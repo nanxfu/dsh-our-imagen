@@ -1,0 +1,41 @@
+{
+  "default_preset": "sdxl-turbo",
+  "presets": {
+    "sdxl-turbo": {
+      "model_id": "stabilityai/sdxl-turbo",
+      "width": 512,
+      "height": 512,
+      "steps": 4,
+      "cfg": 0.0,
+      "license": "Non-commercial research (Stability AI Non-Commercial Research Community License)",
+      "description": "极速草稿与概念验证（~1.5s/张，不支持负向提示词）"
+    },
+    "sdxl-base": {
+      "model_id": "stabilityai/stable-diffusion-xl-base-1.0",
+      "width": 1024,
+      "height": 1024,
+      "steps": 25,
+      "cfg": 7.5,
+      "license": "CreativeML Open RAIL++-M",
+      "description": "标准高清 SDXL 1.0，支持负向提示词与高细节表现"
+    },
+    "playground-v2.5": {
+      "model_id": "playgroundai/playground-v2.5-1024px-aesthetic",
+      "width": 1024,
+      "height": 1024,
+      "steps": 25,
+      "cfg": 3.0,
+      "license": "Playground v2.5 Community License",
+      "description": "高美学质感、色彩与构图表现优异的 1024px 模型"
+    },
+    "dreamshaper-xl-turbo": {
+      "model_id": "Lykon/dreamshaper-xl-v2-turbo",
+      "width": 1024,
+      "height": 1024,
+      "steps": 6,
+      "cfg": 2.0,
+      "license": "OpenRAIL++",
+      "description": "兼顾速度（6步）与 1024px 高清细节的微调 Turbo 模型，支持负向提示词"
+    }
+  }
+}
