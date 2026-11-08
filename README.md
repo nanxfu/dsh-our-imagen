@@ -27,7 +27,20 @@
 
 ## 快速开始
 
-M1 完成后补充。在此之前，现有形态是命令行脚本（见基线提交），不属于 v1 交付内容。
+当前是 M1（骨架 + 引导 + 资源状态），出图在 M2。
+
+1. 安装（已在本机 profile 完成）：
+   - `plugin_manager` → `install_bundle`，目录指向本仓库根。
+2. 打开：设置 → 免费生图工作台，点"检查环境"。
+   - 会调用 `kaggle --version`、`kaggle kernels list`（鉴权）与 `kaggle quota`（配额）。
+3. 账号接入：在 Kaggle 设置页生成 API token，写入 `~/.kaggle/access_token`（命令见设置页内引导）。
+
+命令行等价验证：
+
+```powershell
+curl.exe -sS http://127.0.0.1:58893/imagen-api/state
+curl.exe -sS -X POST http://127.0.0.1:58893/imagen-api/probe
+```
 
 ## 已知限制
 
