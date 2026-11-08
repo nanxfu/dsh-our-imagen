@@ -222,7 +222,8 @@ window.__ModuleLoader__.load({
       const probe = state?.probe ?? null
       const account = statusOf(probe)
       const quota = probe?.quota?.available
-        ? `${probe.quota.usedHours}${probe.quota.totalHours ? ` / ${probe.quota.totalHours}` : ''} h`
+        ? `${probe.quota.usedHours} / ${probe.quota.totalHours ?? '?'} h`
+          + (probe.quota.remainingHours != null ? ` · 剩 ${probe.quota.remainingHours}` : '')
         : probe
           ? t('value.quotaUnavailable')
           : t('value.unknown')

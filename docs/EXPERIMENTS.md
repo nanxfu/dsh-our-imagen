@@ -36,6 +36,7 @@
 | E10 | OAuth 凭据 3 小时后失效 | token 到期后 `kernels.*` 全拒，`datasets.*` 仍可用 | 主路径改 API token（ADR-0008） | 已确认 |
 | E11 | API token 路径验证 | 移走 OAuth 凭据后，仅凭 token 即可调用 `kernels.*` | 引导主路径定为写 `access_token` 文件 | 已确认 |
 | E12 | M1 骨架安装与路由验证 | 路由与设置页槽位均生效；右侧面板需 tab 类型支持 | M1 主落点用设置页整页 | 已确认 |
+| E13 | SDXL-Lightning 单卡 1024² | 4 步稳态 6.2s、峰值 10.3GB，进入快档 | 默认档定为 sdxl-lightning | 已确认 |
 
 ---
 
@@ -262,6 +263,27 @@
   - `settings.section` 出现 `id: our-free-imagen`、`order: 40`、`active: true`。
 - **结论**：M1 的 Host 与 Client 已打通；`sidebar.right.pane.tab` 是以 tab **类型**为 key 的槽位，插件要新增一个 tab 还需注册 tab 类型与其标题，超出 M1 范围，因此 M1 主落点采用 ADR-0002 的退化路径（`settings.section` 整页）。
 - **对策**：M1 以设置页为主界面、会话头 utilities 放状态徽章；右侧面板留到 M2 评估。
+- **状态**：已确认。
+
+---
+
+## E13 · SDXL-Lightning 单卡 1024²（默认档判定）
+
+- **日期**：2026-11-09 00:48；**内核**：`mogudd/free-imagen-lightning` v2；**底座**：`stabilityai/stable-diffusion-xl-base-1.0`（fp16 白名单） + `ByteDance/SDXL-Lightning` LoRA
+- **目的**：1024² 能否在单卡上进入快档（≤15 秒）。
+- **过程**：v1 因镜像自带 `torchao 0.10.0` 与 diffusers 要求（>0.16.0）冲突而失败，卸载 torchao 后 v2 通过。
+- **原始数据**：
+
+  | 档位 | 加载 | 首图 | 稳态 | 每步 | 峰值显存 |
+  | :--- | :--- | :--- | :--- | :--- | :--- |
+  | 4 步 | 7.7s | 9.67s | **6.2s** | 1550ms | 10347MB |
+  | 8 步 | 5.9s | 8.59s | **8.95s** | 1119ms | 10347MB |
+
+  底座下载 40.5s，LoRA 下载约 4.9s。
+
+- **结论**：1024²、单卡、6.2 秒，进入快档。它同时优于 `flux2-klein-4b`（1024² 需双卡、10.24 秒）与 `sdxl-base`（1024² 单卡 27.8 秒）。
+- **对策**：默认档定为 `sdxl-lightning`（4 步）；`sdxl-turbo` 保留为"最快档"（512²、1.87 秒）；`flux2-klein-4b` 降为"双卡质量档"。
+- **影响范围**：`MODEL-CATALOG.md` §2、§5；`lib/presets.js` 的默认值。
 - **状态**：已确认。
 
 ---

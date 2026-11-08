@@ -34,7 +34,7 @@
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | `sdxl-turbo` | `stabilityai/sdxl-turbo` | ~3.5B | 6.62GB（白名单 fp16）／52.1GB（整仓，勿用） | 1 | 7666MB | 无 | 非商用研究许可 | 否 |
 | `sdxl-base` | `stabilityai/stable-diffusion-xl-base-1.0` | ~3.5B | 6.78GB（白名单 fp16） | 1 | 9966MB | 无 | OpenRAIL++ | 否 |
-| `sdxl-lightning` | SDXL + Lightning LoRA | ~3.5B | 约 7GB | 1 | 待测 | 无 | OpenRAIL++ | 否 |
+| `sdxl-lightning` | SDXL + Lightning LoRA（4 步） | ~3.5B + LoRA | 6.78GB + LoRA 约 0.8GB | 1 | 10347MB | 无 | OpenRAIL++ | 否 |
 | `flux2-klein-4b` | `black-forest-labs/FLUX.2-klein-4B` | 3.88B | 15.2GB | **2** | 7929MB/卡 | GGUF Q8/Q4 | Apache-2.0 | 否 |
 | `flux3-klein` | `black-forest-labs/flux-3-image-klein-base` | 5.54B | 11.2GB（BF16） | 待测 | 待测 | 官方 fp8r / nvfp4 **T4 不可用**；社区 INT8 需自写转换器（§3.1） | FLUX Kommunity | **是** |
 | `moss-image` | `OpenMOSS-Team/MOSS-Image-SFT` | 5.08B | 25.96GB（实测） | 待测 | 待测 | 无（需 `trust_remote_code`） | Apache-2.0 | 否 |
@@ -50,7 +50,8 @@
 | `flux2-klein-4b`（单卡整管） | — | 76.5s | — | — | — | 不可用（加载 OOM） | — |
 | `sdxl-turbo`（单卡，512²） | 34 min | 28.0s | 4.0s | 2.79s | **1.87s** | 约 35 min | 4.0s |
 | `sdxl-base`（单卡，1024²） | 34 min | 36.7s | 5.8s | 29.73s | **27.8s** | 约 35 min | 5.8s |
-| `sdxl-lightning` | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 |
+| `sdxl-lightning`（单卡，1024²，4 步） | 待测 | 40.5s | 7.7s | 9.67s | **6.2s** | 待测 | 7.7s |
+| `sdxl-lightning`（单卡，1024²，8 步） | 待测 | 40.5s | 5.9s | 8.59s | **8.95s** | 待测 | 5.9s |
 | `moss-image` | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 |
 | `z-image-turbo` | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 |
 | `flux3-klein` | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 |
@@ -61,7 +62,8 @@
 - `flux3-klein` 是 2026-10-15 发布的更新一代（BFL 自测 Elo 高于 FLUX.2 klein 9B），但三条约束挡在前面：权重 gated、INT8 build 未进仓库、11.2GB 权重在 14.56GiB 卡上大概率重演加载 OOM。它进入候选池但不进默认档，待实测。
 - `moss-image` 是本次调研的意外收获：Apache-2.0、不 gated、diffusers 原生（`MOSSImagePipeline`），体量与 klein 同档。
 - `z-image-turbo` 的双语文字渲染最强，但下载体量是 klein 的 1.6 倍，卡片必须显式标注。
-- `sdxl-turbo` 保留为极速草稿档，许可限非商用，徽章必须显示。
+- `sdxl-lightning` 是默认档：1024²、单卡、4 步稳态 6.2 秒、许可 OpenRAIL++、下载 6.78GB。它同时优于 klein（需双卡）与 base（27.8 秒）。
+- `sdxl-turbo` 保留为"最快档"，512² 稳态 1.87 秒，但许可限非商用，徽章必须显示。
 - `krea-2-turbo` 参数 12.8B，双卡 32GB 只能勉强加载，稳态必然慢，不收录。
 
 ---
