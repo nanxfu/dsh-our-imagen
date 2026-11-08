@@ -18,18 +18,21 @@
 
 目标：验证"加载即引导"这条最容易被低估的路径。
 
-1. 插件包骨架：`package.json`、`cordis.patch.yml`、`index.js`、`client.js`、`locale/`、`icon.svg`。
-2. Host：`ImagenService` 空壳 + `/imagen-api/state`、`/imagen-api/probe` 两个路由。
-3. Client：面板注册（右侧面板 + 设置页退化）、引导四步、资源条占位。
-4. 探测链路真实可用：`kaggle --version`、`kaggle quota` 的调用与解析、登录态判定。
-5. 删除本地 Python 编排（`scripts/imagen.py`、`scripts/providers/**`），`remote/` 迁入包内。
-6. 迁移 `configs/models.json` → `lib/presets.js`。
+- [x] 插件包骨架：`package.json`、`cordis.patch.yml`、`index.js`、`client.js`、`locale/`、`icon.svg`
+- [x] Host：`/imagen-api/state`、`/imagen-api/probe` 两个路由
+- [x] Client：设置页整页（`settings.section`）+ 会话头状态徽章
+- [x] 探测链路真实可用：`kaggle --version`、`kernels list` 鉴权和 `quota` 解析
+- [x] 删除本地 Python 编排（`scripts/`、`configs/`、`SKILL.md`），`remote/` 迁入包内
+- [x] 迁移 `configs/models.json` → `lib/presets.js`
+- [ ] 出图与队列（转 M2）
 
 **验收**：
 
 - 全新 profile 下加载插件，面板出现，引导第 1、2 步能真实反映本机环境（含"本地记录已登录但 API 未认证"这一分支）。
 - 资源条显示真实配额或"配额未知（原文见诊断）"。
 - 卸载插件后无残留进程与定时器。
+
+**实施记录（2026-11-09）**：设置页占位 `id: our-free-imagen` 已注册（`order: 40`），两个路由经 curl 验证可用，探针返回 `cli 2.2.5 / auth ok / quota 0.72h of 30h`。右侧面板未采用，原因见 [EXPERIMENTS.md](EXPERIMENTS.md) E12。
 
 ---
 

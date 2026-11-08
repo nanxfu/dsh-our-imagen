@@ -1,0 +1,4 @@
+- insert:
+    - id: our-free-imagen
+      name: dsh-our-free-imagen
+      config: {}

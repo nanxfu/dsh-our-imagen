@@ -132,7 +132,12 @@ daemon 启动
 2. 匹配失败则保留原文，`quota.raw` 字段供 UI 折叠展示；
 3. 解析失败**不得**阻断出图流程——配额只是展示信息。
 
-实测补充（2026-11-08）：OAuth 登录完成后，`kaggle datasets list` 与 `kaggle competitions list` 正常，但 `kaggle quota` 仍返回 `Authentication required`（退出码 1）。详见 [EXPERIMENTS.md](EXPERIMENTS.md) E4。因此 `probe()` 必须把"配额不可得"当成正常分支：`quota` 字段缺省，`notes` 里记一条"配额接口不可用"，UI 显示替代信息（会话计时 + 上次出图耗时），而不是红色的失败态。
+实测补充（2026-11-09）：配额是否可用取决于凭据类型。
+
+- **API token**：`kaggle quota` 正常返回表格（`resource / used / remaining / total / refreshAt`），可直接解析；
+- **OAuth**：同一条命令返回 `Authentication required`（E4）。
+
+因此 `probe()` 的配额分支要同时支持两种情形：能解析就展示真实数字，不能就退化为"配额不可用"并给出改用 API token 的提示，绝不把配额当作发出任务的前置条件。
 
 ---
 

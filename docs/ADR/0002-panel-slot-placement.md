@@ -22,3 +22,7 @@ Harness 插件没有"页面"或"路由"概念，只能在既有 slot 中渲染�
 
 - **只放 `settings.section`**：可用性最稳，但"在设置里生图"违反直觉。
 - **只做浮层**：零依赖，但每次都要开关，且遮挡对话。
+
+## 实施记录（2026-11-09）
+
+M1 落地时确认：`sidebar.right.pane.tab` 是以 tab **类型**为 key 的槽位（key 由 `rightbar.session` 的 tab kind 决定），插件要新增一个 tab 需要同时注册 tab 类型与标题，M1 范围内成本偏高。因此 M1 采用本文档已声明的退化路径：主界面放 `settings.section` 整页，状态徽章放 `conversation.session.header.utilities`；右侧面板在 M2 重新评估。退化的用户体验代价是"要点两次才能打开"，但不需要依赖其他插件。

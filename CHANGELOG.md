@@ -2,6 +2,25 @@
 
 格式参考 Keep a Changelog；版本遵循语义化版本。
 
+## 0.1.0 — 2026-11-09
+
+### 新增
+
+- 插件骨架（M1）：`package.json`、`cordis.patch.yml`、Host 入口 `index.js`、Client 入口 `client.js`、`lib/presets.js`、`lib/kaggle.js`、`locale/{zh,en}.json`、`icon.svg`。
+- Host 路由：`GET /imagen-api/state`、`POST /imagen-api/probe`。
+- 设置页整页（`settings.section`，id `our-free-imagen`）与会话头状态徽章。
+- `remote/worker.py`、`remote/daemon.py` 迁入包内。
+
+### 变更
+
+- 删除本地 Python 编排（`scripts/`、`configs/models.json`、`SKILL.md`），预设迁移到 `lib/presets.js`。
+- 配额结论收窄：OAuth 下不可用、API token 下可用（E4 复测）。
+
+### 已知限制
+
+- 出图、会话生命周期、Agent tool 属 M2，尚未实现。
+- 右侧面板未采用，主界面在设置页（ADR-0002 实施记录）。
+
 ## 未发布
 
 ### 新增

@@ -35,6 +35,7 @@
 | E9 | 容器写入层配额 | 约 52GB 后文件系统变只读，会话报废 | 下载必须白名单 + 单会话总量上限 | 已确认 |
 | E10 | OAuth 凭据 3 小时后失效 | token 到期后 `kernels.*` 全拒，`datasets.*` 仍可用 | 主路径改 API token（ADR-0008） | 已确认 |
 | E11 | API token 路径验证 | 移走 OAuth 凭据后，仅凭 token 即可调用 `kernels.*` | 引导主路径定为写 `access_token` 文件 | 已确认 |
+| E12 | M1 骨架安装与路由验证 | 路由与设置页槽位均生效；右侧面板需 tab 类型支持 | M1 主落点用设置页整页 | 已确认 |
 
 ---
 
@@ -113,10 +114,18 @@
 - **目的**：配额能否作为资源条的数据源。
 - **步骤**：登录后分别调用 `quota`、`datasets list`、`competitions list`、`kernels list`、`config view`。
 - **原始数据**：`datasets list` 正常返回；`competitions list` 正常；`kernels push` 成功；`quota` 与 `kernels list -m` 返回 `Authentication required`（退出码 1）。token scope 为 `resources.admin:*`，有效期约 3 小时。
-- **结论**：配额接口在 OAuth 下不可用，且该判断与"是否已登录"无关。
-- **对策**：配额降级为尽力而为；`probe()` 必须把"配额不可得"当正常分支；UI 显示替代信息而不是红色失败态。
+- **复测（2026-11-09 00:46，改用 API token 后）**：`kaggle quota` **正常返回**：
+
+  ```
+  resource  used   remaining  total   refreshAt
+  GPU       0.72h  29.28h     30.00h  2026-11-14T00:00:00+00:00
+  TPU       0.00h  20.00h     20.00h  2026-11-14T00:00:00+00:00
+  ```
+
+- **结论**：配额**在 OAuth 凭据下不可用，在 API token 下可用**。此前"配额长期不可用"的判断被收窄为"OAuth 路径不可用"。
+- **对策**：① 账号接入主路径改为 API token（ADR-0008）；② `probe()` 仍需处理配额不可得的退化分支（OAuth 兜底用户会遇到）；③ 资源条显示真实配额，用尽前给出预警。
 - **影响范围**：`PROTOCOL.md` §6；`SPEC.md` 硬约束第 7 条；`WORKBENCH-UI.md` §5。
-- **状态**：已确认。
+- **状态**：已修正（原结论过宽）。
 
 ---
 
@@ -238,6 +247,22 @@
 - **对策**：引导主路径确定为"写 `access_token` 文件 + 用 `kernels list` 验证"；插件仍不读取 token 内容。
 - **待验证**：OAuth 已过期但文件仍在时，CLI 是否会回落到 token（需在 12:09 之后复测）；token 自身是否有有效期。
 - **状态**：已确认（独立可用性）；回落行为待验证。
+
+---
+
+## E12 · M1 骨架安装与路由验证
+
+- **日期**：2026-11-09 00:45；**包**：`dsh-our-free-imagen@0.1.0`
+- **目的**：确认 Host 路由与 Client 槽位在真实页面上生效。
+- **步骤**：`plugin_manager install_bundle` 指向仓库根；用 curl 调 Host 路由；用 `Slots.listSubTree` 查 `settings.section` 占位。
+- **原始数据**：
+  - 安装返回 `application: applied`、`enabled: true`、`bundle: dsh-our-free-imagen@0.1.0`；
+  - `GET /imagen-api/state` 返回 4 个预设与 `session.state = absent`；
+  - `POST /imagen-api/probe` 返回 `cli: 2.2.5`、`auth.ok = true`、`quota.usedHours = 0.72`；
+  - `settings.section` 出现 `id: our-free-imagen`、`order: 40`、`active: true`。
+- **结论**：M1 的 Host 与 Client 已打通；`sidebar.right.pane.tab` 是以 tab **类型**为 key 的槽位，插件要新增一个 tab 还需注册 tab 类型与其标题，超出 M1 范围，因此 M1 主落点采用 ADR-0002 的退化路径（`settings.section` 整页）。
+- **对策**：M1 以设置页为主界面、会话头 utilities 放状态徽章；右侧面板留到 M2 评估。
+- **状态**：已确认。
 
 ---
 

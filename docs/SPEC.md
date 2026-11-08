@@ -74,7 +74,7 @@
 4. 双卡为 16GB × 2、PCIe 互联、无 NVLink；跨卡张量并行的收益不可假设。
 5. Harness 插件没有"页面/路由"概念，只有 slot；PNG 必须经宿主 HTTP 路由输出，Client 使用相对页面 base 的 URL。
 6. 插件配置值会落进 profile 的 `cordis.patch.yml` 明文；密钥类内容一律走 `ctx.credentials`。
-7. `kaggle` CLI 的鉴权按命令差异化：实测在 OAuth 登录（token scope 为 `resources.admin:*`）下，`datasets`、`competitions`、`kernels push` 正常，而 `quota` 与 `kernels list -m` 返回 `Authentication required`。因此配额属于**尽力而为**的展示项，不得作为出图流程的前置条件。
+7. `kaggle` CLI 的鉴权按命令差异化：OAuth 凭据下 `datasets`、`competitions`、`kernels push` 正常，而 `quota` 与 `kernels list -m` 返回 `Authentication required`；改用 API token 后 `quota` 也正常。因此账号接入以 token 为主路径（ADR-0008），配额仍按"可能不可得"实现退化分支。
 8. 单卡 T4（可用 14.56 GiB）**装不下** `FLUX.2-klein-4B` 整管：`.to("cuda")` 阶段即 OOM，且 512² 与 1024² 崩在同一处，说明与分辨率无关。1024² 只有双卡 `device_map="balanced"`（稳态 10.24 秒）或 CPU offload（27 秒）两条路。
 9. `kernels.*` 子命令存在间歇性鉴权失败：同一条命令可能一次报 `Authentication required`、数秒后成功。所有内核操作必须内置重试。
 10. OAuth 的 access token 有效期约 3 小时且**不自动续期**；过期后 `kernels.*` 全部被拒，而 `datasets.*` 仍可用。因此账号接入以 API token 为主路径（长期有效），OAuth 仅作兜底（见 ADR-0008）。
