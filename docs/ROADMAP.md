@@ -1,19 +1,24 @@
-# 技术路线 (ROADMAP)
+# 后续演化路线 (ROADMAP)
 
-## 演进方向
+本项目核心功能已在 0.2.0 版本闭环（真实 GPU 端到端链路跑通，单张 1024² 稳态耗时 6.2s）。后续路线聚焦在**启动加速、网络稳定性与体验打磨**：
 
-### 1. 模型权重挂载加速（Kaggle Dataset）
-- **现状**：每次拉起新 Kernel 需从 Hugging Face 下载 6~8GB 权重，耗时约 1~2 分钟。
-- **思路**：将常用模型打包为私有或公开 Kaggle Dataset，Kernel 启动时通过 `dataset_sources` 挂载至 `/kaggle/input/`，直接读取本地文件以跳过下载步骤。
+---
 
-### 2. 双卡与多模型支持
-- **现状**：当前默认单卡 T4，较大参数模型（如 FLUX.2-klein-4B）单卡显存不足。
-- **思路**：支持切换 `--accelerator NvidiaTeslaT4`（Kaggle 会提供 2 块 T4），并在远端脚本使用 `device_map="balanced"` 分布显存，支持更高质量或更大参数模型。
+## 1. 权重挂载秒级冷启（Kaggle Dataset）
+- **痛点**：目前每次重新拉起 Kernel 容器，都需要从 HuggingFace 下载约 6.6GB 权重，耗时约 40~60 秒。
+- **方案**：
+  1. 将常用的 SDXL Base 与 Lightning 权重预先打包为私有或公开的 Kaggle Dataset。
+  2. 在 Kernel 配置 `dataset_sources` 中直接挂载该 Dataset 至 `/kaggle/input/`。
+  3. `remote/daemon.py` 优先检测本地挂载路径，命中则直接加载，免除公网下载等待。
 
-### 3. 生成历史与参数回填
-- **现状**：图片直接保存到工作区目录，前端仅保留当前会话结果。
-- **思路**：解析 `imagen-output/` 目录中的 `meta.json`，提供历史缩略图查看，支持点击一键回填 Prompt 与 Seed 参数。
+## 2. 隧道备用通道（降低对 trycloudflare 的单点依赖）
+- **痛点**：部分地区网络对 Cloudflare 临时域名解析不稳定或存在偶发阻断。
+- **方案**：
+  1. 在容器内引入备选穿透工具（如 Bore、Ngrok 或自建 FRP）。
+  2. 容器启动时优先尝试 Cloudflare，若在 90 秒内无法获取公网域名或握手失败，自动切至备选隧道，并在状态接口上报当前使用的通道类型。
 
-### 4. 连接隧道备份
-- **现状**：依赖 Cloudflare Tunnel（trycloudflare.com）进行内网穿透。
-- **思路**：在复杂网络环境下增加备用隧道通道，并支持网络抖动后的自动重连。
+## 3. 生成历史一键回填与参数复用
+- **痛点**：前端图墙仅展示最近生成的结果，用户想调整上一张图的某个参数需要手动重新录入。
+- **方案**：
+  1. 前端在历史卡片与放大视图中增加「以此参数再来一张」按钮。
+  2. 点击后将对应图片的 Prompt、Negative Prompt、Seed 与尺寸配置完整回填至输入框。

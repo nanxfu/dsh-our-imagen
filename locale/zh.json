@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "免费生图工作台",
-    "description": "借 Kaggle 免费 GPU 运行开源文生图模型：账号接入引导、资源状态与出图工作台。"
+    "description": "借用 Kaggle 免费 GPU 运行开源文生图模型，无需本地显卡，在 DSH 中快速出图并保存至当前工作区。"
   }
 }
