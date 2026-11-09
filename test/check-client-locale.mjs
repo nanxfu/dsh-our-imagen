@@ -1,60 +1,79 @@
 /**
- * client.js 文案键静态检查（不需要浏览器）。
+ * 文案键静态检查（不需要浏览器）。
  *
- * 1. 提取 DICT 里 zh / en 两个键集合，要求完全一致；
- * 2. 收集代码里静态调用的 t('…')，要求都能在字典里找到；
- * 3. 提示常见拼写问题（多余空格、大小写不一致）。
+ * 1. src/dict 下 zh / en 两个键集合必须完全一致；
+ * 2. src 里所有静态调用的 t('…') 都要在字典里存在；
+ * 3. 动态键（`xxx.${…}`）的命名空间必须已定义；
+ * 4. 发布产物 client.js 必须与源码同步，且包含全部中文文案。
  *
  * 运行：node test/check-client-locale.mjs
  */
 
-import { readFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { readFile, readdir } from 'node:fs/promises'
+import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
-const source = await readFile(join(ROOT, 'client.js'), 'utf8')
+const SRC = join(ROOT, 'src')
 
-function sliceObject(startMarker, endMarker) {
-  const start = source.indexOf(startMarker)
-  if (start === -1) throw new Error(`找不到 ${startMarker}`)
-  const end = source.indexOf(endMarker, start)
-  if (end === -1) throw new Error(`找不到 ${endMarker}`)
-  return source.slice(start, end)
+const problems = []
+
+async function listSourceFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true })
+  const files = []
+  for (const entry of entries) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) files.push(...(await listSourceFiles(path)))
+    else if (entry.name.endsWith('.js')) files.push(path)
+  }
+  return files
 }
 
-const zhBlock = sliceObject('zh: {', 'en: {')
-const enBlock = sliceObject('en: {', 'function fallbackTranslate')
-
-function keysOf(block) {
+function keysOf(text) {
   const keys = new Set()
-  for (const match of block.matchAll(/^\s*'([^']+)':/gm)) keys.add(match[1])
+  for (const match of text.matchAll(/^\s*'([^']+)':/gm)) keys.add(match[1])
   return keys
 }
 
-const zh = keysOf(zhBlock)
-const en = keysOf(enBlock)
+const zhSource = await readFile(join(SRC, 'dict/zh.js'), 'utf8')
+const enSource = await readFile(join(SRC, 'dict/en.js'), 'utf8')
+const zh = keysOf(zhSource)
+const en = keysOf(enSource)
 
-const problems = []
 for (const key of zh) if (!en.has(key)) problems.push(`en 缺少：${key}`)
 for (const key of en) if (!zh.has(key)) problems.push(`zh 缺少：${key}`)
 
-// 静态调用点：t('x') / t("x")
+// 静态调用点与动态键命名空间
 const used = new Set()
-for (const match of source.matchAll(/\bt\(\s*'([^']+)'\s*\)/g)) used.add(match[1])
-for (const match of source.matchAll(/\bt\(\s*"([^"]+)"\s*\)/g)) used.add(match[1])
+const namespaces = new Set()
+for (const key of zh) namespaces.add(key.split('.')[0])
+
+const files = await listSourceFiles(SRC)
+for (const file of files) {
+  const text = await readFile(file, 'utf8')
+  const shortName = relative(ROOT, file).replace(/\\/g, '/')
+
+  for (const match of text.matchAll(/\bt\(\s*'([^']+)'\s*\)/g)) used.add(match[1])
+  for (const match of text.matchAll(/\bt\(\s*"([^"]+)"\s*\)/g)) used.add(match[1])
+  for (const match of text.matchAll(/`([a-zA-Z0-9_]+)\.\$\{/g)) {
+    if (!namespaces.has(match[1])) problems.push(`${shortName}：动态键命名空间未定义 ${match[1]}.*`)
+  }
+}
+
 for (const key of used) {
   if (!zh.has(key)) problems.push(`代码引用了不存在的键：${key}`)
 }
 
-// 动态键的命名空间至少要有前缀定义，避免整段缺失
-const namespaces = new Set()
-for (const key of zh) namespaces.add(key.split('.')[0])
-for (const match of source.matchAll(/`([a-zA-Z0-9_]+)\.\$\{/g)) {
-  if (!namespaces.has(match[1])) problems.push(`动态键命名空间未定义：${match[1]}.*`)
+// 发布产物必须包含全部中文文案（防"改了源码忘了构建"）
+const artifact = await readFile(join(ROOT, 'client.js'), 'utf8')
+for (const key of zh) {
+  const value = zhSource.match(new RegExp(`^\\s*'${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}':\\s*'([^']*)'`, 'm'))?.[1]
+  if (!value) continue
+  if (!artifact.includes(value)) problems.push(`client.js 缺少文案（未重新构建？）：${key} → ${value}`)
 }
+if (artifact.includes('__test')) problems.push('client.js 里出现了 __test，发布产物不应包含测试出口')
 
-console.log(`zh 键 ${zh.size} 个，en 键 ${en.size} 个，静态引用 ${used.size} 个`)
+console.log(`zh 键 ${zh.size} 个，en 键 ${en.size} 个，静态引用 ${used.size} 个，扫描源文件 ${files.length} 个`)
 if (problems.length === 0) {
   console.log('文案检查通过')
 } else {

@@ -1,0 +1,18 @@
+/**
+ * 画面比例：给出常用成片比例与实际像素。
+ *
+ * 宽高必须落在 docs/SPEC.md 的约束里（8 的整数倍、256~1536），
+ * 因此这里的像素值都先按比例算，再钳制。
+ */
+
+import { clampSize } from '../logic/clamp.js'
+
+export const DEFAULT_RATIOS = [
+  { id: '1:1', zh: '1:1 方形', en: '1:1 Square', width: 1024, height: 1024 },
+  { id: '16:9', zh: '16:9 横屏', en: '16:9 Landscape', width: 1152, height: 648 },
+  { id: '9:16', zh: '9:16 竖屏', en: '9:16 Portrait', width: 648, height: 1152 },
+]
+
+export function ratioToSize(ratio) {
+  return { width: clampSize(ratio.width), height: clampSize(ratio.height) }
+}

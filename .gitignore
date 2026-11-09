@@ -7,6 +7,7 @@ node_modules/
 # 生成产物
 imagen-output/
 bench-results/
+test/.build/
 
 # Python 运行残留
 __pycache__/
@@ -18,3 +19,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.log
+
+# 设计预览产物
+tools/.preview/

@@ -8,11 +8,13 @@
  *  - 向 Agent 暴露 imagen_generate / imagen_session / imagen_history 三个工具。
  */
 
-import { readFile } from 'node:fs/promises'
+import { readFile, unlink } from 'node:fs/promises'
 
 import { methodNotAllowed, readJsonBody, sendError, sendJson } from './lib/http.js'
+import { enhancePrompt } from './lib/enhance.js'
 import { JobQueue } from './lib/jobs.js'
 import { probeKaggle } from './lib/kaggle.js'
+import { readLibrary, recordDeleted, setFavorite } from './lib/library.js'
 import { scanHistory } from './lib/output.js'
 import { contentTypeOf, resolveOutputPath } from './lib/paths.js'
 import { DEFAULT_PRESET, PRESETS, presetById, publicPresets } from './lib/presets.js'
@@ -288,6 +290,90 @@ export function apply(ctx, config = {}) {
         },
       }),
     'imagen:route-file',
+  )
+
+  // ---- 本地作品库（收藏 / 删除） ------------------------------------------
+
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/imagen-api/library',
+        async handler(req, res) {
+          if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
+          sendJson(res, 200, await readLibrary(ctx))
+        },
+      }),
+    'imagen:route-library',
+  )
+
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/imagen-api/library/favorite',
+        async handler(req, res) {
+          if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
+          const body = await readJsonBody(req).catch(() => null)
+          if (!body || typeof body.path !== 'string') return sendError(res, 400, 'invalid_body', '缺少 path')
+          const result = await setFavorite(ctx, body.path, body.favorite !== false)
+          if (!result.ok) return sendError(res, 400, result.code, '路径无效')
+          sendJson(res, 200, result)
+        },
+      }),
+    'imagen:route-library-favorite',
+  )
+
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/imagen-api/library/delete',
+        async handler(req, res) {
+          if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
+          const body = await readJsonBody(req).catch(() => null)
+          const requested = Array.isArray(body?.paths) ? body.paths.filter((item) => typeof item === 'string') : []
+          if (requested.length === 0) return sendError(res, 400, 'invalid_body', '缺少 paths')
+          if (requested.length > 200) return sendError(res, 400, 'too_many', '一次最多删除 200 张')
+
+          const removed = []
+          const failed = []
+          for (const path of requested) {
+            // 只允许删除 imagen-output 内的文件；解析失败一律拒绝，防止越权。
+            const found = await resolveOutputPath(ctx, path).catch(() => null)
+            if (!found) {
+              failed.push({ path, code: 'not_found' })
+              continue
+            }
+            try {
+              await unlink(found.absolute)
+              removed.push(String(path).replace(/\\/g, '/'))
+            } catch (error) {
+              failed.push({ path, code: String(error?.code ?? 'unlink_failed') })
+            }
+          }
+          const library = await recordDeleted(ctx, removed)
+          sendJson(res, 200, { ok: failed.length === 0, removed, failed, favorites: library.favorites })
+        },
+      }),
+    'imagen:route-library-delete',
+  )
+
+  // ---- 提示词扩写（走宿主已配置的模型） -----------------------------------
+
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/imagen-api/enhance',
+        async handler(req, res) {
+          if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
+          const body = await readJsonBody(req).catch(() => ({}))
+          const result = await enhancePrompt(ctx, body?.prompt)
+          sendJson(res, 200, { ok: true, ...result })
+        },
+      }),
+    'imagen:route-enhance',
   )
 
   // ---- Agent 工具 ---------------------------------------------------------

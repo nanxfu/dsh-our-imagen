@@ -1,0 +1,20 @@
+{
+  "ready": {
+    "view": "f0516e44e0da1877ae15f97d60a8f066"
+  },
+  "chat": {
+    "view": "27d980af4f971d65270a2f9fc420c27a"
+  },
+  "empty": {
+    "view": "ebd25f4d1c337d2585cce09df090ccf2"
+  },
+  "gallery": {
+    "view": "beae135e814c384a6ff87a9ab46e7eb2"
+  },
+  "guidance": {
+    "view": "273056324c1dbeda65cfe37f391681c4"
+  },
+  "queued": {
+    "view": "4dbca416767034e1c41c0e8d6afbcddc"
+  }
+}

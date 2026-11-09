@@ -210,6 +210,10 @@ async function main() {
       '/imagen-api/jobs',
       '/imagen-api/history',
       '/imagen-api/file',
+      '/imagen-api/library',
+      '/imagen-api/library/favorite',
+      '/imagen-api/library/delete',
+      '/imagen-api/enhance',
     ]) {
       assert.ok(paths.includes(expected), `缺少路由 ${expected}`)
     }
@@ -374,6 +378,101 @@ async function main() {
     const tool = fake.tools.find((item) => item.name === 'imagen_session')
     const value = await tool.execute({ action: 'status' }, {})
     assert.match(value.text, /会话状态：ready/)
+  })
+
+  await check('收藏与本地库', async () => {
+    const initial = await json(host.origin, '/imagen-api/library')
+    assert.equal(initial.status, 200)
+    assert.deepEqual(initial.body, { favorites: [], deleted: [] })
+
+    const imagePath = firstJob.output.images[0].path
+    const added = await json(host.origin, '/imagen-api/library/favorite', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: imagePath, favorite: true }),
+    })
+    assert.equal(added.status, 200)
+    assert.deepEqual(added.body.favorites, [imagePath])
+
+    const reread = await json(host.origin, '/imagen-api/library')
+    assert.deepEqual(reread.body.favorites, [imagePath], '收藏应持久化')
+
+    const removedFavorite = await json(host.origin, '/imagen-api/library/favorite', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: imagePath, favorite: false }),
+    })
+    assert.deepEqual(removedFavorite.body.favorites, [])
+
+    const bad = await json(host.origin, '/imagen-api/library/favorite', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+    assert.equal(bad.status, 400)
+  })
+
+  await check('批量删除拒绝越权路径', async () => {
+    const escape = await json(host.origin, '/imagen-api/library/delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ paths: ['../index.js'] }),
+    })
+    assert.equal(escape.status, 200)
+    assert.deepEqual(escape.body.removed, [], '不应删除输出目录外的文件')
+    assert.equal(escape.body.failed[0].code, 'not_found')
+
+    const empty = await json(host.origin, '/imagen-api/library/delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ paths: [] }),
+    })
+    assert.equal(empty.status, 400)
+  })
+
+  await check('批量删除图片并记录', async () => {
+    const target = firstJob.output.images[1]
+    const result = await json(host.origin, '/imagen-api/library/delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ paths: [target.path] }),
+    })
+    assert.equal(result.status, 200)
+    assert.deepEqual(result.body.removed, [target.path])
+    assert.deepEqual(result.body.failed, [])
+
+    const absolute = join(workspace, ...target.path.split('/'))
+    await assert.rejects(stat(absolute), '文件应已删除')
+
+    const library = await json(host.origin, '/imagen-api/library')
+    assert.ok(library.body.deleted.some((item) => item.path === target.path), '删除应被记录')
+
+    const history = await json(host.origin, '/imagen-api/history?limit=10')
+    const item = history.body.items.find((entry) => entry.jobId === firstJob.id)
+    assert.equal(item.images.length, 1, '历史里不应再出现已删除的图片')
+  })
+
+  await check('提示词扩写（无模型时走本地兜底）', async () => {
+    const result = await json(host.origin, '/imagen-api/enhance', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: '一只赛博猫' }),
+    })
+    assert.equal(result.status, 200)
+    assert.equal(result.body.ok, true)
+    assert.ok(['model', 'local'].includes(result.body.source), `source=${result.body.source}`)
+    assert.equal(result.body.suggestions.length, 3)
+    for (const item of result.body.suggestions) {
+      assert.equal(typeof item.text, 'string')
+      assert.ok(item.text.length > 0)
+    }
+
+    const blank = await json(host.origin, '/imagen-api/enhance', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: '   ' }),
+    })
+    assert.deepEqual(blank.body.suggestions, [], '空描述不产生建议')
   })
 
   await check('会话停止', async () => {
