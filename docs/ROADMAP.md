@@ -1,87 +1,19 @@
-# 阶段与验收（ROADMAP）
+# 技术路线 (ROADMAP)
 
-三个里程碑，每个以"可演示 + 可回滚"为完成条件。里程碑内部的顺序即实现顺序。
+## 演进方向
 
----
+### 1. 模型权重挂载加速（Kaggle Dataset）
+- **现状**：每次拉起新 Kernel 需从 Hugging Face 下载 6~8GB 权重，耗时约 1~2 分钟。
+- **思路**：将常用模型打包为私有或公开 Kaggle Dataset，Kernel 启动时通过 `dataset_sources` 挂载至 `/kaggle/input/`，直接读取本地文件以跳过下载步骤。
 
-## M0 · 基线与清理（半天）
+### 2. 双卡与多模型支持
+- **现状**：当前默认单卡 T4，较大参数模型（如 FLUX.2-klein-4B）单卡显存不足。
+- **思路**：支持切换 `--accelerator NvidiaTeslaT4`（Kaggle 会提供 2 块 T4），并在远端脚本使用 `device_map="balanced"` 分布显存，支持更高质量或更大参数模型。
 
-- 建立 git 基线（现有 Python CLI 形态）。
-- 写入 `docs/` 全套规格与本文件。
-- 冻结决策，不开新分支讨论架构。
+### 3. 生成历史与参数回填
+- **现状**：图片直接保存到工作区目录，前端仅保留当前会话结果。
+- **思路**：解析 `imagen-output/` 目录中的 `meta.json`，提供历史缩略图查看，支持点击一键回填 Prompt 与 Seed 参数。
 
-**验收**：`git log` 有基线提交；文档评审通过；无未决问题。
-
----
-
-## M1 · 骨架 + 引导 + 资源条（不出图）
-
-目标：验证"加载即引导"这条最容易被低估的路径。
-
-- [x] 插件包骨架：`package.json`、`cordis.patch.yml`、`index.js`、`client.js`、`locale/`、`icon.svg`
-- [x] Host：`/imagen-api/state`、`/imagen-api/probe` 两个路由
-- [x] Client：设置页整页（`settings.section`）+ 会话头状态徽章
-- [x] 探测链路真实可用：`kaggle --version`、`kernels list` 鉴权和 `quota` 解析
-- [x] 删除本地 Python 编排（`scripts/`、`configs/`、`SKILL.md`），`remote/` 迁入包内
-- [x] 迁移 `configs/models.json` → `lib/presets.js`
-- [ ] 出图与队列（转 M2）
-
-**验收**：
-
-- 全新 profile 下加载插件，面板出现，引导第 1、2 步能真实反映本机环境（含"本地记录已登录但 API 未认证"这一分支）。
-- 资源条显示真实配额或"配额未知（原文见诊断）"。
-- 卸载插件后无残留进程与定时器。
-
-**实施记录（2026-11-09）**：设置页占位 `id: our-free-imagen` 已注册（`order: 40`），两个路由经 curl 验证可用，探针返回 `cli 2.2.5 / auth ok / quota 0.72h of 30h`。右侧面板未采用，原因见 [EXPERIMENTS.md](EXPERIMENTS.md) E12。
-
----
-
-## M2 · 工作台出图闭环
-
-目标：v1 的核心价值成立——热态秒级出图。
-
-1. `KaggleProvider`：推送、轮询、ntfy 握手、健康检查、关机。
-2. 任务队列：串行、取消剩余、增量落盘、`meta.json`。
-3. 图片路由 `/imagen-api/img`。
-4. 模型卡（v1 四张）、参数区、图墙、生成中占位动画。
-5. 六类错误态的文案与诊断区。
-6. Agent tool：`imagen_generate`（立即返回 `jobId`）、`imagen_session`（启停/状态）。
-
-**验收**：
-
-- 从 `absent` 到第一张图全流程走通，记录总耗时分解（推送/调度/下载/加载/首图）。
-- 连续三次出图不重启会话，第二次起耗时明显低于第一次。
-- 一键关机后 `absent`，远端内核 60 秒内变为 `COMPLETE`。
-- 对话中调用 tool 能拿到 `jobId` 与摘要，随后取到图片路径。
-
----
-
-## M3 · 双卡、量化档与基准回填
-
-1. `useSecondGpu` 开关接到底层（`device_map` 策略），未开启时行为不变。
-2. 量化档：GGUF 加载分支（`GGUFQuantizationConfig`），默认折叠。
-3. 跑完 [MODEL-CATALOG.md](MODEL-CATALOG.md) 的 B1~B6，回填表格。
-4. 按实测结果调整默认档与"更多模型"门槛。
-
-**验收**：
-
-- 双卡开关切换后，`/health` 的 `devices` 长度随之变化。
-- 量化档至少一张模型能出图并记录耗时与画质抽样。
-- 模型目录的基准表格无 `待测` 残留（未收录的模型移出表格）。
-
----
-
-## v1.1 候选（不进 v1）
-
-- 权重缓存数据集引导（`dataset_sources`）。
-- 图库与历史（按 jobId 浏览、参数回填）。
-- 用户自定义预设（UI 增删）。
-- 生成队列的多任务预排与"再来一张"。
-
----
-
-## v2 候选
-
-- ComfyUI 运行时（工作流 JSON 直通）。
-- 第二个 Provider 实现（用 [PROVIDER-INTERFACE.md](PROVIDER-INTERFACE.md) 的验收清单把关）。
-- 图像编辑（当前 `daemon.py` 只做文生图）。
+### 4. 连接隧道备份
+- **现状**：依赖 Cloudflare Tunnel（trycloudflare.com）进行内网穿透。
+- **思路**：在复杂网络环境下增加备用隧道通道，并支持网络抖动后的自动重连。

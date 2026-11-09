@@ -1,8 +1,7 @@
 /**
- * Host half of the free-image workbench bundle.
+ * DSH 插件宿主端 (Host)
  *
- * M1 范围：环境探测与状态读取。出图、会话生命周期在 M2。
- * 状态只在本进程内存中；真正的凭据与台账在 kaggle CLI 与远端内核里。
+ * 负责注册 HTTP 状态与探针路由，管理与 Kaggle 的会话状态。
  */
 
 import { DEFAULT_PRESET, PRESETS } from './lib/presets.js'

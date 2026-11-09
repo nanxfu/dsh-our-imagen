@@ -9,7 +9,7 @@ window.__ModuleLoader__.load({
       zh: {
         'nav.label': '免费生图工作台',
         'page.title': '免费生图工作台',
-        'page.subtitle': '借 Kaggle 免费 GPU 运行开源文生图模型。当前为 M1：环境探测与资源状态；出图在 M2 开放。',
+        'page.subtitle': '基于 Kaggle 免费 GPU 算力运行开源生图模型，支持秒级快速出图。',
         'action.probe': '检查环境',
         'action.probing': '检查中…',
         'status.account': '账号接入',
@@ -45,12 +45,12 @@ window.__ModuleLoader__.load({
         'unit.second': '秒',
         'chip.offline': '生图未就绪',
         'chip.online': '生图就绪',
-        'note.m2': '生成工作台与队列在 M2 交付；当前页面数据全部来自实测目录 docs/MODEL-CATALOG.md。',
+        'note.m2': '模型数据与显存占用均来自 Kaggle T4 实测基准（详见 docs/MODELS_AND_BENCHMARKS.md）。',
       },
       en: {
         'nav.label': 'Free imagen',
         'page.title': 'Free imagen workbench',
-        'page.subtitle': 'Run open image models on free Kaggle GPUs. M1 ships environment probing and resource status; generation arrives in M2.',
+        'page.subtitle': 'Run open image models on free Kaggle GPUs with second-level turnaround.',
         'action.probe': 'Check environment',
         'action.probing': 'Checking…',
         'status.account': 'Account',
@@ -86,7 +86,7 @@ window.__ModuleLoader__.load({
         'unit.second': 's',
         'chip.offline': 'Imagen not ready',
         'chip.online': 'Imagen ready',
-        'note.m2': 'The generation workbench and queue ship in M2; every number here comes from the measured catalogue in docs/MODEL-CATALOG.md.',
+        'note.m2': 'Model metrics and memory usage are verified on Kaggle T4 (see docs/MODELS_AND_BENCHMARKS.md).',
       },
     }
 

@@ -1,54 +1,31 @@
-# 免费生图工作台（our-free-imagen）
+# our-free-imagen
 
-把"免费 GPU 生图"做成 Harness 里的一个常驻工作台：借 Kaggle 免费额度（T4 ×2，30 小时/周）运行开源文生图模型，首次加载完成接入引导，之后在对话旁边以秒级往返出图。
+DSH Desktop（DeepSeek Harness）的生图插件。调用 Kaggle 免费 GPU（T4 ×2）在远端运行开源文生图模型，向 DSH 界面与 Agent 提供出图能力。
 
-当前状态：**v1 规格冻结，尚未开始实现**（M1 待启动）。
+## 运行环境准备
 
-## 它解决什么
+插件依赖本机 `kaggle` 命令行与账号凭据完成远端调度，插件本身不存储凭据。
 
-- 本机没有可用显卡，出图要靠远端免费算力；现有的命令行形态每次都要回到终端。
-- 免费算力有两个隐性成本：冷启动时间与每周配额。工作台把两者都摆到明面上（资源条、会话计时、一键关机）。
-- 同一份能力需要同时服务界面操作与对话指令，避免两套状态。
+1. 安装 CLI：
+   ```powershell
+   pip install -U kaggle
+   ```
+2. 配置 Token：
+   在 [Kaggle 账号设置页](https://www.kaggle.com/settings/api) 点击 **Create New Token**，将内容写入本地凭据文件：
+   ```powershell
+   Set-Content -NoNewline "$env:USERPROFILE\.kaggle\access_token" "你的Kaggle_Token"
+   ```
+   > 注：Kaggle 账号必须绑定手机号，否则 GPU 任务会被平台降级至 CPU。
 
-## 文档导航
+## 安装与启动
 
-| 文档 | 内容 |
-| :--- | :--- |
-| [docs/SPEC.md](docs/SPEC.md) | 总纲：目标、非目标、术语、硬约束 |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 四层结构、进程边界、状态机 |
-| [docs/PROVIDER-INTERFACE.md](docs/PROVIDER-INTERFACE.md) | Provider 契约与第二家接入清单 |
-| [docs/PROTOCOL.md](docs/PROTOCOL.md) | 内核交付、隧道握手、远端 HTTP、错误码 |
-| [docs/WORKBENCH-UI.md](docs/WORKBENCH-UI.md) | 落点、布局、引导分镜、状态矩阵 |
-| [docs/MODEL-CATALOG.md](docs/MODEL-CATALOG.md) | 模型卡、量化档、T4 准入基准 |
-| [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md) | 实测记录：原始数据、结论、对策、待验证清单 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | M1~M3 与验收标准 |
-| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | 分支、提交、版本、测试策略 |
-| [docs/ADR/](docs/ADR/) | 七条关键决策记录 |
+1. 在 DSH Desktop 的插件管理中以本地 Bundle 方式加载本项目目录。
+2. 打开 DSH 设置页中的 **免费生图工作台**。
+3. 点击 **检查环境**，确认 CLI、鉴权与配额状态正常。
 
-## 快速开始
+## 文档索引
 
-当前是 M1（骨架 + 引导 + 资源状态），出图在 M2。
-
-1. 安装（已在本机 profile 完成）：
-   - `plugin_manager` → `install_bundle`，目录指向本仓库根。
-2. 打开：设置 → 免费生图工作台，点"检查环境"。
-   - 会调用 `kaggle --version`、`kaggle kernels list`（鉴权）与 `kaggle quota`（配额）。
-3. 账号接入：在 Kaggle 设置页生成 API token，写入 `~/.kaggle/access_token`（命令见设置页内引导）。
-
-命令行等价验证：
-
-```powershell
-curl.exe -sS http://127.0.0.1:58893/imagen-api/state
-curl.exe -sS -X POST http://127.0.0.1:58893/imagen-api/probe
-```
-
-## 已知限制
-
-- 只支持 Kaggle 一家 Provider。
-- 只做文生图，不做编辑。
-- 首次使用需要接入 Kaggle 账号：主路径是在 Kaggle 网页生成一次 API token 并写入 CLI 凭据位置，OAuth 仅作兜底；凭据不由插件保存。
-- 模型权重每次冷启动从 Hugging Face 下载，缓存能力在 v1.1。
-
-## 许可
-
-插件代码待定；各模型权重遵循其自身许可，工作台会在模型卡上标注（见 [docs/MODEL-CATALOG.md](docs/MODEL-CATALOG.md)）。
+- [docs/DESIGN.md](docs/DESIGN.md)：系统架构、进程边界、Daemon 握手与 HTTP 协议。
+- [docs/MODELS_AND_BENCHMARKS.md](docs/MODELS_AND_BENCHMARKS.md)：实测性能数据、显存占用与平台限制。
+- [docs/ROADMAP.md](docs/ROADMAP.md)：后续演进规划（权重挂载加速、双卡支持等）。
+- [TODO.md](TODO.md)：开发任务清单（供编码 Agent 接手执行）。
