@@ -11,6 +11,20 @@
 | `stabilityai/stable-diffusion-xl-base-1.0` | 1024×1024 | 30 步 / 5.0 | 27.8s | 10.5 GB | 6.6 GB | 可选，传统多步生成 |
 | `black-forest-labs/FLUX.2-klein-4B` | 1024×1024 | 4 步 / 1.0 | 10.2s（双卡）/ 27s（CPU offload） | 单卡整管 >14.5 GB (OOM) | 8.0 GB | 单卡显存不足，需双卡或 offload |
 
+## 端到端实测（0.2.0）
+
+2026-11-09 用 `node test/gpu-live.mjs` 跑通整条链路（Kernel `mogudd/imagen-101f2d4c`，2×Tesla T4）：
+
+| 项 | 实测值 | 说明 |
+| --- | --- | --- |
+| 队列 + 启动 + 依赖安装 + 预载 | 约 6 分钟 | 含 Kaggle 排队；预载在 Kernel 内完成 |
+| `POST /generate` 首张 1024² / 4 步 | 11.65s | 含首张的 CUDA 上下文与内存分配 |
+| 首张之后的稳态 | 6.2s | 见上表 bench（三张 median） |
+| 落盘 PNG | 1.15MB | 1024×1024，8 位 RGB |
+| 关机 | Kernel 转为 COMPLETE | `/shutdown` 生效 |
+
+结论：`preload` 注入生效（`/generate` 的 `load_seconds` 为 0），首张偏慢属于预热成本，前端展示时应按"首张较慢、之后稳定"的预期提示用户。
+
 ## 运行约束与环境特性
 
 1. **调度排队**：

@@ -1,39 +1,146 @@
 /**
  * DSH 插件宿主端 (Host)
  *
- * 负责注册 HTTP 状态与探针路由，管理与 Kaggle 的会话状态。
+ * 职责（协议见 docs/API.md）：
+ *  - 维护单例远端会话（Kaggle Kernel + Cloudflare 隧道）的生命周期；
+ *  - 串行执行出图任务并把图片落到 `<workspace>/imagen-output/`；
+ *  - 向 Web Client 暴露状态/任务/历史/文件路由；
+ *  - 向 Agent 暴露 imagen_generate / imagen_session / imagen_history 三个工具。
  */
 
-import { DEFAULT_PRESET, PRESETS } from './lib/presets.js'
+import { readFile } from 'node:fs/promises'
+
+import { methodNotAllowed, readJsonBody, sendError, sendJson } from './lib/http.js'
+import { JobQueue } from './lib/jobs.js'
 import { probeKaggle } from './lib/kaggle.js'
+import { scanHistory } from './lib/output.js'
+import { contentTypeOf, resolveOutputPath } from './lib/paths.js'
+import { DEFAULT_PRESET, PRESETS, presetById, publicPresets } from './lib/presets.js'
+import { SessionManager } from './lib/session.js'
 
 export const name = 'our-free-imagen'
-export const inject = ['webServer', 'subprocess']
+// cordis 的服务访问是严格的：没有在 inject 里声明过的服务，读取属性会直接抛错，
+// 因此 tools 必须显式声明（它同时是 Agent 工具注册的依赖）。
+export const inject = ['webServer', 'subprocess', 'tools']
 
-const STATE = {
-  probe: null,
-  probeAt: 0,
-  session: { state: 'absent', detail: null },
-  lastJob: null,
+const VERSION = '0.2.0'
+
+function parseQuery(req) {
+  try {
+    return new URL(req.url ?? '/', 'http://placeholder.local').searchParams
+  } catch {
+    return new URLSearchParams()
+  }
 }
 
-function sendJson(res, code, value) {
-  const body = Buffer.from(JSON.stringify(value), 'utf8')
-  res.writeHead(code, {
-    'content-type': 'application/json; charset=utf-8',
-    'content-length': String(body.length),
-    'cache-control': 'no-store',
-  })
-  res.end(body)
+function toInt(value, fallback, min, max) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return fallback
+  return Math.min(max, Math.max(min, Math.round(number)))
 }
 
-function methodNotAllowed(res, allow) {
-  res.writeHead(405, { allow })
-  res.end()
+/** 把 job 折叠成一段给模型看的文字。 */
+function describeJob(job) {
+  if (!job) return '任务不存在'
+  const lines = []
+  lines.push(`任务 ${job.id}：${job.status}${job.seconds != null ? `（${job.seconds}s）` : ''}`)
+  lines.push(`预设：${job.presetId} · 尺寸 ${job.params.width}×${job.params.height} · ${job.params.steps} 步 · cfg ${job.params.cfg} · seed ${job.params.seed}`)
+  if (job.error) lines.push(`错误：${job.error.code} ${job.error.message}`)
+  if (job.output?.images?.length) {
+    lines.push('产物：')
+    for (const image of job.output.images) {
+      lines.push(`- ${image.path}（${image.width}×${image.height}，seed ${image.seed}）`)
+      if (image.url) lines.push(`  ${image.url}`)
+    }
+    lines.push('提示：可以直接在回复里用 ![描述](URL) 展示图片。')
+  } else if (job.status !== 'done') {
+    lines.push('任务仍在进行中，可用 imagen_history 或再次调用查看结果。')
+  }
+  return lines.join('\n')
+}
+
+function describeSession(session) {
+  const lines = [
+    `会话状态：${session.state}${session.phase ? `（${session.phase}）` : ''}`,
+    session.detail ? `说明：${session.detail}` : null,
+    session.kernelUrl ? `Kernel：${session.kernelUrl}` : null,
+    session.endpointUrl ? `隧道：已建立` : null,
+    session.device ? `设备：${session.device}${session.deviceCount ? ` ×${session.deviceCount}` : ''}` : null,
+    session.error ? `错误：${session.error.code} ${session.error.message}` : null,
+  ]
+  return lines.filter(Boolean).join('\n')
 }
 
 export function apply(ctx, config = {}) {
-  const defaultPreset = config.defaultPreset ?? DEFAULT_PRESET
+  const defaultPreset = presetById(config.defaultPreset ?? DEFAULT_PRESET).id
+  const devEndpoint = config.devEndpoint ?? process.env.OUR_FREE_IMAGEN_ENDPOINT ?? null
+  const devToken = config.devToken ?? process.env.OUR_FREE_IMAGEN_TOKEN ?? 'dev-token'
+
+  const cache = { probe: null, probeAt: 0, probing: null }
+
+  const session = new SessionManager({
+    ctx,
+    defaultPreset,
+    options: {
+      devEndpoint,
+      devToken,
+      accelerator: config.accelerator ?? 'NvidiaTeslaT4',
+      idleTimeoutSec: toInt(config.idleTimeoutSec, 1800, 300, 10800),
+      provisionTimeoutMs: toInt(config.provisionTimeoutMinutes, 45, 5, 240) * 60 * 1000,
+    },
+  })
+
+  const queue = new JobQueue({
+    ctx,
+    session,
+    defaultPreset,
+    options: {
+      sessionWaitMs: toInt(config.sessionWaitMinutes, 45, 5, 240) * 60 * 1000,
+      generateTimeoutMs: toInt(config.generateTimeoutSeconds, 300, 30, 1800) * 1000,
+    },
+  })
+
+  const statePayload = () => ({
+    version: VERSION,
+    defaultPreset,
+    presets: publicPresets(),
+    session: session.snapshot(),
+    probe: cache.probe,
+    probeAt: cache.probeAt,
+    jobs: queue.list(10),
+    lastJob: queue.lastFinished,
+    queue: queue.queueStats(),
+    devMode: Boolean(devEndpoint),
+  })
+
+  const probes = {
+    async run() {
+      if (cache.probing) return cache.probing
+      cache.probing = (async () => {
+        try {
+          const probe = await probeKaggle(ctx)
+          cache.probe = probe
+          cache.probeAt = Date.now()
+          return probe
+        } catch (error) {
+          const probe = {
+            provider: 'kaggle',
+            cli: { present: false },
+            auth: { ok: false, checkedAt: new Date().toISOString(), errorCode: 'unknown' },
+            notes: [String(error?.message ?? error).slice(0, 300)],
+          }
+          cache.probe = probe
+          cache.probeAt = Date.now()
+          return probe
+        } finally {
+          cache.probing = null
+        }
+      })()
+      return cache.probing
+    },
+  }
+
+  // ---- 路由 ---------------------------------------------------------------
 
   ctx.effect(
     () =>
@@ -42,15 +149,7 @@ export function apply(ctx, config = {}) {
         path: '/imagen-api/state',
         handler(req, res) {
           if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
-          sendJson(res, 200, {
-            version: '0.1.0',
-            defaultPreset,
-            presets: PRESETS,
-            session: STATE.session,
-            probe: STATE.probe,
-            probeAt: STATE.probeAt,
-            lastJob: STATE.lastJob,
-          })
+          sendJson(res, 200, statePayload())
         },
       }),
     'imagen:route-state',
@@ -63,24 +162,246 @@ export function apply(ctx, config = {}) {
         path: '/imagen-api/probe',
         async handler(req, res) {
           if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
-          try {
-            const probe = await probeKaggle(ctx)
-            STATE.probe = probe
-            STATE.probeAt = Date.now()
-            sendJson(res, 200, { ok: probe.auth?.ok === true, probe })
-          } catch (error) {
-            const probe = {
-              provider: 'kaggle',
-              cli: { present: false },
-              auth: { ok: false, checkedAt: new Date().toISOString(), errorCode: 'unknown' },
-              notes: [String(error?.message ?? error).slice(0, 300)],
-            }
-            STATE.probe = probe
-            STATE.probeAt = Date.now()
-            sendJson(res, 200, { ok: false, probe })
-          }
+          const probe = await probes.run()
+          sendJson(res, 200, { ok: probe.auth?.ok === true, probe })
         },
       }),
     'imagen:route-probe',
+  )
+
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/imagen-api/session/start',
+        async handler(req, res) {
+          if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
+          const body = await readJsonBody(req).catch(() => ({}))
+          const presetId = typeof body.presetId === 'string' ? body.presetId : defaultPreset
+          const snapshot = await session.start(presetById(presetId).id)
+          sendJson(res, 200, { ok: snapshot.state !== 'error', session: snapshot })
+        },
+      }),
+    'imagen:route-session-start',
+  )
+
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/imagen-api/session/stop',
+        async handler(req, res) {
+          if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
+          const snapshot = await session.stop()
+          sendJson(res, 200, { ok: true, session: snapshot })
+        },
+      }),
+    'imagen:route-session-stop',
+  )
+
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/imagen-api/generate',
+        async handler(req, res) {
+          if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
+          let body
+          try {
+            body = await readJsonBody(req)
+          } catch (error) {
+            return sendError(res, 400, 'invalid_body', String(error?.message ?? error))
+          }
+          const result = queue.submit(body)
+          if (!result.ok) return sendError(res, 400, result.code, result.message)
+          const waitSeconds = Number(body.waitSeconds) || 0
+          const job = waitSeconds > 0 ? await queue.waitFor(result.job.id, waitSeconds) : result.job
+          sendJson(res, 200, job)
+        },
+      }),
+    'imagen:route-generate',
+  )
+
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/imagen-api/job',
+        handler(req, res) {
+          if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
+          const id = parseQuery(req).get('id') ?? ''
+          const job = queue.get(id)
+          if (!job) return sendError(res, 404, 'not_found', '任务不存在')
+          sendJson(res, 200, job)
+        },
+      }),
+    'imagen:route-job',
+  )
+
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/imagen-api/jobs',
+        handler(req, res) {
+          if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
+          const limit = toInt(parseQuery(req).get('limit'), 20, 1, 100)
+          sendJson(res, 200, { jobs: queue.list(limit), queue: queue.queueStats() })
+        },
+      }),
+    'imagen:route-jobs',
+  )
+
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/imagen-api/history',
+        async handler(req, res) {
+          if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
+          const limit = toInt(parseQuery(req).get('limit'), 30, 1, 100)
+          const items = await scanHistory(ctx, limit)
+          sendJson(res, 200, { items })
+        },
+      }),
+    'imagen:route-history',
+  )
+
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/imagen-api/file',
+        async handler(req, res) {
+          if (req.method !== 'GET' && req.method !== 'HEAD') return methodNotAllowed(res, 'GET, HEAD')
+          const requested = parseQuery(req).get('path') ?? ''
+          const found = await resolveOutputPath(ctx, requested).catch(() => null)
+          if (!found) return sendError(res, 404, 'not_found', '文件不存在或不在输出目录内')
+          const data = await readFile(found.absolute).catch(() => null)
+          if (!data) return sendError(res, 404, 'not_found', '文件读取失败')
+          res.writeHead(200, {
+            'content-type': contentTypeOf(found.absolute),
+            'content-length': String(data.length),
+            'cache-control': 'public, max-age=31536000, immutable',
+          })
+          res.end(req.method === 'HEAD' ? undefined : data)
+        },
+      }),
+    'imagen:route-file',
+  )
+
+  // ---- Agent 工具 ---------------------------------------------------------
+
+  const toolParameters = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['prompt'],
+    properties: {
+      prompt: { type: 'string', description: '画面描述，建议英文，不超过 2000 字符' },
+      negativePrompt: { type: 'string', description: '反向提示词，仅在 cfg > 0 时生效' },
+      presetId: {
+        type: 'string',
+        enum: PRESETS.map((preset) => preset.id),
+        description: '模型预设；默认 sdxl-lightning（1024²，4 步，约 6 秒）',
+      },
+      width: { type: 'integer', description: '宽度 256-1536，默认取预设' },
+      height: { type: 'integer', description: '高度 256-1536，默认取预设' },
+      steps: { type: 'integer', description: '采样步数 1-60，默认取预设' },
+      cfg: { type: 'number', description: 'CFG 0-20，默认取预设' },
+      seed: { type: 'integer', description: '随机种子，省略则随机' },
+      count: { type: 'integer', description: '张数 1-4，默认 1' },
+      waitSeconds: {
+        type: 'integer',
+        description: '最多等待多少秒（0-600，默认 90）。首次生成需要排队与加载模型时可能超时，超时后任务仍在后台继续',
+      },
+    },
+  }
+
+  const textOutput = {
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { text: { type: 'string' } },
+    },
+    render: (_args, value) => [{ type: 'text', text: String(value?.text ?? '') }],
+  }
+
+  if (ctx.tools) {
+    ctx.tools.register({
+      name: 'imagen_generate',
+      description:
+        '在免费的 Kaggle GPU 上运行开源文生图模型并出图，图片会保存到工作区 imagen-output/ 目录。' +
+        '首次调用若远端会话未启动，会自动拉起 Kernel（可能需要排队 10 分钟以上），此时建议 waitSeconds 保持较小并稍后用 imagen_history 查看结果。',
+      parameters: toolParameters,
+      output: textOutput,
+      async execute(args = {}) {
+        const submitted = queue.submit(args)
+        if (!submitted.ok) return { text: `提交失败：${submitted.message}` }
+        const waitSeconds = toInt(args.waitSeconds, 90, 0, 600)
+        const job = await queue.waitFor(submitted.job.id, waitSeconds)
+        return { text: describeJob(job) }
+      },
+    })
+
+    ctx.tools.register({
+      name: 'imagen_session',
+      description:
+        '管理远端生图会话：start 拉起 Kaggle Kernel（幂等，已在运行则直接返回），stop 关机释放 GPU 配额，status 查看当前状态。',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['action'],
+        properties: {
+          action: { type: 'string', enum: ['start', 'stop', 'status'] },
+          presetId: { type: 'string', enum: PRESETS.map((preset) => preset.id) },
+        },
+      },
+      output: textOutput,
+      async execute(args = {}) {
+        const action = String(args.action ?? 'status')
+        if (action === 'start') {
+          const snapshot = await session.start(presetById(args.presetId ?? defaultPreset).id)
+          return { text: describeSession(snapshot) }
+        }
+        if (action === 'stop') {
+          const snapshot = await session.stop()
+          return { text: describeSession(snapshot) }
+        }
+        return { text: describeSession(session.snapshot()) }
+      },
+    })
+
+    ctx.tools.register({
+      name: 'imagen_history',
+      description: '列出最近生成过的图片（工作区 imagen-output/ 下的产物），返回路径与提示词，可用于回填或引用。',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          limit: { type: 'integer', description: '返回条数 1-30，默认 5' },
+        },
+      },
+      output: textOutput,
+      async execute(args = {}) {
+        const limit = toInt(args.limit, 5, 1, 30)
+        const items = await scanHistory(ctx, limit)
+        if (items.length === 0) return { text: '还没有生成记录。' }
+        const lines = []
+        for (const item of items) {
+          lines.push(`${item.createdAt ?? item.dir} · ${item.presetId ?? '未知预设'}`)
+          lines.push(`  ${String(item.prompt ?? '').slice(0, 120)}`)
+          for (const image of item.images) lines.push(`  ${image.path}`)
+        }
+        return { text: lines.join('\n') }
+      },
+    })
+  }
+
+  ctx.effect(
+    () => () => {
+      session.dispose()
+      queue.dispose()
+    },
+    'imagen:dispose',
   )
 }

@@ -1,6 +1,6 @@
 {
   "name": "dsh-our-free-imagen",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Free image generation workbench backed by Kaggle GPUs",
@@ -19,6 +19,11 @@
     "cordis.patch.yml",
     "remote/*.py"
   ],
+  "scripts": {
+    "test": "node test/host-e2e.mjs",
+    "test:live": "node test/kaggle-live.mjs",
+    "test:gpu": "node test/gpu-live.mjs"
+  },
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": {

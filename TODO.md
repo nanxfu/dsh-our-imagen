@@ -1,84 +1,100 @@
 # 待办任务清单 (TODO)
 
-供后续编码 Agent 接手执行。每个任务应保持独立、可验证。
+当前版本 0.2.0 的功能开发已收敛，剩余事项集中在真实 GPU 验证与体验增强。每项保持独立、可验证。
 
 ---
 
-## Task 1: 远端会话生命周期管理
+## 已完成（0.2.0）
 
-### 目标
-实现从本地拉起 Kaggle Kernel、获取穿透地址、到完成健康检查的完整流程。
-
-### 详细步骤
-1. **Kernel 打包与推送 (`lib/session.js`)**：
-   - 生成一次性随机 Topic 名与 Bearer Token。
-   - 准备临时目录，将 `remote/daemon.py` 中的 Topic 与 Token 占位符替换。
-   - 生成 `kernel-metadata.json`（`enable_gpu: true`, `enable_internet: true`）。
-   - 调用 `kaggle kernels push` 推送任务。
-2. **隧道握手与连接探测**：
-   - 轮询 `https://ntfy.sh/<topic>/json?poll=1&since=all`，解析出 `endpoint_url`（Cloudflare 临时域名）。
-   - 使用 Bearer Token 循环探测 `GET /health`，连续成功后将本地状态置为 `ready`。
-3. **路由对接 (`index.js`)**：
-   - 增加 `POST /imagen-api/session/start`：启动会话。
-   - 增加 `POST /imagen-api/session/stop`：调用远端 `POST /shutdown` 并重置本地状态为 `absent`。
-
-### 验收标准
-- 运行后本地状态能从 `absent` 转为 `provisioning`（排队/启动中），最终转为 `ready`。
-- 调用 stop 能通知远端正常退出，Kernel 变为 `COMPLETE`。
+| 事项 | 落点 | 验证方式 |
+| --- | --- | --- |
+| 远端会话生命周期（push → 排队 → 隧道 → 握手） | `lib/session.js`、`lib/kernel.js` | `node test/kaggle-live.mjs` 已跑通 |
+| 出图任务串行队列与参数钳制 | `lib/jobs.js` | `node test/host-e2e.mjs` |
+| 图片落盘、meta.json、历史扫描 | `lib/output.js` | `node test/host-e2e.mjs` |
+| Host 路由（state/probe/session/generate/job/jobs/history/file） | `index.js` | `node test/host-e2e.mjs` |
+| Agent 工具（imagen_generate / imagen_session / imagen_history） | `index.js` | `node test/host-e2e.mjs` |
+| 前端工作台与状态徽章 | `client.js` | `node --check client.js` + DSH 设置页人工检查 |
+| 远端 Daemon v2（依赖安装、加载分支、日志环、空闲退出） | `remote/daemon.py` | 待 GPU 实测（见 Task 1） |
 
 ---
 
-## Task 2: 出图任务处理与图片本地落盘
+## Task 1: 真实 GPU 端到端验证（已完成）
 
-### 目标
-实现接收生图参数、调用远端 HTTP 接口、将 Base64 图像落盘至当前工作区。
+### 结果
+`node test/gpu-live.mjs` 于 2026-11-09 跑通：Kernel `mogudd/imagen-101f2d4c`，2×Tesla T4，`sdxl-lightning` 1024²/4 步首张 11.65 秒，落盘 1.15MB PNG，关机后 Kernel 转为 `COMPLETE`。详见 `docs/MODELS_AND_BENCHMARKS.md` 的端到端实测小节与 `bench-results/gpu-live/2026-11-09T05-03-41/`。
 
-### 详细步骤
-1. **任务分发与 HTTP 调用**：
-   - 构建 `POST /generate` 请求体（Prompt、尺寸、步数、Seed 等）。
-   - 接收远端返回的 Base64 编码图片。
-2. **本地落盘**：
-   - 获取当前工作区路径，创建目标目录 `<workspace>/imagen-output/<jobId>/`。
-   - 将 Base64 解码写入 `.png` 文件。
-   - 生成伴随的 `meta.json`，记录完整的 prompt、seed、steps、cfg、model_id 及耗时。
-3. **路由暴露**：
-   - 增加 `POST /imagen-api/generate`：接收生成请求，加入串行任务队列，返回 jobId 与落盘文件路径。
+### 原目标与步骤（留档）
+用真实 Kaggle GPU 跑一次 `remote/daemon.py`，确认依赖安装、模型加载与出图耗时符合 `docs/MODELS_AND_BENCHMARKS.md` 的记录。
+
+1. 运行 `node test/gpu-live.mjs`（默认 `sdxl-lightning`，1024²、4 步）。
+2. 等待排队与模型加载，记录 `/health` 的 `device` 与 `loaded`。
+3. 检查 `bench-results/gpu-live/<时间戳>/01.png` 是否有效，`report.json` 里的 `loadSeconds` 与 `imageSeconds`。
+4. 把实测值与文档对比，偏差超过 50% 时更新 `docs/MODELS_AND_BENCHMARKS.md`。
 
 ### 验收标准
-- 调用生成接口后，工作区对应目录下生成有效的 PNG 图片和 `meta.json`。
-- 支持单任务排队，避免并发调用打崩远端 GPU 显存。
+- 生成成功，图片可打开，`imageSeconds` 在 5–10 秒区间（Lightning 4 步）。
+- Kernel 关机后 `kaggle kernels status` 变为 `COMPLETE`。
+
+> 首张 11.65 秒高于 5–10 秒区间，原因是首张包含 CUDA 上下文与显存分配；稳态仍是 6.2 秒。前端已按"首张较慢"提示。
 
 ---
 
-## Task 3: 前端交互完善 (`client.js`)
+## Task 2: 生成历史回填与复用
 
 ### 目标
-在现有设置页面板中增加出图操作区与图墙展示。
+让历史产物可以一键回填参数，减少重复输入。
 
-### 详细步骤
-1. **参数控制区**：
-   - Prompt 多行输入框。
-   - 步数与尺寸选择器（根据预设模型自动填充推荐值）。
-   - “开始生成”按钮与“一键关机”按钮。
-2. **状态与图墙呈现**：
-   - 展示生成中的加载状态与耗时计时。
-   - 渲染最近生成的图片缩略图，并提供打开本地文件所在目录的入口。
+### 步骤
+1. `GET /history` 已返回完整参数与 seed，前端在历史卡片上增加"以此参数再生成"按钮。
+2. 点击后把 prompt、negativePrompt、尺寸、步数、CFG、seed 写回表单（seed 保留，便于复现）。
+3. 需要的话在 `docs/API.md` 第 3 节补一句用法说明。
 
 ### 验收标准
-- 用户在界面输入 Prompt 点击生成后，界面显示生成状态，完成后直接展示出图缩略图。
+- 从历史卡片回填后直接点生成，能复现同一张图（同 seed、同参数）。
 
 ---
 
-## Task 4: DSH Agent Tool 接入
+## Task 3: Kernel 权重缓存（Kaggle Dataset 挂载）
 
 ### 目标
-让 DSH 对话模型能够在聊天中自主调用生图能力。
+把常用权重打包成 Kaggle Dataset，Kernel 启动时挂载，跳过每次 40 秒左右的下载。
 
-### 详细步骤
-1. 在 `index.js` 中使用 DSH 提供的 Tool 注册机制，声明 `imagen_generate` 工具：
-   - 参数定义：`prompt` (string), `width` (number), `height` (number), `steps` (number)。
-   - 实现体：直接复用 Task 2 的任务提交逻辑。
-   - 返回值：生成成功后的本地图片绝对/相对路径及摘要信息。
+### 步骤
+1. 把 SDXL base 的 fp16 文件整理成 Dataset 并上传（或复用社区公开 Dataset）。
+2. `kernel-metadata.json` 增加 `dataset_sources`，daemon 从 `/kaggle/input/<dataset>` 读取本地路径。
+3. `lib/presets.js` 增加 `datasetSource` 字段，`lib/kernel.js` 透传到 metadata。
+4. 未配置来源时保持现有下载路径，作为回退。
 
 ### 验收标准
-- 在对话中向 DSH 发送“帮我画一张...”时，模型能正确触发 Tool 调用并在回复中附带图片路径。
+- 二次启动 Kernel 的模型加载时间明显低于首次（目标 < 20 秒）。
+- 未配置 Dataset 的环境仍能正常加载。
+
+---
+
+## Task 4: FLUX.2 双卡路径验证
+
+### 目标
+确认 `loader: "flux2"` 在 2×T4 上能跑通，并补齐参数默认值。
+
+### 步骤
+1. 用 `node test/gpu-live.mjs --preset flux2-klein-4b` 跑一次。
+2. 观察 `device_map="balanced"` 是否让两张卡都参与，记录显存峰值。
+3. 若 diffusers 对 FLUX.2 的接口与 `AutoPipelineForText2Image` 不同，在 daemon 的 `build_pipeline` 增加对应分支。
+
+### 验收标准
+- 1024² 出图成功，不 OOM；耗时与文档记录（约 10 秒）偏差在合理范围。
+
+---
+
+## Task 5: 隧道备份通道
+
+### 目标
+`trycloudflare.com` 不可用时自动切换到备用通道。
+
+### 步骤
+1. 抽象 `start_tunnel(provider)`，先实现 `cloudflared`，再补一个备选（如 `bore` 或 ngrok，按可用性选择）。
+2. 主通道在 90 秒内未拿到域名时切换备选，并在日志与 `/health` 里标明当前通道。
+3. `lib/remote.js` 的 `isTrustedEndpoint` 需要按通道放行对应域名。
+
+### 验收标准
+- 人为阻断主通道时，会话仍能进入 ready。
