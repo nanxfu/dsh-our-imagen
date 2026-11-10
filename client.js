@@ -821,6 +821,65 @@ async function request(relative, init) {
   }
 }
 
+// src/api/resources.js
+function fetchState() {
+  return request(routePath("state"), { method: "GET" });
+}
+function fetchHistory(limit = 60) {
+  return request(`${routePath("history")}?limit=${limit}`, { method: "GET" });
+}
+function fetchLibrary() {
+  return request(routePath("library"), { method: "GET" });
+}
+function startSession(presetId) {
+  return request(routePath("sessionStart"), {
+    method: "POST",
+    body: JSON.stringify({ presetId })
+  });
+}
+function stopSession() {
+  return request(routePath("sessionStop"), { method: "POST" });
+}
+function submitGenerate(body) {
+  return request(routePath("generate"), {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+function runProbe(signal) {
+  return request(routePath("probe"), {
+    method: "POST",
+    ...signal ? { signal } : {}
+  });
+}
+function enhancePromptRequest({ prompt, presetId, locale }) {
+  return request(routePath("enhance"), {
+    method: "POST",
+    body: JSON.stringify({ prompt, presetId, locale })
+  });
+}
+function parseIntentRequest({ text, previousPrompt, locale }) {
+  return request(routePath("intent"), {
+    method: "POST",
+    body: JSON.stringify({ text, previousPrompt, locale })
+  });
+}
+function revealOutput() {
+  return request(routePath("reveal"), { method: "POST", body: JSON.stringify({}) });
+}
+function favoriteImage(path, favorite) {
+  return request(routePath("libraryFavorite"), {
+    method: "POST",
+    body: JSON.stringify({ path, favorite })
+  });
+}
+function deleteImages(paths) {
+  return request(routePath("libraryDelete"), {
+    method: "POST",
+    body: JSON.stringify({ paths })
+  });
+}
+
 // src/hooks/useHostState.js
 function useHostState() {
   const [state, setState] = import_react.default.useState(null);
@@ -842,7 +901,7 @@ function useHostState() {
       timer = null;
       if (stopped) return;
       if (typeof document !== "undefined" && document.hidden) return;
-      const result = await request(routePath("state"), { method: "GET" });
+      const result = await fetchState();
       if (stopped || !aliveRef.current) return;
       let delay = TIMEOUTS.clientStatePollMs;
       if (result.ok && result.data && typeof result.data === "object") {
@@ -3042,7 +3101,7 @@ function useStudio(props) {
     });
   }, [presets.length, defaultPreset]);
   const loadHistory = import_react12.default.useCallback(async () => {
-    const result = await request(routePath("history") + "?limit=60", { method: "GET" });
+    const result = await fetchHistory(60);
     if (!aliveRef.current) return;
     if (result.ok && result.data && Array.isArray(result.data.items)) {
       setHistoryItems(result.data.items.filter(Boolean));
@@ -3055,7 +3114,7 @@ function useStudio(props) {
     loadHistory();
   }, [loadHistory]);
   const loadLibrary = import_react12.default.useCallback(async () => {
-    const result = await request(routePath("library"), { method: "GET" });
+    const result = await fetchLibrary();
     if (!aliveRef.current) return;
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
       setFavorites(result.data.favorites);
@@ -3164,19 +3223,19 @@ function useStudio(props) {
   function copyInstallCommand() {
     return copyText(KAGGLE_INSTALL_COMMAND, "studio.guidance.cli.copied");
   }
-  async function startSession() {
+  async function startSession2() {
     if (busy) return;
     setBusy("start");
-    const result = await request(routePath("sessionStart"), { method: "POST", body: JSON.stringify({ presetId: form.presetId || defaultPreset }) });
+    const result = await startSession(form.presetId || defaultPreset);
     if (!aliveRef.current) return;
     setBusy("");
     if (!result.ok) fail(result.code, result.message);
     refresh();
   }
-  async function stopSession() {
+  async function stopSession2() {
     if (busy) return;
     setBusy("stop");
-    const result = await request(routePath("sessionStop"), { method: "POST" });
+    const result = await stopSession();
     if (!aliveRef.current) return;
     setBusy("");
     if (!result.ok) fail(result.code, result.message);
@@ -3198,7 +3257,7 @@ function useStudio(props) {
     pendingRef.current = body;
     setSending(true);
     setError(null);
-    const result = await request(routePath("generate"), { method: "POST", body: JSON.stringify(body) });
+    const result = await submitGenerate(body);
     if (!aliveRef.current) return;
     setSending(false);
     if (result.ok && result.data && result.data.id) {
@@ -3221,10 +3280,7 @@ function useStudio(props) {
     const previousPrompt = lastIntentPrompt(messages);
     pushMessages([{ role: "user", text: value }]);
     setInterpreting(true);
-    const result = await request(routePath("intent"), {
-      method: "POST",
-      body: JSON.stringify({ text: value, previousPrompt, locale: isEn ? "en" : "zh" })
-    });
+    const result = await parseIntentRequest({ text: value, previousPrompt, locale: isEn ? "en" : "zh" });
     interpretingRef.current = false;
     if (!aliveRef.current) return;
     setInterpreting(false);
@@ -3275,7 +3331,7 @@ function useStudio(props) {
     setZoom(true);
   }
   async function openFolder() {
-    const result = await request(routePath("reveal"), { method: "POST", body: JSON.stringify({}) });
+    const result = await revealOutput();
     if (!aliveRef.current) return;
     if (!result.ok) showToast(t("studio.toast.revealFailed"));
   }
@@ -3324,10 +3380,7 @@ function useStudio(props) {
     if (!target) return;
     const next = !isFavorite(target);
     setFavorites((prev) => next ? [...prev, target] : prev.filter((item) => item !== target));
-    const result = await request(routePath("libraryFavorite"), {
-      method: "POST",
-      body: JSON.stringify({ path: target, favorite: next })
-    });
+    const result = await favoriteImage(target, next);
     if (!aliveRef.current) return;
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
       setFavorites(result.data.favorites);
@@ -3337,13 +3390,10 @@ function useStudio(props) {
     setFavorites((prev) => next ? prev.filter((item) => item !== target) : [...prev, target]);
     fail(result.code, result.message);
   }
-  async function deleteImages(paths) {
+  async function deleteImages2(paths) {
     const list = (Array.isArray(paths) ? paths : []).filter(Boolean);
     if (list.length === 0) return;
-    const result = await request(routePath("libraryDelete"), {
-      method: "POST",
-      body: JSON.stringify({ paths: list })
-    });
+    const result = await deleteImages(list);
     if (!aliveRef.current) return;
     if (!result.ok) {
       fail(result.code, result.message);
@@ -3363,17 +3413,14 @@ function useStudio(props) {
     setError(null);
     showToast(t("studio.guidance.oom.action"));
   }
-  async function runProbe() {
+  async function runProbe2() {
     if (probing) return;
     setProbing(true);
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), TIMEOUTS.clientProbeMs) : null;
     let result;
     try {
-      result = await request(routePath("probe"), {
-        method: "POST",
-        ...controller ? { signal: controller.signal } : {}
-      });
+      result = await runProbe(controller ? controller.signal : void 0);
     } finally {
       if (timer !== null) clearTimeout(timer);
     }
@@ -3422,13 +3469,10 @@ function useStudio(props) {
       return;
     }
     setEnhancing(true);
-    const result = await request(routePath("enhance"), {
-      method: "POST",
-      body: JSON.stringify({
-        prompt: form.prompt,
-        presetId: form.presetId,
-        locale: isEn ? "en" : "zh"
-      })
+    const result = await enhancePromptRequest({
+      prompt: form.prompt,
+      presetId: form.presetId,
+      locale: isEn ? "en" : "zh"
     });
     if (!aliveRef.current) return;
     setEnhancing(false);
@@ -3486,7 +3530,7 @@ ${value}` : value });
     },
     sessionQueued,
     resetToSafe,
-    runProbe,
+    runProbe: runProbe2,
     exportPaths,
     t,
     view,
@@ -3518,7 +3562,7 @@ ${value}` : value });
     favorites,
     isFavorite,
     toggleFavorite,
-    deleteImages,
+    deleteImages: deleteImages2,
     refineGroups: refineGroups.map((group) => ({
       ...group,
       options: group.options.map((option) => ({ ...option, applied: isRefineApplied(form.prompt, option.text) }))
@@ -3537,8 +3581,8 @@ ${value}` : value });
     retryFocusedJob,
     copyPath,
     copyInstallCommand,
-    startSession,
-    stopSession,
+    startSession: startSession2,
+    stopSession: stopSession2,
     loadHistory
   };
 }

@@ -1,0 +1,94 @@
+/**
+ * Host 资源访问层：把「哪个端点、什么方法、什么请求体」收在一处。
+ *
+ * 约定：
+ *  - 每个函数只做 URL / 方法 / JSON body / 查询串拼装，返回值与 src/api.js 的 request()
+ *    完全相同（{ ok, status, code, message } 或 { ok, status, data }），不引入新的 envelope；
+ *  - 失败不抛异常，错误码与 message 原样交给调用方，由 UI 层决定 toast / 指引卡；
+ *  - 路径唯一来源是 routePath(name)（shared/contract.js 的 ROUTES），这里不写路径字面量。
+ */
+
+import { request, routePath } from '../api.js'
+
+/** Host 状态快照（轮询用）。 */
+export function fetchState() {
+  return request(routePath('state'), { method: 'GET' })
+}
+
+/** 最近生成历史；limit 默认 60，与收敛前的调用点一致。 */
+export function fetchHistory(limit = 60) {
+  return request(`${routePath('history')}?limit=${limit}`, { method: 'GET' })
+}
+
+/** 收藏库列表。 */
+export function fetchLibrary() {
+  return request(routePath('library'), { method: 'GET' })
+}
+
+/** 启动云端会话。 */
+export function startSession(presetId) {
+  return request(routePath('sessionStart'), {
+    method: 'POST',
+    body: JSON.stringify({ presetId }),
+  })
+}
+
+/** 关闭云端会话。 */
+export function stopSession() {
+  return request(routePath('sessionStop'), { method: 'POST' })
+}
+
+/** 提交一次生成任务。 */
+export function submitGenerate(body) {
+  return request(routePath('generate'), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/**
+ * 环境探测；signal 由调用方提供（45 秒超时与 AbortController 留在 useStudio）。
+ */
+export function runProbe(signal) {
+  return request(routePath('probe'), {
+    method: 'POST',
+    ...(signal ? { signal } : {}),
+  })
+}
+
+/** 提示词润色。 */
+export function enhancePromptRequest({ prompt, presetId, locale }) {
+  return request(routePath('enhance'), {
+    method: 'POST',
+    body: JSON.stringify({ prompt, presetId, locale }),
+  })
+}
+
+/** 把一句话解析成生成参数。 */
+export function parseIntentRequest({ text, previousPrompt, locale }) {
+  return request(routePath('intent'), {
+    method: 'POST',
+    body: JSON.stringify({ text, previousPrompt, locale }),
+  })
+}
+
+/** 在系统文件管理器里打开产物目录。 */
+export function revealOutput() {
+  return request(routePath('reveal'), { method: 'POST', body: JSON.stringify({}) })
+}
+
+/** 设置/取消单张作品的收藏。 */
+export function favoriteImage(path, favorite) {
+  return request(routePath('libraryFavorite'), {
+    method: 'POST',
+    body: JSON.stringify({ path, favorite }),
+  })
+}
+
+/** 删除一批产物文件。 */
+export function deleteImages(paths) {
+  return request(routePath('libraryDelete'), {
+    method: 'POST',
+    body: JSON.stringify({ paths }),
+  })
+}

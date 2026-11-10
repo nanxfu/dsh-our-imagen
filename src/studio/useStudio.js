@@ -8,7 +8,19 @@ import React from 'react'
 
 import { LIMITS, TIMEOUTS } from '../../shared/contract.js'
 
-import { request, routePath } from '../api.js'
+import {
+  deleteImages as deleteImagesRequest,
+  enhancePromptRequest,
+  favoriteImage,
+  fetchHistory,
+  fetchLibrary,
+  parseIntentRequest,
+  revealOutput,
+  runProbe as runProbeRequest,
+  startSession as startSessionRequest,
+  stopSession as stopSessionRequest,
+  submitGenerate,
+} from '../api/resources.js'
 import { useHostState } from '../hooks/useHostState.js'
 import { translator } from '../i18n.js'
 import { activeJobOf, stateJobs } from '../logic/jobs.js'
@@ -145,7 +157,7 @@ export function useStudio(props) {
   }, [presets.length, defaultPreset])
 
   const loadHistory = React.useCallback(async () => {
-    const result = await request(routePath('history') + '?limit=60', { method: 'GET' })
+    const result = await fetchHistory(60)
     if (!aliveRef.current) return
     if (result.ok && result.data && Array.isArray(result.data.items)) {
       setHistoryItems(result.data.items.filter(Boolean))
@@ -161,7 +173,7 @@ export function useStudio(props) {
   }, [loadHistory])
 
   const loadLibrary = React.useCallback(async () => {
-    const result = await request(routePath('library'), { method: 'GET' })
+    const result = await fetchLibrary()
     if (!aliveRef.current) return
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
       setFavorites(result.data.favorites)
@@ -300,7 +312,7 @@ export function useStudio(props) {
   async function startSession() {
     if (busy) return
     setBusy('start')
-    const result = await request(routePath('sessionStart'), { method: 'POST', body: JSON.stringify({ presetId: form.presetId || defaultPreset }) })
+    const result = await startSessionRequest(form.presetId || defaultPreset)
     if (!aliveRef.current) return
     setBusy('')
     if (!result.ok) fail(result.code, result.message)
@@ -310,7 +322,7 @@ export function useStudio(props) {
   async function stopSession() {
     if (busy) return
     setBusy('stop')
-    const result = await request(routePath('sessionStop'), { method: 'POST' })
+    const result = await stopSessionRequest()
     if (!aliveRef.current) return
     setBusy('')
     if (!result.ok) fail(result.code, result.message)
@@ -335,7 +347,7 @@ export function useStudio(props) {
     pendingRef.current = body
     setSending(true)
     setError(null)
-    const result = await request(routePath('generate'), { method: 'POST', body: JSON.stringify(body) })
+    const result = await submitGenerate(body)
     if (!aliveRef.current) return
     setSending(false)
     if (result.ok && result.data && result.data.id) {
@@ -363,10 +375,7 @@ export function useStudio(props) {
     const previousPrompt = lastIntentPrompt(messages)
     pushMessages([{ role: 'user', text: value }])
     setInterpreting(true)
-    const result = await request(routePath('intent'), {
-      method: 'POST',
-      body: JSON.stringify({ text: value, previousPrompt, locale: isEn ? 'en' : 'zh' }),
-    })
+    const result = await parseIntentRequest({ text: value, previousPrompt, locale: isEn ? 'en' : 'zh' })
     interpretingRef.current = false
     if (!aliveRef.current) return
     setInterpreting(false)
@@ -428,7 +437,7 @@ export function useStudio(props) {
 
   /** 在系统文件管理器里打开产物目录。 */
   async function openFolder() {
-    const result = await request(routePath('reveal'), { method: 'POST', body: JSON.stringify({}) })
+    const result = await revealOutput()
     if (!aliveRef.current) return
     if (!result.ok) showToast(t('studio.toast.revealFailed'))
   }
@@ -489,10 +498,7 @@ export function useStudio(props) {
     const next = !isFavorite(target)
     // 先本地翻转，再以宿主返回的列表为准，交互不等网络。
     setFavorites((prev) => (next ? [...prev, target] : prev.filter((item) => item !== target)))
-    const result = await request(routePath('libraryFavorite'), {
-      method: 'POST',
-      body: JSON.stringify({ path: target, favorite: next }),
-    })
+    const result = await favoriteImage(target, next)
     if (!aliveRef.current) return
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
       setFavorites(result.data.favorites)
@@ -506,10 +512,7 @@ export function useStudio(props) {
   async function deleteImages(paths) {
     const list = (Array.isArray(paths) ? paths : []).filter(Boolean)
     if (list.length === 0) return
-    const result = await request(routePath('libraryDelete'), {
-      method: 'POST',
-      body: JSON.stringify({ paths: list }),
-    })
+    const result = await deleteImagesRequest(list)
     if (!aliveRef.current) return
     if (!result.ok) {
       fail(result.code, result.message)
@@ -539,10 +542,7 @@ export function useStudio(props) {
     const timer = controller ? setTimeout(() => controller.abort(), TIMEOUTS.clientProbeMs) : null
     let result
     try {
-      result = await request(routePath('probe'), {
-        method: 'POST',
-        ...(controller ? { signal: controller.signal } : {}),
-      })
+      result = await runProbeRequest(controller ? controller.signal : undefined)
     } finally {
       if (timer !== null) clearTimeout(timer)
     }
@@ -596,13 +596,10 @@ export function useStudio(props) {
       return
     }
     setEnhancing(true)
-    const result = await request(routePath('enhance'), {
-      method: 'POST',
-      body: JSON.stringify({
-        prompt: form.prompt,
-        presetId: form.presetId,
-        locale: isEn ? 'en' : 'zh',
-      }),
+    const result = await enhancePromptRequest({
+      prompt: form.prompt,
+      presetId: form.presetId,
+      locale: isEn ? 'en' : 'zh',
     })
     if (!aliveRef.current) return
     setEnhancing(false)

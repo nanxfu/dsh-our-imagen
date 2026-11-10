@@ -3,7 +3,7 @@
 import { TIMEOUTS } from '../../shared/contract.js'
 
 import { React } from '../runtime.js'
-import { request, routePath } from '../api.js'
+import { fetchState } from '../api/resources.js'
 import { activeJobOf } from '../logic/jobs.js'
 
 export function useHostState() {
@@ -28,7 +28,7 @@ export function useHostState() {
       timer = null
       if (stopped) return
       if (typeof document !== 'undefined' && document.hidden) return
-      const result = await request(routePath('state'), { method: 'GET' })
+      const result = await fetchState()
       if (stopped || !aliveRef.current) return
       let delay = TIMEOUTS.clientStatePollMs
       if (result.ok && result.data && typeof result.data === 'object') {
