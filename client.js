@@ -978,7 +978,7 @@ function StatusChip(props) {
 }
 
 // src/studio/Studio.jsx
-var import_react13 = __toESM(require("react"), 1);
+var import_react18 = __toESM(require("react"), 1);
 
 // src/styles/tokens.css
 var tokens_default = '/*\n * 设计变量：黑白灰工作室。\n *\n * 视觉立场：一间明度分层的工作室，而不是一块彩色 AI 画布。\n *  1. 地面是中性灰的柔光渐变，上面浮近白的实心卡片；不用彩色光晕，不用玻璃彩虹。\n *  2. 只有明度关系：墨黑做主操作与选中，灰阶做层级，语义色（成功/警告/错误）\n *     只以小圆点或窄条出现，不参与大面积装饰。\n *  3. 深色是同一套明度关系反相：深灰底、浅灰字、浅色主操作。\n *\n * 预览工具（tools/preview.mjs）用同一组值注入深色，改这里要同步那边。\n */\n\n.ofs-root {\n  /* 地面：三层中性柔光 + 一层底色 */\n  --ofs-ground-1: #e7e8ea;\n  --ofs-ground-2: #f1f1f2;\n  --ofs-ground-3: #e3e4e6;\n  --ofs-ground-base: #f5f5f6;\n\n  /* 表面 */\n  --ofs-window: rgb(255 255 255 / 86%);\n  --ofs-window-border: rgb(18 18 22 / 8%);\n  --ofs-card: #ffffff;\n  --ofs-card-solid: #ffffff;\n  --ofs-card-border: rgb(18 18 22 / 9%);\n  --ofs-hairline: rgb(18 18 22 / 7%);\n  --ofs-sunken: #f4f4f6;\n  --ofs-sunken-border: rgb(18 18 22 / 8%);\n\n  /* 文字 */\n  --ofs-ink: #141416;\n  --ofs-ink-2: #52525a;\n  --ofs-ink-3: #6b6b73;\n  --ofs-ink-4: #a8a8b0;\n\n  /* 主操作：墨黑 */\n  --ofs-accent: #141416;\n  --ofs-accent-2: #3f3f46;\n  --ofs-accent-ink: #ffffff;\n  --ofs-accent-soft: #f0f0f2;\n  --ofs-accent-soft-border: #dedee3;\n  --ofs-accent-grad: linear-gradient(180deg, #2b2b30 0%, #141416 100%);\n\n  /* 状态：只做小面积语义色 */\n  --ofs-ok: #2f8a5c;\n  --ofs-ok-soft: #eaf5ef;\n  --ofs-warn: #a96a18;\n  --ofs-warn-soft: #f7f0e4;\n  --ofs-error: #c04444;\n  --ofs-error-soft: #f9ecec;\n  --ofs-idle: #a0a0a8;\n  --ofs-idle-soft: #f1f1f3;\n\n  /* 几何 */\n  --ofs-r-xl: 24px;\n  --ofs-r-lg: 18px;\n  --ofs-r-md: 14px;\n  --ofs-r-sm: 10px;\n  --ofs-r-pill: 999px;\n  --ofs-blur: 18px;\n\n  /* 投影：始终带偏移与柔和扩散，不用零偏移光晕 */\n  --ofs-shadow-card: 0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%);\n  --ofs-shadow-lift: 0 2px 6px rgb(16 16 20 / 6%), 0 18px 40px -20px rgb(16 16 20 / 26%);\n  --ofs-shadow-window: 0 1px 3px rgb(16 16 20 / 5%), 0 36px 80px -48px rgb(16 16 20 / 32%);\n  --ofs-shadow-accent: 0 8px 18px -10px rgb(16 16 20 / 48%);\n  --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(20 20 22 / 45%);\n\n  --ofs-font: -apple-system, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;\n\n  /* 留白节奏 */\n  --ofs-pad: 18px;\n  --ofs-gap: 14px;\n\n  display: flex;\n  flex-direction: column;\n  height: 100%;\n  min-height: 0;\n  padding: 18px;\n  color: var(--ofs-ink);\n  font-family: var(--ofs-font);\n  font-size: 13px;\n  line-height: 1.55;\n  -webkit-font-smoothing: antialiased;\n  background:\n    radial-gradient(1100px 620px at 12% -8%, var(--ofs-ground-1) 0%, transparent 62%),\n    radial-gradient(900px 520px at 88% 4%, var(--ofs-ground-2) 0%, transparent 58%),\n    radial-gradient(780px 540px at 62% 108%, var(--ofs-ground-3) 0%, transparent 62%),\n    linear-gradient(160deg, var(--ofs-ground-base) 0%, var(--ofs-ground-base) 100%);\n}\n\n@media (prefers-color-scheme: dark) {\n  .ofs-root {\n    --ofs-ground-1: #232326;\n    --ofs-ground-2: #17171a;\n    --ofs-ground-3: #26262a;\n    --ofs-ground-base: #101012;\n\n    --ofs-window: rgb(24 24 27 / 88%);\n    --ofs-window-border: rgb(255 255 255 / 9%);\n    --ofs-card: #18181b;\n    --ofs-card-solid: #1c1c20;\n    --ofs-card-border: rgb(255 255 255 / 9%);\n    --ofs-hairline: rgb(255 255 255 / 8%);\n    --ofs-sunken: rgb(255 255 255 / 5%);\n    --ofs-sunken-border: rgb(255 255 255 / 9%);\n\n    --ofs-ink: #f2f2f4;\n    --ofs-ink-2: #a4a4ac;\n    --ofs-ink-3: #8d8d95;\n    --ofs-ink-4: #5c5c63;\n\n    --ofs-accent: #f2f2f4;\n    --ofs-accent-2: #c8c8cf;\n    --ofs-accent-ink: #161618;\n    --ofs-accent-soft: rgb(255 255 255 / 8%);\n    --ofs-accent-soft-border: rgb(255 255 255 / 14%);\n    --ofs-accent-grad: linear-gradient(180deg, #fafafa 0%, #dcdce1 100%);\n\n    --ofs-ok: #58c08a;\n    --ofs-ok-soft: rgb(88 192 138 / 14%);\n    --ofs-warn: #d8a55c;\n    --ofs-warn-soft: rgb(216 165 92 / 14%);\n    --ofs-error: #e07a7a;\n    --ofs-error-soft: rgb(224 122 122 / 14%);\n    --ofs-idle: #8a8a92;\n    --ofs-idle-soft: rgb(255 255 255 / 6%);\n\n    --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 28px -18px rgb(0 0 0 / 70%);\n    --ofs-shadow-lift: 0 2px 6px rgb(0 0 0 / 44%), 0 20px 44px -22px rgb(0 0 0 / 76%);\n    --ofs-shadow-window: 0 1px 3px rgb(0 0 0 / 40%), 0 40px 88px -48px rgb(0 0 0 / 88%);\n    --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);\n    --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(255 255 255 / 40%);\n  }\n}';
@@ -2769,76 +2769,7 @@ function TopBar(props) {
 }
 
 // src/studio/useStudio.js
-var import_react12 = __toESM(require("react"), 1);
-
-// src/logic/error.js
-function errorText(t, error) {
-  if (!error) return "";
-  if (error.code === "need_prompt") return t("workbench.needPrompt");
-  if (error.code === "network") return t("error.network");
-  const label = localized(t, `error.code.${error.code}`);
-  const detail = error.message && error.message !== error.code ? String(error.message) : "";
-  if (label && detail) return `${label} · ${detail}`;
-  if (label) return label;
-  if (detail) return detail;
-  return t("error.http");
-}
-
-// src/logic/prompt.js
-function composePrompt(base, suffix) {
-  const head = String(base ?? "").trim();
-  const tail = String(suffix ?? "").trim();
-  if (!head) return "";
-  if (!tail) return head;
-  if (head.includes(tail)) return head;
-  return `${head}, ${tail}`;
-}
-function toggleStyle(form, capsule) {
-  const prev = form || {};
-  if (!capsule || !capsule.id) return { ...prev };
-  if (prev.styleId === capsule.id) {
-    return {
-      ...prev,
-      styleId: "",
-      negative: prev.negative === capsule.negative ? "" : prev.negative
-    };
-  }
-  return {
-    ...prev,
-    styleId: capsule.id,
-    negative: String(prev.negative ?? "").trim() ? prev.negative : capsule.negative
-  };
-}
-
-// src/logic/generate.js
-function buildGenerateBody(form, options = {}) {
-  const input = form || {};
-  const overrides = options.overrides && typeof options.overrides === "object" ? options.overrides : null;
-  const explicit = overrides && typeof overrides.prompt === "string" ? overrides.prompt : null;
-  const maxPromptChars = LIMITS.prompt.maxChars;
-  const prompt = explicit !== null ? explicit.trim().slice(0, maxPromptChars) : composePrompt(input.prompt, options.styleSuffix).slice(0, maxPromptChars);
-  const body = {
-    prompt,
-    negativePrompt: String(input.negative ?? "").trim(),
-    width: clampSize(input.width),
-    height: clampSize(input.height),
-    steps: clampInt(input.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
-    cfg: clampNumber(input.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
-    seed: parseSeed(input.seed),
-    count: clampInt(input.count, LIMITS.count.min, LIMITS.count.max, 1),
-    waitSeconds: 0,
-    autoStart: true
-  };
-  const presetId = input.presetId || options.defaultPreset || "";
-  if (presetId) body.presetId = presetId;
-  if (overrides) {
-    for (const [key, value] of Object.entries(overrides)) {
-      if (key === "prompt") continue;
-      body[key] = value;
-    }
-  }
-  return body;
-}
+var import_react17 = __toESM(require("react"), 1);
 
 // src/logic/recall.js
 function finiteNumber(value) {
@@ -2924,48 +2855,20 @@ function retryOverrides(source) {
   return overrides;
 }
 
-// src/logic/refine.js
-var SEPARATOR_CHARS = /[，,、;；\n\r\t ]/;
-var CJK = /[\u3400-\u9fff]/;
-function isBoundary(char) {
-  return char === void 0 || SEPARATOR_CHARS.test(char);
-}
-function findDelimited(text, term) {
-  let index = text.lastIndexOf(term);
-  while (index >= 0) {
-    if (isBoundary(text[index - 1]) && isBoundary(text[index + term.length])) return index;
-    index = index > 0 ? text.lastIndexOf(term, index - 1) : -1;
-  }
-  return -1;
-}
-function refineSeparator(prompt) {
-  return CJK.test(String(prompt ?? "")) ? "，" : ", ";
-}
-function isRefineApplied(prompt, term) {
-  const text = String(prompt ?? "");
-  const value = String(term ?? "").trim();
-  if (!value) return false;
-  return findDelimited(text, value) >= 0;
-}
-function toggleRefineTerm(prompt, term, separator) {
-  const text = String(prompt ?? "");
-  const value = String(term ?? "").trim();
-  if (!value) return text;
-  const sep = typeof separator === "string" && separator ? separator : refineSeparator(text);
-  const index = findDelimited(text, value);
-  if (index >= 0) {
-    let start = index;
-    let end = index + value.length;
-    while (start > 0 && SEPARATOR_CHARS.test(text[start - 1])) start -= 1;
-    if (start === index) {
-      while (end < text.length && SEPARATOR_CHARS.test(text[end])) end += 1;
-    }
-    return (text.slice(0, start) + text.slice(end)).trim();
-  }
-  const trimmed = text.replace(/\s+$/, "");
-  if (!trimmed) return value;
-  if (/[，,、;；]$/.test(trimmed)) return trimmed + value;
-  return trimmed + sep + value;
+// src/studio/hooks/useChatThread.js
+var import_react12 = __toESM(require("react"), 1);
+
+// src/logic/error.js
+function errorText(t, error) {
+  if (!error) return "";
+  if (error.code === "need_prompt") return t("workbench.needPrompt");
+  if (error.code === "network") return t("error.network");
+  const label = localized(t, `error.code.${error.code}`);
+  const detail = error.message && error.message !== error.code ? String(error.message) : "";
+  if (label && detail) return `${label} · ${detail}`;
+  if (label) return label;
+  if (detail) return detail;
+  return t("error.http");
 }
 
 // src/logic/intent.js
@@ -2999,132 +2902,13 @@ function intentPrompt(intent, capsules) {
   return capsule ? `${base}, ${capsule.suffix}` : base;
 }
 
-// src/studio/useStudio.js
-var EMPTY_FORM = {
-  prompt: "",
-  negative: "",
-  presetId: "",
-  width: 1024,
-  height: 1024,
-  steps: 4,
-  cfg: 0,
-  seed: "",
-  count: 1,
-  styleId: ""
-};
-function flattenHistory(items) {
-  const images = [];
-  for (const item of items) {
-    const list = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
-    for (const image of list) images.push({ image, item });
-  }
-  return images;
-}
-function useStudio(props) {
-  const t = translator(props);
-  const isEn = !/^zh/i.test(String(typeof document !== "undefined" && document.documentElement && document.documentElement.lang || "en"));
-  const host = useHostState();
-  const state = host.state;
-  const refresh = host.refresh;
-  const hostError = host.error;
-  const session = state && state.session || null;
-  const sessionState = session && session.state || "absent";
-  const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : [];
-  const defaultPreset = state && state.defaultPreset || "";
-  const activeJob = activeJobOf(state);
-  const [form, setForm] = import_react12.default.useState(() => ({
-    ...EMPTY_FORM,
-    prompt: props && typeof props.initialPrompt === "string" ? props.initialPrompt : ""
-  }));
-  const ratioId = (() => {
-    const match = DEFAULT_RATIOS.find((ratio) => {
-      const size = ratioToSize(ratio);
-      return size.width === form.width && size.height === form.height;
-    });
-    return match ? match.id : "";
-  })();
-  const [view, setView] = import_react12.default.useState(props && props.view === "gallery" ? "gallery" : "studio");
-  const [advancedOpen, setAdvancedOpen] = import_react12.default.useState(false);
-  const [negativeOpen, setNegativeOpen] = import_react12.default.useState(false);
-  const [sending, setSending] = import_react12.default.useState(false);
-  const [busy, setBusy] = import_react12.default.useState("");
-  const [probing, setProbing] = import_react12.default.useState(false);
-  const [probeReport, setProbeReport] = import_react12.default.useState(null);
-  const [error, setError] = import_react12.default.useState(null);
-  const [dismissed, setDismissed] = import_react12.default.useState("");
-  const [toast, setToast] = import_react12.default.useState(null);
-  const [selectedPath, setSelectedPath] = import_react12.default.useState("");
-  const [historyItems, setHistoryItems] = import_react12.default.useState([]);
-  const [historyDone, setHistoryDone] = import_react12.default.useState(false);
-  const [favorites, setFavorites] = import_react12.default.useState([]);
-  const [refineGroups, setRefineGroups] = import_react12.default.useState([]);
-  const [refineSource, setRefineSource] = import_react12.default.useState("");
-  const [enhancing, setEnhancing] = import_react12.default.useState(false);
-  const [panelMode, setPanelMode] = import_react12.default.useState(props && props.panelMode === "chat" ? "chat" : "form");
+// src/studio/hooks/useChatThread.js
+function useChatThread({ state, t, isEn, aliveRef, form, patchForm, generate }) {
   const [messages, setMessages] = import_react12.default.useState([]);
   const [interpreting, setInterpreting] = import_react12.default.useState(false);
   const messageSeq = import_react12.default.useRef(0);
-  const [zoom, setZoom] = import_react12.default.useState(false);
-  const pendingRef = import_react12.default.useRef(null);
   const interpretingRef = import_react12.default.useRef(false);
-  const aliveRef = import_react12.default.useRef(true);
-  import_react12.default.useEffect(() => {
-    aliveRef.current = true;
-    return () => {
-      aliveRef.current = false;
-    };
-  }, []);
-  const hostErrorKeyRef = import_react12.default.useRef("");
-  import_react12.default.useEffect(() => {
-    if (!hostError) return;
-    const key = `${hostError.code}|${hostError.message ?? ""}`;
-    if (hostErrorKeyRef.current === key) return;
-    hostErrorKeyRef.current = key;
-    setError((prev) => prev || { code: hostError.code, message: hostError.message ?? "" });
-  }, [hostError]);
-  import_react12.default.useEffect(() => {
-    if (presets.length === 0) return;
-    setForm((prev) => {
-      if (prev.presetId && presets.some((item) => item.id === prev.presetId)) return prev;
-      const initial = presets.some((item) => item.id === defaultPreset) ? defaultPreset : presets[0].id;
-      const preset2 = presets.find((item) => item.id === initial);
-      if (!preset2) return prev;
-      const size = clampSize(preset2.size);
-      return {
-        ...prev,
-        presetId: initial,
-        width: size,
-        height: size,
-        steps: clampInt(preset2.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
-        cfg: clampNumber(preset2.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0)
-      };
-    });
-  }, [presets.length, defaultPreset]);
-  const loadHistory = import_react12.default.useCallback(async () => {
-    const result = await fetchHistory(60);
-    if (!aliveRef.current) return;
-    if (result.ok && result.data && Array.isArray(result.data.items)) {
-      setHistoryItems(result.data.items.filter(Boolean));
-    } else if (!result.ok) {
-      fail(result.code, result.message);
-    }
-    setHistoryDone(true);
-  }, []);
-  import_react12.default.useEffect(() => {
-    loadHistory();
-  }, [loadHistory]);
-  const loadLibrary = import_react12.default.useCallback(async () => {
-    const result = await fetchLibrary();
-    if (!aliveRef.current) return;
-    if (result.ok && result.data && Array.isArray(result.data.favorites)) {
-      setFavorites(result.data.favorites);
-    } else if (!result.ok) {
-      fail(result.code, result.message);
-    }
-  }, []);
-  import_react12.default.useEffect(() => {
-    loadLibrary();
-  }, [loadLibrary]);
+  const activeJob = activeJobOf(state);
   const threadJob = activeJob || state && state.lastJob || null;
   const threadJobKey = threadJob ? `${threadJob.id}:${threadJob.status}` : "";
   import_react12.default.useEffect(() => {
@@ -3159,119 +2943,8 @@ function useStudio(props) {
       return copy;
     });
   }, [threadJobKey]);
-  const firstImageRef = import_react12.default.useRef(false);
-  const finished = state && state.lastJob && state.lastJob.status === "done" ? state.lastJob : null;
-  import_react12.default.useEffect(() => {
-    if (!finished || firstImageRef.current) return;
-    const images = Array.isArray(finished.output?.images) ? finished.output.images : [];
-    if (images.length === 0) return;
-    firstImageRef.current = true;
-    setToast({ text: t("studio.toast.firstImage"), id: Date.now() });
-  }, [finished && finished.id]);
-  const lastJobId = state && state.lastJob ? `${state.lastJob.id}:${state.lastJob.finishedAt ?? ""}` : "";
-  const lastSeenRef = import_react12.default.useRef("");
-  import_react12.default.useEffect(() => {
-    if (!lastJobId || lastSeenRef.current === lastJobId) return;
-    lastSeenRef.current = lastJobId;
-    loadHistory();
-  }, [lastJobId, loadHistory]);
-  const gallery = flattenHistory(historyItems);
-  const batches = historyItems.map((item) => ({
-    key: item.jobId || item.dir || String(item.prompt),
-    prompt: item.prompt || "",
-    presetId: item.presetId || "",
-    entries: (Array.isArray(item.images) ? item.images.filter(Boolean) : []).map((image) => ({ image, item }))
-  })).filter((batch) => batch.entries.length > 0);
-  const newest = gallery[0] || null;
-  const selected = selectedPath && gallery.find((entry) => entry.image.path === selectedPath) || newest;
-  const focusedJob = activeJob || state && state.lastJob || stateJobs(state)[0] || null;
-  const sessionQueued = sessionState === "provisioning" || Boolean(activeJob && (activeJob.status === "queued" || activeJob.status === "waiting-session"));
-  const preset = presets.find((item) => item.id === form.presetId) || null;
-  function patchForm(partial) {
-    setForm((prev) => ({ ...prev, ...partial }));
-  }
-  function showToast(text) {
-    setToast({ text, id: Date.now() });
-  }
-  function fail(code, message) {
-    setDismissed("");
-    setError({ code, message: message ?? "" });
-  }
-  import_react12.default.useEffect(() => {
-    if (!toast) return void 0;
-    const timer = setTimeout(() => {
-      if (aliveRef.current) setToast(null);
-    }, 2600);
-    return () => clearTimeout(timer);
-  }, [toast]);
-  async function copyText(text, okKey) {
-    const value = String(text ?? "").trim();
-    if (!value) return;
-    try {
-      if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(value);
-        showToast(t(okKey));
-        return;
-      }
-    } catch {
-    }
-    showToast(value);
-  }
-  function copyPath(value) {
-    return copyText(value, "studio.toast.copied");
-  }
-  function copyInstallCommand() {
-    return copyText(KAGGLE_INSTALL_COMMAND, "studio.guidance.cli.copied");
-  }
-  async function startSession2() {
-    if (busy) return;
-    setBusy("start");
-    const result = await startSession(form.presetId || defaultPreset);
-    if (!aliveRef.current) return;
-    setBusy("");
-    if (!result.ok) fail(result.code, result.message);
-    refresh();
-  }
-  async function stopSession2() {
-    if (busy) return;
-    setBusy("stop");
-    const result = await stopSession();
-    if (!aliveRef.current) return;
-    setBusy("");
-    if (!result.ok) fail(result.code, result.message);
-    refresh();
-  }
-  function buildBody(overrides) {
-    return buildGenerateBody(form, { styleSuffix, defaultPreset, overrides });
-  }
   function pushMessages(entries) {
     setMessages((prev) => [...prev, ...entries.map((entry) => ({ id: messageSeq.current += 1, ...entry }))]);
-  }
-  async function generate(overrides, options = {}) {
-    if (sending) return;
-    const body = buildBody(overrides);
-    if (!body.prompt) {
-      fail("need_prompt", "");
-      return;
-    }
-    pendingRef.current = body;
-    setSending(true);
-    setError(null);
-    const result = await submitGenerate(body);
-    if (!aliveRef.current) return;
-    setSending(false);
-    if (result.ok && result.data && result.data.id) {
-      const jobId = result.data.id;
-      const entries = [];
-      if (options.pushUser !== false) entries.push({ role: "user", text: body.prompt });
-      entries.push({ role: "assistant", kind: "job", jobId, stage: "pending", text: t("studio.chat.pending") });
-      pushMessages(entries);
-      refresh();
-      loadHistory();
-      showToast(t("studio.toast.submitted"));
-      return;
-    }
-    fail(result.code, result.message);
   }
   async function interpret(text) {
     const value = String(text ?? "").trim();
@@ -3324,42 +2997,270 @@ function useStudio(props) {
     if (Object.keys(patch).length > 0) patchForm(patch);
     await generate(overrides, { pushUser: false });
   }
-  function zoomImage(entry) {
-    if (!entry) return;
-    selectImage(entry);
-    setView("studio");
-    setZoom(true);
+  function clearThread() {
+    setMessages([]);
+  }
+  return {
+    messages,
+    interpreting,
+    interpret,
+    resolveClarify,
+    generateIntent,
+    clearThread,
+    pushMessages
+  };
+}
+
+// src/studio/hooks/useSessionControl.js
+var import_react13 = __toESM(require("react"), 1);
+function useSessionControl({ state, refresh, hostError, t, aliveRef, error, setError, showToast, fail }) {
+  const [busy, setBusy] = import_react13.default.useState("");
+  const [probing, setProbing] = import_react13.default.useState(false);
+  const [probeReport, setProbeReport] = import_react13.default.useState(null);
+  const session = state && state.session || null;
+  const sessionState = session && session.state || "absent";
+  const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : [];
+  const defaultPreset = state && state.defaultPreset || "";
+  const activeJob = activeJobOf(state);
+  const focusedJob = activeJob || state && state.lastJob || stateJobs(state)[0] || null;
+  const hostErrorKeyRef = import_react13.default.useRef("");
+  import_react13.default.useEffect(() => {
+    if (!hostError) return;
+    const key = `${hostError.code}|${hostError.message ?? ""}`;
+    if (hostErrorKeyRef.current === key) return;
+    hostErrorKeyRef.current = key;
+    setError((prev) => prev || { code: hostError.code, message: hostError.message ?? "" });
+  }, [hostError]);
+  async function startSession2(presetId) {
+    if (busy) return;
+    setBusy("start");
+    const result = await startSession(presetId);
+    if (!aliveRef.current) return;
+    setBusy("");
+    if (!result.ok) fail(result.code, result.message);
+    refresh();
+  }
+  async function stopSession2() {
+    if (busy) return;
+    setBusy("stop");
+    const result = await stopSession();
+    if (!aliveRef.current) return;
+    setBusy("");
+    if (!result.ok) fail(result.code, result.message);
+    refresh();
   }
   async function openFolder() {
     const result = await revealOutput();
     if (!aliveRef.current) return;
     if (!result.ok) showToast(t("studio.toast.revealFailed"));
   }
-  function reroll(entry) {
-    const target = entry || selected;
-    const overrides = rerollOverrides(target, presets);
-    if (!overrides) {
-      showToast(t("workbench.needPrompt"));
+  async function runProbe2() {
+    if (probing) return;
+    setProbing(true);
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), TIMEOUTS.clientProbeMs) : null;
+    let result;
+    try {
+      result = await runProbe(controller ? controller.signal : void 0);
+    } finally {
+      if (timer !== null) clearTimeout(timer);
+    }
+    if (!aliveRef.current) return;
+    setProbing(false);
+    if (!result.ok) {
+      setProbeReport({ status: result.code === "timeout" ? "timeout" : "failed", message: result.message, probe: null });
+      showToast(result.code === "timeout" ? t("studio.probe.timeout") : t("studio.probe.failed"));
       return;
     }
-    generate(overrides);
-  }
-  function iterate(entry) {
-    const target = entry || selected;
-    const patch = iteratePatch(target, form, presets);
-    if (Object.keys(patch).length === 0) return;
-    patchForm(patch);
-    setView("studio");
-    setPanelMode("form");
-    showToast(t("studio.toast.recalled"));
-  }
-  function retryFocusedJob() {
-    const overrides = retryOverrides(focusedJob) || (pendingRef.current ? retryOverrides(pendingRef.current) : null);
-    if (!overrides) {
-      showToast(t("workbench.needPrompt"));
-      return;
+    const outcome = probeOutcomeOf(result.data);
+    if (outcome.ok) {
+      setProbeReport({ status: "ok", message: "", probe: outcome.probe });
+      if (error && (error.code === "cli_missing" || error.code === "auth_required")) setError(null);
+      showToast(t("studio.probe.ok"));
+    } else {
+      setProbeReport({ status: "failed", message: outcome.detail, probe: outcome.probe });
+      if (outcome.code === "cli_missing" || outcome.code === "auth_required") fail(outcome.code, outcome.detail);
+      else showToast(t("studio.probe.failed"));
     }
-    generate(overrides);
+    refresh();
+  }
+  return {
+    session,
+    sessionState,
+    presets,
+    defaultPreset,
+    activeJob,
+    focusedJob,
+    quota: state && state.probe && state.probe.quota || null,
+    probe: state && state.probe || null,
+    busy,
+    probing,
+    probeReport,
+    startSession: startSession2,
+    stopSession: stopSession2,
+    runProbe: runProbe2,
+    openFolder
+  };
+}
+
+// src/studio/hooks/useStudioForm.js
+var import_react14 = __toESM(require("react"), 1);
+
+// src/logic/prompt.js
+function composePrompt(base, suffix) {
+  const head = String(base ?? "").trim();
+  const tail = String(suffix ?? "").trim();
+  if (!head) return "";
+  if (!tail) return head;
+  if (head.includes(tail)) return head;
+  return `${head}, ${tail}`;
+}
+function toggleStyle(form, capsule) {
+  const prev = form || {};
+  if (!capsule || !capsule.id) return { ...prev };
+  if (prev.styleId === capsule.id) {
+    return {
+      ...prev,
+      styleId: "",
+      negative: prev.negative === capsule.negative ? "" : prev.negative
+    };
+  }
+  return {
+    ...prev,
+    styleId: capsule.id,
+    negative: String(prev.negative ?? "").trim() ? prev.negative : capsule.negative
+  };
+}
+
+// src/logic/generate.js
+function buildGenerateBody(form, options = {}) {
+  const input = form || {};
+  const overrides = options.overrides && typeof options.overrides === "object" ? options.overrides : null;
+  const explicit = overrides && typeof overrides.prompt === "string" ? overrides.prompt : null;
+  const maxPromptChars = LIMITS.prompt.maxChars;
+  const prompt = explicit !== null ? explicit.trim().slice(0, maxPromptChars) : composePrompt(input.prompt, options.styleSuffix).slice(0, maxPromptChars);
+  const body = {
+    prompt,
+    negativePrompt: String(input.negative ?? "").trim(),
+    width: clampSize(input.width),
+    height: clampSize(input.height),
+    steps: clampInt(input.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
+    cfg: clampNumber(input.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
+    seed: parseSeed(input.seed),
+    count: clampInt(input.count, LIMITS.count.min, LIMITS.count.max, 1),
+    waitSeconds: 0,
+    autoStart: true
+  };
+  const presetId = input.presetId || options.defaultPreset || "";
+  if (presetId) body.presetId = presetId;
+  if (overrides) {
+    for (const [key, value] of Object.entries(overrides)) {
+      if (key === "prompt") continue;
+      body[key] = value;
+    }
+  }
+  return body;
+}
+
+// src/logic/refine.js
+var SEPARATOR_CHARS = /[，,、;；\n\r\t ]/;
+var CJK = /[\u3400-\u9fff]/;
+function isBoundary(char) {
+  return char === void 0 || SEPARATOR_CHARS.test(char);
+}
+function findDelimited(text, term) {
+  let index = text.lastIndexOf(term);
+  while (index >= 0) {
+    if (isBoundary(text[index - 1]) && isBoundary(text[index + term.length])) return index;
+    index = index > 0 ? text.lastIndexOf(term, index - 1) : -1;
+  }
+  return -1;
+}
+function refineSeparator(prompt) {
+  return CJK.test(String(prompt ?? "")) ? "，" : ", ";
+}
+function isRefineApplied(prompt, term) {
+  const text = String(prompt ?? "");
+  const value = String(term ?? "").trim();
+  if (!value) return false;
+  return findDelimited(text, value) >= 0;
+}
+function toggleRefineTerm(prompt, term, separator) {
+  const text = String(prompt ?? "");
+  const value = String(term ?? "").trim();
+  if (!value) return text;
+  const sep = typeof separator === "string" && separator ? separator : refineSeparator(text);
+  const index = findDelimited(text, value);
+  if (index >= 0) {
+    let start = index;
+    let end = index + value.length;
+    while (start > 0 && SEPARATOR_CHARS.test(text[start - 1])) start -= 1;
+    if (start === index) {
+      while (end < text.length && SEPARATOR_CHARS.test(text[end])) end += 1;
+    }
+    return (text.slice(0, start) + text.slice(end)).trim();
+  }
+  const trimmed = text.replace(/\s+$/, "");
+  if (!trimmed) return value;
+  if (/[，,、;；]$/.test(trimmed)) return trimmed + value;
+  return trimmed + sep + value;
+}
+
+// src/studio/hooks/useStudioForm.js
+var EMPTY_FORM = {
+  prompt: "",
+  negative: "",
+  presetId: "",
+  width: 1024,
+  height: 1024,
+  steps: 4,
+  cfg: 0,
+  seed: "",
+  count: 1,
+  styleId: ""
+};
+function useStudioForm({ presets, defaultPreset, t, isEn, aliveRef, showToast, fail, initialPrompt }) {
+  const [form, setForm] = import_react14.default.useState(() => ({
+    ...EMPTY_FORM,
+    prompt: initialPrompt
+  }));
+  const [refineGroups, setRefineGroups] = import_react14.default.useState([]);
+  const [refineSource, setRefineSource] = import_react14.default.useState("");
+  const [enhancing, setEnhancing] = import_react14.default.useState(false);
+  const ratioId = (() => {
+    const match = DEFAULT_RATIOS.find((ratio) => {
+      const size = ratioToSize(ratio);
+      return size.width === form.width && size.height === form.height;
+    });
+    return match ? match.id : "";
+  })();
+  const styleSuffix = (() => {
+    const capsule = STYLE_CAPSULES.find((item) => item.id === form.styleId);
+    return capsule ? capsule.suffix : "";
+  })();
+  import_react14.default.useEffect(() => {
+    if (presets.length === 0) return;
+    setForm((prev) => {
+      if (prev.presetId && presets.some((item) => item.id === prev.presetId)) return prev;
+      const initial = presets.some((item) => item.id === defaultPreset) ? defaultPreset : presets[0].id;
+      const preset = presets.find((item) => item.id === initial);
+      if (!preset) return prev;
+      const size = clampSize(preset.size);
+      return {
+        ...prev,
+        presetId: initial,
+        width: size,
+        height: size,
+        steps: clampInt(preset.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
+        cfg: clampNumber(preset.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0)
+      };
+    });
+  }, [presets.length, defaultPreset]);
+  function patchForm(partial) {
+    setForm((prev) => ({ ...prev, ...partial }));
+  }
+  function buildBody(overrides) {
+    return buildGenerateBody(form, { styleSuffix, defaultPreset, overrides });
   }
   function applyStyle(capsuleId) {
     const capsule = STYLE_CAPSULES.find((item) => item.id === capsuleId);
@@ -3371,6 +3272,200 @@ function useStudio(props) {
     if (!ratio) return;
     const size = ratioToSize(ratio);
     patchForm({ width: size.width, height: size.height });
+  }
+  async function enhance() {
+    if (enhancing) return;
+    if (!form.prompt.trim()) {
+      showToast(t("studio.promptHint"));
+      return;
+    }
+    setEnhancing(true);
+    const result = await enhancePromptRequest({
+      prompt: form.prompt,
+      presetId: form.presetId,
+      locale: isEn ? "en" : "zh"
+    });
+    if (!aliveRef.current) return;
+    setEnhancing(false);
+    if (result.ok && result.data && Array.isArray(result.data.groups)) {
+      const groups = result.data.groups.filter((group) => group && Array.isArray(group.options) && group.options.length > 0);
+      setRefineGroups(groups);
+      setRefineSource(result.data.source === "model" ? "model" : "local");
+      return;
+    }
+    fail(result.code, result.message);
+  }
+  function toggleRefine(term) {
+    patchForm({ prompt: toggleRefineTerm(form.prompt, term, refineSeparator(form.prompt)) });
+  }
+  function useInspiration(text) {
+    const value = String(text ?? "").trim();
+    if (!value) return;
+    const base = form.prompt.trim();
+    patchForm({ prompt: base ? `${base}
+${value}` : value });
+  }
+  return {
+    form,
+    patchForm,
+    buildBody,
+    ratioId,
+    styleId: form.styleId,
+    applyStyle,
+    applyRatio,
+    refineGroups: refineGroups.map((group) => ({
+      ...group,
+      options: group.options.map((option) => ({ ...option, applied: isRefineApplied(form.prompt, option.text) }))
+    })),
+    refineSource,
+    enhancing,
+    enhance,
+    toggleRefine,
+    useInspiration
+  };
+}
+
+// src/studio/hooks/useStudioUi.js
+var import_react15 = __toESM(require("react"), 1);
+function useStudioUi({ t, aliveRef, initialView, initialPanelMode }) {
+  const [view, setView] = import_react15.default.useState(initialView);
+  const [advancedOpen, setAdvancedOpen] = import_react15.default.useState(false);
+  const [negativeOpen, setNegativeOpen] = import_react15.default.useState(false);
+  const [error, setError] = import_react15.default.useState(null);
+  const [dismissed, setDismissed] = import_react15.default.useState("");
+  const [toast, setToast] = import_react15.default.useState(null);
+  const [panelMode, setPanelMode] = import_react15.default.useState(initialPanelMode);
+  const [zoom, setZoom] = import_react15.default.useState(false);
+  function showToast(text) {
+    setToast({ text, id: Date.now() });
+  }
+  function fail(code, message) {
+    setDismissed("");
+    setError({ code, message: message ?? "" });
+  }
+  function dismissGuidance(guidanceKey) {
+    if (guidanceKey) setDismissed(guidanceKey);
+    setError(null);
+  }
+  import_react15.default.useEffect(() => {
+    if (!toast) return void 0;
+    const timer = setTimeout(() => {
+      if (aliveRef.current) setToast(null);
+    }, 2600);
+    return () => clearTimeout(timer);
+  }, [toast]);
+  async function copyText(text, okKey) {
+    const value = String(text ?? "").trim();
+    if (!value) return;
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(value);
+        showToast(t(okKey));
+        return;
+      }
+    } catch {
+    }
+    showToast(value);
+  }
+  function copyPath(value) {
+    return copyText(value, "studio.toast.copied");
+  }
+  function copyInstallCommand() {
+    return copyText(KAGGLE_INSTALL_COMMAND, "studio.guidance.cli.copied");
+  }
+  return {
+    view,
+    setView,
+    zoom,
+    setZoom,
+    panelMode,
+    setPanelMode,
+    advancedOpen,
+    setAdvancedOpen,
+    negativeOpen,
+    setNegativeOpen,
+    toast,
+    error,
+    setError,
+    dismissed,
+    showToast,
+    fail,
+    dismissGuidance,
+    copyPath,
+    copyInstallCommand
+  };
+}
+
+// src/studio/hooks/useWorkLibrary.js
+var import_react16 = __toESM(require("react"), 1);
+function flattenHistory(items) {
+  const images = [];
+  for (const item of items) {
+    const list = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
+    for (const image of list) images.push({ image, item });
+  }
+  return images;
+}
+function useWorkLibrary({ state, t, aliveRef, showToast, fail, setView, setZoom }) {
+  const [selectedPath, setSelectedPath] = import_react16.default.useState("");
+  const [historyItems, setHistoryItems] = import_react16.default.useState([]);
+  const [historyDone, setHistoryDone] = import_react16.default.useState(false);
+  const [favorites, setFavorites] = import_react16.default.useState([]);
+  const loadHistory = import_react16.default.useCallback(async () => {
+    const result = await fetchHistory(60);
+    if (!aliveRef.current) return;
+    if (result.ok && result.data && Array.isArray(result.data.items)) {
+      setHistoryItems(result.data.items.filter(Boolean));
+    } else if (!result.ok) {
+      fail(result.code, result.message);
+    }
+    setHistoryDone(true);
+  }, []);
+  import_react16.default.useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+  const loadLibrary = import_react16.default.useCallback(async () => {
+    const result = await fetchLibrary();
+    if (!aliveRef.current) return;
+    if (result.ok && result.data && Array.isArray(result.data.favorites)) {
+      setFavorites(result.data.favorites);
+    } else if (!result.ok) {
+      fail(result.code, result.message);
+    }
+  }, []);
+  import_react16.default.useEffect(() => {
+    loadLibrary();
+  }, [loadLibrary]);
+  const firstImageRef = import_react16.default.useRef(false);
+  const finished = state && state.lastJob && state.lastJob.status === "done" ? state.lastJob : null;
+  import_react16.default.useEffect(() => {
+    if (!finished || firstImageRef.current) return;
+    const images = Array.isArray(finished.output?.images) ? finished.output.images : [];
+    if (images.length === 0) return;
+    firstImageRef.current = true;
+    showToast(t("studio.toast.firstImage"));
+  }, [finished && finished.id]);
+  const lastJobId = state && state.lastJob ? `${state.lastJob.id}:${state.lastJob.finishedAt ?? ""}` : "";
+  const lastSeenRef = import_react16.default.useRef("");
+  import_react16.default.useEffect(() => {
+    if (!lastJobId || lastSeenRef.current === lastJobId) return;
+    lastSeenRef.current = lastJobId;
+    loadHistory();
+  }, [lastJobId, loadHistory]);
+  const gallery = flattenHistory(historyItems);
+  const batches = historyItems.map((item) => ({
+    key: item.jobId || item.dir || String(item.prompt),
+    prompt: item.prompt || "",
+    presetId: item.presetId || "",
+    entries: (Array.isArray(item.images) ? item.images.filter(Boolean) : []).map((image) => ({ image, item }))
+  })).filter((batch) => batch.entries.length > 0);
+  const newest = gallery[0] || null;
+  const selected = selectedPath && gallery.find((entry) => entry.image.path === selectedPath) || newest;
+  function selectImage(entry) {
+    setSelectedPath(entry && entry.image ? entry.image.path : "");
+  }
+  function openMessage(path) {
+    if (path) setSelectedPath(path);
   }
   function isFavorite(path) {
     return Boolean(path) && favorites.includes(String(path));
@@ -3408,40 +3503,11 @@ function useStudio(props) {
     await Promise.all([loadHistory(), loadLibrary()]);
     return { removed, failed: Array.isArray(result.data.failed) ? result.data.failed : [] };
   }
-  function resetToSafe() {
-    patchForm({ width: 1024, height: 1024, steps: 4, cfg: 1 });
-    setError(null);
-    showToast(t("studio.guidance.oom.action"));
-  }
-  async function runProbe2() {
-    if (probing) return;
-    setProbing(true);
-    const controller = typeof AbortController === "function" ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), TIMEOUTS.clientProbeMs) : null;
-    let result;
-    try {
-      result = await runProbe(controller ? controller.signal : void 0);
-    } finally {
-      if (timer !== null) clearTimeout(timer);
-    }
-    if (!aliveRef.current) return;
-    setProbing(false);
-    if (!result.ok) {
-      setProbeReport({ status: result.code === "timeout" ? "timeout" : "failed", message: result.message, probe: null });
-      showToast(result.code === "timeout" ? t("studio.probe.timeout") : t("studio.probe.failed"));
-      return;
-    }
-    const outcome = probeOutcomeOf(result.data);
-    if (outcome.ok) {
-      setProbeReport({ status: "ok", message: "", probe: outcome.probe });
-      if (error && (error.code === "cli_missing" || error.code === "auth_required")) setError(null);
-      showToast(t("studio.probe.ok"));
-    } else {
-      setProbeReport({ status: "failed", message: outcome.detail, probe: outcome.probe });
-      if (outcome.code === "cli_missing" || outcome.code === "auth_required") fail(outcome.code, outcome.detail);
-      else showToast(t("studio.probe.failed"));
-    }
-    refresh();
+  function zoomImage(entry) {
+    if (!entry) return;
+    selectImage(entry);
+    setView("studio");
+    setZoom(true);
   }
   async function exportPaths(paths) {
     const list = (Array.isArray(paths) ? paths : []).filter(Boolean);
@@ -3462,128 +3528,225 @@ function useStudio(props) {
     }
     showToast(text);
   }
-  async function enhance() {
-    if (enhancing) return;
-    if (!form.prompt.trim()) {
-      showToast(t("studio.promptHint"));
+  return {
+    gallery,
+    batches,
+    selected,
+    selectImage,
+    openMessage,
+    favorites,
+    isFavorite,
+    toggleFavorite,
+    deleteImages: deleteImages2,
+    exportPaths,
+    zoomImage,
+    historyDone,
+    loadHistory
+  };
+}
+
+// src/studio/useStudio.js
+function useStudio(props) {
+  const t = translator(props);
+  const isEn = !/^zh/i.test(String(typeof document !== "undefined" && document.documentElement && document.documentElement.lang || "en"));
+  const host = useHostState();
+  const state = host.state;
+  const refresh = host.refresh;
+  const hostError = host.error;
+  const initialPrompt = props && typeof props.initialPrompt === "string" ? props.initialPrompt : "";
+  const initialView = props && props.view === "gallery" ? "gallery" : "studio";
+  const initialPanelMode = props && props.panelMode === "chat" ? "chat" : "form";
+  const aliveRef = import_react17.default.useRef(true);
+  import_react17.default.useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+  const [sending, setSending] = import_react17.default.useState(false);
+  const pendingRef = import_react17.default.useRef(null);
+  const ui = useStudioUi({ t, aliveRef, initialView, initialPanelMode });
+  const session = useSessionControl({
+    state,
+    refresh,
+    hostError,
+    t,
+    aliveRef,
+    error: ui.error,
+    setError: ui.setError,
+    showToast: ui.showToast,
+    fail: ui.fail
+  });
+  const form = useStudioForm({
+    presets: session.presets,
+    defaultPreset: session.defaultPreset,
+    t,
+    isEn,
+    aliveRef,
+    showToast: ui.showToast,
+    fail: ui.fail,
+    initialPrompt
+  });
+  const chat = useChatThread({
+    state,
+    t,
+    isEn,
+    aliveRef,
+    form: form.form,
+    patchForm: form.patchForm,
+    generate
+  });
+  const library = useWorkLibrary({
+    state,
+    t,
+    aliveRef,
+    showToast: ui.showToast,
+    fail: ui.fail,
+    setView: ui.setView,
+    setZoom: ui.setZoom
+  });
+  async function generate(overrides, options = {}) {
+    if (sending) return;
+    const body = form.buildBody(overrides);
+    if (!body.prompt) {
+      ui.fail("need_prompt", "");
       return;
     }
-    setEnhancing(true);
-    const result = await enhancePromptRequest({
-      prompt: form.prompt,
-      presetId: form.presetId,
-      locale: isEn ? "en" : "zh"
-    });
+    pendingRef.current = body;
+    setSending(true);
+    ui.setError(null);
+    const result = await submitGenerate(body);
     if (!aliveRef.current) return;
-    setEnhancing(false);
-    if (result.ok && result.data && Array.isArray(result.data.groups)) {
-      const groups = result.data.groups.filter((group) => group && Array.isArray(group.options) && group.options.length > 0);
-      setRefineGroups(groups);
-      setRefineSource(result.data.source === "model" ? "model" : "local");
+    setSending(false);
+    if (result.ok && result.data && result.data.id) {
+      const jobId = result.data.id;
+      const entries = [];
+      if (options.pushUser !== false) entries.push({ role: "user", text: body.prompt });
+      entries.push({ role: "assistant", kind: "job", jobId, stage: "pending", text: t("studio.chat.pending") });
+      chat.pushMessages(entries);
+      refresh();
+      library.loadHistory();
+      ui.showToast(t("studio.toast.submitted"));
       return;
     }
-    fail(result.code, result.message);
+    ui.fail(result.code, result.message);
   }
-  function toggleRefine(term) {
-    patchForm({ prompt: toggleRefineTerm(form.prompt, term, refineSeparator(form.prompt)) });
+  function reroll(entry) {
+    const target = entry || library.selected;
+    const overrides = rerollOverrides(target, session.presets);
+    if (!overrides) {
+      ui.showToast(t("workbench.needPrompt"));
+      return;
+    }
+    generate(overrides);
   }
-  function useInspiration(text) {
-    const value = String(text ?? "").trim();
-    if (!value) return;
-    const base = form.prompt.trim();
-    patchForm({ prompt: base ? `${base}
-${value}` : value });
+  function iterate(entry) {
+    const target = entry || library.selected;
+    const patch = iteratePatch(target, form.form, session.presets);
+    if (Object.keys(patch).length === 0) return;
+    form.patchForm(patch);
+    ui.setView("studio");
+    ui.setPanelMode("form");
+    ui.showToast(t("studio.toast.recalled"));
   }
-  const styleSuffix = (() => {
-    const capsule = STYLE_CAPSULES.find((item) => item.id === form.styleId);
-    return capsule ? capsule.suffix : "";
-  })();
-  const guidanceCode = error && error.code || session && session.error && session.error.code || focusedJob && focusedJob.status === "failed" && focusedJob.error && focusedJob.error.code || "";
-  const guidanceDetail = guidanceDetailOf({ error, session, job: focusedJob });
+  function retryFocusedJob() {
+    const overrides = retryOverrides(session.focusedJob) || (pendingRef.current ? retryOverrides(pendingRef.current) : null);
+    if (!overrides) {
+      ui.showToast(t("workbench.needPrompt"));
+      return;
+    }
+    generate(overrides);
+  }
+  function resetToSafe() {
+    form.patchForm({ width: 1024, height: 1024, steps: 4, cfg: 1 });
+    ui.setError(null);
+    ui.showToast(t("studio.guidance.oom.action"));
+  }
+  function startSession2() {
+    return session.startSession(form.form.presetId || session.defaultPreset);
+  }
+  const sessionQueued = session.sessionState === "provisioning" || Boolean(session.activeJob && (session.activeJob.status === "queued" || session.activeJob.status === "waiting-session"));
+  const preset = session.presets.find((item) => item.id === form.form.presetId) || null;
+  const guidanceCode = ui.error && ui.error.code || session.session && session.session.error && session.session.error.code || session.focusedJob && session.focusedJob.status === "failed" && session.focusedJob.error && session.focusedJob.error.code || "";
+  const guidanceDetail = guidanceDetailOf({ error: ui.error, session: session.session, job: session.focusedJob });
   const guidanceKey = guidanceCode ? `${guidanceCode}|${guidanceDetail}` : "";
-  const guidanceKind = guidanceCode && dismissed !== guidanceKey ? guidanceKindOf(guidanceCode) : "";
+  const guidanceKind = guidanceCode && ui.dismissed !== guidanceKey ? guidanceKindOf(guidanceCode) : "";
   function dismissGuidance() {
-    if (guidanceKey) setDismissed(guidanceKey);
-    setError(null);
+    ui.dismissGuidance(guidanceKey);
   }
   return {
     guidanceKind,
     guidanceDetail,
     dismissGuidance,
-    batches,
-    quota: state && state.probe && state.probe.quota || null,
-    probe: state && state.probe || null,
-    probing,
-    probeReport,
-    panelMode,
-    setPanelMode,
-    messages,
-    interpreting,
-    interpret,
-    resolveClarify,
-    generateIntent,
-    openFolder,
-    zoomImage,
-    clearThread: () => setMessages([]),
-    openMessage: (path) => {
-      if (path) setSelectedPath(path);
-    },
+    batches: library.batches,
+    quota: session.quota,
+    probe: session.probe,
+    probing: session.probing,
+    probeReport: session.probeReport,
+    panelMode: ui.panelMode,
+    setPanelMode: ui.setPanelMode,
+    messages: chat.messages,
+    interpreting: chat.interpreting,
+    interpret: chat.interpret,
+    resolveClarify: chat.resolveClarify,
+    generateIntent: chat.generateIntent,
+    openFolder: session.openFolder,
+    zoomImage: library.zoomImage,
+    clearThread: chat.clearThread,
+    openMessage: library.openMessage,
     sessionQueued,
     resetToSafe,
-    runProbe: runProbe2,
-    exportPaths,
+    runProbe: session.runProbe,
+    exportPaths: library.exportPaths,
     t,
-    view,
-    setView,
-    session,
-    sessionState,
-    presets,
+    view: ui.view,
+    setView: ui.setView,
+    session: session.session,
+    sessionState: session.sessionState,
+    presets: session.presets,
     preset,
-    activeJob,
-    focusedJob,
-    gallery,
-    selected,
-    selectImage: (entry) => setSelectedPath(entry && entry.image ? entry.image.path : ""),
-    form,
-    patchForm,
+    activeJob: session.activeJob,
+    focusedJob: session.focusedJob,
+    gallery: library.gallery,
+    selected: library.selected,
+    selectImage: library.selectImage,
+    form: form.form,
+    patchForm: form.patchForm,
     styleId: form.styleId,
-    applyStyle,
-    ratioId,
-    applyRatio,
-    advancedOpen,
-    setAdvancedOpen,
-    negativeOpen,
-    setNegativeOpen,
+    applyStyle: form.applyStyle,
+    ratioId: form.ratioId,
+    applyRatio: form.applyRatio,
+    advancedOpen: ui.advancedOpen,
+    setAdvancedOpen: ui.setAdvancedOpen,
+    negativeOpen: ui.negativeOpen,
+    setNegativeOpen: ui.setNegativeOpen,
     sending,
-    busy,
-    error,
-    toast,
-    showToast,
-    favorites,
-    isFavorite,
-    toggleFavorite,
-    deleteImages: deleteImages2,
-    refineGroups: refineGroups.map((group) => ({
-      ...group,
-      options: group.options.map((option) => ({ ...option, applied: isRefineApplied(form.prompt, option.text) }))
-    })),
-    refineSource,
-    enhancing,
-    enhance,
-    toggleRefine,
-    useInspiration,
-    zoom,
-    setZoom,
-    historyDone,
+    busy: session.busy,
+    error: ui.error,
+    toast: ui.toast,
+    showToast: ui.showToast,
+    favorites: library.favorites,
+    isFavorite: library.isFavorite,
+    toggleFavorite: library.toggleFavorite,
+    deleteImages: library.deleteImages,
+    refineGroups: form.refineGroups,
+    refineSource: form.refineSource,
+    enhancing: form.enhancing,
+    enhance: form.enhance,
+    toggleRefine: form.toggleRefine,
+    useInspiration: form.useInspiration,
+    zoom: ui.zoom,
+    setZoom: ui.setZoom,
+    historyDone: library.historyDone,
     generate,
     reroll,
     iterate,
     retryFocusedJob,
-    copyPath,
-    copyInstallCommand,
+    copyPath: ui.copyPath,
+    copyInstallCommand: ui.copyInstallCommand,
     startSession: startSession2,
-    stopSession: stopSession2,
-    loadHistory
+    stopSession: session.stopSession,
+    loadHistory: library.loadHistory
   };
 }
 
