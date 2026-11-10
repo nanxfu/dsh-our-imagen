@@ -122,6 +122,16 @@ var zh = {
   "error.code.disposed": "插件已停止，任务未执行",
   "error.code.session_timeout": "等待云端会话超时",
   "error.code.not_found": "没有找到对应内容",
+  "error.code.invalid_body": "请求内容格式不正确",
+  "error.code.too_many": "一次提交的数量过多",
+  "error.code.output_missing": "找不到对应的生成结果",
+  "error.code.reveal_failed": "无法打开文件所在位置",
+  "error.code.internal_error": "本地服务内部错误",
+  "error.code.session_error": "云端会话出错",
+  "error.code.generate_failed": "出图没有成功",
+  "error.code.cli_timeout": "kaggle 命令执行超时",
+  "error.code.unknown": "未识别的错误",
+  "error.code.unauthorized": "远端访问未授权",
   // ── 工作台骨架 ───────────────────────────────────────────────
   "studio.nav.label": "免费生图",
   "studio.brand": "免费生图",
@@ -362,6 +372,16 @@ var en = {
   "error.code.disposed": "The plugin stopped before the task ran",
   "error.code.session_timeout": "Timed out waiting for the cloud session",
   "error.code.not_found": "Not found",
+  "error.code.invalid_body": "The request body is malformed",
+  "error.code.too_many": "Too many items in one request",
+  "error.code.output_missing": "The generated output was not found",
+  "error.code.reveal_failed": "Could not open the containing folder",
+  "error.code.internal_error": "The local service hit an internal error",
+  "error.code.session_error": "The cloud session failed",
+  "error.code.generate_failed": "Image generation did not succeed",
+  "error.code.cli_timeout": "The kaggle command timed out",
+  "error.code.unknown": "Unrecognized error",
+  "error.code.unauthorized": "Remote access was not authorized",
   // ── Workbench shell ───────────────────────────────────────────
   "studio.nav.label": "Free imagen",
   "studio.brand": "Free imagen",
@@ -677,10 +697,89 @@ function buildSessionView(t, input) {
   };
 }
 
+// shared/contract.js
+var ROUTES = {
+  state: { method: "GET", path: "/imagen-api/state" },
+  probe: { method: "POST", path: "/imagen-api/probe" },
+  sessionStart: { method: "POST", path: "/imagen-api/session/start" },
+  sessionStop: { method: "POST", path: "/imagen-api/session/stop" },
+  generate: { method: "POST", path: "/imagen-api/generate" },
+  job: { method: "GET", path: "/imagen-api/job" },
+  jobs: { method: "GET", path: "/imagen-api/jobs" },
+  history: { method: "GET", path: "/imagen-api/history" },
+  file: { method: "GET", path: "/imagen-api/file" },
+  library: { method: "GET", path: "/imagen-api/library" },
+  libraryFavorite: { method: "POST", path: "/imagen-api/library/favorite" },
+  libraryDelete: { method: "POST", path: "/imagen-api/library/delete" },
+  enhance: { method: "POST", path: "/imagen-api/enhance" },
+  intent: { method: "POST", path: "/imagen-api/intent" },
+  reveal: { method: "POST", path: "/imagen-api/reveal" }
+};
+function clientPath(route) {
+  return route.path.replace(/^\//, "");
+}
+var LIMITS = {
+  prompt: { maxChars: 2e3 },
+  negativePrompt: { maxChars: 1e3 },
+  width: { min: 256, max: 1536, step: 8 },
+  height: { min: 256, max: 1536, step: 8 },
+  steps: { min: 1, max: 60 },
+  cfg: { min: 0, max: 20 },
+  count: { min: 1, max: 4 },
+  // Kaggle / torch 侧接受 32 位有符号正整数；两端必须用同一个上界，否则用户输入的
+  // seed 会被宿主静默取模改写，导致「带回参数」复现不出同一张图。
+  seed: { max: 2147483647 },
+  waitSeconds: { min: 0, max: 600, default: 90 },
+  queue: { maxPending: 20, maxKept: 60 },
+  history: { defaultLimit: 30, maxLimit: 100 },
+  jobs: { defaultLimit: 20, maxLimit: 100 },
+  historyTool: { defaultLimit: 5, maxLimit: 30 },
+  libraryDelete: { maxPaths: 200 },
+  intentText: { maxChars: 2e3 }
+};
+var TIMEOUTS = {
+  // 远端 HTTP
+  remoteHealthMs: 4e3,
+  remoteGenerateMs: 3e5,
+  remoteShutdownMs: 3e3,
+  remoteGenerateMaxBytes: 32 * 1024 * 1024,
+  // ntfy 会合轮询单次请求
+  ntfyPollMs: 8e3,
+  // 会话状态机
+  sessionTickMs: 3e3,
+  kernelPollMs: 3e4,
+  healthyPollMs: 1e4,
+  readyHealthMissesBeforeCheck: 3,
+  reconnectMaxAttempts: 1,
+  recoveryMs: 12e4,
+  provisionMs: 45 * 60 * 1e3,
+  tunnelMs: 15 * 60 * 1e3,
+  sessionWaitMs: 45 * 60 * 1e3,
+  idleShutdownSec: 1800,
+  kernelRunMaxSec: 10800,
+  // 宿主本地动作
+  revealWaitMs: 1500,
+  bodyMaxBytes: 256 * 1024,
+  // kaggle CLI
+  cliMs: 3e4,
+  cliQuotaMs: 2e4,
+  cliPushMs: 18e4,
+  cliLogsMs: 45e3,
+  // 客户端
+  clientProbeMs: 45e3,
+  clientStatePollMs: 1e4,
+  clientStateActivePollMs: 2e3
+};
+
 // src/api.js
 function apiUrl(relative) {
   if (typeof document === "undefined") return relative;
   return new URL(relative, document.baseURI).toString();
+}
+function routePath(name) {
+  const route = ROUTES[name];
+  if (!route) throw new Error(`未知路由：${name}`);
+  return clientPath(route);
 }
 async function request(relative, init) {
   try {
@@ -743,13 +842,13 @@ function useHostState() {
       timer = null;
       if (stopped) return;
       if (typeof document !== "undefined" && document.hidden) return;
-      const result = await request("imagen-api/state", { method: "GET" });
+      const result = await request(routePath("state"), { method: "GET" });
       if (stopped || !aliveRef.current) return;
-      let delay = 1e4;
+      let delay = TIMEOUTS.clientStatePollMs;
       if (result.ok && result.data && typeof result.data === "object") {
         setState(result.data);
         setError(null);
-        delay = activeJobOf(result.data) ? 2e3 : 1e4;
+        delay = activeJobOf(result.data) ? TIMEOUTS.clientStateActivePollMs : TIMEOUTS.clientStatePollMs;
       } else {
         setError({ code: result.code, message: result.message });
       }
@@ -1275,7 +1374,7 @@ function ChatPanel(props) {
           {
             rows: 2,
             value: draft,
-            maxLength: 2e3,
+            maxLength: LIMITS.prompt.maxChars,
             placeholder: t("studio.chat.placeholder"),
             "aria-label": t("studio.chat.placeholder"),
             spellCheck: false,
@@ -1882,7 +1981,8 @@ function clampNumber(value, min, max, fallback) {
 function clampSize(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return 1024;
-  return Math.min(1536, Math.max(256, Math.round(number / 8) * 8));
+  const { min, max, step } = LIMITS.width;
+  return Math.min(max, Math.max(min, Math.round(number / step) * step));
 }
 function parseSeed(text) {
   const raw = String(text ?? "").trim();
@@ -1891,7 +1991,7 @@ function parseSeed(text) {
   if (!Number.isFinite(value)) return -1;
   const int = Math.trunc(value);
   if (int < 0) return -1;
-  return Math.min(int, 4294967295);
+  return Math.min(int, LIMITS.seed.max);
 }
 
 // src/studio/ratios.js
@@ -1908,7 +2008,7 @@ function ratioToSize(ratio) {
 
 // src/studio/Rail.jsx
 var import_jsx_runtime7 = require("react/jsx-runtime");
-var PROMPT_MAX = 2e3;
+var PROMPT_MAX = LIMITS.prompt.maxChars;
 var INSPIRE_KEYS = ["studio.inspire.1", "studio.inspire.2", "studio.inspire.3", "studio.inspire.4", "studio.inspire.5"];
 function Fieldset(props) {
   return /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("section", { className: "ofs-fieldset", children: [
@@ -2656,16 +2756,17 @@ function buildGenerateBody(form, options = {}) {
   const input = form || {};
   const overrides = options.overrides && typeof options.overrides === "object" ? options.overrides : null;
   const explicit = overrides && typeof overrides.prompt === "string" ? overrides.prompt : null;
-  const prompt = explicit !== null ? explicit.trim().slice(0, 2e3) : composePrompt(input.prompt, options.styleSuffix).slice(0, 2e3);
+  const maxPromptChars = LIMITS.prompt.maxChars;
+  const prompt = explicit !== null ? explicit.trim().slice(0, maxPromptChars) : composePrompt(input.prompt, options.styleSuffix).slice(0, maxPromptChars);
   const body = {
     prompt,
     negativePrompt: String(input.negative ?? "").trim(),
     width: clampSize(input.width),
     height: clampSize(input.height),
-    steps: clampInt(input.steps, 1, 60, 4),
-    cfg: clampNumber(input.cfg, 0, 20, 0),
+    steps: clampInt(input.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
+    cfg: clampNumber(input.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
     seed: parseSeed(input.seed),
-    count: clampInt(input.count, 1, 4, 1),
+    count: clampInt(input.count, LIMITS.count.min, LIMITS.count.max, 1),
     waitSeconds: 0,
     autoStart: true
   };
@@ -2866,6 +2967,7 @@ function useStudio(props) {
   const host = useHostState();
   const state = host.state;
   const refresh = host.refresh;
+  const hostError = host.error;
   const session = state && state.session || null;
   const sessionState = session && session.state || "absent";
   const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : [];
@@ -2913,6 +3015,14 @@ function useStudio(props) {
       aliveRef.current = false;
     };
   }, []);
+  const hostErrorKeyRef = import_react12.default.useRef("");
+  import_react12.default.useEffect(() => {
+    if (!hostError) return;
+    const key = `${hostError.code}|${hostError.message ?? ""}`;
+    if (hostErrorKeyRef.current === key) return;
+    hostErrorKeyRef.current = key;
+    setError((prev) => prev || { code: hostError.code, message: hostError.message ?? "" });
+  }, [hostError]);
   import_react12.default.useEffect(() => {
     if (presets.length === 0) return;
     setForm((prev) => {
@@ -2926,16 +3036,18 @@ function useStudio(props) {
         presetId: initial,
         width: size,
         height: size,
-        steps: clampInt(preset2.steps, 1, 60, 4),
-        cfg: clampNumber(preset2.cfg, 0, 20, 0)
+        steps: clampInt(preset2.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
+        cfg: clampNumber(preset2.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0)
       };
     });
   }, [presets.length, defaultPreset]);
   const loadHistory = import_react12.default.useCallback(async () => {
-    const result = await request("imagen-api/history?limit=60", { method: "GET" });
+    const result = await request(routePath("history") + "?limit=60", { method: "GET" });
     if (!aliveRef.current) return;
     if (result.ok && result.data && Array.isArray(result.data.items)) {
       setHistoryItems(result.data.items.filter(Boolean));
+    } else if (!result.ok) {
+      fail(result.code, result.message);
     }
     setHistoryDone(true);
   }, []);
@@ -2943,9 +3055,13 @@ function useStudio(props) {
     loadHistory();
   }, [loadHistory]);
   const loadLibrary = import_react12.default.useCallback(async () => {
-    const result = await request("imagen-api/library", { method: "GET" });
+    const result = await request(routePath("library"), { method: "GET" });
     if (!aliveRef.current) return;
-    if (result.ok && result.data && Array.isArray(result.data.favorites)) setFavorites(result.data.favorites);
+    if (result.ok && result.data && Array.isArray(result.data.favorites)) {
+      setFavorites(result.data.favorites);
+    } else if (!result.ok) {
+      fail(result.code, result.message);
+    }
   }, []);
   import_react12.default.useEffect(() => {
     loadLibrary();
@@ -3051,7 +3167,7 @@ function useStudio(props) {
   async function startSession() {
     if (busy) return;
     setBusy("start");
-    const result = await request("imagen-api/session/start", { method: "POST", body: JSON.stringify({ presetId: form.presetId || defaultPreset }) });
+    const result = await request(routePath("sessionStart"), { method: "POST", body: JSON.stringify({ presetId: form.presetId || defaultPreset }) });
     if (!aliveRef.current) return;
     setBusy("");
     if (!result.ok) fail(result.code, result.message);
@@ -3060,7 +3176,7 @@ function useStudio(props) {
   async function stopSession() {
     if (busy) return;
     setBusy("stop");
-    const result = await request("imagen-api/session/stop", { method: "POST" });
+    const result = await request(routePath("sessionStop"), { method: "POST" });
     if (!aliveRef.current) return;
     setBusy("");
     if (!result.ok) fail(result.code, result.message);
@@ -3082,7 +3198,7 @@ function useStudio(props) {
     pendingRef.current = body;
     setSending(true);
     setError(null);
-    const result = await request("imagen-api/generate", { method: "POST", body: JSON.stringify(body) });
+    const result = await request(routePath("generate"), { method: "POST", body: JSON.stringify(body) });
     if (!aliveRef.current) return;
     setSending(false);
     if (result.ok && result.data && result.data.id) {
@@ -3105,7 +3221,7 @@ function useStudio(props) {
     const previousPrompt = lastIntentPrompt(messages);
     pushMessages([{ role: "user", text: value }]);
     setInterpreting(true);
-    const result = await request("imagen-api/intent", {
+    const result = await request(routePath("intent"), {
       method: "POST",
       body: JSON.stringify({ text: value, previousPrompt, locale: isEn ? "en" : "zh" })
     });
@@ -3159,7 +3275,7 @@ function useStudio(props) {
     setZoom(true);
   }
   async function openFolder() {
-    const result = await request("imagen-api/reveal", { method: "POST", body: JSON.stringify({}) });
+    const result = await request(routePath("reveal"), { method: "POST", body: JSON.stringify({}) });
     if (!aliveRef.current) return;
     if (!result.ok) showToast(t("studio.toast.revealFailed"));
   }
@@ -3208,7 +3324,7 @@ function useStudio(props) {
     if (!target) return;
     const next = !isFavorite(target);
     setFavorites((prev) => next ? [...prev, target] : prev.filter((item) => item !== target));
-    const result = await request("imagen-api/library/favorite", {
+    const result = await request(routePath("libraryFavorite"), {
       method: "POST",
       body: JSON.stringify({ path: target, favorite: next })
     });
@@ -3224,7 +3340,7 @@ function useStudio(props) {
   async function deleteImages(paths) {
     const list = (Array.isArray(paths) ? paths : []).filter(Boolean);
     if (list.length === 0) return;
-    const result = await request("imagen-api/library/delete", {
+    const result = await request(routePath("libraryDelete"), {
       method: "POST",
       body: JSON.stringify({ paths: list })
     });
@@ -3251,10 +3367,10 @@ function useStudio(props) {
     if (probing) return;
     setProbing(true);
     const controller = typeof AbortController === "function" ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), 45e3) : null;
+    const timer = controller ? setTimeout(() => controller.abort(), TIMEOUTS.clientProbeMs) : null;
     let result;
     try {
-      result = await request("imagen-api/probe", {
+      result = await request(routePath("probe"), {
         method: "POST",
         ...controller ? { signal: controller.signal } : {}
       });
@@ -3306,7 +3422,7 @@ function useStudio(props) {
       return;
     }
     setEnhancing(true);
-    const result = await request("imagen-api/enhance", {
+    const result = await request(routePath("enhance"), {
       method: "POST",
       body: JSON.stringify({
         prompt: form.prompt,

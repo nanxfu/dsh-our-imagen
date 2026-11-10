@@ -1,7 +1,7 @@
 /**
  * 历史图回填与重试：把「当前选中的作品」换算成表单补丁或生成参数。
  *
- * 真实 Host 的 `/imagen-api/history` 条目只有 jobId/createdAt/presetId/prompt/images，
+ * 真实 Host 的 history 接口（routePath('history')）条目只有 jobId/createdAt/presetId/prompt/images，
  * 不一定带 params，所以这里的所有回填都以 item.prompt / image.width / image.height
  * 为第一来源，params 只用来补 steps / cfg 这类作品本身没记录的字段；
  * 预设的推荐值作为最后兜底。任何一条都不依赖「最近完成的任务」。

@@ -73,6 +73,16 @@ export const zh = {
   'error.code.disposed': '插件已停止，任务未执行',
   'error.code.session_timeout': '等待云端会话超时',
   'error.code.not_found': '没有找到对应内容',
+  'error.code.invalid_body': '请求内容格式不正确',
+  'error.code.too_many': '一次提交的数量过多',
+  'error.code.output_missing': '找不到对应的生成结果',
+  'error.code.reveal_failed': '无法打开文件所在位置',
+  'error.code.internal_error': '本地服务内部错误',
+  'error.code.session_error': '云端会话出错',
+  'error.code.generate_failed': '出图没有成功',
+  'error.code.cli_timeout': 'kaggle 命令执行超时',
+  'error.code.unknown': '未识别的错误',
+  'error.code.unauthorized': '远端访问未授权',
 
   // ── 工作台骨架 ───────────────────────────────────────────────
   'studio.nav.label': '免费生图',

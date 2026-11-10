@@ -10,12 +10,14 @@
 
 import { readFile, unlink } from 'node:fs/promises'
 
+import { LIMITS, TIMEOUTS, VERSION } from './shared/contract.js'
 import { methodNotAllowed, readJsonBody, sendError, sendJson } from './lib/http.js'
 import { enhancePrompt } from './lib/enhance.js'
 import { parseIntent } from './lib/intent.js'
 import { JobQueue } from './lib/jobs.js'
 import { probeKaggle } from './lib/kaggle.js'
 import { readLibrary, recordDeleted, setFavorite } from './lib/library.js'
+import { createLogger } from './lib/log.js'
 import { scanHistory } from './lib/output.js'
 import { contentTypeOf, resolveOutputDir, resolveOutputPath } from './lib/paths.js'
 import { DEFAULT_PRESET, PRESETS, presetById, publicPresets } from './lib/presets.js'
@@ -26,12 +28,13 @@ export const name = 'our-free-imagen'
 // 因此 tools 必须显式声明（它同时是 Agent 工具注册的依赖）。
 export const inject = ['webServer', 'subprocess', 'tools']
 
-const VERSION = '0.3.0'
+const log = createLogger({ scope: 'index' })
 
 function parseQuery(req) {
   try {
     return new URL(req.url ?? '/', 'http://placeholder.local').searchParams
-  } catch {
+  } catch (error) {
+    log.debug('请求 URL 解析失败，按无参数处理', error?.message ?? error)
     return new URLSearchParams()
   }
 }
@@ -40,6 +43,20 @@ function toInt(value, fallback, min, max) {
   const number = Number(value)
   if (!Number.isFinite(number)) return fallback
   return Math.min(max, Math.max(min, Math.round(number)))
+}
+
+/**
+ * 读请求体，非法 JSON 不中断请求：记录一条 warn 后返回调用方给定的兜底值。
+ * 这与 /generate 的严格 400 invalid_body 有意区分：那一条是出图主路径，
+ * 其余路由缺参时都能用默认值继续，没必要把坏 JSON 升级成 500。
+ */
+async function readBodyOr(req, fallback) {
+  try {
+    return await readJsonBody(req)
+  } catch (error) {
+    log.warn('请求体不是合法 JSON，按兜底值继续', error?.message ?? error)
+    return fallback
+  }
 }
 
 /**
@@ -62,8 +79,14 @@ async function revealFolder(ctx, dir) {
     },
     graceMs: 2000,
   })
-  const done = handle && typeof handle.done?.then === 'function' ? handle.done.catch(() => null) : Promise.resolve(null)
-  await Promise.race([done, new Promise((resolve) => setTimeout(resolve, 1500))])
+  const done =
+    handle && typeof handle.done?.then === 'function'
+      ? handle.done.catch((error) => {
+          log.debug('文件管理器进程异常退出（忽略）', error?.message ?? error)
+          return null
+        })
+      : Promise.resolve(null)
+  await Promise.race([done, new Promise((resolve) => setTimeout(resolve, TIMEOUTS.revealWaitMs))])
 }
 
 /** 把 job 折叠成一段给模型看的文字。 */
@@ -112,8 +135,8 @@ export function apply(ctx, config = {}) {
       devEndpoint,
       devToken,
       accelerator: config.accelerator ?? 'NvidiaTeslaT4',
-      idleTimeoutSec: toInt(config.idleTimeoutSec, 1800, 300, 10800),
-      provisionTimeoutMs: toInt(config.provisionTimeoutMinutes, 45, 5, 240) * 60 * 1000,
+      idleTimeoutSec: toInt(config.idleTimeoutSec, TIMEOUTS.idleShutdownSec, 300, 10800),
+      provisionTimeoutMs: toInt(config.provisionTimeoutMinutes, TIMEOUTS.provisionMs / 60000, 5, 240) * 60 * 1000,
     },
   })
 
@@ -122,8 +145,8 @@ export function apply(ctx, config = {}) {
     session,
     defaultPreset,
     options: {
-      sessionWaitMs: toInt(config.sessionWaitMinutes, 45, 5, 240) * 60 * 1000,
-      generateTimeoutMs: toInt(config.generateTimeoutSeconds, 300, 30, 1800) * 1000,
+      sessionWaitMs: toInt(config.sessionWaitMinutes, TIMEOUTS.sessionWaitMs / 60000, 5, 240) * 60 * 1000,
+      generateTimeoutMs: toInt(config.generateTimeoutSeconds, TIMEOUTS.remoteGenerateMs / 1000, 30, 1800) * 1000,
     },
   })
 
@@ -150,6 +173,8 @@ export function apply(ctx, config = {}) {
           cache.probeAt = Date.now()
           return probe
         } catch (error) {
+          // 探测崩溃不等于「环境不可用」，必须留 warn 才能和真正的鉴权失败区分开。
+          log.warn('Kaggle 环境探测异常', error?.message ?? error)
           const probe = {
             provider: 'kaggle',
             cli: { present: false },
@@ -203,7 +228,7 @@ export function apply(ctx, config = {}) {
         path: '/imagen-api/session/start',
         async handler(req, res) {
           if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
-          const body = await readJsonBody(req).catch(() => ({}))
+          const body = await readBodyOr(req, {})
           const presetId = typeof body.presetId === 'string' ? body.presetId : defaultPreset
           const snapshot = await session.start(presetById(presetId).id)
           sendJson(res, 200, { ok: snapshot.state !== 'error', session: snapshot })
@@ -272,7 +297,7 @@ export function apply(ctx, config = {}) {
         path: '/imagen-api/jobs',
         handler(req, res) {
           if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
-          const limit = toInt(parseQuery(req).get('limit'), 20, 1, 100)
+          const limit = toInt(parseQuery(req).get('limit'), LIMITS.jobs.defaultLimit, 1, LIMITS.jobs.maxLimit)
           sendJson(res, 200, { jobs: queue.list(limit), queue: queue.queueStats() })
         },
       }),
@@ -286,7 +311,7 @@ export function apply(ctx, config = {}) {
         path: '/imagen-api/history',
         async handler(req, res) {
           if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
-          const limit = toInt(parseQuery(req).get('limit'), 30, 1, 100)
+          const limit = toInt(parseQuery(req).get('limit'), LIMITS.history.defaultLimit, 1, LIMITS.history.maxLimit)
           const items = await scanHistory(ctx, limit)
           sendJson(res, 200, { items })
         },
@@ -302,9 +327,17 @@ export function apply(ctx, config = {}) {
         async handler(req, res) {
           if (req.method !== 'GET' && req.method !== 'HEAD') return methodNotAllowed(res, 'GET, HEAD')
           const requested = parseQuery(req).get('path') ?? ''
-          const found = await resolveOutputPath(ctx, requested).catch(() => null)
+          const found = await resolveOutputPath(ctx, requested).catch((error) => {
+            // 越界/不存在的路径是预期输入，按 404 处理即可。
+            log.debug('产物路径解析失败（按 404 处理）', error?.message ?? error)
+            return null
+          })
           if (!found) return sendError(res, 404, 'not_found', '文件不存在或不在输出目录内')
-          const data = await readFile(found.absolute).catch(() => null)
+          const data = await readFile(found.absolute).catch((error) => {
+            // 校验通过后仍读不到，通常是被并发删除或权限问题，需要留痕。
+            log.warn('产物文件读取失败', error?.message ?? error)
+            return null
+          })
           if (!data) return sendError(res, 404, 'not_found', '文件读取失败')
           res.writeHead(200, {
             'content-type': contentTypeOf(found.absolute),
@@ -339,7 +372,7 @@ export function apply(ctx, config = {}) {
         path: '/imagen-api/library/favorite',
         async handler(req, res) {
           if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
-          const body = await readJsonBody(req).catch(() => null)
+          const body = await readBodyOr(req, null)
           if (!body || typeof body.path !== 'string') return sendError(res, 400, 'invalid_body', '缺少 path')
           const result = await setFavorite(ctx, body.path, body.favorite !== false)
           if (!result.ok) return sendError(res, 400, result.code, '路径无效')
@@ -356,16 +389,21 @@ export function apply(ctx, config = {}) {
         path: '/imagen-api/library/delete',
         async handler(req, res) {
           if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
-          const body = await readJsonBody(req).catch(() => null)
+          const body = await readBodyOr(req, null)
           const requested = Array.isArray(body?.paths) ? body.paths.filter((item) => typeof item === 'string') : []
           if (requested.length === 0) return sendError(res, 400, 'invalid_body', '缺少 paths')
-          if (requested.length > 200) return sendError(res, 400, 'too_many', '一次最多删除 200 张')
+          if (requested.length > LIMITS.libraryDelete.maxPaths) {
+            return sendError(res, 400, 'too_many', `一次最多删除 ${LIMITS.libraryDelete.maxPaths} 张`)
+          }
 
           const removed = []
           const failed = []
           for (const path of requested) {
             // 只允许删除 imagen-output 内的文件；解析失败一律拒绝，防止越权。
-            const found = await resolveOutputPath(ctx, path).catch(() => null)
+            const found = await resolveOutputPath(ctx, path).catch((error) => {
+              log.debug('待删路径解析失败（按 not_found 记）', error?.message ?? error)
+              return null
+            })
             if (!found) {
               failed.push({ path, code: 'not_found' })
               continue
@@ -393,7 +431,7 @@ export function apply(ctx, config = {}) {
         path: '/imagen-api/enhance',
         async handler(req, res) {
           if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
-          const body = await readJsonBody(req).catch(() => ({}))
+          const body = await readBodyOr(req, {})
           const result = await enhancePrompt(ctx, body?.prompt, {
             locale: body?.locale === 'en' ? 'en' : 'zh',
             presetId: typeof body?.presetId === 'string' ? body.presetId : '',
@@ -413,10 +451,10 @@ export function apply(ctx, config = {}) {
         path: '/imagen-api/intent',
         async handler(req, res) {
           if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
-          const body = await readJsonBody(req).catch(() => ({}))
+          const body = await readBodyOr(req, {})
           const text = typeof body?.text === 'string' ? body.text.trim() : ''
           if (!text) return sendError(res, 400, 'invalid_request', '对话内容不能为空')
-          if (text.length > 2000) return sendError(res, 400, 'invalid_request', '对话内容过长')
+          if (text.length > LIMITS.intentText.maxChars) return sendError(res, 400, 'invalid_request', '对话内容过长')
           const result = await parseIntent(ctx, {
             text,
             previousPrompt: typeof body?.previousPrompt === 'string' ? body.previousPrompt : '',
@@ -437,7 +475,7 @@ export function apply(ctx, config = {}) {
         path: '/imagen-api/reveal',
         async handler(req, res) {
           if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
-          const body = await readJsonBody(req).catch(() => ({}))
+          const body = await readBodyOr(req, {})
           const dir = await resolveOutputDir(ctx)
           if (!dir) return sendError(res, 404, 'output_missing', '产物目录还不存在，先出一张图')
           // dryRun 供无界面环境自检：只解析目录，不真的唤起文件管理器。
@@ -500,7 +538,7 @@ export function apply(ctx, config = {}) {
       async execute(args = {}) {
         const submitted = queue.submit(args)
         if (!submitted.ok) return { text: `提交失败：${submitted.message}` }
-        const waitSeconds = toInt(args.waitSeconds, 90, 0, 600)
+        const waitSeconds = toInt(args.waitSeconds, LIMITS.waitSeconds.default, LIMITS.waitSeconds.min, LIMITS.waitSeconds.max)
         const job = await queue.waitFor(submitted.job.id, waitSeconds)
         return { text: describeJob(job) }
       },
@@ -546,7 +584,7 @@ export function apply(ctx, config = {}) {
       },
       output: textOutput,
       async execute(args = {}) {
-        const limit = toInt(args.limit, 5, 1, 30)
+        const limit = toInt(args.limit, LIMITS.historyTool.defaultLimit, 1, LIMITS.historyTool.maxLimit)
         const items = await scanHistory(ctx, limit)
         if (items.length === 0) return { text: '还没有生成记录。' }
         const lines = []

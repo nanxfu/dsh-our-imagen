@@ -6,7 +6,9 @@
 
 import React from 'react'
 
-import { request } from '../api.js'
+import { LIMITS, TIMEOUTS } from '../../shared/contract.js'
+
+import { request, routePath } from '../api.js'
 import { useHostState } from '../hooks/useHostState.js'
 import { translator } from '../i18n.js'
 import { activeJobOf, stateJobs } from '../logic/jobs.js'
@@ -55,6 +57,7 @@ export function useStudio(props) {
   const host = useHostState()
   const state = host.state
   const refresh = host.refresh
+  const hostError = host.error
 
   const session = (state && state.session) || null
   const sessionState = (session && session.state) || 'absent'
@@ -110,6 +113,17 @@ export function useStudio(props) {
     }
   }, [])
 
+  // 宿主状态轮询失败：当前已有更具体的错误时保留它，否则借现有 error/指引通道提示；
+  // 按 code+message 去重，避免每 10 秒把同一失败重复弹一遍。
+  const hostErrorKeyRef = React.useRef('')
+  React.useEffect(() => {
+    if (!hostError) return
+    const key = `${hostError.code}|${hostError.message ?? ''}`
+    if (hostErrorKeyRef.current === key) return
+    hostErrorKeyRef.current = key
+    setError((prev) => prev || { code: hostError.code, message: hostError.message ?? '' })
+  }, [hostError])
+
   // 预设同步：只在用户没手动改过时套用推荐值
   React.useEffect(() => {
     if (presets.length === 0) return
@@ -124,17 +138,20 @@ export function useStudio(props) {
         presetId: initial,
         width: size,
         height: size,
-        steps: clampInt(preset.steps, 1, 60, 4),
-        cfg: clampNumber(preset.cfg, 0, 20, 0),
+        steps: clampInt(preset.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
+        cfg: clampNumber(preset.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
       }
     })
   }, [presets.length, defaultPreset])
 
   const loadHistory = React.useCallback(async () => {
-    const result = await request('imagen-api/history?limit=60', { method: 'GET' })
+    const result = await request(routePath('history') + '?limit=60', { method: 'GET' })
     if (!aliveRef.current) return
     if (result.ok && result.data && Array.isArray(result.data.items)) {
       setHistoryItems(result.data.items.filter(Boolean))
+    } else if (!result.ok) {
+      // 加载失败不再静默成"暂无作品"：走现有错误/指引通道，且不清空已有列表。
+      fail(result.code, result.message)
     }
     setHistoryDone(true)
   }, [])
@@ -144,9 +161,13 @@ export function useStudio(props) {
   }, [loadHistory])
 
   const loadLibrary = React.useCallback(async () => {
-    const result = await request('imagen-api/library', { method: 'GET' })
+    const result = await request(routePath('library'), { method: 'GET' })
     if (!aliveRef.current) return
-    if (result.ok && result.data && Array.isArray(result.data.favorites)) setFavorites(result.data.favorites)
+    if (result.ok && result.data && Array.isArray(result.data.favorites)) {
+      setFavorites(result.data.favorites)
+    } else if (!result.ok) {
+      fail(result.code, result.message)
+    }
   }, [])
 
   React.useEffect(() => {
@@ -279,7 +300,7 @@ export function useStudio(props) {
   async function startSession() {
     if (busy) return
     setBusy('start')
-    const result = await request('imagen-api/session/start', { method: 'POST', body: JSON.stringify({ presetId: form.presetId || defaultPreset }) })
+    const result = await request(routePath('sessionStart'), { method: 'POST', body: JSON.stringify({ presetId: form.presetId || defaultPreset }) })
     if (!aliveRef.current) return
     setBusy('')
     if (!result.ok) fail(result.code, result.message)
@@ -289,7 +310,7 @@ export function useStudio(props) {
   async function stopSession() {
     if (busy) return
     setBusy('stop')
-    const result = await request('imagen-api/session/stop', { method: 'POST' })
+    const result = await request(routePath('sessionStop'), { method: 'POST' })
     if (!aliveRef.current) return
     setBusy('')
     if (!result.ok) fail(result.code, result.message)
@@ -314,7 +335,7 @@ export function useStudio(props) {
     pendingRef.current = body
     setSending(true)
     setError(null)
-    const result = await request('imagen-api/generate', { method: 'POST', body: JSON.stringify(body) })
+    const result = await request(routePath('generate'), { method: 'POST', body: JSON.stringify(body) })
     if (!aliveRef.current) return
     setSending(false)
     if (result.ok && result.data && result.data.id) {
@@ -342,7 +363,7 @@ export function useStudio(props) {
     const previousPrompt = lastIntentPrompt(messages)
     pushMessages([{ role: 'user', text: value }])
     setInterpreting(true)
-    const result = await request('imagen-api/intent', {
+    const result = await request(routePath('intent'), {
       method: 'POST',
       body: JSON.stringify({ text: value, previousPrompt, locale: isEn ? 'en' : 'zh' }),
     })
@@ -407,7 +428,7 @@ export function useStudio(props) {
 
   /** 在系统文件管理器里打开产物目录。 */
   async function openFolder() {
-    const result = await request('imagen-api/reveal', { method: 'POST', body: JSON.stringify({}) })
+    const result = await request(routePath('reveal'), { method: 'POST', body: JSON.stringify({}) })
     if (!aliveRef.current) return
     if (!result.ok) showToast(t('studio.toast.revealFailed'))
   }
@@ -468,7 +489,7 @@ export function useStudio(props) {
     const next = !isFavorite(target)
     // 先本地翻转，再以宿主返回的列表为准，交互不等网络。
     setFavorites((prev) => (next ? [...prev, target] : prev.filter((item) => item !== target)))
-    const result = await request('imagen-api/library/favorite', {
+    const result = await request(routePath('libraryFavorite'), {
       method: 'POST',
       body: JSON.stringify({ path: target, favorite: next }),
     })
@@ -485,7 +506,7 @@ export function useStudio(props) {
   async function deleteImages(paths) {
     const list = (Array.isArray(paths) ? paths : []).filter(Boolean)
     if (list.length === 0) return
-    const result = await request('imagen-api/library/delete', {
+    const result = await request(routePath('libraryDelete'), {
       method: 'POST',
       body: JSON.stringify({ paths: list }),
     })
@@ -515,10 +536,10 @@ export function useStudio(props) {
     setProbing(true)
     // Host 的 /probe 会串行调用 kaggle CLI，首次检查约 20~30 秒；45 秒兜底，避免无限等待。
     const controller = typeof AbortController === 'function' ? new AbortController() : null
-    const timer = controller ? setTimeout(() => controller.abort(), 45000) : null
+    const timer = controller ? setTimeout(() => controller.abort(), TIMEOUTS.clientProbeMs) : null
     let result
     try {
-      result = await request('imagen-api/probe', {
+      result = await request(routePath('probe'), {
         method: 'POST',
         ...(controller ? { signal: controller.signal } : {}),
       })
@@ -575,7 +596,7 @@ export function useStudio(props) {
       return
     }
     setEnhancing(true)
-    const result = await request('imagen-api/enhance', {
+    const result = await request(routePath('enhance'), {
       method: 'POST',
       body: JSON.stringify({
         prompt: form.prompt,

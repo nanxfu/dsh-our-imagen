@@ -51,9 +51,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # ─────────────────────────────────────────────────────────────────────────────
 EMBEDDED_CONFIG_B64 = ""
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
-# 日志环容量：Host 侧按 docs/API.md 第 6 节实现，最多 400 行。
+# 日志环容量：Host 侧按 docs/SPEC.md 实现，最多 400 行。
 LOG_MAX_LINES = 400
 LOG_LINE_MAX_CHARS = 2000
 

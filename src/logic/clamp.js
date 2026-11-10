@@ -1,4 +1,6 @@
-/** 参数钳制：与 docs/SPEC.md 第 2 节的硬性约束一一对应。 */
+/** 参数钳制：边界值来自 shared/contract.js 的 LIMITS（与 docs/SPEC.md 第 2 节一致）。 */
+
+import { LIMITS } from '../../shared/contract.js'
 
 export function clampInt(value, min, max, fallback) {
   const number = Number(value)
@@ -15,7 +17,8 @@ export function clampNumber(value, min, max, fallback) {
 export function clampSize(value) {
   const number = Number(value)
   if (!Number.isFinite(number)) return 1024
-  return Math.min(1536, Math.max(256, Math.round(number / 8) * 8))
+  const { min, max, step } = LIMITS.width
+  return Math.min(max, Math.max(min, Math.round(number / step) * step))
 }
 
 export function parseSeed(text) {
@@ -25,5 +28,5 @@ export function parseSeed(text) {
   if (!Number.isFinite(value)) return -1
   const int = Math.trunc(value)
   if (int < 0) return -1
-  return Math.min(int, 4294967295)
+  return Math.min(int, LIMITS.seed.max)
 }

@@ -5,6 +5,7 @@
  * useStudio 只负责收集状态与发起请求。
  */
 
+import { LIMITS } from '../../shared/contract.js'
 import { clampInt, clampNumber, clampSize, parseSeed } from './clamp.js'
 import { composePrompt } from './prompt.js'
 
@@ -14,25 +15,26 @@ import { composePrompt } from './prompt.js'
  * @param {string} [options.styleSuffix] 当前风格后缀（仅在没有显式 prompt 时追加）
  * @param {string} [options.defaultPreset] 预设兜底 id
  * @param {object} [options.overrides] 显式覆盖项（对话输入 / 生成变体 / 重试）
- * @returns {object} POST /imagen-api/generate 的请求体
+ * @returns {object} POST /generate（路径由 shared/contract.js 提供）的请求体
  */
 export function buildGenerateBody(form, options = {}) {
   const input = form || {}
   const overrides = options.overrides && typeof options.overrides === 'object' ? options.overrides : null
   const explicit = overrides && typeof overrides.prompt === 'string' ? overrides.prompt : null
+  const maxPromptChars = LIMITS.prompt.maxChars
   const prompt = explicit !== null
-    ? explicit.trim().slice(0, 2000)
-    : composePrompt(input.prompt, options.styleSuffix).slice(0, 2000)
+    ? explicit.trim().slice(0, maxPromptChars)
+    : composePrompt(input.prompt, options.styleSuffix).slice(0, maxPromptChars)
 
   const body = {
     prompt,
     negativePrompt: String(input.negative ?? '').trim(),
     width: clampSize(input.width),
     height: clampSize(input.height),
-    steps: clampInt(input.steps, 1, 60, 4),
-    cfg: clampNumber(input.cfg, 0, 20, 0),
+    steps: clampInt(input.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
+    cfg: clampNumber(input.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
     seed: parseSeed(input.seed),
-    count: clampInt(input.count, 1, 4, 1),
+    count: clampInt(input.count, LIMITS.count.min, LIMITS.count.max, 1),
     waitSeconds: 0,
     autoStart: true,
   }

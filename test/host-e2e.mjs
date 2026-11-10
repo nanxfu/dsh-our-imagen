@@ -38,7 +38,7 @@ function startMockDaemon() {
       return send(200, {
         status: 'ok',
         phase: 'ready',
-        version: '0.2.0',
+        version: '0.3.0',
         model_id: 'mock-model',
         device: 'Mock T4',
         device_count: 2,

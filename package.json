@@ -14,6 +14,7 @@
     "index.js",
     "client.js",
     "lib/*.js",
+    "shared/*.js",
     "locale/*.json",
     "icon.svg",
     "cordis.patch.yml",
@@ -21,7 +22,8 @@
   ],
   "scripts": {
     "build": "node build.mjs",
-    "test": "node build.mjs && node test/check-client-locale.mjs && node test/check-client-logic.mjs && node test/check-client-render.mjs && node test/host-e2e.mjs && node test/library-atomic.mjs && node test/session-reliability.mjs && node test/session-race.mjs",
+    "test": "node build.mjs && node test/check-contract.mjs && node test/check-client-locale.mjs && node test/check-client-logic.mjs && node test/check-client-render.mjs && node test/host-e2e.mjs && node test/library-atomic.mjs && node test/session-reliability.mjs && node test/session-race.mjs",
+    "test:contract": "node test/check-contract.mjs",
     "test:client": "node build.mjs && node test/check-client-locale.mjs && node test/check-client-logic.mjs && node test/check-client-render.mjs",
     "test:host": "node test/host-e2e.mjs && node test/library-atomic.mjs && node test/session-reliability.mjs && node test/session-race.mjs",
     "test:live": "node test/kaggle-live.mjs",

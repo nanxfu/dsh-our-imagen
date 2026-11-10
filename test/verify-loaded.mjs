@@ -7,6 +7,8 @@
  * 运行：node test/verify-loaded.mjs [--port 52629]
  */
 
+import { VERSION } from '../shared/contract.js'
+
 const args = process.argv.slice(2)
 const portIndex = args.indexOf('--port')
 const port = portIndex >= 0 ? args[portIndex + 1] : '52629'
@@ -45,8 +47,8 @@ async function main() {
     return
   }
 
-  await check('版本为 0.2.0', () => {
-    if (state.version !== '0.2.0') throw new Error(`实际 ${state.version}`)
+  await check(`版本为 ${VERSION}`, () => {
+    if (state.version !== VERSION) throw new Error(`实际 ${state.version}`)
   })
   await check('预设列表完整且不泄露 pipeline', () => {
     if (!Array.isArray(state.presets) || state.presets.length < 4) {

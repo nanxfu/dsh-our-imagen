@@ -16,6 +16,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
 import { bundle } from '../build.mjs'
+import { PRESETS } from '../shared/contract.js'
 import { STYLE_FILES } from '../src/styles/manifest.js'
 import { loadClient, TEST_ARTIFACT } from '../test/load-client.mjs'
 
@@ -112,24 +113,18 @@ const image = (seed, width = 1024, height = 1024, seconds = 6.2) => ({
   height,
 })
 
-const preset = {
-  id: 'sdxl-lightning',
-  label: '默认 · 1024 快档',
-  params: '3.5B + LoRA',
-  license: 'OpenRAIL++',
-  licenseKind: 'open',
-  gpus: 1,
-  downloadGb: 6.78,
-  size: 1024,
-  steps: 4,
-  cfg: 0,
-  steadySeconds: 6.2,
-  tier: 'fast',
+// 预览用的预设来自契约（与 /imagen-api/state 的公开视图同形）：去掉仅下发远端使用的 pipeline。
+const publicPreset = (id) => {
+  const found = PRESETS.find((item) => item.id === id)
+  if (!found) throw new Error(`预览缺少预设：${id}`)
+  const { pipeline, ...rest } = found
+  return rest
 }
-const turbo = { ...preset, id: 'sdxl-turbo', label: '极速草稿', license: '非商用研究许可', licenseKind: 'restricted', tier: 'usable' }
-const base = { ...preset, id: 'sdxl-base', label: '经典 · 30 步精修', size: 1024, steps: 30, cfg: 7, steadySeconds: 18, tier: 'usable' }
+const preset = publicPreset('sdxl-lightning')
+const turbo = publicPreset('sdxl-turbo')
+const base = publicPreset('sdxl-base')
 
-// 与真实 Host 的 /imagen-api/history 一致：不提供 params，只给作品本身的信息。
+// 真实 Host 的 /imagen-api/history 每条含完整 params（用于「带回参数」）；预览只用提示词与图片，故这里省略。
 const historyItems = [
   {
     jobId: 'job-9001',

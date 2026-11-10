@@ -10,6 +10,8 @@
 
 import React from 'react'
 
+import { LIMITS } from '../../shared/contract.js'
+
 import { Icon } from './icons.jsx'
 import { STYLE_CAPSULES } from './capsules.js'
 
@@ -248,7 +250,7 @@ export function ChatPanel(props) {
           <textarea
             rows={2}
             value={draft}
-            maxLength={2000}
+            maxLength={LIMITS.prompt.maxChars}
             placeholder={t('studio.chat.placeholder')}
             aria-label={t('studio.chat.placeholder')}
             spellCheck={false}

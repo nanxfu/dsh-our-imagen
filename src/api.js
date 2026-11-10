@@ -1,8 +1,20 @@
 /** Host 接口访问：URL 解析与统一请求出口。 */
 
+import { ROUTES, clientPath } from '../shared/contract.js'
+
 export function apiUrl(relative) {
   if (typeof document === 'undefined') return relative
   return new URL(relative, document.baseURI).toString()
+}
+
+/**
+ * 按契约名取客户端请求路径（返回值与改造前的相对路径同形，查询串由调用方拼接）。
+ * 路径唯一来源是 shared/contract.js 的 ROUTES。
+ */
+export function routePath(name) {
+  const route = ROUTES[name]
+  if (!route) throw new Error(`未知路由：${name}`)
+  return clientPath(route)
 }
 
 /**

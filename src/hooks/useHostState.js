@@ -1,7 +1,9 @@
 /** 轮询 Host 状态；有进行中的任务时加快节奏。 */
 
+import { TIMEOUTS } from '../../shared/contract.js'
+
 import { React } from '../runtime.js'
-import { request } from '../api.js'
+import { request, routePath } from '../api.js'
 import { activeJobOf } from '../logic/jobs.js'
 
 export function useHostState() {
@@ -26,13 +28,13 @@ export function useHostState() {
       timer = null
       if (stopped) return
       if (typeof document !== 'undefined' && document.hidden) return
-      const result = await request('imagen-api/state', { method: 'GET' })
+      const result = await request(routePath('state'), { method: 'GET' })
       if (stopped || !aliveRef.current) return
-      let delay = 10000
+      let delay = TIMEOUTS.clientStatePollMs
       if (result.ok && result.data && typeof result.data === 'object') {
         setState(result.data)
         setError(null)
-        delay = activeJobOf(result.data) ? 2000 : 10000
+        delay = activeJobOf(result.data) ? TIMEOUTS.clientStateActivePollMs : TIMEOUTS.clientStatePollMs
       } else {
         setError({ code: result.code, message: result.message })
       }

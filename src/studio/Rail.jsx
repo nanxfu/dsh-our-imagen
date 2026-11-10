@@ -7,12 +7,14 @@
 
 import React from 'react'
 
+import { LIMITS } from '../../shared/contract.js'
+
 import { Tooltip } from '../components/Tooltip.jsx'
 import { Icon } from './icons.jsx'
 import { STYLE_CAPSULES } from './capsules.js'
 import { DEFAULT_RATIOS } from './ratios.js'
 
-const PROMPT_MAX = 2000
+const PROMPT_MAX = LIMITS.prompt.maxChars
 const INSPIRE_KEYS = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
 
 function Fieldset(props) {

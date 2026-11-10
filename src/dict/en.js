@@ -73,6 +73,16 @@ export const en = {
   'error.code.disposed': 'The plugin stopped before the task ran',
   'error.code.session_timeout': 'Timed out waiting for the cloud session',
   'error.code.not_found': 'Not found',
+  'error.code.invalid_body': 'The request body is malformed',
+  'error.code.too_many': 'Too many items in one request',
+  'error.code.output_missing': 'The generated output was not found',
+  'error.code.reveal_failed': 'Could not open the containing folder',
+  'error.code.internal_error': 'The local service hit an internal error',
+  'error.code.session_error': 'The cloud session failed',
+  'error.code.generate_failed': 'Image generation did not succeed',
+  'error.code.cli_timeout': 'The kaggle command timed out',
+  'error.code.unknown': 'Unrecognized error',
+  'error.code.unauthorized': 'Remote access was not authorized',
 
   // ── Workbench shell ───────────────────────────────────────────
   'studio.nav.label': 'Free imagen',

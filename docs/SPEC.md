@@ -1,12 +1,17 @@
 # 技术规格与接口契约 (SPEC)
 
-本文档是 `our-free-imagen` 的唯一规格真理源（Single Source of Truth），涵盖接口入参出参、错误码、Agent 工具定义以及实测硬件基准。
+> **数据单一来源**：路由、错误码、参数边界、超时、预设与远端协议字段统一由 [`shared/contract.js`](../shared/contract.js) 定义；
+> 本文档只描述语义、请求/响应形状与使用约束，不重复维护数值。`node test/check-contract.mjs` 会校验
+> 宿主注册的路由、宿主错误码、客户端文案与本文档是否跟随契约。
+>
+> **版本**：0.3.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
 
 ---
 
 ## 1. 核心状态与生命周期
 
-### 会话状态（Session State）
+### 1.1 会话状态（Session State）
+
 会话由 Host 单例管理，对应远端 Kaggle 容器实例：
 
 | 状态 (`state`) | 含义 | 触发场景 / 转换条件 |
@@ -19,35 +24,128 @@
 | `stopping` | 正在关机 | 正在向远端发送退出通知 |
 | `error` | 异常中断 | 任一阶段超时或失败（附带具体的错误码与日志片段） |
 
-### 错误码字典 (`error.code`)
-- `cli_missing`: 本地未安装 `kaggle` 命令行工具。
-- `auth_required`: 未找到 Kaggle 凭证文件或凭据已失效。
-- `push_failed`: 推送 Kernel 代码至 Kaggle 平台失败。
-- `queue_timeout`: Kaggle GPU 排队超过配置阈值（默认 45 分钟）。
-- `tunnel_timeout`: 远端容器启动后，未能在规定时间内建立公网隧道。
-- `health_failed`: 隧道已建立，但探针接口无法联通。
-- `remote_error`: 远端执行推理异常（如 CUDA 显存不足 OOM）。
-- `session_ended`: 远端会话非预期中断（如达到 Kaggle 单次运行上限或被平台回收）。
-- `stopped`: 用户主动关机。
-- `invalid_request` / `invalid_prompt` / `invalid_path`: 请求参数、提示词或路径不合法。
-- `oom` / `load_failed` / `generation_failed`: 显存不足、权重加载失败、推理失败。
-- `warming`: 远端仍在加载模型，可稍后重试。
-- `queue_full` / `session_absent` / `session_timeout`: 队列已满、会话不存在、等待会话超时。
-- `empty_result` / `disposed` / `timeout` / `not_found`: 远端未返回图片、插件已停止、检查超时、目标不存在。
+会话快照（`/state` 的 `session` 字段）包含：`state`、`phase`、`detail`、`presetId`、`kernelId`、`kernelUrl`、
+`kernelStatus`、`endpointUrl`、`device`、`deviceCount`、`modelId`、`startedAt`、`readyAt`、`lastProbeAt`、
+`idleTimeoutSec`、`error`（`null` 或 `{ code, message }`）。鉴权 token 不进入任何对外快照
+（只在 Host 内部用于请求远端；`endpointUrl` 会下发，供前端展示隧道是否建立）。
+
+### 1.2 任务状态（Job Status）
+
+| `status` | 含义 |
+| :--- | :--- |
+| `queued` | 已入本地队列，尚未开始 |
+| `waiting-session` | 正在等待/唤起远端会话 |
+| `running` | 远端生成中 |
+| `done` | 完成，`output` 内有图片 |
+| `failed` | 失败，`error` 内是错误码与原因 |
+
+### 1.3 错误码字典 (`error.code`)
+
+错误响应统一为 `{ "error": { "code": "...", "message": "..." } }`。错误码词表见
+`shared/contract.js` 的 `ERROR_CODES`；下表的 `HTTP` 列是宿主直接返回该码时的状态码。
+远端 daemon 的 `{ error: { code, message } }` 由宿主原样透传（`remote` 层 4 个码在宿主字典中也有文案）。
+
+**Host 层（27 个）**
+
+| 错误码 | HTTP | 触发场景 |
+| :--- | ---: | :--- |
+| `invalid_body` | 400 | 请求体缺失、不是合法 JSON 或缺少必填字段（如 `path` / `paths`） |
+| `invalid_request` | 400 | 请求内容不合法（如 `/intent` 的对话内容为空或超过 2000 字符） |
+| `invalid_prompt` | 400 | 提示词为空或超过 2000 字符 |
+| `invalid_path` | 400 | 路径不在 `imagen-output/` 内或格式非法 |
+| `too_many` | 400 | 一次删除的图片数量超过上限（200） |
+| `not_found` | 404 | 任务、文件或目标资源不存在 |
+| `output_missing` | 404 | 产物目录尚不存在（`/reveal`） |
+| `reveal_failed` | 500 | 调起系统文件管理器失败 |
+| `internal_error` | 500 | 未分类的宿主异常（`errorShape` 兜底码） |
+| `queue_full` | 400 | 本地待执行队列已满 |
+| `stopped` | — | 用户主动关机导致任务未执行 |
+| `session_absent` | — | 需要远端连接时会话不存在 |
+| `session_timeout` | — | 等待会话就绪超时 |
+| `session_error` | — | 会话进入错误态且没有更具体的错误码 |
+| `empty_result` | — | 远端未返回任何图片 |
+| `generate_failed` | — | 生成失败且没有更具体的错误码 |
+| `disposed` | — | 插件已卸载 / 已释放 |
+| `auth_required` | — | 未找到 Kaggle 凭证或凭据失效 |
+| `cli_missing` | — | 本机未安装 `kaggle` CLI |
+| `cli_timeout` | — | `kaggle` CLI 启动超时 |
+| `push_failed` | — | 构建/推送 Kernel 失败 |
+| `queue_timeout` | — | Kaggle GPU 排队超时（默认 45 分钟） |
+| `tunnel_timeout` | — | 容器已启动但隧道未建立 / 会合失败 |
+| `health_failed` | — | 隧道已建立但 `/health` 持续不可达 |
+| `remote_error` | — | 远端 daemon 主动报告错误 |
+| `session_ended` | — | Kernel 非预期结束（被平台回收等） |
+| `unknown` | — | 探测/检查失败但无法归因 |
+
+**Remote 层（4 个，远端产生、宿主透传）**
+
+| 错误码 | 触发场景 |
+| :--- | :--- |
+| `unauthorized` | 远端 Bearer Token 缺失或错误（远端回 401） |
+| `load_failed` | 依赖安装 / 模型加载失败 |
+| `generation_failed` | 推理过程异常 |
+| `oom` | CUDA 显存不足（远端会先 `torch.cuda.empty_cache()` 再回错） |
+
+> 远端也会复用 Host 层的 `invalid_request`（参数不合法，400）与 `not_found`（未知路径，404）。
+
+**Client 层（6 个，仅客户端本地合成，不会由 Host/远端返回）**
+
+`warming`（收到 503 但没有明确错误码，按可重试处理）、`timeout`（请求被 AbortController 取消）、
+`network`（fetch 失败）、`need_prompt`（本地表单校验）、`delete_failed`（删除动作失败）、
+`probe_failed`（环境检查失败）。
 
 ---
 
 ## 2. Host HTTP 路由
 
-所有插件接口统一挂载在 `/imagen-api` 前缀下，响应格式固定为 `application/json; charset=utf-8`。  
-异常响应统一为：`{ "error": { "code": "...", "message": "..." } }`。
+所有插件接口统一挂载在 `/imagen-api` 前缀下；除个别例外，成功响应为 `application/json; charset=utf-8`。
+异常响应统一为 `{ "error": { "code": "...", "message": "..." } }`。方法不匹配时返回 `405`（带 `Allow` 头、无响应体）。
 
-### 2.1 会话管理
+> **例外**：`GET /imagen-api/file` 返回图片二进制流（`image/png` 等），不是 JSON。
+
+路由总览（15 条，以 `shared/contract.js` 的 `ROUTES` 为准）：
+
+| 方法 | 路径 | 用途 |
+| :--- | :--- | :--- |
+| GET | `/imagen-api/state` | 插件运行状态全貌（前端轮询数据源） |
+| POST | `/imagen-api/probe` | 主动触发本地 Kaggle 环境检测 |
+| POST | `/imagen-api/session/start` | 启动远端 GPU 会话（幂等） |
+| POST | `/imagen-api/session/stop` | 关机 |
+| POST | `/imagen-api/generate` | 提交生图任务 |
+| GET | `/imagen-api/job?id=` | 查询单个任务 |
+| GET | `/imagen-api/jobs?limit=` | 查询任务列表与队列概况 |
+| GET | `/imagen-api/history?limit=` | 查询历史产物 |
+| GET | `/imagen-api/file?path=` | 读取产物图片（二进制） |
+| GET | `/imagen-api/library` | 读取收藏 / 删除记录 |
+| POST | `/imagen-api/library/favorite` | 收藏 / 取消收藏 |
+| POST | `/imagen-api/library/delete` | 删除产物 |
+| POST | `/imagen-api/enhance` | 提示词润色 |
+| POST | `/imagen-api/intent` | 对话意图解析 |
+| POST | `/imagen-api/reveal` | 在文件管理器中打开产物目录 |
+
+### 2.1 会话与状态
 
 #### `GET /imagen-api/state`
+
 获取当前插件运行状态全貌（前端轮询面板与徽章的数据来源）。
 
+- **响应字段**：
+
+| 字段 | 说明 |
+| :--- | :--- |
+| `version` | 插件版本（与契约 `VERSION` 一致） |
+| `defaultPreset` | 默认预设 id |
+| `presets` | 预设的公开视图数组（见下） |
+| `session` | 会话快照（字段见 §1.1） |
+| `probe` | 最近一次环境检测结果；未检测时为 `null` |
+| `probeAt` | 最近一次检测完成的时间戳（毫秒） |
+| `jobs` | 最近 10 条任务（`Job` 公开视图，见 §2.2） |
+| `lastJob` | 最近一条完成/失败的任务，或 `null` |
+| `queue` | `{ running: id \| null, pending: number }` |
+| `devMode` | 是否通过 `devEndpoint` 走本地联调 |
+
 - **响应示例**：
+
 ```json
 {
   "version": "0.3.0",
@@ -55,109 +153,252 @@
   "presets": [
     {
       "id": "sdxl-lightning",
-      "name": "SDXL Lightning (极速平衡)",
-      "width": 1024,
-      "height": 1024,
+      "label": "默认 · 1024 快档",
+      "repo": "stabilityai/stable-diffusion-xl-base-1.0 + ByteDance/SDXL-Lightning",
+      "params": "3.5B + LoRA",
+      "license": "OpenRAIL++",
+      "licenseKind": "open",
+      "gated": false,
+      "gpus": 1,
+      "downloadGb": 6.78,
+      "size": 1024,
+      "sizeOptions": [768, 1024, 1152],
       "steps": 4,
-      "cfg": 1.0
+      "cfg": 0,
+      "peakVramMb": 10347,
+      "loadSeconds": 7.7,
+      "steadySeconds": 6.2,
+      "tier": "fast",
+      "negativeHint": "blurry, low quality, deformed, extra limbs"
     }
   ],
   "session": {
     "state": "ready",
+    "phase": "warm",
+    "detail": null,
     "presetId": "sdxl-lightning",
     "kernelId": "username/imagen-1a2b3c4d",
     "kernelUrl": "https://www.kaggle.com/code/username/imagen-1a2b3c4d",
     "kernelStatus": "RUNNING",
+    "endpointUrl": "https://xxxx.trycloudflare.com",
     "device": "Tesla T4",
     "deviceCount": 2,
+    "modelId": "sdxl-lightning",
     "startedAt": "2026-11-09T04:00:00.000Z",
     "readyAt": "2026-11-09T04:06:00.000Z",
+    "lastProbeAt": "2026-11-09T04:07:02.000Z",
     "idleTimeoutSec": 1800,
     "error": null
   },
+  "probe": null,
+  "probeAt": 0,
   "jobs": [],
-  "lastJob": null
+  "lastJob": null,
+  "queue": { "running": null, "pending": 0 },
+  "devMode": false
 }
 ```
+
+> `presets` 是 `publicPresets()` 的结果：不含 `pipeline`（下发远端 daemon 用的加载描述），避免同一份数据在
+> 客户端快照里出现两份。
 
 #### `POST /imagen-api/probe`
-主动触发本地 Kaggle 环境检测。
-- **响应**：`{ "ok": true, "probe": { "cli": true, "auth": true, "quota": true, "notes": [] } }`
 
-#### `POST /imagen-api/session/start`
-启动远端 GPU 会话。具备幂等性（若会话已在运行中，直接返回当前会话信息）。
-- **请求体**：`{ "presetId": "sdxl-lightning" }`
-- **响应**：`{ "ok": true, "session": { ... } }`
+主动触发本地 Kaggle 环境检测（安装/登录状态、配额）。检测会并发调用 `kaggle` CLI，首次约 20~30 秒。
 
-#### `POST /imagen-api/session/stop`
-关机。通知远端容器退出并清理本地连接状态。
-- **响应**：`{ "ok": true, "session": { "state": "absent" } }`
+- **响应**：`{ "ok": boolean, "probe": Probe }`，`ok = probe.auth.ok`。
 
----
+`Probe` 结构：
 
-### 2.2 出图任务
+| 字段 | 说明 |
+| :--- | :--- |
+| `provider` | 固定 `"kaggle"` |
+| `cli.present` | CLI 是否存在 |
+| `cli.version` | CLI 版本字符串（可能为 `null`） |
+| `cli.username` | 读到的 Kaggle 用户名（可选） |
+| `cli.error` | CLI 不可用时的原因（可选） |
+| `auth.ok` | 鉴权是否通过 |
+| `auth.checkedAt` | 检测时间（ISO 字符串） |
+| `auth.errorCode` | 失败时的错误码：`cli_missing` / `cli_timeout` / `auth_required` / `unknown` |
+| `auth.detail` | 失败详情（可选，截断 300 字符） |
+| `quota.available` | 配额是否可读；不可读时只有 `raw` |
+| `quota.usedHours` / `remainingHours` / `totalHours` / `refreshAt` | 配额明细（可读时） |
+| `quota.raw` | CLI 原始输出片段 |
+| `notes` | 给用户看的说明数组 |
 
-#### `POST /imagen-api/generate`
-提交新的文生图请求。任务进入本地串行队列（同一时刻只执行一个任务）。
+- **响应示例**：
 
-- **请求体**：
-```json
-{
-  "prompt": "a cinematic portrait of an astronaut exploring a lush neon forest, 8k",
-  "negativePrompt": "blurry, low quality, distorted",
-  "presetId": "sdxl-lightning",
-  "width": 1024,
-  "height": 1024,
-  "steps": 4,
-  "cfg": 1.0,
-  "seed": 42,
-  "count": 1
-}
-```
-- **参数硬性约束与自动钳制（不报错，自动校正）**：
-  - `width` / `height`: 必须为 8 的整数倍，范围 256 ~ 1536。
-  - `steps`: 范围 1 ~ 60。
-  - `cfg`: 范围 0.0 ~ 20.0。
-  - `count`: 范围 1 ~ 4。多张生成时，第 `i` 张图片的随机种子为 `seed + i`。
-- **响应**：
 ```json
 {
   "ok": true,
-  "jobId": "job-101f2d4c",
-  "status": "pending",
-  "job": { "id": "job-101f2d4c", "prompt": "..." }
+  "probe": {
+    "provider": "kaggle",
+    "cli": { "present": true, "version": "2.2.5", "username": "someone" },
+    "auth": { "ok": true, "checkedAt": "2026-11-09T04:07:02.000Z" },
+    "quota": {
+      "available": true,
+      "usedHours": 0.72,
+      "remainingHours": 29.28,
+      "totalHours": 30,
+      "refreshAt": "2026-11-14T00:00:00+00:00",
+      "raw": "GPU  0.72h  29.28h  30.00h  2026-11-14T00:00:00+00:00"
+    },
+    "notes": ["kaggle CLI 2.2.5", "账号接入正常"]
+  }
 }
 ```
 
-#### `GET /imagen-api/job?id=<jobId>`
-查询单个任务状态与生成结果。
-- **完成态数据**：包含生成耗时、本地保存路径、图片访问相对 URL 列表。
+#### `POST /imagen-api/session/start`
 
-#### `GET /imagen-api/history?limit=20`
-获取工作区 `imagen-output/` 目录下的历史生成记录，按时间倒序排列。每条记录含 `jobId`、`createdAt`、`finishedAt`、`presetId`、完整 `params` 与 `images[]`；每个 image 带 `path`（工作区相对路径）、`absolute`（绝对路径）与 `url`。
+启动远端 GPU 会话。具备幂等性（会话已在运行中直接返回当前快照；`error` 态会先清空再重试）。
+
+- **请求体**：`{ "presetId": "sdxl-lightning" }`（可选；未知 id 回退 `defaultPreset`）
+- **响应**：`{ "ok": true, "session": SessionSnapshot }`
+
+#### `POST /imagen-api/session/stop`
+
+关机。通知远端容器退出并清理本地连接状态（best-effort，不等待远端确认）。
+
+- **响应**：`{ "ok": true, "session": { "state": "stopping" | "absent", ... } }`
+
+### 2.2 出图任务
+
+队列在 Host 侧串行执行：同一时刻最多 1 个 `running`，其余按提交顺序排队。
+
+#### `POST /imagen-api/generate`
+
+提交新的文生图请求。
+
+- **请求体**：
+
+| 字段 | 类型 | 约束（越界自动钳制，不报错） |
+| :--- | :--- | :--- |
+| `prompt` | string | 必填，trim 后 1~2000 字符；空则 400 `invalid_prompt` |
+| `negativePrompt` | string | 可选，截断到 1000 字符；默认空 |
+| `presetId` | string | 可选，未知 id 回退默认预设 |
+| `width` / `height` | integer | 256~1536，按 8 的倍数对齐；缺省取预设 `size` |
+| `steps` | integer | 1~60；缺省取预设 `steps` |
+| `cfg` | number | 0~20；缺省取预设 `cfg` |
+| `seed` | integer | 0~2147483647；省略则随机。多张时第 `i` 张为 `seed + i` |
+| `count` | integer | 1~4，默认 1 |
+| `waitSeconds` | integer | 0~600：>0 时该请求最多等待任务结束 N 秒再返回（默认 0，立即返回） |
+| `autoStart` | boolean | 默认 `true`；`false` 时不自动唤起会话 |
+
+- **响应**：**裸 `Job` 对象**（不是 `{ ok, job }` 包装）。`waitSeconds > 0` 时返回的是等待结束后的快照，
+  任务可能仍在 `queued` / `running`。
+
+`Job` 结构：
+
+| 字段 | 说明 |
+| :--- | :--- |
+| `id` | 任务 id（`j_<hex>`） |
+| `status` | `queued` / `waiting-session` / `running` / `done` / `failed` |
+| `stage` | 给人看的中文阶段文案（如「排队中」「生成中」） |
+| `presetId` | 实际使用的预设 id |
+| `params` | 归一化后的参数：`{ prompt, negativePrompt, width, height, steps, cfg, seed, count }` |
+| `createdAt` / `startedAt` / `finishedAt` | ISO 时间；未发生为 `null` |
+| `seconds` | 生成耗时（秒，1 位小数）或 `null` |
+| `sessionState` | 任务执行时最近的会话状态 |
+| `modelId` | 预设对应的仓库标识（远端可能回传实际值） |
+| `output` | 完成时 `{ dir, metaFile, images[] }`，否则 `null` |
+| `error` | 失败时 `{ code, message }`，否则 `null` |
+
+`output.images[]` 每项：`{ file, path, url, width, height, seed, seconds }`，其中 `path` 是工作区相对路径，
+`url` 是 `/imagen-api/file?path=...` 形式的预览地址。
+
+- **响应示例**：
+
+```json
+{
+  "id": "j_9f2c1a4b",
+  "status": "queued",
+  "stage": "排队中",
+  "presetId": "sdxl-lightning",
+  "params": {
+    "prompt": "a cinematic portrait of an astronaut",
+    "negativePrompt": "blurry, low quality",
+    "width": 1024,
+    "height": 1024,
+    "steps": 4,
+    "cfg": 0,
+    "seed": 42,
+    "count": 1
+  },
+  "createdAt": "2026-11-09T04:10:00.000Z",
+  "startedAt": null,
+  "finishedAt": null,
+  "seconds": null,
+  "sessionState": "ready",
+  "modelId": "stabilityai/stable-diffusion-xl-base-1.0 + ByteDance/SDXL-Lightning",
+  "output": null,
+  "error": null
+}
+```
+
+- **错误**：`400 invalid_prompt`（prompt 为空/超长）、`400 queue_full`（待执行队列已满）、`400 invalid_body`（请求体不是合法 JSON）。
+
+#### `GET /imagen-api/job?id=<jobId>`
+
+查询单个任务的状态与结果。
+
+- **响应**：`Job` 对象（结构同上）。
+- **错误**：`404 not_found`（任务不存在或已被裁剪）。
+
+#### `GET /imagen-api/jobs?limit=<n>`
+
+查询最近任务列表与队列概况。
+
+- `limit`：1~100，默认 20。
+- **响应**：`{ "jobs": Job[], "queue": { "running": "j_... | null", "pending": 0 } }`
+
+#### `GET /imagen-api/history?limit=<n>`
+
+获取工作区 `imagen-output/` 下的历史生成记录，按时间倒序。
+
+- `limit`：1~100，默认 30。
+- **响应**：`{ "items": HistoryItem[] }`。
+
+`HistoryItem`：`{ jobId, dir, createdAt, finishedAt, presetId, params, prompt, images[] }`；
+`params` 是完整的生成参数（用于「带回参数」），`images[]` 每项：
+`{ file, path, absolute, url, width, height, seed, seconds }`（已按文件是否存在过滤，删除过的图不会出现）。
 
 #### `GET /imagen-api/file?path=<encodedPath>`
-读取保存在当前工作区内的图片二进制流，供前端直接预览（带路径安全穿透保护）。
 
----
+读取产物图片二进制流，供前端直接预览。
+
+- `path` 必须是工作区相对路径且落在 `imagen-output/` 内（越界路径返回 404，不做目录穿越猜测）。
+- 支持 `HEAD`；成功响应带 `content-type`、`content-length`、`cache-control: public, max-age=31536000, immutable`。
+- **错误**：`404 not_found`（路径非法、文件不存在或读取失败）。
 
 ### 2.3 收藏、文案与本地动作
 
 #### `GET /imagen-api/library`
-读取本地收藏与删除记录：`{ ok, favorites: string[], deleted: [] }`。
+
+读取本地收藏与删除记录。
+
+- **响应**：`{ "favorites": string[], "deleted": [{ "path": string, "at": string }], "notes"?: string[] }`
+- `notes` 只在库文件损坏或读取失败时出现（如 `library.json 已损坏，暂按空库显示…`），前端据此提示而不是静默清空。
 
 #### `POST /imagen-api/library/favorite`
+
 - **请求体**：`{ "path": "imagen-output/…/1.png", "favorite": true }`
 - **响应**：`{ "ok": true, "favorites": [...] }`
+- **错误**：`400 invalid_body`（缺少 `path`）、`400 invalid_path`（路径为空或非法）。
 
 #### `POST /imagen-api/library/delete`
-- **请求体**：`{ "paths": ["imagen-output/…/1.png"] }`
-- **响应**：`{ "ok": boolean, "removed": [...], "failed": [...] }`（越界路径会被拒绝）
+
+- **请求体**：`{ "paths": ["imagen-output/…/1.png", ...] }`
+- 单次最多 200 条（`400 too_many`）；只允许删除 `imagen-output/` 内的文件。
+- **响应**：`{ "ok": boolean, "removed": string[], "failed": [{ "path": string, "code": string }], "favorites": string[] }`
+  （`ok` 表示全部成功；越界/不存在的路径进 `failed`，不会中断其余删除）
 
 #### `POST /imagen-api/enhance`
+
 提示词润色：按光影 / 材质 / 构图 / 氛围四个维度返回可追加的短语。
-- **请求体**：`{ "prompt": "雨夜街景", "presetId": "sdxl-lightning", "locale": "zh" }`
+
+- **请求体**：`{ "prompt": "雨夜街景", "presetId": "sdxl-lightning", "locale": "zh" }`（`presetId` / `locale` 可选，locale 仅 `zh` / `en`）
 - **响应**：
+
 ```json
 {
   "ok": true,
@@ -168,12 +409,17 @@
   ]
 }
 ```
-- `source`: `model`（宿主模型）/ `local`（同结构本地兜底）；空提示词返回空 `groups`。
+
+- `source`：`model`（宿主模型）/ `local`（同结构本地兜底）；空提示词返回空 `groups`、`source: "local"`。
 
 #### `POST /imagen-api/intent`
+
 对话模式意图解析：把一句话整理成生成参数，必要时返回澄清项。
-- **请求体**：`{ "text": "画一张横版的雨夜街景", "previousPrompt": "", "locale": "zh" }`
+
+- **请求体**：`{ "text": "画一张横版的雨夜街景", "previousPrompt": "", "locale": "zh" }`（后两者可选）
+- **错误**：`400 invalid_request`（`text` 为空或超过 2000 字符）。
 - **响应**：
+
 ```json
 {
   "ok": true,
@@ -184,14 +430,18 @@
   "clarify": null
 }
 ```
+
 - `ratioId` 取值 `1:1 / 16:9 / 9:16 / 4:3 / 3:4 / ""`；`styleId` 取值 `film / concept / cyberpunk / ink / clay / ""`，留空表示沿用当前设置。
 - `clarify` 仅在用户要求互相矛盾时出现：`{ "field": "ratio"|"style", "options": [...] }`。
-- 空 `text` 返回 `400 invalid_request`；无可用模型时 `source` 为 `local`，`prompt` 为原文。
+- 无可用模型时 `source` 为 `local`，`prompt` 为原文。
 
 #### `POST /imagen-api/reveal`
+
 在系统文件管理器中打开产物目录（仅限 `<workspace>/imagen-output/`）。
+
 - **请求体**：`{}`；`{ "dryRun": true }` 只解析目录、不唤起文件管理器（自检用）。
-- **响应**：`{ "ok": true, "dir": "…/imagen-output" }`；目录不存在时 `404 output_missing`。
+- **响应**：`{ "ok": true, "dir": "…/imagen-output" }`（dryRun 时多一个 `"dryRun": true`）。
+- **错误**：`404 output_missing`（目录不存在）、`500 reveal_failed`（调起失败）。
 
 ---
 
@@ -200,36 +450,56 @@
 插件向 DSH 会话模型注入 3 个标准 Tool，支持对话中直接出图：
 
 ### 3.1 `imagen_generate`
-- **描述**：调用远程 Kaggle GPU 生成一张或多张图片。若会话未启动会自动唤起。
-- **输入参数**：
-  - `prompt` (string, required): 画面内容描述。
-  - `negative_prompt` (string, optional): 排除的画面内容。
-  - `preset` (string, optional): 预设模型，如 `sdxl-lightning`。
-  - `seed` (integer, optional): 随机种子。
-- **模型返回样例**：
-  - 任务提交成功：返回任务 ID、预计等待时间和本地保存目录。
-  - 正在排队时：明确返回当前排队进度，提示用户稍后通过 `imagen_history` 查看。
+
+- **描述**：在免费的 Kaggle GPU 上运行开源文生图模型并出图，图片保存到工作区 `imagen-output/` 目录。
+  首次调用若远端会话未启动，会自动拉起 Kernel（可能需要排队 10 分钟以上）。
+- **输入参数**（`additionalProperties: false`）：
+
+| 参数 | 类型 | 必填 | 说明 |
+| :--- | :--- | :---: | :--- |
+| `prompt` | string | 是 | 画面描述，建议英文，不超过 2000 字符 |
+| `negativePrompt` | string | 否 | 反向提示词，仅在 `cfg > 0` 时生效 |
+| `presetId` | string | 否 | 预设 id（枚举来自契约 `PRESETS`），默认 `sdxl-lightning` |
+| `width` | integer | 否 | 宽度 256–1536，默认取预设 |
+| `height` | integer | 否 | 高度 256–1536，默认取预设 |
+| `steps` | integer | 否 | 采样步数 1–60，默认取预设 |
+| `cfg` | number | 否 | CFG 0–20，默认取预设 |
+| `seed` | integer | 否 | 随机种子，省略则随机 |
+| `count` | integer | 否 | 张数 1–4，默认 1 |
+| `waitSeconds` | integer | 否 | 最多等待累计秒数 0–600，默认 90；超时后任务仍在后台继续 |
+
+- **返回**：文本（`{ "text": string }`），内容为任务状态 / 参数摘要 / 产物路径（完成时提示可用
+  `![描述](URL)` 展示图片）。
 
 ### 3.2 `imagen_session`
+
 - **描述**：管理云端 GPU 会话（查询状态、主动开机、主动关机）。
-- **输入参数**：`action` (`"start"` | `"stop"` | `"status"`)。
+- **输入参数**：`action`（必填，枚举 `start` / `stop` / `status`）、`presetId`（可选，枚举来自契约 `PRESETS`）。
+- **返回**：会话状态摘要文本。
 
 ### 3.3 `imagen_history`
+
 - **描述**：获取当前工作区最近生成的图片文件列表与参数信息。
-- **输入参数**：`limit` (integer, optional, default=5)。
+- **输入参数**：`limit`（可选，1–30，默认 5）。
+- **返回**：最近生成的条目文本（时间、预设、提示词摘要、图片路径）。
 
 ---
 
 ## 4. 模型基准与硬件实测数据
 
 运行环境：Kaggle Nvidia Tesla T4（分配 2 块 T4，每卡可用显存 14.56 GiB，CUDA 12.x）。
+**数值以 `shared/contract.js` 的 `PRESETS` 为准**（`peakVramMb` 为实测峰值显存，`loadSeconds` 为首次加载耗时，
+`steadySeconds` 为加载完成后的单张稳定耗时）。
 
-| 模型预设 ID | 基础模型与权重 | 推荐分辨率 | 步数 / CFG | 单张生成耗时 | 显存占用 | 显存与运行策略 |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`sdxl-lightning`** *(默认)* | `ByteDance/SDXL-Lightning` (4-step) | 1024×1024 | 4 步 / 1.0 | **6.2s** (首张 11.6s) | 10.3 GB | 单卡平稳运行，画质与速度最佳平衡 |
-| **`sdxl-turbo`** | `stabilityai/sdxl-turbo` | 512×512 | 1 步 / 0.0 | **1.9s** | 7.2 GB | 单卡运行，极速生成草图 |
-| **`sdxl-base`** | `stabilityai/stable-diffusion-xl-base-1.0` | 1024×1024 | 30 步 / 5.0 | **27.8s** | 10.5 GB | 单卡运行，传统多步采样 |
-| **`flux2-klein-4b`** *(实验)* | `black-forest-labs/FLUX.2-klein-4B` | 1024×1024 | 4 步 / 1.0 | **10.2s** | 整管 > 15 GB | **必须启用双卡平衡** (`device_map="balanced"`)，单卡直接 OOM |
+| 预设 ID | 基础模型与权重 | 默认尺寸（可选档位） | 步数 / CFG | 加载 / 单张耗时 | 峰值显存 | 下载量 | 卡数 | 档位 |
+| :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :--- |
+| **`sdxl-lightning`** *(默认)* | `stabilityai/stable-diffusion-xl-base-1.0` + `ByteDance/SDXL-Lightning` (4-step LoRA) | 1024（768 / 1024 / 1152） | 4 步 / 0 | 7.7s / 6.2s | 10347 MB | 6.78 GB | 1 | fast |
+| **`sdxl-turbo`** | `stabilityai/sdxl-turbo` | 512（512 / 768 / 1024） | 4 步 / 0 | 4.0s / 1.87s | 7666 MB | 6.62 GB | 1 | fast |
+| **`sdxl-base`** | `stabilityai/stable-diffusion-xl-base-1.0` | 1024（768 / 1024 / 1152） | 25 步 / 7.5 | 5.8s / 27.8s | 9966 MB | 6.78 GB | 1 | usable |
+| **`flux2-klein-4b`** *(实验)* | `black-forest-labs/FLUX.2-klein-4B` | 1024（768 / 1024） | 4 步 / 1.0 | 28.2s / 10.24s | 7929 MB | 15.2 GB | 2 | fast |
 
-> **首张生成延迟说明**：  
-> 远端服务已支持预载模型（Preload）。但首次生成（First Inference）需要建立 CUDA Context 并初始化内存池，耗时通常为 11~12 秒；从第二张开始即恢复为 6.2 秒的稳定速度。
+> **双卡说明**：`flux2-klein-4b` 的 pipeline 使用 `deviceMap: "balanced"`，Kernel 申请 2×T4 时按 `gpus: 2` 下发；
+> 其余预设单卡即可。
+>
+> **首张生成延迟说明**：远端服务支持在 Kernel 启动时预载模型（`preload`）；但首次推理仍需建立 CUDA Context
+> 与内存池，耗时高于 `steadySeconds`，从第二张开始进入稳定速度。

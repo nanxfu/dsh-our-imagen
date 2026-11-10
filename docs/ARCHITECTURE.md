@@ -9,7 +9,7 @@
 系统由三个主要部分构成：
 
 ```
-[ DSH 设置页 / 会话模型 (Client) ]
+[ DSH 独立工作台 / 对话徽章 (Client) ]
                   │
                   ▼ HTTP (/imagen-api/*)
 [ DSH 插件宿主进程 (Host / Node.js) ]
@@ -25,6 +25,12 @@
   ├── 内网穿透：cloudflared 申请 *.trycloudflare.com 临时公网地址
   └── 隧道会合：通过公共 ntfy.sh 将临时域名回传给 Host
 ```
+
+### 契约的唯一来源
+路由、错误码、参数边界、模型预设与 daemon 协议字段统一放在 [`shared/contract.js`](../shared/contract.js)：
+Host 与 Web Client 直接 import，远端由 `lib/kernel.js` 把 `daemonContract()` 的返回值随注入配置下发。
+修改契约后运行 `node test/check-contract.mjs`，它会校验 Host 路由注册、客户端错误码文案、daemon 版本与 `docs/SPEC.md` 是否跟随。
+**接口的权威说明是 [`docs/SPEC.md`](SPEC.md)**（历史上引用过的 `docs/API.md` 从未存在，已废弃）。
 
 ### 为什么采用“ntfy 会合”而不是写死域名？
 Kaggle 容器运行在受限沙箱中，无法直接对外暴露端口。常规方案是通过 Cloudflare Tunnel 随机生成临时公网二级域名（如 `https://random-subdomain.trycloudflare.com`）。
@@ -63,6 +69,11 @@ Kaggle 容器运行在受限沙箱中，无法直接对外暴露端口。常规�
 - **解法**：
   - 推送 Kernel 时指定 `--accelerator NvidiaTeslaT4`（Kaggle 会分配 2 张 T4 显卡）。
   - 在加载大型模型时，通过 `device_map="balanced"` 将模型权重自动平摊到 2 块显卡中。
+
+### 2.7 宿主日志开关
+宿主对"吞掉但保持行为"的容错分支（轮询失败、代理降级、关机通知失败等）默认静默，避免桌面端噪音。
+排障时设置环境变量 `OUR_FREE_IMAGEN_LOG=debug|info|warn|error` 后重启 DSH，即可在宿主控制台看到带 `[imagen:<scope>]` 前缀的事件流；
+日志不会输出 token。实现见 `lib/log.js`，各模块用 `createLogger({ scope })` 获取实例。
 
 ---
 

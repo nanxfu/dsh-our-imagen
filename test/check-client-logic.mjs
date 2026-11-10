@@ -17,6 +17,7 @@ import * as logic from '../src/logic/index.js'
 import { styles, token } from '../src/theme.js'
 import { ACTIVE_STATUS, TRANSIENT_SESSION, PHASE_STATE, NS } from '../src/constants.js'
 import { STYLE_CAPSULES } from '../src/studio/capsules.js'
+import { LIMITS } from '../shared/contract.js'
 
 const t = fallbackTranslate('zh')
 const te = fallbackTranslate('en')
@@ -55,7 +56,19 @@ await check('种子解析', () => {
   assert.equal(logic.parseSeed('-5'), -1)
   assert.equal(logic.parseSeed('abc'), -1)
   assert.equal(logic.parseSeed('1e999'), -1, '非有限值按未指定处理')
-  assert.equal(logic.parseSeed('4294967296'), 4294967295, '上限钳到 32 位')
+  assert.equal(logic.parseSeed('4294967296'), 2147483647, '上限钳到契约上界（32 位有符号整数）')
+})
+
+await check('参数边界与共享契约一致', () => {
+  // clampSize 的边界与步长必须来自 LIMITS.width；否则客户端先按旧边界钳制、宿主再按契约钳一次，
+  // 同一份表单会落出两种尺寸。
+  assert.equal(logic.clampSize(LIMITS.width.max + 8), LIMITS.width.max)
+  assert.equal(logic.clampSize(LIMITS.width.min - 8), LIMITS.width.min)
+  assert.equal(logic.clampSize(LIMITS.width.max - 1), LIMITS.width.max, '按 LIMITS.width.step 取整后落到上限')
+  assert.equal(logic.clampSize(LIMITS.width.min + 3), LIMITS.width.min, '按 LIMITS.width.step 取整后落到下限')
+  // seed 超过契约上界必须钳到 LIMITS.seed.max，避免宿主静默取模后复现不出同一张图。
+  assert.equal(logic.parseSeed(String(LIMITS.seed.max + 1)), LIMITS.seed.max)
+  assert.equal(logic.parseSeed(LIMITS.seed.max), LIMITS.seed.max)
 })
 
 await check('时长格式化', () => {

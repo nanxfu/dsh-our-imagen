@@ -4,7 +4,7 @@
 用途：Host 侧（index.js + lib/**）在没排到 Kaggle GPU 的时候也能跑通
 「探测 /health → 拉 /logs → POST /generate → 落盘 PNG → POST /shutdown」全链路。
 
-协议与 ``remote/daemon.py``（docs/API.md 第 6 节）保持一致：
+协议与 ``remote/daemon.py``（docs/SPEC.md）保持一致：
   GET  /health              phase 报告 booting/installing/loading/ready/error
   GET  /logs?since=N        {lines, next}，环形缓冲最多 400 行
   POST /generate            {status, model_id, load_seconds, results[...]}
@@ -46,7 +46,7 @@ except Exception:  # pragma: no cover - 只在极简环境触发
     ImageDraw = None  # type: ignore[assignment]
     _HAS_PILLOW = False
 
-VERSION = "0.2.0-mock"
+VERSION = "0.3.0-mock"
 LOG_MAX_LINES = 400
 SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2")
 FAIL_CHOICES = ("none", "oom", "load_failed", "invalid_request", "generation_failed")
