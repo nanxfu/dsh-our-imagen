@@ -1,5 +1,7 @@
 # DSH 独立生图工作台产品规格书 (STUDIO_SPEC)
 
+> **已废弃（2026-11-10）**：本规格中的「极窄图标条 + 宽创作面板」双层侧栏，以及焦点舞台 / 胶卷流 / 算力胶囊等概念，已被 [`docs/STUDIO_V2_SPEC.md`](STUDIO_V2_SPEC.md) 取代。本文件只作历史记录保留，不要再按它实现。
+
 > **定位**：深度集成于 DSH Desktop 的独立专业生图工作台（Imagen Studio）。  
 > **核心构想**：**灵感助手（Prompt Co-pilot） + 焦点舞台（Focus Stage） + 胶卷流（Filmstrip Roll）**。
 

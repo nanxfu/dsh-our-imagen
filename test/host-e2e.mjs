@@ -340,7 +340,7 @@ async function main() {
     assert.ok(item, '历史里应能查到刚生成的任务')
     assert.equal(item.images.length, 2)
     assert.match(item.prompt, /荷花/)
-    // 历史条目必须带回完整参数：舞台提示词与「以此图微调」都依赖它，
+    // 历史条目必须带回完整参数：舞台提示词与「带回参数」都依赖它，
     // 缺 params 会让旧图无法复现（曾经回退到「最近一次任务」的错参）。
     assert.ok(item.params, '历史条目应带 params')
     assert.equal(item.params.prompt, '测试用的荷花池塘')

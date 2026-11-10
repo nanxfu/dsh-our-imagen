@@ -53,7 +53,7 @@ const image = (seed) => ({
 })
 
 // 与真实 Host 的 /imagen-api/history 形状一致：没有 params 字段。
-// 舞台提示词与「以此图微调」必须只靠 item.prompt / image 像素工作。
+// 舞台提示词与「带回参数」必须只靠 item.prompt / image 像素工作。
 const historyItem = {
   jobId: 'job-1',
   dir: 'imagen-output/20261109-120000-job-1',

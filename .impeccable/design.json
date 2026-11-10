@@ -455,7 +455,7 @@
       {
         "name": "card",
         "value": "0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%)",
-        "purpose": "面板、画廊卡片、胶片坞、画廊工具卡的静止态。"
+        "purpose": "面板、画廊卡片、最近生成栏、画廊工具卡的静止态。"
       },
       {
         "name": "lift",
@@ -517,7 +517,7 @@
       {
         "name": "shimmer-render",
         "value": "ofs-shimmer 1.5s linear infinite",
-        "purpose": "渲染中的扫光条；胶片骨架用 1.8s、对话用 2s。"
+        "purpose": "渲染中的扫光条；缩略图骨架用 1.8s、对话用 2s。"
       },
       {
         "name": "breathe-queued",
@@ -539,7 +539,7 @@
       {
         "name": "desktop-compact",
         "value": "1280px",
-        "purpose": "主体三列收窄，模型参数元信息隐藏，胶片坞左缩。"
+        "purpose": "主体三列收窄，模型参数元信息隐藏，最近生成栏左缩。"
       },
       {
         "name": "gallery-three-col",
@@ -549,12 +549,12 @@
       {
         "name": "laptop",
         "value": "1120px",
-        "purpose": "品牌副标、模型前缀隐藏；图标栏与面板再收窄。"
+        "purpose": "品牌副标、模型前缀隐藏；面板再收窄。"
       },
       {
         "name": "narrow-desktop",
         "value": "980px",
-        "purpose": "外边距 10px、顶栏 54px、画布与胶片坞整体缩小一档。"
+        "purpose": "外边距 10px、顶栏 54px、画布与最近生成栏整体缩小一档。"
       },
       {
         "name": "gallery-two-col",
@@ -564,7 +564,7 @@
       {
         "name": "single-column",
         "value": "820px",
-        "purpose": "单列堆叠：图标栏横置、面板在上、画布 62vh、胶片坞隐藏。"
+        "purpose": "单列堆叠：面板在上、画布 62vh、最近生成栏隐藏。"
       },
       {
         "name": "phone",
@@ -584,15 +584,15 @@
       "kind": "button",
       "refersTo": "button-primary",
       "description": "唯一的墨黑实心主操作，位于创作面板底部，用于生成或发送。",
-      "html": "<button class=\"ds-btn-primary\" type=\"button\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M11.4 4.2 12.9 8l3.8 1.5-3.8 1.5-1.5 3.8-1.5-3.8L6.1 9.5 9.9 8z\"></path><path d=\"M17.6 14.4l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z\"></path><path d=\"M5.4 15.6l.6 1.5 1.5.6-1.5.6-.6 1.5-.6-1.5-1.5-.6 1.5-.6z\"></path></svg>即刻生成</button>",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M11.4 4.2 12.9 8l3.8 1.5-3.8 1.5-1.5 3.8-1.5-3.8L6.1 9.5 9.9 8z\"></path><path d=\"M17.6 14.4l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z\"></path><path d=\"M5.4 15.6l.6 1.5 1.5.6-1.5.6-.6 1.5-.6-1.5-1.5-.6 1.5-.6z\"></path></svg>立即生成</button>",
       "css": ".ds-btn-primary {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  width: 100%;\n  height: 42px;\n  padding: 0 18px;\n  border: 1px solid transparent;\n  border-radius: var(--ofs-r-md, 14px);\n  background: var(--ofs-accent-grad, linear-gradient(180deg, #2b2b30 0%, #141416 100%));\n  color: var(--ofs-accent-ink, #ffffff);\n  font-family: -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  font-size: 13.5px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  white-space: nowrap;\n  box-shadow: var(--ofs-shadow-accent, 0 8px 18px -10px rgb(16 16 20 / 48%));\n  cursor: pointer;\n  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms ease, opacity 160ms ease;\n}\n.ds-btn-primary:hover:not(:disabled) {\n  transform: translateY(-1px);\n  box-shadow: 0 14px 28px -12px rgb(16 16 20 / 50%);\n}\n.ds-btn-primary:active:not(:disabled) {\n  transform: translateY(0) scale(0.99);\n}\n.ds-btn-primary:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring, 0 0 0 2px #ffffff, 0 0 0 4px rgb(20 20 22 / 45%));\n}\n.ds-btn-primary:disabled {\n  opacity: 0.36;\n  filter: saturate(0.6);\n  box-shadow: none;\n  cursor: default;\n}\n.ds-icon {\n  flex: 0 0 auto;\n}"
     },
     {
       "name": "Secondary Pill Button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "白底描边的次级动作胶囊（画布下方的「以此图微调」一类），悬停转浅墨底。",
-      "html": "<button class=\"ds-btn-secondary\" type=\"button\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 8.6V6.2a2.2 2.2 0 0 1 2.2-2.2h2.4M15.4 4h2.4A2.2 2.2 0 0 1 20 6.2v2.4M20 15.4v2.4a2.2 2.2 0 0 1-2.2 2.2h-2.4M8.6 20H6.2A2.2 2.2 0 0 1 4 17.8v-2.4\"></path><circle cx=\"12\" cy=\"12\" r=\"2.5\"></circle></svg>以此图微调</button>",
+      "description": "白底描边的次级动作胶囊（画布下方的「带回参数」一类），悬停转浅墨底。",
+      "html": "<button class=\"ds-btn-secondary\" type=\"button\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 8.6V6.2a2.2 2.2 0 0 1 2.2-2.2h2.4M15.4 4h2.4A2.2 2.2 0 0 1 20 6.2v2.4M20 15.4v2.4a2.2 2.2 0 0 1-2.2 2.2h-2.4M8.6 20H6.2A2.2 2.2 0 0 1 4 17.8v-2.4\"></path><circle cx=\"12\" cy=\"12\" r=\"2.5\"></circle></svg>带回参数</button>",
       "css": ".ds-btn-secondary {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 30px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-sunken-border, rgb(18 18 22 / 8%));\n  border-radius: var(--ofs-r-pill, 999px);\n  background: color-mix(in oklab, var(--ofs-card, #ffffff) 78%, transparent);\n  color: var(--ofs-ink-2, #52525a);\n  font-family: -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;\n}\n.ds-btn-secondary:hover {\n  border-color: var(--ofs-accent-soft-border, #dedee3);\n  background: var(--ofs-accent-soft, #f0f0f2);\n  color: var(--ofs-accent, #141416);\n}\n.ds-btn-secondary:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring, 0 0 0 2px #ffffff, 0 0 0 4px rgb(20 20 22 / 45%));\n}\n.ds-btn-secondary:disabled {\n  color: var(--ofs-ink-4, #a8a8b0);\n  cursor: default;\n}\n.ds-icon {\n  flex: 0 0 auto;\n}"
     },
     {
@@ -623,7 +623,7 @@
       "name": "Compute Status Pill",
       "kind": "chip",
       "refersTo": "chip",
-      "description": "顶栏的云端算力胶囊：7px 状态点 + 文案 + 额度 + 箭头；在线 / 排队 / 离线三态只换状态点颜色。",
+      "description": "顶栏的云端GPU 状态：7px 状态点 + 文案 + 额度 + 箭头；在线 / 排队 / 离线三态只换状态点颜色。",
       "html": "<div class=\"ds-compute-row\">\n  <button class=\"ds-compute\" type=\"button\">\n    <span class=\"ds-compute-dot ds-is-ok\" aria-hidden=\"true\"></span>\n    <span>在线</span>\n    <em>3 / 30 小时</em>\n    <svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"13\" height=\"13\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6.4 9.6 12 15.2l5.6-5.6\"></path></svg>\n  </button>\n  <button class=\"ds-compute\" type=\"button\">\n    <span class=\"ds-compute-dot ds-is-warn\" aria-hidden=\"true\"></span>\n    <span>云端排队中</span>\n    <em>等待 4 分钟</em>\n    <svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"13\" height=\"13\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6.4 9.6 12 15.2l5.6-5.6\"></path></svg>\n  </button>\n  <button class=\"ds-compute\" type=\"button\">\n    <span class=\"ds-compute-dot\" aria-hidden=\"true\"></span>\n    <span>离线</span>\n    <svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"13\" height=\"13\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6.4 9.6 12 15.2l5.6-5.6\"></path></svg>\n  </button>\n</div>",
       "css": ".ds-compute-row {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 8px;\n}\n.ds-compute {\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-card-border, rgb(18 18 22 / 9%));\n  border-radius: var(--ofs-r-pill, 999px);\n  background: var(--ofs-card, #ffffff);\n  color: var(--ofs-ink-2, #52525a);\n  font-family: -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  box-shadow: var(--ofs-shadow-card, 0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%));\n  cursor: pointer;\n  transition: border-color 160ms ease, color 160ms ease, background-color 160ms ease;\n}\n.ds-compute:hover {\n  border-color: var(--ofs-accent-soft-border, #dedee3);\n  color: var(--ofs-ink, #141416);\n}\n.ds-compute:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring, 0 0 0 2px #ffffff, 0 0 0 4px rgb(20 20 22 / 45%));\n}\n.ds-compute em {\n  font-style: normal;\n  font-size: 11px;\n  color: var(--ofs-ink-3, #6b6b73);\n  font-variant-numeric: tabular-nums;\n}\n.ds-compute-dot {\n  display: inline-block;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--ofs-idle, #a0a0a8);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-idle, #a0a0a8) 22%, transparent);\n}\n.ds-compute-dot.ds-is-ok {\n  background: var(--ofs-ok, #2f8a5c);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-ok, #2f8a5c) 20%, transparent);\n  animation: ds-pulse 2.4s ease-out infinite;\n}\n.ds-compute-dot.ds-is-warn {\n  background: var(--ofs-warn, #a96a18);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-warn, #a96a18) 22%, transparent);\n}\n.ds-compute-dot.ds-is-error {\n  background: var(--ofs-error, #c04444);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-error, #c04444) 20%, transparent);\n}\n@keyframes ds-pulse {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok, #2f8a5c) 34%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-ok, #2f8a5c) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok, #2f8a5c) 0%, transparent); }\n}\n.ds-icon {\n  flex: 0 0 auto;\n}"
     },
@@ -655,18 +655,18 @@
       "name": "Filmstrip Thumbnail",
       "kind": "custom",
       "refersTo": "filmstrip-thumb",
-      "description": "胶片坞里的 62px 缩略图；选中的一帧是 2px 墨黑描边 + 3px 20% 墨黑光环，悬停上移 2px。",
+      "description": "最近生成栏里的 62px 缩略图；选中的一帧是 2px 墨黑描边 + 3px 20% 墨黑光环，悬停上移 2px。",
       "html": "<div class=\"ds-thumb-row\">\n  <button class=\"ds-thumb ds-is-on\" type=\"button\" aria-label=\"选中缩略图\">\n    <span class=\"ds-thumb-art\" aria-hidden=\"true\"></span>\n  </button>\n  <button class=\"ds-thumb\" type=\"button\" aria-label=\"缩略图\">\n    <span class=\"ds-thumb-art\" aria-hidden=\"true\"></span>\n  </button>\n</div>",
       "css": ".ds-thumb-row {\n  display: flex;\n  gap: 6px;\n}\n.ds-thumb {\n  display: block;\n  width: 62px;\n  height: 62px;\n  padding: 0;\n  border: 2px solid transparent;\n  border-radius: 12px;\n  background: var(--ofs-sunken, #f4f4f6);\n  overflow: hidden;\n  cursor: pointer;\n  transition: transform 170ms cubic-bezier(0.22, 1, 0.36, 1), border-color 170ms ease, box-shadow 170ms ease;\n}\n.ds-thumb-art {\n  display: block;\n  width: 100%;\n  height: 100%;\n  background:\n    radial-gradient(80% 100% at 30% 0%, #e9e9ec 0%, transparent 55%),\n    linear-gradient(150deg, #c9c9cf 0%, #8a8a93 48%, #3a3a40 100%);\n}\n.ds-thumb:hover {\n  transform: translateY(-2px);\n}\n.ds-thumb.ds-is-on {\n  border-color: var(--ofs-accent, #141416);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent, #141416) 20%, transparent);\n}\n.ds-thumb:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring, 0 0 0 2px #ffffff, 0 0 0 4px rgb(20 20 22 / 45%));\n}"
     }
   ],
   "narrative": {
     "northStar": "The Monochrome Print Room",
-    "overview": "这间印相室沿用参考图钉住的构图——左图标栏、设置面板、悬浮画布、底部胶片坞，以及参考图 2/3 的卡片墙——保留了卡片悬浮与宽松留白，但把参考图那层“AI 产品默认皮肤”剥掉了。用户明确拒绝紫色主题色，要求只用黑白灰的关系。于是房间里的所有表面都来自同一条中性灰阶：柔光地面、雾面近白的外壳、白色相纸卡；**唯一带有颜色的是画布上的作品本身**，界面自己不携带任何彩色主张。\n\n承重的判断是“明度即层级”。墨黑（深色下反相为近白）是唯一强调色，只出现在主操作、选中环、激活图标与状态点；辅助文字由深到浅分三层，边框是一根 1px 发丝线，深度来自带偏移的中性柔影。这样做是为了让 1440px 的整页工作台读起来像一件器材，而不是一张营销落地页：图片永远在中心，控制件都是边缘的灰阶卡片。\n\n密度上，页面只有一张雾面大卡，内部再分顶栏、图标栏、创作面板、焦点画布与胶片坞；画廊切换成 5 列自然高度的作品墙。浅色是母版，深色按同一套明度关系整体反相；语义色只在 7px 状态点或窄条里出现，不参与大面积装饰。这套系统拒绝控制台式密集参数面板、成排等比重卡片、紫色渐变与彩色光晕。",
+    "overview": "这间印相室沿用参考图钉住的构图——单轨创作面板、悬浮画面预览、底部最近生成栏，以及参考图 2/3 的卡片墙——保留了卡片悬浮与宽松留白，但把参考图那层“AI 产品默认皮肤”剥掉了。用户明确拒绝紫色主题色，要求只用黑白灰的关系。于是房间里的所有表面都来自同一条中性灰阶：柔光地面、雾面近白的外壳、白色相纸卡；**唯一带有颜色的是画布上的作品本身**，界面自己不携带任何彩色主张。\n\n承重的判断是“明度即层级”。墨黑（深色下反相为近白）是唯一强调色，只出现在主操作、选中环、激活图标与状态点；辅助文字由深到浅分三层，边框是一根 1px 发丝线，深度来自带偏移的中性柔影。这样做是为了让 1440px 的整页工作台读起来像一件器材，而不是一张营销落地页：图片永远在中心，控制件都是边缘的灰阶卡片。\n\n密度上，页面只有一张雾面大卡，内部再分顶栏、图标栏、创作面板、画面预览与最近生成栏；画廊切换成 5 列自然高度的作品墙。浅色是母版，深色按同一套明度关系整体反相；语义色只在 7px 状态点或窄条里出现，不参与大面积装饰。这套系统拒绝控制台式密集参数面板、成排等比重卡片、紫色渐变与彩色光晕。",
     "keyCharacteristics": [
       "墨黑（深色下反相为近白）是唯一强调色，只出现在主操作、选中环、激活图标与状态点。",
       "中性柔光地面（三层灰渐变）上浮雾面外壳与近白卡片，靠 1px 发丝描边 + 带偏移的中性柔影分层。",
-      "居中焦点画布 + 底部悬浮胶片坞：图片是唯一主角，其余都是灰色工具。",
+      "居中画面预览 + 底部悬浮最近生成栏：图片是唯一主角，其余都是灰色工具。",
       "画廊是 5 列自然高度作品墙，不裁切、不统一高度，像印相室墙上的样片。",
       "浅色为母版；深色按同一套明度关系反相，不另起一套配色。",
       "语义色只在 7px 状态点或窄幅提示条里出现，不做大面积填充。",
@@ -700,7 +700,7 @@
       },
       {
         "name": "The Focus-Canvas Rule",
-        "body": "中央画布是页面的唯一焦点：左栏只收纳控制，胶片坞贴在底部，任何新增控制面都必须落到边缘，不能与画布争夺中心。",
+        "body": "中央画布是页面的唯一焦点：左栏只收纳控制，最近生成栏贴在底部，任何新增控制面都必须落到边缘，不能与画布争夺中心。",
         "section": "layout"
       },
       {
@@ -742,7 +742,7 @@
     "dos": [
       "Do 用 Studio Ink (#141416) 作为唯一强调色，深色主题反相为近白 #f2f2f4。",
       "Do 让地面保持中性柔光渐变（三层径向 + 底色），卡片用 1px 发丝描边 + 带偏移的中性柔影浮起。",
-      "Do 把画布放在中心、把控制收进 72px 图标栏与 360px 面板；新控件先考虑边缘位置。",
+      "Do 把画布放在中心、把控制收进 固定 320px 的单轨面板；新控件先考虑边缘位置。",
       "Do 保持画廊 5 列（≤1400px 4 列）自然高度，图片按原始比例，不裁切。",
       "Do 让深浅主题共用同一套明度关系：地面 → 卡片 → 文字 → 主操作，每一层只差明度。",
       "Do 把语义色限制在 7px 状态点或窄幅提示条；出错时用整行异常指引条，而不是染红整个区域。",
@@ -754,7 +754,7 @@
       "Don't 把成功、警告、错误做成大面积填充、卡片底色或主按钮颜色。",
       "Don't 用彩色阴影、零偏移 glow 或霓虹描边制造层级。",
       "Don't 用 emoji 或 Unicode 字符当图标（▾、✨、⭐ 都换成手写 SVG）。",
-      "Don't 让每个区域都长成同规格的等比重卡片；画布与胶片坞有明确的主次。",
+      "Don't 让每个区域都长成同规格的等比重卡片；画布与最近生成栏有明确的主次。",
       "Don't 为“好看”增加第二套字体、加载字体文件或位图资产。",
       "Don't 把胶囊套在容器与多行输入上；胶囊只留给单行动作、状态与搜索。",
       "Don't 用禁用色 Ink Quaternary (#a8a8b0) 承载信息；它只用于禁用态与滚动条。"

@@ -13,7 +13,7 @@ import { composePrompt } from './prompt.js'
  * @param {object} [options]
  * @param {string} [options.styleSuffix] 当前风格后缀（仅在没有显式 prompt 时追加）
  * @param {string} [options.defaultPreset] 预设兜底 id
- * @param {object} [options.overrides] 显式覆盖项（对话输入 / 抽卡 / 重试）
+ * @param {object} [options.overrides] 显式覆盖项（对话输入 / 生成变体 / 重试）
  * @returns {object} POST /imagen-api/generate 的请求体
  */
 export function buildGenerateBody(form, options = {}) {

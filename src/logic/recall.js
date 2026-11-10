@@ -47,7 +47,7 @@ function recallOf(entry, presets) {
 }
 
 /**
- * 「以此图微调」→ 表单补丁。
+ * 「带回参数」→ 表单补丁。
  * prompt 用作品自己的提示词；尺寸用产物像素（不再用最近任务兜底）；
  * steps/cfg 优先作品 params，其次预设推荐值；styleId 清空，避免后缀重复。
  */
@@ -73,7 +73,7 @@ export function iteratePatch(entry, form, presets) {
 }
 
 /**
- * 「换种子抽卡」→ 生成参数覆盖项：保持该图的 prompt / 尺寸 / steps / cfg / 预设，
+ * 「生成变体」→ 生成参数覆盖项：保持该图的 prompt / 尺寸 / steps / cfg / 预设，
  * 只把 seed 换成随机（-1），并按「再画一张」把张数固定为 1。
  * 没有可用的提示词时返回 null，由调用方给可见提示。
  */

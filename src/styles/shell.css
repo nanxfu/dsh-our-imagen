@@ -1,8 +1,8 @@
 /*
- * 外壳：整页容器、顶栏、图标栏、布局骨架、异常指引与 Toast。
+ * 外壳：整页容器、顶栏、布局骨架、异常指引与 Toast。
  *
  * 页面是一张浮在柔光地面上的雾面玻璃大卡：
- *   .ofs-root = 柔光底，.ofs-app = 玻璃大卡，内部再分顶栏 / 主体 / 胶片坞。
+ *   .ofs-root = 柔光底，.ofs-app = 玻璃大卡，内部再分顶栏 / 主体 / 最近生成栏。
  */
 
 .ofs-app {
@@ -109,7 +109,7 @@
   box-shadow: 0 1px 2px rgb(16 16 20 / 8%);
 }
 
-/* 云端算力胶囊 */
+/* 云端GPU 状态 */
 .ofs-pill-wrap {
   position: relative;
   flex: 0 0 auto;

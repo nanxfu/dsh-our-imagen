@@ -221,7 +221,7 @@ await check('文案字典两侧一致且无空值', () => {
     assert.ok(DICT.en[key].length > 0, `${key} 的 en 文案不应为空`)
   }
   assert.equal(localized(t, 'no.such.key'), '')
-  assert.equal(localized(t, 'workbench.title'), t('workbench.title'))
+  assert.equal(localized(t, 'studio.brand'), t('studio.brand'))
 })
 
 await check('样式 token 与命名空间自洽', () => {
@@ -309,7 +309,7 @@ await check('最终请求体带风格后缀', () => {
     defaultPreset: 'sdxl-lightning',
     overrides: { prompt: '聊天输入' },
   })
-  assert.equal(chat.prompt, '聊天输入', '显式 prompt（对话 / 抽卡 / 重试）不追加风格后缀')
+  assert.equal(chat.prompt, '聊天输入', '显式 prompt（对话 / 生成变体 / 重试）不追加风格后缀')
   assert.equal(chat.seed, -1)
 
   const empty = logic.buildGenerateBody({ ...form, prompt: '  ' }, { styleSuffix: 'cinematic film' })
@@ -331,7 +331,7 @@ await check('风格切换同步负向提示词', () => {
   assert.equal(keep.negative, 'my own')
 })
 
-await check('以此图微调的回填参数', () => {
+await check('带回参数的回填参数', () => {
   const presets = [
     { id: 'sdxl-lightning', size: 1024, steps: 4, cfg: 0 },
     { id: 'sdxl-base', size: 1024, steps: 25, cfg: 7.5 },
@@ -378,7 +378,7 @@ await check('以此图微调的回填参数', () => {
   assert.deepEqual(logic.iteratePatch(null, form, presets), {})
 })
 
-await check('换种子抽卡参数', () => {
+await check('生成变体参数', () => {
   const presets = [
     { id: 'sdxl-lightning', size: 1024, steps: 4, cfg: 0 },
     { id: 'sdxl-base', size: 1024, steps: 25, cfg: 7.5 },
@@ -388,7 +388,7 @@ await check('换种子抽卡参数', () => {
     item: { jobId: 'job-9', prompt: '黄昏的街道', presetId: 'sdxl-base', images: [] },
   }
   const overrides = logic.rerollOverrides(entry, presets)
-  assert.equal(overrides.prompt, '黄昏的街道', '抽卡使用当前图的提示词')
+  assert.equal(overrides.prompt, '黄昏的街道', '生成变体使用当前图的提示词')
   assert.equal(overrides.seed, -1, '种子换成随机')
   assert.equal(overrides.count, 1, '再画一张')
   assert.equal(overrides.width, 1152)

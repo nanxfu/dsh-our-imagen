@@ -26,7 +26,7 @@ export const name = 'our-free-imagen'
 // 因此 tools 必须显式声明（它同时是 Agent 工具注册的依赖）。
 export const inject = ['webServer', 'subprocess', 'tools']
 
-const VERSION = '0.2.0'
+const VERSION = '0.3.0'
 
 function parseQuery(req) {
   try {

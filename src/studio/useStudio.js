@@ -66,7 +66,7 @@ export function useStudio(props) {
     ...EMPTY_FORM,
     prompt: props && typeof props.initialPrompt === 'string' ? props.initialPrompt : '',
   }))
-  // 初始视图同样可由 props 指定（预览与测试用）；正常运行时从工坊开始。
+  // 初始视图同样可由 props 指定（预览与测试用）；正常运行时从创作开始。
   const [view, setView] = React.useState(props && props.view === 'gallery' ? 'gallery' : 'studio')
   const [advancedOpen, setAdvancedOpen] = React.useState(false)
   const [negativeOpen, setNegativeOpen] = React.useState(false)
@@ -193,7 +193,7 @@ export function useStudio(props) {
     setToast({ text: t('studio.toast.firstImage'), id: Date.now() })
   }, [finished && finished.id])
 
-  // 任务完成后刷新历史，让新图自动出现在胶卷流最前面
+  // 任务完成后刷新历史，让新图自动出现在最近生成最前面
   const lastJobId = state && state.lastJob ? `${state.lastJob.id}:${state.lastJob.finishedAt ?? ''}` : ''
   const lastSeenRef = React.useRef('')
   React.useEffect(() => {
@@ -203,7 +203,7 @@ export function useStudio(props) {
   }, [lastJobId, loadHistory])
 
   const gallery = flattenHistory(historyItems)
-  // 胶卷流按批次分组：一次生成（1~4 张）就是一组。
+  // 最近生成按批次分组：一次生成（1~4 张）就是一组。
   const batches = historyItems
     .map((item) => ({
       key: item.jobId || item.dir || String(item.prompt),
@@ -390,7 +390,7 @@ export function useStudio(props) {
     if (!result.ok) showToast(t('studio.toast.revealFailed'))
   }
 
-  /** 换种子抽卡：基于当前选中的作品，而不是左侧表单。 */
+  /** 生成变体：基于当前选中的作品，而不是左侧表单。 */
   function reroll(entry) {
     const target = entry || selected
     const overrides = rerollOverrides(target, presets)
@@ -401,7 +401,7 @@ export function useStudio(props) {
     generate(overrides)
   }
 
-  /** 以此图微调：提示词与尺寸来自作品本身，steps/cfg 才用 params 或预设推荐值。 */
+  /** 带回参数：提示词与尺寸来自作品本身，steps/cfg 才用 params 或预设推荐值。 */
   function iterate(entry) {
     const target = entry || selected
     const patch = iteratePatch(target, form, presets)

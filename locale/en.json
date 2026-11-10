@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Free imagen workbench",
-    "description": "Run open image models on free Kaggle GPUs: guided account setup, resource status, and a generation workbench."
+    "description": "Run open image models on free Kaggle GPUs: creation panel, prompt ideas and refinement, a natural-language assistant, and a gallery; outputs stay in your workspace."
   }
 }
