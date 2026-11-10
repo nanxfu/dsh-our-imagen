@@ -4,6 +4,9 @@ node_modules/
 # 插件运行态（会话、任务、日志）
 .imagen/
 
+# 模型资产草稿（.tmp/<id>.json，验证通过后再入库 models/）
+.tmp/
+
 # 生成产物
 imagen-output/
 bench-results/

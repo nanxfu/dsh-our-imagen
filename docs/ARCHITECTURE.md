@@ -27,9 +27,12 @@
 ```
 
 ### 契约的唯一来源
-路由、错误码、参数边界、模型预设与 daemon 协议字段统一放在 [`shared/contract.js`](../shared/contract.js)：
+路由、错误码、参数边界、超时与远端协议字段统一放在 [`shared/contract.js`](../shared/contract.js)；
+模型预设（名称、默认参数、pipeline、实测指标）的唯一来源是 [`models/*.json`](../models/)，
+由 `tools/build-assets.mjs` 生成 `shared/models.generated.js`，`contract.js` 只做 re-export。
 Host 与 Web Client 直接 import，远端由 `lib/kernel.js` 把 `daemonContract()` 的返回值随注入配置下发。
-修改契约后运行 `node test/check-contract.mjs`，它会校验 Host 路由注册、客户端错误码文案、daemon 版本与 `docs/SPEC.md` 是否跟随。
+修改契约后运行 `node test/check-contract.mjs`，它会校验 Host 路由注册、客户端错误码文案、daemon 版本、
+模型资产生成文件与 `docs/SPEC.md` 是否跟随。
 **接口的权威说明是 [`docs/SPEC.md`](SPEC.md)**（历史上引用过的 `docs/API.md` 从未存在，已废弃）。
 
 ### 为什么采用“ntfy 会合”而不是写死域名？

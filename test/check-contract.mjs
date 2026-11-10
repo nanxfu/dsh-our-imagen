@@ -16,6 +16,7 @@
  *   i. lib/presets.js 不再定义预设数据
  *   j. remote/contract.json 与 shared/contract.js 的 daemonContract() 一致，且下发对象只含
  *      version + limits（Host/Client 专有的路由、health phase、ntfy 事件、错误码不再下发远端；P10 生成物）
+ *   k. models/*.json 与 shared/models.generated.js 同步（模型资产的唯一来源是 models/）
  *
  * 运行：node test/check-contract.mjs
  */
@@ -33,6 +34,7 @@ import {
   daemonContract,
   hostErrorCodes,
 } from '../shared/contract.js'
+import { loadModels, renderGenerated, readGenerated } from '../tools/build-assets.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const ROUTE_LIST = Object.values(ROUTES).map((route) => route.path)
@@ -487,6 +489,27 @@ async function checkRemoteContract() {
   pass('j', `${rel} 与 daemonContract() 一致`, `${Object.keys(expected).length} 个顶层键：${topKeys.join(' + ')}`)
 }
 
+// ── k. 模型资产生成文件同步 ───────────────────────────────────────────────
+// models/*.json 是模型定义的唯一来源；shared/models.generated.js 是构建产物。
+// 这里直接复用 build-assets 的读取/渲染函数，避免两套校验口径。
+async function checkModelAssets() {
+  try {
+    const models = await loadModels()
+    const expected = renderGenerated(models)
+    const actual = await readGenerated()
+    if (actual === expected) {
+      const ids = models.map((model) => model.id).join(', ')
+      return pass('k', '模型资产生成文件与 models/ 同步', `${models.length} 个：${ids}`)
+    }
+    return fail('k', 'shared/models.generated.js 与 models/ 不同步', [
+      actual === null ? '生成文件缺失' : '生成文件内容与 models/ 不一致',
+      '修改模型后运行 npm run models:build（node tools/build-assets.mjs）',
+    ])
+  } catch (error) {
+    return fail('k', '模型资产校验未通过', [String(error?.message ?? error)])
+  }
+}
+
 // ── main ──────────────────────────────────────────────────────────────────
 const CHECKS = [
   checkPackageVersion,
@@ -499,6 +522,7 @@ const CHECKS = [
   checkSpecDoc,
   checkPresetsMoved,
   checkRemoteContract,
+  checkModelAssets,
 ]
 
 async function main() {

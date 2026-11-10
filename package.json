@@ -23,9 +23,11 @@
   ],
   "scripts": {
     "build": "node build.mjs",
+    "models:build": "node tools/build-assets.mjs",
+    "models:check": "node tools/build-assets.mjs --check",
     "package": "node scripts/package.mjs",
-    "test": "node build.mjs && node test/check-contract.mjs && node test/check-client-locale.mjs && node test/check-client-logic.mjs && node test/check-client-render.mjs && node test/host-e2e.mjs && python test/daemon-unit.py && node test/kernel-package.mjs && node test/session-pure.mjs && node test/library-atomic.mjs && node test/session-reliability.mjs && node test/session-race.mjs && node test/session-restore.mjs",
-    "test:contract": "node test/check-contract.mjs",
+    "test": "node build.mjs && node tools/build-assets.mjs --check && node test/check-contract.mjs && node test/check-client-locale.mjs && node test/check-client-logic.mjs && node test/check-client-render.mjs && node test/host-e2e.mjs && python test/daemon-unit.py && node test/kernel-package.mjs && node test/session-pure.mjs && node test/library-atomic.mjs && node test/session-reliability.mjs && node test/session-race.mjs && node test/session-restore.mjs",
+    "test:contract": "node tools/build-assets.mjs --check && node test/check-contract.mjs",
     "test:client": "node build.mjs && node test/check-client-locale.mjs && node test/check-client-logic.mjs && node test/check-client-render.mjs",
     "test:host": "node test/host-e2e.mjs && python test/daemon-unit.py && node test/kernel-package.mjs && node test/session-pure.mjs && node test/library-atomic.mjs && node test/session-reliability.mjs && node test/session-race.mjs && node test/session-restore.mjs",
     "test:session-pure": "node test/session-pure.mjs",

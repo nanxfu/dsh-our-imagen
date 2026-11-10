@@ -1,0 +1,43 @@
+{
+  "id": "sdxl-lightning",
+  "order": 10,
+  "label": "默认 · 1024 快档",
+  "repo": "stabilityai/stable-diffusion-xl-base-1.0 + ByteDance/SDXL-Lightning",
+  "params": "3.5B + LoRA",
+  "license": "OpenRAIL++",
+  "licenseKind": "open",
+  "gated": false,
+  "gpus": 1,
+  "tier": "fast",
+  "size": 1024,
+  "steps": 4,
+  "cfg": 0,
+  "negativeHint": "blurry, low quality, deformed, extra limbs",
+  "sizeOptions": [768, 1024, 1152],
+  "runtime": "default",
+  "pipeline": {
+    "loader": "sdxl-lora",
+    "base": "stabilityai/stable-diffusion-xl-base-1.0",
+    "lora": {
+      "repo": "ByteDance/SDXL-Lightning",
+      "weight": "sdxl_lightning_4step_lora.safetensors"
+    },
+    "scheduler": { "type": "euler", "timestepSpacing": "trailing" },
+    "variant": "fp16",
+    "downloadGb": 6.78,
+    "allowPatterns": [
+      "model_index.json",
+      "**/config.json",
+      "**/*.json",
+      "**/*.txt",
+      "**/*.fp16.safetensors"
+    ],
+    "deviceMap": null
+  },
+  "measured": {
+    "peakVramMb": 10347,
+    "loadSeconds": 7.7,
+    "steadySeconds": 6.2,
+    "downloadGb": 6.78
+  }
+}

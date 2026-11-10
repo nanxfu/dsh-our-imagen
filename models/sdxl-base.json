@@ -1,0 +1,40 @@
+{
+  "id": "sdxl-base",
+  "order": 30,
+  "label": "标准 1024",
+  "repo": "stabilityai/stable-diffusion-xl-base-1.0",
+  "params": "3.5B",
+  "license": "OpenRAIL++",
+  "licenseKind": "open",
+  "gated": false,
+  "gpus": 1,
+  "tier": "usable",
+  "size": 1024,
+  "steps": 25,
+  "cfg": 7.5,
+  "negativeHint": "blurry, low quality, deformed, extra limbs",
+  "sizeOptions": [768, 1024, 1152],
+  "runtime": "default",
+  "pipeline": {
+    "loader": "sdxl",
+    "base": "stabilityai/stable-diffusion-xl-base-1.0",
+    "lora": null,
+    "scheduler": null,
+    "variant": "fp16",
+    "downloadGb": 6.78,
+    "allowPatterns": [
+      "model_index.json",
+      "**/config.json",
+      "**/*.json",
+      "**/*.txt",
+      "**/*.fp16.safetensors"
+    ],
+    "deviceMap": null
+  },
+  "measured": {
+    "peakVramMb": 9966,
+    "loadSeconds": 5.8,
+    "steadySeconds": 27.8,
+    "downloadGb": 6.78
+  }
+}

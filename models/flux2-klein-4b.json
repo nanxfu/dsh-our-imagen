@@ -1,0 +1,34 @@
+{
+  "id": "flux2-klein-4b",
+  "order": 40,
+  "label": "质量优先",
+  "repo": "black-forest-labs/FLUX.2-klein-4B",
+  "params": "3.88B",
+  "license": "Apache-2.0",
+  "licenseKind": "open",
+  "gated": false,
+  "gpus": 2,
+  "tier": "fast",
+  "size": 1024,
+  "steps": 4,
+  "cfg": 1.0,
+  "negativeHint": "",
+  "sizeOptions": [768, 1024],
+  "runtime": "default",
+  "pipeline": {
+    "loader": "flux2",
+    "base": "black-forest-labs/FLUX.2-klein-4B",
+    "lora": null,
+    "scheduler": null,
+    "variant": "fp16",
+    "downloadGb": 15.2,
+    "allowPatterns": null,
+    "deviceMap": "balanced"
+  },
+  "measured": {
+    "peakVramMb": 7929,
+    "loadSeconds": 28.2,
+    "steadySeconds": 10.24,
+    "downloadGb": 15.2
+  }
+}

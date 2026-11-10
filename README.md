@@ -142,6 +142,10 @@ node test/kernel-package.mjs
 # 重新生成 / 校验下发给远端 daemon 的契约 JSON（改了 shared/contract.js 后）
 npm run contract:gen
 npm run contract:check
+
+# 模型资产：编辑 models/<id>.json 后重新生成并校验（详见 docs/MODEL_ASSET_SPEC.md）
+npm run models:build
+npm run models:check
 ```
 
 发布打包（先构建 client.js，再产出 `dist/` 下可加载目录与 zip）：
@@ -172,4 +176,5 @@ npm run test:gpu    # 真实 GPU 出图链路（端到端出图）
 - **[演进路线 (docs/ROADMAP.md)](docs/ROADMAP.md)**：版本里程碑与后续功能规划。
 - **[故障排查 (docs/TROUBLESHOOTING.md)](docs/TROUBLESHOOTING.md)**：pip 版本冲突复盘、venv 取舍、磁盘/隧道/凭证等已知环境问题与判断依据。
 - **[代码重构与整洁化规范 (docs/CODE_REFACTOR_SPEC.md)](docs/CODE_REFACTOR_SPEC.md)**：针对过度设计、伪解耦与测试自嗨的工程整洁化实施指南。
+- **[模型资产规范 (docs/MODEL_ASSET_SPEC.md)](docs/MODEL_ASSET_SPEC.md)**：模型 JSON 格式、实测数据回填、`models/ → models.generated.js` 生成与校验流程。
 - **[历史归档库 (docs/archive/)](docs/archive/README.md)**：归档历史重构调研底稿与已废弃的前序版本规格。

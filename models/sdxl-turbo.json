@@ -1,0 +1,40 @@
+{
+  "id": "sdxl-turbo",
+  "order": 20,
+  "label": "极速草稿",
+  "repo": "stabilityai/sdxl-turbo",
+  "params": "3.5B",
+  "license": "非商用研究许可",
+  "licenseKind": "restricted",
+  "gated": false,
+  "gpus": 1,
+  "tier": "fast",
+  "size": 512,
+  "steps": 4,
+  "cfg": 0,
+  "negativeHint": "blurry, low quality",
+  "sizeOptions": [512, 768, 1024],
+  "runtime": "default",
+  "pipeline": {
+    "loader": "sdxl",
+    "base": "stabilityai/sdxl-turbo",
+    "lora": null,
+    "scheduler": null,
+    "variant": "fp16",
+    "downloadGb": 6.62,
+    "allowPatterns": [
+      "model_index.json",
+      "**/config.json",
+      "**/*.json",
+      "**/*.txt",
+      "**/*.fp16.safetensors"
+    ],
+    "deviceMap": null
+  },
+  "measured": {
+    "peakVramMb": 7666,
+    "loadSeconds": 4.0,
+    "steadySeconds": 1.87,
+    "downloadGb": 6.62
+  }
+}

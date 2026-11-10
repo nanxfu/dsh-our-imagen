@@ -193,148 +193,18 @@ export const PROTOCOL = {
 }
 
 /**
- * 模型预设目录（唯一数据来源）。
+ * 模型预设目录：唯一数据来源是仓库根目录的 models/*.json。
  *
- * 数字来自 docs/SPEC.md 第 4 节的 T4 实测；未实测的字段为 null，
- * UI 显示"待测"，不得用上游宣称值顶替。
+ * 修改模型请编辑 models/<id>.json，然后运行 `npm run models:build` 生成
+ * `shared/models.generated.js`；本文件只做 re-export，不在这里手写预设数据。
+ * `node test/check-contract.mjs` 会校验生成文件是否与 models/ 同步。
  *
- * `pipeline` 是下发给远端 Daemon 的加载描述（字段见 remote/daemon.py 顶部说明）：
- * Daemon 不认识预设 id，只按 loader 分支加载，因此新增预设不需要改 Python。
+ * 每个预设的 `pipeline` 是下发给远端 Daemon 的加载描述（字段见 remote/daemon.py
+ * 顶部说明）：Daemon 不认识预设 id，只按 loader 分支加载，因此新增预设不需要改 Python。
  */
-const SDXL_ALLOW = [
-  'model_index.json',
-  '**/config.json',
-  '**/*.json',
-  '**/*.txt',
-  '**/*.fp16.safetensors',
-]
+import { PRESETS } from './models.generated.js'
 
-export const PRESETS = [
-  {
-    id: 'sdxl-lightning',
-    label: '默认 · 1024 快档',
-    repo: 'stabilityai/stable-diffusion-xl-base-1.0 + ByteDance/SDXL-Lightning',
-    params: '3.5B + LoRA',
-    license: 'OpenRAIL++',
-    licenseKind: 'open',
-    gated: false,
-    gpus: 1,
-    downloadGb: 6.78,
-    size: 1024,
-    steps: 4,
-    cfg: 0,
-    peakVramMb: 10347,
-    loadSeconds: 7.7,
-    steadySeconds: 6.2,
-    tier: 'fast',
-    negativeHint: 'blurry, low quality, deformed, extra limbs',
-    sizeOptions: [768, 1024, 1152],
-    pipeline: {
-      loader: 'sdxl-lora',
-      base: 'stabilityai/stable-diffusion-xl-base-1.0',
-      lora: {
-        repo: 'ByteDance/SDXL-Lightning',
-        weight: 'sdxl_lightning_4step_lora.safetensors',
-      },
-      scheduler: { type: 'euler', timestepSpacing: 'trailing' },
-      variant: 'fp16',
-      // 远端下载权重的估算体积（GiB）：daemon 在下载前做磁盘预检。
-      downloadGb: 6.78,
-      allowPatterns: SDXL_ALLOW,
-      deviceMap: null,
-    },
-  },
-  {
-    id: 'sdxl-turbo',
-    label: '极速草稿',
-    repo: 'stabilityai/sdxl-turbo',
-    params: '3.5B',
-    license: '非商用研究许可',
-    licenseKind: 'restricted',
-    gated: false,
-    gpus: 1,
-    downloadGb: 6.62,
-    size: 512,
-    steps: 4,
-    cfg: 0,
-    peakVramMb: 7666,
-    loadSeconds: 4.0,
-    steadySeconds: 1.87,
-    tier: 'fast',
-    negativeHint: 'blurry, low quality',
-    sizeOptions: [512, 768, 1024],
-    pipeline: {
-      loader: 'sdxl',
-      base: 'stabilityai/sdxl-turbo',
-      lora: null,
-      scheduler: null,
-      variant: 'fp16',
-      downloadGb: 6.62,
-      allowPatterns: SDXL_ALLOW,
-      deviceMap: null,
-    },
-  },
-  {
-    id: 'sdxl-base',
-    label: '标准 1024',
-    repo: 'stabilityai/stable-diffusion-xl-base-1.0',
-    params: '3.5B',
-    license: 'OpenRAIL++',
-    licenseKind: 'open',
-    gated: false,
-    gpus: 1,
-    downloadGb: 6.78,
-    size: 1024,
-    steps: 25,
-    cfg: 7.5,
-    peakVramMb: 9966,
-    loadSeconds: 5.8,
-    steadySeconds: 27.8,
-    tier: 'usable',
-    negativeHint: 'blurry, low quality, deformed, extra limbs',
-    sizeOptions: [768, 1024, 1152],
-    pipeline: {
-      loader: 'sdxl',
-      base: 'stabilityai/stable-diffusion-xl-base-1.0',
-      lora: null,
-      scheduler: null,
-      variant: 'fp16',
-      downloadGb: 6.78,
-      allowPatterns: SDXL_ALLOW,
-      deviceMap: null,
-    },
-  },
-  {
-    id: 'flux2-klein-4b',
-    label: '质量优先',
-    repo: 'black-forest-labs/FLUX.2-klein-4B',
-    params: '3.88B',
-    license: 'Apache-2.0',
-    licenseKind: 'open',
-    gated: false,
-    gpus: 2,
-    downloadGb: 15.2,
-    size: 1024,
-    steps: 4,
-    cfg: 1.0,
-    peakVramMb: 7929,
-    loadSeconds: 28.2,
-    steadySeconds: 10.24,
-    tier: 'fast',
-    negativeHint: '',
-    sizeOptions: [768, 1024],
-    pipeline: {
-      loader: 'flux2',
-      base: 'black-forest-labs/FLUX.2-klein-4B',
-      lora: null,
-      scheduler: null,
-      variant: 'fp16',
-      downloadGb: 15.2,
-      allowPatterns: null,
-      deviceMap: 'balanced',
-    },
-  },
-]
+export { PRESETS }
 
 export const DEFAULT_PRESET = 'sdxl-lightning'
 
