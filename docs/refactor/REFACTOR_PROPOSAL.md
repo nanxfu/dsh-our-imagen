@@ -237,3 +237,21 @@
 2. `remote/daemon.py` 仍忽略注入的 `preset_id`/`log_level`/`version`/`contract`（已随 kernel 配置下发，但 daemon 未读取）→ P9（M1）。
 3. `apply()` 470 行、`SessionManager` 703 行、`useStudio` 709 行、客户端测试替身只支持 4 个 hook → P4~P8。
 4. 响应信封仍有 5 种写法（含 200+`ok:false`）→ 随 P4/P7 与客户端同批统一。
+
+---
+
+## 附录 B：B 阶段执行记录（进行中）
+
+每批仍是"一次提交、独立验收、可单独回滚"。
+
+| 批次 | 内容 | 结果 |
+| --- | --- | --- |
+| P4 | `apply()` 485→89 行（index.js 608→120）：新增 `lib/route-kit.js` + `lib/routes/{session,jobs,files,library,prompts}.js` + `lib/tools.js`；`JobQueue.runNext` 拆为 `runJob`/`persistResult`/纯函数 `describeJobError` | ✅ host-e2e 21/21、session-race 44/44、reliability 26/26、library 12/12 |
+| P6 | 测试 React 替身补齐 `useReducer`/`useMemo`/`useLayoutEffect`/`memo`，未实现 API 明确报错；新增 hook 探针场景 | ✅ 渲染 13→14 项，golden 未改 |
+| P7 | 新增 `src/api/resources.js`（12 个资源函数）；`useStudio` 11 处、`useHostState` 1 处调用收敛 | ✅ 客户端逻辑 24/24、渲染 14/14 |
+| P9 | `remote/daemon.py` 1216→1378 行：`STATE`/`BOOT` 字典 → `DaemonConfig`/`RuntimeState`/`BootState` 对象；校验边界改读注入的契约（缺失回退）；6 处启动失败收敛 `fail_boot()`；新增 `test/daemon-unit.py`（50 用例） | ✅ 单测 50/50；真机链路待人工验证 |
+| P5 | `lib/session.js` 703→282 行，拆出 `lib/session/{state,timers,provisioner,rendezvous,health,remote-port}.js`；health 嵌套三元改映射表；`JobQueue` 经 `remote-port` 出网 | ✅ 4 套宿主测试 + 新增 session-pure 19/19；测试文件零改动 |
+
+**唯一有意的行为变更**（P9）：远端 daemon 在未注入 `auth_token` 时不再放行匿名访问（401、不发布 ready），本地无鉴权调试需显式 `allow_no_auth: true`。其余批次均为行为不变重构。
+
+B 阶段剩余：P8（客户端按域拆 `useStudio`）、P10（协议契约驱动 mock + 测试分层），以及 P9 的 mock 边界对齐、真机 `gpu-live` 验证。
