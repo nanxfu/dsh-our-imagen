@@ -5,8 +5,23 @@
  * 没有可 import 的导出。所以测试的加载方式是：把构建产物整文件求值，注入假的
  * window / React / fetch / 定时器，再从 `factory(require)` 的返回值里取插件对象。
  *
- * 渲染器只服务本插件：Workbench 持有全部 hook，子组件是纯函数组件。
- * 它按需重跑渲染直到状态收敛，不实现 React 的调度、key 复用与并发特性。
+ * 假 React 支持的 API：
+ *   - createElement、jsx / jsxs / jsxDEV、Fragment
+ *   - useState、useReducer、useRef、useMemo、useCallback
+ *   - useEffect、useLayoutEffect（同一套"渲染后执行 + deps 变化时清理"逻辑）
+ *   - memo（只做组件包装，不做 props 相等短路）
+ *   - 其余 hook（useContext / useSyncExternalStore / useImperativeHandle / forwardRef 等）
+ *     未实现，调用时会抛出带说明的错误，避免调用方只看到 "undefined is not a function"。
+ *
+ * 已知语义差异（够用即可，不追求与 React 等价）：
+ *   - 只有 mount 的顶层组件在 hook 槽位管理下渲染；serializeTree / collectText 展开子组件时
+ *     直接当普通函数调用，子组件的 hook 会共享同一组槽位，effect 也不会单独调度。
+ *   - 没有调度器、并发与 key 复用；状态变更只把本次 mount 标脏，由 mount 循环重跑到收敛。
+ *   - useEffect 与 useLayoutEffect 没有执行时机差别，都在本轮提交后立即执行。
+ *   - useReducer 的 dispatch 立即计算并标脏（React 会批处理），因此可以在 effect 里
+ *     触发下一轮渲染。
+ *   - memo 不做 props 比较，不能用来验证"跳过重渲染"；只保证包装后的类型可被渲染器展开。
+ *   - useMemo 的依赖按 Object.is 浅比较；deps 为 undefined 时每次渲染重算。
  */
 
 import { readFile } from 'node:fs/promises'
@@ -21,6 +36,9 @@ const sameDeps = (previous, next) => {
   if (previous.length !== next.length) return false
   return previous.every((value, index) => Object.is(value, next[index]))
 }
+
+/** 假 React 已实现的 hook / API 清单；报错信息复用它，避免两处漂移。 */
+const SUPPORTED_HOOKS = 'useState/useReducer/useRef/useMemo/useCallback/useEffect/useLayoutEffect/memo'
 
 /** 最小 React 替身 + 状态循环。 */
 function createRenderer(now) {
@@ -48,8 +66,24 @@ function createRenderer(now) {
   }
   const jsxRuntime = { jsx, jsxs: jsx, jsxDEV: jsx, Fragment }
 
+  /** useEffect / useLayoutEffect 共用：本轮渲染后按 deps 决定是否执行。 */
+  const registerEffect = (effect, deps) => {
+    pendingEffects.push({ effect, deps })
+  }
+
+  /** memo：套一层函数组件并保留 displayName；假渲染器不做 props 比较。 */
+  function memo(component) {
+    if (typeof component !== 'function') {
+      throw new Error(`memo() 需要函数组件，收到：${typeof component}`)
+    }
+    const wrapped = (props) => component(props)
+    wrapped.displayName = `Memo(${component.displayName || component.name || 'Component'})`
+    return wrapped
+  }
+
   const React = {
     createElement,
+    Fragment,
     useState(init) {
       const index = slotIndex++
       if (!(index in slots)) slots[index] = typeof init === 'function' ? init() : init
@@ -62,14 +96,38 @@ function createRenderer(now) {
       }
       return [slots[index], setState]
     },
+    useReducer(reducer, initialArg, init) {
+      const index = slotIndex++
+      if (!(index in slots)) {
+        slots[index] = typeof init === 'function' ? init(initialArg) : initialArg
+      }
+      // dispatch 立即计算并标脏，交给 mount 循环重跑到收敛（React 会批处理，这里不模拟）。
+      const dispatch = (action) => {
+        if (unmounted) return
+        const next = reducer(slots[index], action)
+        if (Object.is(next, slots[index])) return
+        slots[index] = next
+        dirty = true
+      }
+      return [slots[index], dispatch]
+    },
     useRef(init) {
       const index = slotIndex++
       if (!(index in slots)) slots[index] = { current: init }
       return slots[index]
     },
-    useEffect(effect, deps) {
-      pendingEffects.push({ effect, deps })
+    useMemo(factory, deps) {
+      const index = slotIndex++
+      const prev = slots[index]
+      const hasDeps = Array.isArray(deps)
+      if (prev && hasDeps && sameDeps(prev.deps, deps)) return prev.value
+      const value = factory()
+      slots[index] = { value, deps: hasDeps ? deps : null }
+      return value
     },
+    // 假渲染器不区分提交阶段：两者都只是"本轮渲染后执行"，清理逻辑共用。
+    useEffect: registerEffect,
+    useLayoutEffect: registerEffect,
     useCallback(fn, deps) {
       const index = slotIndex++
       const prev = slots[index]
@@ -77,6 +135,28 @@ function createRenderer(now) {
       slots[index] = { fn, deps }
       return fn
     },
+    memo,
+  }
+
+  // 未实现的 hook / API：调用时给出可操作的报错，替代 "undefined is not a function"。
+  const UNSUPPORTED_APIS = [
+    'useContext',
+    'useSyncExternalStore',
+    'useImperativeHandle',
+    'useInsertionEffect',
+    'useId',
+    'useTransition',
+    'useDeferredValue',
+    'useDebugValue',
+    'useOptimistic',
+    'createContext',
+    'forwardRef',
+    'startTransition',
+  ]
+  for (const name of UNSUPPORTED_APIS) {
+    React[name] = () => {
+      throw new Error(`假 React 未实现 ${name}：请先在 test/load-client.mjs 里补语义（当前支持 ${SUPPORTED_HOOKS}）`)
+    }
   }
 
   const settle = async (rounds = 6) => {

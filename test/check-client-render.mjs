@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { bundle } from '../build.mjs'
-import { loadClient, TEST_ARTIFACT } from './load-client.mjs'
+import { loadClient, serializeTree, TEST_ARTIFACT } from './load-client.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const GOLDEN_PATH = join(ROOT, 'test/render-golden.json')
@@ -438,6 +438,31 @@ await check('画廊悬停动作把完整作品条目交给回调', async () => {
   assert.equal(received.recall && received.recall.image, historyItem.images[0], '条目里应带图片信息')
   assert.equal(received.variant && received.variant.item, historyItem, '生成变体应收到完整条目')
   assert.equal(received.zoom && received.zoom.item, historyItem, '查看大图应收到完整条目')
+})
+
+await check('渲染：hook 探针（useReducer/useMemo/useLayoutEffect/memo）', async () => {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const tree = await client.mountRaw(client.components.HarnessProbe, {})
+  client.unmount()
+
+  const byClass = (className) => findNodes(
+    tree,
+    (node) => node.type && node.props && node.props.className === className,
+  )[0] || null
+  const textOf = (node) => (node ? collectText(node).join('') : '')
+
+  assert.equal(countByClass(tree, 'ofs-harness-probe'), 1, '探针应渲染一个根节点')
+  // useReducer + useLayoutEffect：挂载时 dispatch 一次，mount 重新渲染后 count 应为 1。
+  assert.equal(textOf(byClass('ofs-harness-count')), '1', 'useReducer dispatch 后应触发重渲染')
+  // useMemo：依赖 count 变化后应重算（0 × 2 → 1 × 2）。
+  assert.equal(textOf(byClass('ofs-harness-doubled')), '2', 'useMemo 应在依赖变化后重算')
+  // useMemo：空依赖必须跨渲染复用，若每轮重算这里会变成 2。
+  assert.equal(textOf(byClass('ofs-harness-memo-stamp')), '1', '空依赖 useMemo 应跨重渲染复用')
+  // memo：包装组件仍可被 serializeTree 正常展开。
+  assert.ok(JSON.stringify(serializeTree(tree)).includes('memo-child-ok'), 'memo 包装的子组件应被序列化展开')
+  assert.match(client.components.HarnessProbe.displayName || '', /^Memo\(/, 'memo 应保留 displayName')
+  // 未实现的 hook 要给出明确报错，而不是 undefined is not a function。
+  assert.throws(() => client.react.useContext({}), /未实现 useContext/)
 })
 
 if (UPDATE) {
