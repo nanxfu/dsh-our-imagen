@@ -251,7 +251,9 @@
 | P7 | 新增 `src/api/resources.js`（12 个资源函数）；`useStudio` 11 处、`useHostState` 1 处调用收敛 | ✅ 客户端逻辑 24/24、渲染 14/14 |
 | P9 | `remote/daemon.py` 1216→1378 行：`STATE`/`BOOT` 字典 → `DaemonConfig`/`RuntimeState`/`BootState` 对象；校验边界改读注入的契约（缺失回退）；6 处启动失败收敛 `fail_boot()`；新增 `test/daemon-unit.py`（50 用例） | ✅ 单测 50/50；真机链路待人工验证 |
 | P5 | `lib/session.js` 703→282 行，拆出 `lib/session/{state,timers,provisioner,rendezvous,health,remote-port}.js`；health 嵌套三元改映射表；`JobQueue` 经 `remote-port` 出网 | ✅ 4 套宿主测试 + 新增 session-pure 19/19；测试文件零改动 |
+| P8 | `useStudio.js` 727→259 行，拆出 `src/studio/hooks/{useStudioUi,useStudioForm,useSessionControl,useWorkLibrary,useChatThread}.js`；返回对象 72 键与拆分前一致、`Studio.jsx` 未改、golden 未变 | ✅ 渲染 14/14、逻辑 24/24、文案检查通过 |
+| P10 | `tools/gen-contract-json.mjs` 生成 `remote/contract.json`（daemon 与 Python mock 共用契约）；`test/mock-daemon.py` 契约化并新增 `--phase`/`--fail-generate` 分支；smoke 6→9 场景；host-e2e 内联 mock 改对象错误信封；`lib/remote.js` 移除为测试而留的字符串兼容分支；check-contract 新增第 10 项（契约 JSON 同步） | ✅ 契约 10/10、host-e2e 21/21、smoke 9/9、daemon-unit 50/50 |
 
 **唯一有意的行为变更**（P9）：远端 daemon 在未注入 `auth_token` 时不再放行匿名访问（401、不发布 ready），本地无鉴权调试需显式 `allow_no_auth: true`。其余批次均为行为不变重构。
 
-B 阶段剩余：P8（客户端按域拆 `useStudio`）、P10（协议契约驱动 mock + 测试分层），以及 P9 的 mock 边界对齐、真机 `gpu-live` 验证。
+**B 阶段状态**：P4~P10 全部完成；每批一个本地提交、可单独回滚。剩余仅"真机 GPU 链路验证"需在具备 Kaggle 额度的环境手动执行（`npm run test:gpu` / `npm run test:live`），离线侧已由 daemon-unit 50 项 + smoke 9 场景 + host-e2e 21 项覆盖。
