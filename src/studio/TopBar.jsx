@@ -1,57 +1,121 @@
-/** 工作台顶栏：视图切换、云端算力胶囊、模型预设选择器。 */
+/** 工作台顶栏：品牌、视图切换、云端状态与配额、模型预设。 */
 
 import React from 'react'
 
-function sessionPill(t, sessionState, busy, onStart, onStop) {
-  if (sessionState === 'ready') return { tone: 'ok', label: t('studio.compute.online'), action: onStop, actionLabel: t('studio.compute.stop') }
+import { Icon } from './icons.jsx'
+import { StudioIcon } from './StudioIcon.jsx'
+
+function sessionPill(t, sessionState) {
+  if (sessionState === 'ready') return { tone: 'ok', label: t('studio.compute.online') }
   if (sessionState === 'provisioning') return { tone: 'warn', label: t('studio.compute.queued') }
   if (sessionState === 'connecting' || sessionState === 'warming') return { tone: 'warn', label: t('studio.compute.warming') }
   if (sessionState === 'stopping') return { tone: 'warn', label: t('studio.compute.stopping') }
-  if (sessionState === 'error') return { tone: 'error', label: t('studio.compute.error'), action: onStart, actionLabel: t('studio.compute.start') }
-  return { tone: 'idle', label: t('studio.compute.offline'), action: onStart, actionLabel: t('studio.compute.start') }
+  if (sessionState === 'error') return { tone: 'error', label: t('studio.compute.error') }
+  return { tone: 'idle', label: t('studio.compute.offline') }
 }
 
 export function TopBar(props) {
-  const { t, view, setView, sessionState, presets, form, patchForm, busy, onStart, onStop, onProbe } = props
-  const pill = sessionPill(t, sessionState, busy, onStart, onStop)
+  const { t, view, setView, sessionState, session, quota, presets, form, patchForm, busy, onStart, onStop, onProbe, onRefresh } = props
+  const pill = sessionPill(t, sessionState)
   const [open, setOpen] = React.useState(false)
+  const wrapRef = React.useRef(null)
+
+  // 菜单：Esc 关闭，点外面也关闭——这不是模态，不该困住用户。
+  React.useEffect(() => {
+    if (!open) return undefined
+    function onKey(event) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    function onDown(event) {
+      const node = wrapRef.current
+      if (node && !node.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('pointerdown', onDown)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('pointerdown', onDown)
+    }
+  }, [open])
+
+  const idleMinutes = session && session.idleTimeoutSec ? Math.round(session.idleTimeoutSec / 60) : 0
+  const quotaUsed = quota && Number.isFinite(quota.usedHours) ? quota.usedHours : null
+  const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null
+  const notReady = sessionState === 'absent' || sessionState === 'error'
+  const activePreset = presets.find((item) => item.id === form.presetId) || null
 
   return (
     <header className="ofs-topbar">
+      <div className="ofs-brand" title={t('studio.nav.label')}>
+        <span className="ofs-brand-mark" aria-hidden="true">
+          <StudioIcon size={18} />
+        </span>
+        <span className="ofs-brand-name">{t('studio.brand')}</span>
+        <span className="ofs-brand-sub">{t('studio.brandSub')}</span>
+      </div>
+
       <nav className="ofs-tabs" aria-label={t('studio.tabs')}>
-        <button type="button" className={view === 'studio' ? 'is-on' : ''} onClick={() => setView('studio')}>
+        <button type="button" className={view === 'studio' ? 'ofs-tab is-on' : 'ofs-tab'} onClick={() => setView('studio')}>
+          <Icon name="sparkles" size={15} />
           {t('studio.tab.studio')}
         </button>
-        <button type="button" className={view === 'gallery' ? 'is-on' : ''} onClick={() => setView('gallery')}>
+        <button type="button" className={view === 'gallery' ? 'ofs-tab is-on' : 'ofs-tab'} onClick={() => setView('gallery')}>
+          <Icon name="images" size={15} />
           {t('studio.tab.gallery')}
         </button>
       </nav>
 
       <span className="ofs-grow" />
 
-      <div className="ofs-pill-wrap">
+      {onRefresh ? (
+        <button type="button" className="ofs-icon-btn" onClick={onRefresh} title={t('studio.refresh')} aria-label={t('studio.refresh')}>
+          <Icon name="refresh" size={16} />
+        </button>
+      ) : null}
+
+      <div className="ofs-pill-wrap" ref={wrapRef}>
         <button
           type="button"
-          className={`ofs-pill ofs-pill--${pill.tone}`}
+          className={`ofs-compute is-${pill.tone}`}
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
+          aria-haspopup="menu"
         >
-          <i aria-hidden="true" />
+          <i className={`ofs-dot is-${pill.tone}${pill.tone === 'ok' ? ' is-live' : ''}`} aria-hidden="true" />
           <span>{pill.label}</span>
+          {quotaUsed !== null && quotaTotal !== null ? (
+            <em>
+              {quotaUsed} / {quotaTotal} {t('unit.hour')}
+            </em>
+          ) : null}
           <span className="ofs-pill-caret" aria-hidden="true">
-            ▾
+            <Icon name="chevronDown" size={13} />
           </span>
         </button>
 
         {open ? (
-          <div className="ofs-pill-card" role="dialog">
-            <button type="button" onClick={onStop} disabled={!!busy || sessionState === 'absent'}>
-              {t('studio.compute.stop')}
-            </button>
-            <button type="button" onClick={onStart} disabled={!!busy || sessionState === 'ready'}>
+          <div className="ofs-popover" role="menu">
+            <div className="ofs-popover-head">
+              <span>
+                <i className={`ofs-dot is-${pill.tone}`} aria-hidden="true" />
+                <b>{pill.label}</b>
+              </span>
+              <span className="ofs-muted">
+                {t('studio.compute.quota')} {quotaUsed !== null && quotaTotal !== null ? `${quotaUsed} / ${quotaTotal} ${t('unit.hour')}` : '—'}
+              </span>
+              {idleMinutes > 0 ? <span className="ofs-muted">{t('studio.compute.idleFor')} {idleMinutes} {t('unit.min')}</span> : null}
+              {session && session.device ? <span className="ofs-muted">{session.device}</span> : null}
+            </div>
+            <button type="button" role="menuitem" className="ofs-popover-row" onClick={onStart} disabled={!!busy || !notReady}>
+              <Icon name="cloud" size={15} />
               {t('studio.compute.start')}
             </button>
-            <button type="button" onClick={onProbe} disabled={!!busy}>
+            <button type="button" role="menuitem" className="ofs-popover-row" onClick={onStop} disabled={!!busy || sessionState === 'absent'}>
+              <Icon name="clock" size={15} />
+              {t('studio.compute.stop')}
+            </button>
+            <button type="button" role="menuitem" className="ofs-popover-row" onClick={onProbe} disabled={!!busy}>
+              <Icon name="refresh" size={15} />
               {t('studio.compute.check')}
             </button>
           </div>
@@ -59,10 +123,12 @@ export function TopBar(props) {
       </div>
 
       <label className="ofs-preset">
-        <span>{t('studio.preset')}</span>
+        <Icon name="sliders" size={14} />
+        <span className="ofs-preset-label">{t('studio.preset')}</span>
         <select
           value={form.presetId}
           disabled={presets.length === 0}
+          aria-label={t('studio.preset')}
           onChange={(event) => {
             const id = event.target.value
             const next = presets.find((item) => item.id === id)
@@ -82,10 +148,12 @@ export function TopBar(props) {
           {presets.length === 0 ? <option value="">—</option> : null}
           {presets.map((item) => (
             <option key={item.id} value={item.id}>
-              {item.label ? `${item.label} · ${item.id}` : item.id}
+              {item.label || item.id}
             </option>
           ))}
         </select>
+        <span className="ofs-preset-meta">{activePreset && activePreset.params ? activePreset.params : ''}</span>
+        <Icon name="chevronDown" size={13} className="ofs-preset-caret" />
       </label>
     </header>
   )

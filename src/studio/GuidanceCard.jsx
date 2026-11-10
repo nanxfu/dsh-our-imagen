@@ -7,6 +7,8 @@
 
 import React from 'react'
 
+import { Icon } from './icons.jsx'
+
 const KAGGLE_SETTINGS = 'https://www.kaggle.com/settings'
 
 /** 错误码 → 指引标识。 */
@@ -34,8 +36,8 @@ export function GuidanceCard(props) {
 
   return (
     <div className="ofs-guidance" role="alert">
-      <span className="ofs-guidance-icon" aria-hidden="true">
-        ⚠️
+      <span className="ofs-guidance-icon">
+        <Icon name="alert" size={15} />
       </span>
       <div className="ofs-guidance-body">
         <p className="ofs-guidance-title">{preset.title}</p>

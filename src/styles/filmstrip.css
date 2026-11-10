@@ -1,0 +1,191 @@
+/*
+ * 底部胶片坞：悬浮玻璃条，左边是批次缩略图流，右边去画廊。
+ */
+
+.ofs-filmstrip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 14px 14px 86px;
+  padding: 10px 12px;
+  min-height: 92px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: var(--ofs-r-lg);
+  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);
+  box-shadow: var(--ofs-shadow-card);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.ofs-roll {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
+.ofs-batch {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ofs-batch-thumbs {
+  display: flex;
+  gap: 3px;
+}
+
+.ofs-thumb {
+  appearance: none;
+  flex: 0 0 auto;
+  display: block;
+  width: 62px;
+  height: 62px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: var(--ofs-sunken);
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    transform 170ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 170ms ease,
+    box-shadow 170ms ease;
+}
+
+.ofs-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ofs-thumb:hover {
+  transform: translateY(-2px);
+}
+
+.ofs-thumb.is-on {
+  border-color: var(--ofs-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 20%, transparent);
+}
+
+.ofs-batch-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--ofs-ink-3);
+}
+
+.ofs-batch-meta em {
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ofs-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 进行中的骨架卡 */
+.ofs-ghost {
+  flex: 0 0 auto;
+  width: 148px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 36%, transparent);
+  border-radius: 14px;
+  background: linear-gradient(140deg, var(--ofs-accent-soft) 0%, transparent 78%);
+}
+
+.ofs-ghost-bar {
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--ofs-accent) 10%, transparent) 0%,
+    color-mix(in oklab, var(--ofs-accent) 32%, transparent) 50%,
+    color-mix(in oklab, var(--ofs-accent) 10%, transparent) 100%
+  );
+  background-size: 220% 100%;
+  animation: ofs-shimmer 1.8s linear infinite;
+}
+
+.ofs-ghost-label {
+  font-size: 10.5px;
+  color: var(--ofs-ink-2);
+}
+
+.ofs-ghost-time {
+  font-size: 10px;
+  color: var(--ofs-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 空态 */
+.ofs-filmstrip-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 auto;
+  color: var(--ofs-ink-3);
+  font-size: 12px;
+}
+
+.ofs-slots {
+  display: flex;
+  gap: 6px;
+}
+
+.ofs-slot {
+  display: block;
+  width: 46px;
+  height: 46px;
+  border: 1px dashed var(--ofs-sunken-border);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--ofs-card) 60%, transparent);
+}
+
+/* 去画廊 */
+.ofs-filmstrip-side {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding-left: 12px;
+  border-left: 1px solid var(--ofs-hairline);
+}
+
+.ofs-filmstrip-link {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ofs-ink-2);
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.ofs-filmstrip-link:hover {
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+}

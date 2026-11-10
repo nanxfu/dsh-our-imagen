@@ -1,12 +1,14 @@
 /**
- * 颜色 token 与少量仍需内联的样式。
+ * 对话页徽章的内联样式。
  *
- * 工作台主体已改用 src/styles.css；这里只保留对话页徽章（StatusChip）需要的那份样式，
- * 以及状态色 token。新增 UI 请优先写进 styles.css，不要再往这个对象里堆。
+ * 工作台主体样式在 src/styles/ 下的 CSS 模块里；这里只保留对话页头部徽章
+ * 需要的那份内联样式，以及语义状态色 token。新增 UI 请优先写进 CSS 模块。
+ *
+ * 约定：token 只引用宿主 CSS 变量（不带 fallback），宿主深色主题会一起切换。
  */
 
 export const token = {
-  bg: 'var(--dsw-alias-bg-layer-1)',
+  bg: 'var(--dsw-alias-bg-layer-2)',
   border: 'var(--dsw-alias-border-l1)',
   text: 'var(--dsw-alias-label-primary)',
   textSub: 'var(--dsw-alias-label-secondary)',
@@ -19,9 +21,9 @@ export const token = {
 
 export const styles = {
   dot: (color) => ({
-    width: 7,
-    height: 7,
-    minWidth: 7,
+    width: 6,
+    height: 6,
+    minWidth: 6,
     borderRadius: 99,
     background: color,
     display: 'inline-block',
@@ -29,15 +31,16 @@ export const styles = {
   headerChip: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 5,
-    maxWidth: 96,
+    gap: 6,
+    maxWidth: 112,
     minWidth: 0,
     fontSize: 11,
+    fontWeight: 550,
     color: token.textSub,
-    padding: '1px 8px',
-    border: `1px solid ${token.border}`,
+    padding: '2px 9px 2px 8px',
+    border: `1px solid color-mix(in oklab, ${token.border} 72%, transparent)`,
     borderRadius: 999,
-    background: token.bg,
+    background: `color-mix(in oklab, ${token.bg} 78%, transparent)`,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
   },

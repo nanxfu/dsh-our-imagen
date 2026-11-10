@@ -91,6 +91,7 @@ var zh = {
   "unit.card": "卡",
   "unit.second": "秒",
   "unit.min": "分",
+  "unit.hour": "小时",
   "unit.image": "张",
   "chip.offline": "云端未连接",
   "chip.online": "云端在线",
@@ -180,10 +181,13 @@ var zh = {
   "error.code.invalid_request": "请求参数不符合远端要求",
   "error.code.generation_failed": "生成失败",
   "studio.nav.label": "生图工作台",
+  "studio.brand": "免费生图",
+  "studio.brandSub": "Studio",
+  "studio.refresh": "刷新历史",
   "studio.tabs": "工作台视图",
   "studio.tab.studio": "工坊",
   "studio.tab.gallery": "画廊",
-  "studio.compute.offline": "离线（点击唤起）",
+  "studio.compute.offline": "离线",
   "studio.compute.queued": "正在排队",
   "studio.compute.warming": "模型准备中",
   "studio.compute.stopping": "正在休眠",
@@ -191,6 +195,9 @@ var zh = {
   "studio.compute.error": "连接异常",
   "studio.compute.start": "唤起",
   "studio.compute.stop": "休眠",
+  "studio.compute.quota": "免费额度",
+  "studio.compute.idleFor": "闲置休眠",
+  "studio.promptHint": "先写一句画面描述",
   "studio.preset": "模型",
   "studio.style": "风格",
   "studio.prompt": "提示词",
@@ -205,9 +212,10 @@ var zh = {
   "studio.count": "张数",
   "studio.generate": "即刻生成",
   "studio.generating": "提交中…",
-  "studio.generateHint": "Ctrl+Enter 也可生成",
-  "studio.stage.empty": "还没有选中作品",
-  "studio.stage.emptyHint": "在左侧写下描述，第一张图会出现在这里",
+  "studio.generateHint": "Ctrl+Enter 直接生成",
+  "studio.stage.empty": "这里还没有图片",
+  "studio.stage.emptyHint": "在左侧写一句描述，第一张图会出现在这里",
+  "studio.stage.examples": "试试这些",
   "studio.stage.zoom": "点击查看原图",
   "studio.stage.rendering": "正在渲染…",
   "studio.meta.size": "分辨率",
@@ -217,9 +225,11 @@ var zh = {
   "studio.action.reroll": "换种子抽卡",
   "studio.action.copyPath": "复制文件路径",
   "studio.filmstrip.empty": "这里会出现你生成的每一批作品",
-  "studio.filmstrip.offline": "云端还在休眠，先唤起再出图",
+  "studio.filmstrip.offline": "云端还没启动",
   "studio.gallery.title": "资产画廊",
   "studio.gallery.empty": "还没有作品，回工坊抽一张",
+  "studio.gallery.noMatch": "没有匹配的作品，换个关键词或清除筛选",
+  "studio.gallery.clearFilters": "清除筛选",
   "studio.gallery.today": "今天",
   "studio.gallery.week": "本周",
   "studio.gallery.earlier": "更早",
@@ -228,9 +238,9 @@ var zh = {
   "studio.toast.submitted": "已加入云端队列",
   "studio.toast.recalled": "参数已回填",
   "studio.dismiss": "知道了",
-  "studio.action.favorite": "⭐ 收藏",
-  "studio.action.favorited": "⭐ 已收藏",
-  "studio.enhance.button": "AI 建议",
+  "studio.action.favorite": "收藏",
+  "studio.action.favorited": "已收藏",
+  "studio.enhance.button": "扩写提示词",
   "studio.enhance.thinking": "正在生成建议…",
   "studio.enhance.local": "模型暂不可用，以下是通用建议",
   "studio.gallery.select": "批量选择",
@@ -264,12 +274,17 @@ var zh = {
   "studio.example.1": "黄昏的赛博朋克街道，湿润地面反射霓虹灯",
   "studio.example.2": "东方水墨的远山与孤舟，大面积留白",
   "studio.example.3": "3D 黏土质感的小熊，柔和棚拍光",
+  "studio.rail.tools": "创作工具",
+  "studio.rail.sectionPrompt": "创作",
+  "studio.rail.sectionStyle": "风格",
+  "studio.rail.sectionAdvanced": "参数",
   "studio.rail.title": "创作设置",
+  "studio.rail.compute": "算力",
   "studio.rail.modeForm": "表单",
   "studio.rail.modeChat": "对话",
   "studio.rail.frame": "画面设置",
   "studio.rail.advanced": "高级设置",
-  "studio.rail.params": "采样器 / 步数 / 引导强度",
+  "studio.rail.params": "步数 / 引导强度 / 种子",
   "studio.chat.assistant": "生图助手",
   "studio.chat.pending": "已提交，正在排队…",
   "studio.chat.queued": "云端正在排队，请稍候…",
@@ -319,6 +334,7 @@ var en = {
   "unit.card": "GPU",
   "unit.second": "s",
   "unit.min": "m",
+  "unit.hour": "h",
   "unit.image": "images",
   "chip.offline": "Cloud offline",
   "chip.online": "Cloud online",
@@ -408,10 +424,13 @@ var en = {
   "error.code.invalid_request": "Request was rejected by the daemon",
   "error.code.generation_failed": "Generation failed",
   "studio.nav.label": "Imagen Studio",
+  "studio.brand": "Free Imagen",
+  "studio.brandSub": "Studio",
+  "studio.refresh": "Refresh history",
   "studio.tabs": "Workbench views",
   "studio.tab.studio": "Studio",
   "studio.tab.gallery": "Gallery",
-  "studio.compute.offline": "Offline (click to wake)",
+  "studio.compute.offline": "Offline",
   "studio.compute.queued": "Queued",
   "studio.compute.warming": "Preparing model",
   "studio.compute.stopping": "Sleeping",
@@ -419,6 +438,9 @@ var en = {
   "studio.compute.error": "Connection error",
   "studio.compute.start": "Wake",
   "studio.compute.stop": "Sleep",
+  "studio.compute.quota": "Free quota",
+  "studio.compute.idleFor": "Idle timeout",
+  "studio.promptHint": "Write a line first",
   "studio.preset": "Model",
   "studio.style": "Style",
   "studio.prompt": "Prompt",
@@ -433,9 +455,10 @@ var en = {
   "studio.count": "Images",
   "studio.generate": "Generate now",
   "studio.generating": "Submitting…",
-  "studio.generateHint": "Ctrl+Enter works too",
-  "studio.stage.empty": "No artwork selected yet",
+  "studio.generateHint": "Ctrl+Enter also generates",
+  "studio.stage.empty": "No image yet",
   "studio.stage.emptyHint": "Describe something on the left and your first image lands here",
+  "studio.stage.examples": "Try one of these",
   "studio.stage.zoom": "Click to view full size",
   "studio.stage.rendering": "Rendering…",
   "studio.meta.size": "Size",
@@ -445,9 +468,11 @@ var en = {
   "studio.action.reroll": "Reroll",
   "studio.action.copyPath": "Copy path",
   "studio.filmstrip.empty": "Every batch you generate shows up here",
-  "studio.filmstrip.offline": "The cloud is asleep — wake it to generate",
+  "studio.filmstrip.offline": "The cloud is not running",
   "studio.gallery.title": "Asset gallery",
   "studio.gallery.empty": "Nothing yet — head back and roll one",
+  "studio.gallery.noMatch": "No works match — try another keyword or clear the filters",
+  "studio.gallery.clearFilters": "Clear filters",
   "studio.gallery.today": "Today",
   "studio.gallery.week": "This week",
   "studio.gallery.earlier": "Earlier",
@@ -456,9 +481,9 @@ var en = {
   "studio.toast.submitted": "Added to the cloud queue",
   "studio.toast.recalled": "Settings restored",
   "studio.dismiss": "Got it",
-  "studio.action.favorite": "⭐ Favorite",
-  "studio.action.favorited": "⭐ Favorited",
-  "studio.enhance.button": "AI hints",
+  "studio.action.favorite": "Favorite",
+  "studio.action.favorited": "Favorited",
+  "studio.enhance.button": "Expand prompt",
   "studio.enhance.thinking": "Writing hints…",
   "studio.enhance.local": "Model unavailable — showing generic hints",
   "studio.gallery.select": "Select",
@@ -492,12 +517,17 @@ var en = {
   "studio.example.1": "A cyberpunk street at dusk, wet asphalt mirroring neon",
   "studio.example.2": "Ink-wash mountains and a lone boat, plenty of negative space",
   "studio.example.3": "A clay-render bear cub under soft studio light",
+  "studio.rail.tools": "Creation tools",
+  "studio.rail.sectionPrompt": "Create",
+  "studio.rail.sectionStyle": "Styles",
+  "studio.rail.sectionAdvanced": "Params",
   "studio.rail.title": "Creation",
+  "studio.rail.compute": "Compute",
   "studio.rail.modeForm": "Form",
   "studio.rail.modeChat": "Chat",
   "studio.rail.frame": "Frame",
   "studio.rail.advanced": "Advanced",
-  "studio.rail.params": "Sampler / steps / guidance",
+  "studio.rail.params": "Steps / guidance / seed",
   "studio.chat.assistant": "Image assistant",
   "studio.chat.pending": "Submitted, queuing…",
   "studio.chat.queued": "Waiting in the cloud queue…",
@@ -517,7 +547,7 @@ var h = import_react.default.createElement;
 
 // src/theme.js
 var token = {
-  bg: "var(--dsw-alias-bg-layer-1)",
+  bg: "var(--dsw-alias-bg-layer-2)",
   border: "var(--dsw-alias-border-l1)",
   text: "var(--dsw-alias-label-primary)",
   textSub: "var(--dsw-alias-label-secondary)",
@@ -529,9 +559,9 @@ var token = {
 };
 var styles = {
   dot: (color) => ({
-    width: 7,
-    height: 7,
-    minWidth: 7,
+    width: 6,
+    height: 6,
+    minWidth: 6,
     borderRadius: 99,
     background: color,
     display: "inline-block"
@@ -539,15 +569,16 @@ var styles = {
   headerChip: {
     display: "inline-flex",
     alignItems: "center",
-    gap: 5,
-    maxWidth: 96,
+    gap: 6,
+    maxWidth: 112,
     minWidth: 0,
     fontSize: 11,
+    fontWeight: 550,
     color: token.textSub,
-    padding: "1px 8px",
-    border: `1px solid ${token.border}`,
+    padding: "2px 9px 2px 8px",
+    border: `1px solid color-mix(in oklab, ${token.border} 72%, transparent)`,
     borderRadius: 999,
-    background: token.bg,
+    background: `color-mix(in oklab, ${token.bg} 78%, transparent)`,
     whiteSpace: "nowrap",
     overflow: "hidden"
   },
@@ -794,10 +825,37 @@ function StatusChip(props) {
 }
 
 // src/studio/Studio.jsx
-var import_react11 = __toESM(require("react"), 1);
+var import_react13 = __toESM(require("react"), 1);
 
-// src/styles.css
-var styles_default = "/*\n * 生图工作台样式。\n *\n * 设计约束：\n *  1. 视觉分层：画布 → 卡片 → 控件，三级不混用；卡片统一 16px 圆角与柔和投影。\n *  2. 颜色优先取宿主 --dsw-alias-* 变量；预览 / 独立运行时有兜底值，\n *     因此这里写 `var(--dsw-alias-x, #fallback)` 的形式。\n *  3. 结构：根用 flex 纵向三段（顶栏 / 弹性主体 / 胶卷流），主体内部左右两栏，\n *     避免用固定 grid 行数——某一层条件渲染时会错位。\n */\n\n/* ── 根与画布 ───────────────────────────────────────────────── */\n.ofs-root {\n  --ofs-card: var(--dsw-alias-bg-layer-1, #ffffff);\n  --ofs-sunken: var(--dsw-alias-bg-layer-2, #f5f6fa);\n  --ofs-line: var(--dsw-alias-border-l1, #e6e8f0);\n  --ofs-line-strong: color-mix(in oklab, var(--ofs-line) 72%, #000 28%);\n  --ofs-text: var(--dsw-alias-label-primary, #14161d);\n  --ofs-text-2: var(--dsw-alias-label-secondary, #6a7183);\n  --ofs-text-3: color-mix(in oklab, var(--ofs-text-2) 62%, #fff);\n  --ofs-brand: var(--dsw-alias-brand-primary, #4f46e5);\n  --ofs-brand-soft: color-mix(in oklab, var(--ofs-brand) 14%, transparent);\n  --ofs-ok: var(--dsw-alias-state-success-primary, #12a150);\n  --ofs-warn: var(--dsw-alias-state-warn-primary, #d97706);\n  --ofs-error: var(--dsw-alias-state-error-primary, #dc2626);\n  --ofs-idle: var(--dsw-alias-state-idle-primary, #9aa1b2);\n  --ofs-radius-lg: 18px;\n  --ofs-radius: 12px;\n  --ofs-radius-sm: 9px;\n  --ofs-shadow-card: 0 1px 2px rgb(16 24 40 / 4%), 0 12px 28px -18px rgb(16 24 40 / 22%);\n  --ofs-shadow-pop: 0 18px 46px -16px rgb(16 24 40 / 28%);\n\n  display: flex;\n  flex-direction: column;\n  height: 100%;\n  min-height: 0;\n  color: var(--ofs-text);\n  font-size: 13px;\n  line-height: 1.55;\n  background:\n    radial-gradient(900px 420px at 4% -8%, rgb(99 102 241 / 10%), transparent 62%),\n    radial-gradient(760px 400px at 102% -4%, rgb(14 165 233 / 9%), transparent 58%),\n    var(--dsw-alias-bg-canvas, #eef0f6);\n}\n\n/* ── 顶栏 ───────────────────────────────────────────────────── */\n.ofs-topbar {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  padding: 14px 22px 6px;\n  min-width: 0;\n}\n\n.ofs-tabs {\n  display: inline-flex;\n  gap: 2px;\n  padding: 3px;\n  border-radius: 999px;\n  background: color-mix(in oklab, var(--ofs-card) 70%, transparent);\n  border: 1px solid var(--ofs-line);\n}\n\n.ofs-tabs button {\n  appearance: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-text-2);\n  font: inherit;\n  font-size: 12.5px;\n  padding: 5px 16px;\n  border-radius: 999px;\n  cursor: pointer;\n  transition: background 140ms ease, color 140ms ease;\n}\n\n.ofs-tabs button.is-on {\n  background: var(--ofs-card);\n  color: var(--ofs-text);\n  font-weight: 550;\n  box-shadow: 0 1px 3px rgb(16 24 40 / 10%);\n}\n\n.ofs-grow { flex: 1 1 auto; min-width: 0; }\n\n.ofs-pill-wrap { position: relative; }\n\n.ofs-pill {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n  padding: 6px 12px 6px 13px;\n  border: 1px solid var(--ofs-line);\n  border-radius: 999px;\n  background: var(--ofs-card);\n  color: var(--ofs-text);\n  font: inherit;\n  font-size: 12px;\n  cursor: pointer;\n  white-space: nowrap;\n  box-shadow: 0 1px 2px rgb(16 24 40 / 5%);\n}\n\n.ofs-pill i {\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--ofs-idle);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-idle) 22%, transparent);\n}\n\n.ofs-pill--ok i { background: var(--ofs-ok); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-ok) 22%, transparent); }\n.ofs-pill--warn i { background: var(--ofs-warn); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-warn) 22%, transparent); }\n.ofs-pill--error i { background: var(--ofs-error); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-error) 22%, transparent); }\n\n.ofs-pill-caret { color: var(--ofs-text-3); font-size: 9px; }\n\n.ofs-pill-card {\n  position: absolute;\n  top: calc(100% + 8px);\n  right: 0;\n  z-index: 40;\n  display: grid;\n  gap: 2px;\n  min-width: 156px;\n  padding: 6px;\n  border: 1px solid var(--ofs-line);\n  border-radius: var(--ofs-radius);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-pop);\n}\n\n.ofs-pill-card button {\n  appearance: none;\n  border: 0;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--ofs-text);\n  font: inherit;\n  font-size: 12.5px;\n  text-align: left;\n  padding: 7px 10px;\n  cursor: pointer;\n}\n\n.ofs-pill-card button:hover:not(:disabled) { background: var(--ofs-sunken); }\n.ofs-pill-card button:disabled { opacity: 0.38; cursor: default; }\n\n.ofs-preset {\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  font-size: 12px;\n  color: var(--ofs-text-2);\n}\n\n.ofs-preset select,\n.ofs-gallery-bar select {\n  appearance: none;\n  border: 1px solid var(--ofs-line);\n  border-radius: 999px;\n  background: var(--ofs-card);\n  color: var(--ofs-text);\n  font: inherit;\n  font-size: 12px;\n  padding: 6px 12px;\n  max-width: 280px;\n  cursor: pointer;\n  box-shadow: 0 1px 2px rgb(16 24 40 / 5%);\n}\n\n/* ── 主体：灵感卡 + 主舞台 ──────────────────────────────────── */\n.ofs-shell {\n  flex: 1 1 0;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n  padding: 6px 22px 0;\n}\n\n.ofs-body {\n  flex: 1 1 0;\n  min-height: 0;\n  display: grid;\n  grid-template-columns: 340px minmax(0, 1fr);\n  grid-template-rows: minmax(0, 1fr);\n  gap: 16px;\n  overflow: hidden;\n}\n\n.ofs-main { min-width: 0; min-height: 0; display: flex; }\n\n/* ── 左侧灵感与控制卡 ───────────────────────────────────────── */\n.ofs-rail {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  min-height: 0;\n  padding: 16px;\n  border: 1px solid var(--ofs-line);\n  border-radius: var(--ofs-radius-lg);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  overflow-y: auto;\n  overflow-x: hidden;\n}\n\n.ofs-block {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  min-width: 0;\n}\n\n/* 提示词块吃掉多余高度，主按钮自然落到底部 */\n.ofs-block--grow { flex: 1 1 auto; min-height: 0; }\n.ofs-block--grow .ofs-textarea { flex: 1 1 auto; min-height: 96px; }\n\n.ofs-block > h3 {\n  margin: 0;\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: 0.06em;\n  color: var(--ofs-text-3);\n  text-transform: uppercase;\n}\n\n.ofs-capsules { display: flex; flex-wrap: wrap; gap: 6px; }\n\n.ofs-capsule {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  border: 1px solid var(--ofs-line);\n  border-radius: 999px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-text-2);\n  font: inherit;\n  font-size: 11.5px;\n  padding: 5px 11px;\n  cursor: pointer;\n  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;\n}\n\n.ofs-capsule:hover { border-color: var(--ofs-line-strong); color: var(--ofs-text); }\n\n.ofs-capsule.is-on {\n  border-color: transparent;\n  background: var(--ofs-brand-soft);\n  color: var(--ofs-brand);\n  font-weight: 550;\n}\n\n.ofs-textarea {\n  box-sizing: border-box;\n  width: 100%;\n  resize: none;\n  border: 1px solid var(--ofs-line);\n  border-radius: var(--ofs-radius);\n  background: var(--ofs-sunken);\n  color: var(--ofs-text);\n  font: inherit;\n  font-size: 13px;\n  line-height: 1.65;\n  padding: 11px 12px;\n  min-height: 118px;\n  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;\n}\n\n.ofs-textarea--short { min-height: 66px; }\n\n.ofs-textarea::placeholder { color: var(--ofs-text-3); }\n\n.ofs-textarea:focus {\n  outline: none;\n  background: var(--ofs-card);\n  border-color: var(--ofs-brand);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-brand) 16%, transparent);\n}\n\n.ofs-boosts { display: flex; flex-wrap: wrap; gap: 6px; }\n\n.ofs-boost {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  border: 1px dashed var(--ofs-line-strong);\n  border-radius: var(--ofs-radius-sm);\n  background: transparent;\n  color: var(--ofs-text-2);\n  font: inherit;\n  font-size: 11px;\n  padding: 5px 9px;\n  cursor: pointer;\n  max-width: 100%;\n}\n\n.ofs-boost:hover { border-color: var(--ofs-brand); color: var(--ofs-brand); border-style: solid; }\n\n.ofs-boost.is-ai {\n  border-style: solid;\n  border-color: color-mix(in oklab, var(--ofs-brand) 32%, var(--ofs-line));\n  background: var(--ofs-brand-soft);\n  color: var(--ofs-text);\n  text-align: left;\n}\n\n.ofs-boost.is-ai span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n\n.ofs-boost-row { display: flex; align-items: center; gap: 8px; min-width: 0; }\n\n.ofs-enhance {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  border: 1px solid var(--ofs-line);\n  border-radius: 999px;\n  background: var(--ofs-card);\n  color: var(--ofs-text-2);\n  font: inherit;\n  font-size: 11.5px;\n  padding: 5px 12px;\n  cursor: pointer;\n  white-space: nowrap;\n  transition: border-color 140ms ease, color 140ms ease;\n}\n\n.ofs-enhance:hover:not(:disabled) { border-color: var(--ofs-brand); color: var(--ofs-brand); }\n.ofs-enhance:disabled { opacity: 0.55; cursor: default; }\n\n.ofs-disclosure {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  width: 100%;\n  border: 0;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--ofs-text-2);\n  font: inherit;\n  font-size: 11.5px;\n  padding: 4px 2px;\n  cursor: pointer;\n}\n\n.ofs-disclosure:hover { color: var(--ofs-text); }\n\n.ofs-advanced {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 9px;\n}\n\n.ofs-ratios {\n  grid-column: 1 / -1;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 7px;\n}\n\n.ofs-ratio {\n  appearance: none;\n  display: grid;\n  justify-items: center;\n  gap: 5px;\n  border: 1px solid var(--ofs-line);\n  border-radius: var(--ofs-radius-sm);\n  background: var(--ofs-sunken);\n  color: var(--ofs-text-2);\n  font: inherit;\n  font-size: 10.5px;\n  padding: 8px 2px;\n  cursor: pointer;\n  transition: border-color 140ms ease, color 140ms ease;\n}\n\n.ofs-ratio:hover { border-color: var(--ofs-line-strong); color: var(--ofs-text); }\n.ofs-ratio.is-on { border-color: var(--ofs-brand); color: var(--ofs-brand); background: var(--ofs-brand-soft); }\n\n.ofs-ratio-glyph { display: block; border: 1.5px solid currentcolor; border-radius: 3px; }\n.ofs-ratio-glyph--1-1 { width: 16px; height: 16px; }\n.ofs-ratio-glyph--16-9 { width: 24px; height: 13.5px; }\n.ofs-ratio-glyph--9-16 { width: 13.5px; height: 24px; }\n\n.ofs-field { display: grid; gap: 4px; font-size: 10.5px; color: var(--ofs-text-2); }\n\n.ofs-field input,\n.ofs-field select {\n  box-sizing: border-box;\n  width: 100%;\n  border: 1px solid var(--ofs-line);\n  border-radius: 8px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-text);\n  font: inherit;\n  font-size: 12px;\n  padding: 6px 8px;\n  text-align: center;\n}\n\n.ofs-field input:focus,\n.ofs-field select:focus {\n  outline: none;\n  border-color: var(--ofs-brand);\n  background: var(--ofs-card);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-brand) 16%, transparent);\n}\n\n/* 主按钮固定在卡片底部，不被输入区挤走 */\n.ofs-generate {\n  appearance: none;\n  margin-top: auto;\n  border: 1px solid transparent;\n  border-radius: 999px;\n  background: var(--ofs-text);\n  color: var(--ofs-card);\n  font: inherit;\n  font-size: 13.5px;\n  font-weight: 600;\n  padding: 12px 18px;\n  cursor: pointer;\n  box-shadow: 0 10px 24px -14px rgb(16 24 40 / 70%);\n  transition: transform 120ms ease, opacity 140ms ease;\n}\n\n.ofs-generate:hover:not(:disabled) { transform: translateY(-1px); }\n.ofs-generate:disabled { opacity: 0.45; cursor: default; transform: none; }\n\n.ofs-hint {\n  margin: -4px 0 0;\n  font-size: 10.5px;\n  color: var(--ofs-text-3);\n  text-align: center;\n}\n\n/* ── 焦点舞台 ───────────────────────────────────────────────── */\n.ofs-stage {\n  flex: 1 1 0;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  min-width: 0;\n  min-height: 0;\n}\n\n.ofs-figure {\n  position: relative;\n  flex: 1 1 auto;\n  margin: 0;\n  min-height: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  border: 1px solid var(--ofs-line);\n  border-radius: var(--ofs-radius-lg);\n  padding: 14px;\n  background:\n    radial-gradient(120% 90% at 50% 0%, var(--ofs-card), var(--ofs-sunken) 78%);\n  box-shadow: var(--ofs-shadow-card);\n  overflow: hidden;\n}\n\n.ofs-figure-button {\n  appearance: none;\n  border: 0;\n  background: transparent;\n  padding: 0;\n  flex: 1 1 auto;\n  min-width: 0;\n  min-height: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  cursor: zoom-in;\n}\n\n.ofs-image {\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  display: block;\n  border-radius: 10px;\n}\n\n.ofs-meta {\n  position: absolute;\n  top: 14px;\n  left: 50%;\n  transform: translateX(-50%);\n  display: inline-flex;\n  align-items: center;\n  gap: 9px;\n  padding: 6px 15px;\n  border-radius: 999px;\n  background: rgb(17 20 28 / 58%);\n  color: #f7f8fb;\n  font-size: 11.5px;\n  letter-spacing: 0.01em;\n  backdrop-filter: blur(10px) saturate(140%);\n  white-space: nowrap;\n}\n\n.ofs-meta span[aria-hidden=\"true\"] { opacity: 0.45; }\n\n.ofs-dock {\n  display: flex;\n  justify-content: center;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ofs-dock-button {\n  appearance: none;\n  border: 1px solid var(--ofs-line);\n  border-radius: 999px;\n  background: var(--ofs-card);\n  color: var(--ofs-text);\n  font: inherit;\n  font-size: 12.5px;\n  padding: 8px 16px;\n  cursor: pointer;\n  box-shadow: 0 1px 2px rgb(16 24 40 / 5%);\n  transition: border-color 140ms ease, color 140ms ease, transform 120ms ease;\n}\n\n.ofs-dock-button:hover {\n  border-color: var(--ofs-brand);\n  color: var(--ofs-brand);\n  transform: translateY(-1px);\n}\n\n.ofs-stage-prompt {\n  margin: 0;\n  font-size: 11.5px;\n  color: var(--ofs-text-3);\n  text-align: center;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-stage-progress {\n  display: grid;\n  gap: 6px;\n  font-size: 11.5px;\n  color: var(--ofs-text-2);\n}\n\n.ofs-progress-label { justify-self: start; }\n\n.ofs-shimmer {\n  position: relative;\n  display: block;\n  width: 100%;\n  height: 3px;\n  border-radius: 999px;\n  background: var(--ofs-line);\n  overflow: hidden;\n}\n\n.ofs-shimmer::after {\n  content: '';\n  position: absolute;\n  inset: 0;\n  width: 40%;\n  border-radius: 999px;\n  background: var(--ofs-brand);\n  animation: ofs-slide 1.4s ease-in-out infinite;\n}\n\n@keyframes ofs-slide {\n  0% { transform: translateX(-120%); }\n  100% { transform: translateX(340%); }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-shimmer::after { animation: none; width: 45%; }\n}\n\n.ofs-empty {\n  display: grid;\n  justify-items: center;\n  gap: 8px;\n  padding: 32px;\n  text-align: center;\n  color: var(--ofs-text-2);\n  font-size: 13px;\n}\n\n.ofs-empty p { margin: 0; }\n\n.ofs-empty-glyph {\n  font-size: 34px;\n  line-height: 1;\n  color: var(--ofs-brand);\n  opacity: 0.32;\n}\n\n.ofs-muted { color: var(--ofs-text-3); font-size: 11.5px; }\n.ofs-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }\n\n.ofs-link {\n  appearance: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-brand);\n  font: inherit;\n  font-size: 11.5px;\n  padding: 0 4px;\n  cursor: pointer;\n}\n\n.ofs-lightbox {\n  position: fixed;\n  inset: 0;\n  z-index: 60;\n  display: grid;\n  place-items: center;\n  padding: 32px;\n  background: rgb(9 11 16 / 82%);\n  backdrop-filter: blur(6px);\n  cursor: zoom-out;\n}\n\n.ofs-lightbox img {\n  max-width: 94vw;\n  max-height: 88vh;\n  object-fit: contain;\n  border-radius: 10px;\n  cursor: default;\n  box-shadow: 0 30px 80px rgb(0 0 0 / 45%);\n}\n\n/* ── 胶卷流 ─────────────────────────────────────────────────── */\n.ofs-filmstrip {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  margin: 12px 22px 18px;\n  padding: 12px 14px;\n  height: 132px;\n  border: 1px solid var(--ofs-line);\n  border-radius: var(--ofs-radius-lg);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  overflow: hidden;\n}\n\n.ofs-ghost {\n  position: relative;\n  flex: 0 0 auto;\n  display: grid;\n  align-content: center;\n  justify-items: center;\n  gap: 5px;\n  width: 128px;\n  height: 96px;\n  padding: 8px;\n  border: 1px dashed var(--ofs-line-strong);\n  border-radius: var(--ofs-radius);\n  background: var(--ofs-sunken);\n  color: var(--ofs-text-2);\n  font-size: 10.5px;\n  text-align: center;\n  overflow: hidden;\n}\n\n.ofs-ghost-bar {\n  position: absolute;\n  inset: 0;\n  background: linear-gradient(110deg, transparent 20%, rgb(255 255 255 / 55%) 50%, transparent 80%);\n  animation: ofs-sweep 1.6s linear infinite;\n}\n\n@keyframes ofs-sweep {\n  0% { transform: translateX(-100%); }\n  100% { transform: translateX(100%); }\n}\n\n.ofs-ghost-label { position: relative; line-height: 1.35; }\n.ofs-ghost-time { position: relative; color: var(--ofs-text-3); }\n\n.ofs-roll {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n  overflow-x: auto;\n  overflow-y: hidden;\n  padding: 2px;\n}\n\n.ofs-batch {\n  flex: 0 0 auto;\n  display: grid;\n  gap: 5px;\n  padding: 5px;\n  border: 1px solid var(--ofs-line);\n  border-radius: var(--ofs-radius);\n  background: var(--ofs-sunken);\n}\n\n.ofs-batch-thumbs { display: flex; gap: 4px; }\n\n.ofs-thumb {\n  appearance: none;\n  flex: 0 0 auto;\n  padding: 0;\n  border: 1px solid transparent;\n  border-radius: 8px;\n  background: transparent;\n  cursor: pointer;\n  overflow: hidden;\n  line-height: 0;\n  transition: border-color 140ms ease, transform 120ms ease;\n}\n\n.ofs-thumb img {\n  width: 84px;\n  height: 84px;\n  object-fit: cover;\n  display: block;\n  border-radius: 8px;\n}\n\n.ofs-thumb:hover { transform: translateY(-1px); }\n\n.ofs-thumb.is-on {\n  border-color: var(--ofs-brand);\n  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ofs-brand) 30%, transparent);\n}\n\n.ofs-batch-meta {\n  display: flex;\n  justify-content: space-between;\n  gap: 6px;\n  padding: 0 2px;\n  font-size: 10px;\n  color: var(--ofs-text-3);\n}\n\n.ofs-batch-meta em {\n  font-style: normal;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-filmstrip-empty { margin: 0; }\n\n/* ── 画廊 ───────────────────────────────────────────────────── */\n.ofs-gallery {\n  flex: 1 1 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 16px;\n  min-height: 0;\n  padding: 18px;\n  border: 1px solid var(--ofs-line);\n  border-radius: var(--ofs-radius-lg);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  overflow-y: auto;\n}\n\n.ofs-gallery-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }\n\n.ofs-gallery-bar h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }\n\n.ofs-search {\n  box-sizing: border-box;\n  width: 210px;\n  border: 1px solid var(--ofs-line);\n  border-radius: 999px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-text);\n  font: inherit;\n  font-size: 12px;\n  padding: 6px 13px;\n}\n\n.ofs-search:focus {\n  outline: none;\n  background: var(--ofs-card);\n  border-color: var(--ofs-brand);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-brand) 16%, transparent);\n}\n\n.ofs-gallery-group { display: grid; gap: 10px; }\n\n.ofs-gallery-group h4 {\n  margin: 0;\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: 0.06em;\n  color: var(--ofs-text-3);\n  text-transform: uppercase;\n}\n\n.ofs-gallery-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));\n  gap: 14px;\n}\n\n.ofs-gallery-card {\n  appearance: none;\n  position: relative;\n  display: grid;\n  gap: 6px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n  min-width: 0;\n}\n\n.ofs-gallery-card img {\n  width: 100%;\n  aspect-ratio: 1;\n  object-fit: cover;\n  border-radius: var(--ofs-radius);\n  border: 1px solid var(--ofs-line);\n  display: block;\n  transition: transform 160ms ease, box-shadow 160ms ease;\n}\n\n.ofs-gallery-card:hover img {\n  transform: translateY(-2px);\n  box-shadow: 0 14px 30px -18px rgb(16 24 40 / 55%);\n}\n\n.ofs-gallery-card.is-picked img {\n  border-color: var(--ofs-brand);\n  box-shadow: 0 0 0 2px var(--ofs-brand);\n}\n\n.ofs-gallery-caption {\n  font-size: 11.5px;\n  color: var(--ofs-text-2);\n  display: -webkit-box;\n  -webkit-line-clamp: 2;\n  -webkit-box-orient: vertical;\n  overflow: hidden;\n  line-height: 1.5;\n}\n\n.ofs-gallery-tags { display: flex; gap: 7px; font-size: 10px; color: var(--ofs-text-3); }\n.ofs-gallery-tags em { font-style: normal; }\n\n.ofs-gallery-star {\n  position: absolute;\n  top: 8px;\n  right: 8px;\n  font-size: 12px;\n  line-height: 1;\n  filter: drop-shadow(0 1px 3px rgb(0 0 0 / 45%));\n}\n\n.ofs-gallery-check {\n  position: absolute;\n  top: 8px;\n  left: 8px;\n  width: 15px;\n  height: 15px;\n  border-radius: 5px;\n  border: 1.5px solid #fff;\n  background: rgb(0 0 0 / 30%);\n}\n\n.ofs-gallery-check.is-on { background: var(--ofs-brand); border-color: var(--ofs-brand); }\n\n.ofs-gallery-empty { margin: 0; }\n\n/* ── 通用小控件 ─────────────────────────────────────────────── */\n.ofs-chip {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  border: 1px solid var(--ofs-line);\n  border-radius: 999px;\n  background: var(--ofs-card);\n  color: var(--ofs-text-2);\n  font: inherit;\n  font-size: 11.5px;\n  padding: 5px 12px;\n  cursor: pointer;\n  white-space: nowrap;\n  text-decoration: none;\n  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;\n}\n\n.ofs-chip:hover:not(:disabled) { border-color: var(--ofs-line-strong); color: var(--ofs-text); }\n.ofs-chip.is-on { border-color: transparent; background: var(--ofs-brand-soft); color: var(--ofs-brand); font-weight: 550; }\n.ofs-chip.is-danger { border-color: color-mix(in oklab, var(--ofs-error) 40%, var(--ofs-line)); color: var(--ofs-error); }\n.ofs-chip:disabled { opacity: 0.42; cursor: default; }\n\n/* ── 错误与指引 ─────────────────────────────────────────────── */\n.ofs-error,\n.ofs-guidance {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  padding: 10px 14px;\n  border-radius: var(--ofs-radius);\n  font-size: 12px;\n}\n\n.ofs-error {\n  justify-content: space-between;\n  border: 1px solid color-mix(in oklab, var(--ofs-error) 35%, var(--ofs-line));\n  background: color-mix(in oklab, var(--ofs-error) 8%, var(--ofs-card));\n}\n\n.ofs-error button {\n  appearance: none;\n  border: 1px solid color-mix(in oklab, var(--ofs-error) 30%, var(--ofs-line));\n  border-radius: 999px;\n  background: var(--ofs-card);\n  color: var(--ofs-error);\n  font: inherit;\n  font-size: 11px;\n  padding: 4px 11px;\n  cursor: pointer;\n}\n\n.ofs-guidance {\n  align-items: flex-start;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 32%, var(--ofs-line));\n  background: color-mix(in oklab, var(--ofs-warn) 7%, var(--ofs-card));\n}\n\n.ofs-guidance-icon { font-size: 14px; line-height: 1.4; }\n\n.ofs-guidance-body { display: grid; gap: 8px; min-width: 0; }\n\n.ofs-guidance-title { margin: 0; font-size: 12.5px; line-height: 1.55; }\n\n.ofs-guidance-actions { display: flex; gap: 7px; flex-wrap: wrap; }\n\n/* ── Toast ──────────────────────────────────────────────────── */\n.ofs-toast {\n  position: fixed;\n  right: 26px;\n  bottom: 26px;\n  z-index: 80;\n  max-width: 340px;\n  padding: 10px 16px;\n  border: 1px solid var(--ofs-line);\n  border-radius: 999px;\n  background: var(--ofs-text);\n  color: var(--ofs-card);\n  font-size: 12.5px;\n  box-shadow: var(--ofs-shadow-pop);\n  animation: ofs-toast-in 180ms ease-out;\n}\n\n@keyframes ofs-toast-in {\n  from { opacity: 0; transform: translateY(6px); }\n  to { opacity: 1; transform: none; }\n}\n\n/* ── 窄屏 ───────────────────────────────────────────────────── */\n@media (max-width: 1040px) {\n  .ofs-body { grid-template-columns: 300px minmax(0, 1fr); }\n  .ofs-search { width: 140px; }\n}\n\n@media (max-width: 860px) {\n  .ofs-shell { padding: 6px 14px 0; }\n  .ofs-body { grid-template-columns: minmax(0, 1fr); }\n  .ofs-rail { max-height: 42vh; }\n  .ofs-filmstrip { margin: 10px 14px 14px; height: 116px; }\n  .ofs-thumb img { width: 72px; height: 72px; }\n}\n\n/* 灵感卡底部：次要折叠项与主按钮成组，避免卡片中间出现空洞 */\n.ofs-rail-foot {\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n  margin-top: auto;\n  padding-top: 12px;\n  border-top: 1px solid var(--ofs-line);\n}\n\n.ofs-rail-foot .ofs-generate { margin-top: 0; }\n\n\n/* ── 空状态卡片 ─────────────────────────────────────────────── */\n.ofs-figure--empty { justify-content: center; align-items: center; }\n\n.ofs-empty-card {\n  display: grid;\n  justify-items: center;\n  gap: 9px;\n  padding: 32px 28px;\n  text-align: center;\n  max-width: 680px;\n}\n\n.ofs-empty-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 600;\n  letter-spacing: -0.01em;\n  color: var(--ofs-text);\n}\n\n.ofs-empty-card .ofs-muted { font-size: 12px; }\n\n.ofs-examples {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: center;\n  gap: 7px;\n  margin-top: 6px;\n}\n\n.ofs-example {\n  appearance: none;\n  border: 1px dashed var(--ofs-line-strong);\n  border-radius: 999px;\n  background: transparent;\n  color: var(--ofs-text-2);\n  font: inherit;\n  font-size: 11.5px;\n  padding: 6px 13px;\n  cursor: pointer;\n  transition: border-color 140ms ease, color 140ms ease;\n}\n\n.ofs-example:hover { border-style: solid; border-color: var(--ofs-brand); color: var(--ofs-brand); }\n\n/* ── 胶卷流空态占位 ─────────────────────────────────────────── */\n.ofs-filmstrip-empty {\n  display: flex;\n  align-items: center;\n  gap: 14px;\n  min-width: 0;\n}\n\n.ofs-slots { display: flex; gap: 8px; }\n\n.ofs-slot {\n  display: block;\n  width: 84px;\n  height: 84px;\n  border-radius: var(--ofs-radius);\n  border: 1px dashed var(--ofs-line-strong);\n  background: linear-gradient(180deg, transparent, color-mix(in oklab, var(--ofs-sunken) 70%, transparent));\n  opacity: 0.75;\n}\n\n\n\n/* ══ 左侧创作面板（表单式） ══════════════════════════════════ */\n.ofs-rail-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding-bottom: 12px;\n  border-bottom: 1px solid var(--ofs-line);\n}\n\n.ofs-rail-head h2 {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 600;\n  letter-spacing: -0.01em;\n}\n\n.ofs-mode {\n  display: inline-flex;\n  gap: 2px;\n  padding: 2px;\n  border-radius: 999px;\n  background: var(--ofs-sunken);\n  border: 1px solid var(--ofs-line);\n}\n\n.ofs-mode button {\n  appearance: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-text-2);\n  font: inherit;\n  font-size: 11.5px;\n  padding: 4px 12px;\n  border-radius: 999px;\n  cursor: pointer;\n}\n\n.ofs-mode button.is-on {\n  background: var(--ofs-card);\n  color: var(--ofs-text);\n  font-weight: 550;\n  box-shadow: 0 1px 3px rgb(16 24 40 / 12%);\n}\n\n.ofs-rail-scroll {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overflow-x: hidden;\n  display: flex;\n  flex-direction: column;\n  gap: 20px;\n  padding: 4px 2px 8px;\n  margin-right: -4px;\n}\n\n.ofs-fieldset { display: flex; flex-direction: column; gap: 10px; }\n\n.ofs-fieldset-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-fieldset-head h3 {\n  margin: 0;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  font-size: 13px;\n  font-weight: 600;\n  letter-spacing: -0.005em;\n  color: var(--ofs-text);\n}\n\n.ofs-num {\n  font-size: 11px;\n  font-weight: 600;\n  color: var(--ofs-text-3);\n  letter-spacing: 0.04em;\n}\n\n.ofs-text-action {\n  appearance: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-text-2);\n  font: inherit;\n  font-size: 11.5px;\n  padding: 2px 0;\n  cursor: pointer;\n}\n\n.ofs-text-action:hover:not(:disabled) { color: var(--ofs-brand); }\n.ofs-text-action:disabled { opacity: 0.5; cursor: default; }\n\n.ofs-composer {\n  border: 1px solid var(--ofs-line);\n  border-radius: var(--ofs-radius);\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;\n}\n\n.ofs-composer:focus-within {\n  border-color: var(--ofs-brand);\n  background: var(--ofs-card);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-brand) 16%, transparent);\n}\n\n.ofs-composer-input {\n  box-sizing: border-box;\n  display: block;\n  width: 100%;\n  min-height: 132px;\n  resize: vertical;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-text);\n  font: inherit;\n  font-size: 13px;\n  line-height: 1.65;\n  padding: 12px 13px 6px;\n}\n\n.ofs-composer-input:focus { outline: none; }\n.ofs-composer-input::placeholder { color: var(--ofs-text-3); }\n\n.ofs-composer-foot {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 6px 11px 8px;\n}\n\n.ofs-counter { font-size: 10.5px; color: var(--ofs-text-3); font-variant-numeric: tabular-nums; }\n\n.ofs-suggestions { display: flex; flex-wrap: wrap; gap: 6px; }\n\n.ofs-suggestion {\n  appearance: none;\n  max-width: 100%;\n  border: 1px solid var(--ofs-line);\n  border-radius: 999px;\n  background: var(--ofs-card);\n  color: var(--ofs-text-2);\n  font: inherit;\n  font-size: 11px;\n  padding: 5px 11px;\n  cursor: pointer;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  transition: border-color 140ms ease, color 140ms ease;\n}\n\n.ofs-suggestion:hover { border-color: var(--ofs-brand); color: var(--ofs-brand); }\n\n/* 风格tile */\n.ofs-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }\n\n.ofs-tile {\n  appearance: none;\n  display: grid;\n  justify-items: center;\n  gap: 5px;\n  padding: 10px 4px;\n  border: 1px solid var(--ofs-line);\n  border-radius: var(--ofs-radius);\n  background: var(--ofs-card);\n  color: var(--ofs-text-2);\n  font: inherit;\n  cursor: pointer;\n  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;\n}\n\n.ofs-tile:hover { border-color: var(--ofs-line-strong); color: var(--ofs-text); }\n\n.ofs-tile.is-on {\n  border-color: var(--ofs-brand);\n  background: var(--ofs-brand-soft);\n  color: var(--ofs-brand);\n}\n\n.ofs-tile-icon { font-size: 15px; line-height: 1; }\n.ofs-tile-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }\n.ofs-tile-label { font-size: 11.5px; }\n\n/* 比例 */\n.ofs-ratio-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }\n\n.ofs-ratio {\n  appearance: none;\n  display: grid;\n  justify-items: center;\n  gap: 7px;\n  padding: 12px 6px;\n  border: 1px solid var(--ofs-line);\n  border-radius: var(--ofs-radius);\n  background: var(--ofs-card);\n  color: var(--ofs-text-2);\n  font: inherit;\n  cursor: pointer;\n  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;\n}\n\n.ofs-ratio.is-on { border-color: var(--ofs-brand); background: var(--ofs-brand-soft); color: var(--ofs-brand); }\n.ofs-ratio-label { font-size: 11px; }\n\n/* 高级设置行 */\n.ofs-rows {\n  display: flex;\n  flex-direction: column;\n  border: 1px solid var(--ofs-line);\n  border-radius: var(--ofs-radius);\n  background: var(--ofs-card);\n  overflow: hidden;\n}\n\n.ofs-row + .ofs-row { border-top: 1px solid var(--ofs-line); }\n\n.ofs-row-head {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-text-2);\n  font: inherit;\n  font-size: 12px;\n  padding: 11px 12px;\n  cursor: pointer;\n  text-align: left;\n}\n\n.ofs-row-head:hover { background: var(--ofs-sunken); color: var(--ofs-text); }\n.ofs-chevron { color: var(--ofs-text-3); font-size: 11px; }\n\n.ofs-row-textarea {\n  box-sizing: border-box;\n  width: 100%;\n  resize: vertical;\n  border: 1px solid var(--ofs-line);\n  border-radius: 9px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-text);\n  font: inherit;\n  font-size: 12px;\n  line-height: 1.6;\n  padding: 8px 10px;\n  margin: 0 12px 12px;\n  width: calc(100% - 24px);\n}\n\n.ofs-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; padding: 0 12px 12px; }\n\n.ofs-rail-bottom {\n  padding-top: 12px;\n  border-top: 1px solid var(--ofs-line);\n  display: grid;\n  gap: 6px;\n}\n\n.ofs-rail-bottom .ofs-generate { margin-top: 0; }\n\n/* ══ 对话式面板 ══════════════════════════════════════════════ */\n.ofs-thread {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  padding: 2px 2px 6px;\n}\n\n.ofs-thread-empty { display: grid; gap: 10px; color: var(--ofs-text-2); font-size: 12px; }\n.ofs-thread-empty p { margin: 0; }\n\n.ofs-msg { display: flex; flex-direction: column; gap: 6px; max-width: 100%; }\n\n.ofs-msg p { margin: 0; font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }\n\n.ofs-msg--user {\n  align-self: flex-end;\n  max-width: 92%;\n  padding: 9px 13px;\n  border-radius: 14px 14px 4px 14px;\n  background: var(--ofs-brand);\n  color: #fff;\n}\n\n.ofs-msg--user p { color: inherit; }\n\n.ofs-msg--assistant {\n  align-self: flex-start;\n  max-width: 96%;\n  padding: 10px 13px;\n  border: 1px solid var(--ofs-line);\n  border-radius: 14px 14px 14px 4px;\n  background: var(--ofs-sunken);\n}\n\n.ofs-msg-head {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 10.5px;\n  color: var(--ofs-text-3);\n}\n\n.ofs-msg-avatar { color: var(--ofs-brand); }\n\n.ofs-msg-thumb {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  margin-top: 2px;\n  padding: 4px;\n  border: 1px solid var(--ofs-line);\n  border-radius: 10px;\n  background: var(--ofs-card);\n  color: var(--ofs-text-2);\n  font: inherit;\n  font-size: 10.5px;\n  cursor: pointer;\n  text-align: left;\n}\n\n.ofs-msg-thumb img { width: 52px; height: 52px; object-fit: cover; border-radius: 7px; display: block; }\n\n.ofs-thread-suggestions { display: flex; gap: 6px; flex-wrap: wrap; }\n\n.ofs-quick { display: flex; gap: 6px; flex-wrap: wrap; }\n\n.ofs-chat-composer {\n  display: flex;\n  align-items: flex-end;\n  gap: 8px;\n  padding: 8px;\n  border: 1px solid var(--ofs-line);\n  border-radius: var(--ofs-radius);\n  background: var(--ofs-sunken);\n}\n\n.ofs-chat-composer:focus-within {\n  border-color: var(--ofs-brand);\n  background: var(--ofs-card);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-brand) 16%, transparent);\n}\n\n.ofs-chat-composer textarea {\n  flex: 1 1 auto;\n  min-width: 0;\n  resize: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-text);\n  font: inherit;\n  font-size: 12.5px;\n  line-height: 1.55;\n  padding: 4px 2px;\n}\n\n.ofs-chat-composer textarea:focus { outline: none; }\n.ofs-chat-composer textarea::placeholder { color: var(--ofs-text-3); }\n\n.ofs-chat-send {\n  appearance: none;\n  flex: 0 0 auto;\n  width: 32px;\n  height: 32px;\n  border: 0;\n  border-radius: 50%;\n  background: var(--ofs-text);\n  color: var(--ofs-card);\n  font-size: 15px;\n  line-height: 1;\n  cursor: pointer;\n}\n\n.ofs-chat-send:disabled { opacity: 0.35; cursor: default; }\n\n/* ══ 暗色兜底（宿主变量缺失时生效；DSH 提供变量时以宿主为准） ══ */\n@media (prefers-color-scheme: dark) {\n  .ofs-root {\n    --ofs-card: var(--dsw-alias-bg-layer-1, #1b1e26);\n    --ofs-sunken: var(--dsw-alias-bg-layer-2, #22262f);\n    --ofs-line: var(--dsw-alias-border-l1, #313643);\n    --ofs-line-strong: color-mix(in oklab, var(--ofs-line) 78%, #fff 22%);\n    --ofs-text: var(--dsw-alias-label-primary, #e9ecf2);\n    --ofs-text-2: var(--dsw-alias-label-secondary, #a2a9ba);\n    --ofs-text-3: color-mix(in oklab, var(--ofs-text-2) 68%, transparent);\n    background:\n      radial-gradient(900px 420px at 4% -8%, rgb(99 102 241 / 16%), transparent 62%),\n      radial-gradient(760px 400px at 102% -4%, rgb(14 165 233 / 12%), transparent 58%),\n      var(--dsw-alias-bg-canvas, #14161c);\n    --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 30%), 0 14px 32px -20px rgb(0 0 0 / 60%);\n    --ofs-shadow-pop: 0 20px 50px -18px rgb(0 0 0 / 70%);\n  }\n\n  .ofs-msg--user { background: color-mix(in oklab, var(--ofs-brand) 72%, #000 28%); }\n  .ofs-tabs button.is-on,\n  .ofs-mode button.is-on { box-shadow: 0 1px 3px rgb(0 0 0 / 45%); }\n  .ofs-meta { background: rgb(8 10 14 / 66%); }\n}\n\n/* ══ 响应式 ══════════════════════════════════════════════════ */\n@media (max-width: 1180px) {\n  .ofs-body { grid-template-columns: 320px minmax(0, 1fr); }\n}\n\n@media (max-width: 980px) {\n  .ofs-shell { padding: 6px 14px 0; }\n  .ofs-body {\n    grid-template-columns: minmax(0, 1fr);\n    grid-template-rows: minmax(0, auto) minmax(0, 1fr);\n    gap: 12px;\n  }\n  .ofs-rail { max-height: 44vh; }\n  .ofs-rail-scroll { gap: 16px; }\n  .ofs-filmstrip { margin: 10px 14px 14px; height: 112px; }\n  .ofs-thumb img { width: 76px; height: 76px; }\n  .ofs-topbar { padding: 12px 14px 4px; gap: 8px; }\n  .ofs-preset span:first-child { display: none; }\n}\n\n@media (max-width: 720px) {\n  .ofs-tiles { grid-template-columns: 1fr 1fr; }\n  .ofs-preset select { max-width: 150px; }\n  .ofs-tabs button { padding: 5px 12px; }\n}\n\n/* 面板滚动可见性：细滚动条 + 底部渐隐，提示还有内容 */\n.ofs-rail { position: relative; }\n.ofs-rail-scroll { scrollbar-width: thin; scrollbar-color: var(--ofs-line-strong) transparent; }\n.ofs-rail-scroll::-webkit-scrollbar { width: 6px; }\n.ofs-rail-scroll::-webkit-scrollbar-thumb { background: var(--ofs-line-strong); border-radius: 3px; }\n.ofs-rail-scroll::-webkit-scrollbar-track { background: transparent; }\n.ofs-rail::after {\n  content: '';\n  position: absolute;\n  left: 1px;\n  right: 1px;\n  bottom: 78px;\n  height: 22px;\n  pointer-events: none;\n  background: linear-gradient(to bottom, transparent, var(--ofs-card));\n  border-radius: 0 0 var(--ofs-radius-lg) var(--ofs-radius-lg);\n}\n.ofs-composer-input { min-height: 118px; }\r\n\n/* 对话面板空态：整块居中，建议项占满宽度便于阅读 */\n.ofs-thread.is-empty { justify-content: center; }\n.ofs-thread-empty { text-align: left; }\n.ofs-thread-empty .ofs-suggestion {\n  display: block;\n  width: 100%;\n  border-radius: 10px;\n  padding: 9px 12px;\n  white-space: normal;\n  line-height: 1.5;\n  text-align: left;\n}\n.ofs-quick { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }\n.ofs-quick::-webkit-scrollbar { display: none; }\n.ofs-quick .ofs-chip { flex: 0 0 auto; }\r\n";
+// src/styles/tokens.css
+var tokens_default = '/*\n * 设计变量：黑白灰工作室。\n *\n * 视觉立场：一间明度分层的工作室，而不是一块彩色 AI 画布。\n *  1. 地面是中性灰的柔光渐变，上面浮近白的实心卡片；不用彩色光晕，不用玻璃彩虹。\n *  2. 只有明度关系：墨黑做主操作与选中，灰阶做层级，语义色（成功/警告/错误）\n *     只以小圆点或窄条出现，不参与大面积装饰。\n *  3. 深色是同一套明度关系反相：深灰底、浅灰字、浅色主操作。\n *\n * 预览工具（tools/preview.mjs）用同一组值注入深色，改这里要同步那边。\n */\n\n.ofs-root {\n  /* 地面：三层中性柔光 + 一层底色 */\n  --ofs-ground-1: #e7e8ea;\n  --ofs-ground-2: #f1f1f2;\n  --ofs-ground-3: #e3e4e6;\n  --ofs-ground-base: #f5f5f6;\n\n  /* 表面 */\n  --ofs-window: rgb(255 255 255 / 86%);\n  --ofs-window-border: rgb(18 18 22 / 8%);\n  --ofs-card: #ffffff;\n  --ofs-card-solid: #ffffff;\n  --ofs-card-border: rgb(18 18 22 / 9%);\n  --ofs-hairline: rgb(18 18 22 / 7%);\n  --ofs-sunken: #f4f4f6;\n  --ofs-sunken-border: rgb(18 18 22 / 8%);\n\n  /* 文字 */\n  --ofs-ink: #141416;\n  --ofs-ink-2: #52525a;\n  --ofs-ink-3: #6b6b73;\n  --ofs-ink-4: #a8a8b0;\n\n  /* 主操作：墨黑 */\n  --ofs-accent: #141416;\n  --ofs-accent-2: #3f3f46;\n  --ofs-accent-ink: #ffffff;\n  --ofs-accent-soft: #f0f0f2;\n  --ofs-accent-soft-border: #dedee3;\n  --ofs-accent-grad: linear-gradient(180deg, #2b2b30 0%, #141416 100%);\n\n  /* 状态：只做小面积语义色 */\n  --ofs-ok: #2f8a5c;\n  --ofs-ok-soft: #eaf5ef;\n  --ofs-warn: #a96a18;\n  --ofs-warn-soft: #f7f0e4;\n  --ofs-error: #c04444;\n  --ofs-error-soft: #f9ecec;\n  --ofs-idle: #a0a0a8;\n  --ofs-idle-soft: #f1f1f3;\n\n  /* 几何 */\n  --ofs-r-xl: 24px;\n  --ofs-r-lg: 18px;\n  --ofs-r-md: 14px;\n  --ofs-r-sm: 10px;\n  --ofs-r-pill: 999px;\n  --ofs-blur: 18px;\n\n  /* 投影：始终带偏移与柔和扩散，不用零偏移光晕 */\n  --ofs-shadow-card: 0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%);\n  --ofs-shadow-lift: 0 2px 6px rgb(16 16 20 / 6%), 0 18px 40px -20px rgb(16 16 20 / 26%);\n  --ofs-shadow-window: 0 1px 3px rgb(16 16 20 / 5%), 0 36px 80px -48px rgb(16 16 20 / 32%);\n  --ofs-shadow-accent: 0 8px 18px -10px rgb(16 16 20 / 48%);\n  --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(20 20 22 / 45%);\n\n  --ofs-font: -apple-system, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;\n\n  /* 留白节奏 */\n  --ofs-pad: 18px;\n  --ofs-gap: 14px;\n\n  display: flex;\n  flex-direction: column;\n  height: 100%;\n  min-height: 0;\n  padding: 18px;\n  color: var(--ofs-ink);\n  font-family: var(--ofs-font);\n  font-size: 13px;\n  line-height: 1.55;\n  -webkit-font-smoothing: antialiased;\n  background:\n    radial-gradient(1100px 620px at 12% -8%, var(--ofs-ground-1) 0%, transparent 62%),\n    radial-gradient(900px 520px at 88% 4%, var(--ofs-ground-2) 0%, transparent 58%),\n    radial-gradient(780px 540px at 62% 108%, var(--ofs-ground-3) 0%, transparent 62%),\n    linear-gradient(160deg, var(--ofs-ground-base) 0%, var(--ofs-ground-base) 100%);\n}\n\n@media (prefers-color-scheme: dark) {\n  .ofs-root {\n    --ofs-ground-1: #232326;\n    --ofs-ground-2: #17171a;\n    --ofs-ground-3: #26262a;\n    --ofs-ground-base: #101012;\n\n    --ofs-window: rgb(24 24 27 / 88%);\n    --ofs-window-border: rgb(255 255 255 / 9%);\n    --ofs-card: #18181b;\n    --ofs-card-solid: #1c1c20;\n    --ofs-card-border: rgb(255 255 255 / 9%);\n    --ofs-hairline: rgb(255 255 255 / 8%);\n    --ofs-sunken: rgb(255 255 255 / 5%);\n    --ofs-sunken-border: rgb(255 255 255 / 9%);\n\n    --ofs-ink: #f2f2f4;\n    --ofs-ink-2: #a4a4ac;\n    --ofs-ink-3: #8d8d95;\n    --ofs-ink-4: #5c5c63;\n\n    --ofs-accent: #f2f2f4;\n    --ofs-accent-2: #c8c8cf;\n    --ofs-accent-ink: #161618;\n    --ofs-accent-soft: rgb(255 255 255 / 8%);\n    --ofs-accent-soft-border: rgb(255 255 255 / 14%);\n    --ofs-accent-grad: linear-gradient(180deg, #fafafa 0%, #dcdce1 100%);\n\n    --ofs-ok: #58c08a;\n    --ofs-ok-soft: rgb(88 192 138 / 14%);\n    --ofs-warn: #d8a55c;\n    --ofs-warn-soft: rgb(216 165 92 / 14%);\n    --ofs-error: #e07a7a;\n    --ofs-error-soft: rgb(224 122 122 / 14%);\n    --ofs-idle: #8a8a92;\n    --ofs-idle-soft: rgb(255 255 255 / 6%);\n\n    --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 28px -18px rgb(0 0 0 / 70%);\n    --ofs-shadow-lift: 0 2px 6px rgb(0 0 0 / 44%), 0 20px 44px -22px rgb(0 0 0 / 76%);\n    --ofs-shadow-window: 0 1px 3px rgb(0 0 0 / 40%), 0 40px 88px -48px rgb(0 0 0 / 88%);\n    --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);\n    --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(255 255 255 / 40%);\n  }\n}';
+
+// src/styles/base.css
+var base_default = "/*\n * 基础件：浏览器表面、通用原语（按钮 / 胶囊 / 图标钮 / 输入 / 分段控件）。\n *\n * 所有组件只从这里取原语，不在各自文件里重造按钮。类名都以 .ofs- 开头，\n * 避免污染宿主页面。\n */\n\n.ofs-root *,\n.ofs-root *::before,\n.ofs-root *::after {\n  box-sizing: border-box;\n}\n\n.ofs-root ::selection {\n  background: color-mix(in oklab, var(--ofs-ink) 16%, transparent);\n  color: var(--ofs-ink);\n}\n\n.ofs-root :focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-root :focus:not(:focus-visible) {\n  outline: none;\n}\n\n.ofs-root input,\n.ofs-root textarea,\n.ofs-root select {\n  font: inherit;\n  color: inherit;\n  caret-color: var(--ofs-accent);\n}\n\n.ofs-root button {\n  font: inherit;\n}\n\n.ofs-root img {\n  display: block;\n}\n\n.ofs-root h2,\n.ofs-root h3,\n.ofs-root h4,\n.ofs-root p {\n  margin: 0;\n}\n\n.ofs-root a {\n  color: var(--ofs-accent);\n  text-decoration-thickness: 1px;\n  text-underline-offset: 3px;\n}\n\n.ofs-icon {\n  display: block;\n  flex: 0 0 auto;\n}\n\n.ofs-grow {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ofs-muted {\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n}\n\n/* 滚动条：属于同一个世界，不做默认灰条 */\n.ofs-scroll,\n.ofs-panel-scroll,\n.ofs-thread,\n.ofs-gallery,\n.ofs-roll {\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-scroll::-webkit-scrollbar,\n.ofs-panel-scroll::-webkit-scrollbar,\n.ofs-thread::-webkit-scrollbar,\n.ofs-gallery::-webkit-scrollbar,\n.ofs-roll::-webkit-scrollbar {\n  width: 8px;\n  height: 8px;\n}\n\n.ofs-scroll::-webkit-scrollbar-thumb,\n.ofs-panel-scroll::-webkit-scrollbar-thumb,\n.ofs-thread::-webkit-scrollbar-thumb,\n.ofs-gallery::-webkit-scrollbar-thumb,\n.ofs-roll::-webkit-scrollbar-thumb {\n  border: 2px solid transparent;\n  border-radius: 8px;\n  background: var(--ofs-ink-4);\n  background-clip: content-box;\n}\n\n.ofs-scroll::-webkit-scrollbar-thumb:hover,\n.ofs-panel-scroll::-webkit-scrollbar-thumb:hover,\n.ofs-thread::-webkit-scrollbar-thumb:hover,\n.ofs-gallery::-webkit-scrollbar-thumb:hover,\n.ofs-roll::-webkit-scrollbar-thumb:hover {\n  background: var(--ofs-ink-3);\n  background-clip: content-box;\n}\n\n/* ── 按钮 ───────────────────────────────────────────────────── */\n.ofs-btn {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  height: 38px;\n  padding: 0 18px;\n  border: 1px solid transparent;\n  border-radius: 12px;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  font-weight: 600;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 160ms ease,\n    background-color 160ms ease,\n    border-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-btn:disabled {\n  cursor: default;\n}\n\n.ofs-btn.is-primary {\n  color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n.ofs-btn.is-primary:hover:not(:disabled) {\n  transform: translateY(-1px);\n  box-shadow: 0 14px 28px -12px rgb(16 16 20 / 50%);\n}\n\n.ofs-btn.is-primary:active:not(:disabled) {\n  transform: translateY(0) scale(0.99);\n}\n\n.ofs-btn.is-primary:disabled {\n  background: var(--ofs-accent-grad);\n  border-color: transparent;\n  color: color-mix(in oklab, #fff 82%, transparent);\n  box-shadow: none;\n  opacity: 0.36;\n  filter: saturate(0.6);\n}\n\n.ofs-btn.is-quiet {\n  background: var(--ofs-card);\n  border-color: var(--ofs-card-border);\n  color: var(--ofs-ink);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n.ofs-btn.is-quiet:hover:not(:disabled) {\n  background: var(--ofs-card-solid);\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-accent);\n}\n\n.ofs-btn.is-quiet:disabled {\n  color: var(--ofs-ink-4);\n  box-shadow: none;\n}\n\n.ofs-btn.is-ghost {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-btn.is-ghost:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-ink);\n}\n\n.ofs-btn--sm {\n  height: 30px;\n  padding: 0 12px;\n  border-radius: 10px;\n  font-size: 12px;\n  gap: 6px;\n}\n\n/* ── 图标按钮 ───────────────────────────────────────────────── */\n.ofs-icon-btn {\n  appearance: none;\n  display: inline-grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid transparent;\n  border-radius: 10px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    color 150ms ease,\n    border-color 150ms ease,\n    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-icon-btn:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-icon-btn:active:not(:disabled) {\n  transform: scale(0.96);\n}\n\n.ofs-icon-btn:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n.ofs-icon-btn.is-on {\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-accent);\n}\n\n/* ── 胶囊 / 标签 ────────────────────────────────────────────── */\n.ofs-chip {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 28px;\n  padding: 0 12px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-chip:hover:not(:disabled) {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-chip.is-on {\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-accent);\n}\n\n.ofs-chip.is-danger {\n  color: var(--ofs-error);\n  border-color: transparent;\n  background: var(--ofs-error-soft);\n}\n\n.ofs-chip.is-danger:hover:not(:disabled) {\n  color: var(--ofs-error);\n  border-color: var(--ofs-error);\n}\n\n.ofs-chip:disabled {\n  color: var(--ofs-ink-4);\n  background: transparent;\n  border-color: var(--ofs-sunken-border);\n  cursor: default;\n}\n\n.ofs-tag {\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  height: 22px;\n  padding: 0 8px;\n  border-radius: 6px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 500;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n/* ── 分段控件 ───────────────────────────────────────────────── */\n.ofs-seg {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  border: 1px solid var(--ofs-sunken-border);\n}\n\n.ofs-seg button {\n  appearance: none;\n  height: 26px;\n  padding: 0 12px;\n  border: 0;\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 500;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-seg button:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-seg button.is-on {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n  font-weight: 600;\n  box-shadow: 0 1px 2px rgb(16 16 20 / 8%);\n}\n\n/* ── 输入 ───────────────────────────────────────────────────── */\n.ofs-input {\n  width: 100%;\n  height: 34px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-sm);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 13px;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-input:focus-visible {\n  background: var(--ofs-card-solid);\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-input--search {\n  padding-left: 32px;\n  border-radius: var(--ofs-r-pill);\n}\n\n/* ── 状态点 ─────────────────────────────────────────────────── */\n.ofs-dot {\n  display: inline-block;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--ofs-idle);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-idle) 22%, transparent);\n}\n\n.ofs-dot.is-ok { background: var(--ofs-ok); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-ok) 20%, transparent); }\n.ofs-dot.is-warn { background: var(--ofs-warn); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-warn) 22%, transparent); }\n.ofs-dot.is-error { background: var(--ofs-error); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-error) 20%, transparent); }\n.ofs-dot.is-idle { background: var(--ofs-idle); }\n.ofs-dot.is-live { animation: ofs-pulse 2.4s ease-out infinite; }\n\n/* ── 动效 ───────────────────────────────────────────────────── */\n@keyframes ofs-pulse {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok) 34%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-ok) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok) 0%, transparent); }\n}\n\n@keyframes ofs-shimmer {\n  0% { background-position: -220% 0; }\n  100% { background-position: 220% 0; }\n}\n\n@keyframes ofs-fade-in {\n  from { opacity: 0; transform: translateY(4px); }\n  to { opacity: 1; transform: translateY(0); }\n}\n\n@keyframes ofs-pop-in {\n  from { opacity: 0; transform: translateY(6px) scale(0.985); }\n  to { opacity: 1; transform: translateY(0) scale(1); }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-root *,\n  .ofs-root *::before,\n  .ofs-root *::after {\n    animation-duration: 1ms !important;\n    animation-iteration-count: 1 !important;\n    transition-duration: 1ms !important;\n  }\n}";
+
+// src/styles/shell.css
+var shell_default = "/*\n * 外壳：整页容器、顶栏、图标栏、布局骨架、异常指引与 Toast。\n *\n * 页面是一张浮在柔光地面上的雾面玻璃大卡：\n *   .ofs-root = 柔光底，.ofs-app = 玻璃大卡，内部再分顶栏 / 主体 / 胶片坞。\n */\n\n.ofs-app {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-xl);\n  background: var(--ofs-window);\n  box-shadow: var(--ofs-shadow-window);\n  backdrop-filter: blur(24px) saturate(140%);\n  -webkit-backdrop-filter: blur(24px) saturate(140%);\n  overflow: hidden;\n}\n\n/* ── 顶栏 ───────────────────────────────────────────────────── */\n.ofs-topbar {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 14px;\n  height: 58px;\n  padding: 0 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-brand {\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  min-width: 0;\n}\n\n.ofs-brand-mark {\n  display: grid;\n  place-items: center;\n  width: 30px;\n  height: 30px;\n  border-radius: 9px;\n  color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n.ofs-brand-name {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-brand-sub {\n  padding-left: 2px;\n  font-size: 10px;\n  font-weight: 550;\n  letter-spacing: 0.14em;\n  text-transform: uppercase;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-tabs {\n  display: flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  margin-left: 4px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n}\n\n.ofs-tab {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 28px;\n  padding: 0 12px;\n  border: 0;\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-tab:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-tab.is-on {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n  font-weight: 600;\n  box-shadow: 0 1px 2px rgb(16 16 20 / 8%);\n}\n\n/* 云端算力胶囊 */\n.ofs-pill-wrap {\n  position: relative;\n  flex: 0 0 auto;\n}\n\n.ofs-compute {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    color 160ms ease,\n    background-color 160ms ease;\n}\n\n.ofs-compute:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-compute em {\n  font-style: normal;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-pill-caret {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-popover {\n  position: absolute;\n  top: calc(100% + 8px);\n  right: 0;\n  z-index: 40;\n  width: 248px;\n  padding: 6px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  animation: ofs-pop-in 160ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-popover-head {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  padding: 8px 10px 10px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-popover-head > span {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-popover-head > span b {\n  font-size: 12.5px;\n  font-weight: 650;\n  color: var(--ofs-ink);\n}\n\n.ofs-popover-row {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  width: 100%;\n  height: 32px;\n  padding: 0 10px;\n  border: 0;\n  border-radius: 9px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-popover-row:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-popover-row:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* 模型预设 */\n.ofs-preset {\n  position: relative;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 10px 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  box-shadow: var(--ofs-shadow-card);\n  cursor: pointer;\n}\n\n.ofs-preset-label {\n  font-size: 11.5px;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-preset:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-preset select {\n  appearance: none;\n  max-width: 168px;\n  padding: 0 18px 0 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  font-weight: 600;\n  cursor: pointer;\n  text-overflow: ellipsis;\n}\n\n.ofs-preset select:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-preset select option {\n  color: var(--ofs-ink);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-preset-meta {\n  padding-left: 8px;\n  border-left: 1px solid var(--ofs-hairline);\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-preset-caret {\n  position: absolute;\n  right: 10px;\n  color: var(--ofs-ink-3);\n  pointer-events: none;\n}\n\n/* ── 骨架 ───────────────────────────────────────────────────── */\n.ofs-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: grid;\n  grid-template-columns: 72px minmax(300px, 360px) minmax(0, 1fr);\n  grid-template-rows: minmax(0, 1fr);\n}\n\n.ofs-body.is-gallery {\n  grid-template-columns: 72px minmax(0, 1fr);\n}\n\n/* 左图标栏 */\n.ofs-rail {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  min-height: 0;\n  padding: 12px 0 14px;\n  border-right: 1px solid var(--ofs-hairline);\n  background: color-mix(in oklab, var(--ofs-card) 46%, transparent);\n}\n\n.ofs-rail-group {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 4px;\n  width: 100%;\n}\n\n.ofs-rail-btn {\n  appearance: none;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 3px;\n  width: 52px;\n  padding: 7px 0 5px;\n  border: 0;\n  border-radius: 13px;\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 10px;\n  font-weight: 500;\n  letter-spacing: 0.02em;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-rail-btn:hover {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-rail-btn.is-on {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: inset 0 0 0 1px var(--ofs-accent-soft-border);\n}\n\n.ofs-rail-btn span {\n  line-height: 1.1;\n}\n\n.ofs-rail-divider {\n  width: 22px;\n  height: 1px;\n  margin: 5px 0;\n  background: var(--ofs-hairline);\n}\n\n.ofs-rail-status {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 6px;\n  font-size: 10px;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-main {\n  position: relative;\n  min-width: 0;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  margin: 14px;\n}\n\n/* ── 异常指引 ───────────────────────────────────────────────── */\n.ofs-guidance,\n.ofs-error {\n  display: flex;\n  align-items: flex-start;\n  gap: 10px;\n  margin: 12px 16px 0;\n  padding: 10px 12px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n  border-radius: 14px;\n  background: var(--ofs-warn-soft);\n  animation: ofs-fade-in 220ms ease;\n}\n\n.ofs-guidance-icon {\n  display: grid;\n  place-items: center;\n  flex: 0 0 auto;\n  width: 28px;\n  height: 28px;\n  border-radius: 9px;\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  color: var(--ofs-warn);\n}\n\n.ofs-guidance-body {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  min-width: 0;\n}\n\n.ofs-guidance-title {\n  font-size: 12.5px;\n  color: var(--ofs-ink);\n}\n\n.ofs-guidance-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-guidance-actions .ofs-chip.is-on {\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);\n  color: var(--ofs-warn);\n  text-decoration: none;\n}\n\n/* ── Toast ──────────────────────────────────────────────────── */\n.ofs-toast {\n  position: absolute;\n  left: 50%;\n  bottom: 132px;\n  z-index: 60;\n  transform: translateX(-50%);\n  max-width: 78%;\n  padding: 9px 16px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 88%, transparent);\n  box-shadow: var(--ofs-shadow-lift);\n  backdrop-filter: blur(14px);\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  animation: ofs-pop-in 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}";
+
+// src/styles/panel.css
+var panel_default = "/*\n * 左侧创作面板（表单 / 对话两种形态共用的卡片容器与表单控件）。\n */\n\n.ofs-panel,\n.ofs-rail--chat {\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n  min-width: 0;\n  margin: 14px 0 14px 14px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  overflow: hidden;\n}\n\n.ofs-panel-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 15px 15px 11px;\n}\n\n.ofs-panel-head h2 {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-panel-scroll {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 0 15px 14px;\n  display: flex;\n  flex-direction: column;\n  gap: 0;\n  scroll-behavior: smooth;\n}\n\n/* ── 分区 ───────────────────────────────────────────────────── */\n.ofs-fieldset {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 10px 0;\n}\n\n.ofs-fieldset:first-child {\n  padding-top: 2px;\n}\n\n.ofs-fieldset + .ofs-fieldset {\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-fieldset-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-fieldset-head h3 {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n/* ── 提示词输入 ─────────────────────────────────────────────── */\n.ofs-composer {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  padding: 10px 10px 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-sunken) 100%);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: 0 0 0 3px rgb(20 20 22 / 10%);\n}\n\n.ofs-composer-input {\n  width: 100%;\n  min-height: 66px;\n  resize: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  line-height: 1.62;\n}\n\n.ofs-composer-input:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-composer-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-composer-foot {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-counter {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-text-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  padding: 3px 7px;\n  border: 0;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transition: background-color 150ms ease;\n}\n\n.ofs-text-action:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-text-action:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* ── 建议 chips ─────────────────────────────────────────────── */\n.ofs-suggestions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-suggestion {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  max-width: 100%;\n  height: 24px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 10.5px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-suggestion:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 风格 tile ──────────────────────────────────────────────── */\n.ofs-tiles {\n  display: flex;\n  gap: 8px;\n}\n\n.ofs-tile {\n  appearance: none;\n  flex: 1 1 0;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  cursor: pointer;\n}\n\n.ofs-tile-art {\n  position: relative;\n  display: grid;\n  place-items: center;\n  width: 100%;\n  aspect-ratio: 1 / 1;\n  border-radius: var(--ofs-r-md);\n  border: 1px solid rgb(255 255 255 / 40%);\n  box-shadow:\n    inset 0 1px 0 rgb(255 255 255 / 40%),\n    0 8px 18px -12px rgb(16 16 20 / 22%);\n  color: rgb(255 255 255 / 94%);\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease;\n}\n\n.ofs-tile-art::after {\n  content: '';\n  position: absolute;\n  inset: 0;\n  border-radius: inherit;\n  background: linear-gradient(180deg, rgb(255 255 255 / 18%) 0%, transparent 42%, rgb(16 16 18 / 16%) 100%);\n}\n\n.ofs-tile-art .ofs-icon {\n  position: relative;\n  z-index: 1;\n  filter: drop-shadow(0 1px 2px rgb(16 16 18 / 35%));\n}\n\n.ofs-tile-art.is-film { background: linear-gradient(150deg, #5c5c64 0%, #2f2f34 52%, #19191c 100%); }\n.ofs-tile-art.is-concept { background: linear-gradient(150deg, #dcdce1 0%, #a6a6ae 52%, #7d7d86 100%); }\n.ofs-tile-art.is-cyberpunk { background: linear-gradient(150deg, #34343a 0%, #62626b 50%, #1d1d21 100%); }\n.ofs-tile-art.is-ink { background: linear-gradient(150deg, #f4f4f6 0%, #d3d3d9 52%, #a9a9b2 100%); }\n.ofs-tile-art.is-clay { background: linear-gradient(150deg, #ececef 0%, #c6c6cd 50%, #9d9da6 100%); }\n\n.ofs-tile-art.is-concept,\n.ofs-tile-art.is-ink,\n.ofs-tile-art.is-clay {\n  color: rgb(20 20 22 / 58%);\n}\n\n.ofs-tile:hover .ofs-tile-art {\n  transform: translateY(-1px);\n  box-shadow:\n    inset 0 1px 0 rgb(255 255 255 / 40%),\n    0 12px 22px -12px rgb(16 16 20 / 26%);\n}\n\n.ofs-tile-label {\n  font-size: 10.5px;\n  line-height: 1.3;\n  color: var(--ofs-ink-3);\n  text-align: center;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n.ofs-tile.is-on .ofs-tile-art {\n  box-shadow:\n    0 0 0 2px var(--ofs-card-solid),\n    0 0 0 4px var(--ofs-accent),\n    0 10px 20px -12px rgb(16 16 20 / 30%);\n}\n\n.ofs-tile.is-on .ofs-tile-label {\n  color: var(--ofs-accent);\n  font-weight: 600;\n}\n\n/* ── 画面比例 ───────────────────────────────────────────────── */\n.ofs-ratio-row {\n  display: flex;\n  gap: 8px;\n}\n\n.ofs-ratio {\n  appearance: none;\n  flex: 1 1 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 6px;\n  padding: 10px 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-3);\n  cursor: pointer;\n  transition:\n    border-color 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-ratio:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-ratio.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-ratio-glyph {\n  display: block;\n  border: 1.5px solid currentColor;\n  border-radius: 3px;\n}\n\n.ofs-ratio-glyph--1-1 { width: 19px; height: 19px; }\n.ofs-ratio-glyph--16-9 { width: 25px; height: 14px; }\n.ofs-ratio-glyph--9-16 { width: 14px; height: 25px; }\n\n.ofs-ratio-label {\n  font-size: 11px;\n  font-weight: 550;\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 高级设置行 ─────────────────────────────────────────────── */\n.ofs-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-row {\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  overflow: hidden;\n  transition: border-color 160ms ease;\n}\n\n.ofs-row.is-open,\n.ofs-row:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-row-head {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  padding: 9px 12px;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-row-head:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-chevron {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-4);\n  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-chevron.is-open {\n  transform: rotate(180deg);\n}\n\n.ofs-row-textarea {\n  display: block;\n  width: calc(100% - 20px);\n  min-height: 64px;\n  margin: 0 10px 10px;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-grid2 {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 8px;\n  padding: 0 10px 10px;\n}\n\n.ofs-field {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ofs-field > span {\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field input,\n.ofs-field select {\n  width: 100%;\n  height: 30px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-field input:focus-visible,\n.ofs-field select:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n/* ── 底部生成 ───────────────────────────────────────────────── */\n.ofs-panel-foot {\n  position: relative;\n  z-index: 1;\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 12px 15px 14px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card);\n  box-shadow: 0 -16px 20px -18px rgb(16 16 20 / 20%);\n}\n\n.ofs-generate {\n  width: 100%;\n  height: 42px;\n  border-radius: 14px;\n  font-size: 13.5px;\n  letter-spacing: 0.02em;\n}\n\n.ofs-hint {\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n  text-align: center;\n}\n\n.ofs-link {\n  appearance: none;\n  margin-left: 6px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: inherit;\n  cursor: pointer;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}";
+
+// src/styles/stage.css
+var stage_default = "/*\n * 焦点舞台：画布卡、图片、浮动工具、信息行、动作坞、空态与放大层。\n */\n\n.ofs-stage {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.ofs-figure {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  padding: 26px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(120% 90% at 50% 0%, color-mix(in oklab, var(--ofs-card-solid) 88%, transparent) 0%, transparent 70%),\n    color-mix(in oklab, var(--ofs-card) 62%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  overflow: hidden;\n}\n\n.ofs-figure-button {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  max-width: 94%;\n  max-height: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  cursor: zoom-in;\n}\n\n.ofs-image {\n  width: auto;\n  height: auto;\n  max-width: 100%;\n  max-height: 100%;\n  border-radius: 16px;\n  box-shadow: 0 30px 64px -28px rgb(16 16 20 / 38%);\n  object-fit: contain;\n}\n\n.ofs-figure-tools {\n  position: absolute;\n  top: 14px;\n  right: 14px;\n  display: flex;\n  gap: 6px;\n}\n\n.ofs-glass-btn {\n  appearance: none;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: 11px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 68%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  color: var(--ofs-ink-2);\n  cursor: pointer;\n  transition:\n    color 150ms ease,\n    background-color 150ms ease,\n    border-color 150ms ease,\n    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-glass-btn:hover {\n  color: var(--ofs-accent);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-glass-btn:active {\n  transform: scale(0.95);\n}\n\n.ofs-glass-btn.is-on {\n  color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-stage-progress {\n  position: absolute;\n  left: 50%;\n  bottom: 16px;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  padding: 7px 13px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 74%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  transform: translateX(-50%);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  white-space: nowrap;\n}\n\n.ofs-progress-label {\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-shimmer {\n  display: block;\n  width: 54px;\n  height: 4px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(\n    90deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 70%, transparent) 50%,\n    transparent 100%\n  );\n  background-size: 220% 100%;\n  animation: ofs-shimmer 1.5s linear infinite;\n}\n\n/* ── 图片下的信息与动作 ─────────────────────────────────────── */\n.ofs-stage-foot {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 16px;\n  padding: 0 4px;\n  min-width: 0;\n}\n\n.ofs-stage-prompt {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n.ofs-stage-meta {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n.ofs-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-dock-button {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 30px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-dock-button:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-dock-button.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 空态 ───────────────────────────────────────────────────── */\n.ofs-figure--empty {\n  background:\n    radial-gradient(90% 80% at 18% 8%, color-mix(in oklab, var(--ofs-ink) 5%, transparent) 0%, transparent 62%),\n    radial-gradient(80% 70% at 86% 96%, color-mix(in oklab, var(--ofs-ink) 3%, transparent) 0%, transparent 60%),\n    color-mix(in oklab, var(--ofs-card) 58%, transparent);\n}\n\n.ofs-empty-card {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 9px;\n  max-width: 440px;\n  padding: 20px;\n  text-align: center;\n}\n\n.ofs-empty-icon {\n  display: grid;\n  place-items: center;\n  width: 54px;\n  height: 54px;\n  margin-bottom: 2px;\n  border: 1px solid var(--ofs-accent-soft-border);\n  border-radius: 18px;\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-empty-title {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n}\n\n.ofs-examples {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: center;\n  gap: 6px;\n  margin-top: 6px;\n}\n\n.ofs-examples-label {\n  width: 100%;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-example {\n  appearance: none;\n  padding: 5px 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 放大层 ─────────────────────────────────────────────────── */\n.ofs-lightbox {\n  position: absolute;\n  inset: -14px;\n  z-index: 80;\n  display: grid;\n  place-items: center;\n  padding: 3vw;\n  background: rgb(16 16 18 / 72%);\n  backdrop-filter: blur(16px);\n  -webkit-backdrop-filter: blur(16px);\n  animation: ofs-fade-in 180ms ease;\n}\n\n.ofs-lightbox img {\n  max-width: 94%;\n  max-height: 92%;\n  border-radius: 12px;\n  box-shadow: 0 40px 90px -30px rgb(0 0 0 / 70%);\n}\n\n.ofs-lightbox-close {\n  position: absolute;\n  top: 18px;\n  right: 18px;\n  display: grid;\n  place-items: center;\n  width: 36px;\n  height: 36px;\n  border: 1px solid rgb(255 255 255 / 26%);\n  border-radius: 11px;\n  background: rgb(255 255 255 / 12%);\n  color: rgb(255 255 255 / 88%);\n  cursor: pointer;\n}\n\n.ofs-lightbox-close:hover {\n  background: rgb(255 255 255 / 20%);\n  color: #fff;\n}";
+
+// src/styles/filmstrip.css
+var filmstrip_default = "/*\n * 底部胶片坞：悬浮玻璃条，左边是批次缩略图流，右边去画廊。\n */\n\n.ofs-filmstrip {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  margin: 0 14px 14px 86px;\n  padding: 10px 12px;\n  min-height: 92px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(18px);\n  -webkit-backdrop-filter: blur(18px);\n}\n\n.ofs-roll {\n  flex: 1 1 auto;\n  min-width: 0;\n  display: flex;\n  align-items: stretch;\n  gap: 16px;\n  overflow-x: auto;\n  overflow-y: hidden;\n  padding-bottom: 2px;\n}\n\n.ofs-batch {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.ofs-batch-thumbs {\n  display: flex;\n  gap: 3px;\n}\n\n.ofs-thumb {\n  appearance: none;\n  flex: 0 0 auto;\n  display: block;\n  width: 62px;\n  height: 62px;\n  padding: 0;\n  border: 2px solid transparent;\n  border-radius: 12px;\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  cursor: pointer;\n  transition:\n    transform 170ms cubic-bezier(0.22, 1, 0.36, 1),\n    border-color 170ms ease,\n    box-shadow 170ms ease;\n}\n\n.ofs-thumb img {\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n.ofs-thumb:hover {\n  transform: translateY(-2px);\n}\n\n.ofs-thumb.is-on {\n  border-color: var(--ofs-accent);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 20%, transparent);\n}\n\n.ofs-batch-meta {\n  display: flex;\n  align-items: center;\n  justify-content: flex-start;\n  gap: 6px;\n  font-size: 10px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-batch-meta em {\n  font-style: normal;\n  font-size: 9px;\n  letter-spacing: 0.06em;\n  text-transform: uppercase;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n/* 进行中的骨架卡 */\n.ofs-ghost {\n  flex: 0 0 auto;\n  width: 148px;\n  display: flex;\n  flex-direction: column;\n  justify-content: center;\n  gap: 8px;\n  padding: 11px 12px;\n  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 36%, transparent);\n  border-radius: 14px;\n  background: linear-gradient(140deg, var(--ofs-accent-soft) 0%, transparent 78%);\n}\n\n.ofs-ghost-bar {\n  height: 34px;\n  border-radius: 10px;\n  background: linear-gradient(\n    90deg,\n    color-mix(in oklab, var(--ofs-accent) 10%, transparent) 0%,\n    color-mix(in oklab, var(--ofs-accent) 32%, transparent) 50%,\n    color-mix(in oklab, var(--ofs-accent) 10%, transparent) 100%\n  );\n  background-size: 220% 100%;\n  animation: ofs-shimmer 1.8s linear infinite;\n}\n\n.ofs-ghost-label {\n  font-size: 10.5px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-ghost-time {\n  font-size: 10px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n/* 空态 */\n.ofs-filmstrip-empty {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  flex: 1 1 auto;\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n}\n\n.ofs-slots {\n  display: flex;\n  gap: 6px;\n}\n\n.ofs-slot {\n  display: block;\n  width: 46px;\n  height: 46px;\n  border: 1px dashed var(--ofs-sunken-border);\n  border-radius: 12px;\n  background: color-mix(in oklab, var(--ofs-card) 60%, transparent);\n}\n\n/* 去画廊 */\n.ofs-filmstrip-side {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  align-self: stretch;\n  padding-left: 12px;\n  border-left: 1px solid var(--ofs-hairline);\n}\n\n.ofs-filmstrip-link {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  padding: 8px 10px;\n  border: 0;\n  border-radius: 10px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-filmstrip-link:hover {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}";
+
+// src/styles/gallery.css
+var gallery_default = "/*\n * 资产画廊：作品集式的卡片墙。\n *\n * 结构：\n *   .ofs-gallery          自身滚动容器（高度由 .ofs-main 决定）\n *     .ofs-gallery-tools  轻浮的玻璃工具卡：标题 / 搜索 / 模型 / 收藏 / 批量动作\n *     .ofs-gallery-group  今天 / 本周 / 更早\n *       .ofs-gallery-wall CSS columns 瀑布流：图片按原始宽高比自然高度\n *\n * 卡片是「图片 + 两行提示词 + 标签行」的白卡：圆角、描边、阴影全部来自\n * tokens.css；网格只负责列宽，不裁切图片、不拉伸比例。\n */\n\n/* ── 容器 ───────────────────────────────────────────────────── */\n.ofs-gallery {\n  /* 吸顶工具卡要贴住滚动口，padding-top 用变量参与 top 偏移，避免内容从顶部缝隙露出 */\n  --ofs-gallery-pad-top: 18px;\n  position: relative;\n  flex: 1 1 auto;\n  height: 100%;\n  min-height: 0;\n  overflow-y: auto;\n  overflow-x: hidden;\n  display: flex;\n  flex-direction: column;\n  gap: var(--ofs-gap);\n  padding: var(--ofs-gallery-pad-top) 20px 26px;\n  overscroll-behavior: contain;\n}\n\n.ofs-gallery.is-empty {\n  min-height: 360px;\n}\n\n/* ── 工具卡 ─────────────────────────────────────────────────── */\n.ofs-gallery-tools {\n  position: sticky;\n  top: calc(-1 * var(--ofs-gallery-pad-top));\n  z-index: 3;\n  flex: 0 0 auto;\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 10px 12px;\n  padding: 12px 14px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-window);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(18px) saturate(140%);\n  -webkit-backdrop-filter: blur(18px) saturate(140%);\n}\n\n.ofs-gallery-headline {\n  display: flex;\n  align-items: baseline;\n  gap: 9px;\n  min-width: 0;\n}\n\n.ofs-gallery-title {\n  font-size: 15px;\n  font-weight: 650;\n  letter-spacing: -0.01em;\n  line-height: 1.3;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n.ofs-gallery-count {\n  font-size: 12px;\n  line-height: 1.4;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-gallery-count b {\n  font-weight: 600;\n  color: var(--ofs-ink-2);\n  font-variant-numeric: tabular-nums;\n}\n\n/* 搜索：胶囊内嵌放大镜 */\n.ofs-gallery-search {\n  position: relative;\n  display: flex;\n  align-items: center;\n  flex: 1 1 200px;\n  max-width: 320px;\n  height: 34px;\n  padding: 0 12px 0 32px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-3);\n  cursor: text;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease,\n    box-shadow 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-gallery-search:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-focus-ring);\n  color: var(--ofs-accent);\n}\n\n.ofs-gallery-search-icon {\n  position: absolute;\n  left: 11px;\n  top: 50%;\n  transform: translateY(-50%);\n  pointer-events: none;\n}\n\n.ofs-gallery-search-input {\n  width: 100%;\n  height: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n}\n\n.ofs-gallery-search-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-gallery-search-input:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-gallery-search-input::-webkit-search-cancel-button,\n.ofs-gallery-search-input::-webkit-search-decoration {\n  appearance: none;\n  -webkit-appearance: none;\n}\n\n/* 模型过滤：原生 select，外观融进胶囊体系 */\n.ofs-gallery-select {\n  position: relative;\n  display: inline-flex;\n  align-items: center;\n  flex: 0 0 auto;\n}\n\n.ofs-gallery-select-input {\n  appearance: none;\n  -webkit-appearance: none;\n  height: 34px;\n  max-width: 200px;\n  padding: 0 30px 0 13px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  text-overflow: ellipsis;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease;\n}\n\n.ofs-gallery-select-input:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-gallery-select-input:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-gallery-select-input option {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n}\n\n.ofs-gallery-select-caret {\n  position: absolute;\n  right: 11px;\n  top: 50%;\n  transform: translateY(-50%);\n  color: var(--ofs-ink-3);\n  pointer-events: none;\n}\n\n/* 工具条里的 chip 与输入同高，避免一排控件高低不齐 */\n.ofs-gallery-tools .ofs-chip {\n  height: 32px;\n  padding: 0 13px;\n  font-size: 12.5px;\n}\n\n.ofs-gallery-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 8px;\n  margin-left: auto;\n}\n\n.ofs-gallery-selected {\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  height: 32px;\n  padding: 0 12px;\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  font-size: 12px;\n  font-weight: 600;\n  white-space: nowrap;\n}\n\n.ofs-gallery-selected b {\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 分组：小字重对比 + 一条极淡分隔 ─────────────────────────── */\n.ofs-gallery-group {\n  flex: 0 0 auto;\n}\n\n.ofs-gallery-group-title {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  margin: 0 0 12px;\n  padding-left: 2px;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  line-height: 1.4;\n  letter-spacing: 0.02em;\n}\n\n.ofs-gallery-group-title::after {\n  content: '';\n  flex: 1 1 auto;\n  height: 1px;\n  border-radius: 1px;\n  background: var(--ofs-hairline);\n}\n\n/* ── 卡片墙：CSS columns，图片按原始比例撑高 ─────────────────── */\n.ofs-gallery-wall {\n  column-count: 5;\n  column-gap: var(--ofs-gap);\n}\n\n.ofs-gallery-card {\n  appearance: none;\n  display: block;\n  width: 100%;\n  margin: 0 0 var(--ofs-gap);\n  padding: 6px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-card);\n  color: var(--ofs-ink);\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n  break-inside: avoid;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease,\n    border-color 180ms ease;\n}\n\n.ofs-gallery-card:hover {\n  transform: translateY(-2px);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-gallery-card.is-picked {\n  border-color: var(--ofs-accent);\n  box-shadow: var(--ofs-focus-ring), var(--ofs-shadow-card);\n}\n\n.ofs-gallery-card.is-picked:hover {\n  box-shadow: var(--ofs-focus-ring), var(--ofs-shadow-lift);\n}\n\n.ofs-gallery-media {\n  position: relative;\n  display: block;\n  overflow: hidden;\n  border-radius: calc(var(--ofs-r-lg) - 7px);\n  background: var(--ofs-sunken);\n}\n\n.ofs-gallery-media img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n/* 批量选择：左上角圆点，选中后墨黑填充 */\n.ofs-gallery-pick {\n  position: absolute;\n  top: 9px;\n  left: 9px;\n  display: grid;\n  place-items: center;\n  width: 20px;\n  height: 20px;\n  border: 1.5px solid rgb(20 20 22 / 16%);\n  border-radius: 50%;\n  background: rgb(255 255 255 / 72%);\n  color: var(--ofs-accent-ink);\n  box-shadow: 0 1px 4px rgb(24 24 27 / 22%);\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease;\n}\n\n.ofs-gallery-pick.is-on {\n  border-color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n/* 收藏星标：右上角玻璃圆点，已收藏用墨黑 */\n.ofs-gallery-star {\n  position: absolute;\n  top: 8px;\n  right: 8px;\n  display: grid;\n  place-items: center;\n  width: 24px;\n  height: 24px;\n  border-radius: 50%;\n  background: color-mix(in oklab, var(--ofs-card-solid) 84%, transparent);\n  color: var(--ofs-ink);\n  box-shadow: 0 1px 4px rgb(24 24 27 / 22%);\n  backdrop-filter: blur(4px);\n  -webkit-backdrop-filter: blur(4px);\n}\n\n/* 卡身：两行提示词 + 标签行 */\n.ofs-gallery-body {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  min-width: 0;\n  padding: 10px 8px 8px;\n}\n\n.ofs-gallery-caption {\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n  line-clamp: 2;\n  overflow: hidden;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  font-weight: 500;\n  line-height: 1.5;\n  word-break: break-word;\n}\n\n.ofs-gallery-tags {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.3;\n}\n\n.ofs-gallery-tags em {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-style: normal;\n  font-weight: 500;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-gallery-tags span {\n  flex: 0 0 auto;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 空态：一张柔光卡片，一句话 ─────────────────────────────── */\n.ofs-gallery-empty {\n  flex: 0 0 auto;\n  margin: auto;\n  width: 100%;\n  max-width: 380px;\n  padding: 40px 30px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(120% 150% at 50% -18%, color-mix(in oklab, var(--ofs-ink) 6%, transparent) 0%, transparent 62%),\n    var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  text-align: center;\n}\n\n.ofs-gallery-empty p {\n  color: var(--ofs-ink-2);\n  font-size: 13px;\n  line-height: 1.7;\n}\n\n.ofs-gallery-empty-actions {\n  display: flex;\n  justify-content: center;\n  margin-top: 14px;\n}\n\n/* ── 响应式 ─────────────────────────────────────────────────── */\n@media (max-width: 1400px) {\n  .ofs-gallery-wall {\n    column-count: 4;\n  }\n}\n\n@media (max-width: 1180px) {\n  .ofs-gallery {\n    --ofs-gallery-pad-top: 16px;\n    padding: 16px 18px 24px;\n  }\n\n  .ofs-gallery-wall {\n    column-count: 3;\n  }\n\n  .ofs-gallery-search {\n    max-width: 260px;\n  }\n}\n\n@media (max-width: 900px) {\n  .ofs-gallery-wall {\n    column-count: 2;\n  }\n\n  /* 窄窗里工具卡不再吸顶：它本身会折成两三行，吸顶太占高度 */\n  .ofs-gallery-tools {\n    position: static;\n  }\n}\n\n@media (max-width: 700px) {\n  .ofs-gallery {\n    --ofs-gallery-pad-top: 12px;\n    gap: 12px;\n    padding: 12px 12px 22px;\n  }\n\n  .ofs-gallery-tools {\n    gap: 8px;\n    padding: 10px 11px;\n  }\n\n  .ofs-gallery-search {\n    flex: 1 1 100%;\n    max-width: none;\n  }\n\n  .ofs-gallery-select-input {\n    max-width: 116px;\n  }\n\n  .ofs-gallery-tools .ofs-chip {\n    padding: 0 10px;\n  }\n\n  .ofs-gallery-empty {\n    padding: 32px 22px;\n  }\n}";
+
+// src/styles/chat.css
+var chat_default = "/*\n * 对话式面板：柔和消息流。\n *\n * 卡片外壳（背景 / 圆角 / 阴影 / 外边距）、头部与分段控件都由 panel.css 提供，\n * 这里只写卡片内部：消息流、空态、建议行与底部悬浮输入区。\n * 所有选择器挂在 .ofs-panel--chat 下，避免和表单式面板共用的类名互相影响；\n * 对话专属的类名统一用 ofs-chat- / ofs-msg- 前缀。\n */\n\n/* ── 消息流 ─────────────────────────────────────────────────── */\n/* 面板始终落在 .ofs-body 的第二列（图标栏之后）；单独挂载预览时也靠这句归位。 */\n.ofs-panel--chat.ofs-rail--chat {\n  grid-column: 2;\n}\n\n.ofs-panel--chat .ofs-thread {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 6px 15px 10px;\n}\n\n/* 空态用 auto 外边距居中，内容超高时自然回到顶部可滚动，不会被裁掉。 */\n.ofs-panel--chat .ofs-thread.is-empty {\n  justify-content: flex-start;\n}\n\n.ofs-chat-empty {\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 13px;\n  margin: auto 0;\n  /* 稍微上提，避免视觉重心压在输入区上。 */\n  padding-bottom: 26px;\n  animation: ofs-fade-in 260ms ease both;\n}\n\n.ofs-chat-empty-text {\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  line-height: 1.7;\n  text-align: center;\n}\n\n.ofs-chat-examples {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-panel--chat .ofs-chat-example {\n  display: flex;\n  align-items: center;\n  height: auto;\n  min-height: 30px;\n  padding: 7px 12px;\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  text-align: left;\n  white-space: normal;\n}\n\n.ofs-panel--chat .ofs-chat-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 消息 ───────────────────────────────────────────────────── */\n.ofs-panel--chat .ofs-msg {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  max-width: 100%;\n  min-width: 0;\n  animation: ofs-fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;\n}\n\n.ofs-panel--chat .ofs-msg p {\n  font-size: 12.5px;\n  line-height: 1.62;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n\n/* 用户：右对齐的浅灰底，右下角收小圆角但不出气泡尾巴。 */\n.ofs-panel--chat .ofs-msg--user {\n  align-self: flex-end;\n  max-width: 88%;\n  padding: 8px 13px;\n  border: 1px solid var(--ofs-accent-soft-border);\n  border-radius: 16px 16px 6px 16px;\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-ink);\n}\n\n/* 助手：整宽白卡，左上角收小圆角，跟用户消息形成对角呼应。 */\n.ofs-panel--chat .ofs-msg--assistant {\n  align-self: stretch;\n}\n\n.ofs-chat-author {\n  display: flex;\n  align-items: center;\n  gap: 7px;\n  padding-left: 2px;\n}\n\n.ofs-chat-author-name {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.04em;\n}\n\n.ofs-chat-dot {\n  flex: 0 0 auto;\n}\n\n/* 排队与渲染中：状态点换成琥珀色呼吸，不用转圈。 */\n.ofs-panel--chat .ofs-chat-dot.is-live {\n  animation: ofs-chat-breathe 2.2s ease-out infinite;\n}\n\n@keyframes ofs-chat-breathe {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 36%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n}\n\n.ofs-msg-card {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px 13px 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 6px 16px 16px 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n/* 生成中：卡片留一条柔光微光条，扫过即表示在跑。 */\n.ofs-chat-shimmer {\n  display: block;\n  width: 58%;\n  height: 3px;\n  margin-top: -2px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(90deg, transparent 0%, var(--ofs-accent-2) 52%, transparent 100%);\n  background-size: 220% 100%;\n  opacity: 0.62;\n  animation: ofs-shimmer 2s linear infinite;\n}\n\n/* 结果缩略图：整宽图片卡，元信息压在右下角。 */\n.ofs-msg-thumb {\n  appearance: none;\n  position: relative;\n  display: block;\n  width: 100%;\n  margin-top: 1px;\n  padding: 0;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 12px;\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  cursor: pointer;\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease,\n    border-color 180ms ease;\n}\n\n.ofs-msg-thumb img {\n  display: block;\n  width: 100%;\n  height: 132px;\n  object-fit: cover;\n}\n\n.ofs-msg-thumb:hover {\n  transform: translateY(-1px);\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-msg-thumb:active {\n  transform: translateY(0) scale(0.995);\n}\n\n.ofs-msg-thumb-meta {\n  position: absolute;\n  right: 7px;\n  bottom: 7px;\n  padding: 2px 8px;\n  border-radius: var(--ofs-r-pill);\n  background: rgb(17 17 20 / 52%);\n  backdrop-filter: blur(8px);\n  -webkit-backdrop-filter: blur(8px);\n  color: rgb(255 255 255 / 93%);\n  font-size: 10px;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.01em;\n}\n\n/* ── 底部：建议 / 动作 / 输入 ────────────────────────────────── */\n.ofs-chat-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px 15px 14px;\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-chat-suggest {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-panel--chat .ofs-chat-suggest-chip {\n  /* 纯文字胶囊：用块盒（而不是 inline-flex）才能让 text-overflow 生效，\n     否则长建议只会被裁掉、看不到省略号。 */\n  display: block;\n  min-width: 0;\n  max-width: 100%;\n  height: 26px;\n  padding: 0 10px;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  font-size: 11.5px;\n  line-height: 24px;\n}\n\n.ofs-chat-tools {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-panel--chat .ofs-chat-tools .ofs-chip {\n  height: 27px;\n  padding: 0 11px;\n  font-size: 11.5px;\n}\n\n/* 输入区：白/玻璃的圆角卡，靠内发光描边和柔影浮起来。 */\n.ofs-chat-composer {\n  display: flex;\n  align-items: flex-end;\n  gap: 8px;\n  padding: 9px 9px 9px 12px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-card) 100%);\n  box-shadow:\n    inset 0 1px 0 var(--ofs-window-border),\n    var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-chat-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow:\n    inset 0 1px 0 var(--ofs-window-border),\n    0 0 0 3px color-mix(in oklab, var(--ofs-accent) 12%, transparent),\n    var(--ofs-shadow-card);\n}\n\n.ofs-chat-composer textarea {\n  flex: 1 1 auto;\n  min-width: 0;\n  min-height: 42px;\n  max-height: 128px;\n  padding: 2px 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  line-height: 1.6;\n  resize: none;\n  overflow-y: auto;\n  /* 支持的浏览器里让输入框随内容长到 max-height；不支持时退化成固定两行。 */\n  field-sizing: content;\n}\n\n.ofs-chat-composer textarea:focus,\n.ofs-chat-composer textarea:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-chat-composer textarea::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n/* 发送：墨黑实心圆钮（深色主题由 tokens 反相成浅灰），hover 轻抬升，禁用降饱和。 */\n.ofs-chat-send {\n  appearance: none;\n  flex: 0 0 auto;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  padding: 0;\n  border: 0;\n  border-radius: 50%;\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n  box-shadow: var(--ofs-shadow-accent);\n  cursor: pointer;\n  transition:\n    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-chat-send:hover:not(:disabled) {\n  transform: translateY(-1px);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-chat-send:active:not(:disabled) {\n  transform: translateY(0) scale(0.94);\n}\n\n.ofs-chat-send:disabled {\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-4);\n  box-shadow: none;\n  filter: saturate(0);\n  cursor: default;\n}\n\n/* 窄窗下面板被压到 46vh：收紧留白，让最后两条消息仍然可见。 */\n@media (max-width: 820px) {\n  .ofs-panel--chat .ofs-thread {\n    padding: 0 13px 8px;\n  }\n\n  .ofs-chat-dock {\n    padding: 8px 13px 12px;\n  }\n\n  .ofs-msg-thumb img {\n    height: 112px;\n  }\n}\n\n/* 动效停用时，微光条改成一条静态浅色线，信息不丢。 */\n@media (prefers-reduced-motion: reduce) {\n  .ofs-chat-shimmer {\n    background: var(--ofs-accent-soft-border);\n    opacity: 0.9;\n    animation: none;\n  }\n\n  .ofs-panel--chat .ofs-chat-dot.is-live {\n    animation: none;\n  }\n}";
+
+// src/styles/responsive.css
+var responsive_default = "/*\n * 响应式：这是桌面端的整页工作台，先保桌面；窄窗口按「面板在上、画布在下」收，\n * 不把桌面布局硬挤成不可用的三列。\n */\n\n@media (max-width: 1280px) {\n  .ofs-body {\n    grid-template-columns: 68px minmax(288px, 330px) minmax(0, 1fr);\n  }\n\n  .ofs-preset-meta {\n    display: none;\n  }\n\n  .ofs-filmstrip {\n    margin-left: 82px;\n  }\n}\n\n@media (max-width: 1120px) {\n  .ofs-brand-sub {\n    display: none;\n  }\n\n  .ofs-body {\n    grid-template-columns: 64px minmax(272px, 312px) minmax(0, 1fr);\n  }\n\n  .ofs-body.is-gallery {\n    grid-template-columns: 64px minmax(0, 1fr);\n  }\n\n  .ofs-preset-label {\n    display: none;\n  }\n\n  .ofs-preset select {\n    max-width: 132px;\n  }\n\n  .ofs-filmstrip {\n    margin-left: 78px;\n  }\n\n  .ofs-dock-button {\n    padding: 0 9px;\n    font-size: 11px;\n  }\n}\n\n@media (max-width: 980px) {\n  .ofs-root {\n    padding: 10px;\n  }\n\n  .ofs-app {\n    border-radius: var(--ofs-r-lg);\n  }\n\n  .ofs-topbar {\n    gap: 10px;\n    padding: 0 12px;\n    height: 54px;\n  }\n\n  .ofs-brand-name {\n    font-size: 13px;\n  }\n\n  .ofs-tab {\n    padding: 0 9px;\n    font-size: 12px;\n  }\n\n  .ofs-body {\n    grid-template-columns: 58px minmax(250px, 288px) minmax(0, 1fr);\n  }\n\n  .ofs-body.is-gallery {\n    grid-template-columns: 58px minmax(0, 1fr);\n  }\n\n  .ofs-rail-btn {\n    width: 46px;\n    font-size: 9px;\n  }\n\n  .ofs-panel,\n  .ofs-rail--chat {\n    margin: 10px 0 10px 10px;\n  }\n\n  .ofs-main {\n    margin: 10px;\n  }\n\n  .ofs-filmstrip {\n    margin: 0 10px 10px 68px;\n    min-height: 84px;\n    padding: 8px 10px;\n    border-radius: var(--ofs-r-md);\n  }\n\n  .ofs-thumb {\n    width: 54px;\n    height: 54px;\n    border-radius: 10px;\n  }\n\n  .ofs-stage-foot {\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n\n  .ofs-stage-meta {\n    font-size: 10.5px;\n  }\n\n  .ofs-dock {\n    gap: 4px;\n  }\n\n  .ofs-dock-button {\n    height: 28px;\n    padding: 0 8px;\n    font-size: 10.5px;\n    gap: 4px;\n  }\n\n  .ofs-figure {\n    padding: 10px;\n    border-radius: var(--ofs-r-lg);\n  }\n\n  .ofs-image {\n    border-radius: 12px;\n  }\n}\n\n/* 窄窗：面板在上、画布在下，图标栏收成横向条 */\n@media (max-width: 820px) {\n  .ofs-root {\n    padding: 8px;\n    font-size: 12.5px;\n  }\n\n  .ofs-topbar {\n    flex-wrap: wrap;\n    height: auto;\n    min-height: 52px;\n    padding: 8px 10px;\n    row-gap: 6px;\n  }\n\n  .ofs-tabs {\n    margin-left: 0;\n    order: 3;\n    flex: 1 1 100%;\n    justify-content: flex-start;\n  }\n\n  .ofs-compute em {\n    display: none;\n  }\n\n  .ofs-preset {\n    margin-left: auto;\n  }\n\n  .ofs-body,\n  .ofs-body.is-gallery {\n    display: flex;\n    flex-direction: column;\n    overflow-y: auto;\n    overflow-x: hidden;\n  }\n\n  .ofs-rail {\n    flex: 0 0 auto;\n    flex-direction: row;\n    align-items: center;\n    justify-content: flex-start;\n    gap: 4px;\n    padding: 6px 8px;\n    border-right: 0;\n    border-bottom: 1px solid var(--ofs-hairline);\n  }\n\n  .ofs-rail-group {\n    flex-direction: row;\n    align-items: center;\n    gap: 4px;\n    width: auto;\n  }\n\n  .ofs-rail-btn {\n    flex-direction: row;\n    gap: 5px;\n    width: auto;\n    padding: 6px 9px;\n    border-radius: 10px;\n    font-size: 10.5px;\n  }\n\n  .ofs-rail-divider {\n    width: 1px;\n    height: 20px;\n    margin: 0 3px;\n  }\n\n  .ofs-rail-status {\n    margin-left: auto;\n    flex-direction: row;\n    padding: 0 6px;\n  }\n\n  .ofs-panel,\n  .ofs-rail--chat {\n    flex: 0 0 auto;\n    margin: 8px 8px 0;\n    max-height: none;\n  }\n\n  .ofs-main {\n    flex: 0 0 auto;\n    min-height: 340px;\n    height: 62vh;\n    margin: 8px;\n  }\n\n  .ofs-stage {\n    min-height: 300px;\n  }\n\n  .ofs-figure {\n    min-height: 240px;\n  }\n\n  .ofs-image {\n    max-height: 42vh;\n  }\n\n  .ofs-filmstrip {\n    display: none;\n  }\n\n  .ofs-panel-head {\n    padding: 12px 13px 9px;\n  }\n\n  .ofs-panel-scroll {\n    padding: 0 13px 12px;\n  }\n\n  .ofs-panel-foot {\n    padding: 10px 13px 12px;\n  }\n\n  .ofs-toast {\n    bottom: 24px;\n    max-width: 86%;\n  }\n\n  .ofs-stage-foot {\n    padding: 0 2px;\n  }\n\n  .ofs-stage-prompt {\n    flex: 1 1 100%;\n  }\n\n  .ofs-dock {\n    flex: 1 1 100%;\n    flex-wrap: wrap;\n  }\n\n  .ofs-tile-label {\n    font-size: 9.5px;\n  }\n\n  .ofs-composer-input {\n    min-height: 76px;\n  }\n}\n\n@media (max-width: 520px) {\n  .ofs-brand-name {\n    font-size: 12.5px;\n  }\n\n  .ofs-tab {\n    height: 26px;\n    padding: 0 8px;\n    font-size: 11.5px;\n  }\n\n  .ofs-preset select {\n    max-width: 108px;\n    font-size: 11.5px;\n  }\n\n  .ofs-compute {\n    height: 30px;\n    padding: 0 9px;\n  }\n\n  .ofs-preset {\n    height: 30px;\n  }\n\n  .ofs-panel-head h2 {\n    font-size: 14px;\n  }\n\n  .ofs-empty-title {\n    font-size: 15px;\n  }\n}";
+
+// src/styles.js
+var CSS = [tokens_default, base_default, shell_default, panel_default, stage_default, filmstrip_default, gallery_default, chat_default, responsive_default].join("\n");
 
 // src/hooks/useNow.js
 function useNow(enabled) {
@@ -841,7 +899,167 @@ function jobElapsed(job, now) {
 
 // src/studio/ChatPanel.jsx
 var import_react2 = __toESM(require("react"), 1);
+
+// src/studio/icons.jsx
 var import_jsx_runtime = require("react/jsx-runtime");
+var SHAPES = {
+  // 胶片与时装：风格预设用
+  film: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("rect", { x: "3", y: "5.5", width: "18", height: "13", rx: "1.8" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M7.5 5.5v13M16.5 5.5v13" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M3.6 8.6h3.9M3.6 12h3.9M3.6 15.4h3.9M16.5 8.6h3.9M16.5 12h3.9M16.5 15.4h3.9" })
+  ] }),
+  palette: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M12 3.6a8.4 8.4 0 0 0 0 16.8h1.1a2 2 0 0 0 1.5-3.3 2 2 0 0 1 1.5-3.3h1.5a3.8 3.8 0 0 0 3.8-3.8c0-3.6-4.2-6.4-9.4-6.4z" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "8.4", cy: "9.2", r: "1.05" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "12", cy: "7.4", r: "1.05" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "15.6", cy: "9.2", r: "1.05" })
+  ] }),
+  skyline: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M3.5 20.2V11.4l3.8-1.9v10.7" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M7.3 20.2V6.6l4.6-1.9v15.5" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M11.9 20.2V13l3.8-1.9v9.1" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M15.7 20.2V9.6l4.8 2.2v8.4" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M2.6 20.2h18.8" })
+  ] }),
+  mountains: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M3.2 17.6 8.6 9.8l3.1 4.1 2.2-2.8 5.9 6.5z" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M3.2 20.2h17.6" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M6.4 12.9l1.7 1.1 1.3-1.6" })
+  ] }),
+  cube: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M12 3.4 19.6 7.6v8.8L12 20.6 4.4 16.4V7.6z" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M4.4 7.6 12 11.8l7.6-4.2M12 11.8v8.8" })
+  ] }),
+  // 提示词动作
+  expandText: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M4 6.6h9.4M4 11h6.2M4 15.4h9.4" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M17.8 17.4V8.2" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M15.1 10.8l2.7-2.7 2.7 2.7" })
+  ] }),
+  focus: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M4 8.6V6.2a2.2 2.2 0 0 1 2.2-2.2h2.4M15.4 4h2.4A2.2 2.2 0 0 1 20 6.2v2.4M20 15.4v2.4a2.2 2.2 0 0 1-2.2 2.2h-2.4M8.6 20H6.2A2.2 2.2 0 0 1 4 17.8v-2.4" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "12", cy: "12", r: "2.5" })
+  ] }),
+  sun: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "12", cy: "12", r: "3.5" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M12 3.2v2.1M12 18.7v2.1M3.2 12h2.1M18.7 12h2.1M5.7 5.7l1.5 1.5M16.8 16.8l1.5 1.5M18.3 5.7l-1.5 1.5M7.2 16.8l-1.5 1.5" })
+  ] }),
+  // 通用
+  star: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M12 4.4l2.35 4.76 5.25.77-3.8 3.7.9 5.24L12 16.39l-4.7 2.48.9-5.24-3.8-3.7 5.25-.77z" }),
+  starFilled: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+    "path",
+    {
+      d: "M12 4.4l2.35 4.76 5.25.77-3.8 3.7.9 5.24L12 16.39l-4.7 2.48.9-5.24-3.8-3.7 5.25-.77z",
+      fill: "currentColor",
+      stroke: "none"
+    }
+  ),
+  alert: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M12 4.6 20.2 19H3.8z" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M12 9.8v4.1M12 16.7v.1" })
+  ] }),
+  chevronDown: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M6.4 9.6 12 15.2l5.6-5.6" }),
+  arrowUp: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M12 19.4V4.9" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M5.9 11 12 4.9 18.1 11" })
+  ] }),
+  copy: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("rect", { x: "8.4", y: "8.4", width: "11.2", height: "11.2", rx: "2" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M15.6 5.2H6.6a1.4 1.4 0 0 0-1.4 1.4v9" })
+  ] }),
+  reroll: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M19.4 12a7.4 7.4 0 1 1-2.2-5.2" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M19.8 4.6v4.8h-4.8" })
+  ] }),
+  sliders: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M4 8.4h8.4M17.2 8.4h2.8M4 15.6h2.8M11.6 15.6h8.4" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "14.8", cy: "8.4", r: "1.9" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "9.2", cy: "15.6", r: "1.9" })
+  ] }),
+  image: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("rect", { x: "3.4", y: "5", width: "17.2", height: "14", rx: "2" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M3.4 15.3 8 11l3.4 2.9 3-2.4 5.2 4.6" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "8.6", cy: "9.4", r: "1.25" })
+  ] }),
+  folder: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M3.4 7.4a2 2 0 0 1 2-2h3.5l1.8 2.2h7.9a2 2 0 0 1 2 2v7.9a2 2 0 0 1-2 2H5.4a2 2 0 0 1-2-2z" }),
+  close: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8" }),
+  dot: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "12", cy: "12", r: "2.6", fill: "currentColor", stroke: "none" }),
+  // 导航与面板
+  sparkles: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M11.4 4.2 12.9 8l3.8 1.5-3.8 1.5-1.5 3.8-1.5-3.8L6.1 9.5 9.9 8z" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M17.6 14.4l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M5.4 15.6l.6 1.5 1.5.6-1.5.6-.6 1.5-.6-1.5-1.5-.6 1.5-.6z" })
+  ] }),
+  message: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M4.4 7.2a2.8 2.8 0 0 1 2.8-2.8h9.6a2.8 2.8 0 0 1 2.8 2.8v6.2a2.8 2.8 0 0 1-2.8 2.8H9.6l-3.7 3v-3h-.7a.8.8 0 0 1-.8-.8z" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M8.4 9.6h7.2M8.4 12.8h4.4" })
+  ] }),
+  images: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("rect", { x: "6.4", y: "5.2", width: "13.4", height: "11.4", rx: "2.2" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M3.6 8.6v8.6a2.2 2.2 0 0 0 2.2 2.2h9" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M6.4 13.4 9.8 10l2.6 2.4 2.1-1.7 3.7 3.3" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "15.2", cy: "8.6", r: "1.1" })
+  ] }),
+  expand: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_jsx_runtime.Fragment, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M4.4 9V5.6a1.2 1.2 0 0 1 1.2-1.2H9M15 4.4h3.4a1.2 1.2 0 0 1 1.2 1.2V9M19.6 15v3.4a1.2 1.2 0 0 1-1.2 1.2H15M9 19.6H5.6a1.2 1.2 0 0 1-1.2-1.2V15" }) }),
+  dots: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "6.2", cy: "12", r: "1.4", fill: "currentColor", stroke: "none" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "12", cy: "12", r: "1.4", fill: "currentColor", stroke: "none" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "17.8", cy: "12", r: "1.4", fill: "currentColor", stroke: "none" })
+  ] }),
+  plus: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M12 5.4v13.2M5.4 12h13.2" }),
+  search: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "10.9", cy: "10.9", r: "6.1" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M15.4 15.4 20 20" })
+  ] }),
+  refresh: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M19.4 12a7.4 7.4 0 1 1-2.2-5.2" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M19.8 4.6v4.8h-4.8" })
+  ] }),
+  check: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M5.4 12.6 9.6 16.8 18.6 7.8" }),
+  chevronRight: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M9.6 6.4 15.2 12l-5.6 5.6" }),
+  cloud: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M7.4 18.2a3.8 3.8 0 0 1-.5-7.6 5.2 5.2 0 0 1 10-1.2 4.3 4.3 0 0 1 .9 8.4" }),
+  clock: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "12", cy: "12", r: "7.8" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M12 7.6V12l3 1.8" })
+  ] })
+};
+function Icon(props) {
+  const name = props.name;
+  const size = props.size || 16;
+  const shape = SHAPES[name] || null;
+  if (!shape) return null;
+  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+    "svg",
+    {
+      className: props.className ? `ofs-icon ${props.className}` : "ofs-icon",
+      width: size,
+      height: size,
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: 1.6,
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      "aria-hidden": "true",
+      focusable: "false",
+      children: shape
+    }
+  );
+}
+
+// src/studio/ChatPanel.jsx
+var import_jsx_runtime2 = require("react/jsx-runtime");
+var EXAMPLES = ["studio.example.1", "studio.example.2", "studio.example.3"];
+var WORKING_STAGES = ["pending", "queued", "running"];
+function isWorking(stage) {
+  return WORKING_STAGES.indexOf(stage) >= 0;
+}
+function dotClass(stage) {
+  if (stage === "failed") return "ofs-dot ofs-chat-dot is-error";
+  if (isWorking(stage)) return "ofs-dot ofs-chat-dot is-warn is-live";
+  return "ofs-dot ofs-chat-dot is-ok";
+}
 function ChatPanel(props) {
   const {
     t,
@@ -850,23 +1068,22 @@ function ChatPanel(props) {
     sending,
     onGenerate,
     messages,
-    onReroll,
-    onIterate,
     onClearThread,
-    hasSelection,
     mode,
     setMode,
     onEnhance,
     enhancing,
     suggestions,
-    onApplySuggestion
+    onApplySuggestion,
+    onOpenMessage
   } = props;
   const [draft, setDraft] = import_react2.default.useState("");
   const threadRef = import_react2.default.useRef(null);
+  const lastStage = messages.length > 0 ? messages[messages.length - 1].stage : "";
   import_react2.default.useEffect(() => {
     const node = threadRef.current;
     if (node && typeof node.scrollTo === "function") node.scrollTo({ top: node.scrollHeight });
-  }, [messages.length]);
+  }, [messages.length, lastStage]);
   function send() {
     const text = draft.trim();
     if (!text) return;
@@ -874,11 +1091,15 @@ function ChatPanel(props) {
     setDraft("");
     onGenerate(text);
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("aside", { className: "ofs-rail ofs-rail--chat", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", { className: "ofs-rail-head", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: t("studio.rail.title") }),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "ofs-mode", role: "tablist", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+  function openMessage(message) {
+    if (typeof message.onOpen === "function") message.onOpen();
+    else if (typeof onOpenMessage === "function" && message.imagePath) onOpenMessage(message.imagePath);
+  }
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("aside", { className: "ofs-panel ofs-panel--chat ofs-rail--chat", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("header", { className: "ofs-panel-head", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("h2", { children: t("studio.rail.title") }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-seg", role: "tablist", "aria-label": t("studio.rail.title"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
           "button",
           {
             type: "button",
@@ -889,7 +1110,7 @@ function ChatPanel(props) {
             children: t("studio.rail.modeForm")
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
           "button",
           {
             type: "button",
@@ -902,80 +1123,116 @@ function ChatPanel(props) {
         )
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: messages.length === 0 ? "ofs-thread is-empty" : "ofs-thread", ref: threadRef, children: [
-      messages.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "ofs-thread-empty", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: t("studio.chat.empty") }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "ofs-suggestions", children: ["studio.example.1", "studio.example.2", "studio.example.3"].map((key) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-          "button",
-          {
-            type: "button",
-            className: "ofs-suggestion",
-            onClick: () => {
-              patchForm({ prompt: t(key) });
-              setDraft(t(key));
-            },
-            children: t(key)
-          },
-          key
-        )) })
-      ] }) : null,
-      messages.map(
-        (message) => message.role === "user" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "ofs-msg ofs-msg--user", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: message.text }) }, message.id) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "ofs-msg ofs-msg--assistant", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "ofs-msg-head", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "ofs-msg-avatar", "aria-hidden": "true", children: "✧" }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: t("studio.chat.assistant") })
-          ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: message.text }),
-          message.image ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", { type: "button", className: "ofs-msg-thumb", onClick: message.onOpen, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", { src: message.image, alt: "", loading: "lazy" }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: message.meta })
-          ] }) : null
-        ] }, message.id)
-      )
-    ] }),
-    suggestions.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "ofs-thread-suggestions", children: suggestions.slice(0, 3).map((entry) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-      "button",
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
+      "div",
       {
-        type: "button",
-        className: "ofs-suggestion",
-        onClick: () => onApplySuggestion(entry.text),
-        title: entry.text,
-        children: entry.text
-      },
-      entry.id
-    )) }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "ofs-quick", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "ofs-chip", onClick: onEnhance, disabled: enhancing, children: enhancing ? t("studio.enhance.thinking") : `✨ ${t("studio.enhance.button")}` }),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "ofs-chip", onClick: onReroll, children: t("studio.action.reroll") }),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "ofs-chip", onClick: onIterate, disabled: !hasSelection, children: t("studio.action.iterate") }),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "ofs-chip", onClick: onClearThread, disabled: messages.length === 0, children: t("studio.chat.clear") })
-    ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "ofs-chat-composer", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-        "textarea",
+        className: messages.length === 0 ? "ofs-thread is-empty" : "ofs-thread",
+        ref: threadRef,
+        role: "log",
+        "aria-live": "polite",
+        children: [
+          messages.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-chat-empty", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "ofs-chat-empty-text", children: t("studio.chat.empty") }),
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "ofs-chat-examples", children: EXAMPLES.map((key) => /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+              "button",
+              {
+                type: "button",
+                className: "ofs-chip ofs-chat-example",
+                onClick: () => {
+                  patchForm({ prompt: t(key) });
+                  setDraft(t(key));
+                },
+                children: t(key)
+              },
+              key
+            )) })
+          ] }) : null,
+          messages.map(
+            (message) => message.role === "user" ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "ofs-msg ofs-msg--user", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { children: message.text }) }, message.id) : /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-msg ofs-msg--assistant", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-chat-author", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: dotClass(message.stage), "aria-hidden": "true" }),
+                /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-chat-author-name", children: t("studio.chat.assistant") })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: isWorking(message.stage) ? "ofs-msg-card is-working" : "ofs-msg-card", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { children: message.text }),
+                isWorking(message.stage) ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-chat-shimmer", "aria-hidden": "true" }) : null,
+                message.image ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
+                  "button",
+                  {
+                    type: "button",
+                    className: "ofs-msg-thumb",
+                    onClick: () => openMessage(message),
+                    title: message.meta || void 0,
+                    children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("img", { src: message.image, alt: "", loading: "lazy" }),
+                      message.meta ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-msg-thumb-meta", children: message.meta }) : null
+                    ]
+                  }
+                ) : null
+              ] })
+            ] }, message.id)
+          )
+        ]
+      }
+    ),
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-chat-dock", children: [
+      suggestions.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "ofs-chat-suggest", children: suggestions.slice(0, 3).map((entry) => /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+        "button",
         {
-          rows: 2,
-          value: draft,
-          maxLength: 2e3,
-          placeholder: t("studio.chat.placeholder"),
-          spellCheck: false,
-          onChange: (event) => setDraft(event.target.value),
-          onKeyDown: (event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
+          type: "button",
+          className: "ofs-chip ofs-chat-suggest-chip",
+          onClick: () => onApplySuggestion(entry.text),
+          title: entry.text,
+          children: entry.text
+        },
+        entry.id
+      )) }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-chat-tools", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("button", { type: "button", className: "ofs-chip", onClick: onEnhance, disabled: enhancing, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Icon, { name: "expandText", size: 13 }),
+          enhancing ? t("studio.enhance.thinking") : t("studio.enhance.button")
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", className: "ofs-chip", onClick: onClearThread, disabled: messages.length === 0, children: t("studio.chat.clear") })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-chat-composer", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+          "textarea",
+          {
+            rows: 2,
+            value: draft,
+            maxLength: 2e3,
+            placeholder: t("studio.chat.placeholder"),
+            "aria-label": t("studio.chat.placeholder"),
+            spellCheck: false,
+            onChange: (event) => setDraft(event.target.value),
+            onKeyDown: (event) => {
+              if (event.key !== "Enter" || event.shiftKey) return;
+              if (event.nativeEvent && event.nativeEvent.isComposing) return;
               event.preventDefault();
               send();
             }
           }
-        }
-      ),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "ofs-chat-send", onClick: send, disabled: sending || draft.trim().length === 0, "aria-label": t("studio.generate"), children: "↑" })
+        ),
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+          "button",
+          {
+            type: "button",
+            className: "ofs-chat-send",
+            onClick: send,
+            disabled: sending || draft.trim().length === 0,
+            "aria-label": t("studio.generate"),
+            title: t("studio.generate"),
+            children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Icon, { name: "arrowUp", size: 15 })
+          }
+        )
+      ] })
     ] })
   ] });
 }
 
 // src/studio/Filmstrip.jsx
 var import_react3 = __toESM(require("react"), 1);
-var import_jsx_runtime2 = require("react/jsx-runtime");
+var import_jsx_runtime3 = require("react/jsx-runtime");
 function Filmstrip(props) {
   const {
     t,
@@ -986,54 +1243,67 @@ function Filmstrip(props) {
     elapsedMs,
     onSessionStart,
     sessionState,
-    sessionQueued
+    sessionQueued,
+    onOpenGallery
   } = props;
   const selectedPath = selected && selected.image ? selected.image.path : "";
-  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("footer", { className: "ofs-filmstrip", children: [
-    activeJob ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-ghost", role: "status", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-ghost-bar", "aria-hidden": "true" }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-ghost-label", children: sessionQueued ? t("studio.ghost.queued") : t("studio.ghost.rendering") }),
-      formatDuration(t, elapsedMs) ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-ghost-time", children: formatDuration(t, elapsedMs) }) : null
-    ] }) : null,
-    batches.length === 0 && !activeJob ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-filmstrip-empty", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-slots", "aria-hidden": "true", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-slot" }),
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-slot" }),
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-slot" })
-      ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { className: "ofs-muted", children: [
-        sessionState === "absent" ? t("studio.filmstrip.offline") : t("studio.filmstrip.empty"),
-        sessionState === "absent" ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", className: "ofs-link", onClick: onSessionStart, children: t("studio.compute.start") }) : null
-      ] })
-    ] }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "ofs-roll", children: batches.map((batch) => /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-batch", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "ofs-batch-thumbs", children: batch.entries.map((entry) => {
-        const path = entry.image.path || entry.image.file;
-        const active = path === selectedPath;
-        return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
-          "button",
-          {
-            type: "button",
-            className: active ? "ofs-thumb is-on" : "ofs-thumb",
-            onClick: () => onSelect(entry),
-            title: batch.prompt || path,
-            children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("img", { src: entry.image.url, alt: entry.image.file || "thumb", loading: "lazy" })
-          },
-          path
-        );
-      }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { className: "ofs-batch-meta", children: [
-        batch.presetId ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("em", { children: batch.presetId }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { children: batch.entries.length })
-      ] })
-    ] }, batch.key)) })
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("footer", { className: "ofs-filmstrip", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "ofs-roll", children: [
+      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "ofs-ghost", role: "status", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "ofs-ghost-bar", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "ofs-ghost-label", children: sessionQueued ? t("studio.ghost.queued") : t("studio.ghost.rendering") }),
+        formatDuration(t, elapsedMs) ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "ofs-ghost-time", children: formatDuration(t, elapsedMs) }) : null
+      ] }) : null,
+      batches.length === 0 && !activeJob ? /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "ofs-filmstrip-empty", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "ofs-slots", "aria-hidden": "true", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "ofs-slot" }),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "ofs-slot" }),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "ofs-slot" })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { children: [
+          sessionState === "absent" ? t("studio.filmstrip.offline") : t("studio.filmstrip.empty"),
+          sessionState === "absent" ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "ofs-link", onClick: onSessionStart, children: t("studio.compute.start") }) : null
+        ] })
+      ] }) : null,
+      batches.map((batch) => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "ofs-batch", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "ofs-batch-thumbs", children: batch.entries.map((entry) => {
+          const path = entry.image.path || entry.image.file;
+          const active = path === selectedPath;
+          return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            "button",
+            {
+              type: "button",
+              className: active ? "ofs-thumb is-on" : "ofs-thumb",
+              onClick: () => onSelect(entry),
+              title: batch.prompt || path,
+              children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("img", { src: entry.image.url, alt: entry.image.file || "thumb", loading: "lazy" })
+            },
+            path
+          );
+        }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: "ofs-batch-meta", children: [
+          batch.presetId ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("em", { children: batch.presetId }) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("em", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { children: [
+            batch.entries.length,
+            " ",
+            t("unit.image")
+          ] })
+        ] })
+      ] }, batch.key))
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "ofs-filmstrip-side", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("button", { type: "button", className: "ofs-filmstrip-link", onClick: onOpenGallery, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Icon, { name: "images", size: 15 }),
+      t("studio.gallery.title"),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Icon, { name: "chevronRight", size: 13 })
+    ] }) })
   ] });
 }
 
 // src/studio/Gallery.jsx
 var import_react4 = __toESM(require("react"), 1);
-var import_jsx_runtime3 = require("react/jsx-runtime");
+var import_jsx_runtime4 = require("react/jsx-runtime");
 var DAY = 24 * 60 * 60 * 1e3;
+var BUCKETS = ["today", "week", "earlier"];
 function bucketOf(time, now) {
   if (!Number.isFinite(time)) return "earlier";
   const diff = now - time;
@@ -1041,19 +1311,34 @@ function bucketOf(time, now) {
   if (diff < 7 * DAY) return "week";
   return "earlier";
 }
+function keyOf(entry) {
+  return entry.image.path || entry.image.file;
+}
+function aspectOf(entry) {
+  const { image, item } = entry;
+  const width = Number(image && image.width) || Number(item && item.params && item.params.width) || 0;
+  const height = Number(image && image.height) || Number(item && item.params && item.params.height) || 0;
+  if (width > 0 && height > 0) return String(width / height);
+  return "";
+}
+function presetNameOf(presets, id) {
+  const found = (presets || []).find((preset) => preset && preset.id === id);
+  return found && found.label || id;
+}
 function Gallery(props) {
-  const { t, gallery, now, onOpen, favorites, onDelete, onExport } = props;
+  const { t, gallery, now, presets, favorites, onOpen, onDelete, onExport } = props;
   const [presetFilter, setPresetFilter] = import_react4.default.useState("");
   const [favoriteOnly, setFavoriteOnly] = import_react4.default.useState(false);
   const [selecting, setSelecting] = import_react4.default.useState(false);
   const [picked, setPicked] = import_react4.default.useState([]);
   const [confirming, setConfirming] = import_react4.default.useState(false);
   const [keyword, setKeyword] = import_react4.default.useState("");
+  const items = Array.isArray(gallery) ? gallery : [];
   const favoriteSet = new Set(favorites ?? []);
   const groups = { today: [], week: [], earlier: [] };
-  for (const entry of gallery) {
+  for (const entry of items) {
     if (presetFilter && entry.item.presetId !== presetFilter) continue;
-    const key = entry.image.path || entry.image.file;
+    const key = keyOf(entry);
     if (favoriteOnly && !favoriteSet.has(key)) continue;
     if (keyword.trim()) {
       const needle = keyword.trim().toLowerCase();
@@ -1063,11 +1348,9 @@ function Gallery(props) {
     const time = Date.parse(entry.item.finishedAt || entry.item.createdAt || entry.item.mtime || "");
     groups[bucketOf(time, now)].push(entry);
   }
-  const usedPresets = [...new Set(gallery.map((entry) => entry.item.presetId).filter(Boolean))];
-  const visibleCount = groups.today.length + groups.week.length + groups.earlier.length;
-  const visiblePaths = ["today", "week", "earlier"].flatMap(
-    (bucket) => groups[bucket].map((entry) => entry.image.path || entry.image.file)
-  );
+  const usedPresets = [...new Set(items.map((entry) => entry.item.presetId).filter(Boolean))];
+  const visibleCount = BUCKETS.reduce((total, bucket) => total + groups[bucket].length, 0);
+  const visiblePaths = BUCKETS.flatMap((bucket) => groups[bucket].map((entry) => keyOf(entry)));
   function togglePick(key) {
     setPicked((prev) => prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]);
   }
@@ -1076,49 +1359,99 @@ function Gallery(props) {
     setPicked([]);
     setConfirming(false);
   }
+  function clearFilters() {
+    setKeyword("");
+    setPresetFilter("");
+    setFavoriteOnly(false);
+  }
   async function confirmDelete() {
     if (picked.length === 0) return;
     await onDelete(picked);
     exitSelect();
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("section", { className: "ofs-gallery", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "ofs-gallery-bar", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("h3", { children: t("studio.gallery.title") }),
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-        "input",
-        {
-          className: "ofs-search",
-          type: "search",
-          value: keyword,
-          placeholder: t("studio.gallery.search"),
-          onChange: (event) => setKeyword(event.target.value)
-        }
-      ),
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "ofs-grow" }),
-      usedPresets.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("select", { value: presetFilter, onChange: (event) => setPresetFilter(event.target.value), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: "", children: t("studio.gallery.allPresets") }),
-        usedPresets.map((id) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: id, children: id }, id))
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("section", { className: visibleCount === 0 ? "ofs-gallery is-empty" : "ofs-gallery", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "ofs-gallery-tools", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "ofs-gallery-headline", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("h3", { className: "ofs-gallery-title", children: t("studio.gallery.title") }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "ofs-gallery-count", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("b", { children: visibleCount }),
+          " ",
+          t("unit.image")
+        ] })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("label", { className: "ofs-gallery-search", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Icon, { name: "search", size: 15, className: "ofs-gallery-search-icon" }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+          "input",
+          {
+            className: "ofs-gallery-search-input",
+            type: "search",
+            value: keyword,
+            placeholder: t("studio.gallery.search"),
+            "aria-label": t("studio.gallery.search"),
+            onChange: (event) => setKeyword(event.target.value)
+          }
+        )
+      ] }),
+      usedPresets.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "ofs-gallery-select", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+          "select",
+          {
+            className: "ofs-gallery-select-input",
+            value: presetFilter,
+            "aria-label": t("studio.gallery.allPresets"),
+            onChange: (event) => setPresetFilter(event.target.value),
+            children: [
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "", children: t("studio.gallery.allPresets") }),
+              usedPresets.map((id) => /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: id, children: presetNameOf(presets, id) }, id))
+            ]
+          }
+        ),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Icon, { name: "chevronDown", size: 13, className: "ofs-gallery-select-caret" })
       ] }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
         "button",
         {
           type: "button",
           className: favoriteOnly ? "ofs-chip is-on" : "ofs-chip",
+          "aria-pressed": favoriteOnly,
           onClick: () => setFavoriteOnly((value) => !value),
           children: [
-            "⭐ ",
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Icon, { name: favoriteOnly ? "starFilled" : "star", size: 13 }),
             t("studio.gallery.favoriteOnly")
           ]
         }
       ),
-      selecting ? /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: "ofs-muted", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "ofs-gallery-actions", children: selecting ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "ofs-gallery-selected", children: [
           t("studio.gallery.selectedCount"),
           " ",
-          picked.length
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("b", { children: picked.length })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "ofs-chip", onClick: exitSelect, children: t("studio.gallery.cancel") }),
-        confirming ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "ofs-chip is-danger", onClick: confirmDelete, disabled: picked.length === 0, children: t("studio.gallery.confirmDelete") }) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", className: "ofs-chip", onClick: exitSelect, children: t("studio.gallery.cancel") }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+          "button",
+          {
+            type: "button",
+            className: "ofs-chip",
+            onClick: () => onExport(picked.length > 0 ? picked : visiblePaths),
+            disabled: picked.length === 0 && visiblePaths.length === 0,
+            children: [
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Icon, { name: "copy", size: 13 }),
+              t("studio.gallery.export")
+            ]
+          }
+        ),
+        confirming ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+          "button",
+          {
+            type: "button",
+            className: "ofs-chip is-danger",
+            onClick: confirmDelete,
+            disabled: picked.length === 0,
+            children: t("studio.gallery.confirmDelete")
+          }
+        ) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
           "button",
           {
             type: "button",
@@ -1128,46 +1461,52 @@ function Gallery(props) {
             children: t("studio.gallery.delete")
           }
         )
-      ] }) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "ofs-chip", onClick: () => setSelecting(true), disabled: gallery.length === 0, children: t("studio.gallery.select") }),
-      selecting ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-        "button",
-        {
-          type: "button",
-          className: "ofs-chip",
-          onClick: () => onExport(picked.length > 0 ? picked : visiblePaths),
-          disabled: picked.length === 0 && visiblePaths.length === 0,
-          children: t("studio.gallery.export")
-        }
-      ) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "ofs-muted", children: visibleCount })
+      ] }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", className: "ofs-chip", onClick: () => setSelecting(true), disabled: items.length === 0, children: t("studio.gallery.select") }) })
     ] }),
-    visibleCount === 0 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("p", { className: "ofs-muted ofs-gallery-empty", children: t("studio.gallery.empty") }) : null,
-    ["today", "week", "earlier"].map((bucket) => {
+    visibleCount === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "ofs-gallery-empty", children: items.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { children: t("studio.gallery.noMatch") }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "ofs-gallery-empty-actions", children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", className: "ofs-chip", onClick: clearFilters, children: t("studio.gallery.clearFilters") }) })
+    ] }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { children: t("studio.gallery.empty") }) }) : BUCKETS.map((bucket) => {
       const entries = groups[bucket];
       if (entries.length === 0) return null;
-      return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "ofs-gallery-group", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("h4", { children: t(`studio.gallery.${bucket}`) }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "ofs-gallery-grid", children: entries.map((entry) => {
-          const key = entry.image.path || entry.image.file;
+      return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("section", { className: "ofs-gallery-group", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("h4", { className: "ofs-gallery-group-title", children: t(`studio.gallery.${bucket}`) }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "ofs-gallery-wall", children: entries.map((entry) => {
+          const key = keyOf(entry);
           const checked = picked.includes(key);
-          return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
+          const favorite = favoriteSet.has(key);
+          const aspect = aspectOf(entry);
+          const prompt = entry.item.prompt || "";
+          return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
             "button",
             {
               type: "button",
               className: checked ? "ofs-gallery-card is-picked" : "ofs-gallery-card",
+              title: prompt || key,
+              "aria-pressed": selecting ? checked : void 0,
               onClick: () => selecting ? togglePick(key) : onOpen(entry),
-              title: entry.item.prompt || key,
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("img", { src: entry.image.url, alt: entry.image.file || "thumb", loading: "lazy" }),
-                favoriteSet.has(key) ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "ofs-gallery-star", children: "⭐" }) : null,
-                selecting ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: checked ? "ofs-gallery-check is-on" : "ofs-gallery-check" }) : null,
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "ofs-gallery-caption", children: entry.item.prompt || "—" }),
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: "ofs-gallery-tags", children: [
-                  entry.item.presetId ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("em", { children: entry.item.presetId }) : null,
-                  entry.image.seed != null ? /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { children: [
-                    "#",
-                    entry.image.seed
-                  ] }) : null
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+                  "span",
+                  {
+                    className: "ofs-gallery-media",
+                    style: aspect ? { aspectRatio: aspect } : void 0,
+                    children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("img", { src: entry.image.url, alt: prompt || entry.image.file || "thumb", loading: "lazy" }),
+                      selecting ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: checked ? "ofs-gallery-pick is-on" : "ofs-gallery-pick", "aria-hidden": "true", children: checked ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Icon, { name: "check", size: 11 }) : null }) : null,
+                      favorite ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "ofs-gallery-star", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Icon, { name: "starFilled", size: 12 }) }) : null
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "ofs-gallery-body", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "ofs-gallery-caption", children: prompt || "—" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "ofs-gallery-tags", children: [
+                    entry.item.presetId ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("em", { children: entry.item.presetId }) : null,
+                    entry.image.seed != null ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { children: [
+                      "#",
+                      entry.image.seed
+                    ] }) : null
+                  ] })
                 ] })
               ]
             },
@@ -1181,7 +1520,7 @@ function Gallery(props) {
 
 // src/studio/GuidanceCard.jsx
 var import_react5 = __toESM(require("react"), 1);
-var import_jsx_runtime4 = require("react/jsx-runtime");
+var import_jsx_runtime5 = require("react/jsx-runtime");
 var KAGGLE_SETTINGS = "https://www.kaggle.com/settings";
 function guidanceKindOf(code) {
   if (!code) return "";
@@ -1202,13 +1541,13 @@ function GuidanceCard(props) {
   };
   const preset = presets[kind] ?? presets.generic;
   const secondary = kind === "auth" ? t("studio.guidance.cli.action") : "";
-  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "ofs-guidance", role: "alert", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "ofs-guidance-icon", "aria-hidden": "true", children: "⚠️" }),
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "ofs-guidance-body", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { className: "ofs-guidance-title", children: preset.title }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "ofs-guidance-actions", children: [
-        preset.href ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("a", { className: "ofs-chip is-on", href: preset.href, target: "_blank", rel: "noreferrer noopener", children: preset.action }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: preset.run, children: preset.action }),
-        secondary && onRecheck ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", className: "ofs-chip", onClick: onRecheck, children: secondary }) : null
+  return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance", role: "alert", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-guidance-icon", children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Icon, { name: "alert", size: 15 }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance-body", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { className: "ofs-guidance-title", children: preset.title }),
+      /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance-actions", children: [
+        preset.href ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("a", { className: "ofs-chip is-on", href: preset.href, target: "_blank", rel: "noreferrer noopener", children: preset.action }) : /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: preset.run, children: preset.action }),
+        secondary && onRecheck ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip", onClick: onRecheck, children: secondary }) : null
       ] })
     ] })
   ] });
@@ -1221,7 +1560,7 @@ var import_react6 = __toESM(require("react"), 1);
 var STYLE_CAPSULES = [
   {
     id: "film",
-    icon: "📷",
+    icon: "film",
     zh: "真实胶片",
     en: "Cinematic Film",
     suffix: "cinematic film photography, 35mm, natural skin texture, soft grain",
@@ -1229,7 +1568,7 @@ var STYLE_CAPSULES = [
   },
   {
     id: "concept",
-    icon: "🎨",
+    icon: "palette",
     zh: "概念原画",
     en: "Concept Art",
     suffix: "concept art, painterly, dramatic lighting, detailed brushwork",
@@ -1237,7 +1576,7 @@ var STYLE_CAPSULES = [
   },
   {
     id: "cyberpunk",
-    icon: "🌆",
+    icon: "skyline",
     zh: "赛博霓虹",
     en: "Cyberpunk",
     suffix: "cyberpunk neon city, volumetric light, reflective surfaces, night atmosphere",
@@ -1245,7 +1584,7 @@ var STYLE_CAPSULES = [
   },
   {
     id: "ink",
-    icon: "🖌️",
+    icon: "mountains",
     zh: "东方水墨",
     en: "Ink Wash",
     suffix: "traditional chinese ink wash painting, rice paper texture, negative space",
@@ -1253,7 +1592,7 @@ var STYLE_CAPSULES = [
   },
   {
     id: "clay",
-    icon: "🧸",
+    icon: "cube",
     zh: "3D 黏土",
     en: "Cute Clay",
     suffix: "clay render, soft studio light, pastel palette, playful proportions",
@@ -1263,14 +1602,14 @@ var STYLE_CAPSULES = [
 var PROMPT_BOOSTS = [
   {
     id: "light",
-    icon: "✨",
+    icon: "sun",
     zh: "丰富光影与材质细节",
     en: "Richer light and material detail",
     suffix: "rich cinematic lighting, detailed materials, subtle reflections"
   },
   {
     id: "cinema",
-    icon: "🎬",
+    icon: "focus",
     zh: "增加电影级景深景别",
     en: "Cinematic depth of field",
     suffix: "cinematic composition, shallow depth of field, 35mm lens"
@@ -1314,15 +1653,12 @@ function ratioToSize(ratio) {
 }
 
 // src/studio/Rail.jsx
-var import_jsx_runtime5 = require("react/jsx-runtime");
+var import_jsx_runtime6 = require("react/jsx-runtime");
 var PROMPT_MAX = 2e3;
 function Fieldset(props) {
-  return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("section", { className: "ofs-fieldset", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-fieldset-head", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("h3", { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-num", children: props.index }),
-        props.title
-      ] }),
+  return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("section", { className: "ofs-fieldset", id: props.id, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-fieldset-head", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { children: props.title }),
       props.action ? props.action : null
     ] }),
     props.children
@@ -1349,18 +1685,17 @@ function Rail(props) {
     enhancing,
     onEnhance,
     onApplySuggestion,
-    presets,
     mode,
     setMode
   } = props;
   const promptLength = form.prompt.length;
-  const styleList = STYLE_CAPSULES;
+  const hasPrompt = form.prompt.trim().length > 0;
   const activeSuggestion = suggestions.length > 0 ? suggestions : [];
-  return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("aside", { className: "ofs-rail", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("header", { className: "ofs-rail-head", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("h2", { children: t("studio.rail.title") }),
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-mode", role: "tablist", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("aside", { className: "ofs-panel ofs-panel--form", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("header", { className: "ofs-panel-head", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h2", { children: t("studio.rail.title") }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-seg", role: "tablist", "aria-label": t("studio.rail.title"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
           "button",
           {
             type: "button",
@@ -1371,7 +1706,7 @@ function Rail(props) {
             children: t("studio.rail.modeForm")
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
           "button",
           {
             type: "button",
@@ -1384,10 +1719,10 @@ function Rail(props) {
         )
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-rail-scroll", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(Fieldset, { index: "01", title: t("studio.prompt"), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-composer", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-panel-scroll", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(Fieldset, { id: "ofs-section-prompt", title: t("studio.prompt"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-composer", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
             "textarea",
             {
               className: "ofs-composer-input",
@@ -1401,20 +1736,20 @@ function Rail(props) {
               }
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-composer-foot", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("span", { className: "ofs-counter", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-composer-foot", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { className: "ofs-counter", children: [
               promptLength,
               " / ",
               PROMPT_MAX
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("button", { type: "button", className: "ofs-text-action", onClick: onEnhance, disabled: enhancing, children: [
-              enhancing ? t("studio.enhance.thinking") : t("studio.enhance.button"),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { "aria-hidden": "true", children: " ✨" })
+            /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("button", { type: "button", className: "ofs-text-action", onClick: onEnhance, disabled: enhancing, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Icon, { name: "expandText", size: 13 }),
+              enhancing ? t("studio.enhance.thinking") : t("studio.enhance.button")
             ] })
           ] })
         ] }),
-        activeSuggestion.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-suggestions", children: [
-          activeSuggestion.map((entry) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+        activeSuggestion.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-suggestions", children: [
+          activeSuggestion.map((entry) => /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
             "button",
             {
               type: "button",
@@ -1425,8 +1760,8 @@ function Rail(props) {
             },
             entry.id
           )),
-          suggestSource === "local" ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-muted", children: t("studio.enhance.local") }) : null
-        ] }) : /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "ofs-suggestions", children: PROMPT_BOOSTS.map((entry) => /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+          suggestSource === "local" ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-muted", children: t("studio.enhance.local") }) : null
+        ] }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "ofs-suggestions", children: PROMPT_BOOSTS.map((entry) => /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(
           "button",
           {
             type: "button",
@@ -1434,29 +1769,29 @@ function Rail(props) {
             onClick: () => onApplySuggestion(entry.suffix),
             title: entry.suffix,
             children: [
-              entry.icon,
-              " ",
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Icon, { name: entry.icon, size: 13 }),
               isEn ? entry.en : entry.zh
             ]
           },
           entry.id
         )) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Fieldset, { index: "02", title: t("studio.style"), children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "ofs-tiles", children: styleList.map((capsule) => /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Fieldset, { id: "ofs-section-style", title: t("studio.style"), children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "ofs-tiles", children: STYLE_CAPSULES.map((capsule) => /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(
         "button",
         {
           type: "button",
           className: styleId === capsule.id ? "ofs-tile is-on" : "ofs-tile",
           onClick: () => applyStyle(capsule.id),
           "aria-pressed": styleId === capsule.id,
+          title: isEn ? capsule.en : capsule.zh,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-tile-icon", "aria-hidden": "true", children: capsule.icon }),
-            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-tile-label", children: isEn ? capsule.en : capsule.zh })
+            /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: `ofs-tile-art is-${capsule.id}`, "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Icon, { name: capsule.icon, size: 16 }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-tile-label", children: isEn ? capsule.en : capsule.zh })
           ]
         },
         capsule.id
       )) }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Fieldset, { index: "03", title: t("studio.rail.frame"), children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "ofs-ratio-row", children: DEFAULT_RATIOS.map((ratio) => /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Fieldset, { title: t("studio.rail.frame"), children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "ofs-ratio-row", children: DEFAULT_RATIOS.map((ratio) => /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(
         "button",
         {
           type: "button",
@@ -1464,15 +1799,15 @@ function Rail(props) {
           onClick: () => applyRatio(ratio.id),
           "aria-pressed": ratioId === ratio.id,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: `ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(":", "-")}`, "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-ratio-label", children: ratio.id })
+            /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: `ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(":", "-")}`, "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-ratio-label", children: ratio.id })
           ]
         },
         ratio.id
       )) }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Fieldset, { index: "04", title: t("studio.rail.advanced"), children: /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-rows", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Fieldset, { id: "ofs-section-advanced", title: t("studio.rail.advanced"), children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-rows", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: negativeOpen ? "ofs-row is-open" : "ofs-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(
             "button",
             {
               type: "button",
@@ -1480,12 +1815,12 @@ function Rail(props) {
               onClick: () => setNegativeOpen((open) => !open),
               "aria-expanded": negativeOpen,
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { children: t("studio.negative") }),
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-chevron", "aria-hidden": "true", children: negativeOpen ? "⌃" : "⌄" })
+                /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { children: t("studio.negative") }),
+                /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: negativeOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Icon, { name: "chevronDown", size: 14 }) })
               ]
             }
           ),
-          negativeOpen ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+          negativeOpen ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
             "textarea",
             {
               className: "ofs-row-textarea",
@@ -1497,8 +1832,8 @@ function Rail(props) {
             }
           ) : null
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: advancedOpen ? "ofs-row is-open" : "ofs-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(
             "button",
             {
               type: "button",
@@ -1506,15 +1841,15 @@ function Rail(props) {
               onClick: () => setAdvancedOpen((open) => !open),
               "aria-expanded": advancedOpen,
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { children: t("studio.rail.params") }),
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-chevron", "aria-hidden": "true", children: advancedOpen ? "⌃" : "⌄" })
+                /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { children: t("studio.rail.params") }),
+                /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: advancedOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Icon, { name: "chevronDown", size: 14 }) })
               ]
             }
           ),
-          advancedOpen ? /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-grid2", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { className: "ofs-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { children: t("studio.steps") }),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+          advancedOpen ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-grid2", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("label", { className: "ofs-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { children: t("studio.steps") }),
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
                 "input",
                 {
                   type: "number",
@@ -1525,9 +1860,9 @@ function Rail(props) {
                 }
               )
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { className: "ofs-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { children: t("studio.cfg") }),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("label", { className: "ofs-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { children: t("studio.cfg") }),
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
                 "input",
                 {
                   type: "number",
@@ -1539,9 +1874,9 @@ function Rail(props) {
                 }
               )
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { className: "ofs-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { children: t("studio.seed") }),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("label", { className: "ofs-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { children: t("studio.seed") }),
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
                 "input",
                 {
                   type: "text",
@@ -1552,134 +1887,381 @@ function Rail(props) {
                 }
               )
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { className: "ofs-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { children: t("studio.count") }),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("select", { value: form.count, onChange: (event) => patchForm({ count: Number(event.target.value) }), children: [1, 2, 3, 4].map((value) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("option", { value, children: value }, value)) })
+            /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("label", { className: "ofs-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { children: t("studio.count") }),
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("select", { value: form.count, onChange: (event) => patchForm({ count: Number(event.target.value) }), children: [1, 2, 3, 4].map((value) => /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("option", { value, children: value }, value)) })
             ] })
           ] }) : null
         ] })
       ] }) })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-rail-bottom", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-generate", onClick: onGenerate, disabled: sending, children: sending ? t("studio.generating") : t("studio.generate") }),
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { className: "ofs-hint", children: t("studio.generateHint") })
+    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-panel-foot", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("button", { type: "button", className: "ofs-btn is-primary ofs-generate", onClick: onGenerate, disabled: sending || !hasPrompt, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Icon, { name: "sparkles", size: 16 }),
+        sending ? t("studio.generating") : t("studio.generate")
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "ofs-hint", children: hasPrompt ? t("studio.generateHint") : t("studio.promptHint") })
+    ] })
+  ] });
+}
+
+// src/studio/RailNav.jsx
+var import_react7 = __toESM(require("react"), 1);
+var import_jsx_runtime7 = require("react/jsx-runtime");
+function sessionTone(sessionState) {
+  if (sessionState === "ready") return "ok";
+  if (sessionState === "error") return "error";
+  if (sessionState === "absent") return "idle";
+  return "warn";
+}
+function RailNav(props) {
+  const { t, view, mode, sessionState, onSection, onGallery } = props;
+  const tone = sessionTone(sessionState);
+  const computeLabel = sessionState === "ready" ? t("studio.compute.online") : sessionState === "provisioning" ? t("studio.compute.queued") : sessionState === "connecting" || sessionState === "warming" ? t("studio.compute.warming") : sessionState === "stopping" ? t("studio.compute.stopping") : sessionState === "error" ? t("studio.compute.error") : t("studio.compute.offline");
+  const studioActive = view === "studio" && mode === "form";
+  return /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("aside", { className: "ofs-rail", "aria-label": t("studio.rail.tools"), children: [
+    /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "ofs-rail-group", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(
+        "button",
+        {
+          type: "button",
+          className: `ofs-rail-btn${studioActive ? " is-on" : ""}`,
+          onClick: () => onSection("prompt"),
+          title: t("studio.rail.sectionPrompt"),
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Icon, { name: "sparkles", size: 19 }),
+            /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { children: t("studio.rail.sectionPrompt") })
+          ]
+        }
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(
+        "button",
+        {
+          type: "button",
+          className: "ofs-rail-btn",
+          onClick: () => onSection("style"),
+          title: t("studio.rail.sectionStyle"),
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Icon, { name: "palette", size: 19 }),
+            /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { children: t("studio.rail.sectionStyle") })
+          ]
+        }
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(
+        "button",
+        {
+          type: "button",
+          className: "ofs-rail-btn",
+          onClick: () => onSection("advanced"),
+          title: t("studio.rail.sectionAdvanced"),
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Icon, { name: "sliders", size: 19 }),
+            /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { children: t("studio.rail.sectionAdvanced") })
+          ]
+        }
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: "ofs-rail-divider", "aria-hidden": "true" }),
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(
+        "button",
+        {
+          type: "button",
+          className: `ofs-rail-btn${view === "gallery" ? " is-on" : ""}`,
+          onClick: onGallery,
+          "aria-pressed": view === "gallery",
+          title: t("studio.tab.gallery"),
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Icon, { name: "images", size: 19 }),
+            /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { children: t("studio.tab.gallery") })
+          ]
+        }
+      )
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: "ofs-grow" }),
+    /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: `ofs-rail-status is-${tone}`, title: computeLabel, "aria-label": computeLabel, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("i", { className: `ofs-dot is-${tone}${tone === "ok" ? " is-live" : ""}`, "aria-hidden": "true" }),
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { children: t("studio.rail.compute") })
     ] })
   ] });
 }
 
 // src/studio/Stage.jsx
-var import_react7 = __toESM(require("react"), 1);
-var import_jsx_runtime6 = require("react/jsx-runtime");
+var import_react8 = __toESM(require("react"), 1);
+var import_jsx_runtime8 = require("react/jsx-runtime");
 function Stage(props) {
-  const { t, selected, activeJob, onIterate, onReroll, onCopy, zoom, setZoom, isFavorite, onToggleFavorite, onUseExample } = props;
+  const { t, selected, activeJob, sessionQueued, onIterate, onReroll, onCopy, zoom, setZoom, isFavorite, onToggleFavorite, onUseExample } = props;
   const image = selected && selected.image ? selected.image : null;
   const params = selected && selected.item && selected.item.params || null;
+  const closeRef = import_react8.default.useRef(null);
+  import_react8.default.useEffect(() => {
+    if (!zoom) return void 0;
+    function onKey(event) {
+      if (event.key === "Escape") setZoom(false);
+    }
+    document.addEventListener("keydown", onKey);
+    if (closeRef.current && typeof closeRef.current.focus === "function") closeRef.current.focus();
+    return () => document.removeEventListener("keydown", onKey);
+  }, [zoom]);
   if (!image) {
-    return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("section", { className: "ofs-stage", children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "ofs-figure ofs-figure--empty", children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-empty-card", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-empty-glyph", "aria-hidden": "true", children: "✧" }),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.empty") }),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "ofs-muted", children: t("studio.stage.emptyHint") }),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "ofs-examples", children: ["studio.example.1", "studio.example.2", "studio.example.3"].map((key) => /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { type: "button", className: "ofs-example", onClick: () => onUseExample(t(key)), children: t(key) }, key)) })
-    ] }) }) });
+    return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("section", { className: "ofs-stage", children: /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-figure ofs-figure--empty", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-empty-card", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-empty-icon", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "images", size: 26 }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.empty") }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-muted", children: t("studio.stage.emptyHint") }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-examples", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
+          ["studio.example.1", "studio.example.2", "studio.example.3"].map((key) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-example", onClick: () => onUseExample(t(key)), children: t(key) }, key))
+        ] })
+      ] }),
+      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-stage-progress", role: "status", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-progress-label", children: sessionQueued ? t("studio.compute.queued") : t("studio.stage.rendering") })
+      ] }) : null
+    ] }) });
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("section", { className: "ofs-stage", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("figure", { className: "ofs-figure", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { type: "button", className: "ofs-figure-button", onClick: () => setZoom(true), title: t("studio.stage.zoom"), children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("img", { src: image.url, alt: image.file || "image", className: "ofs-image" }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("figcaption", { className: "ofs-meta", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { children: [
-          t("studio.meta.size"),
-          " ",
+  const favorite = isFavorite(image.path || image.file);
+  return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("section", { className: "ofs-stage", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("figure", { className: "ofs-figure", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-figure-button", onClick: () => setZoom(true), title: t("studio.stage.zoom"), children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("img", { src: image.url, alt: image.file || "image", className: "ofs-image" }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-figure-tools", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: () => setZoom(true), title: t("studio.stage.zoom"), "aria-label": t("studio.stage.zoom"), children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "expand", size: 16 }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: () => onCopy(image.path || image.file), title: t("studio.action.copyPath"), "aria-label": t("studio.action.copyPath"), children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "copy", size: 16 }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+          "button",
+          {
+            type: "button",
+            className: favorite ? "ofs-glass-btn is-on" : "ofs-glass-btn",
+            onClick: () => onToggleFavorite(image.path || image.file),
+            title: favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
+            "aria-label": favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
+            "aria-pressed": favorite,
+            children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: favorite ? "starFilled" : "star", size: 16 })
+          }
+        )
+      ] }),
+      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-stage-progress", role: "status", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-progress-label", children: sessionQueued ? t("studio.compute.queued") : t("studio.stage.rendering") })
+      ] }) : null
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-stage-foot", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-stage-prompt", children: params && params.prompt ? params.prompt : "" }),
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-stage-meta", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("span", { children: [
           image.width || "—",
-          "×",
+          " × ",
           image.height || "—"
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { "aria-hidden": "true", children: "·" }),
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { children: [
-          t("studio.meta.elapsed"),
-          " ",
-          formatSeconds(t, image.seconds)
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { "aria-hidden": "true", children: "·" }),
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { "aria-hidden": "true", children: "·" }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { children: formatSeconds(t, image.seconds) }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { "aria-hidden": "true", children: "·" }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("span", { children: [
           t("studio.meta.seed"),
           " ",
           image.seed ?? "—"
         ] })
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-dock", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { type: "button", className: "ofs-dock-button", onClick: () => onIterate(selected), children: t("studio.action.iterate") }),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { type: "button", className: "ofs-dock-button", onClick: onReroll, children: t("studio.action.reroll") }),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { type: "button", className: "ofs-dock-button", onClick: () => onToggleFavorite(image.path || image.file), children: isFavorite(image.path || image.file) ? t("studio.action.favorited") : t("studio.action.favorite") }),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { type: "button", className: "ofs-dock-button", onClick: () => onCopy(image.path || image.file), children: t("studio.action.copyPath") })
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-dock", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => onIterate(selected), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "focus", size: 15 }),
+        t("studio.action.iterate")
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: onReroll, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "reroll", size: 15 }),
+        t("studio.action.reroll")
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => onCopy(image.path || image.file), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "copy", size: 15 }),
+        t("studio.action.copyPath")
+      ] })
     ] }),
-    params && params.prompt ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "ofs-stage-prompt", children: params.prompt }) : null,
-    activeJob ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-stage-progress", role: "status", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-progress-label", children: t("studio.stage.rendering") }),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-shimmer" })
-    ] }) : null,
-    zoom ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "ofs-lightbox", role: "presentation", onClick: () => setZoom(false), children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("img", { src: image.url, alt: image.file || "image", onClick: (event) => event.stopPropagation() }) }) : null
+    zoom ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
+      "div",
+      {
+        className: "ofs-lightbox",
+        role: "dialog",
+        "aria-modal": "true",
+        "aria-label": t("studio.stage.zoom"),
+        onClick: () => setZoom(false),
+        children: [
+          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("img", { src: image.url, alt: image.file || "image", onClick: (event) => event.stopPropagation() }),
+          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+            "button",
+            {
+              ref: closeRef,
+              type: "button",
+              className: "ofs-lightbox-close",
+              onClick: () => setZoom(false),
+              "aria-label": t("studio.dismiss"),
+              children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "close", size: 16 })
+            }
+          )
+        ]
+      }
+    ) : null
   ] });
 }
 
 // src/studio/Toast.jsx
-var import_react8 = __toESM(require("react"), 1);
-var import_jsx_runtime7 = require("react/jsx-runtime");
+var import_react9 = __toESM(require("react"), 1);
+var import_jsx_runtime9 = require("react/jsx-runtime");
 function Toast(props) {
   const { toast } = props;
   if (!toast) return null;
-  return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "ofs-toast", role: "status", children: toast.text }, toast.id);
+  return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-toast", role: "status", children: toast.text }, toast.id);
 }
 
 // src/studio/TopBar.jsx
-var import_react9 = __toESM(require("react"), 1);
-var import_jsx_runtime8 = require("react/jsx-runtime");
-function sessionPill(t, sessionState, busy, onStart, onStop) {
-  if (sessionState === "ready") return { tone: "ok", label: t("studio.compute.online"), action: onStop, actionLabel: t("studio.compute.stop") };
+var import_react11 = __toESM(require("react"), 1);
+
+// src/studio/StudioIcon.jsx
+var import_react10 = __toESM(require("react"), 1);
+var import_jsx_runtime10 = require("react/jsx-runtime");
+function StudioIcon(props) {
+  const size = props && props.size || 20;
+  return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
+    "svg",
+    {
+      width: size,
+      height: size,
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: 1.6,
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      "aria-hidden": "true",
+      children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("path", { d: "M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8" }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("path", { d: "M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8" }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("path", { d: "M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16" }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("path", { d: "M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("circle", { cx: "12", cy: "12", r: "3.2" })
+      ]
+    }
+  );
+}
+
+// src/studio/TopBar.jsx
+var import_jsx_runtime11 = require("react/jsx-runtime");
+function sessionPill(t, sessionState) {
+  if (sessionState === "ready") return { tone: "ok", label: t("studio.compute.online") };
   if (sessionState === "provisioning") return { tone: "warn", label: t("studio.compute.queued") };
   if (sessionState === "connecting" || sessionState === "warming") return { tone: "warn", label: t("studio.compute.warming") };
   if (sessionState === "stopping") return { tone: "warn", label: t("studio.compute.stopping") };
-  if (sessionState === "error") return { tone: "error", label: t("studio.compute.error"), action: onStart, actionLabel: t("studio.compute.start") };
-  return { tone: "idle", label: t("studio.compute.offline"), action: onStart, actionLabel: t("studio.compute.start") };
+  if (sessionState === "error") return { tone: "error", label: t("studio.compute.error") };
+  return { tone: "idle", label: t("studio.compute.offline") };
 }
 function TopBar(props) {
-  const { t, view, setView, sessionState, presets, form, patchForm, busy, onStart, onStop, onProbe } = props;
-  const pill = sessionPill(t, sessionState, busy, onStart, onStop);
-  const [open, setOpen] = import_react9.default.useState(false);
-  return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("header", { className: "ofs-topbar", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("nav", { className: "ofs-tabs", "aria-label": t("studio.tabs"), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: view === "studio" ? "is-on" : "", onClick: () => setView("studio"), children: t("studio.tab.studio") }),
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: view === "gallery" ? "is-on" : "", onClick: () => setView("gallery"), children: t("studio.tab.gallery") })
+  const { t, view, setView, sessionState, session, quota, presets, form, patchForm, busy, onStart, onStop, onProbe, onRefresh } = props;
+  const pill = sessionPill(t, sessionState);
+  const [open, setOpen] = import_react11.default.useState(false);
+  const wrapRef = import_react11.default.useRef(null);
+  import_react11.default.useEffect(() => {
+    if (!open) return void 0;
+    function onKey(event) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    function onDown(event) {
+      const node = wrapRef.current;
+      if (node && !node.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [open]);
+  const idleMinutes = session && session.idleTimeoutSec ? Math.round(session.idleTimeoutSec / 60) : 0;
+  const quotaUsed = quota && Number.isFinite(quota.usedHours) ? quota.usedHours : null;
+  const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null;
+  const notReady = sessionState === "absent" || sessionState === "error";
+  const activePreset = presets.find((item) => item.id === form.presetId) || null;
+  return /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("header", { className: "ofs-topbar", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-brand", title: t("studio.nav.label"), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-brand-mark", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(StudioIcon, { size: 18 }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-brand-name", children: t("studio.brand") }),
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-brand-sub", children: t("studio.brandSub") })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-grow" }),
-    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-pill-wrap", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
+    /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("nav", { className: "ofs-tabs", "aria-label": t("studio.tabs"), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", className: view === "studio" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("studio"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "sparkles", size: 15 }),
+        t("studio.tab.studio")
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", className: view === "gallery" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("gallery"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "images", size: 15 }),
+        t("studio.tab.gallery")
+      ] })
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-grow" }),
+    onRefresh ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", className: "ofs-icon-btn", onClick: onRefresh, title: t("studio.refresh"), "aria-label": t("studio.refresh"), children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "refresh", size: 16 }) }) : null,
+    /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-pill-wrap", ref: wrapRef, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
         "button",
         {
           type: "button",
-          className: `ofs-pill ofs-pill--${pill.tone}`,
+          className: `ofs-compute is-${pill.tone}`,
           onClick: () => setOpen((value) => !value),
           "aria-expanded": open,
+          "aria-haspopup": "menu",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("i", { "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { children: pill.label }),
-            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-pill-caret", "aria-hidden": "true", children: "▾" })
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("i", { className: `ofs-dot is-${pill.tone}${pill.tone === "ok" ? " is-live" : ""}`, "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { children: pill.label }),
+            quotaUsed !== null && quotaTotal !== null ? /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("em", { children: [
+              quotaUsed,
+              " / ",
+              quotaTotal,
+              " ",
+              t("unit.hour")
+            ] }) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-pill-caret", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "chevronDown", size: 13 }) })
           ]
         }
       ),
-      open ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-pill-card", role: "dialog", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", onClick: onStop, disabled: !!busy || sessionState === "absent", children: t("studio.compute.stop") }),
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", onClick: onStart, disabled: !!busy || sessionState === "ready", children: t("studio.compute.start") }),
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", onClick: onProbe, disabled: !!busy, children: t("studio.compute.check") })
+      open ? /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-popover", role: "menu", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-popover-head", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("span", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("i", { className: `ofs-dot is-${pill.tone}`, "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("b", { children: pill.label })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("span", { className: "ofs-muted", children: [
+            t("studio.compute.quota"),
+            " ",
+            quotaUsed !== null && quotaTotal !== null ? `${quotaUsed} / ${quotaTotal} ${t("unit.hour")}` : "—"
+          ] }),
+          idleMinutes > 0 ? /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("span", { className: "ofs-muted", children: [
+            t("studio.compute.idleFor"),
+            " ",
+            idleMinutes,
+            " ",
+            t("unit.min")
+          ] }) : null,
+          session && session.device ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-muted", children: session.device }) : null
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: onStart, disabled: !!busy || !notReady, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "cloud", size: 15 }),
+          t("studio.compute.start")
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: onStop, disabled: !!busy || sessionState === "absent", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "clock", size: 15 }),
+          t("studio.compute.stop")
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: onProbe, disabled: !!busy, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "refresh", size: 15 }),
+          t("studio.compute.check")
+        ] })
       ] }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("label", { className: "ofs-preset", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { children: t("studio.preset") }),
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
+    /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("label", { className: "ofs-preset", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "sliders", size: 14 }),
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-preset-label", children: t("studio.preset") }),
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
         "select",
         {
           value: form.presetId,
           disabled: presets.length === 0,
+          "aria-label": t("studio.preset"),
           onChange: (event) => {
             const id = event.target.value;
             const next = presets.find((item) => item.id === id);
@@ -1694,17 +2276,19 @@ function TopBar(props) {
             });
           },
           children: [
-            presets.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("option", { value: "", children: "—" }) : null,
-            presets.map((item) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("option", { value: item.id, children: item.label ? `${item.label} · ${item.id}` : item.id }, item.id))
+            presets.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("option", { value: "", children: "—" }) : null,
+            presets.map((item) => /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("option", { value: item.id, children: item.label || item.id }, item.id))
           ]
         }
-      )
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-preset-meta", children: activePreset && activePreset.params ? activePreset.params : "" }),
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "chevronDown", size: 13, className: "ofs-preset-caret" })
     ] })
   ] });
 }
 
 // src/studio/useStudio.js
-var import_react10 = __toESM(require("react"), 1);
+var import_react12 = __toESM(require("react"), 1);
 
 // src/logic/error.js
 function errorText(t, error) {
@@ -1750,35 +2334,38 @@ function useStudio(props) {
   const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : [];
   const defaultPreset = state && state.defaultPreset || "";
   const activeJob = activeJobOf(state);
-  const [form, setForm] = import_react10.default.useState(EMPTY_FORM);
-  const [view, setView] = import_react10.default.useState("studio");
-  const [advancedOpen, setAdvancedOpen] = import_react10.default.useState(false);
-  const [negativeOpen, setNegativeOpen] = import_react10.default.useState(false);
-  const [sending, setSending] = import_react10.default.useState(false);
-  const [busy, setBusy] = import_react10.default.useState("");
-  const [error, setError] = import_react10.default.useState(null);
-  const [toast, setToast] = import_react10.default.useState(null);
-  const [selectedPath, setSelectedPath] = import_react10.default.useState("");
-  const [historyItems, setHistoryItems] = import_react10.default.useState([]);
-  const [historyDone, setHistoryDone] = import_react10.default.useState(false);
-  const [favorites, setFavorites] = import_react10.default.useState([]);
-  const [suggestions, setSuggestions] = import_react10.default.useState([]);
-  const [suggestSource, setSuggestSource] = import_react10.default.useState("");
-  const [enhancing, setEnhancing] = import_react10.default.useState(false);
-  const [panelMode, setPanelMode] = import_react10.default.useState(props && props.panelMode === "chat" ? "chat" : "form");
-  const [messages, setMessages] = import_react10.default.useState([]);
-  const messageSeq = import_react10.default.useRef(0);
-  const [zoom, setZoom] = import_react10.default.useState(false);
-  const [ratioId, setRatioId] = import_react10.default.useState("1:1");
-  const pendingRef = import_react10.default.useRef(null);
-  const aliveRef = import_react10.default.useRef(true);
-  import_react10.default.useEffect(() => {
+  const [form, setForm] = import_react12.default.useState(() => ({
+    ...EMPTY_FORM,
+    prompt: props && typeof props.initialPrompt === "string" ? props.initialPrompt : ""
+  }));
+  const [view, setView] = import_react12.default.useState(props && props.view === "gallery" ? "gallery" : "studio");
+  const [advancedOpen, setAdvancedOpen] = import_react12.default.useState(false);
+  const [negativeOpen, setNegativeOpen] = import_react12.default.useState(false);
+  const [sending, setSending] = import_react12.default.useState(false);
+  const [busy, setBusy] = import_react12.default.useState("");
+  const [error, setError] = import_react12.default.useState(null);
+  const [toast, setToast] = import_react12.default.useState(null);
+  const [selectedPath, setSelectedPath] = import_react12.default.useState("");
+  const [historyItems, setHistoryItems] = import_react12.default.useState([]);
+  const [historyDone, setHistoryDone] = import_react12.default.useState(false);
+  const [favorites, setFavorites] = import_react12.default.useState([]);
+  const [suggestions, setSuggestions] = import_react12.default.useState([]);
+  const [suggestSource, setSuggestSource] = import_react12.default.useState("");
+  const [enhancing, setEnhancing] = import_react12.default.useState(false);
+  const [panelMode, setPanelMode] = import_react12.default.useState(props && props.panelMode === "chat" ? "chat" : "form");
+  const [messages, setMessages] = import_react12.default.useState([]);
+  const messageSeq = import_react12.default.useRef(0);
+  const [zoom, setZoom] = import_react12.default.useState(false);
+  const [ratioId, setRatioId] = import_react12.default.useState("1:1");
+  const pendingRef = import_react12.default.useRef(null);
+  const aliveRef = import_react12.default.useRef(true);
+  import_react12.default.useEffect(() => {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
     };
   }, []);
-  import_react10.default.useEffect(() => {
+  import_react12.default.useEffect(() => {
     if (presets.length === 0) return;
     setForm((prev) => {
       if (prev.presetId && presets.some((item) => item.id === prev.presetId)) return prev;
@@ -1796,7 +2383,7 @@ function useStudio(props) {
       };
     });
   }, [presets.length, defaultPreset]);
-  const loadHistory = import_react10.default.useCallback(async () => {
+  const loadHistory = import_react12.default.useCallback(async () => {
     const result = await request("imagen-api/history?limit=60", { method: "GET" });
     if (!aliveRef.current) return;
     if (result.ok && result.data && Array.isArray(result.data.items)) {
@@ -1804,20 +2391,20 @@ function useStudio(props) {
     }
     setHistoryDone(true);
   }, []);
-  import_react10.default.useEffect(() => {
+  import_react12.default.useEffect(() => {
     loadHistory();
   }, [loadHistory]);
-  const loadLibrary = import_react10.default.useCallback(async () => {
+  const loadLibrary = import_react12.default.useCallback(async () => {
     const result = await request("imagen-api/library", { method: "GET" });
     if (!aliveRef.current) return;
     if (result.ok && result.data && Array.isArray(result.data.favorites)) setFavorites(result.data.favorites);
   }, []);
-  import_react10.default.useEffect(() => {
+  import_react12.default.useEffect(() => {
     loadLibrary();
   }, [loadLibrary]);
   const threadJob = activeJob || state && state.lastJob || null;
   const threadJobKey = threadJob ? `${threadJob.id}:${threadJob.status}` : "";
-  import_react10.default.useEffect(() => {
+  import_react12.default.useEffect(() => {
     if (!threadJob || messages.length === 0) return;
     setMessages((prev) => {
       const index = prev.map((item) => item.jobId).lastIndexOf(threadJob.id);
@@ -1849,9 +2436,9 @@ function useStudio(props) {
       return copy;
     });
   }, [threadJobKey]);
-  const firstImageRef = import_react10.default.useRef(false);
+  const firstImageRef = import_react12.default.useRef(false);
   const finished = state && state.lastJob && state.lastJob.status === "done" ? state.lastJob : null;
-  import_react10.default.useEffect(() => {
+  import_react12.default.useEffect(() => {
     if (!finished || firstImageRef.current) return;
     const images = Array.isArray(finished.output?.images) ? finished.output.images : [];
     if (images.length === 0) return;
@@ -1859,8 +2446,8 @@ function useStudio(props) {
     setToast({ text: t("studio.toast.firstImage"), id: Date.now() });
   }, [finished && finished.id]);
   const lastJobId = state && state.lastJob ? `${state.lastJob.id}:${state.lastJob.finishedAt ?? ""}` : "";
-  const lastSeenRef = import_react10.default.useRef("");
-  import_react10.default.useEffect(() => {
+  const lastSeenRef = import_react12.default.useRef("");
+  import_react12.default.useEffect(() => {
     if (!lastJobId || lastSeenRef.current === lastJobId) return;
     lastSeenRef.current = lastJobId;
     loadHistory();
@@ -1883,7 +2470,7 @@ function useStudio(props) {
   function showToast(text) {
     setToast({ text, id: Date.now() });
   }
-  import_react10.default.useEffect(() => {
+  import_react12.default.useEffect(() => {
     if (!toast) return void 0;
     const timer = setTimeout(() => {
       if (aliveRef.current) setToast(null);
@@ -2097,6 +2684,7 @@ function useStudio(props) {
   return {
     guidanceCode,
     batches,
+    quota: state && state.probe && state.probe.quota || null,
     panelMode,
     setPanelMode,
     messages,
@@ -2166,14 +2754,23 @@ function useStudio(props) {
 }
 
 // src/studio/Studio.jsx
-var import_jsx_runtime9 = require("react/jsx-runtime");
+var import_jsx_runtime12 = require("react/jsx-runtime");
 function Studio(props) {
   const s = useStudio(props);
   const now = useNow(Boolean(s.activeJob));
   const elapsedMs = s.activeJob ? jobElapsed(s.activeJob, now) : 0;
   const guidanceKind = guidanceKindOf(s.guidanceCode);
   const chatMode = s.panelMode === "chat";
-  const panel = chatMode ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+  function focusSection(section) {
+    s.setView("studio");
+    s.setPanelMode("form");
+    if (typeof document === "undefined" || typeof document.getElementById !== "function") return;
+    setTimeout(() => {
+      const node = document.getElementById(`ofs-section-${section}`);
+      if (node && typeof node.scrollIntoView === "function") node.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }
+  const panel = chatMode ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
     ChatPanel,
     {
       t: s.t,
@@ -2194,7 +2791,7 @@ function Studio(props) {
       suggestions: s.suggestions,
       onApplySuggestion: s.applySuggestion
     }
-  ) : /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+  ) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
     Rail,
     {
       t: s.t,
@@ -2221,26 +2818,29 @@ function Studio(props) {
       setMode: s.setPanelMode
     }
   );
-  return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-root", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("style", { children: styles_default }),
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
-      TopBar,
-      {
-        t: s.t,
-        view: s.view,
-        setView: s.setView,
-        sessionState: s.sessionState,
-        presets: s.presets,
-        form: s.form,
-        patchForm: s.patchForm,
-        busy: s.busy,
-        onStart: s.startSession,
-        onStop: s.stopSession,
-        onProbe: s.runProbe
-      }
-    ),
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-shell", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-root", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("style", { children: CSS }),
+    /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-app", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+        TopBar,
+        {
+          t: s.t,
+          view: s.view,
+          setView: s.setView,
+          sessionState: s.sessionState,
+          session: s.session,
+          quota: s.quota,
+          presets: s.presets,
+          form: s.form,
+          patchForm: s.patchForm,
+          busy: s.busy,
+          onStart: s.startSession,
+          onStop: s.stopSession,
+          onProbe: s.runProbe,
+          onRefresh: s.loadHistory
+        }
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
         GuidanceCard,
         {
           t: s.t,
@@ -2251,9 +2851,20 @@ function Studio(props) {
           onRetry: s.reroll
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: `ofs-body ${chatMode ? "is-chat" : ""}`, children: [
-        panel,
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-main", children: s.view === "gallery" ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: `ofs-body${s.view === "gallery" ? " is-gallery" : ""}${chatMode ? " is-chat" : ""}`, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+          RailNav,
+          {
+            t: s.t,
+            view: s.view,
+            mode: s.panelMode,
+            sessionState: s.sessionState,
+            onSection: focusSection,
+            onGallery: () => s.setView("gallery")
+          }
+        ),
+        s.view === "studio" ? panel : null,
+        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "ofs-main", children: s.view === "gallery" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
           Gallery,
           {
             t: s.t,
@@ -2268,12 +2879,13 @@ function Studio(props) {
               s.setView("studio");
             }
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+        ) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
           Stage,
           {
             t: s.t,
             selected: s.selected,
             activeJob: s.activeJob,
+            sessionQueued: s.sessionQueued,
             zoom: s.zoom,
             setZoom: s.setZoom,
             onIterate: s.iterate,
@@ -2284,53 +2896,26 @@ function Studio(props) {
             onUseExample: (text) => s.patchForm({ prompt: text })
           }
         ) })
-      ] })
+      ] }),
+      s.view === "studio" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+        Filmstrip,
+        {
+          t: s.t,
+          batches: s.batches,
+          activeJob: s.activeJob,
+          selected: s.selected,
+          onSelect: s.selectImage,
+          now,
+          elapsedMs,
+          sessionState: s.sessionState,
+          sessionQueued: s.sessionQueued,
+          onSessionStart: s.startSession,
+          onOpenGallery: () => s.setView("gallery")
+        }
+      ) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
-      Filmstrip,
-      {
-        t: s.t,
-        batches: s.batches,
-        activeJob: s.activeJob,
-        selected: s.selected,
-        onSelect: s.selectImage,
-        now,
-        elapsedMs,
-        sessionState: s.sessionState,
-        sessionQueued: s.sessionQueued,
-        onSessionStart: s.startSession
-      }
-    ),
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Toast, { toast: s.toast })
+    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Toast, { toast: s.toast })
   ] });
-}
-
-// src/studio/StudioIcon.jsx
-var import_react12 = __toESM(require("react"), 1);
-var import_jsx_runtime10 = require("react/jsx-runtime");
-function StudioIcon(props) {
-  const size = props && props.size || 20;
-  return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
-    "svg",
-    {
-      width: size,
-      height: size,
-      viewBox: "0 0 24 24",
-      fill: "none",
-      stroke: "currentColor",
-      strokeWidth: 1.6,
-      strokeLinecap: "round",
-      strokeLinejoin: "round",
-      "aria-hidden": "true",
-      children: [
-        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("path", { d: "M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8" }),
-        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("path", { d: "M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8" }),
-        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("path", { d: "M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16" }),
-        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("path", { d: "M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" }),
-        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("circle", { cx: "12", cy: "12", r: "3.2" })
-      ]
-    }
-  );
 }
 
 // src/index.js

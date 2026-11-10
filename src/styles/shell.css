@@ -1,0 +1,452 @@
+/*
+ * 外壳：整页容器、顶栏、图标栏、布局骨架、异常指引与 Toast。
+ *
+ * 页面是一张浮在柔光地面上的雾面玻璃大卡：
+ *   .ofs-root = 柔光底，.ofs-app = 玻璃大卡，内部再分顶栏 / 主体 / 胶片坞。
+ */
+
+.ofs-app {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ofs-window-border);
+  border-radius: var(--ofs-r-xl);
+  background: var(--ofs-window);
+  box-shadow: var(--ofs-shadow-window);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  overflow: hidden;
+}
+
+/* ── 顶栏 ───────────────────────────────────────────────────── */
+.ofs-topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 58px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--ofs-hairline);
+}
+
+.ofs-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.ofs-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: var(--ofs-accent-ink);
+  background: var(--ofs-accent-grad);
+  box-shadow: var(--ofs-shadow-accent);
+}
+
+.ofs-brand-name {
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.ofs-brand-sub {
+  padding-left: 2px;
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ofs-ink-3);
+  white-space: nowrap;
+}
+
+.ofs-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  margin-left: 4px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-pill);
+  background: var(--ofs-sunken);
+}
+
+.ofs-tab {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--ofs-r-pill);
+  background: transparent;
+  color: var(--ofs-ink-2);
+  font-size: 12.5px;
+  font-weight: 550;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.ofs-tab:hover {
+  color: var(--ofs-ink);
+}
+
+.ofs-tab.is-on {
+  background: var(--ofs-card-solid);
+  color: var(--ofs-ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(16 16 20 / 8%);
+}
+
+/* 云端算力胶囊 */
+.ofs-pill-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.ofs-compute {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: var(--ofs-r-pill);
+  background: var(--ofs-card);
+  color: var(--ofs-ink-2);
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: var(--ofs-shadow-card);
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.ofs-compute:hover {
+  border-color: var(--ofs-accent-soft-border);
+  color: var(--ofs-ink);
+}
+
+.ofs-compute em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ofs-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.ofs-pill-caret {
+  display: grid;
+  place-items: center;
+  color: var(--ofs-ink-3);
+}
+
+.ofs-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: 248px;
+  padding: 6px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: 16px;
+  background: var(--ofs-card-solid);
+  box-shadow: var(--ofs-shadow-lift);
+  animation: ofs-pop-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ofs-popover-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--ofs-hairline);
+}
+
+.ofs-popover-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ofs-ink-2);
+}
+
+.ofs-popover-head > span b {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--ofs-ink);
+}
+
+.ofs-popover-row {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ofs-ink-2);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ofs-popover-row:hover:not(:disabled) {
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+}
+
+.ofs-popover-row:disabled {
+  color: var(--ofs-ink-4);
+  cursor: default;
+}
+
+/* 模型预设 */
+.ofs-preset {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 10px 0 11px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: var(--ofs-r-pill);
+  background: var(--ofs-card);
+  color: var(--ofs-ink-2);
+  box-shadow: var(--ofs-shadow-card);
+  cursor: pointer;
+}
+
+.ofs-preset-label {
+  font-size: 11.5px;
+  color: var(--ofs-ink-3);
+  white-space: nowrap;
+}
+
+.ofs-preset:focus-within {
+  border-color: var(--ofs-accent-soft-border);
+  box-shadow: var(--ofs-focus-ring);
+}
+
+.ofs-preset select {
+  appearance: none;
+  max-width: 168px;
+  padding: 0 18px 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--ofs-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+
+.ofs-preset select:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.ofs-preset select option {
+  color: var(--ofs-ink);
+  background: var(--ofs-card-solid);
+}
+
+.ofs-preset-meta {
+  padding-left: 8px;
+  border-left: 1px solid var(--ofs-hairline);
+  font-size: 10.5px;
+  color: var(--ofs-ink-3);
+  white-space: nowrap;
+}
+
+.ofs-preset-caret {
+  position: absolute;
+  right: 10px;
+  color: var(--ofs-ink-3);
+  pointer-events: none;
+}
+
+/* ── 骨架 ───────────────────────────────────────────────────── */
+.ofs-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 72px minmax(300px, 360px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.ofs-body.is-gallery {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
+/* 左图标栏 */
+.ofs-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+  padding: 12px 0 14px;
+  border-right: 1px solid var(--ofs-hairline);
+  background: color-mix(in oklab, var(--ofs-card) 46%, transparent);
+}
+
+.ofs-rail-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.ofs-rail-btn {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 52px;
+  padding: 7px 0 5px;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  color: var(--ofs-ink-3);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.ofs-rail-btn:hover {
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+}
+
+.ofs-rail-btn.is-on {
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+  box-shadow: inset 0 0 0 1px var(--ofs-accent-soft-border);
+}
+
+.ofs-rail-btn span {
+  line-height: 1.1;
+}
+
+.ofs-rail-divider {
+  width: 22px;
+  height: 1px;
+  margin: 5px 0;
+  background: var(--ofs-hairline);
+}
+
+.ofs-rail-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--ofs-ink-3);
+  white-space: nowrap;
+}
+
+.ofs-main {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 14px;
+}
+
+/* ── 异常指引 ───────────────────────────────────────────────── */
+.ofs-guidance,
+.ofs-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 16px 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);
+  border-radius: 14px;
+  background: var(--ofs-warn-soft);
+  animation: ofs-fade-in 220ms ease;
+}
+
+.ofs-guidance-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);
+  color: var(--ofs-warn);
+}
+
+.ofs-guidance-body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.ofs-guidance-title {
+  font-size: 12.5px;
+  color: var(--ofs-ink);
+}
+
+.ofs-guidance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ofs-guidance-actions .ofs-chip.is-on {
+  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);
+  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);
+  color: var(--ofs-warn);
+  text-decoration: none;
+}
+
+/* ── Toast ──────────────────────────────────────────────────── */
+.ofs-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 132px;
+  z-index: 60;
+  transform: translateX(-50%);
+  max-width: 78%;
+  padding: 9px 16px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: var(--ofs-r-pill);
+  background: color-mix(in oklab, var(--ofs-card-solid) 88%, transparent);
+  box-shadow: var(--ofs-shadow-lift);
+  backdrop-filter: blur(14px);
+  color: var(--ofs-ink);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: ofs-pop-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}

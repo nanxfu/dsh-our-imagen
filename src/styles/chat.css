@@ -1,0 +1,373 @@
+/*
+ * 对话式面板：柔和消息流。
+ *
+ * 卡片外壳（背景 / 圆角 / 阴影 / 外边距）、头部与分段控件都由 panel.css 提供，
+ * 这里只写卡片内部：消息流、空态、建议行与底部悬浮输入区。
+ * 所有选择器挂在 .ofs-panel--chat 下，避免和表单式面板共用的类名互相影响；
+ * 对话专属的类名统一用 ofs-chat- / ofs-msg- 前缀。
+ */
+
+/* ── 消息流 ─────────────────────────────────────────────────── */
+/* 面板始终落在 .ofs-body 的第二列（图标栏之后）；单独挂载预览时也靠这句归位。 */
+.ofs-panel--chat.ofs-rail--chat {
+  grid-column: 2;
+}
+
+.ofs-panel--chat .ofs-thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 15px 10px;
+}
+
+/* 空态用 auto 外边距居中，内容超高时自然回到顶部可滚动，不会被裁掉。 */
+.ofs-panel--chat .ofs-thread.is-empty {
+  justify-content: flex-start;
+}
+
+.ofs-chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 13px;
+  margin: auto 0;
+  /* 稍微上提，避免视觉重心压在输入区上。 */
+  padding-bottom: 26px;
+  animation: ofs-fade-in 260ms ease both;
+}
+
+.ofs-chat-empty-text {
+  color: var(--ofs-ink-2);
+  font-size: 12.5px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.ofs-chat-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ofs-panel--chat .ofs-chat-example {
+  display: flex;
+  align-items: center;
+  height: auto;
+  min-height: 30px;
+  padding: 7px 12px;
+  border-radius: var(--ofs-r-md);
+  background: var(--ofs-card);
+  color: var(--ofs-ink-2);
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+}
+
+.ofs-panel--chat .ofs-chat-example:hover {
+  border-color: var(--ofs-accent-soft-border);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+}
+
+/* ── 消息 ───────────────────────────────────────────────────── */
+.ofs-panel--chat .ofs-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  animation: ofs-fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ofs-panel--chat .ofs-msg p {
+  font-size: 12.5px;
+  line-height: 1.62;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 用户：右对齐的浅灰底，右下角收小圆角但不出气泡尾巴。 */
+.ofs-panel--chat .ofs-msg--user {
+  align-self: flex-end;
+  max-width: 88%;
+  padding: 8px 13px;
+  border: 1px solid var(--ofs-accent-soft-border);
+  border-radius: 16px 16px 6px 16px;
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-ink);
+}
+
+/* 助手：整宽白卡，左上角收小圆角，跟用户消息形成对角呼应。 */
+.ofs-panel--chat .ofs-msg--assistant {
+  align-self: stretch;
+}
+
+.ofs-chat-author {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-left: 2px;
+}
+
+.ofs-chat-author-name {
+  color: var(--ofs-ink-3);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.ofs-chat-dot {
+  flex: 0 0 auto;
+}
+
+/* 排队与渲染中：状态点换成琥珀色呼吸，不用转圈。 */
+.ofs-panel--chat .ofs-chat-dot.is-live {
+  animation: ofs-chat-breathe 2.2s ease-out infinite;
+}
+
+@keyframes ofs-chat-breathe {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 36%, transparent); }
+  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-warn) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 0%, transparent); }
+}
+
+.ofs-msg-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 13px 11px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: 6px 16px 16px 16px;
+  background: var(--ofs-card-solid);
+  box-shadow: var(--ofs-shadow-card);
+}
+
+/* 生成中：卡片留一条柔光微光条，扫过即表示在跑。 */
+.ofs-chat-shimmer {
+  display: block;
+  width: 58%;
+  height: 3px;
+  margin-top: -2px;
+  border-radius: var(--ofs-r-pill);
+  background: linear-gradient(90deg, transparent 0%, var(--ofs-accent-2) 52%, transparent 100%);
+  background-size: 220% 100%;
+  opacity: 0.62;
+  animation: ofs-shimmer 2s linear infinite;
+}
+
+/* 结果缩略图：整宽图片卡，元信息压在右下角。 */
+.ofs-msg-thumb {
+  appearance: none;
+  position: relative;
+  display: block;
+  width: 100%;
+  margin-top: 1px;
+  padding: 0;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: 12px;
+  background: var(--ofs-sunken);
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.ofs-msg-thumb img {
+  display: block;
+  width: 100%;
+  height: 132px;
+  object-fit: cover;
+}
+
+.ofs-msg-thumb:hover {
+  transform: translateY(-1px);
+  border-color: var(--ofs-accent-soft-border);
+  box-shadow: var(--ofs-shadow-lift);
+}
+
+.ofs-msg-thumb:active {
+  transform: translateY(0) scale(0.995);
+}
+
+.ofs-msg-thumb-meta {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  padding: 2px 8px;
+  border-radius: var(--ofs-r-pill);
+  background: rgb(17 17 20 / 52%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgb(255 255 255 / 93%);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* ── 底部：建议 / 动作 / 输入 ────────────────────────────────── */
+.ofs-chat-dock {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 15px 14px;
+  border-top: 1px solid var(--ofs-hairline);
+}
+
+.ofs-chat-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ofs-panel--chat .ofs-chat-suggest-chip {
+  /* 纯文字胶囊：用块盒（而不是 inline-flex）才能让 text-overflow 生效，
+     否则长建议只会被裁掉、看不到省略号。 */
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  height: 26px;
+  padding: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  line-height: 24px;
+}
+
+.ofs-chat-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ofs-panel--chat .ofs-chat-tools .ofs-chip {
+  height: 27px;
+  padding: 0 11px;
+  font-size: 11.5px;
+}
+
+/* 输入区：白/玻璃的圆角卡，靠内发光描边和柔影浮起来。 */
+.ofs-chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 9px 9px 9px 12px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: var(--ofs-r-lg);
+  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-card) 100%);
+  box-shadow:
+    inset 0 1px 0 var(--ofs-window-border),
+    var(--ofs-shadow-card);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.ofs-chat-composer:focus-within {
+  border-color: var(--ofs-accent-soft-border);
+  box-shadow:
+    inset 0 1px 0 var(--ofs-window-border),
+    0 0 0 3px color-mix(in oklab, var(--ofs-accent) 12%, transparent),
+    var(--ofs-shadow-card);
+}
+
+.ofs-chat-composer textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 42px;
+  max-height: 128px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ofs-ink);
+  font-size: 12.5px;
+  line-height: 1.6;
+  resize: none;
+  overflow-y: auto;
+  /* 支持的浏览器里让输入框随内容长到 max-height；不支持时退化成固定两行。 */
+  field-sizing: content;
+}
+
+.ofs-chat-composer textarea:focus,
+.ofs-chat-composer textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.ofs-chat-composer textarea::placeholder {
+  color: var(--ofs-ink-3);
+}
+
+/* 发送：墨黑实心圆钮（深色主题由 tokens 反相成浅灰），hover 轻抬升，禁用降饱和。 */
+.ofs-chat-send {
+  appearance: none;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ofs-accent);
+  color: var(--ofs-accent-ink);
+  box-shadow: var(--ofs-shadow-accent);
+  cursor: pointer;
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.ofs-chat-send:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--ofs-shadow-lift);
+}
+
+.ofs-chat-send:active:not(:disabled) {
+  transform: translateY(0) scale(0.94);
+}
+
+.ofs-chat-send:disabled {
+  background: var(--ofs-sunken);
+  color: var(--ofs-ink-4);
+  box-shadow: none;
+  filter: saturate(0);
+  cursor: default;
+}
+
+/* 窄窗下面板被压到 46vh：收紧留白，让最后两条消息仍然可见。 */
+@media (max-width: 820px) {
+  .ofs-panel--chat .ofs-thread {
+    padding: 0 13px 8px;
+  }
+
+  .ofs-chat-dock {
+    padding: 8px 13px 12px;
+  }
+
+  .ofs-msg-thumb img {
+    height: 112px;
+  }
+}
+
+/* 动效停用时，微光条改成一条静态浅色线，信息不丢。 */
+@media (prefers-reduced-motion: reduce) {
+  .ofs-chat-shimmer {
+    background: var(--ofs-accent-soft-border);
+    opacity: 0.9;
+    animation: none;
+  }
+
+  .ofs-panel--chat .ofs-chat-dot.is-live {
+    animation: none;
+  }
+}

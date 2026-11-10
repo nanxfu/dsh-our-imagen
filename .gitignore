@@ -22,3 +22,9 @@ Thumbs.db
 
 # 设计预览产物
 tools/.preview/
+
+# impeccable 工作产物（截图、live 会话、决策稿）
+.impeccable/review/
+.impeccable/live/
+.impeccable/mocks/
+.impeccable/critique/

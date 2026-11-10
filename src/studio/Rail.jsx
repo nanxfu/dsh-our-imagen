@@ -1,12 +1,13 @@
 /**
- * 左侧创作控制面板（表单式）。
+ * 左侧创作面板（表单式）。
  *
- * 结构按编号分区：01 提示词 / 02 风格预设 / 03 画面设置 / 04 高级设置，
- * 底部固定主按钮。参考「创作设置」类面板的组织方式，但不照搬配色与图标。
+ * 分区按内容分组，不用「01 / 02 / 03」编号——这不是需要按顺序完成的步骤。
+ * 每个分区是一块浅底卡片，标题上方留白多于下方。
  */
 
 import React from 'react'
 
+import { Icon } from './icons.jsx'
 import { PROMPT_BOOSTS, STYLE_CAPSULES } from './capsules.js'
 import { DEFAULT_RATIOS } from './ratios.js'
 
@@ -14,12 +15,9 @@ const PROMPT_MAX = 2000
 
 function Fieldset(props) {
   return (
-    <section className="ofs-fieldset">
+    <section className="ofs-fieldset" id={props.id}>
       <div className="ofs-fieldset-head">
-        <h3>
-          <span className="ofs-num">{props.index}</span>
-          {props.title}
-        </h3>
+        <h3>{props.title}</h3>
         {props.action ? props.action : null}
       </div>
       {props.children}
@@ -48,20 +46,19 @@ export function Rail(props) {
     enhancing,
     onEnhance,
     onApplySuggestion,
-    presets,
     mode,
     setMode,
   } = props
 
   const promptLength = form.prompt.length
-  const styleList = STYLE_CAPSULES
+  const hasPrompt = form.prompt.trim().length > 0
   const activeSuggestion = suggestions.length > 0 ? suggestions : []
 
   return (
-    <aside className="ofs-rail">
-      <header className="ofs-rail-head">
+    <aside className="ofs-panel ofs-panel--form">
+      <header className="ofs-panel-head">
         <h2>{t('studio.rail.title')}</h2>
-        <div className="ofs-mode" role="tablist">
+        <div className="ofs-seg" role="tablist" aria-label={t('studio.rail.title')}>
           <button
             type="button"
             role="tab"
@@ -83,8 +80,8 @@ export function Rail(props) {
         </div>
       </header>
 
-      <div className="ofs-rail-scroll">
-        <Fieldset index="01" title={t('studio.prompt')}>
+      <div className="ofs-panel-scroll">
+        <Fieldset id="ofs-section-prompt" title={t('studio.prompt')}>
           <div className="ofs-composer">
             <textarea
               className="ofs-composer-input"
@@ -102,8 +99,8 @@ export function Rail(props) {
                 {promptLength} / {PROMPT_MAX}
               </span>
               <button type="button" className="ofs-text-action" onClick={onEnhance} disabled={enhancing}>
+                <Icon name="expandText" size={13} />
                 {enhancing ? t('studio.enhance.thinking') : t('studio.enhance.button')}
-                <span aria-hidden="true"> ✨</span>
               </button>
             </div>
           </div>
@@ -133,25 +130,27 @@ export function Rail(props) {
                   onClick={() => onApplySuggestion(entry.suffix)}
                   title={entry.suffix}
                 >
-                  {entry.icon} {isEn ? entry.en : entry.zh}
+                  <Icon name={entry.icon} size={13} />
+                  {isEn ? entry.en : entry.zh}
                 </button>
               ))}
             </div>
           )}
         </Fieldset>
 
-        <Fieldset index="02" title={t('studio.style')}>
+        <Fieldset id="ofs-section-style" title={t('studio.style')}>
           <div className="ofs-tiles">
-            {styleList.map((capsule) => (
+            {STYLE_CAPSULES.map((capsule) => (
               <button
                 type="button"
                 key={capsule.id}
                 className={styleId === capsule.id ? 'ofs-tile is-on' : 'ofs-tile'}
                 onClick={() => applyStyle(capsule.id)}
                 aria-pressed={styleId === capsule.id}
+                title={isEn ? capsule.en : capsule.zh}
               >
-                <span className="ofs-tile-icon" aria-hidden="true">
-                  {capsule.icon}
+                <span className={`ofs-tile-art is-${capsule.id}`} aria-hidden="true">
+                  <Icon name={capsule.icon} size={16} />
                 </span>
                 <span className="ofs-tile-label">{isEn ? capsule.en : capsule.zh}</span>
               </button>
@@ -159,7 +158,7 @@ export function Rail(props) {
           </div>
         </Fieldset>
 
-        <Fieldset index="03" title={t('studio.rail.frame')}>
+        <Fieldset title={t('studio.rail.frame')}>
           <div className="ofs-ratio-row">
             {DEFAULT_RATIOS.map((ratio) => (
               <button
@@ -176,9 +175,9 @@ export function Rail(props) {
           </div>
         </Fieldset>
 
-        <Fieldset index="04" title={t('studio.rail.advanced')}>
+        <Fieldset id="ofs-section-advanced" title={t('studio.rail.advanced')}>
           <div className="ofs-rows">
-            <div className="ofs-row">
+            <div className={negativeOpen ? 'ofs-row is-open' : 'ofs-row'}>
               <button
                 type="button"
                 className="ofs-row-head"
@@ -186,8 +185,8 @@ export function Rail(props) {
                 aria-expanded={negativeOpen}
               >
                 <span>{t('studio.negative')}</span>
-                <span className="ofs-chevron" aria-hidden="true">
-                  {negativeOpen ? '⌃' : '⌄'}
+                <span className={negativeOpen ? 'ofs-chevron is-open' : 'ofs-chevron'} aria-hidden="true">
+                  <Icon name="chevronDown" size={14} />
                 </span>
               </button>
               {negativeOpen ? (
@@ -202,7 +201,7 @@ export function Rail(props) {
               ) : null}
             </div>
 
-            <div className="ofs-row">
+            <div className={advancedOpen ? 'ofs-row is-open' : 'ofs-row'}>
               <button
                 type="button"
                 className="ofs-row-head"
@@ -210,8 +209,8 @@ export function Rail(props) {
                 aria-expanded={advancedOpen}
               >
                 <span>{t('studio.rail.params')}</span>
-                <span className="ofs-chevron" aria-hidden="true">
-                  {advancedOpen ? '⌃' : '⌄'}
+                <span className={advancedOpen ? 'ofs-chevron is-open' : 'ofs-chevron'} aria-hidden="true">
+                  <Icon name="chevronDown" size={14} />
                 </span>
               </button>
               {advancedOpen ? (
@@ -264,11 +263,12 @@ export function Rail(props) {
         </Fieldset>
       </div>
 
-      <div className="ofs-rail-bottom">
-        <button type="button" className="ofs-generate" onClick={onGenerate} disabled={sending}>
+      <div className="ofs-panel-foot">
+        <button type="button" className="ofs-btn is-primary ofs-generate" onClick={onGenerate} disabled={sending || !hasPrompt}>
+          <Icon name="sparkles" size={16} />
           {sending ? t('studio.generating') : t('studio.generate')}
         </button>
-        <p className="ofs-hint">{t('studio.generateHint')}</p>
+        <p className="ofs-hint">{hasPrompt ? t('studio.generateHint') : t('studio.promptHint')}</p>
       </div>
     </aside>
   )

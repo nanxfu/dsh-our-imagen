@@ -1,0 +1,135 @@
+/*
+ * 设计变量：黑白灰工作室。
+ *
+ * 视觉立场：一间明度分层的工作室，而不是一块彩色 AI 画布。
+ *  1. 地面是中性灰的柔光渐变，上面浮近白的实心卡片；不用彩色光晕，不用玻璃彩虹。
+ *  2. 只有明度关系：墨黑做主操作与选中，灰阶做层级，语义色（成功/警告/错误）
+ *     只以小圆点或窄条出现，不参与大面积装饰。
+ *  3. 深色是同一套明度关系反相：深灰底、浅灰字、浅色主操作。
+ *
+ * 预览工具（tools/preview.mjs）用同一组值注入深色，改这里要同步那边。
+ */
+
+.ofs-root {
+  /* 地面：三层中性柔光 + 一层底色 */
+  --ofs-ground-1: #e7e8ea;
+  --ofs-ground-2: #f1f1f2;
+  --ofs-ground-3: #e3e4e6;
+  --ofs-ground-base: #f5f5f6;
+
+  /* 表面 */
+  --ofs-window: rgb(255 255 255 / 86%);
+  --ofs-window-border: rgb(18 18 22 / 8%);
+  --ofs-card: #ffffff;
+  --ofs-card-solid: #ffffff;
+  --ofs-card-border: rgb(18 18 22 / 9%);
+  --ofs-hairline: rgb(18 18 22 / 7%);
+  --ofs-sunken: #f4f4f6;
+  --ofs-sunken-border: rgb(18 18 22 / 8%);
+
+  /* 文字 */
+  --ofs-ink: #141416;
+  --ofs-ink-2: #52525a;
+  --ofs-ink-3: #6b6b73;
+  --ofs-ink-4: #a8a8b0;
+
+  /* 主操作：墨黑 */
+  --ofs-accent: #141416;
+  --ofs-accent-2: #3f3f46;
+  --ofs-accent-ink: #ffffff;
+  --ofs-accent-soft: #f0f0f2;
+  --ofs-accent-soft-border: #dedee3;
+  --ofs-accent-grad: linear-gradient(180deg, #2b2b30 0%, #141416 100%);
+
+  /* 状态：只做小面积语义色 */
+  --ofs-ok: #2f8a5c;
+  --ofs-ok-soft: #eaf5ef;
+  --ofs-warn: #a96a18;
+  --ofs-warn-soft: #f7f0e4;
+  --ofs-error: #c04444;
+  --ofs-error-soft: #f9ecec;
+  --ofs-idle: #a0a0a8;
+  --ofs-idle-soft: #f1f1f3;
+
+  /* 几何 */
+  --ofs-r-xl: 24px;
+  --ofs-r-lg: 18px;
+  --ofs-r-md: 14px;
+  --ofs-r-sm: 10px;
+  --ofs-r-pill: 999px;
+  --ofs-blur: 18px;
+
+  /* 投影：始终带偏移与柔和扩散，不用零偏移光晕 */
+  --ofs-shadow-card: 0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%);
+  --ofs-shadow-lift: 0 2px 6px rgb(16 16 20 / 6%), 0 18px 40px -20px rgb(16 16 20 / 26%);
+  --ofs-shadow-window: 0 1px 3px rgb(16 16 20 / 5%), 0 36px 80px -48px rgb(16 16 20 / 32%);
+  --ofs-shadow-accent: 0 8px 18px -10px rgb(16 16 20 / 48%);
+  --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(20 20 22 / 45%);
+
+  --ofs-font: -apple-system, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  /* 留白节奏 */
+  --ofs-pad: 18px;
+  --ofs-gap: 14px;
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 18px;
+  color: var(--ofs-ink);
+  font-family: var(--ofs-font);
+  font-size: 13px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(1100px 620px at 12% -8%, var(--ofs-ground-1) 0%, transparent 62%),
+    radial-gradient(900px 520px at 88% 4%, var(--ofs-ground-2) 0%, transparent 58%),
+    radial-gradient(780px 540px at 62% 108%, var(--ofs-ground-3) 0%, transparent 62%),
+    linear-gradient(160deg, var(--ofs-ground-base) 0%, var(--ofs-ground-base) 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  .ofs-root {
+    --ofs-ground-1: #232326;
+    --ofs-ground-2: #17171a;
+    --ofs-ground-3: #26262a;
+    --ofs-ground-base: #101012;
+
+    --ofs-window: rgb(24 24 27 / 88%);
+    --ofs-window-border: rgb(255 255 255 / 9%);
+    --ofs-card: #18181b;
+    --ofs-card-solid: #1c1c20;
+    --ofs-card-border: rgb(255 255 255 / 9%);
+    --ofs-hairline: rgb(255 255 255 / 8%);
+    --ofs-sunken: rgb(255 255 255 / 5%);
+    --ofs-sunken-border: rgb(255 255 255 / 9%);
+
+    --ofs-ink: #f2f2f4;
+    --ofs-ink-2: #a4a4ac;
+    --ofs-ink-3: #8d8d95;
+    --ofs-ink-4: #5c5c63;
+
+    --ofs-accent: #f2f2f4;
+    --ofs-accent-2: #c8c8cf;
+    --ofs-accent-ink: #161618;
+    --ofs-accent-soft: rgb(255 255 255 / 8%);
+    --ofs-accent-soft-border: rgb(255 255 255 / 14%);
+    --ofs-accent-grad: linear-gradient(180deg, #fafafa 0%, #dcdce1 100%);
+
+    --ofs-ok: #58c08a;
+    --ofs-ok-soft: rgb(88 192 138 / 14%);
+    --ofs-warn: #d8a55c;
+    --ofs-warn-soft: rgb(216 165 92 / 14%);
+    --ofs-error: #e07a7a;
+    --ofs-error-soft: rgb(224 122 122 / 14%);
+    --ofs-idle: #8a8a92;
+    --ofs-idle-soft: rgb(255 255 255 / 6%);
+
+    --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 28px -18px rgb(0 0 0 / 70%);
+    --ofs-shadow-lift: 0 2px 6px rgb(0 0 0 / 44%), 0 20px 44px -22px rgb(0 0 0 / 76%);
+    --ofs-shadow-window: 0 1px 3px rgb(0 0 0 / 40%), 0 40px 88px -48px rgb(0 0 0 / 88%);
+    --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);
+    --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(255 255 255 / 40%);
+  }
+}

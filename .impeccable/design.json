@@ -1,0 +1,763 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-09T18:12:57.628Z",
+  "title": "Design System: Imagen Studio",
+  "extensions": {
+    "colorMeta": {
+      "studio-ink": {
+        "role": "primary",
+        "displayName": "Studio Ink",
+        "canonical": "#141416",
+        "tonalRamp": [
+          "#0b0b0d",
+          "#252527",
+          "#424244",
+          "#616163",
+          "#828285",
+          "#a5a5a7",
+          "#c9c9cc",
+          "#eeeef1"
+        ]
+      },
+      "ink-lift": {
+        "role": "primary",
+        "displayName": "Ink Lift",
+        "canonical": "#2b2b30",
+        "tonalRamp": [
+          "#0b0b0f",
+          "#242429",
+          "#414147",
+          "#606166",
+          "#828288",
+          "#a4a4ab",
+          "#c8c8cf",
+          "#eeeef4"
+        ]
+      },
+      "ink-soft": {
+        "role": "primary",
+        "displayName": "Ink Soft",
+        "canonical": "#3f3f46",
+        "tonalRamp": [
+          "#0b0a10",
+          "#24242b",
+          "#414148",
+          "#606068",
+          "#818189",
+          "#a4a4ac",
+          "#c8c8d1",
+          "#ededf6"
+        ]
+      },
+      "ink-on": {
+        "role": "primary",
+        "displayName": "Ink On",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "ink-wash": {
+        "role": "primary",
+        "displayName": "Ink Wash",
+        "canonical": "#f0f0f2",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#252526",
+          "#424243",
+          "#616163",
+          "#828284",
+          "#a5a5a7",
+          "#c9c9cb",
+          "#eeeef0"
+        ]
+      },
+      "ink-wash-edge": {
+        "role": "primary",
+        "displayName": "Ink Wash Edge",
+        "canonical": "#dedee3",
+        "tonalRamp": [
+          "#0b0b0e",
+          "#252528",
+          "#414145",
+          "#616165",
+          "#828286",
+          "#a4a4a9",
+          "#c8c8cd",
+          "#eeeef3"
+        ]
+      },
+      "print-white": {
+        "role": "neutral",
+        "displayName": "Print White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "frosted-shell": {
+        "role": "neutral",
+        "displayName": "Frosted Shell",
+        "canonical": "rgb(255 255 255 / 86%)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "ground-base": {
+        "role": "neutral",
+        "displayName": "Soft-Ground Base",
+        "canonical": "#f5f5f6",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#252526",
+          "#424243",
+          "#616162",
+          "#828283",
+          "#a5a5a6",
+          "#c9c9ca",
+          "#eeeeef"
+        ]
+      },
+      "ground-mist": {
+        "role": "neutral",
+        "displayName": "Soft-Ground Mist",
+        "canonical": "#f1f1f2",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#252526",
+          "#424243",
+          "#616162",
+          "#828283",
+          "#a5a5a6",
+          "#c9c9ca",
+          "#eeeeef"
+        ]
+      },
+      "ground-shade": {
+        "role": "neutral",
+        "displayName": "Soft-Ground Shade",
+        "canonical": "#e7e8ea",
+        "tonalRamp": [
+          "#0a0b0c",
+          "#242526",
+          "#414244",
+          "#606163",
+          "#818284",
+          "#a4a5a7",
+          "#c8c9cb",
+          "#edeef0"
+        ]
+      },
+      "ground-groove": {
+        "role": "neutral",
+        "displayName": "Soft-Ground Groove",
+        "canonical": "#e3e4e6",
+        "tonalRamp": [
+          "#0a0b0c",
+          "#242526",
+          "#414244",
+          "#606163",
+          "#818284",
+          "#a4a5a7",
+          "#c8c9cb",
+          "#edeef0"
+        ]
+      },
+      "sunken-well": {
+        "role": "neutral",
+        "displayName": "Sunken Well",
+        "canonical": "#f4f4f6",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#252526",
+          "#424243",
+          "#616163",
+          "#828284",
+          "#a5a5a7",
+          "#c9c9cb",
+          "#eeeef0"
+        ]
+      },
+      "sunken-edge": {
+        "role": "neutral",
+        "displayName": "Sunken Edge",
+        "canonical": "rgb(18 18 22 / 8%)",
+        "tonalRamp": [
+          "#0b0b0e",
+          "#252529",
+          "#414146",
+          "#616166",
+          "#828287",
+          "#a4a4aa",
+          "#c8c8ce",
+          "#eeeef4"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "rgb(18 18 22 / 7%)",
+        "tonalRamp": [
+          "#0b0b0e",
+          "#252529",
+          "#414146",
+          "#616166",
+          "#828287",
+          "#a4a4aa",
+          "#c8c8ce",
+          "#eeeef4"
+        ]
+      },
+      "shell-edge": {
+        "role": "neutral",
+        "displayName": "Shell Edge",
+        "canonical": "rgb(18 18 22 / 8%)",
+        "tonalRamp": [
+          "#0b0b0e",
+          "#252529",
+          "#414146",
+          "#616166",
+          "#828287",
+          "#a4a4aa",
+          "#c8c8ce",
+          "#eeeef4"
+        ]
+      },
+      "panel-edge": {
+        "role": "neutral",
+        "displayName": "Panel Edge",
+        "canonical": "rgb(18 18 22 / 9%)",
+        "tonalRamp": [
+          "#0b0b0e",
+          "#252529",
+          "#414146",
+          "#616166",
+          "#828287",
+          "#a4a4aa",
+          "#c8c8ce",
+          "#eeeef4"
+        ]
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "Ink Secondary",
+        "canonical": "#52525a",
+        "tonalRamp": [
+          "#0b0a10",
+          "#24242b",
+          "#414149",
+          "#606068",
+          "#81818a",
+          "#a4a4ad",
+          "#c8c8d1",
+          "#ededf7"
+        ]
+      },
+      "ink-tertiary": {
+        "role": "neutral",
+        "displayName": "Ink Tertiary",
+        "canonical": "#6b6b73",
+        "tonalRamp": [
+          "#0b0a10",
+          "#24242b",
+          "#414148",
+          "#606068",
+          "#81818a",
+          "#a4a4ad",
+          "#c8c8d1",
+          "#ededf7"
+        ]
+      },
+      "ink-quaternary": {
+        "role": "neutral",
+        "displayName": "Ink Quaternary",
+        "canonical": "#a8a8b0",
+        "tonalRamp": [
+          "#0b0a10",
+          "#24242a",
+          "#414148",
+          "#606068",
+          "#818189",
+          "#a4a4ac",
+          "#c8c8d0",
+          "#ededf6"
+        ]
+      },
+      "signal-ok": {
+        "role": "signal",
+        "displayName": "Signal Online",
+        "canonical": "#2f8a5c",
+        "tonalRamp": [
+          "#000f06",
+          "#002e19",
+          "#00502e",
+          "#0e7447",
+          "#3d9667",
+          "#63ba89",
+          "#87dfad",
+          "#c3ffda"
+        ]
+      },
+      "signal-ok-wash": {
+        "role": "signal",
+        "displayName": "Signal Online Wash",
+        "canonical": "#eaf5ef",
+        "tonalRamp": [
+          "#060d09",
+          "#1f2723",
+          "#3c4440",
+          "#5a645f",
+          "#7b8580",
+          "#9ea8a2",
+          "#c1ccc6",
+          "#e7f2ec"
+        ]
+      },
+      "signal-warn": {
+        "role": "signal",
+        "displayName": "Signal Queued",
+        "canonical": "#a96a18",
+        "tonalRamp": [
+          "#140800",
+          "#381e00",
+          "#5f3700",
+          "#8a5300",
+          "#b27224",
+          "#d7954c",
+          "#feb970",
+          "#ffebd7"
+        ]
+      },
+      "signal-warn-wash": {
+        "role": "signal",
+        "displayName": "Signal Queued Wash",
+        "canonical": "#f7f0e4",
+        "tonalRamp": [
+          "#0f0a04",
+          "#29241b",
+          "#474138",
+          "#666056",
+          "#888177",
+          "#aba499",
+          "#cfc8bd",
+          "#f5eee2"
+        ]
+      },
+      "signal-error": {
+        "role": "signal",
+        "displayName": "Signal Error",
+        "canonical": "#c04444",
+        "tonalRamp": [
+          "#1f0001",
+          "#4d0008",
+          "#800014",
+          "#a92e31",
+          "#d15352",
+          "#f97873",
+          "#ffb2ad",
+          "#ffe8e6"
+        ]
+      },
+      "signal-error-wash": {
+        "role": "signal",
+        "displayName": "Signal Error Wash",
+        "canonical": "#f9ecec",
+        "tonalRamp": [
+          "#110909",
+          "#2c2222",
+          "#493f3f",
+          "#695e5e",
+          "#8b7f7f",
+          "#aea2a2",
+          "#d2c6c6",
+          "#f8ebeb"
+        ]
+      },
+      "signal-idle": {
+        "role": "signal",
+        "displayName": "Signal Offline",
+        "canonical": "#a0a0a8",
+        "tonalRamp": [
+          "#0b0a10",
+          "#24242b",
+          "#414148",
+          "#606068",
+          "#818189",
+          "#a4a4ac",
+          "#c8c8d0",
+          "#ededf6"
+        ]
+      },
+      "signal-idle-wash": {
+        "role": "signal",
+        "displayName": "Signal Offline Wash",
+        "canonical": "#f1f1f3",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#252526",
+          "#424243",
+          "#616163",
+          "#828284",
+          "#a5a5a7",
+          "#c9c9cb",
+          "#eeeef0"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "面板标题与空态主标题；16px / 650，最多两行。"
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "画廊标题；15px / 650，只用于一级视图标题。"
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "品牌名与主按钮文字；13.5px / 650。"
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "默认正文与提示词输入；13px / 400 / 1.55。"
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "控件标签与密集元信息；12.5px / 550。"
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "计数、提示、标签、时间戳；10.5px / 500，最低可降到 9px 仅用于批次号。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "card",
+        "value": "0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%)",
+        "purpose": "面板、画廊卡片、胶片坞、画廊工具卡的静止态。"
+      },
+      {
+        "name": "lift",
+        "value": "0 2px 6px rgb(16 16 20 / 6%), 0 18px 40px -20px rgb(16 16 20 / 26%)",
+        "purpose": "悬停抬升、弹出层、Toast、卡片 hover。"
+      },
+      {
+        "name": "window",
+        "value": "0 1px 3px rgb(16 16 20 / 5%), 0 36px 80px -48px rgb(16 16 20 / 32%)",
+        "purpose": "全页唯一的大玻璃外壳。"
+      },
+      {
+        "name": "accent",
+        "value": "0 8px 18px -10px rgb(16 16 20 / 48%)",
+        "purpose": "墨黑主按钮与品牌标下方；中性近黑，不是彩色发光。"
+      },
+      {
+        "name": "focus-ring",
+        "value": "0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(20 20 22 / 45%)",
+        "purpose": "所有键盘焦点；深色主题换成 40% 白。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-rise",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "位移、抬升、弹出层的默认缓动。"
+      },
+      {
+        "name": "ease-state",
+        "value": "ease",
+        "purpose": "颜色、边框、阴影等状态过渡。"
+      },
+      {
+        "name": "linear-shimmer",
+        "value": "linear",
+        "purpose": "渲染扫光条；只改变背景位置。"
+      },
+      {
+        "name": "duration-quick",
+        "value": "150ms",
+        "purpose": "悬停变色与图标按钮反馈。"
+      },
+      {
+        "name": "duration-base",
+        "value": "160ms",
+        "purpose": "按钮、tab、弹出层的默认时长。"
+      },
+      {
+        "name": "duration-enter",
+        "value": "220ms",
+        "purpose": "吐司、指引卡、消息的入场淡入。"
+      },
+      {
+        "name": "pulse-online",
+        "value": "ofs-pulse 2.4s ease-out infinite",
+        "purpose": "在线状态点的呼吸光环。"
+      },
+      {
+        "name": "shimmer-render",
+        "value": "ofs-shimmer 1.5s linear infinite",
+        "purpose": "渲染中的扫光条；胶片骨架用 1.8s、对话用 2s。"
+      },
+      {
+        "name": "breathe-queued",
+        "value": "ofs-chat-breathe 2.2s ease-out infinite",
+        "purpose": "对话里排队/渲染中的琥珀色呼吸点。"
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation-duration: 1ms; transition-duration: 1ms",
+        "purpose": "prefers-reduced-motion 下停用脉冲、扫光与过渡。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide-gallery",
+        "value": "1400px",
+        "purpose": "画廊 5 列降为 4 列。"
+      },
+      {
+        "name": "desktop-compact",
+        "value": "1280px",
+        "purpose": "主体三列收窄，模型参数元信息隐藏，胶片坞左缩。"
+      },
+      {
+        "name": "gallery-three-col",
+        "value": "1180px",
+        "purpose": "画廊降为 3 列，工具条内边距收紧。"
+      },
+      {
+        "name": "laptop",
+        "value": "1120px",
+        "purpose": "品牌副标、模型前缀隐藏；图标栏与面板再收窄。"
+      },
+      {
+        "name": "narrow-desktop",
+        "value": "980px",
+        "purpose": "外边距 10px、顶栏 54px、画布与胶片坞整体缩小一档。"
+      },
+      {
+        "name": "gallery-two-col",
+        "value": "900px",
+        "purpose": "画廊降为 2 列；工具卡取消吸顶。"
+      },
+      {
+        "name": "single-column",
+        "value": "820px",
+        "purpose": "单列堆叠：图标栏横置、面板在上、画布 62vh、胶片坞隐藏。"
+      },
+      {
+        "name": "phone",
+        "value": "700px",
+        "purpose": "画廊工具折行，搜索占满整行。"
+      },
+      {
+        "name": "small-phone",
+        "value": "520px",
+        "purpose": "品牌、tab、模型选择、标题再缩一档。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "唯一的墨黑实心主操作，位于创作面板底部，用于生成或发送。",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M11.4 4.2 12.9 8l3.8 1.5-3.8 1.5-1.5 3.8-1.5-3.8L6.1 9.5 9.9 8z\"></path><path d=\"M17.6 14.4l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z\"></path><path d=\"M5.4 15.6l.6 1.5 1.5.6-1.5.6-.6 1.5-.6-1.5-1.5-.6 1.5-.6z\"></path></svg>即刻生成</button>",
+      "css": ".ds-btn-primary {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  width: 100%;\n  height: 42px;\n  padding: 0 18px;\n  border: 1px solid transparent;\n  border-radius: var(--ofs-r-md, 14px);\n  background: var(--ofs-accent-grad, linear-gradient(180deg, #2b2b30 0%, #141416 100%));\n  color: var(--ofs-accent-ink, #ffffff);\n  font-family: -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  font-size: 13.5px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  white-space: nowrap;\n  box-shadow: var(--ofs-shadow-accent, 0 8px 18px -10px rgb(16 16 20 / 48%));\n  cursor: pointer;\n  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms ease, opacity 160ms ease;\n}\n.ds-btn-primary:hover:not(:disabled) {\n  transform: translateY(-1px);\n  box-shadow: 0 14px 28px -12px rgb(16 16 20 / 50%);\n}\n.ds-btn-primary:active:not(:disabled) {\n  transform: translateY(0) scale(0.99);\n}\n.ds-btn-primary:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring, 0 0 0 2px #ffffff, 0 0 0 4px rgb(20 20 22 / 45%));\n}\n.ds-btn-primary:disabled {\n  opacity: 0.36;\n  filter: saturate(0.6);\n  box-shadow: none;\n  cursor: default;\n}\n.ds-icon {\n  flex: 0 0 auto;\n}"
+    },
+    {
+      "name": "Secondary Pill Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "白底描边的次级动作胶囊（画布下方的「以此图微调」一类），悬停转浅墨底。",
+      "html": "<button class=\"ds-btn-secondary\" type=\"button\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 8.6V6.2a2.2 2.2 0 0 1 2.2-2.2h2.4M15.4 4h2.4A2.2 2.2 0 0 1 20 6.2v2.4M20 15.4v2.4a2.2 2.2 0 0 1-2.2 2.2h-2.4M8.6 20H6.2A2.2 2.2 0 0 1 4 17.8v-2.4\"></path><circle cx=\"12\" cy=\"12\" r=\"2.5\"></circle></svg>以此图微调</button>",
+      "css": ".ds-btn-secondary {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 30px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-sunken-border, rgb(18 18 22 / 8%));\n  border-radius: var(--ofs-r-pill, 999px);\n  background: color-mix(in oklab, var(--ofs-card, #ffffff) 78%, transparent);\n  color: var(--ofs-ink-2, #52525a);\n  font-family: -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;\n}\n.ds-btn-secondary:hover {\n  border-color: var(--ofs-accent-soft-border, #dedee3);\n  background: var(--ofs-accent-soft, #f0f0f2);\n  color: var(--ofs-accent, #141416);\n}\n.ds-btn-secondary:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring, 0 0 0 2px #ffffff, 0 0 0 4px rgb(20 20 22 / 45%));\n}\n.ds-btn-secondary:disabled {\n  color: var(--ofs-ink-4, #a8a8b0);\n  cursor: default;\n}\n.ds-icon {\n  flex: 0 0 auto;\n}"
+    },
+    {
+      "name": "Glass Icon Button",
+      "kind": "button",
+      "refersTo": "icon-button",
+      "description": "画布右上角的 34px 玻璃图标钮（放大 / 复制路径 / 收藏），也用于顶栏刷新。",
+      "html": "<button class=\"ds-glass-btn\" type=\"button\" aria-label=\"复制文件路径\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"8.4\" y=\"8.4\" width=\"11.2\" height=\"11.2\" rx=\"2\"></rect><path d=\"M15.6 5.2H6.6a1.4 1.4 0 0 0-1.4 1.4v9\"></path></svg></button>",
+      "css": ".ds-glass-btn {\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  padding: 0;\n  border: 1px solid var(--ofs-window-border, rgb(18 18 22 / 8%));\n  border-radius: 11px;\n  background: color-mix(in oklab, var(--ofs-card-solid, #ffffff) 68%, transparent);\n  color: var(--ofs-ink-2, #52525a);\n  box-shadow: var(--ofs-shadow-card, 0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%));\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  cursor: pointer;\n  transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease, transform 150ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n.ds-glass-btn:hover {\n  border-color: var(--ofs-accent-soft-border, #dedee3);\n  color: var(--ofs-accent, #141416);\n}\n.ds-glass-btn:active {\n  transform: scale(0.95);\n}\n.ds-glass-btn:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring, 0 0 0 2px #ffffff, 0 0 0 4px rgb(20 20 22 / 45%));\n}\n.ds-glass-btn.ds-is-on {\n  color: var(--ofs-accent, #141416);\n  background: var(--ofs-accent-soft, #f0f0f2);\n  border-color: var(--ofs-accent-soft-border, #dedee3);\n}\n.ds-icon {\n  flex: 0 0 auto;\n}"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "nav",
+      "refersTo": "segmented-control",
+      "description": "面板头部的「表单 / 对话」药丸轨道，当前项换白底并加 1px 中性微影。",
+      "html": "<div class=\"ds-segmented\" role=\"tablist\" aria-label=\"面板形态\">\n  <button class=\"ds-segmented-btn ds-is-on\" type=\"button\" role=\"tab\" aria-selected=\"true\">表单</button>\n  <button class=\"ds-segmented-btn\" type=\"button\" role=\"tab\" aria-selected=\"false\">对话</button>\n</div>",
+      "css": ".ds-segmented {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  border: 1px solid var(--ofs-sunken-border, rgb(18 18 22 / 8%));\n  border-radius: var(--ofs-r-pill, 999px);\n  background: var(--ofs-sunken, #f4f4f6);\n}\n.ds-segmented-btn {\n  appearance: none;\n  height: 26px;\n  padding: 0 12px;\n  border: 0;\n  border-radius: var(--ofs-r-pill, 999px);\n  background: transparent;\n  color: var(--ofs-ink-2, #52525a);\n  font-family: -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  font-size: 12px;\n  font-weight: 500;\n  cursor: pointer;\n  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;\n}\n.ds-segmented-btn:hover {\n  color: var(--ofs-accent, #141416);\n}\n.ds-segmented-btn.ds-is-on {\n  background: var(--ofs-card-solid, #ffffff);\n  color: var(--ofs-ink, #141416);\n  font-weight: 600;\n  box-shadow: 0 1px 2px rgb(16 16 20 / 8%);\n}\n.ds-segmented-btn:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring, 0 0 0 2px #ffffff, 0 0 0 4px rgb(20 20 22 / 45%));\n}"
+    },
+    {
+      "name": "Prompt Composer",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "提示词输入卡：白到浅灰的渐变底、14px 圆角；聚焦时描边转浅墨并加 3px 光晕。",
+      "html": "<div class=\"ds-composer\">\n  <textarea class=\"ds-composer-input\" rows=\"2\" aria-label=\"提示词\" spellcheck=\"false\" maxlength=\"2000\">黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图</textarea>\n  <div class=\"ds-composer-foot\">\n    <span class=\"ds-composer-counter\">25 / 2000</span>\n    <button class=\"ds-composer-action\" type=\"button\">扩写提示词</button>\n  </div>\n</div>",
+      "css": ".ds-composer {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  padding: 10px 10px 7px;\n  border: 1px solid var(--ofs-sunken-border, rgb(18 18 22 / 8%));\n  border-radius: var(--ofs-r-md, 14px);\n  background: linear-gradient(180deg, var(--ofs-card-solid, #ffffff) 0%, var(--ofs-sunken, #f4f4f6) 100%);\n  font-family: -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  transition: border-color 160ms ease, box-shadow 160ms ease;\n}\n.ds-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border, #dedee3);\n  box-shadow: 0 0 0 3px rgb(20 20 22 / 10%);\n}\n.ds-composer-input {\n  width: 100%;\n  min-height: 66px;\n  padding: 0;\n  border: 0;\n  outline: none;\n  resize: none;\n  background: transparent;\n  color: var(--ofs-ink, #141416);\n  font-family: -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  font-size: 13px;\n  line-height: 1.62;\n}\n.ds-composer-input::placeholder {\n  color: var(--ofs-ink-3, #6b6b73);\n}\n.ds-composer-foot {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n.ds-composer-counter {\n  font-size: 11px;\n  color: var(--ofs-ink-3, #6b6b73);\n  font-variant-numeric: tabular-nums;\n}\n.ds-composer-action {\n  padding: 3px 7px;\n  border: 0;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--ofs-accent, #141416);\n  font-family: -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  font-size: 11.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transition: background-color 150ms ease;\n}\n.ds-composer-action:hover {\n  background: var(--ofs-accent-soft, #f0f0f2);\n}"
+    },
+    {
+      "name": "Compute Status Pill",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "顶栏的云端算力胶囊：7px 状态点 + 文案 + 额度 + 箭头；在线 / 排队 / 离线三态只换状态点颜色。",
+      "html": "<div class=\"ds-compute-row\">\n  <button class=\"ds-compute\" type=\"button\">\n    <span class=\"ds-compute-dot ds-is-ok\" aria-hidden=\"true\"></span>\n    <span>在线</span>\n    <em>3 / 30 小时</em>\n    <svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"13\" height=\"13\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6.4 9.6 12 15.2l5.6-5.6\"></path></svg>\n  </button>\n  <button class=\"ds-compute\" type=\"button\">\n    <span class=\"ds-compute-dot ds-is-warn\" aria-hidden=\"true\"></span>\n    <span>云端排队中</span>\n    <em>等待 4 分钟</em>\n    <svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"13\" height=\"13\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6.4 9.6 12 15.2l5.6-5.6\"></path></svg>\n  </button>\n  <button class=\"ds-compute\" type=\"button\">\n    <span class=\"ds-compute-dot\" aria-hidden=\"true\"></span>\n    <span>离线</span>\n    <svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"13\" height=\"13\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6.4 9.6 12 15.2l5.6-5.6\"></path></svg>\n  </button>\n</div>",
+      "css": ".ds-compute-row {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 8px;\n}\n.ds-compute {\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-card-border, rgb(18 18 22 / 9%));\n  border-radius: var(--ofs-r-pill, 999px);\n  background: var(--ofs-card, #ffffff);\n  color: var(--ofs-ink-2, #52525a);\n  font-family: -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  box-shadow: var(--ofs-shadow-card, 0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%));\n  cursor: pointer;\n  transition: border-color 160ms ease, color 160ms ease, background-color 160ms ease;\n}\n.ds-compute:hover {\n  border-color: var(--ofs-accent-soft-border, #dedee3);\n  color: var(--ofs-ink, #141416);\n}\n.ds-compute:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring, 0 0 0 2px #ffffff, 0 0 0 4px rgb(20 20 22 / 45%));\n}\n.ds-compute em {\n  font-style: normal;\n  font-size: 11px;\n  color: var(--ofs-ink-3, #6b6b73);\n  font-variant-numeric: tabular-nums;\n}\n.ds-compute-dot {\n  display: inline-block;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--ofs-idle, #a0a0a8);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-idle, #a0a0a8) 22%, transparent);\n}\n.ds-compute-dot.ds-is-ok {\n  background: var(--ofs-ok, #2f8a5c);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-ok, #2f8a5c) 20%, transparent);\n  animation: ds-pulse 2.4s ease-out infinite;\n}\n.ds-compute-dot.ds-is-warn {\n  background: var(--ofs-warn, #a96a18);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-warn, #a96a18) 22%, transparent);\n}\n.ds-compute-dot.ds-is-error {\n  background: var(--ofs-error, #c04444);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-error, #c04444) 20%, transparent);\n}\n@keyframes ds-pulse {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok, #2f8a5c) 34%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-ok, #2f8a5c) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok, #2f8a5c) 0%, transparent); }\n}\n.ds-icon {\n  flex: 0 0 auto;\n}"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip-selected",
+      "description": "动作与状态用的 28px 胶囊：默认白底描边，选中转浅墨底与墨黑文字，危险态用错误色文字与浅底。",
+      "html": "<div class=\"ds-chip-row\">\n  <button class=\"ds-chip\" type=\"button\">只看收藏</button>\n  <button class=\"ds-chip ds-is-on\" type=\"button\" aria-pressed=\"true\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 4.4l2.35 4.76 5.25.77-3.8 3.7.9 5.24L12 16.39l-4.7 2.48.9-5.24-3.8-3.7 5.25-.77z\"></path></svg>只看收藏</button>\n  <button class=\"ds-chip ds-is-danger\" type=\"button\">删除</button>\n</div>",
+      "css": ".ds-chip-row {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n.ds-chip {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 28px;\n  padding: 0 12px;\n  border: 1px solid var(--ofs-sunken-border, rgb(18 18 22 / 8%));\n  border-radius: var(--ofs-r-pill, 999px);\n  background: var(--ofs-card, #ffffff);\n  color: var(--ofs-ink-2, #52525a);\n  font-family: -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  font-size: 12px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;\n}\n.ds-chip:hover {\n  border-color: var(--ofs-accent-soft-border, #dedee3);\n  color: var(--ofs-ink, #141416);\n}\n.ds-chip.ds-is-on {\n  background: var(--ofs-accent-soft, #f0f0f2);\n  border-color: var(--ofs-accent-soft-border, #dedee3);\n  color: var(--ofs-accent, #141416);\n}\n.ds-chip.ds-is-danger {\n  border-color: transparent;\n  background: var(--ofs-error-soft, #f9ecec);\n  color: var(--ofs-error, #c04444);\n}\n.ds-chip.ds-is-danger:hover {\n  border-color: var(--ofs-error, #c04444);\n  color: var(--ofs-error, #c04444);\n}\n.ds-chip:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring, 0 0 0 2px #ffffff, 0 0 0 4px rgb(20 20 22 / 45%));\n}\n.ds-icon {\n  flex: 0 0 auto;\n}"
+    },
+    {
+      "name": "Gallery Card",
+      "kind": "card",
+      "refersTo": "gallery-card",
+      "description": "画廊作品墙的卡片：6px 内边距的白卡，图片按原始比例撑高，题注两行 + 模型/种子标签。",
+      "html": "<button class=\"ds-gallery-card\" type=\"button\">\n  <span class=\"ds-gallery-media\" style=\"aspect-ratio: 16 / 9\">\n    <span class=\"ds-gallery-placeholder\" aria-hidden=\"true\"></span>\n    <span class=\"ds-gallery-star\" aria-hidden=\"true\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\" width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 4.4l2.35 4.76 5.25.77-3.8 3.7.9 5.24L12 16.39l-4.7 2.48.9-5.24-3.8-3.7 5.25-.77z\"></path></svg></span>\n  </span>\n  <span class=\"ds-gallery-body\">\n    <span class=\"ds-gallery-caption\">黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图</span>\n    <span class=\"ds-gallery-tags\"><em>sdxl-lightning</em><span>#902</span></span>\n  </span>\n</button>",
+      "css": ".ds-gallery-card {\n  display: block;\n  width: 100%;\n  margin: 0;\n  padding: 6px;\n  border: 1px solid var(--ofs-card-border, rgb(18 18 22 / 9%));\n  border-radius: var(--ofs-r-lg, 18px);\n  background: var(--ofs-card, #ffffff);\n  color: var(--ofs-ink, #141416);\n  font-family: -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  text-align: left;\n  box-shadow: var(--ofs-shadow-card, 0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%));\n  cursor: pointer;\n  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease, border-color 180ms ease;\n}\n.ds-gallery-card:hover {\n  transform: translateY(-2px);\n  box-shadow: var(--ofs-shadow-lift, 0 2px 6px rgb(16 16 20 / 6%), 0 18px 40px -20px rgb(16 16 20 / 26%));\n}\n.ds-gallery-card:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring, 0 0 0 2px #ffffff, 0 0 0 4px rgb(20 20 22 / 45%));\n}\n.ds-gallery-media {\n  position: relative;\n  display: block;\n  overflow: hidden;\n  border-radius: calc(var(--ofs-r-lg, 18px) - 7px);\n  background: var(--ofs-sunken, #f4f4f6);\n}\n.ds-gallery-placeholder {\n  display: block;\n  width: 100%;\n  height: 100%;\n  min-height: 140px;\n  background:\n    radial-gradient(90% 120% at 22% 0%, #d8d8dd 0%, transparent 58%),\n    linear-gradient(155deg, #a9a9b1 0%, #6f6f78 45%, #303035 100%);\n}\n.ds-gallery-star {\n  position: absolute;\n  top: 8px;\n  right: 8px;\n  display: grid;\n  place-items: center;\n  width: 24px;\n  height: 24px;\n  border-radius: 50%;\n  background: color-mix(in oklab, var(--ofs-card-solid, #ffffff) 84%, transparent);\n  color: var(--ofs-ink, #141416);\n  box-shadow: 0 1px 4px rgb(24 24 27 / 22%);\n  backdrop-filter: blur(4px);\n  -webkit-backdrop-filter: blur(4px);\n}\n.ds-gallery-body {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 10px 8px 8px;\n}\n.ds-gallery-caption {\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n  line-clamp: 2;\n  overflow: hidden;\n  color: var(--ofs-ink, #141416);\n  font-size: 12.5px;\n  font-weight: 500;\n  line-height: 1.5;\n  word-break: break-word;\n}\n.ds-gallery-tags {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  color: var(--ofs-ink-3, #6b6b73);\n  font-size: 11px;\n  line-height: 1.3;\n}\n.ds-gallery-tags em {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  font-style: normal;\n  font-weight: 500;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.ds-gallery-tags span {\n  flex: 0 0 auto;\n  font-variant-numeric: tabular-nums;\n}\n.ds-icon {\n  flex: 0 0 auto;\n}"
+    },
+    {
+      "name": "Panel Card",
+      "kind": "card",
+      "refersTo": "card-panel",
+      "description": "左侧创作面板的白色卡片：18px 圆角、1px Panel Edge、card 阴影、15px 内边距与发丝线分隔。",
+      "html": "<section class=\"ds-panel\">\n  <header class=\"ds-panel-head\">\n    <h2 class=\"ds-panel-title\">创作设置</h2>\n    <span class=\"ds-panel-meta\">表单 · 对话</span>\n  </header>\n  <div class=\"ds-panel-body\">\n    <p class=\"ds-panel-field\">提示词</p>\n    <div class=\"ds-panel-well\">在左侧写下描述，第一张图会出现在这里。</div>\n  </div>\n  <footer class=\"ds-panel-foot\">Ctrl + Enter 直接生成</footer>\n</section>",
+      "css": ".ds-panel {\n  display: flex;\n  flex-direction: column;\n  width: 100%;\n  max-width: 360px;\n  overflow: hidden;\n  border: 1px solid var(--ofs-card-border, rgb(18 18 22 / 9%));\n  border-radius: var(--ofs-r-lg, 18px);\n  background: var(--ofs-card, #ffffff);\n  color: var(--ofs-ink, #141416);\n  font-family: -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n  box-shadow: var(--ofs-shadow-card, 0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%));\n}\n.ds-panel-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 15px 15px 11px;\n}\n.ds-panel-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n.ds-panel-meta {\n  font-size: 11px;\n  color: var(--ofs-ink-3, #6b6b73);\n  white-space: nowrap;\n}\n.ds-panel-body {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 0 15px 14px;\n  border-top: 1px solid var(--ofs-hairline, rgb(18 18 22 / 7%));\n  padding-top: 10px;\n}\n.ds-panel-field {\n  margin: 0;\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2, #52525a);\n}\n.ds-panel-well {\n  padding: 10px 11px;\n  border: 1px solid var(--ofs-sunken-border, rgb(18 18 22 / 8%));\n  border-radius: 10px;\n  background: var(--ofs-sunken, #f4f4f6);\n  color: var(--ofs-ink-3, #6b6b73);\n  font-size: 12px;\n  line-height: 1.55;\n}\n.ds-panel-foot {\n  padding: 12px 15px 14px;\n  border-top: 1px solid var(--ofs-hairline, rgb(18 18 22 / 7%));\n  box-shadow: 0 -16px 20px -18px rgb(16 16 20 / 20%);\n  color: var(--ofs-ink-3, #6b6b73);\n  font-size: 10.5px;\n  text-align: center;\n}"
+    },
+    {
+      "name": "Filmstrip Thumbnail",
+      "kind": "custom",
+      "refersTo": "filmstrip-thumb",
+      "description": "胶片坞里的 62px 缩略图；选中的一帧是 2px 墨黑描边 + 3px 20% 墨黑光环，悬停上移 2px。",
+      "html": "<div class=\"ds-thumb-row\">\n  <button class=\"ds-thumb ds-is-on\" type=\"button\" aria-label=\"选中缩略图\">\n    <span class=\"ds-thumb-art\" aria-hidden=\"true\"></span>\n  </button>\n  <button class=\"ds-thumb\" type=\"button\" aria-label=\"缩略图\">\n    <span class=\"ds-thumb-art\" aria-hidden=\"true\"></span>\n  </button>\n</div>",
+      "css": ".ds-thumb-row {\n  display: flex;\n  gap: 6px;\n}\n.ds-thumb {\n  display: block;\n  width: 62px;\n  height: 62px;\n  padding: 0;\n  border: 2px solid transparent;\n  border-radius: 12px;\n  background: var(--ofs-sunken, #f4f4f6);\n  overflow: hidden;\n  cursor: pointer;\n  transition: transform 170ms cubic-bezier(0.22, 1, 0.36, 1), border-color 170ms ease, box-shadow 170ms ease;\n}\n.ds-thumb-art {\n  display: block;\n  width: 100%;\n  height: 100%;\n  background:\n    radial-gradient(80% 100% at 30% 0%, #e9e9ec 0%, transparent 55%),\n    linear-gradient(150deg, #c9c9cf 0%, #8a8a93 48%, #3a3a40 100%);\n}\n.ds-thumb:hover {\n  transform: translateY(-2px);\n}\n.ds-thumb.ds-is-on {\n  border-color: var(--ofs-accent, #141416);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent, #141416) 20%, transparent);\n}\n.ds-thumb:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring, 0 0 0 2px #ffffff, 0 0 0 4px rgb(20 20 22 / 45%));\n}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Monochrome Print Room",
+    "overview": "这间印相室沿用参考图钉住的构图——左图标栏、设置面板、悬浮画布、底部胶片坞，以及参考图 2/3 的卡片墙——保留了卡片悬浮与宽松留白，但把参考图那层“AI 产品默认皮肤”剥掉了。用户明确拒绝紫色主题色，要求只用黑白灰的关系。于是房间里的所有表面都来自同一条中性灰阶：柔光地面、雾面近白的外壳、白色相纸卡；**唯一带有颜色的是画布上的作品本身**，界面自己不携带任何彩色主张。\n\n承重的判断是“明度即层级”。墨黑（深色下反相为近白）是唯一强调色，只出现在主操作、选中环、激活图标与状态点；辅助文字由深到浅分三层，边框是一根 1px 发丝线，深度来自带偏移的中性柔影。这样做是为了让 1440px 的整页工作台读起来像一件器材，而不是一张营销落地页：图片永远在中心，控制件都是边缘的灰阶卡片。\n\n密度上，页面只有一张雾面大卡，内部再分顶栏、图标栏、创作面板、焦点画布与胶片坞；画廊切换成 5 列自然高度的作品墙。浅色是母版，深色按同一套明度关系整体反相；语义色只在 7px 状态点或窄条里出现，不参与大面积装饰。这套系统拒绝控制台式密集参数面板、成排等比重卡片、紫色渐变与彩色光晕。",
+    "keyCharacteristics": [
+      "墨黑（深色下反相为近白）是唯一强调色，只出现在主操作、选中环、激活图标与状态点。",
+      "中性柔光地面（三层灰渐变）上浮雾面外壳与近白卡片，靠 1px 发丝描边 + 带偏移的中性柔影分层。",
+      "居中焦点画布 + 底部悬浮胶片坞：图片是唯一主角，其余都是灰色工具。",
+      "画廊是 5 列自然高度作品墙，不裁切、不统一高度，像印相室墙上的样片。",
+      "浅色为母版；深色按同一套明度关系反相，不另起一套配色。",
+      "语义色只在 7px 状态点或窄幅提示条里出现，不做大面积填充。",
+      "全系统只用系统 UI 字体与 1.6px 圆角描边的单色 SVG；没有位图资产、没有 emoji。"
+    ],
+    "rules": [
+      {
+        "name": "The Ink-Only Accent Rule",
+        "body": "墨黑（深色下为近白）是系统里唯一的强调色：只出现在主操作、选中环、激活图标和状态点；任何彩色——包括参考图里的紫色与彩色光晕——都不得成为强调色。",
+        "section": "colors"
+      },
+      {
+        "name": "The Signal-Small Rule",
+        "body": "成功、警告、错误只以 7px 圆点或一条窄幅提示条出现，永远不做大面积填充、卡片底色或主按钮颜色。",
+        "section": "colors"
+      },
+      {
+        "name": "The Same-Lightness Rule",
+        "body": "深色主题不是另一套配色，而是同一套明度关系的反相：深灰地面、浅灰文字、近白主操作；两套主题里地面 → 卡片 → 文字 → 主操作的相对对比必须保持一致。",
+        "section": "colors"
+      },
+      {
+        "name": "The System-Voice Rule",
+        "body": "只用系统 UI 字栈；不为品牌引入展示字体，也不加载任何字体文件——单文件 bundle 不带字体和位图资产。",
+        "section": "typography"
+      },
+      {
+        "name": "The Weight-Ceiling Rule",
+        "body": "字重只用 400 / 500 / 550 / 600 / 650 五档，上限 650；强调靠墨色加深与字号，不靠 700+ 的粗体堆叠。",
+        "section": "typography"
+      },
+      {
+        "name": "The Focus-Canvas Rule",
+        "body": "中央画布是页面的唯一焦点：左栏只收纳控制，胶片坞贴在底部，任何新增控制面都必须落到边缘，不能与画布争夺中心。",
+        "section": "layout"
+      },
+      {
+        "name": "The Print-Wall Rule",
+        "body": "画廊固定 5 列自然高度（≤1400px 4 列、≤1180px 3 列、≤900px 2 列）；不裁切图片、不强制等高，列宽随窗口收窄。",
+        "section": "layout"
+      },
+      {
+        "name": "The Offset-Neutral Rule",
+        "body": "阴影永远是中性近黑、带正偏移与柔和扩散；不用零偏移光晕、不用彩色阴影、不做霓虹 glow。",
+        "section": "elevation"
+      },
+      {
+        "name": "The Ground-First Rule",
+        "body": "深度先由地面柔光与表面明度差建立，阴影只补最后一层距离；没有地面关系的纯投影会让卡片看起来像贴纸。",
+        "section": "elevation"
+      },
+      {
+        "name": "The Concentric Corner Rule",
+        "body": "内层表面的圆角 = 外层圆角 − 内边距（18px 卡片 − 7px 内边距 = 11px 图片框）；不要让两层圆角各写一个数，嵌套就会错位。",
+        "section": "shapes"
+      },
+      {
+        "name": "The Drawn-Mark Rule",
+        "body": "图标只来自同一套 24×24 / 1.6px 圆角描边的单色 SVG；不用 emoji、不用 Unicode 符号、不用位图图标。",
+        "section": "shapes"
+      },
+      {
+        "name": "The One Solid Button Rule",
+        "body": "每个视图最多只有一个墨黑实心按钮（生成或发送）；其余动作一律白底描边、透明 ghost 或文字动作，不允许出现第二个实心强调块。",
+        "section": "components"
+      },
+      {
+        "name": "The Capsule-Only-For-Actions Rule",
+        "body": "胶囊只给单行控件（chip、tab、dock 按钮、状态胶囊、单行搜索）；面板、卡片与多行输入用 10–18px 的圆角矩形，避免“万物胶囊”。",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do 用 Studio Ink (#141416) 作为唯一强调色，深色主题反相为近白 #f2f2f4。",
+      "Do 让地面保持中性柔光渐变（三层径向 + 底色），卡片用 1px 发丝描边 + 带偏移的中性柔影浮起。",
+      "Do 把画布放在中心、把控制收进 72px 图标栏与 360px 面板；新控件先考虑边缘位置。",
+      "Do 保持画廊 5 列（≤1400px 4 列）自然高度，图片按原始比例，不裁切。",
+      "Do 让深浅主题共用同一套明度关系：地面 → 卡片 → 文字 → 主操作，每一层只差明度。",
+      "Do 把语义色限制在 7px 状态点或窄幅提示条；出错时用整行异常指引条，而不是染红整个区域。",
+      "Do 用系统 UI 字栈与 24×24 / 1.6px 圆角描边图标；数字用 tabular-nums 对齐。",
+      "Do 给键盘焦点两环 focus ring，并在 `prefers-reduced-motion` 下停用脉冲、扫光与过渡。"
+    ],
+    "donts": [
+      "Don't 引入任何彩色主题色、彩色渐变或彩色光晕；参考图里的紫与蓝已被明确移除。",
+      "Don't 把成功、警告、错误做成大面积填充、卡片底色或主按钮颜色。",
+      "Don't 用彩色阴影、零偏移 glow 或霓虹描边制造层级。",
+      "Don't 用 emoji 或 Unicode 字符当图标（▾、✨、⭐ 都换成手写 SVG）。",
+      "Don't 让每个区域都长成同规格的等比重卡片；画布与胶片坞有明确的主次。",
+      "Don't 为“好看”增加第二套字体、加载字体文件或位图资产。",
+      "Don't 把胶囊套在容器与多行输入上；胶囊只留给单行动作、状态与搜索。",
+      "Don't 用禁用色 Ink Quaternary (#a8a8b0) 承载信息；它只用于禁用态与滚动条。"
+    ]
+  }
+}

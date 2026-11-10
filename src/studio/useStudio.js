@@ -50,8 +50,12 @@ export function useStudio(props) {
   const defaultPreset = (state && state.defaultPreset) || ''
   const activeJob = activeJobOf(state)
 
-  const [form, setForm] = React.useState(EMPTY_FORM)
-  const [view, setView] = React.useState('studio')
+  const [form, setForm] = React.useState(() => ({
+    ...EMPTY_FORM,
+    prompt: props && typeof props.initialPrompt === 'string' ? props.initialPrompt : '',
+  }))
+  // 初始视图同样可由 props 指定（预览与测试用）；正常运行时从工坊开始。
+  const [view, setView] = React.useState(props && props.view === 'gallery' ? 'gallery' : 'studio')
   const [advancedOpen, setAdvancedOpen] = React.useState(false)
   const [negativeOpen, setNegativeOpen] = React.useState(false)
   const [sending, setSending] = React.useState(false)
@@ -453,6 +457,7 @@ export function useStudio(props) {
   return {
     guidanceCode,
     batches,
+    quota: (state && state.probe && state.probe.quota) || null,
     panelMode,
     setPanelMode,
     messages,
