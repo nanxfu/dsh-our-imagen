@@ -63,7 +63,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # ─────────────────────────────────────────────────────────────────────────────
 EMBEDDED_CONFIG_B64 = ""
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 
 # 日志环容量：Host 侧按 docs/SPEC.md 实现，最多 400 行。
 LOG_MAX_LINES = 400
@@ -91,15 +91,14 @@ TUNNEL_PROVIDERS = ("cloudflare", "custom")
 PIP_UNINSTALL = ("torchao",)
 PIP_INSTALL = ("diffusers", "transformers", "accelerate", "peft")
 
-# P1.2 依赖约束默认上限：Kaggle 镜像的默认版本组合未经 bench 验证，装出无法 import 的
-# 组合比装旧版更糟。键是包名（PEP 503 归一化），值是 pip 约束表达式；Host 注入的
-# pip_constraints 按包名覆盖/追加。
-PIP_CONSTRAINTS = {
-    "diffusers": "diffusers<1.0",
-    "transformers": "transformers<5",
-    "accelerate": "accelerate<2",
-    "peft": "peft<1",
-}
+# 依赖约束默认留空（0.4.1 修正）。0.4.0 曾内置「版本上限」做固化
+# （diffusers<1.0 / transformers<5 / accelerate<2 / peft<1），实测与当前 diffusers
+# 新版直接冲突：diffusers 0.42+ 依赖 huggingface-hub>=1.32，而 transformers 4.x
+# 要求 huggingface-hub<1.0，pip 只能回溯到 2019 年的 transformers 4.12.2；在
+# Kaggle 镜像存在预装包时解析直接失败（远端表现 load_failed: pip install 退出码 1）。
+# 需要固定版本时用 Host 的 `pipConstraints` 显式钉一组自己验证过的组合；默认装
+# 最新兼容组合，再用导入自检兜底。
+PIP_CONSTRAINTS: dict[str, str] = {}
 IMPORT_CHECK_MODULES = ("torch", "diffusers", "transformers", "accelerate", "peft")
 # 磁盘预检在估算值上留 15% 余量：下载缓存、解压临时文件也会占空间。
 DISK_HEADROOM = 1.15
@@ -606,8 +605,8 @@ def request_shutdown() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def run_streaming(argv: list[str], prefix: str) -> int:
-    """跑子进程并把每一行输出写进日志环（pip 必须可见，否则用户以为卡死）。"""
+def _stream_process(argv: list[str], prefix: str, tail_lines: int = 0) -> tuple[int, list[str]]:
+    """跑子进程并把每一行输出写进日志环；可选返回尾部若干行供错误文案使用。"""
     log(f"{prefix} $ {' '.join(argv)}")
     env = dict(os.environ)
     env.setdefault("PIP_DISABLE_PIP_VERSION_CHECK", "1")
@@ -623,15 +622,38 @@ def run_streaming(argv: list[str], prefix: str) -> int:
         )
     except Exception as exc:
         log(f"{prefix} 启动失败：{short(exc)}")
-        return -1
+        return -1, []
     assert proc.stdout is not None
+    tail: deque[str] = deque(maxlen=tail_lines) if tail_lines > 0 else deque(maxlen=0)
     for line in proc.stdout:
         line = line.rstrip()
-        if line:
-            log(f"{prefix} {line}")
+        if not line:
+            continue
+        log(f"{prefix} {line}")
+        if tail_lines > 0:
+            tail.append(line)
     code = proc.wait()
     log(f"{prefix} 退出码 {code}")
-    return code
+    return code, list(tail)
+
+
+def run_streaming(argv: list[str], prefix: str) -> int:
+    """跑子进程并把每一行输出写进日志环（pip 必须可见，否则用户以为卡死）。"""
+    return _stream_process(argv, prefix)[0]
+
+
+def run_streaming_tail(argv: list[str], prefix: str, tail_lines: int = 12) -> tuple[int, list[str]]:
+    """同 run_streaming，但额外返回末尾若干行输出，用于把失败原因带进错误文案。"""
+    return _stream_process(argv, prefix, tail_lines)
+
+
+def tail_summary(lines: list[str], limit: int = 560) -> str:
+    """把子进程尾部输出压成一行，供 LoadError 文案；保留最后几条最有用的行。"""
+    meaningful = [line.strip() for line in lines if isinstance(line, str) and line.strip()]
+    if not meaningful:
+        return "无输出"
+    text = " | ".join(meaningful[-6:])
+    return text if len(text) <= limit else "…" + text[-(limit - 1) :]
 
 
 def package_name(spec: str) -> str:
@@ -665,11 +687,14 @@ def write_constraints_file(constraints: list[str], directory: str | None = None)
 
 
 # 独立进程做 import 自检：pip 显示安装成功 ≠ 能 import（ABI 不匹配、依赖冲突都在这暴露）。
+# 除模块本身外再导入一次 DiffusionPipeline：版本组合不兼容时，它往往在模块级就抛错。
 IMPORT_CHECK_CODE = (
     "import importlib\n"
     "for name in ('torch', 'diffusers', 'transformers', 'accelerate', 'peft'):\n"
     "    module = importlib.import_module(name)\n"
     "    print(name + '==' + str(getattr(module, '__version__', 'unknown')))\n"
+    "from diffusers import DiffusionPipeline\n"
+    "print('DiffusionPipeline ok')\n"
 )
 
 
@@ -707,20 +732,36 @@ def verify_dependencies() -> None:
 
 
 def install_dependencies() -> None:
-    """按 bench/lightning/run.py 已验证过的顺序处理依赖。"""
+    """按 bench/lightning/run.py 已验证过的顺序处理依赖。
+
+    安装策略（0.4.1）：
+      1. 默认不钉版本，装最新兼容组合 —— 硬编码版本上限会与 diffusers 新版的
+         huggingface-hub 要求冲突（见 PIP_CONSTRAINTS 注释）；
+      2. 用户在 Host 配置了 `pipConstraints` 时带 `-c` 安装；若带约束解析失败，
+         自动去掉约束重试一次，并在日志里说明，避免一次错误配置把整个会话卡死；
+      3. 安装失败时把 pip 输出的最后几行带进 LoadError，界面能直接看到原因。
+    """
     set_phase("installing", "卸载 torchao 并升级 diffusers 相关依赖")
     run_streaming(
         [sys.executable, "-m", "pip", "uninstall", "-y", "-q", *PIP_UNINSTALL],
         "[pip]",
     )
     constraints = merge_pip_constraints(CONFIG.pip_constraints)
-    constraints_path = write_constraints_file(constraints)
-    # 约束本身不含敏感信息，完整打印便于对照「为什么装的是这个版本」。
-    log(f"[pip] 依赖约束：{' | '.join(constraints)}")
-    code = run_streaming(
-        # 不加 -q：Collecting / Downloading / Installing 这些行要留在日志环里，
-        # 用户排队结束后才看得到"依赖还在装"，进度条本身由 _NOISE_RE 过滤。
-        [
+    plain_argv = [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "-U",
+        "--progress-bar",
+        "off",
+        *PIP_INSTALL,
+    ]
+    if constraints:
+        constraints_path = write_constraints_file(constraints)
+        # 约束本身不含敏感信息，完整打印便于对照「为什么装的是这个版本」。
+        log(f"[pip] 依赖约束（Host 注入）：{' | '.join(constraints)}")
+        install_argv = [
             sys.executable,
             "-m",
             "pip",
@@ -731,11 +772,20 @@ def install_dependencies() -> None:
             "-c",
             constraints_path,
             *PIP_INSTALL,
-        ],
-        "[pip]",
-    )
+        ]
+    else:
+        log("[pip] 未配置版本约束：安装最新兼容组合（需要复现时用 pipConstraints 钉死已验证版本）")
+        install_argv = plain_argv
+
+    code, tail = run_streaming_tail(install_argv, "[pip]", 12)
+    if code != 0 and constraints:
+        log(f"[pip] WARN 带约束安装失败（退出码 {code}）：{tail_summary(tail)}")
+        log("[pip] 去掉约束重试一次；成功后本次会话按最新兼容组合运行")
+        code, tail = run_streaming_tail(plain_argv, "[pip]", 12)
+        if code == 0:
+            log("[pip] WARN 未使用版本约束安装成功：如需固定版本，请修正 pipConstraints")
     if code != 0:
-        raise LoadError(f"pip install 失败（退出码 {code}），请查看 /logs 的 [pip] 行")
+        raise LoadError(f"pip install 失败（退出码 {code}）：{tail_summary(tail)}")
     verify_dependencies()
 
 

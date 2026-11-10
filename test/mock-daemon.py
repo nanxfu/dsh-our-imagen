@@ -61,7 +61,7 @@ except Exception:  # pragma: no cover - 只在极简环境触发
     ImageDraw = None  # type: ignore[assignment]
     _HAS_PILLOW = False
 
-VERSION = "0.4.0-mock"
+VERSION = "0.4.1-mock"
 LOG_MAX_LINES = 400
 SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2")
 FAIL_CHOICES = ("none", "oom", "load_failed", "invalid_request", "generation_failed")
@@ -74,7 +74,7 @@ CONTRACT_PATH = Path(__file__).resolve().parent.parent / "remote" / "contract.js
 # 契约文件缺失/损坏时的兜底：故意与 remote/daemon.py 的 _FALLBACK_LIMITS 保持一致（旧边界），
 # 保证"没有 contract.json"时 mock 与 daemon 的退化行为相同。
 FALLBACK_CONTRACT = {
-    "version": "0.4.0",
+    "version": "0.4.1",
     "limits": {
         "width": {"max": 2048, "min": 64, "step": 8},
         "height": {"max": 2048, "min": 64, "step": 8},

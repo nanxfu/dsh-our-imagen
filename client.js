@@ -738,7 +738,7 @@ function buildSessionView(t, input) {
 }
 
 // shared/contract.js
-var VERSION = "0.4.0";
+var VERSION = "0.4.1";
 var ROUTES = {
   state: { method: "GET", path: "/imagen-api/state" },
   probe: { method: "POST", path: "/imagen-api/probe" },

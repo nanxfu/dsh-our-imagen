@@ -86,7 +86,7 @@
 | `sessionWaitMinutes` | `45` | 出图任务等待会话就绪的最长分钟数（5~240） |
 | `generateTimeoutSeconds` | `300` | 单次生成请求超时秒数（30~1800） |
 | `hfToken` | 空 | HuggingFace Token；设置后可避免匿名拉取大模型被 429 限流，也支持 gated 仓库 |
-| `pipConstraints` | `[]` | 额外 pip 约束，如 `["diffusers==0.36.0"]`；按包名覆盖内置上限 |
+| `pipConstraints` | `[]` | 可选 pip 版本约束，如 `["diffusers==0.42.1"]`；**默认不钉版本**（硬编码上限会与 diffusers 新版依赖冲突，见 TROUBLESHOOTING）；带约束装不上时会自动去掉约束重试 |
 | `datasetSources` | `[]` | 预挂载的 Kaggle Dataset，如 `["owner/sdxl-weights"]`，挂载到 `/kaggle/input/<dataset>` |
 | `localModels` | 空 | 权重仓库 → 容器内目录的映射，如 `{"stabilityai/stable-diffusion-xl-base-1.0": "/kaggle/input/sdxl-weights"}`；命中后跳过下载 |
 | `fallbackTunnelCommand` | `[]` | 备用隧道命令 argv，支持 `{port}` 占位，如 `["/kaggle/working/bore", "server", "bore.pub", "-p", "{port}"]` |
@@ -170,5 +170,6 @@ npm run test:gpu    # 真实 GPU 出图链路（端到端出图）
 - **[产品定位与约束 (docs/PRODUCT.md)](docs/PRODUCT.md)**：目标人群、运行环境、功能全景矩阵与无障碍设计标准。
 - **[设计系统令牌 (docs/DESIGN.md)](docs/DESIGN.md)**：黑白灰视觉令牌、排版字阶、间距网格、阴影体系与响应式断点。
 - **[演进路线 (docs/ROADMAP.md)](docs/ROADMAP.md)**：版本里程碑与后续功能规划。
+- **[故障排查 (docs/TROUBLESHOOTING.md)](docs/TROUBLESHOOTING.md)**：pip 版本冲突复盘、venv 取舍、磁盘/隧道/凭证等已知环境问题与判断依据。
 - **[代码重构与整洁化规范 (docs/CODE_REFACTOR_SPEC.md)](docs/CODE_REFACTOR_SPEC.md)**：针对过度设计、伪解耦与测试自嗨的工程整洁化实施指南。
 - **[历史归档库 (docs/archive/)](docs/archive/README.md)**：归档历史重构调研底稿与已废弃的前序版本规格。

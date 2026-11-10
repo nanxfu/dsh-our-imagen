@@ -612,7 +612,7 @@ await check('诊断信息拼装（不含 token）', () => {
   }
   const lines = Array.from({ length: 80 }, (_, index) => `log-${index}`)
   const text = buildDiagnostics(t, {
-    version: '0.4.0',
+    version: '0.4.1',
     session,
     probe: { cli: { present: true }, auth: { ok: true }, quota: { available: false }, notes: ['配额接口超时'] },
     probeLastGood: { quota: { available: true, usedHours: 3, totalHours: 30 } },
@@ -625,7 +625,7 @@ await check('诊断信息拼装（不含 token）', () => {
 
   assert.equal(text.split('\n')[0], `${t('studio.logs.diag.title')} · 2026-11-11T00:05:00.000Z`)
   for (const needle of [
-    'version: 0.4.0',
+    'version: 0.4.1',
     'session.state: ready',
     'session.tunnelProvider: cloudflare',
     'session.error: remote_error · boom',

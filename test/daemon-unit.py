@@ -69,7 +69,7 @@ AUTH_TOKEN = "test-token-0123456789"
 
 # 与 shared/contract.js 的 daemonContract() 同形：daemon 只消费 version 与 limits。
 CONTRACT = {
-    "version": "0.4.0",
+    "version": "0.4.1",
     "limits": {
         "width": {"min": 256, "max": 1536, "step": 8},
         "height": {"min": 256, "max": 1536, "step": 8},
@@ -166,7 +166,7 @@ class ImportSideEffectTest(unittest.TestCase):
         self.assertIsInstance(d.CONFIG, d.DaemonConfig)
         self.assertIsInstance(d.STATE, d.RuntimeState)
         self.assertIsInstance(d.BOOT, d.BootState)
-        self.assertEqual(d.VERSION, "0.4.0")
+        self.assertEqual(d.VERSION, "0.4.1")
         self.assertEqual(d.STATE.phase, "booting")
         self.assertIsNone(d.BOOT.tunnel_url)
         self.assertFalse(d.BOOT.published_ready)
@@ -205,7 +205,7 @@ class BuildConfigTest(DaemonUnitTest):
                 "preload": {"loader": "sdxl", "base": "org/base"},
                 "preset_id": "sdxl-lightning",
                 "log_level": "debug",
-                "version": "0.4.0",
+                "version": "0.4.1",
                 "contract": CONTRACT,
                 "allow_no_auth": True,
             }
@@ -218,7 +218,7 @@ class BuildConfigTest(DaemonUnitTest):
         self.assertEqual(config.preload["loader"], "sdxl")
         self.assertEqual(config.preset_id, "sdxl-lightning")
         self.assertEqual(config.log_level, "debug")
-        self.assertEqual(config.version, "0.4.0")
+        self.assertEqual(config.version, "0.4.1")
         self.assertEqual(config.contract["limits"]["width"]["max"], 1536)
         self.assertTrue(config.allow_no_auth)
 
@@ -283,7 +283,7 @@ class BuildConfigTest(DaemonUnitTest):
         with mock.patch.object(d, "EMBEDDED_CONFIG_B64", encoded):
             config = d.load_config()
         self.assertEqual(config.auth_token, "embedded-token")
-        self.assertEqual(config.contract["version"], "0.4.0")
+        self.assertEqual(config.contract["version"], "0.4.1")
 
     def test_load_config_without_payload_returns_defaults(self) -> None:
         with mock.patch.object(d, "EMBEDDED_CONFIG_B64", ""), mock.patch.dict(os.environ, {}, clear=True):
@@ -303,7 +303,7 @@ class BuildConfigTest(DaemonUnitTest):
 
 class ProtocolVersionTest(DaemonUnitTest):
     def test_falls_back_to_file_version(self) -> None:
-        self.assertEqual(d.protocol_version(), "0.4.0")
+        self.assertEqual(d.protocol_version(), "0.4.1")
 
     def test_prefers_injected_version(self) -> None:
         d.CONFIG.version = "0.3.1-injected"
@@ -568,7 +568,7 @@ class HealthPayloadTest(DaemonUnitTest):
         self.assertEqual(set(payload), self.REQUIRED_KEYS)
         self.assertEqual(payload["phase"], "booting")
         self.assertEqual(payload["status"], "ok")
-        self.assertEqual(payload["version"], "0.4.0")
+        self.assertEqual(payload["version"], "0.4.1")
         self.assertEqual(payload["idle_timeout_sec"], 1800)
         self.assertGreaterEqual(payload["idle_seconds"], 0)
         self.assertGreaterEqual(payload["uptime_seconds"], 0)
@@ -697,11 +697,14 @@ class HfTokenTest(DaemonUnitTest):
 
 
 class PipConstraintsTest(DaemonUnitTest):
-    def test_defaults_are_pinned(self) -> None:
-        self.assertEqual(
-            d.merge_pip_constraints([]),
-            ["diffusers<1.0", "transformers<5", "accelerate<2", "peft<1"],
-        )
+    def test_no_default_constraints(self) -> None:
+        """0.4.1 修正：默认不钉版本。
+
+        0.4.0 内置的 transformers<5 与 diffusers 新版要求的 huggingface-hub>=1.32
+        无法同时满足，会让 pip 解析失败（远端 load_failed）。
+        """
+        self.assertEqual(d.PIP_CONSTRAINTS, {})
+        self.assertEqual(d.merge_pip_constraints([]), [])
 
     def test_package_name_is_normalized(self) -> None:
         self.assertEqual(d.package_name("diffusers<1.0"), "diffusers")
@@ -710,20 +713,15 @@ class PipConstraintsTest(DaemonUnitTest):
         self.assertEqual(d.package_name("--no-deps"), "")
         self.assertEqual(d.package_name(""), "")
 
-    def test_injected_overrides_same_package_and_appends_new(self) -> None:
+    def test_injected_constraints_are_used(self) -> None:
         merged = d.merge_pip_constraints(["diffusers<0.36", "numpy<2"])
-        self.assertEqual(merged[0], "diffusers<0.36")
-        self.assertIn("numpy<2", merged)
-        self.assertIn("transformers<5", merged)
-        self.assertEqual(len(merged), 5)
-        # 包名归一化后同名覆盖，不并列两条
-        overridden = d.merge_pip_constraints(["Diffusers>=0.35"])
-        self.assertEqual([item for item in overridden if item.lower().startswith("diffusers")], ["Diffusers>=0.35"])
-        self.assertEqual(len(overridden), 4)
+        self.assertEqual(merged, ["diffusers<0.36", "numpy<2"])
+        # 包名归一化后同名覆盖：后写的值生效，不并列两条
+        overridden = d.merge_pip_constraints(["Diffusers>=0.35", "diffusers<0.36"])
+        self.assertEqual(overridden, ["diffusers<0.36"])
 
     def test_unrecognized_constraint_is_ignored(self) -> None:
-        merged = d.merge_pip_constraints(["==1.0"])
-        self.assertEqual(len(merged), 4)
+        self.assertEqual(d.merge_pip_constraints(["==1.0"]), [])
         self.assertLogContains("无法识别包名")
 
     def test_write_constraints_file(self) -> None:
@@ -734,44 +732,105 @@ class PipConstraintsTest(DaemonUnitTest):
                 content = handle.read()
         self.assertEqual(content.splitlines(), ["diffusers<1.0", "numpy<2"])
 
-    def test_install_dependencies_passes_constraints_and_verifies(self) -> None:
+    def test_install_dependencies_default_has_no_constraints(self) -> None:
         calls: list[list[str]] = []
         verified: list[bool] = []
-        constraints_path = os.path.join(tempfile.gettempdir(), "imagen-fake-constraints.txt")
 
-        def fake_run(argv, _prefix):
-            calls.append(argv)
-            return 0
+        def fake_install(argv, _prefix, tail_lines=12):  # noqa: ANN001, ANN202
+            calls.append(list(argv))
+            return 0, ["ok"]
 
-        def fake_write(constraints, directory=None):
-            self.assertIn("diffusers<1.0", constraints)
-            return constraints_path
-
-        with mock.patch.object(d, "run_streaming", side_effect=fake_run), mock.patch.object(
-            d, "write_constraints_file", side_effect=fake_write
+        with mock.patch.object(d, "run_streaming_tail", side_effect=fake_install), mock.patch.object(
+            d, "run_streaming", return_value=0
+        ), mock.patch.object(
+            d, "write_constraints_file", side_effect=AssertionError("默认不应写约束文件")
         ), mock.patch.object(d, "verify_dependencies", side_effect=lambda: verified.append(True)):
             d.install_dependencies()
         install_argv = calls[-1]
         self.assertIn("install", install_argv)
-        self.assertIn("-c", install_argv)
-        self.assertEqual(install_argv[install_argv.index("-c") + 1], constraints_path)
+        self.assertNotIn("-c", install_argv)
         self.assertIn("diffusers", install_argv)
         self.assertEqual(verified, [True])
-        self.assertLogContains("依赖约束：diffusers<1.0")
+        self.assertLogContains("未配置版本约束")
 
-    def test_install_failure_skips_import_check(self) -> None:
+    def test_install_dependencies_passes_injected_constraints(self) -> None:
+        calls: list[list[str]] = []
+        verified: list[bool] = []
         constraints_path = os.path.join(tempfile.gettempdir(), "imagen-fake-constraints.txt")
-        with mock.patch.object(d, "run_streaming", return_value=1), mock.patch.object(
-            d, "write_constraints_file", return_value=constraints_path
-        ), mock.patch.object(d, "verify_dependencies", side_effect=AssertionError("不应继续自检")):
+        d.CONFIG.pip_constraints = ["diffusers==0.42.1", "numpy<2"]
+
+        def fake_install(argv, _prefix, tail_lines=12):  # noqa: ANN001, ANN202
+            calls.append(list(argv))
+            return 0, []
+
+        def fake_write(constraints, directory=None):  # noqa: ANN001, ANN202
+            self.assertEqual(constraints, ["diffusers==0.42.1", "numpy<2"])
+            return constraints_path
+
+        with mock.patch.object(d, "run_streaming_tail", side_effect=fake_install), mock.patch.object(
+            d, "run_streaming", return_value=0
+        ), mock.patch.object(d, "write_constraints_file", side_effect=fake_write), mock.patch.object(
+            d, "verify_dependencies", side_effect=lambda: verified.append(True)
+        ):
+            d.install_dependencies()
+        install_argv = calls[-1]
+        self.assertIn("-c", install_argv)
+        self.assertEqual(install_argv[install_argv.index("-c") + 1], constraints_path)
+        self.assertEqual(verified, [True])
+        self.assertLogContains("依赖约束（Host 注入）")
+
+    def test_constraint_failure_retries_without_constraints(self) -> None:
+        d.CONFIG.pip_constraints = ["diffusers==9.9.9"]
+        calls: list[list[str]] = []
+        verified: list[bool] = []
+        constraints_path = os.path.join(tempfile.gettempdir(), "imagen-fake-constraints.txt")
+
+        def fake_install(argv, _prefix, tail_lines=12):  # noqa: ANN001, ANN202
+            calls.append(list(argv))
+            if "-c" in argv:
+                return 1, ["ERROR: Could not find a version that satisfies the requirement"]
+            return 0, []
+
+        with mock.patch.object(d, "run_streaming_tail", side_effect=fake_install), mock.patch.object(
+            d, "run_streaming", return_value=0
+        ), mock.patch.object(d, "write_constraints_file", return_value=constraints_path), mock.patch.object(
+            d, "verify_dependencies", side_effect=lambda: verified.append(True)
+        ):
+            d.install_dependencies()
+        self.assertEqual(len(calls), 2)
+        self.assertIn("-c", calls[0])
+        self.assertNotIn("-c", calls[1])
+        self.assertEqual(verified, [True])
+        self.assertLogContains("去掉约束重试一次")
+
+    def test_install_failure_carries_pip_tail(self) -> None:
+        with mock.patch.object(
+            d,
+            "run_streaming_tail",
+            return_value=(1, ["ERROR: Could not build wheels for tokenizers", "torchao ABI conflict"]),
+        ), mock.patch.object(d, "run_streaming", return_value=0), mock.patch.object(
+            d, "verify_dependencies", side_effect=AssertionError("不应继续自检")
+        ):
             with self.assertRaises(d.LoadError) as ctx:
                 d.install_dependencies()
-        self.assertIn("pip install 失败", str(ctx.exception))
+        message = str(ctx.exception)
+        self.assertIn("pip install 失败", message)
+        self.assertIn("Could not build wheels", message)
+        self.assertIn("退出码 1", message)
+
+    def test_tail_summary_keeps_last_lines_and_truncates(self) -> None:
+        self.assertEqual(d.tail_summary([]), "无输出")
+        self.assertIn("last", d.tail_summary(["old\n", "", "last"]))
+        long = d.tail_summary(["x" * 1000], limit=100)
+        self.assertLessEqual(len(long), 100)
+        self.assertTrue(long.startswith("…"))
 
     def test_import_check_covers_all_packages(self) -> None:
         for name in d.IMPORT_CHECK_MODULES:
             self.assertIn(name, d.IMPORT_CHECK_CODE)
         self.assertEqual(d.IMPORT_CHECK_MODULES, ("torch", "diffusers", "transformers", "accelerate", "peft"))
+        # 0.4.1：版本组合不兼容时模块级导入未必报错，补一条 DiffusionPipeline 导入。
+        self.assertIn("from diffusers import DiffusionPipeline", d.IMPORT_CHECK_CODE)
 
     def test_verify_dependencies_raises_with_tail(self) -> None:
         tail = ["Traceback (most recent call last):", "ModuleNotFoundError: No module named 'diffusers'"]

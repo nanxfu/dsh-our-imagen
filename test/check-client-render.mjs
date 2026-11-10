@@ -611,7 +611,7 @@ await check('画廊悬停动作把完整作品条目交给回调', async () => {
 await check('渲染：日志抽屉（就绪 / 空态 / 不可用）', async () => {
   const fallbackState = {
     ...readyState,
-    version: '0.4.0',
+    version: '0.4.1',
     probe: { cli: { present: true }, auth: { ok: true }, quota: { available: false }, notes: ['配额接口超时'] },
     probeLastGood: { quota: { available: true, usedHours: 3, totalHours: 30 } },
     probeLastGoodAt: '2026-11-09T04:40:00.000Z',
@@ -663,7 +663,7 @@ await check('渲染：日志抽屉（就绪 / 空态 / 不可用）', async () =
   copyButton.props.onClick()
   assert.equal(copied.length, 1, '[logs] 复制应交给 ui.copyText')
   assert.equal(copied[0].key, 'studio.logs.copied')
-  assert.ok(copied[0].text.includes('version: 0.4.0'), '[logs] 诊断文本应带版本')
+  assert.ok(copied[0].text.includes('version: 0.4.1'), '[logs] 诊断文本应带版本')
   assert.ok(copied[0].text.includes('session.state: ready'), '[logs] 诊断文本应带会话快照')
   assert.ok(!copied[0].text.includes('token'), '[logs] 诊断文本不得出现 token 字段')
   client.unmount()
@@ -704,7 +704,7 @@ await check('渲染：日志抽屉（就绪 / 空态 / 不可用）', async () =
 await check('渲染：算力弹层配额回退、隧道通道与日志入口', async () => {
   const fallbackState = {
     ...readyState,
-    version: '0.4.0',
+    version: '0.4.1',
     probe: { cli: { present: true }, auth: { ok: true }, quota: { available: false }, notes: ['配额接口超时'] },
     probeLastGood: { quota: { available: true, usedHours: 3, totalHours: 30 } },
     probeLastGoodAt: '2026-11-09T04:40:00.000Z',

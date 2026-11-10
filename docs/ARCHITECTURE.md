@@ -101,6 +101,19 @@ daemon 维护最多 400 行日志环，`GET /logs?since=N` 返回增量行与下
 `GET /imagen-api/logs?since=N` 原样透传（始终 HTTP 200，用 `ok` / `code` 表达可用性），
 工作台的日志抽屉按游标轮询并把安装、隧道、生成三阶段输出展示给用户；诊断导出会剔除 token 类字段。
 
+### 2.11 远端依赖安装策略（0.4.1）
+Kaggle 镜像的包版本会随平台更新，插件里写死版本上限反而更容易把 pip 解析搞崩：
+0.4.0 的 `transformers<5` 与 diffusers 新版要求的 `huggingface-hub>=1.32` 无法同时满足，
+远端直接以 `pip install 退出码 1` 失败。当前策略：
+
+1. 默认**不钉版本**，安装最新兼容组合；
+2. 用户配置 `pipConstraints` 时带 `-c` 安装；解析失败自动去掉约束重试一次并留 WARN；
+3. 安装失败时把 pip 输出尾部带进 `LoadError`，界面直接可见（Host 截断放宽到 700 字符）；
+4. 装完用独立 Python 进程做 `import` 自检（含 `from diffusers import DiffusionPipeline`），
+   把「装上了但 import 不了」提前暴露成 `load_failed`；
+5. 不使用 venv：Kaggle 容器一次性、镜像自带 CUDA torch，venv 要么重装整套依赖、
+   要么需要 bootstrap 后 re-exec daemon，收益低于复杂度。详见 `docs/TROUBLESHOOTING.md`。
+
 ---
 
 ## 3. 本地脱机调试技巧（不烧 Kaggle 额度）

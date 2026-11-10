@@ -64,10 +64,10 @@
 - **实现**：`lib/routes/logs.js` + `src/studio/LogsDrawer.jsx` / `useStudioLogs` / `src/logic/logs.js`；诊断文本剔除 token 类字段。契约新增 `ROUTES.logs`、`logs_unavailable` 错误码与轮询间隔。
 
 ### 2. 冷启动可靠性防护
-- **依赖版本固化**：daemon 内置依赖上限 constraints（`diffusers<1.0` / `transformers<5` / `accelerate<2` / `peft<1`），写临时文件后 `pip install -c`，可用 `pipConstraints` 覆盖；安装后独立进程导入自检并打印版本。
+- **版本约束机制**：默认不钉版本（0.4.0 内置的 `transformers<5` 等上限与 diffusers 新版依赖的 `huggingface-hub>=1.32` 冲突，导致 pip 解析失败，0.4.1 已回退）；需要复现时用 `pipConstraints` 显式钉死一组已验证组合，带约束装不上会自动去掉约束重试。安装后独立进程导入自检并打印版本。
 - **HuggingFace 匿名限流防护**：新增可选 `hfToken`，注入后设置 `HF_TOKEN` / `HUGGING_FACE_HUB_TOKEN`（不落日志）。
 - **Flux.2 磁盘预检**：按 pipeline 的 `downloadGb` 估算（1.15 倍余量）并检查 `/kaggle/working` 剩余空间，不足时在下载前给出「需 X GiB / 可用 Y GiB」的明确错误；使用预挂载权重时跳过。
-- **说明**：没有使用精确版本钉死，是因为 FLUX.2 需要较新的 diffusers 主线；内置约束只挡住破坏性大版本跃迁，需要完全复现时用 `pipConstraints` 显式钉死。
+- **事故复盘**：见 [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md) 第 1 节（含 venv 为何不采用、如何按 pip 尾部输出判断原因）。
 
 ### 3. 配额可见性容错
 - **现状与实施**：Kaggle 平台的 `kaggle account quota` 指令由于官方接口变动或代理网络问题，经常出现超时或报错导致配额显示“不可用”。现在探测失败或配额不可读时，算力弹层展示最近一次成功检查时间与当时配额、当前会话已运行时长，并给出 Kaggle 账户设置直达链接。`/state` 增加 `probeLastGood` / `probeLastGoodAt`。

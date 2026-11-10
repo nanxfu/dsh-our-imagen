@@ -1,5 +1,18 @@
 # 变更记录
 
+## 0.4.1 — 2026-11-11
+
+### 修复
+
+- **pip 依赖约束回归（远端 `load_failed`）**：0.4.0 默认下发的版本上限（`transformers<5` 等）与当前 diffusers 新版依赖的 `huggingface-hub>=1.32` 无法同时满足，pip 解析回溯到 2019 年的 `transformers 4.12.2`，在 Kaggle 镜像中直接以退出码 1 失败。0.4.1 改为**默认不钉版本**，`pipConstraints` 只作为用户显式复现手段；带约束安装失败时自动去掉约束重试一次并记录 WARN。
+- **错误可诊断**：pip 安装失败的 `LoadError` 现在附带 pip 输出最后几行（不再只有退出码）；Host 侧 `remote_error` 文案截断从 400 放宽到 700 字符；依赖导入自检增加 `from diffusers import DiffusionPipeline`，把「装上了但 import 不了」提前暴露。
+- **版本单源升到 0.4.1**：契约 / package.json / daemon / mock / probe / SPEC 同步，`remote/contract.json` 重新生成。
+
+### 文档
+
+- 新增 [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)：pip 版本冲突复盘与判断表、venv 取舍、磁盘/隧道/凭证/会话恢复等已知问题。
+- README 的 `pipConstraints` 说明与故障排查入口更新；ARCHITECTURE 增加远端依赖安装策略；ROADMAP 同步 P1.2 结论。
+
 ## 0.4.0 — 2026-11-11
 
 ### 稳定性（P0）

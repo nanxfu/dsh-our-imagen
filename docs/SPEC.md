@@ -4,7 +4,7 @@
 > 本文档只描述语义、请求/响应形状与使用约束，不重复维护数值。`node test/check-contract.mjs` 会校验
 > 宿主注册的路由、宿主错误码、客户端文案与本文档是否跟随契约。
 >
-> **版本**：0.4.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
+> **版本**：0.4.1（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
 
 ---
 
@@ -160,7 +160,7 @@
 
 ```json
 {
-  "version": "0.4.0",
+  "version": "0.4.1",
   "defaultPreset": "sdxl-lightning",
   "presets": [
     {

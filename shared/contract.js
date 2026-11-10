@@ -12,7 +12,7 @@
  *    随注入配置下发（见 `remote/daemon.py` 的 config 解析）。
  */
 
-export const VERSION = '0.4.0'
+export const VERSION = '0.4.1'
 
 /**
  * Host HTTP 路由表（index.js 注册时必须逐一对应）。
