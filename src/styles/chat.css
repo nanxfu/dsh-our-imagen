@@ -8,9 +8,9 @@
  */
 
 /* ── 消息流 ─────────────────────────────────────────────────── */
-/* 面板始终落在 .ofs-body 的第二列（图标栏之后）；单独挂载预览时也靠这句归位。 */
-.ofs-panel--chat.ofs-rail--chat {
-  grid-column: 2;
+/* 面板落在单轨布局的第一列；单独挂载预览时这句不影响其它容器。 */
+.ofs-panel--chat {
+  grid-column: 1;
 }
 
 .ofs-panel--chat .ofs-thread {

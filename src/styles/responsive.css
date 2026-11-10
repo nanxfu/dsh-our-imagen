@@ -4,16 +4,8 @@
  */
 
 @media (max-width: 1280px) {
-  .ofs-body {
-    grid-template-columns: 68px minmax(288px, 330px) minmax(0, 1fr);
-  }
-
   .ofs-preset-meta {
     display: none;
-  }
-
-  .ofs-filmstrip {
-    margin-left: 82px;
   }
 }
 
@@ -22,24 +14,12 @@
     display: none;
   }
 
-  .ofs-body {
-    grid-template-columns: 64px minmax(272px, 312px) minmax(0, 1fr);
-  }
-
-  .ofs-body.is-gallery {
-    grid-template-columns: 64px minmax(0, 1fr);
-  }
-
   .ofs-preset-label {
     display: none;
   }
 
   .ofs-preset select {
     max-width: 132px;
-  }
-
-  .ofs-filmstrip {
-    margin-left: 78px;
   }
 
   .ofs-dock-button {
@@ -72,21 +52,7 @@
     font-size: 12px;
   }
 
-  .ofs-body {
-    grid-template-columns: 58px minmax(250px, 288px) minmax(0, 1fr);
-  }
-
-  .ofs-body.is-gallery {
-    grid-template-columns: 58px minmax(0, 1fr);
-  }
-
-  .ofs-rail-btn {
-    width: 46px;
-    font-size: 9px;
-  }
-
-  .ofs-panel,
-  .ofs-rail--chat {
+  .ofs-panel {
     margin: 10px 0 10px 10px;
   }
 
@@ -95,7 +61,7 @@
   }
 
   .ofs-filmstrip {
-    margin: 0 10px 10px 68px;
+    margin: 0 10px 10px;
     min-height: 84px;
     padding: 8px 10px;
     border-radius: var(--ofs-r-md);
@@ -175,47 +141,7 @@
     overflow-x: hidden;
   }
 
-  .ofs-rail {
-    flex: 0 0 auto;
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 4px;
-    padding: 6px 8px;
-    border-right: 0;
-    border-bottom: 1px solid var(--ofs-hairline);
-  }
-
-  .ofs-rail-group {
-    flex-direction: row;
-    align-items: center;
-    gap: 4px;
-    width: auto;
-  }
-
-  .ofs-rail-btn {
-    flex-direction: row;
-    gap: 5px;
-    width: auto;
-    padding: 6px 9px;
-    border-radius: 10px;
-    font-size: 10.5px;
-  }
-
-  .ofs-rail-divider {
-    width: 1px;
-    height: 20px;
-    margin: 0 3px;
-  }
-
-  .ofs-rail-status {
-    margin-left: auto;
-    flex-direction: row;
-    padding: 0 6px;
-  }
-
-  .ofs-panel,
-  .ofs-rail--chat {
+  .ofs-panel {
     flex: 0 0 auto;
     margin: 8px 8px 0;
     max-height: none;

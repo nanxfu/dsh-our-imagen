@@ -179,11 +179,9 @@ export const zh = {
   'studio.promptTooltip': '支持中英文输入；英文提示词在多数开源模型上细节更丰富。',
   'studio.negative': '排除项',
   'studio.negativePlaceholder': '画面中不希望出现的元素（如模糊、文字）',
-  'studio.negativeHintCfg': '引导强度为 0 时，远端会忽略排除项',
   'studio.negativeTooltip': '画面中不希望出现的元素。仅在引导强度 (CFG) > 0 时生效。',
 
   // ── 参数 ─────────────────────────────────────────────────────
-  'studio.advanced': '高级参数',
   'studio.steps': '采样步数',
   'studio.stepsTooltip': '模型迭代去噪的步数。Lightning 预设推荐 4~8 步，Base 预设推荐 25~30 步。',
   'studio.cfg': '引导强度',
@@ -293,12 +291,7 @@ export const zh = {
   'studio.tooltip.warning': '注意',
 
   // ── 创作面板 ─────────────────────────────────────────────────
-  'studio.rail.tools': '创作工具',
-  'studio.rail.sectionPrompt': '创作',
-  'studio.rail.sectionStyle': '风格',
-  'studio.rail.sectionAdvanced': '参数',
   'studio.rail.title': '创作设置',
-  'studio.rail.compute': '算力',
   'studio.rail.modeForm': '参数表单',
   'studio.rail.modeChat': '创作助手',
   'studio.rail.frame': '画面设置',

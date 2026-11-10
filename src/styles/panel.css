@@ -2,8 +2,7 @@
  * 左侧创作面板（表单 / 对话两种形态共用的卡片容器与表单控件）。
  */
 
-.ofs-panel,
-.ofs-rail--chat {
+.ofs-panel {
   display: flex;
   flex-direction: column;
   min-height: 0;

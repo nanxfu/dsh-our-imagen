@@ -1,32 +1,32 @@
 {
   "ready": {
-    "view": "6054157af08cdb168e1ea859af608365"
+    "view": "8a562002d6d0701420d606c27c273dae"
   },
   "chat": {
-    "view": "bcc33936d674b6770213246f3f4fc728"
+    "view": "925f7116719349728c5ac67cd979276b"
   },
   "empty": {
-    "view": "e13dcf341c6452472628e0c93d6605f2"
+    "view": "a84440d431efb8af6e09eda1efb959f0"
   },
   "gallery": {
     "view": "250efc4a87fadef299d59b731fbc68ab"
   },
   "guidance": {
-    "view": "500ba42d9c283877194fb81cc21984a9"
+    "view": "53f67c9bae91cabe3f6309bb6b14c5fa"
   },
   "queued": {
-    "view": "1468bd1c9ed3ddf8810750f581f3837d"
+    "view": "a762b314ef0660ccced8b8efcec803e4"
   },
   "cli": {
-    "view": "ab955a8561ff727f3e05f9992da60721"
+    "view": "54ea53bbeca590c6f30a7d33f7031514"
   },
   "session": {
-    "view": "dd0c5f1b6be81494023771d65ba94948"
+    "view": "a491f6e6396c9202b7468bbee04616a5"
   },
   "generic": {
-    "view": "78403a63788e70f88beff92154306485"
+    "view": "add5fecd7e1e211d119622bb8b717488"
   },
   "generate": {
-    "view": "5673f8865f233f510f5254d3b4b9cb87"
+    "view": "6ce21707b1a6a14e38f2e117c82281d1"
   }
 }

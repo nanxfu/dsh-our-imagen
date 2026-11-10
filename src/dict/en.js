@@ -179,11 +179,9 @@ export const en = {
   'studio.promptTooltip': 'Chinese and English are both supported; English prompts tend to add more detail on most open models.',
   'studio.negative': 'Exclusions',
   'studio.negativePlaceholder': 'What should stay out of the picture (blur, text)',
-  'studio.negativeHintCfg': 'The remote ignores exclusions while guidance is 0.',
   'studio.negativeTooltip': 'Elements you do not want in the image. Only applies while guidance (CFG) is above 0.',
 
   // ── Parameters ────────────────────────────────────────────────
-  'studio.advanced': 'Advanced',
   'studio.steps': 'Steps',
   'studio.stepsTooltip': 'Denoising steps. The Lightning preset works at 4–8 steps; Base needs 25–30.',
   'studio.cfg': 'Guidance',
@@ -293,12 +291,7 @@ export const en = {
   'studio.tooltip.warning': 'Warning',
 
   // ── Creation panel ────────────────────────────────────────────
-  'studio.rail.tools': 'Create tools',
-  'studio.rail.sectionPrompt': 'Create',
-  'studio.rail.sectionStyle': 'Style',
-  'studio.rail.sectionAdvanced': 'Settings',
   'studio.rail.title': 'Create',
-  'studio.rail.compute': 'Compute',
   'studio.rail.modeForm': 'Form',
   'studio.rail.modeChat': 'Assistant',
   'studio.rail.frame': 'Frame',

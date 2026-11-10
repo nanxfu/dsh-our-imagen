@@ -7,7 +7,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 0 14px 14px 86px;
+  margin: 0 14px 14px;
   padding: 10px 12px;
   min-height: 92px;
   border: 1px solid var(--ofs-card-border);

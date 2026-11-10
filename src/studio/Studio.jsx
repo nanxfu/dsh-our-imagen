@@ -1,12 +1,12 @@
 /**
- * 生图工作台（Studio）：顶栏 + 图标栏 + 创作面板 + 焦点舞台 + 胶片坞 + 画廊。
+ * 生图工作台（Studio）：顶栏 + 单轨创作面板 + 画面预览 + 最近生成 + 画廊。
  *
  * 挂载在宿主 shell 的 main 插槽上，作为独立整页视图；
  * 侧栏入口由 index.js 通过 sidebar.panellist 注册。
  *
  * 左侧面板两种形态共用一份状态：
  *   表单式（Rail）—— 适合精确调参；
- *   对话式（ChatPanel）—— 适合连续描述与追问。
+ *   对话式（ChatPanel）—— 适合自然语言描述与迭代。
  */
 
 import React from 'react'
@@ -19,7 +19,6 @@ import { Filmstrip } from './Filmstrip.jsx'
 import { Gallery } from './Gallery.jsx'
 import { GuidanceCard } from './GuidanceCard.jsx'
 import { Rail } from './Rail.jsx'
-import { RailNav } from './RailNav.jsx'
 import { Stage } from './Stage.jsx'
 import { Toast } from './Toast.jsx'
 import { TopBar } from './TopBar.jsx'
@@ -31,17 +30,6 @@ export function Studio(props) {
   const elapsedMs = s.activeJob ? jobElapsed(s.activeJob, now) : 0
   const guidanceKind = s.guidanceKind
   const chatMode = s.panelMode === 'chat'
-
-  // 图标栏跳分区：先把面板切回表单式，再滚到对应卡片。
-  function focusSection(section) {
-    s.setView('studio')
-    s.setPanelMode('form')
-    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return
-    setTimeout(() => {
-      const node = document.getElementById(`ofs-section-${section}`)
-      if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 0)
-  }
 
   const panel = chatMode
     ? (
@@ -129,16 +117,7 @@ export function Studio(props) {
           onCopyCommand={s.copyInstallCommand}
         />
 
-        <div className={`ofs-body${s.view === 'gallery' ? ' is-gallery' : ''}${chatMode ? ' is-chat' : ''}`}>
-          <RailNav
-            t={s.t}
-            view={s.view}
-            mode={s.panelMode}
-            sessionState={s.sessionState}
-            onSection={focusSection}
-            onGallery={() => s.setView('gallery')}
-          />
-
+        <div className={`ofs-body${s.view === 'gallery' ? ' is-gallery' : ''}`}>
           {s.view === 'studio' ? panel : null}
 
           <div className="ofs-main">

@@ -16,7 +16,7 @@ const PROMPT_MAX = 2000
 
 function Fieldset(props) {
   return (
-    <section className="ofs-fieldset" id={props.id}>
+    <section className="ofs-fieldset">
       <div className="ofs-fieldset-head">
         <h3>{props.title}</h3>
         {props.action ? props.action : null}
@@ -83,7 +83,6 @@ export function Rail(props) {
 
       <div className="ofs-panel-scroll">
         <Fieldset
-          id="ofs-section-prompt"
           title={t('studio.prompt')}
           action={<Tooltip t={t} text={t('studio.promptTooltip')} />}
         >
@@ -143,7 +142,7 @@ export function Rail(props) {
           )}
         </Fieldset>
 
-        <Fieldset id="ofs-section-style" title={t('studio.style')}>
+        <Fieldset title={t('studio.style')}>
           <div className="ofs-tiles">
             {STYLE_CAPSULES.map((capsule) => (
               <button
@@ -180,7 +179,7 @@ export function Rail(props) {
           </div>
         </Fieldset>
 
-        <Fieldset id="ofs-section-advanced" title={t('studio.rail.advanced')}>
+        <Fieldset title={t('studio.rail.advanced')}>
           <div className="ofs-rows">
             <div className={negativeOpen ? 'ofs-row is-open' : 'ofs-row'}>
               <div className="ofs-row-head">

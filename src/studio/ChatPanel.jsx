@@ -70,7 +70,7 @@ export function ChatPanel(props) {
   }
 
   return (
-    <aside className="ofs-panel ofs-panel--chat ofs-rail--chat">
+    <aside className="ofs-panel ofs-panel--chat">
       <header className="ofs-panel-head">
         <h2>{t('studio.rail.title')}</h2>
         <div className="ofs-seg" role="tablist" aria-label={t('studio.rail.title')}>
