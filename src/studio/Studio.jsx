@@ -126,7 +126,8 @@ export function Studio(props) {
                 onDelete={s.deleteImages}
                 onExport={s.exportPaths}
                 onRecall={s.iterate}
-                onVariant={(item) => s.reroll(item)}
+                onVariant={s.reroll}
+                onZoom={s.zoomImage}
                 onOpen={(entry) => {
                   s.selectImage(entry)
                   s.setView('studio')

@@ -515,6 +515,13 @@ async function main() {
     assert.equal(result.body.ratioId, '')
     assert.equal(result.body.styleId, '')
     assert.equal(result.body.clarify, null)
+
+    const blank = await json(host.origin, '/imagen-api/intent', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: '   ' }),
+    })
+    assert.equal(blank.status, 400, '空对话内容应返回 400')
   })
 
   await check('打开产物目录（dryRun 只解析路径）', async () => {

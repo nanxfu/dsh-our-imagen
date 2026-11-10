@@ -370,6 +370,8 @@
 .ofs-ratio-glyph--1-1 { width: 19px; height: 19px; }
 .ofs-ratio-glyph--16-9 { width: 25px; height: 14px; }
 .ofs-ratio-glyph--9-16 { width: 14px; height: 25px; }
+.ofs-ratio-glyph--4-3 { width: 22px; height: 17px; }
+.ofs-ratio-glyph--3-4 { width: 17px; height: 22px; }
 
 .ofs-ratio-label {
   font-size: 11px;
@@ -451,14 +453,6 @@
   font-size: 12px;
   line-height: 1.55;
   resize: vertical;
-}
-
-/* 负向提示词在 CFG=0 时不会生效，就地说明，不额外占一行标题。 */
-.ofs-row-hint {
-  margin: 0 10px 10px;
-  color: var(--ofs-ink-3);
-  font-size: 11px;
-  line-height: 1.5;
 }
 
 .ofs-grid2 {

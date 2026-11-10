@@ -42,7 +42,7 @@ function presetNameOf(presets, id) {
 }
 
 export function Gallery(props) {
-  const { t, gallery, now, presets, favorites, onOpen, onDelete, onExport, onRecall, onVariant } = props
+  const { t, gallery, now, presets, favorites, onOpen, onZoom, onDelete, onExport, onRecall, onVariant } = props
   const [presetFilter, setPresetFilter] = React.useState('')
   const [favoriteOnly, setFavoriteOnly] = React.useState(false)
   const [selecting, setSelecting] = React.useState(false)
@@ -92,7 +92,12 @@ export function Gallery(props) {
 
   async function confirmDelete() {
     if (picked.length === 0) return
-    await onDelete(picked)
+    const result = await onDelete(picked)
+    // 删除失败时保留选择，方便用户重试或核对。
+    if (result && Array.isArray(result.failed) && result.failed.length > 0) {
+      setConfirming(false)
+      return
+    }
     exitSelect()
   }
 
@@ -159,8 +164,8 @@ export function Gallery(props) {
               <button
                 type="button"
                 className="ofs-chip"
-                onClick={() => onExport(picked.length > 0 ? picked : visiblePaths)}
-                disabled={picked.length === 0 && visiblePaths.length === 0}
+                onClick={() => onExport(picked)}
+                disabled={picked.length === 0}
               >
                 <Icon name="copy" size={13} />
                 {t('studio.gallery.export')}
@@ -248,15 +253,15 @@ export function Gallery(props) {
 
                         {selecting ? null : (
                           <div className="ofs-gallery-hover">
-                            <button type="button" className="ofs-gallery-action" onClick={() => onRecall(entry.item)}>
+                            <button type="button" className="ofs-gallery-action" onClick={() => onRecall(entry)}>
                               <Icon name="focus" size={12} />
                               {t('studio.action.iterate')}
                             </button>
-                            <button type="button" className="ofs-gallery-action" onClick={() => onVariant(entry.item)}>
+                            <button type="button" className="ofs-gallery-action" onClick={() => onVariant(entry)}>
                               <Icon name="reroll" size={12} />
                               {t('studio.action.reroll')}
                             </button>
-                            <button type="button" className="ofs-gallery-action" onClick={() => onOpen(entry)}>
+                            <button type="button" className="ofs-gallery-action" onClick={() => onZoom(entry)}>
                               <Icon name="expand" size={12} />
                               {t('studio.gallery.open')}
                             </button>

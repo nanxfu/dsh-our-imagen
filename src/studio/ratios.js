@@ -11,6 +11,8 @@ export const DEFAULT_RATIOS = [
   { id: '1:1', width: 1024, height: 1024 },
   { id: '16:9', width: 1152, height: 648 },
   { id: '9:16', width: 648, height: 1152 },
+  { id: '4:3', width: 1024, height: 768 },
+  { id: '3:4', width: 768, height: 1024 },
 ]
 
 export function ratioToSize(ratio) {

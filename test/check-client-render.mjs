@@ -240,6 +240,22 @@ const countByClass = (node, className) => {
   return own + countByClass(node.children, className)
 }
 
+/** 收集满足条件的节点，用来直接触发按钮回调（测试替身没有事件系统）。 */
+const findNodes = (node, predicate, out = []) => {
+  if (!node || typeof node !== 'object') return out
+  if (Array.isArray(node)) {
+    for (const child of node) findNodes(child, predicate, out)
+    return out
+  }
+  if (typeof node.type === 'function') {
+    findNodes(node.type({ ...node.props, children: node.children }), predicate, out)
+    return out
+  }
+  if (predicate(node)) out.push(node)
+  findNodes(node.children, predicate, out)
+  return out
+}
+
 const results = []
 async function check(name, fn) {
   try {
@@ -350,6 +366,9 @@ for (const [name, scenario] of Object.entries(scenarios)) {
         onDelete: () => {},
         onExport: () => {},
         onOpen: () => {},
+        onRecall: () => {},
+        onVariant: () => {},
+        onZoom: () => {},
       })
       client.unmount()
       const text = collectText(tree).join(' | ')
@@ -379,6 +398,47 @@ for (const [name, scenario] of Object.entries(scenarios)) {
     assert.equal(actual.view, golden[name].view, '工作台渲染结构与基准不一致（UI 有意变更请 --update）')
   })
 }
+
+await check('画廊悬停动作把完整作品条目交给回调', async () => {
+  const client = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/state': readyState,
+      '/imagen-api/history': { items: [historyItem] },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+    },
+    testBuild: true,
+  })
+  const received = { recall: null, variant: null, zoom: null }
+  const entry = { image: historyItem.images[0], item: historyItem }
+  const tree = await client.mountRaw(client.components.Gallery, {
+    t: client.internals.i18n.fallbackTranslate('zh'),
+    gallery: [entry],
+    now: NOW,
+    presets: [preset],
+    favorites: [],
+    onDelete: () => {},
+    onExport: () => {},
+    onOpen: () => {},
+    onRecall: (value) => { received.recall = value },
+    onVariant: (value) => { received.variant = value },
+    onZoom: (value) => { received.zoom = value },
+  })
+  client.unmount()
+
+  const actions = findNodes(
+    tree,
+    (node) => node.type === 'button' && node.props && node.props.className === 'ofs-gallery-action',
+  )
+  assert.equal(actions.length, 3, '每张作品应有带回参数 / 生成变体 / 查看大图三个动作')
+  for (const node of actions) node.props.onClick()
+
+  // 回归：曾经把 entry.item 直接传给动作，导致 iteratePatch 拿不到图片而静默失败。
+  assert.equal(received.recall && received.recall.item, historyItem, '带回参数应收到 { image, item } 形状的条目')
+  assert.equal(received.recall && received.recall.image, historyItem.images[0], '条目里应带图片信息')
+  assert.equal(received.variant && received.variant.item, historyItem, '生成变体应收到完整条目')
+  assert.equal(received.zoom && received.zoom.item, historyItem, '查看大图应收到完整条目')
+})
 
 if (UPDATE) {
   await writeFile(GOLDEN_PATH, `${JSON.stringify(nextGolden, null, 2)}\n`, 'utf8')

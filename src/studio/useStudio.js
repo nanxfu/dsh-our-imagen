@@ -66,6 +66,14 @@ export function useStudio(props) {
     ...EMPTY_FORM,
     prompt: props && typeof props.initialPrompt === 'string' ? props.initialPrompt : '',
   }))
+  // 比例由当前尺寸反推：切换预设改变宽高时，比例按钮不会停在旧值上。
+  const ratioId = (() => {
+    const match = DEFAULT_RATIOS.find((ratio) => {
+      const size = ratioToSize(ratio)
+      return size.width === form.width && size.height === form.height
+    })
+    return match ? match.id : ''
+  })()
   // 初始视图同样可由 props 指定（预览与测试用）；正常运行时从创作开始。
   const [view, setView] = React.useState(props && props.view === 'gallery' ? 'gallery' : 'studio')
   const [advancedOpen, setAdvancedOpen] = React.useState(false)
@@ -90,9 +98,10 @@ export function useStudio(props) {
   const [interpreting, setInterpreting] = React.useState(false)
   const messageSeq = React.useRef(0)
   const [zoom, setZoom] = React.useState(false)
-  const [ratioId, setRatioId] = React.useState('1:1')
 
   const pendingRef = React.useRef(null)
+  // 同一 tick 内连按两次回车时，用 ref 挡住第二次解析请求。
+  const interpretingRef = React.useRef(false)
   const aliveRef = React.useRef(true)
   React.useEffect(() => {
     aliveRef.current = true
@@ -328,7 +337,8 @@ export function useStudio(props) {
    */
   async function interpret(text) {
     const value = String(text ?? '').trim()
-    if (!value || interpreting) return
+    if (!value || interpreting || interpretingRef.current) return
+    interpretingRef.current = true
     const previousPrompt = lastIntentPrompt(messages)
     pushMessages([{ role: 'user', text: value }])
     setInterpreting(true)
@@ -336,13 +346,13 @@ export function useStudio(props) {
       method: 'POST',
       body: JSON.stringify({ text: value, previousPrompt, locale: isEn ? 'en' : 'zh' }),
     })
+    interpretingRef.current = false
     if (!aliveRef.current) return
     setInterpreting(false)
     if (result.ok && result.data && typeof result.data.prompt === 'string') {
       const data = result.data
-      const patch = intentFormPatch(data, DEFAULT_RATIOS)
-      if (Object.keys(patch).length > 0) patchForm(patch)
-      if (data.ratioId) setRatioId(data.ratioId)
+      // 意图只进确认卡，不动表单：用户还没点「按此生成」之前，
+      // 不该丢掉自己在左侧写的提示词或参数。
       pushMessages([{
         role: 'assistant',
         kind: 'intent',
@@ -377,10 +387,22 @@ export function useStudio(props) {
       overrides.width = ratio.width
       overrides.height = ratio.height
     }
+    // 连续迭代时沿用上一张图的种子，便于对比同一构图下的改动。
+    const previous = (state && state.lastJob && state.lastJob.params) || null
+    if (previous && form.seed === '' && Number.isFinite(previous.seed) && previous.seed >= 0) {
+      overrides.seed = previous.seed
+    }
     const patch = intentFormPatch(message, DEFAULT_RATIOS)
     if (Object.keys(patch).length > 0) patchForm(patch)
-    if (message.ratioId) setRatioId(message.ratioId)
     await generate(overrides, { pushUser: false })
+  }
+
+  /** 从画廊打开大图：切回创作页并直接进放大层。 */
+  function zoomImage(entry) {
+    if (!entry) return
+    selectImage(entry)
+    setView('studio')
+    setZoom(true)
   }
 
   /** 在系统文件管理器里打开产物目录。 */
@@ -407,13 +429,8 @@ export function useStudio(props) {
     const patch = iteratePatch(target, form, presets)
     if (Object.keys(patch).length === 0) return
     patchForm(patch)
-    if (patch.width != null && patch.height != null) {
-      const match = DEFAULT_RATIOS.find((ratio) => {
-        const size = ratioToSize(ratio)
-        return size.width === patch.width && size.height === patch.height
-      })
-      setRatioId(match ? match.id : '')
-    }
+    setView('studio')
+    setPanelMode('form')
     showToast(t('studio.toast.recalled'))
   }
 
@@ -438,7 +455,6 @@ export function useStudio(props) {
     const ratio = DEFAULT_RATIOS.find((item) => item.id === id)
     if (!ratio) return
     const size = ratioToSize(ratio)
-    setRatioId(id)
     patchForm({ width: size.width, height: size.height })
   }
 
@@ -476,7 +492,7 @@ export function useStudio(props) {
     if (!aliveRef.current) return
     if (!result.ok) {
       fail(result.code, result.message)
-      return
+      return null
     }
     const removed = Array.isArray(result.data.removed) ? result.data.removed : []
     if (removed.length > 0) showToast(t('studio.toast.deleted'))
@@ -485,6 +501,7 @@ export function useStudio(props) {
     }
     setSelectedPath('')
     await Promise.all([loadHistory(), loadLibrary()])
+    return { removed, failed: Array.isArray(result.data.failed) ? result.data.failed : [] }
   }
 
   function resetToSafe() {
@@ -540,7 +557,7 @@ export function useStudio(props) {
     }
     const text = list.map((item) => absoluteOf.get(item) || item).join('\n')
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text)
         showToast(t('studio.toast.exported'))
         return
@@ -627,6 +644,7 @@ export function useStudio(props) {
     resolveClarify,
     generateIntent,
     openFolder,
+    zoomImage,
     clearThread: () => setMessages([]),
     openMessage: (path) => {
       if (path) setSelectedPath(path)

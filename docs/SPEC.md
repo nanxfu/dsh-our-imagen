@@ -29,6 +29,11 @@
 - `remote_error`: 远端执行推理异常（如 CUDA 显存不足 OOM）。
 - `session_ended`: 远端会话非预期中断（如达到 Kaggle 单次运行上限或被平台回收）。
 - `stopped`: 用户主动关机。
+- `invalid_request` / `invalid_prompt` / `invalid_path`: 请求参数、提示词或路径不合法。
+- `oom` / `load_failed` / `generation_failed`: 显存不足、权重加载失败、推理失败。
+- `warming`: 远端仍在加载模型，可稍后重试。
+- `queue_full` / `session_absent` / `session_timeout`: 队列已满、会话不存在、等待会话超时。
+- `empty_result` / `disposed` / `timeout` / `not_found`: 远端未返回图片、插件已停止、检查超时、目标不存在。
 
 ---
 
@@ -45,7 +50,7 @@
 - **响应示例**：
 ```json
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "defaultPreset": "sdxl-lightning",
   "presets": [
     {
@@ -129,10 +134,64 @@
 - **完成态数据**：包含生成耗时、本地保存路径、图片访问相对 URL 列表。
 
 #### `GET /imagen-api/history?limit=20`
-获取工作区 `imagen-output/` 目录下的历史生成记录，按时间倒序排列。
+获取工作区 `imagen-output/` 目录下的历史生成记录，按时间倒序排列。每条记录含 `jobId`、`createdAt`、`finishedAt`、`presetId`、完整 `params` 与 `images[]`；每个 image 带 `path`（工作区相对路径）、`absolute`（绝对路径）与 `url`。
 
 #### `GET /imagen-api/file?path=<encodedPath>`
 读取保存在当前工作区内的图片二进制流，供前端直接预览（带路径安全穿透保护）。
+
+---
+
+### 2.3 收藏、文案与本地动作
+
+#### `GET /imagen-api/library`
+读取本地收藏与删除记录：`{ ok, favorites: string[], deleted: [] }`。
+
+#### `POST /imagen-api/library/favorite`
+- **请求体**：`{ "path": "imagen-output/…/1.png", "favorite": true }`
+- **响应**：`{ "ok": true, "favorites": [...] }`
+
+#### `POST /imagen-api/library/delete`
+- **请求体**：`{ "paths": ["imagen-output/…/1.png"] }`
+- **响应**：`{ "ok": boolean, "removed": [...], "failed": [...] }`（越界路径会被拒绝）
+
+#### `POST /imagen-api/enhance`
+提示词润色：按光影 / 材质 / 构图 / 氛围四个维度返回可追加的短语。
+- **请求体**：`{ "prompt": "雨夜街景", "presetId": "sdxl-lightning", "locale": "zh" }`
+- **响应**：
+```json
+{
+  "ok": true,
+  "source": "model",
+  "groups": [
+    { "dimension": "lighting", "options": [{ "id": "model-lighting-0", "text": "柔和漫射光" }] },
+    { "dimension": "material", "options": [] }
+  ]
+}
+```
+- `source`: `model`（宿主模型）/ `local`（同结构本地兜底）；空提示词返回空 `groups`。
+
+#### `POST /imagen-api/intent`
+对话模式意图解析：把一句话整理成生成参数，必要时返回澄清项。
+- **请求体**：`{ "text": "画一张横版的雨夜街景", "previousPrompt": "", "locale": "zh" }`
+- **响应**：
+```json
+{
+  "ok": true,
+  "source": "model",
+  "prompt": "雨夜街景，湿润地面倒映霓虹招牌",
+  "ratioId": "16:9",
+  "styleId": "film",
+  "clarify": null
+}
+```
+- `ratioId` 取值 `1:1 / 16:9 / 9:16 / 4:3 / 3:4 / ""`；`styleId` 取值 `film / concept / cyberpunk / ink / clay / ""`，留空表示沿用当前设置。
+- `clarify` 仅在用户要求互相矛盾时出现：`{ "field": "ratio"|"style", "options": [...] }`。
+- 空 `text` 返回 `400 invalid_request`；无可用模型时 `source` 为 `local`，`prompt` 为原文。
+
+#### `POST /imagen-api/reveal`
+在系统文件管理器中打开产物目录（仅限 `<workspace>/imagen-output/`）。
+- **请求体**：`{}`；`{ "dryRun": true }` 只解析目录、不唤起文件管理器（自检用）。
+- **响应**：`{ "ok": true, "dir": "…/imagen-output" }`；目录不存在时 `404 output_missing`。
 
 ---
 

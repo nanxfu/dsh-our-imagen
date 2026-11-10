@@ -10,16 +10,6 @@ export const en = {
   // ── Setup guide ───────────────────────────────────────────────
 
   // ── Models and hardware ───────────────────────────────────────
-  'models.params': 'Params',
-  'models.download': 'Weights to download',
-  'models.gpus': 'GPU setup',
-  'models.steady': 'Per image',
-  'models.pending': 'pending',
-  'models.license.restricted': 'restricted license',
-  'models.tier.fast': 'Pick for speed',
-  'models.tier.usable': 'Classic multi-step',
-  'models.tier.pending': 'pending',
-  'unit.card': 'GPU',
   'unit.second': 's',
   'unit.min': 'm',
   'unit.hour': 'h',
@@ -166,7 +156,7 @@ export const en = {
 
   // ── Gallery ───────────────────────────────────────────────────
   'studio.gallery.title': 'Gallery',
-  'studio.gallery.empty': 'No images yet. Generate your first one on the Create tab.',
+  'studio.gallery.empty': 'No images yet. Generate your first one on the Generate tab.',
   'studio.gallery.noMatch': 'No matching images. Try another keyword or clear the filters.',
   'studio.gallery.clearFilters': 'Clear filters',
   'studio.gallery.today': 'Today',
@@ -186,7 +176,7 @@ export const en = {
   'studio.error.deleteFailed': 'Some images could not be deleted',
 
   // ── Toasts and favorites ──────────────────────────────────────
-  'studio.toast.copied': 'File path copied',
+  'studio.toast.copied': 'Absolute path copied',
   'studio.toast.submitted': 'Added to the cloud queue',
   'studio.toast.recalled': 'Settings restored',
   'studio.toast.favorited': 'Added to favorites',
@@ -235,10 +225,6 @@ export const en = {
   'studio.refine.composition': 'Composition',
   'studio.refine.atmosphere': 'Mood',
 
-  // ── Tooltips ──────────────────────────────────────────────────
-  'studio.tooltip.more': 'More info',
-  'studio.tooltip.warning': 'Warning',
-
   // ── Creation panel ────────────────────────────────────────────
   'studio.rail.title': 'Create',
   'studio.rail.modeForm': 'Form',
@@ -256,6 +242,8 @@ export const en = {
   'studio.chat.clarify.ratio': 'Which aspect ratio?',
   'studio.chat.clarify.style': 'Which style?',
   'studio.chat.clarify.auto': 'Use current settings',
+  'studio.chat.intent.local': 'The model did not respond; using current settings',
+  'studio.chat.send': 'Send',
   'studio.chat.ratioAuto': 'Ratio auto',
   'studio.chat.styleAuto': 'Style auto',
   'studio.chat.pending': 'Submitted; queuing…',

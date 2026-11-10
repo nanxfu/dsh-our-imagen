@@ -358,6 +358,14 @@
   background: rgb(20 20 22 / 82%);
 }
 
+/* 触屏设备没有 hover：操作条常显，否则手机上无法「带回参数 / 生成变体」。 */
+@media (hover: none) {
+  .ofs-gallery-hover {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 /* 批量选择：左上角圆点，选中后墨黑填充 */
 .ofs-gallery-pick {
   position: absolute;

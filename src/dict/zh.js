@@ -10,16 +10,6 @@ export const zh = {
   // ── 连接指引 ─────────────────────────────────────────────────
 
   // ── 模型与硬件 ───────────────────────────────────────────────
-  'models.params': '参数',
-  'models.download': '需下载权重',
-  'models.gpus': '显卡配置',
-  'models.steady': '单张耗时',
-  'models.pending': '待测',
-  'models.license.restricted': '许可受限',
-  'models.tier.fast': '极速推荐',
-  'models.tier.usable': '经典多步',
-  'models.tier.pending': '待测',
-  'unit.card': '卡',
   'unit.second': '秒',
   'unit.min': '分',
   'unit.hour': '小时',
@@ -186,7 +176,7 @@ export const zh = {
   'studio.error.deleteFailed': '有图片没能删除',
 
   // ── 提示与收藏 ───────────────────────────────────────────────
-  'studio.toast.copied': '已复制文件路径',
+  'studio.toast.copied': '已复制文件绝对路径',
   'studio.toast.submitted': '已加入云端队列',
   'studio.toast.recalled': '参数已回填',
   'studio.toast.favorited': '已加入收藏',
@@ -235,10 +225,6 @@ export const zh = {
   'studio.refine.composition': '构图',
   'studio.refine.atmosphere': '氛围',
 
-  // ── 工具提示 ─────────────────────────────────────────────────
-  'studio.tooltip.more': '说明',
-  'studio.tooltip.warning': '注意',
-
   // ── 创作面板 ─────────────────────────────────────────────────
   'studio.rail.title': '创作设置',
   'studio.rail.modeForm': '参数表单',
@@ -256,6 +242,8 @@ export const zh = {
   'studio.chat.clarify.ratio': '画面比例用哪个？',
   'studio.chat.clarify.style': '风格用哪个？',
   'studio.chat.clarify.auto': '按当前设置',
+  'studio.chat.intent.local': '模型未响应，已按当前设置整理',
+  'studio.chat.send': '发送',
   'studio.chat.ratioAuto': '比例自动',
   'studio.chat.styleAuto': '风格自动',
   'studio.chat.pending': '已提交，正在排队…',

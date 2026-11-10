@@ -66,7 +66,7 @@ export function ChatPanel(props) {
 
   function send() {
     const text = draft.trim()
-    if (!text || sending) return
+    if (!text || sending || interpreting) return
     setDraft('')
     onSend(text)
   }
@@ -114,6 +114,7 @@ export function ChatPanel(props) {
           <span aria-hidden="true">·</span>
           <span>{styleLabel(t, message.styleId)}</span>
         </div>
+        {message.source === 'local' ? <p className="ofs-intent-note">{t('studio.chat.intent.local')}</p> : null}
         <button
           type="button"
           className="ofs-btn is-primary ofs-intent-go"
@@ -265,8 +266,8 @@ export function ChatPanel(props) {
             className="ofs-chat-send"
             onClick={send}
             disabled={sending || interpreting || draft.trim().length === 0}
-            aria-label={t('studio.generate')}
-            title={t('studio.generate')}
+            aria-label={t('studio.chat.send')}
+            title={t('studio.chat.send')}
           >
             <Icon name="arrowUp" size={15} />
           </button>

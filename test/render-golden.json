@@ -1,32 +1,32 @@
 {
   "ready": {
-    "view": "051a3b3d115822fa0f7e3800a25f9a84"
+    "view": "09e3c24f9ba236d52d7d74b57263698c"
   },
   "chat": {
-    "view": "022fd1d1ad3a2effc07a71b9d9348353"
+    "view": "0c3962c20df969dd84ac7168828453c5"
   },
   "empty": {
-    "view": "3ae62fab1af85d263a326e3a1cbf70c2"
+    "view": "f6cf49424ede9e511a80805cc60d1c7e"
   },
   "gallery": {
     "view": "077f54aeae62e184bb1a374ebe3bfb25"
   },
   "guidance": {
-    "view": "954aa1b25723fb293ef9b6f1c40cf050"
+    "view": "de19ff99a7ddc8ca77880a7cbcec04ce"
   },
   "queued": {
-    "view": "6ff6696400ab824f17d6161696315cdc"
+    "view": "4a9f2fe891975df88a5207474720cf92"
   },
   "cli": {
-    "view": "972b9e5100d0ff82069194db01c47f48"
+    "view": "be2d54167d7065a5d11951b283560af2"
   },
   "session": {
-    "view": "1413ba3cc4736058e22650a04f5f3bbf"
+    "view": "b6c97ddcbb538a063302768638d8e47a"
   },
   "generic": {
-    "view": "6ade12a4e298669c5af78fd4c3049cb4"
+    "view": "a59427810b0aaabe9b854e17d5aa19c8"
   },
   "generate": {
-    "view": "54ca0be4bb3c9b627bccd7593b972b98"
+    "view": "548048e9c51634841db97fe778ef4a3c"
   }
 }

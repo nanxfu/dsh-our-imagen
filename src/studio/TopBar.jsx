@@ -110,7 +110,7 @@ export function TopBar(props) {
           aria-expanded={open}
           aria-haspopup="menu"
         >
-          <i className={`ofs-dot is-${pill.tone}${pill.tone === 'ok' ? ' is-live' : ''}`} aria-hidden="true" />
+          <i className={`ofs-dot is-${pill.tone}${pill.tone === 'ok' || pill.tone === 'warn' ? ' is-live' : ''}`} aria-hidden="true" />
           <span>{pill.label}</span>
           {quotaUsed !== null && quotaTotal !== null ? (
             <em>
@@ -122,14 +122,13 @@ export function TopBar(props) {
           </span>
         </button>
 
-        <Tooltip t={t} text={createTooltip} side="bottom" />
-
         {open ? (
           <div className="ofs-popover" role="menu">
             <div className="ofs-popover-head">
               <span>
-                <i className={`ofs-dot is-${pill.tone}`} aria-hidden="true" />
+                <i className={`ofs-dot is-${pill.tone}${pill.tone === 'ok' || pill.tone === 'warn' ? ' is-live' : ''}`} aria-hidden="true" />
                 <b>{pill.label}</b>
+                <Tooltip text={createTooltip} side="bottom" />
               </span>
               <span className="ofs-muted">
                 {t('studio.compute.quota')} {quotaUsed !== null && quotaTotal !== null ? `${quotaUsed} / ${quotaTotal} ${t('unit.hour')}` : '—'}
@@ -138,28 +137,27 @@ export function TopBar(props) {
               {session && session.device ? <span className="ofs-muted">{session.device}</span> : null}
             </div>
 
-            {probeInfo || probing || probeFailed ? (
-              <div className="ofs-popover-note">
-                {probing ? <span>{t('action.probing')}</span> : null}
-                {probeInfo ? (
-                  <>
-                    <span>{t('studio.probe.cli')} · {statusText(probeInfo.cli)}</span>
-                    <span>
-                      {t('studio.probe.account')} · {statusText(probeInfo.auth)}
-                      <Tooltip t={t} text={t('studio.compute.authTooltip')} tone="warn" side="bottom" />
-                    </span>
-                    <span>{t('studio.probe.quota')} · {statusText(probeInfo.quota)}</span>
-                  </>
-                ) : null}
-                {probeFailed ? (
-                  <span title={probeFailed.message || undefined}>
-                    {probeFailed.status === 'timeout' ? t('studio.probe.timeout') : t('studio.probe.failed')}
-                    {probeFailed.message ? ` · ${probeFailed.message}` : ''}
-                  </span>
-                ) : null}
-                {probeNote ? <span title={probeInfo.notes.join(' · ')}>{probeNote}</span> : null}
-              </div>
-            ) : null}
+            <div className="ofs-popover-note">
+              {probing ? <span>{t('action.probing')}</span> : null}
+              {probeInfo ? (
+                <>
+                  <span>{t('studio.probe.cli')} · {statusText(probeInfo.cli)}</span>
+                  <span>{t('studio.probe.quota')} · {statusText(probeInfo.quota)}</span>
+                </>
+              ) : null}
+              {/* 手机号绑定警告在任何状态下都要能查到，所以账号行常驻。 */}
+              <span>
+                {t('studio.probe.account')} · {statusText(probeInfo ? probeInfo.auth : 'unavailable')}
+                <Tooltip text={t('studio.compute.authTooltip')} tone="warn" side="bottom" />
+              </span>
+              {probeFailed ? (
+                <span title={probeFailed.message || undefined}>
+                  {probeFailed.status === 'timeout' ? t('studio.probe.timeout') : t('studio.probe.failed')}
+                  {probeFailed.message ? ` · ${probeFailed.message}` : ''}
+                </span>
+              ) : null}
+              {probeNote ? <span title={probeInfo.notes.join(' · ')}>{probeNote}</span> : null}
+            </div>
 
             <button type="button" role="menuitem" className="ofs-popover-row" onClick={onStart} disabled={!!busy || !notReady}>
               <Icon name="cloud" size={15} />

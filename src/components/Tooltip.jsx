@@ -2,54 +2,66 @@
  * 轻量悬浮提示。
  *
  * 触发方式：鼠标悬停、键盘聚焦、触屏点击；Esc 或点击别处关闭已固定的提示。
- * 弹层用 `position: fixed` 定位，避免被创作面板的滚动容器裁剪。
+ * 弹层用 `position: fixed`，但固定包含块是带 backdrop-filter 的外壳，
+ * 所以位置由 logic/tooltip.js 统一换算，避免被外壳裁掉。
  *
- * 用法：<Tooltip t={t} text={t('studio.stepsTooltip')} />
+ * 用法：<Tooltip text={t('studio.stepsTooltip')} />
  *      tone = 'info' 显示 (i)，tone = 'warn' 显示 (!)
  */
 
 import React from 'react'
 
-// 弹层的估算宽度：只用于把它夹在视口内，实际宽度由内容决定。
+import { tooltipPlacement } from '../logic/tooltip.js'
+
+// 弹层的期望宽度上限：实际宽度由内容决定，定位时按上限夹在容器内。
 const POPUP_MAX = 248
 
 export function Tooltip(props) {
-  const { t, text, tone = 'info', side = 'top' } = props
+  const { text, tone = 'info', side = 'top' } = props
   const [open, setOpen] = React.useState(false)
   const [pinned, setPinned] = React.useState(false)
   const [pos, setPos] = React.useState(null)
   const triggerRef = React.useRef(null)
-
-  const measure = React.useCallback(() => {
-    if (typeof window === 'undefined' || !triggerRef.current) return
-    const rect = triggerRef.current.getBoundingClientRect()
-    const width = Math.min(POPUP_MAX, Math.max(120, window.innerWidth - 16))
-    const centered = rect.left + rect.width / 2 - width / 2
-    const left = Math.max(8, Math.min(centered, window.innerWidth - width - 8))
-    const below = side === 'bottom' || rect.top < 140
-    setPos({ left, top: rect.top - 8, bottom: rect.bottom + 8, below })
-  }, [side])
 
   const close = React.useCallback(() => {
     setPinned(false)
     setOpen(false)
   }, [])
 
+  const measure = React.useCallback(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return
+    const node = triggerRef.current
+    if (!node || typeof node.getBoundingClientRect !== 'function') return
+    const anchor = node.getBoundingClientRect()
+    const app = typeof node.closest === 'function' ? node.closest('.ofs-app') : null
+    let frame = null
+    if (app && typeof app.getBoundingClientRect === 'function') {
+      frame = app.getBoundingClientRect()
+    } else if (Number(window.innerWidth) > 0) {
+      frame = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }
+    }
+    setPos(tooltipPlacement({ anchor, frame, width: POPUP_MAX, preferBelow: side === 'bottom' }))
+  }, [side])
+
   React.useEffect(() => {
     if (!open) return undefined
     measure()
-    if (typeof window === 'undefined' || typeof document === 'undefined') return undefined
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return undefined
     const remeasure = () => measure()
     const onKey = (event) => {
       if (event.key === 'Escape') close()
     }
     window.addEventListener('scroll', remeasure, true)
     window.addEventListener('resize', remeasure)
-    document.addEventListener('keydown', onKey)
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('keydown', onKey)
+    }
     return () => {
       window.removeEventListener('scroll', remeasure, true)
       window.removeEventListener('resize', remeasure)
-      document.removeEventListener('keydown', onKey)
+      if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+        document.removeEventListener('keydown', onKey)
+      }
     }
   }, [open, measure, close])
 
@@ -58,7 +70,7 @@ export function Tooltip(props) {
     if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return undefined
     const onDown = (event) => {
       const node = triggerRef.current
-      if (node && event && event.target && node.contains(event.target)) return
+      if (node && event && event.target && typeof node.contains === 'function' && node.contains(event.target)) return
       close()
     }
     document.addEventListener('pointerdown', onDown)
@@ -67,18 +79,9 @@ export function Tooltip(props) {
 
   if (!text) return null
 
-  const label =
-    tone === 'warn'
-      ? typeof t === 'function' ? t('studio.tooltip.warning') : 'Warning'
-      : typeof t === 'function' ? t('studio.tooltip.more') : 'More info'
-
   const popupStyle = pos
-    ? { left: `${pos.left}px`, top: `${pos.below ? pos.bottom : pos.top}px` }
+    ? { left: `${pos.left}px`, top: `${pos.top}px`, maxWidth: `${pos.maxWidth}px` }
     : undefined
-  const popupClass =
-    'ofs-tip-pop'
-    + (pos && pos.below ? ' is-below' : '')
-    + (open ? ' is-on' : '')
 
   return (
     <span className={`ofs-tip ofs-tip--${tone}${open ? ' is-open' : ''}`}>
@@ -86,7 +89,7 @@ export function Tooltip(props) {
         ref={triggerRef}
         type="button"
         className="ofs-tip-trigger"
-        aria-label={label}
+        aria-label={text}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => {
           if (!pinned) setOpen(false)
@@ -108,7 +111,7 @@ export function Tooltip(props) {
         <span aria-hidden="true">{tone === 'warn' ? '!' : 'i'}</span>
       </button>
       {open && pos ? (
-        <span role="tooltip" className={popupClass} style={popupStyle}>
+        <span role="tooltip" className={pos.below ? 'ofs-tip-pop is-below' : 'ofs-tip-pop'} style={popupStyle}>
           {text}
         </span>
       ) : null}

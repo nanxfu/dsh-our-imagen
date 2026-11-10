@@ -169,35 +169,6 @@ await check('会话视图派生', () => {
   assert.equal(noHint.note, 'ready detail')
 })
 
-await check('预设信息行派生', () => {
-  const preset = {
-    id: 'sdxl-lightning',
-    params: '3.5B + LoRA',
-    license: 'OpenRAIL++',
-    licenseKind: 'open',
-    gpus: 1,
-    downloadGb: 6.78,
-    steadySeconds: 6.2,
-    tier: 'fast',
-  }
-  assert.equal(logic.buildPresetView(t, null), null)
-  const open = logic.buildPresetView(t, preset)
-  assert.equal(open.licenseLabel, 'OpenRAIL++')
-  assert.equal(open.tierLabel, t('models.tier.fast'))
-  assert.match(open.detail, /单张耗时 6\.2秒$/)
-
-  const pending = logic.buildPresetView(t, {
-    ...preset,
-    license: '非商用研究许可',
-    licenseKind: 'restricted',
-    tier: 'pending',
-    steadySeconds: null,
-  })
-  assert.equal(pending.licenseLabel, t('models.license.restricted'))
-  assert.equal(pending.tierLabel, t('models.tier.pending'))
-  assert.match(pending.detail, new RegExp(`${t('models.pending')}$`))
-})
-
 await check('状态色与常量表一致', () => {
   assert.equal(logic.sessionColor('ready'), token.ok)
   assert.equal(logic.sessionColor('error'), token.error)
@@ -481,6 +452,14 @@ await check('润色标签的追加与撤销', () => {
   assert.equal(logic.toggleRefineTerm('雾气，雨夜，雾气', '雾气'), '雾气，雨夜')
   // 撤销不误删用户自己写的内容。
   assert.equal(logic.toggleRefineTerm('雨夜街景，霓虹', '雾'), '雨夜街景，霓虹，雾')
+  // 句子里恰好包含同一个词时，不算已追加、撤销也不删句子。
+  assert.equal(logic.toggleRefineTerm('霓虹灯光效', '灯光'), '霓虹灯光效，灯光')
+  assert.equal(logic.isRefineApplied('霓虹灯光效', '灯光'), false)
+  assert.equal(logic.toggleRefineTerm('水面有雾气弥漫', '雾气'), '水面有雾气弥漫，雾气')
+  // 中英混排时连同分隔符一起撤掉，不留悬空逗号。
+  assert.equal(logic.toggleRefineTerm('rainy street, 静谧雾气', '静谧雾气'), 'rainy street')
+  assert.equal(logic.isRefineApplied('rainy street, 静谧雾气', '静谧雾气'), true)
+  assert.equal(logic.toggleRefineTerm('雨夜，雾气', '雾气'), '雨夜')
   assert.equal(logic.isRefineApplied('雨夜街景，雾', '雾'), true)
   assert.equal(logic.isRefineApplied('雨夜街景', '雾'), false)
   assert.equal(logic.refineSeparator('雨夜'), '，')
@@ -528,6 +507,28 @@ await check('对话意图映射到表单与提示词', () => {
   assert.equal(logic.intentPrompt({ prompt: '雨夜街景', styleId: 'cyberpunk' }, capsules), '雨夜街景, cyberpunk neon city')
   assert.equal(logic.intentPrompt({ prompt: '雨夜街景', styleId: '' }, capsules), '雨夜街景')
   assert.equal(logic.intentPrompt({ prompt: '', styleId: 'cyberpunk' }, capsules), '')
+})
+
+await check('悬浮提示的定位夹在容器内', () => {
+  const frame = { left: 18, top: 18, width: 1400, height: 860 }
+  const middle = logic.tooltipPlacement({ anchor: { left: 400, top: 200, bottom: 220, width: 16 }, frame, width: 248 })
+  assert.equal(middle.below, false)
+  assert.ok(middle.left >= 8, '左侧不越界')
+  assert.ok(middle.left + middle.maxWidth <= frame.width - 8 + 0.001, '右侧不越界')
+  assert.equal(middle.top, 200 - 18 - 8, '向上展开时贴住触发点上方')
+
+  const leftEdge = logic.tooltipPlacement({ anchor: { left: 40, top: 200, bottom: 220, width: 16 }, frame, width: 248 })
+  assert.equal(leftEdge.left, 8, '靠左触发点应被夹到容器内边距上')
+
+  const topEdge = logic.tooltipPlacement({ anchor: { left: 400, top: 30, bottom: 50, width: 16 }, frame, width: 248 })
+  assert.equal(topEdge.below, true, '顶部空间不足时向下展开')
+  assert.equal(topEdge.top, 50 - 18 + 8)
+
+  const forced = logic.tooltipPlacement({ anchor: { left: 400, top: 200, bottom: 220, width: 16 }, frame, width: 248, preferBelow: true })
+  assert.equal(forced.below, true)
+
+  const noFrame = logic.tooltipPlacement({ anchor: { left: 100, top: 200, bottom: 220, width: 16 }, frame: null, width: 400 })
+  assert.equal(noFrame.maxWidth, 400)
 })
 
 const failed = results.filter((item) => !item.ok)

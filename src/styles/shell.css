@@ -327,8 +327,7 @@
 }
 
 /* ── 异常指引 ───────────────────────────────────────────────── */
-.ofs-guidance,
-.ofs-error {
+.ofs-guidance {
   display: flex;
   align-items: flex-start;
   gap: 10px;

@@ -414,8 +414,11 @@ export function apply(ctx, config = {}) {
         async handler(req, res) {
           if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
           const body = await readJsonBody(req).catch(() => ({}))
+          const text = typeof body?.text === 'string' ? body.text.trim() : ''
+          if (!text) return sendError(res, 400, 'invalid_request', '对话内容不能为空')
+          if (text.length > 2000) return sendError(res, 400, 'invalid_request', '对话内容过长')
           const result = await parseIntent(ctx, {
-            text: typeof body?.text === 'string' ? body.text : '',
+            text,
             previousPrompt: typeof body?.previousPrompt === 'string' ? body.previousPrompt : '',
             locale: body?.locale === 'en' ? 'en' : 'zh',
           })

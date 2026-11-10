@@ -2,7 +2,6 @@
 
 import { TRANSIENT_SESSION } from '../constants.js'
 import { token } from '../theme.js'
-import { localized } from '../i18n.js'
 import { sessionStateText, phaseText, phaseHint } from './status.js'
 import { sessionColor } from './color.js'
 
@@ -49,21 +48,6 @@ export function buildSessionView(t, input) {
           ? t('value.quotaUnavailable')
           : t('value.unknown'),
     defaultModel: input.defaultPreset || '—',
-  }
-}
-
-/** 预设信息行的展示数据；没有预设返回 null。 */
-
-export function buildPresetView(t, preset) {
-  if (!preset) return null
-  return {
-    licenseKind: preset.licenseKind,
-    licenseLabel: preset.licenseKind === 'open' ? preset.license : t('models.license.restricted'),
-    tierLabel: localized(t, `models.tier.${preset.tier}`) || t('models.tier.pending'),
-    detail:
-      `${t('models.params')} ${preset.params} · ${t('models.download')} ${preset.downloadGb} GB · `
-      + `${t('models.gpus')} ${preset.gpus}${t('unit.card')} · ${t('models.steady')} `
-      + (preset.steadySeconds == null ? t('models.pending') : `${preset.steadySeconds}${t('unit.second')}`),
   }
 }
 

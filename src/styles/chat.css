@@ -192,6 +192,12 @@
   color: var(--ofs-ink-3);
 }
 
+.ofs-intent-note {
+  color: var(--ofs-ink-3);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
 .ofs-intent-go {
   align-self: flex-start;
   height: 30px;

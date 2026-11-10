@@ -84,7 +84,7 @@ export function Rail(props) {
       <div className="ofs-panel-scroll">
         <Fieldset
           title={t('studio.prompt')}
-          action={<Tooltip t={t} text={t('studio.promptTooltip')} />}
+          action={<Tooltip text={t('studio.promptTooltip')} />}
         >
           <div className="ofs-composer">
             <textarea
@@ -208,7 +208,7 @@ export function Rail(props) {
                     <Icon name="chevronDown" size={14} />
                   </span>
                 </button>
-                <Tooltip t={t} text={t('studio.negativeTooltip')} />
+                <Tooltip text={t('studio.negativeTooltip')} />
               </div>
               {negativeOpen ? (
                 <textarea
@@ -241,7 +241,7 @@ export function Rail(props) {
                   <div className="ofs-field">
                     <span className="ofs-field-label">
                       {t('studio.steps')}
-                      <Tooltip t={t} text={t('studio.stepsTooltip')} />
+                      <Tooltip text={t('studio.stepsTooltip')} />
                     </span>
                     <input
                       type="number"
@@ -255,7 +255,7 @@ export function Rail(props) {
                   <div className="ofs-field">
                     <span className="ofs-field-label">
                       {t('studio.cfg')}
-                      <Tooltip t={t} text={t('studio.cfgTooltip')} />
+                      <Tooltip text={t('studio.cfgTooltip')} />
                     </span>
                     <input
                       type="number"
