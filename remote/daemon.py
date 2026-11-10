@@ -18,6 +18,9 @@
    用 ``application/json`` 会被 ntfy 当成发布指令（publish 指令）解析并失败。
 5. 生成持锁串行；错误按 oom / load_failed / invalid_request / generation_failed 分类，
    OOM 先 ``torch.cuda.empty_cache()`` 再回错，让 Host 可以原样重试。
+6. 没有 ``auth_token`` 时不对外服务：``/health`` 等路由一律 401，启动阶段直接
+   ``fail_boot('unauthorized')`` 并退出（不发布 ready）。本地调试必须显式配置
+   ``allow_no_auth: true``，避免"配置注入失败 → 公网隧道变成无鉴权端点"。
 """
 
 from __future__ import annotations
@@ -42,6 +45,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import deque
+from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -191,42 +195,73 @@ def log_since(since: int) -> tuple[list[str], int]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 运行状态
+# 显式状态对象
+#
+# 历史：配置、运行期资源、统计与生命周期原先塞在同一个模块级 dict 里（23 个键），
+# 无法在单测里构造隔离实例。现在拆成三个 dataclass：
+#   CONFIG —— Host 注入的配置，启动后只读；
+#   STATE  —— 运行期状态（生命周期 / 模型 / 统计）；
+#   BOOT   —— 启动期隧道会合状态；
+# 生成串行锁单独成模块级 GEN_LOCK，避免"锁"混进可复制的状态对象。
+# 约定：除本区块外全文件只用属性访问（STATE.phase / BOOT.tunnel_url / CONFIG.port）。
 # ─────────────────────────────────────────────────────────────────────────────
 
-STATE: dict = {
-    "phase": "booting",
-    "detail": "进程启动",
-    "model_id": None,
-    "loaded": [],
-    "device": None,
-    "device_count": 0,
-    "auth_token": "",
-    "idle_timeout_sec": 1800,
-    "last_active": _START_TS,
-    "jobs_done": 0,
-    "last_error": None,
-    "last_error_code": None,
-    "started_at": _START_TS,
-    "port": DEFAULT_PORT,
-    "ntfy_topic": "",
-    "ntfy_server": "https://ntfy.sh",
-    "preload": None,
-    # 运行期对象
-    "pipe": None,
-    "pipeline_key": None,
-    "sig_params": set(),
-    "gen_lock": threading.Lock(),
-    "waiting": 0,
-    "shutting_down": False,
-}
 
-BOOT: dict = {
-    "tunnel_url": None,
-    "tunnel_error": None,
-    "cloudflared": None,
-    "published_ready": False,
-}
+@dataclass
+class DaemonConfig:
+    """Host 注入的配置（见 shared/contract.js 的 PROTOCOL.daemon.configKeys）。"""
+
+    auth_token: str = ""
+    ntfy_topic: str = ""
+    ntfy_server: str = "https://ntfy.sh"
+    idle_timeout_sec: int = 1800
+    port: int = DEFAULT_PORT
+    preload: dict | None = None
+    preset_id: str | None = None
+    log_level: str = "info"
+    version: str = ""
+    contract: dict = field(default_factory=dict)
+    # 本地调试专用：显式允许无鉴权（默认 false；正常路径必须带 auth_token）。
+    allow_no_auth: bool = False
+
+
+@dataclass
+class RuntimeState:
+    """运行期状态：生命周期、模型句柄与统计。"""
+
+    phase: str = "booting"
+    detail: str | None = "进程启动"
+    model_id: str | None = None
+    loaded: list = field(default_factory=list)
+    device: str | None = None
+    device_count: int = 0
+    last_active: float = _START_TS
+    jobs_done: int = 0
+    last_error: str | None = None
+    last_error_code: str | None = None
+    started_at: float = _START_TS
+    pipe: object | None = None
+    pipeline_key: str | None = None
+    sig_params: set = field(default_factory=set)
+    waiting: int = 0
+    shutting_down: bool = False
+
+
+@dataclass
+class BootState:
+    """启动期会合状态：隧道与 ready 发布。"""
+
+    tunnel_url: str | None = None
+    tunnel_error: str | None = None
+    cloudflared: object | None = None
+    published_ready: bool = False
+
+
+CONFIG = DaemonConfig()
+STATE = RuntimeState()
+BOOT = BootState()
+# 生成串行锁；不放状态对象里，避免状态复制时复制锁。
+GEN_LOCK = threading.Lock()
 
 
 class RequestError(ValueError):
@@ -244,17 +279,43 @@ def short(exc: BaseException, limit: int = 600) -> str:
 
 
 def set_phase(phase: str, detail: str | None = None) -> None:
-    STATE["phase"] = phase
-    STATE["detail"] = detail
+    STATE.phase = phase
+    STATE.detail = detail
     # 启动阶段的进度也算"活动"，避免依赖安装还没结束就被空闲看门狗收走。
-    STATE["last_active"] = time.time()
+    STATE.last_active = time.time()
     log(f"[phase] {phase}" + (f" — {detail}" if detail else ""))
 
 
 def record_error(code: str, message: str) -> None:
     """``/health.last_error`` 是字符串：Host 直接拼进 UI，对象会显示成 [object Object]。"""
-    STATE["last_error"] = f"{code}: {message}"
-    STATE["last_error_code"] = code
+    STATE.last_error = f"{code}: {message}"
+    STATE.last_error_code = code
+
+
+def fail_boot(code: str, message: str, *, tunnel: bool = False) -> None:
+    """启动阶段失败的唯一出口：记录错误 → phase=error → 尽力通过 ntfy 告知 Host。
+
+    收敛原先散落在 tunnel_boot / runtime_boot 的 6 处同构代码；调用方只给错误码与文案
+    （错误码与文案逐字保持原样，Host 按 code 分支）。``tunnel=True`` 时额外记下
+    隧道错误原因，供启动等待逻辑复用。
+    """
+    if tunnel:
+        BOOT.tunnel_error = message
+    record_error(code, message)
+    set_phase("error", message)
+    publish_error(code, message)
+
+
+def protocol_version() -> str:
+    """对外版本号：优先注入契约的 version，其次注入的 version，最后本文件的 VERSION。
+
+    Host 的 check-contract 按 ``CONFIG.contract.version`` 对齐；本地调试没有注入时退回常量。
+    """
+    candidates = [CONFIG.contract.get("version") if isinstance(CONFIG.contract, dict) else None, CONFIG.version]
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return VERSION
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -269,12 +330,79 @@ def _pick(cfg: dict, *names: str, default=None):
     return default
 
 
-def load_config() -> dict:
+# 配置键 → DaemonConfig 字段；别名保留历史行为（Host 只发 snake_case，别名给本地调试）。
+CONFIG_ALIASES: dict[str, tuple[str, ...]] = {
+    "auth_token": ("auth_token", "authToken", "token"),
+    "ntfy_topic": ("ntfy_topic", "ntfyTopic", "topic"),
+    "ntfy_server": ("ntfy_server", "ntfyServer"),
+    "idle_timeout_sec": ("idle_timeout_sec", "idleTimeoutSec"),
+    "port": ("port",),
+    "preload": ("preload", "preloadPipeline", "pipeline"),
+    "preset_id": ("preset_id", "presetId"),
+    "log_level": ("log_level", "logLevel"),
+    "version": ("version",),
+    "contract": ("contract",),
+    "allow_no_auth": ("allow_no_auth", "allowNoAuth"),
+}
+_KNOWN_CONFIG_KEYS = frozenset(alias for aliases in CONFIG_ALIASES.values() for alias in aliases)
+
+
+def _build_config(cfg: dict) -> DaemonConfig:
+    """注入 dict → DaemonConfig。未知键打日志（不再静默丢弃），敏感值不落日志。"""
+    config = DaemonConfig()
+    config.auth_token = str(_pick(cfg, *CONFIG_ALIASES["auth_token"], default="") or "")
+    config.ntfy_topic = str(_pick(cfg, *CONFIG_ALIASES["ntfy_topic"], default="") or "")
+    config.ntfy_server = str(
+        _pick(cfg, *CONFIG_ALIASES["ntfy_server"], default="https://ntfy.sh") or "https://ntfy.sh"
+    ).rstrip("/")
+    try:
+        config.idle_timeout_sec = int(_pick(cfg, *CONFIG_ALIASES["idle_timeout_sec"], default=1800))
+    except (TypeError, ValueError):
+        config.idle_timeout_sec = 1800
+    try:
+        config.port = int(_pick(cfg, *CONFIG_ALIASES["port"], default=DEFAULT_PORT))
+    except (TypeError, ValueError):
+        config.port = DEFAULT_PORT
+    preload = _pick(cfg, *CONFIG_ALIASES["preload"], default=None)
+    # preload 必须是 /generate 里同形状的 pipeline 描述对象（含 loader/base）；
+    # Daemon 不认识预设 id，Host 已经在注入前把预设展开成对象。
+    config.preload = preload if isinstance(preload, dict) and preload.get("loader") else None
+    if preload is not None and config.preload is None:
+        log("[config] preload 不是 pipeline 描述对象，已忽略（Host 应下发 {loader, base, ...}）")
+    config.preset_id = _pick(cfg, *CONFIG_ALIASES["preset_id"], default=None)
+    config.log_level = str(_pick(cfg, *CONFIG_ALIASES["log_level"], default="info") or "info")
+    config.version = str(_pick(cfg, *CONFIG_ALIASES["version"], default="") or "")
+    contract = _pick(cfg, *CONFIG_ALIASES["contract"], default=None)
+    config.contract = contract if isinstance(contract, dict) else {}
+    if contract is not None and not config.contract:
+        log("[config] contract 不是 JSON 对象，已忽略")
+    if not config.contract:
+        log("[config] WARN 未收到 contract，参数边界回退到内置默认值（兼容旧 Host）")
+    config.allow_no_auth = bool(_pick(cfg, *CONFIG_ALIASES["allow_no_auth"], default=False))
+    if config.allow_no_auth:
+        log("[config] WARN allow_no_auth=true：无 auth_token 也放行请求，仅限本地调试")
+    unknown = sorted(set(cfg) - _KNOWN_CONFIG_KEYS)
+    if unknown:
+        log(f"[config] WARN 未知配置键已忽略：{', '.join(unknown)}")
+    # 配置项名可以打日志，值不行（含 token）。
+    log(f"[config] 已加载配置项：{', '.join(sorted(cfg.keys())) or '(空)'}")
+    log(
+        f"[config] idle_timeout={config.idle_timeout_sec}s port={config.port} "
+        f"ntfy={'on' if config.ntfy_topic else 'off'} auth={'on' if config.auth_token else 'off'} "
+        f"preload={config.preload.get('loader') if config.preload else 'none'} "
+        f"preset={config.preset_id or 'none'} log_level={config.log_level} "
+        f"version={config.version or 'none'} contract={'on' if config.contract else 'off'} "
+        f"allow_no_auth={'on' if config.allow_no_auth else 'off'}"
+    )
+    return config
+
+
+def load_config() -> DaemonConfig:
     """读取 Host 注入的配置；环境变量 IMAGEN_CONFIG_B64 作为兜底（本地调试用）。"""
     raw_b64 = (EMBEDDED_CONFIG_B64 or os.environ.get("IMAGEN_CONFIG_B64") or "").strip()
     if not raw_b64:
-        log("[config] 未收到注入配置，按本地调试模式启动（无鉴权、无 ntfy）")
-        return {}
+        log("[config] 未收到注入配置；本地调试需显式配置 allow_no_auth=true，否则启动会拒绝服务")
+        return DaemonConfig()
     try:
         raw = base64.b64decode(raw_b64.encode("ascii")).decode("utf-8")
         cfg = json.loads(raw)
@@ -283,36 +411,12 @@ def load_config() -> dict:
         raise SystemExit(f"配置解析失败：{type(exc).__name__}: {exc}") from None
     if not isinstance(cfg, dict):
         raise SystemExit("配置必须是 JSON 对象")
-    return cfg
+    return _build_config(cfg)
 
 
-def apply_config(cfg: dict) -> None:
-    STATE["auth_token"] = str(_pick(cfg, "auth_token", "authToken", "token", default="") or "")
-    STATE["ntfy_topic"] = str(_pick(cfg, "ntfy_topic", "ntfyTopic", "topic", default="") or "")
-    STATE["ntfy_server"] = str(
-        _pick(cfg, "ntfy_server", "ntfyServer", default="https://ntfy.sh") or "https://ntfy.sh"
-    ).rstrip("/")
-    try:
-        STATE["idle_timeout_sec"] = int(_pick(cfg, "idle_timeout_sec", "idleTimeoutSec", default=1800))
-    except (TypeError, ValueError):
-        STATE["idle_timeout_sec"] = 1800
-    try:
-        STATE["port"] = int(_pick(cfg, "port", default=DEFAULT_PORT))
-    except (TypeError, ValueError):
-        STATE["port"] = DEFAULT_PORT
-    preload = _pick(cfg, "preload", "preloadPipeline", "pipeline", default=None)
-    # preload 必须是 /generate 里同形状的 pipeline 描述对象（含 loader/base）；
-    # Daemon 不认识预设 id，Host 已经在注入前把预设展开成对象。
-    STATE["preload"] = preload if isinstance(preload, dict) and preload.get("loader") else None
-    if preload is not None and STATE["preload"] is None:
-        log("[config] preload 不是 pipeline 描述对象，已忽略（Host 应下发 {loader, base, ...}）")
-    # 配置项名可以打日志，值不行（含 token）。
-    log(f"[config] 已加载配置项：{', '.join(sorted(cfg.keys())) or '(空)'}")
-    log(
-        f"[config] idle_timeout={STATE['idle_timeout_sec']}s port={STATE['port']} "
-        f"ntfy={'on' if STATE['ntfy_topic'] else 'off'} auth={'on' if STATE['auth_token'] else 'off'} "
-        f"preload={STATE['preload'].get('loader') if STATE['preload'] else 'none'}"
-    )
+def auth_missing() -> bool:
+    """既没有 auth_token 又没显式允许无鉴权 —— 必须拒绝启动的危险配置。"""
+    return not CONFIG.auth_token and not CONFIG.allow_no_auth
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -326,12 +430,12 @@ def ntfy_publish(payload: dict, label: str) -> bool:
     关键：Content-Type 必须是 text/plain。ntfy 对 application/json 会走"发布指令"
     （publish directives）解析路径，普通 JSON 会被判成非法指令而失败（已实测）。
     """
-    topic = STATE["ntfy_topic"]
+    topic = CONFIG.ntfy_topic
     if not topic:
         log(f"[ntfy] 未配置 topic，跳过 {label} 发布")
         return False
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    url = f"{STATE['ntfy_server']}/{urllib.parse.quote(topic)}"
+    url = f"{CONFIG.ntfy_server}/{urllib.parse.quote(topic)}"
     for attempt in range(1, 4):
         try:
             request = urllib.request.Request(
@@ -340,7 +444,7 @@ def ntfy_publish(payload: dict, label: str) -> bool:
                 method="POST",
                 headers={
                     "Content-Type": "text/plain",
-                    "User-Agent": f"imagen-daemon/{VERSION}",
+                    "User-Agent": f"imagen-daemon/{protocol_version()}",
                 },
             )
             with urllib.request.urlopen(request, timeout=15) as response:
@@ -357,9 +461,9 @@ def ntfy_publish(payload: dict, label: str) -> bool:
 def publish_ready() -> None:
     payload = {
         "type": "ready",
-        "endpoint": BOOT["tunnel_url"],
-        "model_id": STATE["model_id"],
-        "device": STATE["device"],
+        "endpoint": BOOT.tunnel_url,
+        "model_id": STATE.model_id,
+        "device": STATE.device,
     }
     ntfy_publish(payload, "ready")
 
@@ -557,10 +661,10 @@ def build_pipeline(pipeline_spec: dict):
 
 
 def release_pipeline() -> None:
-    pipe = STATE.get("pipe")
-    STATE["pipe"] = None
-    STATE["pipeline_key"] = None
-    STATE["loaded"] = []
+    pipe = STATE.pipe
+    STATE.pipe = None
+    STATE.pipeline_key = None
+    STATE.loaded = []
     if pipe is not None:
         try:
             del pipe
@@ -579,14 +683,14 @@ def release_pipeline() -> None:
 def ensure_pipeline(pipeline_spec: dict) -> tuple[object, float]:
     """同一个 pipeline 描述只加载一次；描述变了先卸旧模型再加载。"""
     key = json.dumps(pipeline_spec, sort_keys=True, ensure_ascii=False, default=str)
-    if STATE["pipe"] is not None and STATE["pipeline_key"] == key:
-        return STATE["pipe"], 0.0
+    if STATE.pipe is not None and STATE.pipeline_key == key:
+        return STATE.pipe, 0.0
 
-    if STATE["pipe"] is not None:
+    if STATE.pipe is not None:
         log("[load] 请求的 pipeline 与已加载的不一致，先卸载旧模型")
         release_pipeline()
 
-    previous_phase = "ready" if STATE["phase"] == "ready" else STATE["phase"]
+    previous_phase = "ready" if STATE.phase == "ready" else STATE.phase
     set_phase("loading", f"加载 {pipeline_spec.get('base')}")
     started = time.time()
     try:
@@ -599,14 +703,14 @@ def ensure_pipeline(pipeline_spec: dict) -> tuple[object, float]:
         raise
 
     elapsed = round(time.time() - started, 1)
-    STATE["pipe"] = pipe
-    STATE["pipeline_key"] = key
-    STATE["model_id"] = str(pipeline_spec.get("base"))
-    STATE["loaded"] = [identity]
+    STATE.pipe = pipe
+    STATE.pipeline_key = key
+    STATE.model_id = str(pipeline_spec.get("base"))
+    STATE.loaded = [identity]
     try:
-        STATE["sig_params"] = set(inspect.signature(pipe.__call__).parameters.keys())
+        STATE.sig_params = set(inspect.signature(pipe.__call__).parameters.keys())
     except Exception:
-        STATE["sig_params"] = set()
+        STATE.sig_params = set()
     set_phase("ready")
     log(f"[load] 模型就绪，用时 {elapsed}s（{identity}）")
     return pipe, elapsed
@@ -627,6 +731,45 @@ def _int_param(value, field: str, low: int, high: int) -> int:  # noqa: ANN001
     return number
 
 
+# 契约缺失时的兜底边界（兼容旧 Host / 本地调试）：保持 0.3.0 之前的 daemon 行为。
+_FALLBACK_LIMITS: dict[str, dict] = {
+    "width": {"min": 64, "max": 2048, "step": 8},
+    "height": {"min": 64, "max": 2048, "step": 8},
+    "steps": {"min": 1, "max": 80},
+    "cfg": {"min": 0, "max": 30},
+    "count": {"min": 1, "max": 8},
+    "seed": {"max": 2**31 - 1},
+    "prompt": {"maxChars": 2000},
+}
+_MAX_TASKS_FALLBACK = 8
+
+
+def _limit_spec(name: str) -> dict:
+    """取参数边界：优先注入契约 ``CONFIG.contract["limits"]``，缺失时退回内置兜底。"""
+    fallback = dict(_FALLBACK_LIMITS[name])
+    limits = CONFIG.contract.get("limits") if isinstance(CONFIG.contract, dict) else None
+    if not isinstance(limits, dict):
+        return fallback
+    item = limits.get(name)
+    if not isinstance(item, dict):
+        return fallback
+    merged = dict(fallback)
+    for key in ("min", "max", "step", "maxChars"):
+        value = item.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            merged[key] = value
+    return merged
+
+
+def _max_tasks() -> int:
+    """单次请求任务上限：跟契约的 count 上限对齐（Host 的 count 就是每批张数）。"""
+    try:
+        value = int(_limit_spec("count").get("max"))
+    except (TypeError, ValueError):
+        return _MAX_TASKS_FALLBACK
+    return value if value > 0 else _MAX_TASKS_FALLBACK
+
+
 def validate_generate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
     if not isinstance(spec, dict):
         raise RequestError("请求体必须是 JSON 对象")
@@ -644,8 +787,23 @@ def validate_generate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN00
     tasks_raw = spec.get("tasks")
     if not isinstance(tasks_raw, list) or not tasks_raw:
         raise RequestError("tasks 必须是非空数组")
-    if len(tasks_raw) > 8:
-        raise RequestError("单次请求最多 8 个任务")
+    max_tasks = _max_tasks()
+    if len(tasks_raw) > max_tasks:
+        raise RequestError(f"单次请求最多 {max_tasks} 个任务")
+
+    width_limit = _limit_spec("width")
+    height_limit = _limit_spec("height")
+    steps_limit = _limit_spec("steps")
+    cfg_limit = _limit_spec("cfg")
+    seed_limit = _limit_spec("seed")
+    prompt_max = int(_limit_spec("prompt").get("maxChars") or 0)
+    width_min, width_max = int(width_limit["min"]), int(width_limit["max"])
+    height_min, height_max = int(height_limit["min"]), int(height_limit["max"])
+    width_step = int(width_limit.get("step") or 8)
+    height_step = int(height_limit.get("step") or 8)
+    steps_min, steps_max = int(steps_limit["min"]), int(steps_limit["max"])
+    cfg_min, cfg_max = cfg_limit["min"], cfg_limit["max"]
+    seed_max = int(seed_limit.get("max") or 2**31 - 1)
 
     model_id = spec.get("modelId") or spec.get("model_id") or base
     tasks: list[dict] = []
@@ -655,29 +813,34 @@ def validate_generate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN00
         prompt = raw.get("prompt")
         if not isinstance(prompt, str) or not prompt.strip():
             raise RequestError(f"tasks[{index}].prompt 必填")
-        width = _int_param(raw.get("width", 1024), f"tasks[{index}].width", 64, 2048)
-        height = _int_param(raw.get("height", 1024), f"tasks[{index}].height", 64, 2048)
-        steps = _int_param(raw.get("steps", 4), f"tasks[{index}].steps", 1, 80)
+        prompt = prompt.strip()
+        if prompt_max > 0 and len(prompt) > prompt_max:
+            raise RequestError(f"tasks[{index}].prompt 最长 {prompt_max} 个字符")
+        width = _int_param(raw.get("width", 1024), f"tasks[{index}].width", width_min, width_max)
+        height = _int_param(raw.get("height", 1024), f"tasks[{index}].height", height_min, height_max)
+        steps = _int_param(raw.get("steps", 4), f"tasks[{index}].steps", steps_min, steps_max)
         try:
             cfg = float(raw.get("cfg", 0.0))
         except (TypeError, ValueError):
             raise RequestError(f"tasks[{index}].cfg 必须是数字") from None
-        if cfg < 0 or cfg > 30:
-            raise RequestError(f"tasks[{index}].cfg 必须在 0..30 之间")
+        if cfg < cfg_min or cfg > cfg_max:
+            raise RequestError(f"tasks[{index}].cfg 必须在 {cfg_min}..{cfg_max} 之间")
         try:
             seed = int(raw.get("seed", -1))
         except (TypeError, ValueError):
             raise RequestError(f"tasks[{index}].seed 必须是整数") from None
         if seed < 0:
-            seed = random.randint(0, 2**31 - 1)
+            seed = random.randint(0, seed_max)
+        elif seed > seed_max:
+            raise RequestError(f"tasks[{index}].seed 必须不超过 {seed_max}")
         tasks.append(
             {
                 "name": str(raw.get("name") or f"{index + 1:02d}"),
-                "prompt": prompt.strip(),
+                "prompt": prompt,
                 "negative_prompt": str(raw.get("negative_prompt") or "").strip(),
                 "seed": seed,
-                "width": width - width % 8,
-                "height": height - height % 8,
+                "width": width - width % width_step,
+                "height": height - height % height_step,
                 "steps": steps,
                 "cfg": cfg,
             }
@@ -704,11 +867,11 @@ def _sync_cuda() -> None:
 def run_tasks(pipe, tasks: list[dict]) -> list[dict]:  # noqa: ANN001
     import torch
 
-    sig = STATE["sig_params"]
+    sig = STATE.sig_params
     generator_device = "cuda" if torch.cuda.is_available() else "cpu"
     results: list[dict] = []
     for task in tasks:
-        STATE["last_active"] = time.time()
+        STATE.last_active = time.time()
         generator = torch.Generator(device=generator_device).manual_seed(task["seed"])
         call_kwargs = {
             "prompt": task["prompt"],
@@ -768,21 +931,21 @@ def classify_failure(exc: BaseException, default: str = "generation_failed") -> 
 
 def health_payload() -> dict:
     return {
-        "status": "error" if STATE["phase"] == "error" else "ok",
-        "phase": STATE["phase"],
-        "version": VERSION,
-        "model_id": STATE["model_id"],
-        "loaded": list(STATE["loaded"]),
-        "device": STATE["device"],
-        "device_count": STATE["device_count"],
-        "idle_seconds": round(time.time() - STATE["last_active"], 1),
-        "idle_timeout_sec": STATE["idle_timeout_sec"],
-        "jobs_done": STATE["jobs_done"],
-        "queue_depth": STATE["waiting"],
-        "last_error": STATE["last_error"],
-        "last_error_code": STATE["last_error_code"],
-        "detail": STATE["detail"],
-        "uptime_seconds": round(time.time() - STATE["started_at"], 1),
+        "status": "error" if STATE.phase == "error" else "ok",
+        "phase": STATE.phase,
+        "version": protocol_version(),
+        "model_id": STATE.model_id,
+        "loaded": list(STATE.loaded),
+        "device": STATE.device,
+        "device_count": STATE.device_count,
+        "idle_seconds": round(time.time() - STATE.last_active, 1),
+        "idle_timeout_sec": CONFIG.idle_timeout_sec,
+        "jobs_done": STATE.jobs_done,
+        "queue_depth": STATE.waiting,
+        "last_error": STATE.last_error,
+        "last_error_code": STATE.last_error_code,
+        "detail": STATE.detail,
+        "uptime_seconds": round(time.time() - STATE.started_at, 1),
     }
 
 
@@ -817,9 +980,17 @@ class DaemonHandler(BaseHTTPRequestHandler):
         self._send_json(code, {"error": {"code": error_code, "message": message}}, headers)
 
     def _require_auth(self) -> bool:
-        expected = STATE["auth_token"]
+        expected = CONFIG.auth_token
         if not expected:
-            return True
+            # 安全修复：没有 token 时默认不放行（本地调试需显式 allow_no_auth=true）。
+            if CONFIG.allow_no_auth:
+                return True
+            self._send_error(
+                401,
+                "unauthorized",
+                "Daemon 未配置 auth_token，拒绝请求（本地调试请显式配置 allow_no_auth=true）",
+            )
+            return False
         header = self.headers.get("Authorization", "") or ""
         if header.startswith("Bearer "):
             provided = header[len("Bearer ") :].strip()
@@ -871,7 +1042,7 @@ class DaemonHandler(BaseHTTPRequestHandler):
 
         if path == "/shutdown":
             log("[shutdown] 收到 /shutdown，0.3s 后退出进程")
-            STATE["shutting_down"] = True
+            STATE.shutting_down = True
             self._send_json(200, {"status": "shutting_down"})
             threading.Thread(target=self._delayed_exit, daemon=True).start()
             return
@@ -888,10 +1059,10 @@ class DaemonHandler(BaseHTTPRequestHandler):
         os._exit(0)
 
     def _handle_generate(self) -> None:
-        phase = STATE["phase"]
+        phase = STATE.phase
         if phase != "ready":
             if phase == "error":
-                message = STATE["last_error"] or "Daemon 启动失败"
+                message = STATE.last_error or "Daemon 启动失败"
                 self._send_error(503, "load_failed", message)
             else:
                 # Host 正常不会在 ready 之前调用；这里给它一个可重试的明确信号。
@@ -912,9 +1083,9 @@ class DaemonHandler(BaseHTTPRequestHandler):
             return
 
         # 等待计数用于 /health 的 queue_depth；拿到锁之后就不算在排队了。
-        STATE["waiting"] += 1
-        got_lock = STATE["gen_lock"].acquire()
-        STATE["waiting"] = max(0, STATE["waiting"] - 1)
+        STATE.waiting += 1
+        got_lock = GEN_LOCK.acquire()
+        STATE.waiting = max(0, STATE.waiting - 1)
         if not got_lock:  # pragma: no cover - Lock.acquire() 不会返回 False
             self._send_error(503, "generation_failed", "生成锁获取失败")
             return
@@ -923,8 +1094,8 @@ class DaemonHandler(BaseHTTPRequestHandler):
             started = time.time()
             pipe, load_seconds = ensure_pipeline(pipeline_spec)
             results = run_tasks(pipe, tasks)
-            STATE["jobs_done"] += len(results)
-            STATE["last_active"] = time.time()
+            STATE.jobs_done += len(results)
+            STATE.last_active = time.time()
             total = round(time.time() - started, 2)
             log(f"[gen] 请求完成：{len(results)} 张，总耗时 {total}s（加载 {load_seconds}s）")
             self._send_json(
@@ -950,8 +1121,8 @@ class DaemonHandler(BaseHTTPRequestHandler):
             log(traceback.format_exc())
             self._send_error(500, code, message)
         finally:
-            STATE["gen_lock"].release()
-            STATE["last_active"] = time.time()
+            GEN_LOCK.release()
+            STATE.last_active = time.time()
 
 
 def start_http_server(port: int) -> ThreadingHTTPServer:
@@ -1011,7 +1182,7 @@ def _drain_cloudflared(proc: subprocess.Popen, url_event: threading.Event) -> No
                 match = CLOUDFLARED_URL_RE.search(line)
                 if match:
                     found_url = match.group(0)
-                    BOOT["tunnel_url"] = found_url
+                    BOOT.tunnel_url = found_url
                     url_event.set()
     except Exception as exc:
         log(f"[tunnel] 读取 cloudflared stderr 出错：{short(exc)}")
@@ -1019,7 +1190,7 @@ def _drain_cloudflared(proc: subprocess.Popen, url_event: threading.Event) -> No
         code = proc.poll()
         log(f"[tunnel] cloudflared stderr 结束（退出码 {code}，URL={found_url}）")
         if found_url is None:
-            BOOT["tunnel_error"] = f"cloudflared 未给出 trycloudflare 地址（退出码 {code}）"
+            BOOT.tunnel_error = f"cloudflared 未给出 trycloudflare 地址（退出码 {code}）"
             url_event.set()
 
 
@@ -1027,11 +1198,7 @@ def tunnel_boot(port: int) -> None:
     try:
         binary = ensure_cloudflared()
     except Exception as exc:
-        message = f"cloudflared 下载失败：{short(exc)}"
-        BOOT["tunnel_error"] = message
-        record_error("tunnel_failed", message)
-        set_phase("error", message)
-        publish_error("tunnel_failed", message)
+        fail_boot("tunnel_failed", f"cloudflared 下载失败：{short(exc)}", tunnel=True)
         return
 
     log(f"[tunnel] 启动 cloudflared tunnel --url http://127.0.0.1:{port}")
@@ -1044,14 +1211,10 @@ def tunnel_boot(port: int) -> None:
             bufsize=1,
         )
     except Exception as exc:
-        message = f"cloudflared 启动失败：{short(exc)}"
-        BOOT["tunnel_error"] = message
-        record_error("tunnel_failed", message)
-        set_phase("error", message)
-        publish_error("tunnel_failed", message)
+        fail_boot("tunnel_failed", f"cloudflared 启动失败：{short(exc)}", tunnel=True)
         return
 
-    BOOT["cloudflared"] = proc
+    BOOT.cloudflared = proc
     url_event = threading.Event()
     threading.Thread(
         target=_drain_cloudflared,
@@ -1060,15 +1223,12 @@ def tunnel_boot(port: int) -> None:
         daemon=True,
     ).start()
 
-    if url_event.wait(TUNNEL_WAIT_SEC) and BOOT["tunnel_url"]:
-        log(f"[tunnel] 隧道就绪：{BOOT['tunnel_url']}")
+    if url_event.wait(TUNNEL_WAIT_SEC) and BOOT.tunnel_url:
+        log(f"[tunnel] 隧道就绪：{BOOT.tunnel_url}")
         return
 
-    message = BOOT["tunnel_error"] or f"cloudflared 在 {int(TUNNEL_WAIT_SEC)}s 内没有给出隧道地址"
-    BOOT["tunnel_error"] = message
-    record_error("tunnel_failed", message)
-    set_phase("error", message)
-    publish_error("tunnel_failed", message)
+    message = BOOT.tunnel_error or f"cloudflared 在 {int(TUNNEL_WAIT_SEC)}s 内没有给出隧道地址"
+    fail_boot("tunnel_failed", message, tunnel=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1092,46 +1252,39 @@ def runtime_boot() -> None:
         import torch
 
         if torch.cuda.is_available():
-            STATE["device"] = torch.cuda.get_device_name(0)
-            STATE["device_count"] = torch.cuda.device_count()
-            log(f"[cuda] {STATE['device']} × {STATE['device_count']}，torch={torch.__version__}，cuda={torch.version.cuda}")
+            STATE.device = torch.cuda.get_device_name(0)
+            STATE.device_count = torch.cuda.device_count()
+            log(f"[cuda] {STATE.device} × {STATE.device_count}，torch={torch.__version__}，cuda={torch.version.cuda}")
         else:
-            STATE["device"] = None
-            STATE["device_count"] = 0
+            STATE.device = None
+            STATE.device_count = 0
     except Exception as exc:
         log(f"[cuda] 导入 torch 失败：{short(exc)}")
 
-    if not STATE["device_count"]:
+    if not STATE.device_count:
         message = (
             "未检测到可用 GPU（torch.cuda.is_available() 为 False）。"
             "Kaggle 静默降级到 CPU 时请检查设置里的手机号验证。"
         )
-        record_error("load_failed", message)
-        set_phase("error", message)
-        publish_error("load_failed", message)
+        fail_boot("load_failed", message)
         return
 
     try:
         install_dependencies()
     except Exception as exc:
-        message = short(exc)
-        record_error("load_failed", message)
-        set_phase("error", message)
-        publish_error("load_failed", message)
+        fail_boot("load_failed", short(exc))
         return
 
-    preload = STATE["preload"]
+    preload = CONFIG.preload
     if preload:
         try:
             ensure_pipeline(preload)
         except Exception as exc:
             code, message = classify_failure(exc, default="load_failed")
-            record_error(code, message)
-            set_phase("error", message)
-            publish_error(code, message)
+            fail_boot(code, message)
             return
 
-    if STATE["phase"] != "ready":
+    if STATE.phase != "ready":
         set_phase("ready", "依赖已就绪，等待首个生成请求下发 pipeline")
     log("[boot] 运行时就绪，可以接单")
 
@@ -1154,32 +1307,41 @@ def _install_signal_handlers() -> None:
 
 
 def main() -> None:
+    global CONFIG
+
     install_stream_tee()
     _install_signal_handlers()
-    STATE["started_at"] = time.time()
-    STATE["last_active"] = STATE["started_at"]
+    STATE.started_at = time.time()
+    STATE.last_active = STATE.started_at
 
     log("=" * 72)
-    log(f"imagen 远端 Daemon v{VERSION} 启动")
+    log(f"imagen 远端 Daemon v{protocol_version()} 启动")
     try:
-        cfg = load_config()
+        CONFIG = load_config()
     except SystemExit as exc:
         log(f"[config] {exc}")
         os._exit(2)
         return
-    apply_config(cfg)
     _log_environment()
+
+    # 0) 安全闸门：没有 auth_token 且没有显式允许无鉴权 → 拒绝对外服务（不发布 ready）。
+    if auth_missing():
+        message = "未配置 auth_token 且未开启 allow_no_auth，拒绝以无鉴权模式对外提供服务"
+        log(f"[boot] {message}")
+        fail_boot("unauthorized", message)
+        os._exit(4)
+        return
 
     # 1) HTTP 先起来：Host 靠 /health 判断 phase，不依赖模型是否加载完。
     try:
-        start_http_server(STATE["port"])
+        start_http_server(CONFIG.port)
     except Exception as exc:
-        log(f"[http] 端口 {STATE['port']} 监听失败：{short(exc)}")
+        log(f"[http] 端口 {CONFIG.port} 监听失败：{short(exc)}")
         os._exit(3)
         return
 
     # 2) 隧道与运行时各自后台跑，互不阻塞。
-    threading.Thread(target=tunnel_boot, args=(STATE["port"],), name="tunnel-boot", daemon=True).start()
+    threading.Thread(target=tunnel_boot, args=(CONFIG.port,), name="tunnel-boot", daemon=True).start()
     threading.Thread(target=runtime_boot, name="runtime-boot", daemon=True).start()
 
     # 3) 主线程：会合点发布 + 空闲看门狗。
@@ -1191,24 +1353,24 @@ def main() -> None:
         time.sleep(2.0)
         now = time.time()
 
-        if BOOT["tunnel_url"] and not BOOT["published_ready"]:
-            BOOT["published_ready"] = True
+        if BOOT.tunnel_url and not BOOT.published_ready:
+            BOOT.published_ready = True
             publish_ready()
 
-        idle = now - STATE["last_active"]
-        busy = STATE["waiting"] > 0 or STATE["gen_lock"].locked()
+        idle = now - STATE.last_active
+        busy = STATE.waiting > 0 or GEN_LOCK.locked()
         # 启动阶段（装依赖/预加载）不参与空闲退出：Host 可能把 idle_timeout 调得很短，
         # 但首轮加载本来就要几分钟。失败进入 error 后照样会被看门狗收走。
-        bootstrapping = STATE["phase"] in ("booting", "installing", "loading")
-        if not busy and not bootstrapping and idle >= STATE["idle_timeout_sec"]:
-            log(f"[idle] 空闲 {int(idle)}s ≥ {STATE['idle_timeout_sec']}s，退出进程释放 GPU 配额")
+        bootstrapping = STATE.phase in ("booting", "installing", "loading")
+        if not busy and not bootstrapping and idle >= CONFIG.idle_timeout_sec:
+            log(f"[idle] 空闲 {int(idle)}s ≥ {CONFIG.idle_timeout_sec}s，退出进程释放 GPU 配额")
             os._exit(0)
 
         if now - last_report >= 30:
             last_report = now
             log(
-                f"[alive] phase={STATE['phase']} idle={int(idle)}s jobs={STATE['jobs_done']} "
-                f"queue={STATE['waiting']} tunnel={'ok' if BOOT['tunnel_url'] else 'pending'}"
+                f"[alive] phase={STATE.phase} idle={int(idle)}s jobs={STATE.jobs_done} "
+                f"queue={STATE.waiting} tunnel={'ok' if BOOT.tunnel_url else 'pending'}"
             )
 
 
