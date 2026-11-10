@@ -77,6 +77,7 @@ export const zh = {
   'error.code.too_many': '一次提交的数量过多',
   'error.code.output_missing': '找不到对应的生成结果',
   'error.code.reveal_failed': '无法打开文件所在位置',
+  'error.code.logs_unavailable': '暂时拿不到远端运行日志',
   'error.code.internal_error': '本地服务内部错误',
   'error.code.session_error': '云端会话出错',
   'error.code.generate_failed': '出图没有成功',

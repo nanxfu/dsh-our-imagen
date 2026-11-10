@@ -77,6 +77,7 @@ export const en = {
   'error.code.too_many': 'Too many items in one request',
   'error.code.output_missing': 'The generated output was not found',
   'error.code.reveal_failed': 'Could not open the containing folder',
+  'error.code.logs_unavailable': 'Remote runtime logs are temporarily unavailable',
   'error.code.internal_error': 'The local service hit an internal error',
   'error.code.session_error': 'The cloud session failed',
   'error.code.generate_failed': 'Image generation did not succeed',

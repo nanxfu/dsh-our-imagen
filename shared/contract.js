@@ -22,6 +22,8 @@ export const VERSION = '0.3.0'
 export const ROUTES = {
   state: { method: 'GET', path: '/imagen-api/state' },
   probe: { method: 'POST', path: '/imagen-api/probe' },
+  // 远端运行日志（把 daemon 的日志环透传给工作台日志抽屉）。
+  logs: { method: 'GET', path: '/imagen-api/logs' },
   sessionStart: { method: 'POST', path: '/imagen-api/session/start' },
   sessionStop: { method: 'POST', path: '/imagen-api/session/stop' },
   generate: { method: 'POST', path: '/imagen-api/generate' },
@@ -70,6 +72,7 @@ export const LIMITS = {
 export const TIMEOUTS = {
   // 远端 HTTP
   remoteHealthMs: 4000,
+  remoteLogsMs: 4000,
   remoteGenerateMs: 300000,
   remoteShutdownMs: 3000,
   remoteGenerateMaxBytes: 32 * 1024 * 1024,
@@ -99,6 +102,7 @@ export const TIMEOUTS = {
   clientProbeMs: 45000,
   clientStatePollMs: 10000,
   clientStateActivePollMs: 2000,
+  clientLogsPollMs: 2000,
 }
 
 /**
@@ -122,6 +126,8 @@ export const ERROR_CODES = {
   output_missing: { layer: 'host', status: 404 },
   reveal_failed: { layer: 'host', status: 500 },
   internal_error: { layer: 'host', status: 500 },
+  // 远端日志拉取失败：会话在但 daemon 不可达 / 协议漂移，客户端降级展示原因。
+  logs_unavailable: { layer: 'host' },
   queue_full: { layer: 'host', status: 400 },
   stopped: { layer: 'host' },
   session_absent: { layer: 'host' },
@@ -180,6 +186,9 @@ export const PROTOCOL = {
     // /health.phase 的完整取值域；未知值按 warming 处理。
     healthPhases: ['booting', 'installing', 'loading', 'ready', 'error'],
     ntfyEvents: ['ready', 'error'],
+    // 隧道提供方：cloudflare = quick tunnel 默认通道；custom = 用户配置的备用命令
+    // （自建 FRP / 其他 HTTPS 隧道）。ready 事件与 /health 用同一组取值。
+    tunnelProviders: ['cloudflare', 'custom'],
   },
 }
 
@@ -229,6 +238,8 @@ export const PRESETS = [
       },
       scheduler: { type: 'euler', timestepSpacing: 'trailing' },
       variant: 'fp16',
+      // 远端下载权重的估算体积（GiB）：daemon 在下载前做磁盘预检。
+      downloadGb: 6.78,
       allowPatterns: SDXL_ALLOW,
       deviceMap: null,
     },
@@ -258,6 +269,7 @@ export const PRESETS = [
       lora: null,
       scheduler: null,
       variant: 'fp16',
+      downloadGb: 6.62,
       allowPatterns: SDXL_ALLOW,
       deviceMap: null,
     },
@@ -287,6 +299,7 @@ export const PRESETS = [
       lora: null,
       scheduler: null,
       variant: 'fp16',
+      downloadGb: 6.78,
       allowPatterns: SDXL_ALLOW,
       deviceMap: null,
     },
@@ -316,6 +329,7 @@ export const PRESETS = [
       lora: null,
       scheduler: null,
       variant: 'fp16',
+      downloadGb: 15.2,
       allowPatterns: null,
       deviceMap: 'balanced',
     },

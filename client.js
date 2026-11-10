@@ -126,6 +126,7 @@ var zh = {
   "error.code.too_many": "一次提交的数量过多",
   "error.code.output_missing": "找不到对应的生成结果",
   "error.code.reveal_failed": "无法打开文件所在位置",
+  "error.code.logs_unavailable": "暂时拿不到远端运行日志",
   "error.code.internal_error": "本地服务内部错误",
   "error.code.session_error": "云端会话出错",
   "error.code.generate_failed": "出图没有成功",
@@ -376,6 +377,7 @@ var en = {
   "error.code.too_many": "Too many items in one request",
   "error.code.output_missing": "The generated output was not found",
   "error.code.reveal_failed": "Could not open the containing folder",
+  "error.code.logs_unavailable": "Remote runtime logs are temporarily unavailable",
   "error.code.internal_error": "The local service hit an internal error",
   "error.code.session_error": "The cloud session failed",
   "error.code.generate_failed": "Image generation did not succeed",
@@ -701,6 +703,8 @@ function buildSessionView(t, input) {
 var ROUTES = {
   state: { method: "GET", path: "/imagen-api/state" },
   probe: { method: "POST", path: "/imagen-api/probe" },
+  // 远端运行日志（把 daemon 的日志环透传给工作台日志抽屉）。
+  logs: { method: "GET", path: "/imagen-api/logs" },
   sessionStart: { method: "POST", path: "/imagen-api/session/start" },
   sessionStop: { method: "POST", path: "/imagen-api/session/stop" },
   generate: { method: "POST", path: "/imagen-api/generate" },
@@ -740,6 +744,7 @@ var LIMITS = {
 var TIMEOUTS = {
   // 远端 HTTP
   remoteHealthMs: 4e3,
+  remoteLogsMs: 4e3,
   remoteGenerateMs: 3e5,
   remoteShutdownMs: 3e3,
   remoteGenerateMaxBytes: 32 * 1024 * 1024,
@@ -768,7 +773,8 @@ var TIMEOUTS = {
   // 客户端
   clientProbeMs: 45e3,
   clientStatePollMs: 1e4,
-  clientStateActivePollMs: 2e3
+  clientStateActivePollMs: 2e3,
+  clientLogsPollMs: 2e3
 };
 
 // src/api.js

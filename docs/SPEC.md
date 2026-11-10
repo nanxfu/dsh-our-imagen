@@ -25,9 +25,10 @@
 | `error` | 异常中断 | 任一阶段超时或失败（附带具体的错误码与日志片段） |
 
 会话快照（`/state` 的 `session` 字段）包含：`state`、`phase`、`detail`、`presetId`、`kernelId`、`kernelUrl`、
-`kernelStatus`、`endpointUrl`、`device`、`deviceCount`、`modelId`、`startedAt`、`readyAt`、`lastProbeAt`、
+`kernelStatus`、`endpointUrl`、`device`、`deviceCount`、`modelId`、`tunnelProvider`、`startedAt`、`readyAt`、`lastProbeAt`、
 `idleTimeoutSec`、`error`（`null` 或 `{ code, message }`）。鉴权 token 不进入任何对外快照
 （只在 Host 内部用于请求远端；`endpointUrl` 会下发，供前端展示隧道是否建立）。
+`tunnelProvider` 为 `cloudflare` / `custom` / `null`，对应 ready 事件与 `/health.tunnel_provider`。
 
 ### 1.2 任务状态（Job Status）
 
@@ -45,7 +46,7 @@
 `shared/contract.js` 的 `ERROR_CODES`；下表的 `HTTP` 列是宿主直接返回该码时的状态码。
 远端 daemon 的 `{ error: { code, message } }` 由宿主原样透传（`remote` 层 4 个码在宿主字典中也有文案）。
 
-**Host 层（27 个）**
+**Host 层（28 个）**
 
 | 错误码 | HTTP | 触发场景 |
 | :--- | ---: | :--- |
@@ -57,6 +58,7 @@
 | `not_found` | 404 | 任务、文件或目标资源不存在 |
 | `output_missing` | 404 | 产物目录尚不存在（`/reveal`） |
 | `reveal_failed` | 500 | 调起系统文件管理器失败 |
+| `logs_unavailable` | — | 远端日志暂时拉不到（会话在但 daemon 不可达 / 协议漂移） |
 | `internal_error` | 500 | 未分类的宿主异常（`errorShape` 兜底码） |
 | `queue_full` | 400 | 本地待执行队列已满 |
 | `stopped` | — | 用户主动关机导致任务未执行 |
@@ -103,12 +105,13 @@
 
 > **例外**：`GET /imagen-api/file` 返回图片二进制流（`image/png` 等），不是 JSON。
 
-路由总览（15 条，以 `shared/contract.js` 的 `ROUTES` 为准）：
+路由总览（16 条，以 `shared/contract.js` 的 `ROUTES` 为准）：
 
 | 方法 | 路径 | 用途 |
 | :--- | :--- | :--- |
 | GET | `/imagen-api/state` | 插件运行状态全貌（前端轮询数据源） |
 | POST | `/imagen-api/probe` | 主动触发本地 Kaggle 环境检测 |
+| GET | `/imagen-api/logs?since=` | 拉取远端 daemon 的增量运行日志 |
 | POST | `/imagen-api/session/start` | 启动远端 GPU 会话（幂等） |
 | POST | `/imagen-api/session/stop` | 关机 |
 | POST | `/imagen-api/generate` | 提交生图任务 |
@@ -139,6 +142,8 @@
 | `session` | 会话快照（字段见 §1.1） |
 | `probe` | 最近一次环境检测结果；未检测时为 `null` |
 | `probeAt` | 最近一次检测完成的时间戳（毫秒） |
+| `probeLastGood` | 最近一次**成功**的检测结果（用于配额不可用时回退展示）；从未成功为 `null` |
+| `probeLastGoodAt` | 最近一次成功检测的时间（ISO 字符串）；从未成功为 `null` |
 | `jobs` | 最近 10 条任务（`Job` 公开视图，见 §2.2） |
 | `lastJob` | 最近一条完成/失败的任务，或 `null` |
 | `queue` | `{ running: id \| null, pending: number }` |
@@ -184,6 +189,7 @@
     "device": "Tesla T4",
     "deviceCount": 2,
     "modelId": "sdxl-lightning",
+    "tunnelProvider": "cloudflare",
     "startedAt": "2026-11-09T04:00:00.000Z",
     "readyAt": "2026-11-09T04:06:00.000Z",
     "lastProbeAt": "2026-11-09T04:07:02.000Z",
@@ -192,6 +198,8 @@
   },
   "probe": null,
   "probeAt": 0,
+  "probeLastGood": null,
+  "probeLastGoodAt": null,
   "jobs": [],
   "lastJob": null,
   "queue": { "running": null, "pending": 0 },
@@ -260,6 +268,20 @@
 关机。通知远端容器退出并清理本地连接状态（best-effort，不等待远端确认）。
 
 - **响应**：`{ "ok": true, "session": { "state": "stopping" | "absent", ... } }`
+
+#### `GET /imagen-api/logs?since=<n>`
+
+把远端 daemon 的日志环增量透传给工作台日志抽屉（协议见 `remote/daemon.py` 的 `GET /logs`）。
+
+- `since`：上次拿到的游标 `next`，非负整数，默认 0；环形缓冲只保留最近 400 行。
+- **响应**（始终 HTTP 200，用 `ok` 表达可用性，避免客户端把「暂时拿不到日志」当成网络故障）：
+
+```json
+{ "ok": true, "since": 0, "next": 128, "lines": ["[boot] 运行时就绪…", "[tunnel] 隧道就绪：https://…"] }
+```
+
+- 会话未启动 / 没有远端连接：`{ "ok": false, "code": "session_absent", "message": "…", "since": 0, "next": 0, "lines": [] }`
+- 远端不可达或协议漂移：`{ "ok": false, "code": "logs_unavailable", "message": "…", "since": n, "next": n, "lines": [] }`
 
 ### 2.2 出图任务
 

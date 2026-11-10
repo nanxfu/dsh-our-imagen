@@ -17,6 +17,7 @@ import { registerRoutes, toInt } from './lib/route-kit.js'
 import { createFileRoutes } from './lib/routes/files.js'
 import { createJobRoutes } from './lib/routes/jobs.js'
 import { createLibraryRoutes } from './lib/routes/library.js'
+import { createLogRoutes } from './lib/routes/logs.js'
 import { createPromptRoutes } from './lib/routes/prompts.js'
 import { createSessionRoutes } from './lib/routes/session.js'
 import { SessionManager } from './lib/session.js'
@@ -34,7 +35,8 @@ export function apply(ctx, config = {}) {
   const devEndpoint = config.devEndpoint ?? process.env.OUR_FREE_IMAGEN_ENDPOINT ?? null
   const devToken = config.devToken ?? process.env.OUR_FREE_IMAGEN_TOKEN ?? 'dev-token'
 
-  const cache = { probe: null, probeAt: 0, probing: null }
+  // probe：当前探测状态；lastGood：最近一次成功结果（配额不可用时客户端回退展示）。
+  const cache = { probe: null, probeAt: 0, probing: null, lastGood: null, lastGoodAt: null }
 
   const session = new SessionManager({
     ctx,
@@ -45,6 +47,22 @@ export function apply(ctx, config = {}) {
       accelerator: config.accelerator ?? 'NvidiaTeslaT4',
       idleTimeoutSec: toInt(config.idleTimeoutSec, TIMEOUTS.idleShutdownSec, 300, 10800),
       provisionTimeoutMs: toInt(config.provisionTimeoutMinutes, TIMEOUTS.provisionMs / 60000, 5, 240) * 60 * 1000,
+      // 冷启动可靠性（P1.2）：可选 HuggingFace Token、依赖约束、备用隧道命令。
+      hfToken: typeof config.hfToken === 'string' && config.hfToken.trim() ? config.hfToken.trim() : null,
+      pipConstraints: Array.isArray(config.pipConstraints) ? config.pipConstraints.filter((item) => typeof item === 'string') : [],
+      fallbackTunnelCommand: Array.isArray(config.fallbackTunnelCommand)
+        ? config.fallbackTunnelCommand.filter((item) => typeof item === 'string')
+        : [],
+      // 权重预挂载（P2.1）：kernel 的 dataset_sources 与本地权重目录映射。
+      datasetSources: Array.isArray(config.datasetSources) ? config.datasetSources.filter((item) => typeof item === 'string') : [],
+      localModels:
+        config.localModels && typeof config.localModels === 'object' && !Array.isArray(config.localModels)
+          ? config.localModels
+          : null,
+      // 备用隧道（P2.2）：用户自建通道的域名后缀，用于 Host 侧校验会合地址可信。
+      trustedTunnelDomains: Array.isArray(config.trustedTunnelDomains)
+        ? config.trustedTunnelDomains.filter((item) => typeof item === 'string')
+        : [],
     },
   })
 
@@ -65,6 +83,8 @@ export function apply(ctx, config = {}) {
     session: session.snapshot(),
     probe: cache.probe,
     probeAt: cache.probeAt,
+    probeLastGood: cache.lastGood,
+    probeLastGoodAt: cache.lastGoodAt,
     jobs: queue.list(10),
     lastJob: queue.lastFinished,
     queue: queue.queueStats(),
@@ -79,6 +99,11 @@ export function apply(ctx, config = {}) {
           const probe = await probeKaggle(ctx)
           cache.probe = probe
           cache.probeAt = Date.now()
+          // 配额接口偶发不可用：保留最近一次成功结果，客户端可回退展示配额与检查时间。
+          if (probe?.auth?.ok === true) {
+            cache.lastGood = probe
+            cache.lastGoodAt = new Date().toISOString()
+          }
           return probe
         } catch (error) {
           // 探测崩溃不等于「环境不可用」，必须留 warn 才能和真正的鉴权失败区分开。
@@ -102,6 +127,7 @@ export function apply(ctx, config = {}) {
 
   registerRoutes(ctx, [
     ...createSessionRoutes({ session, probes, statePayload, defaultPreset, log }),
+    ...createLogRoutes({ session, log }),
     ...createJobRoutes({ ctx, queue, log }),
     ...createFileRoutes({ ctx, log }),
     ...createLibraryRoutes({ ctx, log }),
