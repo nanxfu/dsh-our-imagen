@@ -353,17 +353,27 @@
 }
 
 .ofs-row-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 9px 12px;
+  color: var(--ofs-ink-2);
+  font-size: 12px;
+}
+
+.ofs-row-toggle {
   appearance: none;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  width: 100%;
-  padding: 9px 12px;
+  min-width: 0;
+  padding: 0;
   border: 0;
   background: transparent;
-  color: var(--ofs-ink-2);
-  font-size: 12px;
+  color: inherit;
+  font: inherit;
   text-align: left;
   cursor: pointer;
 }
@@ -422,6 +432,12 @@
 .ofs-field > span {
   font-size: 10.5px;
   color: var(--ofs-ink-3);
+}
+
+.ofs-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .ofs-field input,

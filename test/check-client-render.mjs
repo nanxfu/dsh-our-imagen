@@ -79,21 +79,21 @@ const scenarios = {
     state: readyState,
     history: { items: [historyItem] },
     props: {},
-    expect: ['创作设置', '提示词', '风格', '画面设置', '高级设置', '即刻生成', '以此图微调', '在线', '测试用的荷花池塘'],
+    expect: ['创作设置', '提示词', '风格预设', '画面设置', '高级设置', '立即生成', '带回参数', '在线', '测试用的荷花池塘'],
     reject: [],
   },
   chat: {
     state: readyState,
     history: { items: [historyItem] },
     props: { panelMode: 'chat' },
-    expect: ['对话', '描述你想要的画面', '扩写提示词'],
+    expect: ['创作助手', '描述你想要的画面', '润色'],
     reject: [],
   },
   empty: {
     state: { defaultPreset: 'sdxl-lightning', presets: [preset], session: { state: 'absent', error: null }, jobs: [] },
     history: { items: [] },
     props: {},
-    expect: ['这里还没有图片', '云端还没启动'],
+    expect: ['画面预览', '云端尚未启动'],
     reject: [],
   },
   gallery: {
@@ -101,7 +101,7 @@ const scenarios = {
     history: { items: [historyItem] },
     props: {},
     view: 'gallery',
-    expect: ['资产画廊', '全部模型', '测试用的荷花池塘', '今天'],
+    expect: ['作品画廊', '全部模型', '测试用的荷花池塘', '今天'],
     reject: [],
   },
   guidance: {
@@ -136,7 +136,7 @@ const scenarios = {
     },
     history: { items: [historyItem] },
     props: {},
-    expect: ['正在排队', '云端正在排队'],
+    expect: ['正在申请 GPU', '云端正在排队'],
     reject: [],
   },
   cli: {
@@ -153,8 +153,8 @@ const scenarios = {
     },
     history: { items: [] },
     props: {},
-    expect: ['本地没有检测到 kaggle 命令行', 'pip install -U kaggle', '复制安装命令', '重新检查环境', '关闭'],
-    reject: ['出图没有成功'],
+    expect: ['本地没有检测到 Kaggle 命令行', 'pip install -U kaggle', '复制安装命令', '重新检查环境', '关闭'],
+    reject: ['生成没有成功'],
   },
   session: {
     state: {
@@ -166,7 +166,7 @@ const scenarios = {
     },
     history: { items: [] },
     props: {},
-    expect: ['云端的连接中断了', '重新唤醒', 'Kernel 推送失败：权限不足'],
+    expect: ['云端连接中断', '重新唤醒', 'Kernel 推送失败：权限不足'],
     reject: [],
   },
   generic: {
@@ -189,7 +189,7 @@ const scenarios = {
     history: { items: [] },
     props: {},
     expect: ['操作没有完成', '有图片没能删除', '关闭'],
-    reject: ['重试一次', '出图没有成功'],
+    reject: ['重试一次', '生成没有成功'],
   },
   generate: {
     state: {
@@ -210,7 +210,7 @@ const scenarios = {
     },
     history: { items: [] },
     props: {},
-    expect: ['出图没有成功', '重试一次', '远端返回了非 JSON 响应'],
+    expect: ['生成没有成功', '重试一次', '远端返回了非 JSON 响应'],
     reject: [],
   },
 }

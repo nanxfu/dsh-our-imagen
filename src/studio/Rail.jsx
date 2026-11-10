@@ -7,6 +7,7 @@
 
 import React from 'react'
 
+import { Tooltip } from '../components/Tooltip.jsx'
 import { Icon } from './icons.jsx'
 import { PROMPT_BOOSTS, STYLE_CAPSULES } from './capsules.js'
 import { DEFAULT_RATIOS } from './ratios.js'
@@ -81,7 +82,11 @@ export function Rail(props) {
       </header>
 
       <div className="ofs-panel-scroll">
-        <Fieldset id="ofs-section-prompt" title={t('studio.prompt')}>
+        <Fieldset
+          id="ofs-section-prompt"
+          title={t('studio.prompt')}
+          action={<Tooltip t={t} text={t('studio.promptTooltip')} />}
+        >
           <div className="ofs-composer">
             <textarea
               className="ofs-composer-input"
@@ -178,87 +183,102 @@ export function Rail(props) {
         <Fieldset id="ofs-section-advanced" title={t('studio.rail.advanced')}>
           <div className="ofs-rows">
             <div className={negativeOpen ? 'ofs-row is-open' : 'ofs-row'}>
-              <button
-                type="button"
-                className="ofs-row-head"
-                onClick={() => setNegativeOpen((open) => !open)}
-                aria-expanded={negativeOpen}
-              >
-                <span>{t('studio.negative')}</span>
-                <span className={negativeOpen ? 'ofs-chevron is-open' : 'ofs-chevron'} aria-hidden="true">
-                  <Icon name="chevronDown" size={14} />
-                </span>
-              </button>
+              <div className="ofs-row-head">
+                <button
+                  type="button"
+                  className="ofs-row-toggle"
+                  onClick={() => setNegativeOpen((open) => !open)}
+                  aria-expanded={negativeOpen}
+                >
+                  <span>{t('studio.negative')}</span>
+                  <span className={negativeOpen ? 'ofs-chevron is-open' : 'ofs-chevron'} aria-hidden="true">
+                    <Icon name="chevronDown" size={14} />
+                  </span>
+                </button>
+                <Tooltip t={t} text={t('studio.negativeTooltip')} />
+              </div>
               {negativeOpen ? (
-                <>
-                  <textarea
-                    className="ofs-row-textarea"
-                    rows={3}
-                    value={form.negative}
-                    placeholder={t('studio.negativePlaceholder')}
-                    spellCheck={false}
-                    onChange={(event) => patchForm({ negative: event.target.value })}
-                  />
-                  {Number(form.cfg) <= 0 ? <p className="ofs-row-hint">{t('studio.negativeHintCfg')}</p> : null}
-                </>
+                <textarea
+                  className="ofs-row-textarea"
+                  rows={3}
+                  value={form.negative}
+                  placeholder={t('studio.negativePlaceholder')}
+                  spellCheck={false}
+                  onChange={(event) => patchForm({ negative: event.target.value })}
+                />
               ) : null}
             </div>
 
             <div className={advancedOpen ? 'ofs-row is-open' : 'ofs-row'}>
-              <button
-                type="button"
-                className="ofs-row-head"
-                onClick={() => setAdvancedOpen((open) => !open)}
-                aria-expanded={advancedOpen}
-              >
-                <span>{t('studio.rail.params')}</span>
-                <span className={advancedOpen ? 'ofs-chevron is-open' : 'ofs-chevron'} aria-hidden="true">
-                  <Icon name="chevronDown" size={14} />
-                </span>
-              </button>
+              <div className="ofs-row-head">
+                <button
+                  type="button"
+                  className="ofs-row-toggle"
+                  onClick={() => setAdvancedOpen((open) => !open)}
+                  aria-expanded={advancedOpen}
+                >
+                  <span>{t('studio.rail.params')}</span>
+                  <span className={advancedOpen ? 'ofs-chevron is-open' : 'ofs-chevron'} aria-hidden="true">
+                    <Icon name="chevronDown" size={14} />
+                  </span>
+                </button>
+              </div>
               {advancedOpen ? (
                 <div className="ofs-grid2">
-                  <label className="ofs-field">
-                    <span>{t('studio.steps')}</span>
+                  <div className="ofs-field">
+                    <span className="ofs-field-label">
+                      {t('studio.steps')}
+                      <Tooltip t={t} text={t('studio.stepsTooltip')} />
+                    </span>
                     <input
                       type="number"
                       min={1}
                       max={60}
                       value={form.steps}
+                      aria-label={t('studio.steps')}
                       onChange={(event) => patchForm({ steps: Number(event.target.value) })}
                     />
-                  </label>
-                  <label className="ofs-field">
-                    <span>{t('studio.cfg')}</span>
+                  </div>
+                  <div className="ofs-field">
+                    <span className="ofs-field-label">
+                      {t('studio.cfg')}
+                      <Tooltip t={t} text={t('studio.cfgTooltip')} />
+                    </span>
                     <input
                       type="number"
                       min={0}
                       max={20}
                       step={0.5}
                       value={form.cfg}
+                      aria-label={t('studio.cfg')}
                       onChange={(event) => patchForm({ cfg: Number(event.target.value) })}
                     />
-                  </label>
-                  <label className="ofs-field">
+                  </div>
+                  <div className="ofs-field">
                     <span>{t('studio.seed')}</span>
                     <input
                       type="text"
                       inputMode="numeric"
                       value={form.seed}
                       placeholder={t('studio.random')}
+                      aria-label={t('studio.seed')}
                       onChange={(event) => patchForm({ seed: event.target.value })}
                     />
-                  </label>
-                  <label className="ofs-field">
+                  </div>
+                  <div className="ofs-field">
                     <span>{t('studio.count')}</span>
-                    <select value={form.count} onChange={(event) => patchForm({ count: Number(event.target.value) })}>
+                    <select
+                      value={form.count}
+                      aria-label={t('studio.count')}
+                      onChange={(event) => patchForm({ count: Number(event.target.value) })}
+                    >
                       {[1, 2, 3, 4].map((value) => (
                         <option key={value} value={value}>
                           {value}
                         </option>
                       ))}
                     </select>
-                  </label>
+                  </div>
                 </div>
               ) : null}
             </div>

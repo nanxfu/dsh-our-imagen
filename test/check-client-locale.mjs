@@ -24,7 +24,7 @@ async function listSourceFiles(dir) {
   for (const entry of entries) {
     const path = join(dir, entry.name)
     if (entry.isDirectory()) files.push(...(await listSourceFiles(path)))
-    else if (entry.name.endsWith('.js')) files.push(path)
+    else if (entry.name.endsWith('.js') || entry.name.endsWith('.jsx')) files.push(path)
   }
   return files
 }

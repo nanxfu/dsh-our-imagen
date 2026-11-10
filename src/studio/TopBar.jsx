@@ -2,6 +2,7 @@
 
 import React from 'react'
 
+import { Tooltip } from '../components/Tooltip.jsx'
 import { Icon } from './icons.jsx'
 import { StudioIcon } from './StudioIcon.jsx'
 import { probeStatusOf } from '../logic/probe.js'
@@ -40,6 +41,12 @@ export function TopBar(props) {
   }, [open])
 
   const idleMinutes = session && session.idleTimeoutSec ? Math.round(session.idleTimeoutSec / 60) : 0
+  const createTooltip =
+    sessionState === 'provisioning'
+      ? t('studio.compute.queuedTooltip')
+      : sessionState === 'ready'
+        ? t('studio.compute.idleTooltip')
+        : t('studio.compute.offlineTooltip')
   const quotaUsed = quota && Number.isFinite(quota.usedHours) ? quota.usedHours : null
   const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null
   const notReady = sessionState === 'absent' || sessionState === 'error'
@@ -103,6 +110,8 @@ export function TopBar(props) {
           </span>
         </button>
 
+        <Tooltip t={t} text={createTooltip} side="bottom" />
+
         {open ? (
           <div className="ofs-popover" role="menu">
             <div className="ofs-popover-head">
@@ -123,7 +132,10 @@ export function TopBar(props) {
                 {probeInfo ? (
                   <>
                     <span>{t('studio.probe.cli')} · {statusText(probeInfo.cli)}</span>
-                    <span>{t('studio.probe.account')} · {statusText(probeInfo.auth)}</span>
+                    <span>
+                      {t('studio.probe.account')} · {statusText(probeInfo.auth)}
+                      <Tooltip t={t} text={t('studio.compute.authTooltip')} tone="warn" side="bottom" />
+                    </span>
                     <span>{t('studio.probe.quota')} · {statusText(probeInfo.quota)}</span>
                   </>
                 ) : null}

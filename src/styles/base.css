@@ -409,6 +409,73 @@
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* ── 悬浮提示 ─────────────────────────────────────────────── */
+.ofs-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+.ofs-tip-trigger {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-pill);
+  background: var(--ofs-sunken);
+  color: var(--ofs-ink-3);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+
+.ofs-tip-trigger:hover,
+.ofs-tip-trigger:focus-visible {
+  color: var(--ofs-ink);
+  border-color: var(--ofs-accent-soft-border);
+}
+
+.ofs-tip-trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--ofs-focus-ring);
+}
+
+.ofs-tip--warn .ofs-tip-trigger {
+  color: var(--ofs-warn);
+  border-color: color-mix(in oklab, var(--ofs-warn) 45%, transparent);
+  background: var(--ofs-warn-soft);
+}
+
+/* 固定在视口坐标上，不被侧栏的滚动容器裁剪；位置由组件按触发点计算。 */
+.ofs-tip-pop {
+  position: fixed;
+  z-index: 90;
+  width: max-content;
+  max-width: 248px;
+  padding: 8px 10px;
+  border: 1px solid var(--ofs-window-border);
+  border-radius: 10px;
+  background: var(--ofs-card-solid);
+  color: var(--ofs-ink-2);
+  box-shadow: var(--ofs-shadow-lift);
+  font-size: 11.5px;
+  line-height: 1.55;
+  text-align: left;
+  white-space: normal;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+}
+
+.ofs-tip-pop.is-below {
+  transform: translate(-50%, 0);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ofs-root *,
   .ofs-root *::before,
