@@ -14,7 +14,6 @@ export function useHostState() {
 
   React.useEffect(() => {
     aliveRef.current = true
-    let stopped = false
     let timer = null
 
     const clear = () => {
@@ -26,10 +25,9 @@ export function useHostState() {
 
     const tick = async () => {
       timer = null
-      if (stopped) return
-      if (typeof document !== 'undefined' && document.hidden) return
+      if (document.hidden) return
       const result = await fetchState()
-      if (stopped || !aliveRef.current) return
+      if (!aliveRef.current) return
       let delay = TIMEOUTS.clientStatePollMs
       if (result.ok && result.data && typeof result.data === 'object') {
         setState(result.data)
@@ -42,7 +40,7 @@ export function useHostState() {
     }
 
     const onVisible = () => {
-      if (typeof document !== 'undefined' && document.hidden) {
+      if (document.hidden) {
         clear()
         return
       }
@@ -56,13 +54,12 @@ export function useHostState() {
     }
 
     tick()
-    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible)
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
-      stopped = true
       aliveRef.current = false
       clear()
       refreshRef.current = () => {}
-      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [])
 
@@ -70,9 +67,5 @@ export function useHostState() {
     refreshRef.current()
   }, [])
 
-  const patch = React.useCallback((partial) => {
-    setState((prev) => (prev ? { ...prev, ...partial } : prev))
-  }, [])
-
-  return { state, error, refresh, patch }
+  return { state, error, refresh }
 }

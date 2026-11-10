@@ -29,13 +29,12 @@ export function Tooltip(props) {
   }, [])
 
   const measure = React.useCallback(() => {
-    if (typeof window === 'undefined' || typeof document === 'undefined') return
     const node = triggerRef.current
-    if (!node || typeof node.getBoundingClientRect !== 'function') return
+    if (!node) return
     const anchor = node.getBoundingClientRect()
-    const app = typeof node.closest === 'function' ? node.closest('.ofs-app') : null
+    const app = node.closest('.ofs-app')
     let frame = null
-    if (app && typeof app.getBoundingClientRect === 'function') {
+    if (app) {
       frame = app.getBoundingClientRect()
     } else if (Number(window.innerWidth) > 0) {
       frame = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }
@@ -46,31 +45,25 @@ export function Tooltip(props) {
   React.useEffect(() => {
     if (!open) return undefined
     measure()
-    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return undefined
     const remeasure = () => measure()
     const onKey = (event) => {
       if (event.key === 'Escape') close()
     }
     window.addEventListener('scroll', remeasure, true)
     window.addEventListener('resize', remeasure)
-    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
-      document.addEventListener('keydown', onKey)
-    }
+    document.addEventListener('keydown', onKey)
     return () => {
       window.removeEventListener('scroll', remeasure, true)
       window.removeEventListener('resize', remeasure)
-      if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
-        document.removeEventListener('keydown', onKey)
-      }
+      document.removeEventListener('keydown', onKey)
     }
   }, [open, measure, close])
 
   React.useEffect(() => {
     if (!pinned) return undefined
-    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return undefined
     const onDown = (event) => {
       const node = triggerRef.current
-      if (node && event && event.target && typeof node.contains === 'function' && node.contains(event.target)) return
+      if (node && event && event.target && node.contains(event.target)) return
       close()
     }
     document.addEventListener('pointerdown', onDown)

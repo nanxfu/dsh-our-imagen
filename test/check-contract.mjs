@@ -14,7 +14,8 @@
  *   g. daemon 协议：/health /logs /generate /shutdown 与 healthPhases 全部取值
  *   h. docs/SPEC.md 包含全部路由路径与全部 host+remote 错误码
  *   i. lib/presets.js 不再定义预设数据
- *   j. remote/contract.json 与 shared/contract.js 的 daemonContract() 一致（P10 生成物）
+ *   j. remote/contract.json 与 shared/contract.js 的 daemonContract() 一致，且下发对象只含
+ *      version + limits（Host/Client 专有的路由、health phase、ntfy 事件、错误码不再下发远端；P10 生成物）
  *
  * 运行：node test/check-contract.mjs
  */
@@ -469,13 +470,21 @@ async function checkRemoteContract() {
     return fail('j', `${rel} 不是合法 JSON`, [String(error?.message ?? error)])
   }
   const expected = daemonContract()
+  // 形状锁定：daemon 只消费 contract.version 与 contract.limits。routes / healthPhases /
+  // ntfyEvents / errorCodes 属于 Host/Client，若被重新塞回下发对象，这里必须失败。
+  const topKeys = Object.keys(expected).sort()
+  if (topKeys.join(',') !== 'limits,version') {
+    return fail('j', 'daemonContract() 顶层字段不符合远端契约（应只含 version + limits）', [
+      `实际顶层键：${topKeys.join(', ') || '（空）'}`,
+    ])
+  }
   const diffs = collectContractDiff(expected, actual)
   if (diffs.length) {
     const shown = diffs.slice(0, 20)
     if (diffs.length > shown.length) shown.push(`…共 ${diffs.length} 处差异`)
     return fail('j', `${rel} 与 daemonContract() 不一致`, shown)
   }
-  pass('j', `${rel} 与 daemonContract() 一致`, `${Object.keys(expected).length} 个顶层键`)
+  pass('j', `${rel} 与 daemonContract() 一致`, `${Object.keys(expected).length} 个顶层键：${topKeys.join(' + ')}`)
 }
 
 // ── main ──────────────────────────────────────────────────────────────────

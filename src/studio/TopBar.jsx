@@ -16,13 +16,30 @@ function sessionPill(t, sessionState) {
   return { tone: 'idle', label: t('studio.compute.offline') }
 }
 
+/** 接收 { t, ui, compute, form, library }；ui/compute/form/library 是领域对象。 */
 export function TopBar(props) {
-  const { t, view, setView, sessionState, session, quota, presets, form, patchForm, busy, probing, probe, probeReport, onStart, onStop, onProbe, onRefresh, onOpenFolder } = props
+  const { t, ui, compute, library } = props
+  const { form: fields, patchForm } = props.form
+  const { view, setView } = ui
+  const {
+    sessionState,
+    session,
+    quota,
+    presets,
+    busy,
+    probing,
+    probe,
+    probeReport,
+    startSession,
+    stopSession,
+    runProbe,
+    openFolder,
+  } = compute
   const pill = sessionPill(t, sessionState)
   const [open, setOpen] = React.useState(false)
   const wrapRef = React.useRef(null)
 
-  // 菜单：Esc 关闭，点外面也关闭——这不是模态，不该困住用户。
+  // 菜单：Esc 与点击外部都关闭。
   React.useEffect(() => {
     if (!open) return undefined
     function onKey(event) {
@@ -50,7 +67,7 @@ export function TopBar(props) {
   const quotaUsed = quota && Number.isFinite(quota.usedHours) ? quota.usedHours : null
   const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null
   const notReady = sessionState === 'absent' || sessionState === 'error'
-  const activePreset = presets.find((item) => item.id === form.presetId) || null
+  const activePreset = presets.find((item) => item.id === fields.presetId) || null
   const probeInfo = probeStatusOf(probe || (probeReport && probeReport.probe))
   const probeFailed = probeReport && probeReport.status && probeReport.status !== 'ok' ? probeReport : null
   const probeNote = probeInfo && probeInfo.notes.length > 0 ? probeInfo.notes[0] : ''
@@ -84,11 +101,11 @@ export function TopBar(props) {
 
       <span className="ofs-grow" />
 
-      {onOpenFolder ? (
+      {openFolder ? (
         <button
           type="button"
           className="ofs-icon-btn"
-          onClick={onOpenFolder}
+          onClick={openFolder}
           title={t('studio.action.openFolder')}
           aria-label={t('studio.action.openFolder')}
         >
@@ -96,8 +113,8 @@ export function TopBar(props) {
         </button>
       ) : null}
 
-      {onRefresh ? (
-        <button type="button" className="ofs-icon-btn" onClick={onRefresh} title={t('studio.refresh')} aria-label={t('studio.refresh')}>
+      {library.loadHistory ? (
+        <button type="button" className="ofs-icon-btn" onClick={library.loadHistory} title={t('studio.refresh')} aria-label={t('studio.refresh')}>
           <Icon name="refresh" size={16} />
         </button>
       ) : null}
@@ -159,11 +176,11 @@ export function TopBar(props) {
               {probeNote ? <span title={probeInfo.notes.join(' · ')}>{probeNote}</span> : null}
             </div>
 
-            <button type="button" role="menuitem" className="ofs-popover-row" onClick={onStart} disabled={!!busy || !notReady}>
+            <button type="button" role="menuitem" className="ofs-popover-row" onClick={startSession} disabled={!!busy || !notReady}>
               <Icon name="cloud" size={15} />
               {t('studio.compute.start')}
             </button>
-            <button type="button" role="menuitem" className="ofs-popover-row" onClick={onStop} disabled={!!busy || sessionState === 'absent'}>
+            <button type="button" role="menuitem" className="ofs-popover-row" onClick={stopSession} disabled={!!busy || sessionState === 'absent'}>
               <Icon name="clock" size={15} />
               {t('studio.compute.stop')}
             </button>
@@ -171,7 +188,7 @@ export function TopBar(props) {
               type="button"
               role="menuitem"
               className="ofs-popover-row"
-              onClick={onProbe}
+              onClick={runProbe}
               disabled={!!busy || probing}
               aria-busy={probing}
             >
@@ -186,7 +203,7 @@ export function TopBar(props) {
         <Icon name="sliders" size={14} />
         <span className="ofs-preset-label">{t('studio.preset')}</span>
         <select
-          value={form.presetId}
+          value={fields.presetId}
           disabled={presets.length === 0}
           aria-label={t('studio.preset')}
           onChange={(event) => {
@@ -196,10 +213,10 @@ export function TopBar(props) {
               presetId: id,
               ...(next
                 ? {
-                    width: next.size || form.width,
-                    height: next.size || form.height,
-                    steps: next.steps ?? form.steps,
-                    cfg: next.cfg ?? form.cfg,
+                    width: next.size || fields.width,
+                    height: next.size || fields.height,
+                    steps: next.steps ?? fields.steps,
+                    cfg: next.cfg ?? fields.cfg,
                   }
                 : {}),
             })

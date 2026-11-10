@@ -209,7 +209,10 @@ def log_since(since: int) -> tuple[list[str], int]:
 
 @dataclass
 class DaemonConfig:
-    """Host 注入的配置（见 shared/contract.js 的 PROTOCOL.daemon.configKeys）。"""
+    """Host 注入的配置。键名即字段名；ntfy_server / port / allow_no_auth 仅本地调试或旧 Host 使用。
+
+    Host 实际下发的键由 lib/session/provisioner.js 的 buildKernelConfig 组装。
+    """
 
     auth_token: str = ""
     ntfy_topic: str = ""
@@ -323,62 +326,55 @@ def protocol_version() -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _pick(cfg: dict, *names: str, default=None):
-    for name in names:
-        if name in cfg and cfg[name] is not None:
-            return cfg[name]
-    return default
-
-
-# 配置键 → DaemonConfig 字段；别名保留历史行为（Host 只发 snake_case，别名给本地调试）。
-CONFIG_ALIASES: dict[str, tuple[str, ...]] = {
-    "auth_token": ("auth_token", "authToken", "token"),
-    "ntfy_topic": ("ntfy_topic", "ntfyTopic", "topic"),
-    "ntfy_server": ("ntfy_server", "ntfyServer"),
-    "idle_timeout_sec": ("idle_timeout_sec", "idleTimeoutSec"),
-    "port": ("port",),
-    "preload": ("preload", "preloadPipeline", "pipeline"),
-    "preset_id": ("preset_id", "presetId"),
-    "log_level": ("log_level", "logLevel"),
-    "version": ("version",),
-    "contract": ("contract",),
-    "allow_no_auth": ("allow_no_auth", "allowNoAuth"),
-}
-_KNOWN_CONFIG_KEYS = frozenset(alias for aliases in CONFIG_ALIASES.values() for alias in aliases)
+# 注入配置的精确键名（= DaemonConfig 字段名）。Host 侧由 lib/session/provisioner.js 组装；
+# ntfy_server / port / allow_no_auth 只给本地调试或旧 Host 使用。未登记的键只告警、不猜别名。
+_KNOWN_CONFIG_KEYS = frozenset(
+    {
+        "auth_token",
+        "ntfy_topic",
+        "ntfy_server",
+        "idle_timeout_sec",
+        "port",
+        "preload",
+        "preset_id",
+        "log_level",
+        "version",
+        "contract",
+        "allow_no_auth",
+    }
+)
 
 
 def _build_config(cfg: dict) -> DaemonConfig:
     """注入 dict → DaemonConfig。未知键打日志（不再静默丢弃），敏感值不落日志。"""
     config = DaemonConfig()
-    config.auth_token = str(_pick(cfg, *CONFIG_ALIASES["auth_token"], default="") or "")
-    config.ntfy_topic = str(_pick(cfg, *CONFIG_ALIASES["ntfy_topic"], default="") or "")
-    config.ntfy_server = str(
-        _pick(cfg, *CONFIG_ALIASES["ntfy_server"], default="https://ntfy.sh") or "https://ntfy.sh"
-    ).rstrip("/")
+    config.auth_token = str(cfg.get("auth_token") or "")
+    config.ntfy_topic = str(cfg.get("ntfy_topic") or "")
+    config.ntfy_server = str(cfg.get("ntfy_server") or "https://ntfy.sh").rstrip("/")
     try:
-        config.idle_timeout_sec = int(_pick(cfg, *CONFIG_ALIASES["idle_timeout_sec"], default=1800))
+        config.idle_timeout_sec = int(cfg.get("idle_timeout_sec", 1800))
     except (TypeError, ValueError):
         config.idle_timeout_sec = 1800
     try:
-        config.port = int(_pick(cfg, *CONFIG_ALIASES["port"], default=DEFAULT_PORT))
+        config.port = int(cfg.get("port", DEFAULT_PORT))
     except (TypeError, ValueError):
         config.port = DEFAULT_PORT
-    preload = _pick(cfg, *CONFIG_ALIASES["preload"], default=None)
+    preload = cfg.get("preload")
     # preload 必须是 /generate 里同形状的 pipeline 描述对象（含 loader/base）；
     # Daemon 不认识预设 id，Host 已经在注入前把预设展开成对象。
     config.preload = preload if isinstance(preload, dict) and preload.get("loader") else None
     if preload is not None and config.preload is None:
         log("[config] preload 不是 pipeline 描述对象，已忽略（Host 应下发 {loader, base, ...}）")
-    config.preset_id = _pick(cfg, *CONFIG_ALIASES["preset_id"], default=None)
-    config.log_level = str(_pick(cfg, *CONFIG_ALIASES["log_level"], default="info") or "info")
-    config.version = str(_pick(cfg, *CONFIG_ALIASES["version"], default="") or "")
-    contract = _pick(cfg, *CONFIG_ALIASES["contract"], default=None)
+    config.preset_id = cfg.get("preset_id")
+    config.log_level = str(cfg.get("log_level") or "info")
+    config.version = str(cfg.get("version") or "")
+    contract = cfg.get("contract")
     config.contract = contract if isinstance(contract, dict) else {}
     if contract is not None and not config.contract:
         log("[config] contract 不是 JSON 对象，已忽略")
     if not config.contract:
         log("[config] WARN 未收到 contract，参数边界回退到内置默认值（兼容旧 Host）")
-    config.allow_no_auth = bool(_pick(cfg, *CONFIG_ALIASES["allow_no_auth"], default=False))
+    config.allow_no_auth = bool(cfg.get("allow_no_auth", False))
     if config.allow_no_auth:
         log("[config] WARN allow_no_auth=true：无 auth_token 也放行请求，仅限本地调试")
     unknown = sorted(set(cfg) - _KNOWN_CONFIG_KEYS)

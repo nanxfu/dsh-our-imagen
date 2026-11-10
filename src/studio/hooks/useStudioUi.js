@@ -2,14 +2,13 @@
  * 工作台界面态域：视图 / 缩放 / 面板形态 / 折叠态 / Toast / 错误 / 剪贴板。
  *
  * 只持有界面状态，不碰业务数据；error 只存 { code, message }，如何展示由组合层决定。
- * 依赖入参：{ t, aliveRef, initialView, initialPanelMode }。
  */
 
 import React from 'react'
 
 import { KAGGLE_INSTALL_COMMAND } from '../../logic/guidance.js'
 
-export function useStudioUi({ t, aliveRef, initialView, initialPanelMode }) {
+export function useStudioUi({ t, initialView, initialPanelMode }) {
   // 初始视图与面板形态可由 props 指定（预览与测试用），由组合层算好后传入。
   const [view, setView] = React.useState(initialView)
   const [advancedOpen, setAdvancedOpen] = React.useState(false)
@@ -36,11 +35,10 @@ export function useStudioUi({ t, aliveRef, initialView, initialPanelMode }) {
     setError(null)
   }
 
+  // Toast 定时消失；卸载时清理定时器，回调不会在卸载后执行。
   React.useEffect(() => {
     if (!toast) return undefined
-    const timer = setTimeout(() => {
-      if (aliveRef.current) setToast(null)
-    }, 2600)
+    const timer = setTimeout(() => setToast(null), 2600)
     return () => clearTimeout(timer)
   }, [toast])
 
@@ -48,7 +46,7 @@ export function useStudioUi({ t, aliveRef, initialView, initialPanelMode }) {
     const value = String(text ?? '').trim()
     if (!value) return
     try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(value)
         showToast(t(okKey))
         return

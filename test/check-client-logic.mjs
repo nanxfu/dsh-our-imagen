@@ -82,7 +82,7 @@ await check('时长格式化', () => {
   assert.equal(logic.formatSeconds(te, 6.2), '6.2s')
 })
 
-await check('任务耗时与焦点任务挑选', () => {
+await check('任务耗时与活跃任务查询', () => {
   const done = { id: 'a', status: 'done', seconds: 6.2 }
   assert.equal(logic.jobElapsed(done, NOW), 6200)
   assert.equal(logic.jobElapsed({ id: 'b', status: 'running', startedAt: at(-4) }, NOW), 4000)
@@ -93,14 +93,9 @@ await check('任务耗时与焦点任务挑选', () => {
       { id: 'job-2', status: 'queued' },
       { id: 'job-1', status: 'done' },
     ],
-    lastJob: { id: 'job-0', status: 'done' },
   }
   assert.equal(logic.activeJobOf(state).id, 'job-2')
   assert.deepEqual(logic.stateJobs({ jobs: [null, { noId: true }, { id: 'x' }] }).map((job) => job.id), ['x'])
-  assert.equal(logic.pickFocusedJob(state, 'job-1')?.id, 'job-1')
-  assert.equal(logic.pickFocusedJob(state, 'job-0')?.id, 'job-0')
-  assert.equal(logic.pickFocusedJob(state, 'missing'), null)
-  assert.equal(logic.pickFocusedJob(state, ''), null)
 })
 
 await check('阶段提示映射到会话态', () => {

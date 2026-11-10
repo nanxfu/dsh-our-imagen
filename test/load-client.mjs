@@ -246,6 +246,7 @@ export async function loadClient(options = {}) {
 
   const saved = {
     document: globalThis.document,
+    window: globalThis.window,
     fetch: globalThis.fetch,
     setTimeout: globalThis.setTimeout,
     setInterval: globalThis.setInterval,
@@ -273,12 +274,19 @@ export async function loadClient(options = {}) {
   }
 
   let registration = null
+  // 浏览器里 window 总是存在且带事件 API：生产代码直接调用即可，不必再写 typeof 防御。
   const fakeWindow = {
     __ModuleLoader__: {
       load(module) {
         registration = module
       },
     },
+    innerWidth: 1280,
+    innerHeight: 800,
+    scrollX: 0,
+    scrollY: 0,
+    addEventListener() {},
+    removeEventListener() {},
   }
 
   const renderer = createRenderer(now)
@@ -294,6 +302,7 @@ export async function loadClient(options = {}) {
       removeEventListener() {},
     }
     globalThis.fetch = fakeFetch
+    globalThis.window = fakeWindow
     globalThis.setTimeout = fakeSetTimeout
     globalThis.setInterval = (fn, ms) => fakeSetTimeout(fn, ms)
     globalThis.clearTimeout = fakeClear
@@ -305,6 +314,7 @@ export async function loadClient(options = {}) {
     installed = false
     globalThis.document = saved.document
     globalThis.fetch = saved.fetch
+    globalThis.window = saved.window
     globalThis.setTimeout = saved.setTimeout
     globalThis.setInterval = saved.setInterval
     globalThis.clearTimeout = saved.clearTimeout

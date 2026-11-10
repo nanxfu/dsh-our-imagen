@@ -10,8 +10,7 @@
  *   node tools/gen-contract-json.mjs --check    # 只比较不写盘；不一致时退出码 1（供 CI/测试复用）
  *
  * 输出约定：UTF-8、LF、2 空格缩进、末尾换行、键序稳定
- * （顶层固定 version→routes→healthPhases→ntfyEvents→limits→errorCodes；
- *   routes / limits 各项 / errorCodes 的子键按字典序排序）。
+ * （顶层固定 version→limits；limits 各项的子键按字典序排序）。
  */
 
 import { readFile, writeFile } from 'node:fs/promises'
@@ -39,9 +38,6 @@ export function buildDaemonContractJson() {
   const contract = daemonContract()
   return {
     version: contract.version,
-    routes: sortByKey(contract.routes),
-    healthPhases: [...contract.healthPhases],
-    ntfyEvents: [...contract.ntfyEvents],
     limits: {
       width: sortByKey(contract.limits.width),
       height: sortByKey(contract.limits.height),
@@ -53,7 +49,6 @@ export function buildDaemonContractJson() {
       negativePrompt: sortByKey(contract.limits.negativePrompt),
       historyTool: sortByKey(contract.limits.historyTool),
     },
-    errorCodes: sortByKey(contract.errorCodes),
   }
 }
 

@@ -606,7 +606,7 @@ function fallbackTranslate(lang) {
 }
 function translator(props) {
   if (props && typeof props.t === "function") return props.t;
-  return fallbackTranslate(typeof document === "undefined" ? "en" : document.documentElement.lang);
+  return fallbackTranslate(document.documentElement.lang);
 }
 function localized(t, key) {
   const value = t(key);
@@ -773,7 +773,6 @@ var TIMEOUTS = {
 
 // src/api.js
 function apiUrl(relative) {
-  if (typeof document === "undefined") return relative;
   return new URL(relative, document.baseURI).toString();
 }
 function routePath(name) {
@@ -889,7 +888,6 @@ function useHostState() {
   });
   import_react.default.useEffect(() => {
     aliveRef.current = true;
-    let stopped = false;
     let timer = null;
     const clear = () => {
       if (timer !== null) {
@@ -899,10 +897,9 @@ function useHostState() {
     };
     const tick = async () => {
       timer = null;
-      if (stopped) return;
-      if (typeof document !== "undefined" && document.hidden) return;
+      if (document.hidden) return;
       const result = await fetchState();
-      if (stopped || !aliveRef.current) return;
+      if (!aliveRef.current) return;
       let delay = TIMEOUTS.clientStatePollMs;
       if (result.ok && result.data && typeof result.data === "object") {
         setState(result.data);
@@ -914,7 +911,7 @@ function useHostState() {
       timer = setTimeout(tick, delay);
     };
     const onVisible = () => {
-      if (typeof document !== "undefined" && document.hidden) {
+      if (document.hidden) {
         clear();
         return;
       }
@@ -926,23 +923,19 @@ function useHostState() {
       tick();
     };
     tick();
-    if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
-      stopped = true;
       aliveRef.current = false;
       clear();
       refreshRef.current = () => {
       };
-      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
   const refresh = import_react.default.useCallback(() => {
     refreshRef.current();
   }, []);
-  const patch = import_react.default.useCallback((partial) => {
-    setState((prev) => prev ? { ...prev, ...partial } : prev);
-  }, []);
-  return { state, error, refresh, patch };
+  return { state, error, refresh };
 }
 
 // src/components/StatusChip.js
@@ -1260,37 +1253,29 @@ function ratioLabel(t, ratioId) {
   return ratioId || t("studio.chat.ratioAuto");
 }
 function ChatPanel(props) {
-  const {
-    t,
-    patchForm,
-    sending,
-    messages,
-    interpreting,
-    onSend,
-    onGenerateIntent,
-    onResolveClarify,
-    onClearThread,
-    onOpenMessage,
-    mode,
-    setMode
-  } = props;
+  const { t, ui, form, chat, library, actions } = props;
+  const { panelMode: mode, setPanelMode: setMode } = ui;
+  const { patchForm } = form;
+  const { messages, interpreting, interpret, generateIntent, resolveClarify, clearThread } = chat;
+  const { openMessage: openImage } = library;
+  const { sending } = actions;
   const [draft, setDraft] = import_react2.default.useState("");
   const threadRef = import_react2.default.useRef(null);
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
   const lastStage = lastMessage && lastMessage.stage || "";
   import_react2.default.useEffect(() => {
     const node = threadRef.current;
-    if (node && typeof node.scrollTo === "function") node.scrollTo({ top: node.scrollHeight });
+    if (node) node.scrollTo({ top: node.scrollHeight });
   }, [messages.length, lastStage, interpreting]);
   function send() {
     const text = draft.trim();
     if (!text || sending || interpreting) return;
     setDraft("");
-    onSend(text);
+    interpret(text);
   }
   function openMessage(message) {
-    if (typeof message.onOpen === "function") message.onOpen();
-    else if (typeof onOpenMessage === "function" && message.imagePath) onOpenMessage(message.imagePath);
+    if (message.onOpen) message.onOpen();
+    else if (message.imagePath) openImage(message.imagePath);
   }
   function renderIntent(message) {
     const clarify = message.clarify;
@@ -1305,12 +1290,12 @@ function ChatPanel(props) {
             {
               type: "button",
               className: "ofs-suggestion",
-              onClick: () => onResolveClarify(message.id, clarify.field, option),
+              onClick: () => resolveClarify(message.id, clarify.field, option),
               children: isRatio ? option : styleLabel(t, option)
             },
             option
           )),
-          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", className: "ofs-suggestion", onClick: () => onResolveClarify(message.id, clarify.field, ""), children: t("studio.chat.clarify.auto") })
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", className: "ofs-suggestion", onClick: () => resolveClarify(message.id, clarify.field, ""), children: t("studio.chat.clarify.auto") })
         ] })
       ] }, message.id);
     }
@@ -1328,7 +1313,7 @@ function ChatPanel(props) {
         {
           type: "button",
           className: "ofs-btn is-primary ofs-intent-go",
-          onClick: () => onGenerateIntent(message),
+          onClick: () => generateIntent(message),
           disabled: sending,
           children: sending ? t("studio.generating") : t("studio.chat.intent.generate")
         }
@@ -1426,7 +1411,7 @@ function ChatPanel(props) {
       }
     ),
     /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-chat-dock", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "ofs-chat-tools", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", className: "ofs-chip", onClick: onClearThread, disabled: messages.length === 0, children: t("studio.chat.clear") }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "ofs-chat-tools", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", className: "ofs-chip", onClick: clearThread, disabled: messages.length === 0, children: t("studio.chat.clear") }) }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-chat-composer", children: [
         /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
           "textarea",
@@ -1467,18 +1452,10 @@ function ChatPanel(props) {
 var import_react3 = __toESM(require("react"), 1);
 var import_jsx_runtime3 = require("react/jsx-runtime");
 function Filmstrip(props) {
-  const {
-    t,
-    batches,
-    activeJob,
-    selected,
-    onSelect,
-    elapsedMs,
-    onSessionStart,
-    sessionState,
-    sessionQueued,
-    onOpenGallery
-  } = props;
+  const { t, ui, compute, library, elapsedMs } = props;
+  const { setView } = ui;
+  const { activeJob, sessionState, queued: sessionQueued, startSession: startSession2 } = compute;
+  const { batches, selected, selectImage } = library;
   const selectedPath = selected && selected.image ? selected.image.path : "";
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("footer", { className: "ofs-filmstrip", children: [
     /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "ofs-roll", children: [
@@ -1495,7 +1472,7 @@ function Filmstrip(props) {
         ] }),
         /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { children: [
           sessionState === "absent" ? t("studio.filmstrip.offline") : t("studio.filmstrip.empty"),
-          sessionState === "absent" ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "ofs-link", onClick: onSessionStart, children: t("studio.compute.start") }) : null
+          sessionState === "absent" ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "ofs-link", onClick: startSession2, children: t("studio.compute.start") }) : null
         ] })
       ] }) : null,
       batches.map((batch) => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "ofs-batch", children: [
@@ -1507,7 +1484,7 @@ function Filmstrip(props) {
             {
               type: "button",
               className: active ? "ofs-thumb is-on" : "ofs-thumb",
-              onClick: () => onSelect(entry),
+              onClick: () => selectImage(entry),
               title: batch.prompt || path,
               children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("img", { src: entry.image.url, alt: entry.image.file || "thumb", loading: "lazy" })
             },
@@ -1524,7 +1501,7 @@ function Filmstrip(props) {
         ] })
       ] }, batch.key))
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "ofs-filmstrip-side", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("button", { type: "button", className: "ofs-filmstrip-link", onClick: onOpenGallery, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "ofs-filmstrip-side", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("button", { type: "button", className: "ofs-filmstrip-link", onClick: () => setView("gallery"), children: [
       /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Icon, { name: "images", size: 15 }),
       t("studio.gallery.title"),
       /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(Icon, { name: "chevronRight", size: 13 })
@@ -1836,39 +1813,43 @@ function guidanceDetailOf(input) {
 // src/studio/GuidanceCard.jsx
 var import_jsx_runtime5 = require("react/jsx-runtime");
 function GuidanceCard(props) {
-  const { t, kind, detail, onReset, onWake, onRecheck, onRetry, onClose, onCopyCommand } = props;
+  const { t, guidance, compute, actions, ui } = props;
+  const { kind, detail, dismiss } = guidance;
+  const { resetToSafe, retryFocusedJob } = actions;
+  const { startSession: startSession2, runProbe: runProbe2 } = compute;
+  const { copyInstallCommand } = ui;
   if (!kind) return null;
   const cards = {
     oom: {
       title: t("studio.guidance.oom.title"),
-      actions: [{ key: "reset", label: t("studio.guidance.oom.action"), run: onReset }]
+      actions: [{ key: "reset", label: t("studio.guidance.oom.action"), run: resetToSafe }]
     },
     sleep: {
       title: t("studio.guidance.sleep.title"),
-      actions: [{ key: "wake", label: t("studio.guidance.sleep.action"), run: onWake }]
+      actions: [{ key: "wake", label: t("studio.guidance.sleep.action"), run: startSession2 }]
     },
     auth: {
       title: t("studio.guidance.auth.title"),
       actions: [
         { key: "settings", label: t("studio.guidance.auth.action"), href: KAGGLE_SETTINGS_URL },
-        { key: "recheck", label: t("studio.guidance.cli.action"), run: onRecheck }
+        { key: "recheck", label: t("studio.guidance.cli.action"), run: runProbe2 }
       ]
     },
     cli: {
       title: t("studio.guidance.cli.title"),
       command: KAGGLE_INSTALL_COMMAND,
       actions: [
-        { key: "copy", label: t("studio.guidance.cli.copy"), run: onCopyCommand },
-        { key: "recheck", label: t("studio.guidance.cli.action"), run: onRecheck }
+        { key: "copy", label: t("studio.guidance.cli.copy"), run: copyInstallCommand },
+        { key: "recheck", label: t("studio.guidance.cli.action"), run: runProbe2 }
       ]
     },
     session: {
       title: t("studio.guidance.session.title"),
-      actions: [{ key: "wake", label: t("studio.guidance.sleep.action"), run: onWake }]
+      actions: [{ key: "wake", label: t("studio.guidance.sleep.action"), run: startSession2 }]
     },
     generate: {
       title: t("studio.guidance.generic.title"),
-      actions: [{ key: "retry", label: t("studio.guidance.generic.action"), run: onRetry }]
+      actions: [{ key: "retry", label: t("studio.guidance.generic.action"), run: retryFocusedJob }]
     },
     generic: {
       title: t("studio.guidance.other.title"),
@@ -1876,7 +1857,7 @@ function GuidanceCard(props) {
     }
   };
   const card = cards[kind] || cards.generic;
-  const actions = card.actions.filter((action) => action.href ? true : typeof action.run === "function");
+  const actionList = card.actions.filter((action) => action.href ? true : typeof action.run === "function");
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance", role: "alert", children: [
     /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-guidance-icon", children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Icon, { name: "alert", size: 15 }) }),
     /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance-body", children: [
@@ -1884,7 +1865,7 @@ function GuidanceCard(props) {
       card.command ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("code", { className: "ofs-guidance-command", children: card.command }) : null,
       detail ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { className: "ofs-guidance-detail", title: detail, children: detail }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance-actions", children: [
-        actions.map((action) => action.href ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+        actionList.map((action) => action.href ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
           "a",
           {
             className: "ofs-chip is-on",
@@ -1895,7 +1876,7 @@ function GuidanceCard(props) {
           },
           action.key
         ) : /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: action.run, children: action.label }, action.key)),
-        typeof onClose === "function" ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip", onClick: onClose, children: t("studio.guidance.close") }) : null
+        dismiss ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip", onClick: dismiss, children: t("studio.guidance.close") }) : null
       ] })
     ] })
   ] });
@@ -1947,13 +1928,12 @@ function Tooltip(props) {
     setOpen(false);
   }, []);
   const measure = import_react6.default.useCallback(() => {
-    if (typeof window === "undefined" || typeof document === "undefined") return;
     const node = triggerRef.current;
-    if (!node || typeof node.getBoundingClientRect !== "function") return;
+    if (!node) return;
     const anchor = node.getBoundingClientRect();
-    const app = typeof node.closest === "function" ? node.closest(".ofs-app") : null;
+    const app = node.closest(".ofs-app");
     let frame = null;
-    if (app && typeof app.getBoundingClientRect === "function") {
+    if (app) {
       frame = app.getBoundingClientRect();
     } else if (Number(window.innerWidth) > 0) {
       frame = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
@@ -1963,30 +1943,24 @@ function Tooltip(props) {
   import_react6.default.useEffect(() => {
     if (!open) return void 0;
     measure();
-    if (typeof window === "undefined" || typeof window.addEventListener !== "function") return void 0;
     const remeasure = () => measure();
     const onKey = (event) => {
       if (event.key === "Escape") close();
     };
     window.addEventListener("scroll", remeasure, true);
     window.addEventListener("resize", remeasure);
-    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
-      document.addEventListener("keydown", onKey);
-    }
+    document.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("scroll", remeasure, true);
       window.removeEventListener("resize", remeasure);
-      if (typeof document !== "undefined" && typeof document.removeEventListener === "function") {
-        document.removeEventListener("keydown", onKey);
-      }
+      document.removeEventListener("keydown", onKey);
     };
   }, [open, measure, close]);
   import_react6.default.useEffect(() => {
     if (!pinned) return void 0;
-    if (typeof document === "undefined" || typeof document.addEventListener !== "function") return void 0;
     const onDown = (event) => {
       const node = triggerRef.current;
-      if (node && event && event.target && typeof node.contains === "function" && node.contains(event.target)) return;
+      if (node && event && event.target && node.contains(event.target)) return;
       close();
     };
     document.addEventListener("pointerdown", onDown);
@@ -2079,31 +2053,32 @@ function Fieldset(props) {
   ] });
 }
 function Rail(props) {
+  const { t, ui, form, actions } = props;
   const {
-    t,
-    form,
+    advancedOpen,
+    setAdvancedOpen,
+    negativeOpen,
+    setNegativeOpen,
+    panelMode: mode,
+    setPanelMode: setMode
+  } = ui;
+  const {
+    form: fields,
     patchForm,
     styleId,
     applyStyle,
     ratioId,
     applyRatio,
-    advancedOpen,
-    setAdvancedOpen,
-    negativeOpen,
-    setNegativeOpen,
-    sending,
-    onGenerate,
     refineGroups,
     refineSource,
     enhancing,
-    onEnhance,
-    onToggleRefine,
-    onInspire,
-    mode,
-    setMode
-  } = props;
-  const promptLength = form.prompt.length;
-  const hasPrompt = form.prompt.trim().length > 0;
+    enhance,
+    toggleRefine,
+    useInspiration
+  } = form;
+  const { sending, generate } = actions;
+  const promptLength = fields.prompt.length;
+  const hasPrompt = fields.prompt.trim().length > 0;
   return /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("aside", { className: "ofs-panel ofs-panel--form", children: [
     /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("header", { className: "ofs-panel-head", children: [
       /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("h2", { children: t("studio.rail.title") }),
@@ -2144,13 +2119,13 @@ function Rail(props) {
                 "textarea",
                 {
                   className: "ofs-composer-input",
-                  value: form.prompt,
+                  value: fields.prompt,
                   maxLength: PROMPT_MAX,
                   placeholder: t("studio.promptPlaceholder"),
                   spellCheck: false,
                   onChange: (event) => patchForm({ prompt: event.target.value }),
                   onKeyDown: (event) => {
-                    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) onGenerate();
+                    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) generate();
                   }
                 }
               ),
@@ -2160,7 +2135,7 @@ function Rail(props) {
                   " / ",
                   PROMPT_MAX
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("button", { type: "button", className: "ofs-text-action", onClick: onEnhance, disabled: enhancing, children: [
+                /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("button", { type: "button", className: "ofs-text-action", onClick: enhance, disabled: enhancing, children: [
                   /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Icon, { name: "expandText", size: 13 }),
                   enhancing ? t("studio.enhance.thinking") : t("studio.enhance.button")
                 ] })
@@ -2173,7 +2148,7 @@ function Rail(props) {
                 {
                   type: "button",
                   className: "ofs-suggestion",
-                  onClick: () => onInspire(t(key)),
+                  onClick: () => useInspiration(t(key)),
                   title: t(key),
                   children: t(`${key}.label`)
                 },
@@ -2192,7 +2167,7 @@ function Rail(props) {
                   {
                     type: "button",
                     className: option.applied ? "ofs-suggestion is-on" : "ofs-suggestion",
-                    onClick: () => onToggleRefine(option.text),
+                    onClick: () => toggleRefine(option.text),
                     "aria-pressed": option.applied,
                     title: option.text,
                     children: option.text
@@ -2257,7 +2232,7 @@ function Rail(props) {
             {
               className: "ofs-row-textarea",
               rows: 3,
-              value: form.negative,
+              value: fields.negative,
               placeholder: t("studio.negativePlaceholder"),
               spellCheck: false,
               onChange: (event) => patchForm({ negative: event.target.value })
@@ -2290,7 +2265,7 @@ function Rail(props) {
                   type: "number",
                   min: 1,
                   max: 60,
-                  value: form.steps,
+                  value: fields.steps,
                   "aria-label": t("studio.steps"),
                   onChange: (event) => patchForm({ steps: Number(event.target.value) })
                 }
@@ -2308,7 +2283,7 @@ function Rail(props) {
                   min: 0,
                   max: 20,
                   step: 0.5,
-                  value: form.cfg,
+                  value: fields.cfg,
                   "aria-label": t("studio.cfg"),
                   onChange: (event) => patchForm({ cfg: Number(event.target.value) })
                 }
@@ -2321,7 +2296,7 @@ function Rail(props) {
                 {
                   type: "text",
                   inputMode: "numeric",
-                  value: form.seed,
+                  value: fields.seed,
                   placeholder: t("studio.random"),
                   "aria-label": t("studio.seed"),
                   onChange: (event) => patchForm({ seed: event.target.value })
@@ -2333,7 +2308,7 @@ function Rail(props) {
               /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
                 "select",
                 {
-                  value: form.count,
+                  value: fields.count,
                   "aria-label": t("studio.count"),
                   onChange: (event) => patchForm({ count: Number(event.target.value) }),
                   children: [1, 2, 3, 4].map((value) => /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("option", { value, children: value }, value))
@@ -2345,7 +2320,7 @@ function Rail(props) {
       ] }) })
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "ofs-panel-foot", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("button", { type: "button", className: "ofs-btn is-primary ofs-generate", onClick: onGenerate, disabled: sending || !hasPrompt, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("button", { type: "button", className: "ofs-btn is-primary ofs-generate", onClick: () => generate(), disabled: sending || !hasPrompt, children: [
         /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Icon, { name: "sparkles", size: 16 }),
         sending ? t("studio.generating") : t("studio.generate")
       ] }),
@@ -2359,7 +2334,12 @@ var import_react8 = __toESM(require("react"), 1);
 var import_jsx_runtime8 = require("react/jsx-runtime");
 var INSPIRE_KEYS2 = ["studio.inspire.1", "studio.inspire.2", "studio.inspire.3", "studio.inspire.4", "studio.inspire.5"];
 function Stage(props) {
-  const { t, selected, activeJob, sessionQueued, onIterate, onReroll, onCopy, zoom, setZoom, isFavorite, onToggleFavorite, onUseExample } = props;
+  const { t, ui, compute, form, library, actions } = props;
+  const { zoom, setZoom, copyPath } = ui;
+  const { activeJob, queued: sessionQueued } = compute;
+  const { useInspiration } = form;
+  const { selected, isFavorite, toggleFavorite } = library;
+  const { iterate, reroll } = actions;
   const image = selected && selected.image ? selected.image : null;
   const item = selected && selected.item || null;
   const params = item && item.params || null;
@@ -2371,7 +2351,7 @@ function Stage(props) {
       if (event.key === "Escape") setZoom(false);
     }
     document.addEventListener("keydown", onKey);
-    if (closeRef.current && typeof closeRef.current.focus === "function") closeRef.current.focus();
+    if (closeRef.current) closeRef.current.focus();
     return () => document.removeEventListener("keydown", onKey);
   }, [zoom]);
   if (!image) {
@@ -2382,7 +2362,7 @@ function Stage(props) {
         /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-muted", children: t("studio.stage.emptyHint") }),
         /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-examples", children: [
           /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
-          INSPIRE_KEYS2.map((key) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-example", onClick: () => onUseExample(t(key)), title: t(key), children: t(`${key}.label`) }, key))
+          INSPIRE_KEYS2.map((key) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
         ] })
       ] }),
       activeJob ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-stage-progress", role: "status", children: [
@@ -2398,13 +2378,13 @@ function Stage(props) {
       /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-figure-button", onClick: () => setZoom(true), title: t("studio.stage.zoom"), children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("img", { src: image.url, alt: image.file || "image", className: "ofs-image" }) }),
       /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-figure-tools", children: [
         /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: () => setZoom(true), title: t("studio.stage.zoom"), "aria-label": t("studio.stage.zoom"), children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "expand", size: 16 }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: () => onCopy(copyTarget), title: t("studio.action.copyPath"), "aria-label": t("studio.action.copyPath"), children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "copy", size: 16 }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: () => copyPath(copyTarget), title: t("studio.action.copyPath"), "aria-label": t("studio.action.copyPath"), children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "copy", size: 16 }) }),
         /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
           "button",
           {
             type: "button",
             className: favorite ? "ofs-glass-btn is-on" : "ofs-glass-btn",
-            onClick: () => onToggleFavorite(image.path || image.file),
+            onClick: () => toggleFavorite(image.path || image.file),
             title: favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
             "aria-label": favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
             "aria-pressed": favorite,
@@ -2436,15 +2416,15 @@ function Stage(props) {
       ] })
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-dock", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => onIterate(selected), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => iterate(selected), children: [
         /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "focus", size: 15 }),
         t("studio.action.iterate")
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => onReroll(selected), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => reroll(selected), children: [
         /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "reroll", size: 15 }),
         t("studio.action.reroll")
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => onCopy(copyTarget), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => copyPath(copyTarget), children: [
         /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "copy", size: 15 }),
         t("studio.action.copyPath")
       ] })
@@ -2575,7 +2555,23 @@ function sessionPill(t, sessionState) {
   return { tone: "idle", label: t("studio.compute.offline") };
 }
 function TopBar(props) {
-  const { t, view, setView, sessionState, session, quota, presets, form, patchForm, busy, probing, probe, probeReport, onStart, onStop, onProbe, onRefresh, onOpenFolder } = props;
+  const { t, ui, compute, library } = props;
+  const { form: fields, patchForm } = props.form;
+  const { view, setView } = ui;
+  const {
+    sessionState,
+    session,
+    quota,
+    presets,
+    busy,
+    probing,
+    probe,
+    probeReport,
+    startSession: startSession2,
+    stopSession: stopSession2,
+    runProbe: runProbe2,
+    openFolder
+  } = compute;
   const pill = sessionPill(t, sessionState);
   const [open, setOpen] = import_react11.default.useState(false);
   const wrapRef = import_react11.default.useRef(null);
@@ -2600,7 +2596,7 @@ function TopBar(props) {
   const quotaUsed = quota && Number.isFinite(quota.usedHours) ? quota.usedHours : null;
   const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null;
   const notReady = sessionState === "absent" || sessionState === "error";
-  const activePreset = presets.find((item) => item.id === form.presetId) || null;
+  const activePreset = presets.find((item) => item.id === fields.presetId) || null;
   const probeInfo = probeStatusOf(probe || probeReport && probeReport.probe);
   const probeFailed = probeReport && probeReport.status && probeReport.status !== "ok" ? probeReport : null;
   const probeNote = probeInfo && probeInfo.notes.length > 0 ? probeInfo.notes[0] : "";
@@ -2627,18 +2623,18 @@ function TopBar(props) {
       ] })
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-grow" }),
-    onOpenFolder ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+    openFolder ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
       "button",
       {
         type: "button",
         className: "ofs-icon-btn",
-        onClick: onOpenFolder,
+        onClick: openFolder,
         title: t("studio.action.openFolder"),
         "aria-label": t("studio.action.openFolder"),
         children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "folder", size: 16 })
       }
     ) : null,
-    onRefresh ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", className: "ofs-icon-btn", onClick: onRefresh, title: t("studio.refresh"), "aria-label": t("studio.refresh"), children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "refresh", size: 16 }) }) : null,
+    library.loadHistory ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", className: "ofs-icon-btn", onClick: library.loadHistory, title: t("studio.refresh"), "aria-label": t("studio.refresh"), children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "refresh", size: 16 }) }) : null,
     /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-pill-wrap", ref: wrapRef, children: [
       /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
         "button",
@@ -2709,11 +2705,11 @@ function TopBar(props) {
           ] }) : null,
           probeNote ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { title: probeInfo.notes.join(" · "), children: probeNote }) : null
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: onStart, disabled: !!busy || !notReady, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: startSession2, disabled: !!busy || !notReady, children: [
           /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "cloud", size: 15 }),
           t("studio.compute.start")
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: onStop, disabled: !!busy || sessionState === "absent", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: stopSession2, disabled: !!busy || sessionState === "absent", children: [
           /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "clock", size: 15 }),
           t("studio.compute.stop")
         ] }),
@@ -2723,7 +2719,7 @@ function TopBar(props) {
             type: "button",
             role: "menuitem",
             className: "ofs-popover-row",
-            onClick: onProbe,
+            onClick: runProbe2,
             disabled: !!busy || probing,
             "aria-busy": probing,
             children: [
@@ -2740,7 +2736,7 @@ function TopBar(props) {
       /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
         "select",
         {
-          value: form.presetId,
+          value: fields.presetId,
           disabled: presets.length === 0,
           "aria-label": t("studio.preset"),
           onChange: (event) => {
@@ -2749,10 +2745,10 @@ function TopBar(props) {
             patchForm({
               presetId: id,
               ...next ? {
-                width: next.size || form.width,
-                height: next.size || form.height,
-                steps: next.steps ?? form.steps,
-                cfg: next.cfg ?? form.cfg
+                width: next.size || fields.width,
+                height: next.size || fields.height,
+                steps: next.steps ?? fields.steps,
+                cfg: next.cfg ?? fields.cfg
               } : {}
             });
           },
@@ -2903,7 +2899,7 @@ function intentPrompt(intent, capsules) {
 }
 
 // src/studio/hooks/useChatThread.js
-function useChatThread({ state, t, isEn, aliveRef, form, patchForm, generate }) {
+function useChatThread({ t, isEn, alive, state, form, generate }) {
   const [messages, setMessages] = import_react12.default.useState([]);
   const [interpreting, setInterpreting] = import_react12.default.useState(false);
   const messageSeq = import_react12.default.useRef(0);
@@ -2953,9 +2949,9 @@ function useChatThread({ state, t, isEn, aliveRef, form, patchForm, generate }) 
     const previousPrompt = lastIntentPrompt(messages);
     pushMessages([{ role: "user", text: value }]);
     setInterpreting(true);
-    const result = await parseIntentRequest({ text: value, previousPrompt, locale: isEn ? "en" : "zh" });
+    const result = await alive(parseIntentRequest({ text: value, previousPrompt, locale: isEn ? "en" : "zh" }));
     interpretingRef.current = false;
-    if (!aliveRef.current) return;
+    if (!result) return;
     setInterpreting(false);
     if (result.ok && result.data && typeof result.data.prompt === "string") {
       const data = result.data;
@@ -2990,11 +2986,11 @@ function useChatThread({ state, t, isEn, aliveRef, form, patchForm, generate }) 
       overrides.height = ratio.height;
     }
     const previous = state && state.lastJob && state.lastJob.params || null;
-    if (previous && form.seed === "" && Number.isFinite(previous.seed) && previous.seed >= 0) {
+    if (previous && form.form.seed === "" && Number.isFinite(previous.seed) && previous.seed >= 0) {
       overrides.seed = previous.seed;
     }
     const patch = intentFormPatch(message, DEFAULT_RATIOS);
-    if (Object.keys(patch).length > 0) patchForm(patch);
+    if (Object.keys(patch).length > 0) form.patchForm(patch);
     await generate(overrides, { pushUser: false });
   }
   function clearThread() {
@@ -3013,84 +3009,83 @@ function useChatThread({ state, t, isEn, aliveRef, form, patchForm, generate }) 
 
 // src/studio/hooks/useSessionControl.js
 var import_react13 = __toESM(require("react"), 1);
-function useSessionControl({ state, refresh, hostError, t, aliveRef, error, setError, showToast, fail }) {
+function useSessionControl({ t, host, ui, alive }) {
   const [busy, setBusy] = import_react13.default.useState("");
   const [probing, setProbing] = import_react13.default.useState(false);
   const [probeReport, setProbeReport] = import_react13.default.useState(null);
+  const state = host.state;
   const session = state && state.session || null;
   const sessionState = session && session.state || "absent";
-  const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : [];
-  const defaultPreset = state && state.defaultPreset || "";
   const activeJob = activeJobOf(state);
   const focusedJob = activeJob || state && state.lastJob || stateJobs(state)[0] || null;
+  const queued = sessionState === "provisioning" || Boolean(activeJob && (activeJob.status === "queued" || activeJob.status === "waiting-session"));
   const hostErrorKeyRef = import_react13.default.useRef("");
   import_react13.default.useEffect(() => {
-    if (!hostError) return;
-    const key = `${hostError.code}|${hostError.message ?? ""}`;
+    if (!host.error) return;
+    const key = `${host.error.code}|${host.error.message ?? ""}`;
     if (hostErrorKeyRef.current === key) return;
     hostErrorKeyRef.current = key;
-    setError((prev) => prev || { code: hostError.code, message: hostError.message ?? "" });
-  }, [hostError]);
+    ui.setError((prev) => prev || { code: host.error.code, message: host.error.message ?? "" });
+  }, [host.error]);
   async function startSession2(presetId) {
     if (busy) return;
     setBusy("start");
-    const result = await startSession(presetId);
-    if (!aliveRef.current) return;
+    const result = await alive(startSession(presetId));
+    if (!result) return;
     setBusy("");
-    if (!result.ok) fail(result.code, result.message);
-    refresh();
+    if (!result.ok) ui.fail(result.code, result.message);
+    host.refresh();
   }
   async function stopSession2() {
     if (busy) return;
     setBusy("stop");
-    const result = await stopSession();
-    if (!aliveRef.current) return;
+    const result = await alive(stopSession());
+    if (!result) return;
     setBusy("");
-    if (!result.ok) fail(result.code, result.message);
-    refresh();
+    if (!result.ok) ui.fail(result.code, result.message);
+    host.refresh();
   }
   async function openFolder() {
-    const result = await revealOutput();
-    if (!aliveRef.current) return;
-    if (!result.ok) showToast(t("studio.toast.revealFailed"));
+    const result = await alive(revealOutput());
+    if (!result) return;
+    if (!result.ok) ui.showToast(t("studio.toast.revealFailed"));
   }
   async function runProbe2() {
     if (probing) return;
     setProbing(true);
-    const controller = typeof AbortController === "function" ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), TIMEOUTS.clientProbeMs) : null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUTS.clientProbeMs);
     let result;
     try {
-      result = await runProbe(controller ? controller.signal : void 0);
+      result = await alive(runProbe(controller.signal));
     } finally {
-      if (timer !== null) clearTimeout(timer);
+      clearTimeout(timer);
     }
-    if (!aliveRef.current) return;
+    if (!result) return;
     setProbing(false);
     if (!result.ok) {
       setProbeReport({ status: result.code === "timeout" ? "timeout" : "failed", message: result.message, probe: null });
-      showToast(result.code === "timeout" ? t("studio.probe.timeout") : t("studio.probe.failed"));
+      ui.showToast(result.code === "timeout" ? t("studio.probe.timeout") : t("studio.probe.failed"));
       return;
     }
     const outcome = probeOutcomeOf(result.data);
     if (outcome.ok) {
       setProbeReport({ status: "ok", message: "", probe: outcome.probe });
-      if (error && (error.code === "cli_missing" || error.code === "auth_required")) setError(null);
-      showToast(t("studio.probe.ok"));
+      if (ui.error && (ui.error.code === "cli_missing" || ui.error.code === "auth_required")) ui.setError(null);
+      ui.showToast(t("studio.probe.ok"));
     } else {
       setProbeReport({ status: "failed", message: outcome.detail, probe: outcome.probe });
-      if (outcome.code === "cli_missing" || outcome.code === "auth_required") fail(outcome.code, outcome.detail);
-      else showToast(t("studio.probe.failed"));
+      if (outcome.code === "cli_missing" || outcome.code === "auth_required") ui.fail(outcome.code, outcome.detail);
+      else ui.showToast(t("studio.probe.failed"));
     }
-    refresh();
+    host.refresh();
   }
   return {
     session,
     sessionState,
-    presets,
-    defaultPreset,
     activeJob,
     focusedJob,
+    queued,
     quota: state && state.probe && state.probe.quota || null,
     probe: state && state.probe || null,
     busy,
@@ -3219,7 +3214,8 @@ var EMPTY_FORM = {
   count: 1,
   styleId: ""
 };
-function useStudioForm({ presets, defaultPreset, t, isEn, aliveRef, showToast, fail, initialPrompt }) {
+function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
+  const { presets, defaultPreset } = preset;
   const [form, setForm] = import_react14.default.useState(() => ({
     ...EMPTY_FORM,
     prompt: initialPrompt
@@ -3241,18 +3237,18 @@ function useStudioForm({ presets, defaultPreset, t, isEn, aliveRef, showToast, f
   import_react14.default.useEffect(() => {
     if (presets.length === 0) return;
     setForm((prev) => {
-      if (prev.presetId && presets.some((item) => item.id === prev.presetId)) return prev;
-      const initial = presets.some((item) => item.id === defaultPreset) ? defaultPreset : presets[0].id;
-      const preset = presets.find((item) => item.id === initial);
-      if (!preset) return prev;
-      const size = clampSize(preset.size);
+      if (prev.presetId && presets.some((item2) => item2.id === prev.presetId)) return prev;
+      const initial = presets.some((item2) => item2.id === defaultPreset) ? defaultPreset : presets[0].id;
+      const item = presets.find((option) => option.id === initial);
+      if (!item) return prev;
+      const size = clampSize(item.size);
       return {
         ...prev,
         presetId: initial,
         width: size,
         height: size,
-        steps: clampInt(preset.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
-        cfg: clampNumber(preset.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0)
+        steps: clampInt(item.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
+        cfg: clampNumber(item.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0)
       };
     });
   }, [presets.length, defaultPreset]);
@@ -3276,16 +3272,16 @@ function useStudioForm({ presets, defaultPreset, t, isEn, aliveRef, showToast, f
   async function enhance() {
     if (enhancing) return;
     if (!form.prompt.trim()) {
-      showToast(t("studio.promptHint"));
+      ui.showToast(t("studio.promptHint"));
       return;
     }
     setEnhancing(true);
-    const result = await enhancePromptRequest({
+    const result = await alive(enhancePromptRequest({
       prompt: form.prompt,
       presetId: form.presetId,
       locale: isEn ? "en" : "zh"
-    });
-    if (!aliveRef.current) return;
+    }));
+    if (!result) return;
     setEnhancing(false);
     if (result.ok && result.data && Array.isArray(result.data.groups)) {
       const groups = result.data.groups.filter((group) => group && Array.isArray(group.options) && group.options.length > 0);
@@ -3293,7 +3289,7 @@ function useStudioForm({ presets, defaultPreset, t, isEn, aliveRef, showToast, f
       setRefineSource(result.data.source === "model" ? "model" : "local");
       return;
     }
-    fail(result.code, result.message);
+    ui.fail(result.code, result.message);
   }
   function toggleRefine(term) {
     patchForm({ prompt: toggleRefineTerm(form.prompt, term, refineSeparator(form.prompt)) });
@@ -3327,7 +3323,7 @@ ${value}` : value });
 
 // src/studio/hooks/useStudioUi.js
 var import_react15 = __toESM(require("react"), 1);
-function useStudioUi({ t, aliveRef, initialView, initialPanelMode }) {
+function useStudioUi({ t, initialView, initialPanelMode }) {
   const [view, setView] = import_react15.default.useState(initialView);
   const [advancedOpen, setAdvancedOpen] = import_react15.default.useState(false);
   const [negativeOpen, setNegativeOpen] = import_react15.default.useState(false);
@@ -3349,16 +3345,14 @@ function useStudioUi({ t, aliveRef, initialView, initialPanelMode }) {
   }
   import_react15.default.useEffect(() => {
     if (!toast) return void 0;
-    const timer = setTimeout(() => {
-      if (aliveRef.current) setToast(null);
-    }, 2600);
+    const timer = setTimeout(() => setToast(null), 2600);
     return () => clearTimeout(timer);
   }, [toast]);
   async function copyText(text, okKey) {
     const value = String(text ?? "").trim();
     if (!value) return;
     try {
-      if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(value);
         showToast(t(okKey));
         return;
@@ -3406,33 +3400,31 @@ function flattenHistory(items) {
   }
   return images;
 }
-function useWorkLibrary({ state, t, aliveRef, showToast, fail, setView, setZoom }) {
+function useWorkLibrary({ t, alive, ui, state }) {
   const [selectedPath, setSelectedPath] = import_react16.default.useState("");
   const [historyItems, setHistoryItems] = import_react16.default.useState([]);
-  const [historyDone, setHistoryDone] = import_react16.default.useState(false);
   const [favorites, setFavorites] = import_react16.default.useState([]);
   const loadHistory = import_react16.default.useCallback(async () => {
-    const result = await fetchHistory(60);
-    if (!aliveRef.current) return;
+    const result = await alive(fetchHistory(60));
+    if (!result) return;
     if (result.ok && result.data && Array.isArray(result.data.items)) {
       setHistoryItems(result.data.items.filter(Boolean));
     } else if (!result.ok) {
-      fail(result.code, result.message);
+      ui.fail(result.code, result.message);
     }
-    setHistoryDone(true);
-  }, []);
+  }, [alive]);
   import_react16.default.useEffect(() => {
     loadHistory();
   }, [loadHistory]);
   const loadLibrary = import_react16.default.useCallback(async () => {
-    const result = await fetchLibrary();
-    if (!aliveRef.current) return;
+    const result = await alive(fetchLibrary());
+    if (!result) return;
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
       setFavorites(result.data.favorites);
     } else if (!result.ok) {
-      fail(result.code, result.message);
+      ui.fail(result.code, result.message);
     }
-  }, []);
+  }, [alive]);
   import_react16.default.useEffect(() => {
     loadLibrary();
   }, [loadLibrary]);
@@ -3443,7 +3435,7 @@ function useWorkLibrary({ state, t, aliveRef, showToast, fail, setView, setZoom 
     const images = Array.isArray(finished.output?.images) ? finished.output.images : [];
     if (images.length === 0) return;
     firstImageRef.current = true;
-    showToast(t("studio.toast.firstImage"));
+    ui.showToast(t("studio.toast.firstImage"));
   }, [finished && finished.id]);
   const lastJobId = state && state.lastJob ? `${state.lastJob.id}:${state.lastJob.finishedAt ?? ""}` : "";
   const lastSeenRef = import_react16.default.useRef("");
@@ -3475,29 +3467,29 @@ function useWorkLibrary({ state, t, aliveRef, showToast, fail, setView, setZoom 
     if (!target) return;
     const next = !isFavorite(target);
     setFavorites((prev) => next ? [...prev, target] : prev.filter((item) => item !== target));
-    const result = await favoriteImage(target, next);
-    if (!aliveRef.current) return;
+    const result = await alive(favoriteImage(target, next));
+    if (!result) return;
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
       setFavorites(result.data.favorites);
-      showToast(next ? t("studio.toast.favorited") : t("studio.toast.unfavorited"));
+      ui.showToast(next ? t("studio.toast.favorited") : t("studio.toast.unfavorited"));
       return;
     }
     setFavorites((prev) => next ? prev.filter((item) => item !== target) : [...prev, target]);
-    fail(result.code, result.message);
+    ui.fail(result.code, result.message);
   }
   async function deleteImages2(paths) {
     const list = (Array.isArray(paths) ? paths : []).filter(Boolean);
     if (list.length === 0) return;
-    const result = await deleteImages(list);
-    if (!aliveRef.current) return;
+    const result = await alive(deleteImages(list));
+    if (!result) return;
     if (!result.ok) {
-      fail(result.code, result.message);
+      ui.fail(result.code, result.message);
       return null;
     }
     const removed = Array.isArray(result.data.removed) ? result.data.removed : [];
-    if (removed.length > 0) showToast(t("studio.toast.deleted"));
+    if (removed.length > 0) ui.showToast(t("studio.toast.deleted"));
     if (Array.isArray(result.data.failed) && result.data.failed.length > 0) {
-      fail("delete_failed", t("studio.error.deleteFailed"));
+      ui.fail("delete_failed", t("studio.error.deleteFailed"));
     }
     setSelectedPath("");
     await Promise.all([loadHistory(), loadLibrary()]);
@@ -3506,8 +3498,8 @@ function useWorkLibrary({ state, t, aliveRef, showToast, fail, setView, setZoom 
   function zoomImage(entry) {
     if (!entry) return;
     selectImage(entry);
-    setView("studio");
-    setZoom(true);
+    ui.setView("studio");
+    ui.setZoom(true);
   }
   async function exportPaths(paths) {
     const list = (Array.isArray(paths) ? paths : []).filter(Boolean);
@@ -3519,14 +3511,14 @@ function useWorkLibrary({ state, t, aliveRef, showToast, fail, setView, setZoom 
     }
     const text = list.map((item) => absoluteOf.get(item) || item).join("\n");
     try {
-      if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
-        showToast(t("studio.toast.exported"));
+        ui.showToast(t("studio.toast.exported"));
         return;
       }
     } catch {
     }
-    showToast(text);
+    ui.showToast(text);
   }
   return {
     gallery,
@@ -3540,71 +3532,46 @@ function useWorkLibrary({ state, t, aliveRef, showToast, fail, setView, setZoom 
     deleteImages: deleteImages2,
     exportPaths,
     zoomImage,
-    historyDone,
     loadHistory
   };
 }
 
 // src/studio/useStudio.js
+function useAlive() {
+  const ref = import_react17.default.useRef(true);
+  import_react17.default.useEffect(() => {
+    ref.current = true;
+    return () => {
+      ref.current = false;
+    };
+  }, []);
+  return import_react17.default.useCallback(async (promise) => {
+    const value = await promise;
+    return ref.current ? value : null;
+  }, []);
+}
 function useStudio(props) {
   const t = translator(props);
-  const isEn = !/^zh/i.test(String(typeof document !== "undefined" && document.documentElement && document.documentElement.lang || "en"));
+  const isEn = !/^zh/i.test(String(document.documentElement.lang || "en"));
   const host = useHostState();
+  const alive = useAlive();
   const state = host.state;
-  const refresh = host.refresh;
-  const hostError = host.error;
   const initialPrompt = props && typeof props.initialPrompt === "string" ? props.initialPrompt : "";
   const initialView = props && props.view === "gallery" ? "gallery" : "studio";
   const initialPanelMode = props && props.panelMode === "chat" ? "chat" : "form";
-  const aliveRef = import_react17.default.useRef(true);
-  import_react17.default.useEffect(() => {
-    aliveRef.current = true;
-    return () => {
-      aliveRef.current = false;
-    };
-  }, []);
+  const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : [];
+  const defaultPreset = state && state.defaultPreset || "";
   const [sending, setSending] = import_react17.default.useState(false);
   const pendingRef = import_react17.default.useRef(null);
-  const ui = useStudioUi({ t, aliveRef, initialView, initialPanelMode });
-  const session = useSessionControl({
-    state,
-    refresh,
-    hostError,
-    t,
-    aliveRef,
-    error: ui.error,
-    setError: ui.setError,
-    showToast: ui.showToast,
-    fail: ui.fail
-  });
-  const form = useStudioForm({
-    presets: session.presets,
-    defaultPreset: session.defaultPreset,
-    t,
-    isEn,
-    aliveRef,
-    showToast: ui.showToast,
-    fail: ui.fail,
-    initialPrompt
-  });
-  const chat = useChatThread({
-    state,
-    t,
-    isEn,
-    aliveRef,
-    form: form.form,
-    patchForm: form.patchForm,
-    generate
-  });
-  const library = useWorkLibrary({
-    state,
-    t,
-    aliveRef,
-    showToast: ui.showToast,
-    fail: ui.fail,
-    setView: ui.setView,
-    setZoom: ui.setZoom
-  });
+  const ui = useStudioUi({ t, initialView, initialPanelMode });
+  const control = useSessionControl({ t, host, ui, alive });
+  const form = useStudioForm({ t, isEn, alive, ui, preset: { presets, defaultPreset }, initialPrompt });
+  const chat = useChatThread({ t, isEn, alive, state, form, generate });
+  const library = useWorkLibrary({ t, alive, ui, state });
+  function startSession2() {
+    return control.startSession(form.form.presetId || defaultPreset);
+  }
+  const compute = { ...control, presets, defaultPreset, startSession: startSession2 };
   async function generate(overrides, options = {}) {
     if (sending) return;
     const body = form.buildBody(overrides);
@@ -3615,8 +3582,8 @@ function useStudio(props) {
     pendingRef.current = body;
     setSending(true);
     ui.setError(null);
-    const result = await submitGenerate(body);
-    if (!aliveRef.current) return;
+    const result = await alive(submitGenerate(body));
+    if (!result) return;
     setSending(false);
     if (result.ok && result.data && result.data.id) {
       const jobId = result.data.id;
@@ -3624,7 +3591,7 @@ function useStudio(props) {
       if (options.pushUser !== false) entries.push({ role: "user", text: body.prompt });
       entries.push({ role: "assistant", kind: "job", jobId, stage: "pending", text: t("studio.chat.pending") });
       chat.pushMessages(entries);
-      refresh();
+      host.refresh();
       library.loadHistory();
       ui.showToast(t("studio.toast.submitted"));
       return;
@@ -3633,7 +3600,7 @@ function useStudio(props) {
   }
   function reroll(entry) {
     const target = entry || library.selected;
-    const overrides = rerollOverrides(target, session.presets);
+    const overrides = rerollOverrides(target, presets);
     if (!overrides) {
       ui.showToast(t("workbench.needPrompt"));
       return;
@@ -3642,7 +3609,7 @@ function useStudio(props) {
   }
   function iterate(entry) {
     const target = entry || library.selected;
-    const patch = iteratePatch(target, form.form, session.presets);
+    const patch = iteratePatch(target, form.form, presets);
     if (Object.keys(patch).length === 0) return;
     form.patchForm(patch);
     ui.setView("studio");
@@ -3650,7 +3617,7 @@ function useStudio(props) {
     ui.showToast(t("studio.toast.recalled"));
   }
   function retryFocusedJob() {
-    const overrides = retryOverrides(session.focusedJob) || (pendingRef.current ? retryOverrides(pendingRef.current) : null);
+    const overrides = retryOverrides(control.focusedJob) || (pendingRef.current ? retryOverrides(pendingRef.current) : null);
     if (!overrides) {
       ui.showToast(t("workbench.needPrompt"));
       return;
@@ -3662,240 +3629,63 @@ function useStudio(props) {
     ui.setError(null);
     ui.showToast(t("studio.guidance.oom.action"));
   }
-  function startSession2() {
-    return session.startSession(form.form.presetId || session.defaultPreset);
-  }
-  const sessionQueued = session.sessionState === "provisioning" || Boolean(session.activeJob && (session.activeJob.status === "queued" || session.activeJob.status === "waiting-session"));
-  const preset = session.presets.find((item) => item.id === form.form.presetId) || null;
-  const guidanceCode = ui.error && ui.error.code || session.session && session.session.error && session.session.error.code || session.focusedJob && session.focusedJob.status === "failed" && session.focusedJob.error && session.focusedJob.error.code || "";
-  const guidanceDetail = guidanceDetailOf({ error: ui.error, session: session.session, job: session.focusedJob });
-  const guidanceKey = guidanceCode ? `${guidanceCode}|${guidanceDetail}` : "";
-  const guidanceKind = guidanceCode && ui.dismissed !== guidanceKey ? guidanceKindOf(guidanceCode) : "";
   function dismissGuidance() {
     ui.dismissGuidance(guidanceKey);
   }
+  const guidanceCode = ui.error && ui.error.code || control.session && control.session.error && control.session.error.code || control.focusedJob && control.focusedJob.status === "failed" && control.focusedJob.error && control.focusedJob.error.code || "";
+  const guidanceDetail = guidanceDetailOf({ error: ui.error, session: control.session, job: control.focusedJob });
+  const guidanceKey = guidanceCode ? `${guidanceCode}|${guidanceDetail}` : "";
+  const guidanceKind = guidanceCode && ui.dismissed !== guidanceKey ? guidanceKindOf(guidanceCode) : "";
   return {
-    guidanceKind,
-    guidanceDetail,
-    dismissGuidance,
-    batches: library.batches,
-    quota: session.quota,
-    probe: session.probe,
-    probing: session.probing,
-    probeReport: session.probeReport,
-    panelMode: ui.panelMode,
-    setPanelMode: ui.setPanelMode,
-    messages: chat.messages,
-    interpreting: chat.interpreting,
-    interpret: chat.interpret,
-    resolveClarify: chat.resolveClarify,
-    generateIntent: chat.generateIntent,
-    openFolder: session.openFolder,
-    zoomImage: library.zoomImage,
-    clearThread: chat.clearThread,
-    openMessage: library.openMessage,
-    sessionQueued,
-    resetToSafe,
-    runProbe: session.runProbe,
-    exportPaths: library.exportPaths,
     t,
-    view: ui.view,
-    setView: ui.setView,
-    session: session.session,
-    sessionState: session.sessionState,
-    presets: session.presets,
-    preset,
-    activeJob: session.activeJob,
-    focusedJob: session.focusedJob,
-    gallery: library.gallery,
-    selected: library.selected,
-    selectImage: library.selectImage,
-    form: form.form,
-    patchForm: form.patchForm,
-    styleId: form.styleId,
-    applyStyle: form.applyStyle,
-    ratioId: form.ratioId,
-    applyRatio: form.applyRatio,
-    advancedOpen: ui.advancedOpen,
-    setAdvancedOpen: ui.setAdvancedOpen,
-    negativeOpen: ui.negativeOpen,
-    setNegativeOpen: ui.setNegativeOpen,
-    sending,
-    busy: session.busy,
-    error: ui.error,
-    toast: ui.toast,
-    showToast: ui.showToast,
-    favorites: library.favorites,
-    isFavorite: library.isFavorite,
-    toggleFavorite: library.toggleFavorite,
-    deleteImages: library.deleteImages,
-    refineGroups: form.refineGroups,
-    refineSource: form.refineSource,
-    enhancing: form.enhancing,
-    enhance: form.enhance,
-    toggleRefine: form.toggleRefine,
-    useInspiration: form.useInspiration,
-    zoom: ui.zoom,
-    setZoom: ui.setZoom,
-    historyDone: library.historyDone,
-    generate,
-    reroll,
-    iterate,
-    retryFocusedJob,
-    copyPath: ui.copyPath,
-    copyInstallCommand: ui.copyInstallCommand,
-    startSession: startSession2,
-    stopSession: session.stopSession,
-    loadHistory: library.loadHistory
+    ui,
+    compute,
+    form,
+    chat,
+    library,
+    guidance: { kind: guidanceKind, detail: guidanceDetail, dismiss: dismissGuidance },
+    actions: { sending, generate, reroll, iterate, retryFocusedJob, resetToSafe }
   };
 }
 
 // src/studio/Studio.jsx
 var import_jsx_runtime12 = require("react/jsx-runtime");
 function Studio(props) {
-  const s = useStudio(props);
-  const now = useNow(Boolean(s.activeJob));
-  const elapsedMs = s.activeJob ? jobElapsed(s.activeJob, now) : 0;
-  const guidanceKind = s.guidanceKind;
-  const chatMode = s.panelMode === "chat";
-  const panel = chatMode ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
-    ChatPanel,
-    {
-      t: s.t,
-      patchForm: s.patchForm,
-      sending: s.sending,
-      messages: s.messages,
-      interpreting: s.interpreting,
-      onSend: s.interpret,
-      onGenerateIntent: s.generateIntent,
-      onResolveClarify: s.resolveClarify,
-      onClearThread: s.clearThread,
-      onOpenMessage: s.openMessage,
-      mode: s.panelMode,
-      setMode: s.setPanelMode
-    }
-  ) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
-    Rail,
-    {
-      t: s.t,
-      form: s.form,
-      patchForm: s.patchForm,
-      styleId: s.styleId,
-      applyStyle: s.applyStyle,
-      ratioId: s.ratioId,
-      applyRatio: s.applyRatio,
-      advancedOpen: s.advancedOpen,
-      setAdvancedOpen: s.setAdvancedOpen,
-      negativeOpen: s.negativeOpen,
-      setNegativeOpen: s.setNegativeOpen,
-      sending: s.sending,
-      onGenerate: () => s.generate(),
-      refineGroups: s.refineGroups,
-      refineSource: s.refineSource,
-      enhancing: s.enhancing,
-      onEnhance: s.enhance,
-      onToggleRefine: s.toggleRefine,
-      onInspire: s.useInspiration,
-      mode: s.panelMode,
-      setMode: s.setPanelMode
-    }
-  );
+  const { t, ui, compute, form, chat, library, guidance, actions } = useStudio(props);
+  const now = useNow(Boolean(compute.activeJob));
+  const elapsedMs = compute.activeJob ? jobElapsed(compute.activeJob, now) : 0;
+  const chatMode = ui.panelMode === "chat";
+  const panel = chatMode ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(ChatPanel, { t, ui, form, chat, library, actions }) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Rail, { t, ui, form, actions });
   return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-root", children: [
     /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("style", { children: CSS }),
     /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-app", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
-        TopBar,
-        {
-          t: s.t,
-          view: s.view,
-          setView: s.setView,
-          sessionState: s.sessionState,
-          session: s.session,
-          quota: s.quota,
-          presets: s.presets,
-          form: s.form,
-          patchForm: s.patchForm,
-          busy: s.busy,
-          probing: s.probing,
-          probe: s.probe,
-          probeReport: s.probeReport,
-          onStart: s.startSession,
-          onStop: s.stopSession,
-          onProbe: s.runProbe,
-          onRefresh: s.loadHistory,
-          onOpenFolder: s.openFolder
-        }
-      ),
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
-        GuidanceCard,
-        {
-          t: s.t,
-          kind: guidanceKind,
-          detail: s.guidanceDetail,
-          onReset: s.resetToSafe,
-          onWake: s.startSession,
-          onRecheck: s.runProbe,
-          onRetry: s.retryFocusedJob,
-          onClose: s.dismissGuidance,
-          onCopyCommand: s.copyInstallCommand
-        }
-      ),
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: `ofs-body${s.view === "gallery" ? " is-gallery" : ""}`, children: [
-        s.view === "studio" ? panel : null,
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "ofs-main", children: s.view === "gallery" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(TopBar, { t, ui, compute, form, library }),
+      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(GuidanceCard, { t, guidance, compute, actions, ui }),
+      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: `ofs-body${ui.view === "gallery" ? " is-gallery" : ""}`, children: [
+        ui.view === "studio" ? panel : null,
+        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "ofs-main", children: ui.view === "gallery" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
           Gallery,
           {
-            t: s.t,
-            gallery: s.gallery,
+            t,
+            gallery: library.gallery,
             now: Date.now(),
-            presets: s.presets,
-            favorites: s.favorites,
-            onDelete: s.deleteImages,
-            onExport: s.exportPaths,
-            onRecall: s.iterate,
-            onVariant: s.reroll,
-            onZoom: s.zoomImage,
+            presets: compute.presets,
+            favorites: library.favorites,
+            onDelete: library.deleteImages,
+            onExport: library.exportPaths,
+            onRecall: actions.iterate,
+            onVariant: actions.reroll,
+            onZoom: library.zoomImage,
             onOpen: (entry) => {
-              s.selectImage(entry);
-              s.setView("studio");
+              library.selectImage(entry);
+              ui.setView("studio");
             }
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
-          Stage,
-          {
-            t: s.t,
-            selected: s.selected,
-            activeJob: s.activeJob,
-            sessionQueued: s.sessionQueued,
-            zoom: s.zoom,
-            setZoom: s.setZoom,
-            onIterate: s.iterate,
-            onReroll: s.reroll,
-            onCopy: s.copyPath,
-            isFavorite: s.isFavorite,
-            onToggleFavorite: s.toggleFavorite,
-            onUseExample: s.useInspiration
-          }
-        ) })
+        ) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Stage, { t, ui, compute, form, library, actions }) })
       ] }),
-      s.view === "studio" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
-        Filmstrip,
-        {
-          t: s.t,
-          batches: s.batches,
-          activeJob: s.activeJob,
-          selected: s.selected,
-          onSelect: s.selectImage,
-          now,
-          elapsedMs,
-          sessionState: s.sessionState,
-          sessionQueued: s.sessionQueued,
-          onSessionStart: s.startSession,
-          onOpenGallery: () => s.setView("gallery")
-        }
-      ) : null
+      ui.view === "studio" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Filmstrip, { t, ui, compute, library, elapsedMs }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Toast, { toast: s.toast })
+    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Toast, { toast: ui.toast })
   ] });
 }
 

@@ -3,7 +3,6 @@
 import { ROUTES, clientPath } from '../shared/contract.js'
 
 export function apiUrl(relative) {
-  if (typeof document === 'undefined') return relative
   return new URL(relative, document.baseURI).toString()
 }
 

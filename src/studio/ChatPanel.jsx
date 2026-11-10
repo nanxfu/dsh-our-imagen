@@ -3,9 +3,10 @@
  *
  * 用户用一句话描述想画什么，宿主模型把它整理成生成参数，面板给出确认卡：
  * 提示词、比例、风格与「按此生成」。参数互相矛盾时先给澄清卡，不让用户重打一遍。
- * 这里的助手不扮演聊天对象：每条气泡要么是参数确认，要么是任务状态与结果。
+ * 气泡只有两类：参数确认与任务状态 / 结果。
  *
  * 外框、头部与分段控件来自 panel.css，消息流与确认卡样式在 chat.css。
+ * 接收 { t, ui, form, chat, library, actions } 领域对象。
  */
 
 import React from 'react'
@@ -40,20 +41,12 @@ function ratioLabel(t, ratioId) {
 }
 
 export function ChatPanel(props) {
-  const {
-    t,
-    patchForm,
-    sending,
-    messages,
-    interpreting,
-    onSend,
-    onGenerateIntent,
-    onResolveClarify,
-    onClearThread,
-    onOpenMessage,
-    mode,
-    setMode,
-  } = props
+  const { t, ui, form, chat, library, actions } = props
+  const { panelMode: mode, setPanelMode: setMode } = ui
+  const { patchForm } = form
+  const { messages, interpreting, interpret, generateIntent, resolveClarify, clearThread } = chat
+  const { openMessage: openImage } = library
+  const { sending } = actions
 
   const [draft, setDraft] = React.useState('')
   const threadRef = React.useRef(null)
@@ -63,19 +56,19 @@ export function ChatPanel(props) {
   // 新消息、状态更新与解析中都把线程滚到底部。
   React.useEffect(() => {
     const node = threadRef.current
-    if (node && typeof node.scrollTo === 'function') node.scrollTo({ top: node.scrollHeight })
+    if (node) node.scrollTo({ top: node.scrollHeight })
   }, [messages.length, lastStage, interpreting])
 
   function send() {
     const text = draft.trim()
     if (!text || sending || interpreting) return
     setDraft('')
-    onSend(text)
+    interpret(text)
   }
 
   function openMessage(message) {
-    if (typeof message.onOpen === 'function') message.onOpen()
-    else if (typeof onOpenMessage === 'function' && message.imagePath) onOpenMessage(message.imagePath)
+    if (message.onOpen) message.onOpen()
+    else if (message.imagePath) openImage(message.imagePath)
   }
 
   function renderIntent(message) {
@@ -94,12 +87,12 @@ export function ChatPanel(props) {
                 type="button"
                 key={option}
                 className="ofs-suggestion"
-                onClick={() => onResolveClarify(message.id, clarify.field, option)}
+                onClick={() => resolveClarify(message.id, clarify.field, option)}
               >
                 {isRatio ? option : styleLabel(t, option)}
               </button>
             ))}
-            <button type="button" className="ofs-suggestion" onClick={() => onResolveClarify(message.id, clarify.field, '')}>
+            <button type="button" className="ofs-suggestion" onClick={() => resolveClarify(message.id, clarify.field, '')}>
               {t('studio.chat.clarify.auto')}
             </button>
           </div>
@@ -120,7 +113,7 @@ export function ChatPanel(props) {
         <button
           type="button"
           className="ofs-btn is-primary ofs-intent-go"
-          onClick={() => onGenerateIntent(message)}
+          onClick={() => generateIntent(message)}
           disabled={sending}
         >
           {sending ? t('studio.generating') : t('studio.chat.intent.generate')}
@@ -241,7 +234,7 @@ export function ChatPanel(props) {
 
       <div className="ofs-chat-dock">
         <div className="ofs-chat-tools">
-          <button type="button" className="ofs-chip" onClick={onClearThread} disabled={messages.length === 0}>
+          <button type="button" className="ofs-chip" onClick={clearThread} disabled={messages.length === 0}>
             {t('studio.chat.clear')}
           </button>
         </div>

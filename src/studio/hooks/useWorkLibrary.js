@@ -1,8 +1,8 @@
 /**
  * 作品库域：生成历史 / 画廊 / 选中图 / 收藏 / 删除 / 导出。
  *
- * 负责两处加载 effect、首图提示与任务完成后的历史刷新（去重逻辑不变）。
- * 依赖入参：{ state, t, aliveRef, showToast, fail, setView, setZoom }。
+ * 负责两处加载 effect、首图提示与任务完成后的历史刷新。
+ * 依赖入参：{ t, alive, ui, state }；ui 提供 toast/错误通道与视图切换。
  */
 
 import React from 'react'
@@ -23,37 +23,35 @@ function flattenHistory(items) {
   return images
 }
 
-export function useWorkLibrary({ state, t, aliveRef, showToast, fail, setView, setZoom }) {
+export function useWorkLibrary({ t, alive, ui, state }) {
   const [selectedPath, setSelectedPath] = React.useState('')
   const [historyItems, setHistoryItems] = React.useState([])
-  const [historyDone, setHistoryDone] = React.useState(false)
   const [favorites, setFavorites] = React.useState([])
 
   const loadHistory = React.useCallback(async () => {
-    const result = await fetchHistory(60)
-    if (!aliveRef.current) return
+    const result = await alive(fetchHistory(60))
+    if (!result) return
     if (result.ok && result.data && Array.isArray(result.data.items)) {
       setHistoryItems(result.data.items.filter(Boolean))
     } else if (!result.ok) {
-      // 加载失败不再静默成"暂无作品"：走现有错误/指引通道，且不清空已有列表。
-      fail(result.code, result.message)
+      // 加载失败走错误/指引通道，且不清空已有列表。
+      ui.fail(result.code, result.message)
     }
-    setHistoryDone(true)
-  }, [])
+  }, [alive])
 
   React.useEffect(() => {
     loadHistory()
   }, [loadHistory])
 
   const loadLibrary = React.useCallback(async () => {
-    const result = await fetchLibrary()
-    if (!aliveRef.current) return
+    const result = await alive(fetchLibrary())
+    if (!result) return
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
       setFavorites(result.data.favorites)
     } else if (!result.ok) {
-      fail(result.code, result.message)
+      ui.fail(result.code, result.message)
     }
-  }, [])
+  }, [alive])
 
   React.useEffect(() => {
     loadLibrary()
@@ -67,7 +65,7 @@ export function useWorkLibrary({ state, t, aliveRef, showToast, fail, setView, s
     const images = Array.isArray(finished.output?.images) ? finished.output.images : []
     if (images.length === 0) return
     firstImageRef.current = true
-    showToast(t('studio.toast.firstImage'))
+    ui.showToast(t('studio.toast.firstImage'))
   }, [finished && finished.id])
 
   // 任务完成后刷新历史，让新图自动出现在最近生成最前面
@@ -110,30 +108,30 @@ export function useWorkLibrary({ state, t, aliveRef, showToast, fail, setView, s
     const next = !isFavorite(target)
     // 先本地翻转，再以宿主返回的列表为准，交互不等网络。
     setFavorites((prev) => (next ? [...prev, target] : prev.filter((item) => item !== target)))
-    const result = await favoriteImage(target, next)
-    if (!aliveRef.current) return
+    const result = await alive(favoriteImage(target, next))
+    if (!result) return
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
       setFavorites(result.data.favorites)
-      showToast(next ? t('studio.toast.favorited') : t('studio.toast.unfavorited'))
+      ui.showToast(next ? t('studio.toast.favorited') : t('studio.toast.unfavorited'))
       return
     }
     setFavorites((prev) => (next ? prev.filter((item) => item !== target) : [...prev, target]))
-    fail(result.code, result.message)
+    ui.fail(result.code, result.message)
   }
 
   async function deleteImages(paths) {
     const list = (Array.isArray(paths) ? paths : []).filter(Boolean)
     if (list.length === 0) return
-    const result = await deleteImagesRequest(list)
-    if (!aliveRef.current) return
+    const result = await alive(deleteImagesRequest(list))
+    if (!result) return
     if (!result.ok) {
-      fail(result.code, result.message)
+      ui.fail(result.code, result.message)
       return null
     }
     const removed = Array.isArray(result.data.removed) ? result.data.removed : []
-    if (removed.length > 0) showToast(t('studio.toast.deleted'))
+    if (removed.length > 0) ui.showToast(t('studio.toast.deleted'))
     if (Array.isArray(result.data.failed) && result.data.failed.length > 0) {
-      fail('delete_failed', t('studio.error.deleteFailed'))
+      ui.fail('delete_failed', t('studio.error.deleteFailed'))
     }
     setSelectedPath('')
     await Promise.all([loadHistory(), loadLibrary()])
@@ -144,8 +142,8 @@ export function useWorkLibrary({ state, t, aliveRef, showToast, fail, setView, s
   function zoomImage(entry) {
     if (!entry) return
     selectImage(entry)
-    setView('studio')
-    setZoom(true)
+    ui.setView('studio')
+    ui.setZoom(true)
   }
 
   async function exportPaths(paths) {
@@ -159,15 +157,15 @@ export function useWorkLibrary({ state, t, aliveRef, showToast, fail, setView, s
     }
     const text = list.map((item) => absoluteOf.get(item) || item).join('\n')
     try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text)
-        showToast(t('studio.toast.exported'))
+        ui.showToast(t('studio.toast.exported'))
         return
       }
     } catch {
       // 退化为提示
     }
-    showToast(text)
+    ui.showToast(text)
   }
 
   return {
@@ -182,7 +180,6 @@ export function useWorkLibrary({ state, t, aliveRef, showToast, fail, setView, s
     deleteImages,
     exportPaths,
     zoomImage,
-    historyDone,
     loadHistory,
   }
 }

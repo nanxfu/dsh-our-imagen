@@ -1,8 +1,7 @@
 /**
  * 左侧创作面板（表单式）。
  *
- * 分区按内容分组，不用「01 / 02 / 03」编号——这不是需要按顺序完成的步骤。
- * 每个分区是一块浅底卡片，标题上方留白多于下方。
+ * 分区按内容分组；接收 { t, ui, form, actions }。
  */
 
 import React from 'react'
@@ -30,32 +29,33 @@ function Fieldset(props) {
 }
 
 export function Rail(props) {
+  const { t, ui, form, actions } = props
   const {
-    t,
-    form,
+    advancedOpen,
+    setAdvancedOpen,
+    negativeOpen,
+    setNegativeOpen,
+    panelMode: mode,
+    setPanelMode: setMode,
+  } = ui
+  const {
+    form: fields,
     patchForm,
     styleId,
     applyStyle,
     ratioId,
     applyRatio,
-    advancedOpen,
-    setAdvancedOpen,
-    negativeOpen,
-    setNegativeOpen,
-    sending,
-    onGenerate,
     refineGroups,
     refineSource,
     enhancing,
-    onEnhance,
-    onToggleRefine,
-    onInspire,
-    mode,
-    setMode,
-  } = props
+    enhance,
+    toggleRefine,
+    useInspiration,
+  } = form
+  const { sending, generate } = actions
 
-  const promptLength = form.prompt.length
-  const hasPrompt = form.prompt.trim().length > 0
+  const promptLength = fields.prompt.length
+  const hasPrompt = fields.prompt.trim().length > 0
 
   return (
     <aside className="ofs-panel ofs-panel--form">
@@ -91,20 +91,20 @@ export function Rail(props) {
           <div className="ofs-composer">
             <textarea
               className="ofs-composer-input"
-              value={form.prompt}
+              value={fields.prompt}
               maxLength={PROMPT_MAX}
               placeholder={t('studio.promptPlaceholder')}
               spellCheck={false}
               onChange={(event) => patchForm({ prompt: event.target.value })}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) onGenerate()
+                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) generate()
               }}
             />
             <div className="ofs-composer-foot">
               <span className="ofs-counter">
                 {promptLength} / {PROMPT_MAX}
               </span>
-              <button type="button" className="ofs-text-action" onClick={onEnhance} disabled={enhancing}>
+              <button type="button" className="ofs-text-action" onClick={enhance} disabled={enhancing}>
                 <Icon name="expandText" size={13} />
                 {enhancing ? t('studio.enhance.thinking') : t('studio.enhance.button')}
               </button>
@@ -119,7 +119,7 @@ export function Rail(props) {
                   type="button"
                   key={key}
                   className="ofs-suggestion"
-                  onClick={() => onInspire(t(key))}
+                  onClick={() => useInspiration(t(key))}
                   title={t(key)}
                 >
                   {t(`${key}.label`)}
@@ -143,7 +143,7 @@ export function Rail(props) {
                         type="button"
                         key={option.id}
                         className={option.applied ? 'ofs-suggestion is-on' : 'ofs-suggestion'}
-                        onClick={() => onToggleRefine(option.text)}
+                        onClick={() => toggleRefine(option.text)}
                         aria-pressed={option.applied}
                         title={option.text}
                       >
@@ -216,7 +216,7 @@ export function Rail(props) {
                 <textarea
                   className="ofs-row-textarea"
                   rows={3}
-                  value={form.negative}
+                  value={fields.negative}
                   placeholder={t('studio.negativePlaceholder')}
                   spellCheck={false}
                   onChange={(event) => patchForm({ negative: event.target.value })}
@@ -249,7 +249,7 @@ export function Rail(props) {
                       type="number"
                       min={1}
                       max={60}
-                      value={form.steps}
+                      value={fields.steps}
                       aria-label={t('studio.steps')}
                       onChange={(event) => patchForm({ steps: Number(event.target.value) })}
                     />
@@ -264,7 +264,7 @@ export function Rail(props) {
                       min={0}
                       max={20}
                       step={0.5}
-                      value={form.cfg}
+                      value={fields.cfg}
                       aria-label={t('studio.cfg')}
                       onChange={(event) => patchForm({ cfg: Number(event.target.value) })}
                     />
@@ -274,7 +274,7 @@ export function Rail(props) {
                     <input
                       type="text"
                       inputMode="numeric"
-                      value={form.seed}
+                      value={fields.seed}
                       placeholder={t('studio.random')}
                       aria-label={t('studio.seed')}
                       onChange={(event) => patchForm({ seed: event.target.value })}
@@ -283,7 +283,7 @@ export function Rail(props) {
                   <div className="ofs-field">
                     <span>{t('studio.count')}</span>
                     <select
-                      value={form.count}
+                      value={fields.count}
                       aria-label={t('studio.count')}
                       onChange={(event) => patchForm({ count: Number(event.target.value) })}
                     >
@@ -302,7 +302,7 @@ export function Rail(props) {
       </div>
 
       <div className="ofs-panel-foot">
-        <button type="button" className="ofs-btn is-primary ofs-generate" onClick={onGenerate} disabled={sending || !hasPrompt}>
+        <button type="button" className="ofs-btn is-primary ofs-generate" onClick={() => generate()} disabled={sending || !hasPrompt}>
           <Icon name="sparkles" size={16} />
           {sending ? t('studio.generating') : t('studio.generate')}
         </button>

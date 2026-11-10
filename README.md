@@ -97,12 +97,11 @@ npm run test:contract
 # 只跑 Host 端到端（21 项自动化断言，起本地 mock daemon 跑完整链路）
 npm run test:host
 
-# 只跑客户端（文案键完整性 / 纯逻辑 / 渲染快照，需先构建 client.js）
+# 只跑客户端（文案键完整性 / 纯逻辑 / 渲染结构，需先构建 client.js）
 npm run test:client
 
-# Python daemon 的单元测试与协议冒烟（需要本机 python 环境）
-npm run test:daemon   # 纯函数单测（50 项）
-npm run test:smoke    # mock daemon 协议场景（9 项）
+# Python daemon 的单元测试（需要本机 python 环境；已接入 npm test 与 npm run test:host）
+npm run test:daemon   # 纯函数单测（51 项）
 
 # 重新生成 / 校验下发给远端 daemon 的契约 JSON（改了 shared/contract.js 后）
 npm run contract:gen
@@ -124,6 +123,10 @@ npm run test:gpu    # 真实 GPU 出图链路（端到端出图）
 
 ## 进阶技术文档
 
-- 想要了解底层链路原理、Cloudflare 穿透细节与 Kaggle 避坑指南？请参阅 [架构设计 (ARCHITECTURE.md)](docs/ARCHITECTURE.md)。
-- 想要查看精准接口定义、Agent Tool 规范与硬件实测性能对比？请参阅 [技术规格 (SPEC.md)](docs/SPEC.md)。
-- 想要了解后续规划？请参阅 [演进路线 (ROADMAP.md)](docs/ROADMAP.md)。
+- **[技术规格与契约 (docs/SPEC.md)](docs/SPEC.md)**：接口契约单一真理源、生命周期、错误码定义以及 Studio 工作台 UI 交互规范。
+- **[架构设计 (docs/ARCHITECTURE.md)](docs/ARCHITECTURE.md)**：底层通信链路、Cloudflare 穿透、心跳保活与 Kaggle 容器避坑指南。
+- **[产品定位与约束 (docs/PRODUCT.md)](docs/PRODUCT.md)**：目标人群、运行环境、功能全景矩阵与无障碍设计标准。
+- **[设计系统令牌 (docs/DESIGN.md)](docs/DESIGN.md)**：黑白灰视觉令牌、排版字阶、间距网格、阴影体系与响应式断点。
+- **[演进路线 (docs/ROADMAP.md)](docs/ROADMAP.md)**：版本里程碑与后续功能规划。
+- **[代码重构与整洁化规范 (docs/CODE_REFACTOR_SPEC.md)](docs/CODE_REFACTOR_SPEC.md)**：针对过度设计、伪解耦与测试自嗨的工程整洁化实施指南。
+- **[历史归档库 (docs/archive/)](docs/archive/README.md)**：归档历史重构调研底稿与已废弃的前序版本规格。

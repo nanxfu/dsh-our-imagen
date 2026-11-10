@@ -1,8 +1,9 @@
 /**
  * 表单域：提示词 / 负向 / 预设 / 比例 / 风格 / 润色建议。
  *
- * 负责表单状态、预设同步 effect 与生成请求体拼装；不做网络请求编排。
- * 依赖入参：{ presets, defaultPreset, t, isEn, aliveRef, showToast, fail, initialPrompt }。
+ * 负责表单状态、预设同步 effect 与生成请求体拼装。
+ * 依赖入参：{ t, isEn, alive, ui, preset, initialPrompt }；preset 是宿主的预设配置
+ * { presets, defaultPreset }，由组合层从宿主状态解析后传入。
  */
 
 import React from 'react'
@@ -30,7 +31,8 @@ const EMPTY_FORM = {
   styleId: '',
 }
 
-export function useStudioForm({ presets, defaultPreset, t, isEn, aliveRef, showToast, fail, initialPrompt }) {
+export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
+  const { presets, defaultPreset } = preset
   const [form, setForm] = React.useState(() => ({
     ...EMPTY_FORM,
     prompt: initialPrompt,
@@ -59,16 +61,16 @@ export function useStudioForm({ presets, defaultPreset, t, isEn, aliveRef, showT
     setForm((prev) => {
       if (prev.presetId && presets.some((item) => item.id === prev.presetId)) return prev
       const initial = presets.some((item) => item.id === defaultPreset) ? defaultPreset : presets[0].id
-      const preset = presets.find((item) => item.id === initial)
-      if (!preset) return prev
-      const size = clampSize(preset.size)
+      const item = presets.find((option) => option.id === initial)
+      if (!item) return prev
+      const size = clampSize(item.size)
       return {
         ...prev,
         presetId: initial,
         width: size,
         height: size,
-        steps: clampInt(preset.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
-        cfg: clampNumber(preset.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
+        steps: clampInt(item.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
+        cfg: clampNumber(item.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
       }
     })
   }, [presets.length, defaultPreset])
@@ -97,16 +99,16 @@ export function useStudioForm({ presets, defaultPreset, t, isEn, aliveRef, showT
   async function enhance() {
     if (enhancing) return
     if (!form.prompt.trim()) {
-      showToast(t('studio.promptHint'))
+      ui.showToast(t('studio.promptHint'))
       return
     }
     setEnhancing(true)
-    const result = await enhancePromptRequest({
+    const result = await alive(enhancePromptRequest({
       prompt: form.prompt,
       presetId: form.presetId,
       locale: isEn ? 'en' : 'zh',
-    })
-    if (!aliveRef.current) return
+    }))
+    if (!result) return
     setEnhancing(false)
     if (result.ok && result.data && Array.isArray(result.data.groups)) {
       const groups = result.data.groups.filter((group) => group && Array.isArray(group.options) && group.options.length > 0)
@@ -114,7 +116,7 @@ export function useStudioForm({ presets, defaultPreset, t, isEn, aliveRef, showT
       setRefineSource(result.data.source === 'model' ? 'model' : 'local')
       return
     }
-    fail(result.code, result.message)
+    ui.fail(result.code, result.message)
   }
 
   /** 润色标签：点一次追加，再点一次撤销。 */

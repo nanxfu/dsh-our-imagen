@@ -3,14 +3,15 @@
  *
  * 1. 发布产物 client.js 必须是合法 bundle：导出 inject / apply，且不含测试出口；
  * 2. apply() 注册三个挂载点，且 main.key 与 sidebar.panellist.id 一致；
- * 3. 用假 React 挂载工作台，逐场景比对渲染结构哈希 + 关键文案；
- * 4. 面板两种形态（表单 / 对话）都要能渲染。
+ * 3. 用假 React 挂载工作台，逐场景断言关键结构类名、关键文案与禁止出现的元素；
+ * 4. 面板两种形态（表单 / 对话）都要能渲染，画廊视图不渲染舞台；
+ * 5. 测试内探针校验假 React 自身的 hook 语义（useReducer/useMemo/memo/未实现 hook 报错），
+ *    探针只存在于本测试文件，不进 src/。
  *
- * 运行：node test/check-client-render.mjs [--update]
+ * 运行：node test/check-client-render.mjs
  */
 
 import assert from 'node:assert/strict'
-import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,9 +20,7 @@ import { bundle } from '../build.mjs'
 import { loadClient, serializeTree, TEST_ARTIFACT } from './load-client.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
-const GOLDEN_PATH = join(ROOT, 'test/render-golden.json')
 const PROD_ARTIFACT = join(ROOT, 'client.js')
-const UPDATE = process.argv.includes('--update')
 
 const NOW = Date.parse('2026-11-09T05:05:00.000Z')
 const at = (offsetSec) => new Date(NOW + offsetSec * 1000).toISOString()
@@ -74,6 +73,12 @@ const readyState = {
   probe: probeOk,
 }
 
+/**
+ * 每个场景的结构断言：
+ *   required —— 类名必须出现的精确次数（结构锚点）；
+ *   forbidden —— 类名必须完全不出现（用来区分场景：对话态没有表单面板、画廊没有舞台等）。
+ * 计数基于组件实际渲染出的 className（全文按空白拆分）。
+ */
 const scenarios = {
   ready: {
     state: readyState,
@@ -81,6 +86,24 @@ const scenarios = {
     props: {},
     expect: ['创作设置', '提示词', '风格预设', '画面设置', '高级设置', '立即生成', '带回参数', '在线', '灵感示例', '测试用的荷花池塘'],
     reject: [],
+    structure: {
+      required: {
+        'ofs-root': 1,
+        'ofs-app': 1,
+        'ofs-topbar': 1,
+        'ofs-body': 1,
+        'ofs-main': 1,
+        'ofs-panel': 1,
+        'ofs-panel--form': 1,
+        'ofs-fieldset': 4,
+        'ofs-tile': 5,
+        'ofs-batch': 1,
+        'ofs-thumb': 2,
+        'ofs-image': 1,
+        'ofs-dock': 1,
+      },
+      forbidden: ['ofs-guidance', 'ofs-panel--chat', 'ofs-gallery', 'ofs-figure--empty', 'ofs-toast', 'ofs-stage-progress'],
+    },
   },
   chat: {
     state: readyState,
@@ -88,6 +111,25 @@ const scenarios = {
     props: { panelMode: 'chat' },
     expect: ['创作助手', '描述你想要的画面', '清空对话'],
     reject: [],
+    structure: {
+      required: {
+        'ofs-root': 1,
+        'ofs-app': 1,
+        'ofs-topbar': 1,
+        'ofs-body': 1,
+        'ofs-panel': 1,
+        'ofs-panel--chat': 1,
+        'ofs-thread': 1,
+        'ofs-chat-empty': 1,
+        'ofs-chat-composer': 1,
+        'ofs-chat-dock': 1,
+        'ofs-chat-example': 5,
+        'ofs-stage': 1,
+        'ofs-image': 1,
+        'ofs-batch': 1,
+      },
+      forbidden: ['ofs-panel--form', 'ofs-fieldset', 'ofs-tile', 'ofs-gallery', 'ofs-guidance', 'ofs-figure--empty', 'ofs-toast'],
+    },
   },
   empty: {
     state: { defaultPreset: 'sdxl-lightning', presets: [preset], session: { state: 'absent', error: null }, jobs: [] },
@@ -95,6 +137,28 @@ const scenarios = {
     props: {},
     expect: ['画面预览', '云端尚未启动'],
     reject: [],
+    structure: {
+      required: {
+        'ofs-root': 1,
+        'ofs-app': 1,
+        'ofs-topbar': 1,
+        'ofs-body': 1,
+        'ofs-main': 1,
+        'ofs-panel--form': 1,
+        'ofs-fieldset': 4,
+        'ofs-stage': 1,
+        'ofs-figure--empty': 1,
+        'ofs-empty-card': 1,
+        'ofs-empty-title': 1,
+        'ofs-examples': 1,
+        'ofs-example': 5,
+        'ofs-filmstrip': 1,
+        'ofs-filmstrip-empty': 1,
+        'ofs-slot': 3,
+        'ofs-link': 1,
+      },
+      forbidden: ['ofs-image', 'ofs-batch', 'ofs-panel--chat', 'ofs-guidance', 'ofs-gallery', 'ofs-stage-progress'],
+    },
   },
   gallery: {
     state: readyState,
@@ -103,6 +167,16 @@ const scenarios = {
     view: 'gallery',
     expect: ['作品画廊', '全部模型', '测试用的荷花池塘', '今天'],
     reject: [],
+    structure: {
+      required: {
+        'ofs-gallery': 1,
+        'ofs-gallery-group': 1,
+        'ofs-gallery-card': 1,
+        'ofs-gallery-action': 3,
+      },
+      // 画廊是独立视图：不应带整页外壳、舞台、单轨面板或胶片条。
+      forbidden: ['ofs-root', 'ofs-topbar', 'ofs-stage', 'ofs-panel', 'ofs-filmstrip', 'ofs-guidance', 'ofs-toast'],
+    },
   },
   guidance: {
     state: {
@@ -125,6 +199,22 @@ const scenarios = {
     props: {},
     expect: ['显存不足', '重置为 1024×1024'],
     reject: [],
+    structure: {
+      required: {
+        'ofs-root': 1,
+        'ofs-app': 1,
+        'ofs-topbar': 1,
+        'ofs-body': 1,
+        'ofs-guidance': 1,
+        'ofs-guidance-title': 1,
+        'ofs-guidance-detail': 1,
+        'ofs-guidance-actions': 1,
+        'ofs-stage': 1,
+        'ofs-figure--empty': 1,
+        'ofs-panel--form': 1,
+      },
+      forbidden: ['ofs-guidance-command', 'ofs-toast', 'ofs-panel--chat', 'ofs-gallery', 'ofs-image'],
+    },
   },
   queued: {
     state: {
@@ -138,6 +228,23 @@ const scenarios = {
     props: {},
     expect: ['正在申请 GPU', '云端正在排队'],
     reject: [],
+    structure: {
+      required: {
+        'ofs-root': 1,
+        'ofs-app': 1,
+        'ofs-topbar': 1,
+        'ofs-body': 1,
+        'ofs-stage': 1,
+        'ofs-stage-progress': 1,
+        'ofs-progress-label': 1,
+        'ofs-ghost': 1,
+        'ofs-ghost-label': 1,
+        'ofs-ghost-time': 1,
+        'ofs-batch': 1,
+        'ofs-image': 1,
+      },
+      forbidden: ['ofs-guidance', 'ofs-figure--empty', 'ofs-toast'],
+    },
   },
   cli: {
     state: {
@@ -155,6 +262,19 @@ const scenarios = {
     props: {},
     expect: ['本地没有检测到 Kaggle 命令行', 'pip install -U kaggle', '复制安装命令', '重新检查环境', '关闭'],
     reject: ['生成没有成功'],
+    structure: {
+      required: {
+        'ofs-root': 1,
+        'ofs-app': 1,
+        'ofs-guidance': 1,
+        'ofs-guidance-title': 1,
+        'ofs-guidance-command': 1,
+        'ofs-guidance-detail': 1,
+        'ofs-guidance-actions': 1,
+        'ofs-figure--empty': 1,
+      },
+      forbidden: ['ofs-panel--chat', 'ofs-image', 'ofs-toast', 'ofs-gallery'],
+    },
   },
   session: {
     state: {
@@ -168,6 +288,18 @@ const scenarios = {
     props: {},
     expect: ['云端连接中断', '重新唤醒', 'Kernel 推送失败：权限不足'],
     reject: [],
+    structure: {
+      required: {
+        'ofs-root': 1,
+        'ofs-app': 1,
+        'ofs-guidance': 1,
+        'ofs-guidance-title': 1,
+        'ofs-guidance-detail': 1,
+        'ofs-guidance-actions': 1,
+        'ofs-figure--empty': 1,
+      },
+      forbidden: ['ofs-guidance-command', 'ofs-panel--chat', 'ofs-image', 'ofs-toast'],
+    },
   },
   generic: {
     state: {
@@ -190,6 +322,18 @@ const scenarios = {
     props: {},
     expect: ['操作没有完成', '有图片没能删除', '关闭'],
     reject: ['重试一次', '生成没有成功'],
+    structure: {
+      required: {
+        'ofs-root': 1,
+        'ofs-app': 1,
+        'ofs-guidance': 1,
+        'ofs-guidance-title': 1,
+        'ofs-guidance-detail': 1,
+        'ofs-guidance-actions': 1,
+        'ofs-figure--empty': 1,
+      },
+      forbidden: ['ofs-guidance-command', 'ofs-panel--chat', 'ofs-image', 'ofs-toast'],
+    },
   },
   generate: {
     state: {
@@ -212,10 +356,20 @@ const scenarios = {
     props: {},
     expect: ['生成没有成功', '重试一次', '远端返回了非 JSON 响应'],
     reject: [],
+    structure: {
+      required: {
+        'ofs-root': 1,
+        'ofs-app': 1,
+        'ofs-guidance': 1,
+        'ofs-guidance-title': 1,
+        'ofs-guidance-detail': 1,
+        'ofs-guidance-actions': 1,
+        'ofs-figure--empty': 1,
+      },
+      forbidden: ['ofs-guidance-command', 'ofs-panel--chat', 'ofs-image', 'ofs-toast'],
+    },
   },
 }
-
-const sha = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 32)
 
 const collectText = (node, out = []) => {
   if (node === null || node === undefined) return out
@@ -238,6 +392,47 @@ const countByClass = (node, className) => {
   if (typeof node.type === 'function') return countByClass(node.type({ ...node.props, children: node.children }), className)
   const own = typeof node.props?.className === 'string' && node.props.className.split(' ').includes(className) ? 1 : 0
   return own + countByClass(node.children, className)
+}
+
+/** 统计整棵树里每个 className token 出现的次数（与 countByClass 不同：一次遍历拿到全部）。 */
+const collectClasses = (node, out = {}) => {
+  if (!node || typeof node !== 'object') return out
+  if (Array.isArray(node)) {
+    for (const child of node) collectClasses(child, out)
+    return out
+  }
+  if (typeof node.type === 'function') return collectClasses(node.type({ ...node.props, children: node.children }), out)
+  const className = node.props?.className
+  if (typeof className === 'string') {
+    for (const token of className.split(/\s+/).filter(Boolean)) out[token] = (out[token] ?? 0) + 1
+  }
+  collectClasses(node.children, out)
+  return out
+}
+
+const describeClasses = (classMap) =>
+  Object.keys(classMap)
+    .sort()
+    .map((token) => `${token}×${classMap[token]}`)
+    .join(' ')
+
+/** 结构断言：失败信息必须同时给出场景名、期望与实际类名集合，便于直接定位。 */
+const assertStructure = (name, tree, structure) => {
+  const classMap = collectClasses(tree)
+  for (const [className, expected] of Object.entries(structure.required ?? {})) {
+    const actual = classMap[className] ?? 0
+    assert.equal(
+      actual,
+      expected,
+      `[${name}] 结构类名 .${className} 应出现 ${expected} 次，实际 ${actual} 次。实际类名集合：${describeClasses(classMap)}`,
+    )
+  }
+  for (const className of structure.forbidden ?? []) {
+    assert.ok(
+      !(className in classMap),
+      `[${name}] 不应出现结构类名 .${className}，实际出现 ${classMap[className]} 次。实际类名集合：${describeClasses(classMap)}`,
+    )
+  }
 }
 
 /** 收集满足条件的节点，用来直接触发按钮回调（测试替身没有事件系统）。 */
@@ -338,15 +533,6 @@ await check('apply() 注册整页工作台与侧栏入口', async () => {
   assert.match(sideSlot.label, /^bound:/)
 })
 
-// 渲染快照
-let golden = {}
-try {
-  golden = JSON.parse(await readFile(GOLDEN_PATH, 'utf8'))
-} catch {
-  golden = {}
-}
-
-const nextGolden = {}
 for (const [name, scenario] of Object.entries(scenarios)) {
   await check(`渲染：${name}`, async () => {
     const responses = {
@@ -355,47 +541,29 @@ for (const [name, scenario] of Object.entries(scenarios)) {
       '/imagen-api/library': { favorites: [], deleted: [] },
     }
     const client = await loadClient({ now: NOW, responses, testBuild: true })
-    if (scenario.view === 'gallery') {
+    const tree = scenario.view === 'gallery'
       // 画廊是工作台内的一个视图，用组件自身的初始 state 无法直达，这里直接挂 Gallery
-      const tree = await client.mountRaw(client.components.Gallery, {
-        t: client.internals.i18n.fallbackTranslate('zh'),
-        gallery: [{ image: historyItem.images[0], item: historyItem }],
-        now: NOW,
-        presets: [preset],
-        favorites: [],
-        onDelete: () => {},
-        onExport: () => {},
-        onOpen: () => {},
-        onRecall: () => {},
-        onVariant: () => {},
-        onZoom: () => {},
-      })
-      client.unmount()
-      const text = collectText(tree).join(' | ')
-      for (const needle of scenario.expect) assert.ok(text.includes(needle), `缺少文案：${needle}`)
-      const actual = sha(tree)
-      nextGolden[name] = { view: actual }
-      if (!golden[name] || UPDATE) return
-      assert.equal(actual, golden[name].view, '画廊渲染结构与基准不一致（UI 有意变更请 --update）')
-      return
-    }
-
-    const tree = await client.mountRaw(client.components.Studio, scenario.props ?? {})
+      ? await client.mountRaw(client.components.Gallery, {
+          t: client.internals.i18n.fallbackTranslate('zh'),
+          gallery: [{ image: historyItem.images[0], item: historyItem }],
+          now: NOW,
+          presets: [preset],
+          favorites: [],
+          onDelete: () => {},
+          onExport: () => {},
+          onOpen: () => {},
+          onRecall: () => {},
+          onVariant: () => {},
+          onZoom: () => {},
+        })
+      : await client.mountRaw(client.components.Studio, scenario.props ?? {})
     client.unmount()
 
     const text = collectText(tree).join(' | ')
-    for (const needle of scenario.expect) assert.ok(text.includes(needle), `缺少文案：${needle}`)
-    for (const needle of scenario.reject ?? []) assert.ok(!text.includes(needle), `不应出现：${needle}`)
+    for (const needle of scenario.expect) assert.ok(text.includes(needle), `[${name}] 缺少文案：${needle}`)
+    for (const needle of scenario.reject ?? []) assert.ok(!text.includes(needle), `[${name}] 不应出现文案：${needle}`)
 
-    const actual = { view: sha(tree) }
-    if (name === 'ready') {
-      assert.equal(countByClass(tree, 'ofs-batch'), 1, '同一批次的 2 张图应聚合成 1 个批次卡')
-      assert.equal(countByClass(tree, 'ofs-tile'), 5, '风格预设应为 5 个 tile')
-      assert.equal(countByClass(tree, 'ofs-fieldset'), 4, '表单应有 4 个分区')
-    }
-    nextGolden[name] = actual
-    if (!golden[name] || UPDATE) return
-    assert.equal(actual.view, golden[name].view, '工作台渲染结构与基准不一致（UI 有意变更请 --update）')
+    assertStructure(name, tree, scenario.structure)
   })
 }
 
@@ -440,9 +608,42 @@ await check('画廊悬停动作把完整作品条目交给回调', async () => {
   assert.equal(received.zoom && received.zoom.item, historyItem, '查看大图应收到完整条目')
 })
 
+// 测试内探针：校验假 React 替身自身的 hook 语义。替身坏了，上面所有渲染断言都会静默失真，
+// 所以这条回归留在测试侧。探针组件不再进入 src/。
 await check('渲染：hook 探针（useReducer/useMemo/useLayoutEffect/memo）', async () => {
   const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
-  const tree = await client.mountRaw(client.components.HarnessProbe, {})
+  const React = client.react
+  const h = React.createElement
+  let memoRuns = 0
+
+  function ProbeChildBase(props) {
+    return h('span', { className: 'ofs-harness-child' }, props.label)
+  }
+  const ProbeChild = React.memo(ProbeChildBase)
+
+  function HarnessProbeBase() {
+    const [count, dispatch] = React.useReducer((state, action) => (action === 'inc' ? state + 1 : state), 0)
+    const doubled = React.useMemo(() => count * 2, [count])
+    const memoStamp = React.useMemo(() => {
+      memoRuns += 1
+      return memoRuns
+    }, [])
+    React.useLayoutEffect(() => {
+      dispatch('inc')
+    }, [])
+    return h(
+      'div',
+      { className: 'ofs-harness-probe' },
+      h('span', { className: 'ofs-harness-count' }, String(count)),
+      h('span', { className: 'ofs-harness-doubled' }, String(doubled)),
+      h('span', { className: 'ofs-harness-memo-stamp' }, String(memoStamp)),
+      h(ProbeChild, { label: 'memo-child-ok' }),
+      h('button', { type: 'button', className: 'ofs-harness-inc', onClick: () => dispatch('inc') }, 'inc'),
+    )
+  }
+  const HarnessProbe = React.memo(HarnessProbeBase)
+
+  const tree = await client.mountRaw(HarnessProbe, {})
   client.unmount()
 
   const byClass = (className) => findNodes(
@@ -460,15 +661,10 @@ await check('渲染：hook 探针（useReducer/useMemo/useLayoutEffect/memo）',
   assert.equal(textOf(byClass('ofs-harness-memo-stamp')), '1', '空依赖 useMemo 应跨重渲染复用')
   // memo：包装组件仍可被 serializeTree 正常展开。
   assert.ok(JSON.stringify(serializeTree(tree)).includes('memo-child-ok'), 'memo 包装的子组件应被序列化展开')
-  assert.match(client.components.HarnessProbe.displayName || '', /^Memo\(/, 'memo 应保留 displayName')
+  assert.match(HarnessProbe.displayName || '', /^Memo\(/, 'memo 应保留 displayName')
   // 未实现的 hook 要给出明确报错，而不是 undefined is not a function。
   assert.throws(() => client.react.useContext({}), /未实现 useContext/)
 })
-
-if (UPDATE) {
-  await writeFile(GOLDEN_PATH, `${JSON.stringify(nextGolden, null, 2)}\n`, 'utf8')
-  console.log(`\n已更新基准：${GOLDEN_PATH}`)
-}
 
 const failed = results.filter((item) => !item.ok)
 console.log(`\n${results.length - failed.length}/${results.length} 通过`)

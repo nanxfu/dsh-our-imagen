@@ -14,8 +14,6 @@
 
 export const VERSION = '0.3.0'
 
-export const API_PREFIX = '/imagen-api'
-
 /**
  * Host HTTP 路由表（index.js 注册时必须逐一对应）。
  * `path` 为宿主注册的绝对路径；客户端请求用 `clientPath()` 得到相对路径，
@@ -166,6 +164,10 @@ export function hostErrorCodes() {
 /**
  * 远端 daemon 协议（Host 客户端与 daemon 实现共用）。
  * daemon 侧字段见 remote/daemon.py 顶部说明；这里是唯一的字段/取值清单。
+ *
+ * 注入配置的键由 `lib/session/provisioner.js` 的 buildKernelConfig 组装，
+ * daemon 侧的接受清单是 `remote/daemon.py` 的 _KNOWN_CONFIG_KEYS——两处各管一端，
+ * 本文件不再维护第三份副本。
  */
 export const PROTOCOL = {
   daemon: {
@@ -178,17 +180,6 @@ export const PROTOCOL = {
     // /health.phase 的完整取值域；未知值按 warming 处理。
     healthPhases: ['booting', 'installing', 'loading', 'ready', 'error'],
     ntfyEvents: ['ready', 'error'],
-    // lib/kernel.js 注入、daemon 解析的配置键。
-    configKeys: [
-      'auth_token',
-      'ntfy_topic',
-      'idle_timeout_sec',
-      'preload',
-      'preset_id',
-      'log_level',
-      'version',
-      'contract',
-    ],
   },
 }
 
@@ -344,17 +335,16 @@ export function publicPresets() {
 }
 
 /**
- * 下发给远端 daemon 的契约子集（经 lib/kernel.js 注入为 `config.contract`）。
- * daemon 侧读取它来校验参数边界、版本号与协议字段，不再各自硬编码。
+ * 下发给远端 daemon 的契约子集（经 lib/kernel.js 注入为 `config.contract`；
+ * 同一份对象由 `tools/gen-contract-json.mjs` 落盘为 `remote/contract.json` 供 mock 使用）。
+ *
+ * 只保留 Python 容器实际消费的元数据：`daemon.py` 读取 `contract.version`
+ * （protocol_version）与 `contract.limits`（_limit_spec / _max_tasks）。宿主路由、
+ * health phase、ntfy 事件与错误码都只属于 Host/Client，不下发远端。
  */
 export function daemonContract() {
   return {
     version: VERSION,
-    routes: Object.fromEntries(
-      Object.entries(PROTOCOL.daemon.routes).map(([name, route]) => [name, { method: route.method, path: route.path }]),
-    ),
-    healthPhases: PROTOCOL.daemon.healthPhases,
-    ntfyEvents: PROTOCOL.daemon.ntfyEvents,
     limits: {
       width: LIMITS.width,
       height: LIMITS.height,
@@ -366,10 +356,5 @@ export function daemonContract() {
       negativePrompt: LIMITS.negativePrompt,
       historyTool: LIMITS.historyTool,
     },
-    errorCodes: Object.fromEntries(
-      Object.entries(ERROR_CODES)
-        .filter(([, value]) => value.layer === 'host' || value.layer === 'remote')
-        .map(([code, value]) => [code, { layer: value.layer, status: value.status ?? null }]),
-    ),
   }
 }

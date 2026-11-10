@@ -102,7 +102,7 @@ export function apply(ctx, config = {}) {
 
   registerRoutes(ctx, [
     ...createSessionRoutes({ session, probes, statePayload, defaultPreset, log }),
-    ...createJobRoutes({ ctx, queue }),
+    ...createJobRoutes({ ctx, queue, log }),
     ...createFileRoutes({ ctx, log }),
     ...createLibraryRoutes({ ctx, log }),
     ...createPromptRoutes({ ctx, log }),

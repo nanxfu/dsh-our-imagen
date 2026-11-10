@@ -4,7 +4,7 @@
  * 词表是本地常量，不依赖模型；名称走字典（labelKey），
  * 这样中英文与其余界面文案同一套来源。
  *
- * icon 是 icons.jsx 里的图标名，不是 emoji —— 图标要跟其余控件同一套描边。
+ * icon 是 icons.jsx 里的图标名。
  */
 
 export const STYLE_CAPSULES = [

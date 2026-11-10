@@ -2,13 +2,13 @@
 /**
  * 会话层纯函数与端口的离线回归（不连 Kaggle、不出外网，只起一个本机 mock /generate）。
  *
- * 覆盖 P5 拆分后的纯函数边界（session-race / session-reliability 继续覆盖状态机行为）：
+ * 覆盖 P5 拆分后仍保留的纯函数边界（session-race / session-reliability 继续覆盖状态机行为）：
  *  - state.js：空快照、快照拷贝、字段初始值、失败状态截断、时长文案；
- *  - timers.js：interval 注册/清理、轮询异常只记日志不抛出；
+ *  - SessionManager：interval 注册/清理、轮询异常只记日志不抛出；
  *  - rendezvous.js：会合 URL、NDJSON 解析分类、daemon error 归一、排队超时判定；
  *  - health.js：phase → 文案映射、Kernel 结束判定、心跳丢失恢复动作；
  *  - provisioner.js：注入 daemon 的配置（版本 / 契约 / 预设展开）；
- *  - remote-port.js：远端载荷构造、结果映射、连接失败与空结果的错误码。
+ *  - JobQueue.generate：远端载荷构造、结果映射、连接失败与空结果的错误码、seed 回绕。
  *
  * 运行：node test/session-pure.mjs
  */
@@ -16,7 +16,9 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 
-import { VERSION } from '../shared/contract.js'
+import { LIMITS, VERSION } from '../shared/contract.js'
+import { JobQueue } from '../lib/jobs.js'
+import { SessionManager } from '../lib/session.js'
 import { describeHealthPhase, decideReadyHealthLoss, isKernelEnded } from '../lib/session/health.js'
 import { buildKernelConfig } from '../lib/session/provisioner.js'
 import {
@@ -25,7 +27,6 @@ import {
   parseRendezvousLine,
   rendezvousUrl,
 } from '../lib/session/rendezvous.js'
-import { requestJobGeneration } from '../lib/session/remote-port.js'
 import {
   ACTIVE_STATES,
   createSessionFields,
@@ -34,7 +35,6 @@ import {
   snapshotOf,
   writeFailure,
 } from '../lib/session/state.js'
-import { clearTimers, every } from '../lib/session/timers.js'
 
 const failures = []
 let passed = 0
@@ -144,42 +144,48 @@ async function scenarioState() {
 }
 
 async function scenarioTimers() {
-  console.log('\n── timers.js 注册与清理')
+  console.log('\n── SessionManager 定时器注册与清理')
   await check('every 把 id 放进 Set，clearTimers 清空并停表', async () => {
-    const timers = new Set()
+    const session = new SessionManager({ ctx: {}, defaultPreset: 'sdxl-turbo' })
     const calls = []
-    const log = { warn: () => {} }
-    const id = every(timers, log, () => calls.push(1), 5)
-    assert.equal(timers.size, 1)
-    assert.ok(timers.has(id))
-    await new Promise((resolve) => setTimeout(resolve, 25))
-    clearTimers(timers)
-    assert.equal(timers.size, 0)
-    const count = calls.length
-    assert.ok(count >= 1, `期望至少触发一次，实际 ${count}`)
-    await new Promise((resolve) => setTimeout(resolve, 15))
-    assert.equal(calls.length, count, '清理后不应继续触发')
+    try {
+      const id = session.every(() => calls.push(1), 5)
+      assert.equal(session.timers.size, 1)
+      assert.ok(session.timers.has(id))
+      await new Promise((resolve) => setTimeout(resolve, 25))
+      session.clearTimers()
+      assert.equal(session.timers.size, 0)
+      const count = calls.length
+      assert.ok(count >= 1, `期望至少触发一次，实际 ${count}`)
+      await new Promise((resolve) => setTimeout(resolve, 15))
+      assert.equal(calls.length, count, '清理后不应继续触发')
+    } finally {
+      session.clearTimers()
+    }
   })
 
   await check('轮询异常只记 warn，不抛出且下一拍继续', async () => {
-    const timers = new Set()
     const warnings = []
+    const session = new SessionManager({
+      ctx: {},
+      defaultPreset: 'sdxl-turbo',
+      deps: { log: { warn: (...args) => warnings.push(args) } },
+    })
     let calls = 0
-    every(
-      timers,
-      { warn: (...args) => warnings.push(args) },
-      () => {
+    try {
+      session.every(() => {
         calls += 1
         throw new Error('boom')
-      },
-      5,
-    )
-    await new Promise((resolve) => setTimeout(resolve, 30))
-    clearTimers(timers)
-    assert.ok(calls >= 2, `期望多拍继续，实际 ${calls}`)
-    assert.ok(warnings.length >= 2, `期望每拍都记 warn，实际 ${warnings.length}`)
-    assert.match(warnings[0][0], /轮询异常/)
-    assert.equal(warnings[0][1], 'boom')
+      }, 5)
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      session.clearTimers()
+      assert.ok(calls >= 2, `期望多拍继续，实际 ${calls}`)
+      assert.ok(warnings.length >= 2, `期望每拍都记 warn，实际 ${warnings.length}`)
+      assert.match(warnings[0][1], /轮询异常/)
+      assert.equal(warnings[0][2], 'boom')
+    } finally {
+      session.clearTimers()
+    }
   })
 }
 
@@ -292,8 +298,18 @@ async function scenarioProvisioner() {
   })
 }
 
+/** 只实现 connection() 的假会话：验证队列自己的载荷构造与传输，不依赖状态机。 */
+function makeGenerationQueue(connection) {
+  return new JobQueue({
+    ctx: null,
+    session: { connection },
+    defaultPreset: 'sdxl-turbo',
+    options: { generateTimeoutMs: 5000 },
+  })
+}
+
 async function scenarioRemotePort() {
-  console.log('\n── remote-port.js 载荷构造与错误码')
+  console.log('\n── JobQueue.generate 载荷构造与错误码')
   const mock = await startMockDaemon()
   try {
     const params = {
@@ -306,16 +322,10 @@ async function scenarioRemotePort() {
       cfg: 1.5,
       count: 2,
     }
-    const session = { connection: () => ({ endpoint: mock.endpoint, token: 'test-token' }) }
+    const queue = makeGenerationQueue(() => ({ endpoint: mock.endpoint, token: 'test-token' }))
 
     await check('成功路径：tasks 递增 seed / 字段名转换 / 返回 modelId', async () => {
-      const { results, modelId } = await requestJobGeneration({
-        session,
-        ctx: null,
-        presetId: 'sdxl-turbo',
-        params,
-        timeoutMs: 5000,
-      })
+      const { results, modelId } = await queue.generate('sdxl-turbo', params, 5000)
       assert.equal(mock.state.calls, 1)
       assert.equal(mock.state.lastBody.pipeline.loader, 'sdxl')
       assert.equal(mock.state.lastBody.modelId, 'stabilityai/sdxl-turbo')
@@ -336,9 +346,21 @@ async function scenarioRemotePort() {
       assert.equal(modelId, 'test/model')
     })
 
+    await check('seed 接近上界时环形回绕：全部落在契约范围内且按序递增', async () => {
+      const wrapped = { ...params, seed: LIMITS.seed.max - 1, count: 4 }
+      await queue.generate('sdxl-turbo', wrapped, 5000)
+      const seeds = mock.state.lastBody.tasks.map((task) => task.seed)
+      assert.deepEqual(seeds, [LIMITS.seed.max - 1, 0, 1, 2], `回绕结果：${seeds}`)
+      assert.ok(
+        seeds.every((seed) => seed >= 0 && seed <= LIMITS.seed.max),
+        `seed 越界：${seeds}`,
+      )
+    })
+
     await check('连接不可用 → session_absent（原文案）', async () => {
+      const offline = makeGenerationQueue(() => ({ endpoint: null, token: null }))
       await assert.rejects(
-        () => requestJobGeneration({ session: { connection: () => ({ endpoint: null, token: null }) }, ctx: null, presetId: 'sdxl-turbo', params, timeoutMs: 1000 }),
+        () => offline.generate('sdxl-turbo', params, 1000),
         (error) => error.code === 'session_absent' && error.message === '远端连接不可用',
       )
     })
@@ -354,15 +376,14 @@ async function scenarioRemotePort() {
     })
     const port = await listen(server)
     try {
+      const queue = makeGenerationQueue(() => ({ endpoint: `http://127.0.0.1:${port}`, token: 't' }))
       await assert.rejects(
         () =>
-          requestJobGeneration({
-            session: { connection: () => ({ endpoint: `http://127.0.0.1:${port}`, token: 't' }) },
-            ctx: null,
-            presetId: 'sdxl-turbo',
-            params: { prompt: 'x', negativePrompt: '', seed: 1, width: 512, height: 512, steps: 1, cfg: 0, count: 1 },
-            timeoutMs: 5000,
-          }),
+          queue.generate(
+            'sdxl-turbo',
+            { prompt: 'x', negativePrompt: '', seed: 1, width: 512, height: 512, steps: 1, cfg: 0, count: 1 },
+            5000,
+          ),
         (error) => error.code === 'empty_result' && error.message === '远端没有返回图片',
       )
     } finally {

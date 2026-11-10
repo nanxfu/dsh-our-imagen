@@ -1,8 +1,8 @@
 /**
  * 对话线程域：消息列表、意图解析、澄清卡与助手气泡同步。
  *
- * 一条助手气泡只反映真实任务进度，不额外提问；意图只进确认卡，不动表单。
- * 依赖入参：{ state, t, isEn, aliveRef, form, patchForm, generate }。
+ * 一条助手气泡只反映真实任务进度；意图只进确认卡，不动表单。
+ * 依赖入参：{ t, isEn, alive, state, form, generate }。form 是表单域对象，
  * generate 由组合层提供（函数声明提升，本 hook 在事件回调里调用时已完成初始化）。
  */
 
@@ -16,14 +16,14 @@ import { intentFormPatch, intentPrompt, lastIntentPrompt } from '../../logic/int
 import { STYLE_CAPSULES } from '../capsules.js'
 import { DEFAULT_RATIOS } from '../ratios.js'
 
-export function useChatThread({ state, t, isEn, aliveRef, form, patchForm, generate }) {
+export function useChatThread({ t, isEn, alive, state, form, generate }) {
   const [messages, setMessages] = React.useState([])
   const [interpreting, setInterpreting] = React.useState(false)
   const messageSeq = React.useRef(0)
   // 同一 tick 内连按两次回车时，用 ref 挡住第二次解析请求。
   const interpretingRef = React.useRef(false)
 
-  // 对话线程里的助手气泡跟着任务状态走，只反映真实进度，不额外提问。
+  // 助手气泡跟着任务状态走，只反映真实进度。
   const activeJob = activeJobOf(state)
   const threadJob = activeJob || (state && state.lastJob) || null
   const threadJobKey = threadJob ? `${threadJob.id}:${threadJob.status}` : ''
@@ -77,9 +77,9 @@ export function useChatThread({ state, t, isEn, aliveRef, form, patchForm, gener
     const previousPrompt = lastIntentPrompt(messages)
     pushMessages([{ role: 'user', text: value }])
     setInterpreting(true)
-    const result = await parseIntentRequest({ text: value, previousPrompt, locale: isEn ? 'en' : 'zh' })
+    const result = await alive(parseIntentRequest({ text: value, previousPrompt, locale: isEn ? 'en' : 'zh' }))
     interpretingRef.current = false
-    if (!aliveRef.current) return
+    if (!result) return
     setInterpreting(false)
     if (result.ok && result.data && typeof result.data.prompt === 'string') {
       const data = result.data
@@ -121,11 +121,11 @@ export function useChatThread({ state, t, isEn, aliveRef, form, patchForm, gener
     }
     // 连续迭代时沿用上一张图的种子，便于对比同一构图下的改动。
     const previous = (state && state.lastJob && state.lastJob.params) || null
-    if (previous && form.seed === '' && Number.isFinite(previous.seed) && previous.seed >= 0) {
+    if (previous && form.form.seed === '' && Number.isFinite(previous.seed) && previous.seed >= 0) {
       overrides.seed = previous.seed
     }
     const patch = intentFormPatch(message, DEFAULT_RATIOS)
-    if (Object.keys(patch).length > 0) patchForm(patch)
+    if (Object.keys(patch).length > 0) form.patchForm(patch)
     await generate(overrides, { pushUser: false })
   }
 

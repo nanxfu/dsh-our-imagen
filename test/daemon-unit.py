@@ -6,7 +6,7 @@
 
 覆盖：
   1. 模块导入无副作用（无服务器、无隧道、无后台线程）
-  2. load_config / _build_config：正常键、别名、未知键告警、contract / allow_no_auth
+  2. load_config / _build_config：精确键、未知键告警、contract / allow_no_auth
   3. protocol_version：契约 version → 注入 version → 文件常量
   4. validate_generate_spec：契约边界（尺寸 256-1536/8 对齐、steps 1-60、cfg 0-20、
      任务数 1-4、seed ≤2147483647、prompt ≤2000）、契约缺失回退、默认值
@@ -55,11 +55,9 @@ d = _load_daemon()
 
 AUTH_TOKEN = "test-token-0123456789"
 
-# 与 shared/contract.js 的 daemonContract() 同形，只取 daemon 会消费的部分。
+# 与 shared/contract.js 的 daemonContract() 同形：daemon 只消费 version 与 limits。
 CONTRACT = {
     "version": "0.3.0",
-    "healthPhases": ["booting", "installing", "loading", "ready", "error"],
-    "ntfyEvents": ["ready", "error"],
     "limits": {
         "width": {"min": 256, "max": 1536, "step": 8},
         "height": {"min": 256, "max": 1536, "step": 8},
@@ -181,7 +179,12 @@ class BuildConfigTest(DaemonUnitTest):
         self.assertEqual(config.contract["limits"]["width"]["max"], 1536)
         self.assertTrue(config.allow_no_auth)
 
-    def test_aliases_are_supported(self) -> None:
+    def test_known_config_keys_match_dataclass_fields(self) -> None:
+        # 精确键表就是 DaemonConfig 的字段名：新增字段必须同步进 _KNOWN_CONFIG_KEYS，否则会被当成未知键。
+        self.assertEqual(d._KNOWN_CONFIG_KEYS, set(d.DaemonConfig.__dataclass_fields__))
+
+    def test_alias_style_keys_are_rejected(self) -> None:
+        # 契约已收敛：只认 Host 实际下发的精确 snake_case 键，历史驼峰别名不再兜底。
         config = d._build_config(
             {
                 "authToken": "tok2",
@@ -193,13 +196,15 @@ class BuildConfigTest(DaemonUnitTest):
                 "pipeline": {"loader": "sdxl", "base": "org/base"},
             }
         )
-        self.assertEqual(config.auth_token, "tok2")
-        self.assertEqual(config.ntfy_topic, "topic-2")
-        self.assertEqual(config.idle_timeout_sec, 300)
-        self.assertEqual(config.preset_id, "sdxl-turbo")
-        self.assertEqual(config.log_level, "warn")
-        self.assertTrue(config.allow_no_auth)
-        self.assertEqual(config.preload["base"], "org/base")
+        self.assertEqual(config.auth_token, "")
+        self.assertEqual(config.ntfy_topic, "")
+        self.assertEqual(config.idle_timeout_sec, 1800)
+        self.assertIsNone(config.preset_id)
+        self.assertEqual(config.log_level, "info")
+        self.assertFalse(config.allow_no_auth)
+        self.assertIsNone(config.preload)
+        self.assertLogContains("未知配置键已忽略")
+        self.assertLogContains("authToken")
 
     def test_invalid_values_fall_back(self) -> None:
         config = d._build_config(

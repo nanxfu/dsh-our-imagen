@@ -5,19 +5,12 @@ import React from 'react'
 import { Icon } from './icons.jsx'
 import { formatDuration } from '../logic/format.js'
 
+/** 接收 { t, ui, compute, library, elapsedMs }；elapsedMs 由 Studio 用 useNow 算好传入。 */
 export function Filmstrip(props) {
-  const {
-    t,
-    batches,
-    activeJob,
-    selected,
-    onSelect,
-    elapsedMs,
-    onSessionStart,
-    sessionState,
-    sessionQueued,
-    onOpenGallery,
-  } = props
+  const { t, ui, compute, library, elapsedMs } = props
+  const { setView } = ui
+  const { activeJob, sessionState, queued: sessionQueued, startSession } = compute
+  const { batches, selected, selectImage } = library
 
   const selectedPath = selected && selected.image ? selected.image.path : ''
 
@@ -42,7 +35,7 @@ export function Filmstrip(props) {
             <span>
               {sessionState === 'absent' ? t('studio.filmstrip.offline') : t('studio.filmstrip.empty')}
               {sessionState === 'absent' ? (
-                <button type="button" className="ofs-link" onClick={onSessionStart}>
+                <button type="button" className="ofs-link" onClick={startSession}>
                   {t('studio.compute.start')}
                 </button>
               ) : null}
@@ -61,7 +54,7 @@ export function Filmstrip(props) {
                     type="button"
                     key={path}
                     className={active ? 'ofs-thumb is-on' : 'ofs-thumb'}
-                    onClick={() => onSelect(entry)}
+                    onClick={() => selectImage(entry)}
                     title={batch.prompt || path}
                   >
                     <img src={entry.image.url} alt={entry.image.file || 'thumb'} loading="lazy" />
@@ -80,7 +73,7 @@ export function Filmstrip(props) {
       </div>
 
       <div className="ofs-filmstrip-side">
-        <button type="button" className="ofs-filmstrip-link" onClick={onOpenGallery}>
+        <button type="button" className="ofs-filmstrip-link" onClick={() => setView('gallery')}>
           <Icon name="images" size={15} />
           {t('studio.gallery.title')}
           <Icon name="chevronRight" size={13} />

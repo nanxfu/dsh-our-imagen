@@ -9,7 +9,7 @@ export function fallbackTranslate(lang) {
 
 export function translator(props) {
   if (props && typeof props.t === 'function') return props.t
-  return fallbackTranslate(typeof document === 'undefined' ? 'en' : document.documentElement.lang)
+  return fallbackTranslate(document.documentElement.lang)
 }
 
 export function localized(t, key) {

@@ -12,10 +12,11 @@
 
 契约：启动时加载 ``remote/contract.json``（由 ``node tools/gen-contract-json.mjs`` 从
 shared/contract.js 生成），参数边界与 daemon 注入的 ``config.contract`` 同源；文件缺失或损坏
-时退回内置旧边界并 WARN。越界请求返回 400 ``{"error": {"code": "invalid_request", ...}}``，
+时退回内置旧边界并 WARN。HTTP 路由是 daemon 协议的一部分，由本文件的 ROUTE_PATHS 固定。
+越界请求返回 400 ``{"error": {"code": "invalid_request", ...}}``，
 不再静默钳制（P9 起 daemon 已改为严格校验）。
 
-失败注入分支（供 Host 错误分支与 smoke 测试用）：
+失败注入分支（供 Host 的错误分支回归使用）：
   --phase installing|loading|error   /generate 返回 503（warming / load_failed）
   --fail oom|load_failed|...         固定错误码（旧错误分类分支）
   --fail-generate 400|500            固定 HTTP 状态码的错误响应
@@ -64,7 +65,7 @@ LOG_MAX_LINES = 400
 SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2")
 FAIL_CHOICES = ("none", "oom", "load_failed", "invalid_request", "generation_failed")
 FAIL_GENERATE_CHOICES = ("none", "400", "500")
-# --phase 取值域：auto = 按 --warm-seconds 推导；其余与 contract.healthPhases 对齐。
+# --phase 取值域：auto = 按 --warm-seconds 推导；其余与 remote/daemon.py 的 /health.phase 一致。
 PHASE_CHOICES = ("auto", "ready", "installing", "loading", "error")
 
 CONTRACT_PATH = Path(__file__).resolve().parent.parent / "remote" / "contract.json"
@@ -73,14 +74,6 @@ CONTRACT_PATH = Path(__file__).resolve().parent.parent / "remote" / "contract.js
 # 保证"没有 contract.json"时 mock 与 daemon 的退化行为相同。
 FALLBACK_CONTRACT = {
     "version": "0.3.0",
-    "routes": {
-        "generate": {"method": "POST", "path": "/generate"},
-        "health": {"method": "GET", "path": "/health"},
-        "logs": {"method": "GET", "path": "/logs"},
-        "shutdown": {"method": "POST", "path": "/shutdown"},
-    },
-    "healthPhases": ["booting", "installing", "loading", "ready", "error"],
-    "ntfyEvents": ["ready", "error"],
     "limits": {
         "width": {"max": 2048, "min": 64, "step": 8},
         "height": {"max": 2048, "min": 64, "step": 8},
@@ -90,12 +83,11 @@ FALLBACK_CONTRACT = {
         "seed": {"max": 2**31 - 1},
         "prompt": {"maxChars": 2000},
     },
-    "errorCodes": {},
 }
 
 CONTRACT: dict = {}
-# HTTP 路由路径由契约提供（兜底值与 daemon 一致）；契约改路径时 mock 的 dispatch 会跟着变。
-ROUTE_PATHS = {name: route["path"] for name, route in FALLBACK_CONTRACT["routes"].items()}
+# HTTP 路由路径是 daemon 协议的一部分（与 remote/daemon.py 一致），不从契约文件读取。
+ROUTE_PATHS = {"health": "/health", "logs": "/logs", "generate": "/generate", "shutdown": "/shutdown"}
 
 _START_TS = time.time()
 _ARGS: argparse.Namespace  # 在 main() 里赋值
@@ -157,11 +149,6 @@ def load_contract() -> dict:
         else:
             CONTRACT = json.loads(json.dumps(FALLBACK_CONTRACT))
             log("[mock] WARN 契约不是 JSON 对象，回退内置契约")
-    routes = CONTRACT.get("routes")
-    if isinstance(routes, dict):
-        for name, route in routes.items():
-            if isinstance(route, dict) and isinstance(route.get("path"), str):
-                ROUTE_PATHS[name] = route["path"]
     log(
         f"[mock] 契约 version={CONTRACT.get('version')} "
         f"limits={','.join(sorted((CONTRACT.get('limits') or {}).keys())) or 'none'}"

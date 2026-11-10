@@ -7,8 +7,14 @@ import { formatSeconds } from '../logic/format.js'
 
 const INSPIRE_KEYS = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
 
+/** 接收 { t, ui, compute, form, library, actions } 领域对象。 */
 export function Stage(props) {
-  const { t, selected, activeJob, sessionQueued, onIterate, onReroll, onCopy, zoom, setZoom, isFavorite, onToggleFavorite, onUseExample } = props
+  const { t, ui, compute, form, library, actions } = props
+  const { zoom, setZoom, copyPath } = ui
+  const { activeJob, queued: sessionQueued } = compute
+  const { useInspiration } = form
+  const { selected, isFavorite, toggleFavorite } = library
+  const { iterate, reroll } = actions
   const image = selected && selected.image ? selected.image : null
   const item = (selected && selected.item) || null
   const params = (item && item.params) || null
@@ -25,7 +31,7 @@ export function Stage(props) {
       if (event.key === 'Escape') setZoom(false)
     }
     document.addEventListener('keydown', onKey)
-    if (closeRef.current && typeof closeRef.current.focus === 'function') closeRef.current.focus()
+    if (closeRef.current) closeRef.current.focus()
     return () => document.removeEventListener('keydown', onKey)
   }, [zoom])
 
@@ -42,7 +48,7 @@ export function Stage(props) {
             <div className="ofs-examples">
               <span className="ofs-examples-label">{t('studio.stage.examples')}</span>
               {INSPIRE_KEYS.map((key) => (
-                <button type="button" key={key} className="ofs-example" onClick={() => onUseExample(t(key))} title={t(key)}>
+                <button type="button" key={key} className="ofs-example" onClick={() => useInspiration(t(key))} title={t(key)}>
                   {t(`${key}.label`)}
                 </button>
               ))}
@@ -77,13 +83,13 @@ export function Stage(props) {
           <button type="button" className="ofs-glass-btn" onClick={() => setZoom(true)} title={t('studio.stage.zoom')} aria-label={t('studio.stage.zoom')}>
             <Icon name="expand" size={16} />
           </button>
-          <button type="button" className="ofs-glass-btn" onClick={() => onCopy(copyTarget)} title={t('studio.action.copyPath')} aria-label={t('studio.action.copyPath')}>
+          <button type="button" className="ofs-glass-btn" onClick={() => copyPath(copyTarget)} title={t('studio.action.copyPath')} aria-label={t('studio.action.copyPath')}>
             <Icon name="copy" size={16} />
           </button>
           <button
             type="button"
             className={favorite ? 'ofs-glass-btn is-on' : 'ofs-glass-btn'}
-            onClick={() => onToggleFavorite(image.path || image.file)}
+            onClick={() => toggleFavorite(image.path || image.file)}
             title={favorite ? t('studio.action.favorited') : t('studio.action.favorite')}
             aria-label={favorite ? t('studio.action.favorited') : t('studio.action.favorite')}
             aria-pressed={favorite}
@@ -118,15 +124,15 @@ export function Stage(props) {
       </div>
 
       <div className="ofs-dock">
-        <button type="button" className="ofs-dock-button" onClick={() => onIterate(selected)}>
+        <button type="button" className="ofs-dock-button" onClick={() => iterate(selected)}>
           <Icon name="focus" size={15} />
           {t('studio.action.iterate')}
         </button>
-        <button type="button" className="ofs-dock-button" onClick={() => onReroll(selected)}>
+        <button type="button" className="ofs-dock-button" onClick={() => reroll(selected)}>
           <Icon name="reroll" size={15} />
           {t('studio.action.reroll')}
         </button>
-        <button type="button" className="ofs-dock-button" onClick={() => onCopy(copyTarget)}>
+        <button type="button" className="ofs-dock-button" onClick={() => copyPath(copyTarget)}>
           <Icon name="copy" size={15} />
           {t('studio.action.copyPath')}
         </button>
