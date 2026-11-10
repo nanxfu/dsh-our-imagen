@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { apply as applyPlugin } from '../index.js'
+import { VERSION } from '../shared/contract.js'
 
 // 1×1 透明 PNG，用于伪造远端返回
 const PNG_B64 =
@@ -31,14 +32,14 @@ function startMockDaemon() {
       res.end(body)
     }
     const auth = req.headers.authorization
-    if (auth !== `Bearer ${DEV_TOKEN}`) return send(401, { error: 'Unauthorized' })
+    if (auth !== `Bearer ${DEV_TOKEN}`) return send(401, { error: { code: 'unauthorized', message: 'Unauthorized' } })
 
     if (req.method === 'GET' && req.url === '/health') {
       state.healthCalls += 1
       return send(200, {
         status: 'ok',
         phase: 'ready',
-        version: '0.3.0',
+        version: VERSION,
         model_id: 'mock-model',
         device: 'Mock T4',
         device_count: 2,
@@ -76,7 +77,7 @@ function startMockDaemon() {
     }
 
     if (req.method === 'POST' && req.url === '/shutdown') return send(200, { status: 'shutting_down' })
-    return send(404, { error: 'Not found' })
+    return send(404, { error: { code: 'not_found', message: 'Not found' } })
   })
 
   return new Promise((resolve) => {

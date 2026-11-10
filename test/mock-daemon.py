@@ -10,6 +10,16 @@
   POST /generate            {status, model_id, load_seconds, results[...]}
   POST /shutdown            {"status": "shutting_down"} 后退出
 
+契约：启动时加载 ``remote/contract.json``（由 ``node tools/gen-contract-json.mjs`` 从
+shared/contract.js 生成），参数边界与 daemon 注入的 ``config.contract`` 同源；文件缺失或损坏
+时退回内置旧边界并 WARN。越界请求返回 400 ``{"error": {"code": "invalid_request", ...}}``，
+不再静默钳制（P9 起 daemon 已改为严格校验）。
+
+失败注入分支（供 Host 错误分支与 smoke 测试用）：
+  --phase installing|loading|error   /generate 返回 503（warming / load_failed）
+  --fail oom|load_failed|...         固定错误码（旧错误分类分支）
+  --fail-generate 400|500            固定 HTTP 状态码的错误响应
+
 图片编码优先用 Pillow；没装 Pillow 时退回内置的最小 PNG 编码（zlib + CRC32），
 保证任何环境都能返回合法 PNG。
 
@@ -18,6 +28,8 @@
   python test/mock-daemon.py --port 17860 --token test-token --delay 1.5
   python test/mock-daemon.py --port 17860 --token test-token --fail oom
   python test/mock-daemon.py --port 17860 --token test-token --warm-seconds 20
+  python test/mock-daemon.py --port 17860 --token test-token --phase error
+  python test/mock-daemon.py --port 17860 --token test-token --fail-generate 500
 """
 
 from __future__ import annotations
@@ -36,6 +48,7 @@ import urllib.parse
 import zlib
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 try:  # Pillow 可选：仅用于画出更像样的测试图
     from PIL import Image, ImageDraw
@@ -50,6 +63,39 @@ VERSION = "0.3.0-mock"
 LOG_MAX_LINES = 400
 SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2")
 FAIL_CHOICES = ("none", "oom", "load_failed", "invalid_request", "generation_failed")
+FAIL_GENERATE_CHOICES = ("none", "400", "500")
+# --phase 取值域：auto = 按 --warm-seconds 推导；其余与 contract.healthPhases 对齐。
+PHASE_CHOICES = ("auto", "ready", "installing", "loading", "error")
+
+CONTRACT_PATH = Path(__file__).resolve().parent.parent / "remote" / "contract.json"
+
+# 契约文件缺失/损坏时的兜底：故意与 remote/daemon.py 的 _FALLBACK_LIMITS 保持一致（旧边界），
+# 保证"没有 contract.json"时 mock 与 daemon 的退化行为相同。
+FALLBACK_CONTRACT = {
+    "version": "0.3.0",
+    "routes": {
+        "generate": {"method": "POST", "path": "/generate"},
+        "health": {"method": "GET", "path": "/health"},
+        "logs": {"method": "GET", "path": "/logs"},
+        "shutdown": {"method": "POST", "path": "/shutdown"},
+    },
+    "healthPhases": ["booting", "installing", "loading", "ready", "error"],
+    "ntfyEvents": ["ready", "error"],
+    "limits": {
+        "width": {"max": 2048, "min": 64, "step": 8},
+        "height": {"max": 2048, "min": 64, "step": 8},
+        "steps": {"max": 80, "min": 1},
+        "cfg": {"max": 30, "min": 0},
+        "count": {"max": 8, "min": 1},
+        "seed": {"max": 2**31 - 1},
+        "prompt": {"maxChars": 2000},
+    },
+    "errorCodes": {},
+}
+
+CONTRACT: dict = {}
+# HTTP 路由路径由契约提供（兜底值与 daemon 一致）；契约改路径时 mock 的 dispatch 会跟着变。
+ROUTE_PATHS = {name: route["path"] for name, route in FALLBACK_CONTRACT["routes"].items()}
 
 _START_TS = time.time()
 _ARGS: argparse.Namespace  # 在 main() 里赋值
@@ -87,6 +133,66 @@ def log_since(since: int) -> tuple[list[str], int]:
     first_seq = total - len(snapshot) + 1
     lines = [line for offset, line in enumerate(snapshot) if first_seq + offset > since]
     return lines, total
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 契约（remote/contract.json，与 daemon 注入的 config.contract 同源）
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def load_contract() -> dict:
+    """加载远端契约 JSON；缺失/损坏时回退内置兜底并 WARN，不让 mock 起不来。"""
+    global CONTRACT
+    try:
+        data = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        CONTRACT = json.loads(json.dumps(FALLBACK_CONTRACT))
+        log(f"[mock] WARN 未找到 {CONTRACT_PATH}，回退内置契约（旧边界）")
+    except Exception as exc:  # noqa: BLE001 - 契约坏掉也要能起 mock
+        CONTRACT = json.loads(json.dumps(FALLBACK_CONTRACT))
+        log(f"[mock] WARN 契约解析失败（{type(exc).__name__}: {exc}），回退内置契约")
+    else:
+        if isinstance(data, dict):
+            CONTRACT = data
+        else:
+            CONTRACT = json.loads(json.dumps(FALLBACK_CONTRACT))
+            log("[mock] WARN 契约不是 JSON 对象，回退内置契约")
+    routes = CONTRACT.get("routes")
+    if isinstance(routes, dict):
+        for name, route in routes.items():
+            if isinstance(route, dict) and isinstance(route.get("path"), str):
+                ROUTE_PATHS[name] = route["path"]
+    log(
+        f"[mock] 契约 version={CONTRACT.get('version')} "
+        f"limits={','.join(sorted((CONTRACT.get('limits') or {}).keys())) or 'none'}"
+    )
+    return CONTRACT
+
+
+def _limit(name: str) -> dict:
+    """取参数边界：优先契约 limits，缺失项用内置兜底（合并口径与 daemon 的 _limit_spec 一致）。"""
+    fallback = dict(FALLBACK_CONTRACT["limits"][name])
+    limits = CONTRACT.get("limits") if isinstance(CONTRACT, dict) else None
+    if not isinstance(limits, dict):
+        return fallback
+    item = limits.get(name)
+    if not isinstance(item, dict):
+        return fallback
+    merged = dict(fallback)
+    for key in ("min", "max", "step", "maxChars"):
+        value = item.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            merged[key] = value
+    return merged
+
+
+def _max_tasks() -> int:
+    fallback = int(FALLBACK_CONTRACT["limits"]["count"]["max"])
+    try:
+        value = int(_limit("count").get("max"))
+    except (TypeError, ValueError):
+        return fallback
+    return value if value > 0 else fallback
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -209,6 +315,10 @@ def render_png(width: int, height: int, seed: int) -> bytes:
 
 
 def _phase() -> str:
+    """当前 phase：--phase 显式指定优先；auto 时按 --warm-seconds 模拟 loading。"""
+    configured = str(getattr(_ARGS, "phase", "auto") or "auto")
+    if configured != "auto":
+        return configured
     warm = float(_ARGS.warm_seconds or 0.0)
     if warm > 0 and (time.time() - _START_TS) < warm:
         return "loading"
@@ -218,7 +328,7 @@ def _phase() -> str:
 def health_payload(extra: dict | None = None) -> dict:
     phase = _phase()
     payload = {
-        "status": "ok",
+        "status": "error" if phase == "error" else "ok",
         "phase": phase,
         "version": VERSION,
         "model_id": "mock/mock-model",
@@ -231,7 +341,8 @@ def health_payload(extra: dict | None = None) -> dict:
         "queue_depth": 0,
         "last_error": _LAST_ERROR["value"],
         "last_error_code": _LAST_ERROR["code"],
-        "detail": extra.get("detail") if extra else None,
+        "detail": (extra.get("detail") if extra else None)
+        or (_LAST_ERROR["value"] if phase == "error" else None),
         "uptime_seconds": round(time.time() - _START_TS, 1),
         "mock": True,
     }
@@ -246,8 +357,18 @@ _AUTH_TOKEN = ""
 _GEN_LOCK = threading.Lock()
 
 
+def _int_param(value, field: str, low: int, high: int) -> int:  # noqa: ANN001
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field} 必须是整数") from None
+    if number < low or number > high:
+        raise ValueError(f"{field} 必须在 {low}..{high} 之间，收到 {number}")
+    return number
+
+
 def validate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
-    """与 remote/daemon.py 相同的校验口径，让 Host 的错误分支能被真实触发。"""
+    """与 remote/daemon.py 相同的校验口径（边界来自 contract.limits），越界返回 400。"""
     if not isinstance(spec, dict):
         raise ValueError("请求体必须是 JSON 对象")
     pipeline = spec.get("pipeline")
@@ -262,6 +383,23 @@ def validate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
     tasks_raw = spec.get("tasks")
     if not isinstance(tasks_raw, list) or not tasks_raw:
         raise ValueError("tasks 必须是非空数组")
+    max_tasks = _max_tasks()
+    if len(tasks_raw) > max_tasks:
+        raise ValueError(f"单次请求最多 {max_tasks} 个任务")
+
+    width_limit = _limit("width")
+    height_limit = _limit("height")
+    steps_limit = _limit("steps")
+    cfg_limit = _limit("cfg")
+    seed_limit = _limit("seed")
+    prompt_max = int(_limit("prompt").get("maxChars") or 0)
+    width_min, width_max = int(width_limit["min"]), int(width_limit["max"])
+    height_min, height_max = int(height_limit["min"]), int(height_limit["max"])
+    width_step = int(width_limit.get("step") or 8)
+    height_step = int(height_limit.get("step") or 8)
+    steps_min, steps_max = int(steps_limit["min"]), int(steps_limit["max"])
+    cfg_min, cfg_max = cfg_limit["min"], cfg_limit["max"]
+    seed_max = int(seed_limit.get("max") or 2**31 - 1)
 
     model_id = spec.get("modelId") or spec.get("model_id") or base
     tasks = []
@@ -271,23 +409,34 @@ def validate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
         prompt = raw.get("prompt")
         if not isinstance(prompt, str) or not prompt.strip():
             raise ValueError(f"tasks[{index}].prompt 必填")
-        width = int(raw.get("width", 512) or 512)
-        height = int(raw.get("height", 512) or 512)
-        width = min(2048, max(64, width - width % 8))
-        height = min(2048, max(64, height - height % 8))
-        steps = int(raw.get("steps", 4) or 4)
-        cfg = float(raw.get("cfg", 0.0) or 0.0)
-        seed = int(raw.get("seed", -1))
+        prompt = prompt.strip()
+        if prompt_max > 0 and len(prompt) > prompt_max:
+            raise ValueError(f"tasks[{index}].prompt 最长 {prompt_max} 个字符")
+        width = _int_param(raw.get("width", 1024), f"tasks[{index}].width", width_min, width_max)
+        height = _int_param(raw.get("height", 1024), f"tasks[{index}].height", height_min, height_max)
+        steps = _int_param(raw.get("steps", 4), f"tasks[{index}].steps", steps_min, steps_max)
+        try:
+            cfg = float(raw.get("cfg", 0.0))
+        except (TypeError, ValueError):
+            raise ValueError(f"tasks[{index}].cfg 必须是数字") from None
+        if cfg < cfg_min or cfg > cfg_max:
+            raise ValueError(f"tasks[{index}].cfg 必须在 {cfg_min}..{cfg_max} 之间")
+        try:
+            seed = int(raw.get("seed", -1))
+        except (TypeError, ValueError):
+            raise ValueError(f"tasks[{index}].seed 必须是整数") from None
         if seed < 0:
-            seed = int(time.time() * 1000) % (2**31 - 1)
+            seed = int(time.time() * 1000) % seed_max
+        elif seed > seed_max:
+            raise ValueError(f"tasks[{index}].seed 必须不超过 {seed_max}")
         tasks.append(
             {
                 "name": str(raw.get("name") or f"{index + 1:02d}"),
-                "prompt": prompt.strip(),
+                "prompt": prompt,
                 "negative_prompt": str(raw.get("negative_prompt") or "").strip(),
                 "seed": seed,
-                "width": width,
-                "height": height,
+                "width": width - width % width_step,
+                "height": height - height % height_step,
                 "steps": steps,
                 "cfg": cfg,
             }
@@ -357,12 +506,12 @@ class MockHandler(BaseHTTPRequestHandler):
         path = parts.path.rstrip("/") or "/"
         query = urllib.parse.parse_qs(parts.query)
 
-        if path == "/health":
+        if path == ROUTE_PATHS.get("health", "/health"):
             # 与真实 daemon 一致：/health 轮询不写日志环，否则会把 /logs 分页搅乱。
             self._send_json(200, health_payload())
             return
 
-        if path == "/logs":
+        if path == ROUTE_PATHS.get("logs", "/logs"):
             try:
                 since = int((query.get("since") or ["0"])[0])
             except (TypeError, ValueError):
@@ -379,13 +528,13 @@ class MockHandler(BaseHTTPRequestHandler):
         parts = urllib.parse.urlsplit(self.path)
         path = parts.path.rstrip("/") or "/"
 
-        if path == "/shutdown":
+        if path == ROUTE_PATHS.get("shutdown", "/shutdown"):
             log("[http] 200 POST /shutdown（0.3s 后退出）")
             self._send_json(200, {"status": "shutting_down"})
             threading.Thread(target=self._delayed_exit, daemon=True).start()
             return
 
-        if path == "/generate":
+        if path == ROUTE_PATHS.get("generate", "/generate"):
             self._handle_generate()
             return
 
@@ -399,13 +548,19 @@ class MockHandler(BaseHTTPRequestHandler):
     def _handle_generate(self) -> None:
         phase = _phase()
         if phase != "ready":
-            log(f"[http] 503 /generate（phase={phase}）")
-            self._send_error(
-                503,
-                "warming",
-                f"mock 尚未就绪（phase={phase}），请稍后重试",
-                {"Retry-After": "2"},
-            )
+            if phase == "error":
+                # 与 daemon 一致：启动失败时 /generate 返回 503 + load_failed（错误详情可读）。
+                message = _LAST_ERROR["value"] or "mock 启动失败"
+                log("[http] 503 /generate（phase=error）")
+                self._send_error(503, "load_failed", message)
+            else:
+                log(f"[http] 503 /generate（phase={phase}）")
+                self._send_error(
+                    503,
+                    "warming",
+                    f"mock 尚未就绪（phase={phase}），请稍后重试",
+                    {"Retry-After": "5"},
+                )
             return
 
         try:
@@ -414,6 +569,17 @@ class MockHandler(BaseHTTPRequestHandler):
         except ValueError as exc:
             log(f"[http] 400 /generate 校验失败：{exc}")
             self._send_error(400, "invalid_request", str(exc))
+            return
+
+        fail_generate = str(getattr(_ARGS, "fail_generate", "none") or "none")
+        if fail_generate != "none":
+            status = int(fail_generate)
+            code = "invalid_request" if status == 400 else "generation_failed"
+            message = f"mock 按 --fail-generate {status} 注入的错误：{code}"
+            _LAST_ERROR["value"] = f"{code}: {message}"
+            _LAST_ERROR["code"] = code
+            log(f"[http] {status} /generate 注入错误 {code}（--fail-generate）")
+            self._send_error(status, code, message)
             return
 
         if _ARGS.fail != "none":
@@ -483,6 +649,18 @@ def parse_args(argv=None):  # noqa: ANN001, ANN201
         help="让 /generate 返回指定错误码，用于测试 Host 的错误分支",
     )
     parser.add_argument(
+        "--fail-generate",
+        choices=FAIL_GENERATE_CHOICES,
+        default="none",
+        help="让 /generate 返回固定 HTTP 状态码的错误（400 invalid_request / 500 generation_failed）",
+    )
+    parser.add_argument(
+        "--phase",
+        choices=PHASE_CHOICES,
+        default="auto",
+        help="固定 /health 的 phase；auto 表示按 --warm-seconds 推导",
+    )
+    parser.add_argument(
         "--warm-seconds",
         type=float,
         default=0.0,
@@ -496,13 +674,20 @@ def main(argv=None) -> int:  # noqa: ANN001
     global _ARGS, _AUTH_TOKEN
     _ARGS = parse_args(argv)
     _AUTH_TOKEN = str(_ARGS.token or "")
+    load_contract()
 
     log("=" * 60)
     log(f"imagen mock daemon v{VERSION}（Pillow={'on' if _HAS_PILLOW else 'off'}）")
     log(
         f"host={_ARGS.host} port={_ARGS.port} auth={'on' if _AUTH_TOKEN else 'off'} "
-        f"delay={_ARGS.delay}s fail={_ARGS.fail} warm={_ARGS.warm_seconds}s"
+        f"delay={_ARGS.delay}s fail={_ARGS.fail} fail_generate={_ARGS.fail_generate} "
+        f"phase={_ARGS.phase} warm={_ARGS.warm_seconds}s"
     )
+    if _ARGS.phase == "error":
+        # 模拟 daemon 启动失败：/health status=error，/generate → 503 load_failed。
+        _LAST_ERROR["value"] = "load_failed: mock 按 --phase error 注入的启动失败"
+        _LAST_ERROR["code"] = "load_failed"
+        log("[mock] 模拟启动失败：phase=error，/generate 将返回 503 load_failed")
     if _ARGS.warm_seconds and _ARGS.warm_seconds > 0:
         log(f"[mock] 模拟加载中：{_ARGS.warm_seconds}s 内 /health 报 phase=loading")
 

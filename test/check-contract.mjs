@@ -14,6 +14,7 @@
  *   g. daemon 协议：/health /logs /generate /shutdown 与 healthPhases 全部取值
  *   h. docs/SPEC.md 包含全部路由路径与全部 host+remote 错误码
  *   i. lib/presets.js 不再定义预设数据
+ *   j. remote/contract.json 与 shared/contract.js 的 daemonContract() 一致（P10 生成物）
  *
  * 运行：node test/check-contract.mjs
  */
@@ -28,6 +29,7 @@ import {
   ERROR_CODES,
   PRESETS,
   PROTOCOL,
+  daemonContract,
   hostErrorCodes,
 } from '../shared/contract.js'
 
@@ -416,28 +418,94 @@ async function checkPresetsMoved() {
   pass('i', 'lib/presets.js 只引用契约，不再定义预设数据')
 }
 
+// ── j. remote/contract.json 与 daemonContract() 一致 ──────────────────────
+
+/** 深比较两个 JSON 值，把差异路径收集到 `out`（键顺序不计）。 */
+export function collectContractDiff(expected, actual, out = [], path = '') {
+  const kind = (value) => (Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value)
+  const expectedKind = kind(expected)
+  const actualKind = kind(actual)
+  if (expectedKind !== actualKind) {
+    out.push(`${path || '（根）'}: 期望 ${expectedKind}，实际 ${actualKind}`)
+    return out
+  }
+  if (expectedKind === 'object') {
+    for (const key of new Set([...Object.keys(expected), ...Object.keys(actual)])) {
+      const child = path ? `${path}.${key}` : key
+      if (!(key in expected)) out.push(`${child}: 实际多出 ${JSON.stringify(actual[key])}`)
+      else if (!(key in actual)) out.push(`${child}: 实际缺失（期望 ${JSON.stringify(expected[key])}）`)
+      else collectContractDiff(expected[key], actual[key], out, child)
+    }
+    return out
+  }
+  if (expectedKind === 'array') {
+    if (expected.length !== actual.length) {
+      out.push(`${path}: 数组长度 期望 ${expected.length}，实际 ${actual.length}`)
+      return out
+    }
+    expected.forEach((item, index) => collectContractDiff(item, actual[index], out, `${path}[${index}]`))
+    return out
+  }
+  if (!Object.is(expected, actual)) {
+    out.push(`${path || '（根）'}: 期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`)
+  }
+  return out
+}
+
+async function checkRemoteContract() {
+  const rel = 'remote/contract.json'
+  let text
+  try {
+    text = await readText(rel)
+  } catch {
+    return fail('j', `${rel} 不存在或不可读`, [
+      '契约导出物缺失：先运行 `node tools/gen-contract-json.mjs` 生成（P10-a）',
+    ])
+  }
+  let actual
+  try {
+    actual = JSON.parse(text)
+  } catch (error) {
+    return fail('j', `${rel} 不是合法 JSON`, [String(error?.message ?? error)])
+  }
+  const expected = daemonContract()
+  const diffs = collectContractDiff(expected, actual)
+  if (diffs.length) {
+    const shown = diffs.slice(0, 20)
+    if (diffs.length > shown.length) shown.push(`…共 ${diffs.length} 处差异`)
+    return fail('j', `${rel} 与 daemonContract() 不一致`, shown)
+  }
+  pass('j', `${rel} 与 daemonContract() 一致`, `${Object.keys(expected).length} 个顶层键`)
+}
+
 // ── main ──────────────────────────────────────────────────────────────────
+const CHECKS = [
+  checkPackageVersion,
+  checkHostRoutes,
+  checkLibRoutes,
+  checkClientLayer,
+  checkErrorCodes,
+  checkVersions,
+  checkDaemonProtocol,
+  checkSpecDoc,
+  checkPresetsMoved,
+  checkRemoteContract,
+]
+
 async function main() {
   console.log('契约校验（shared/contract.js 为唯一来源）')
   console.log(`VERSION=${VERSION}  路由=${ROUTE_LIST.length}  错误码=${Object.keys(ERROR_CODES).length}（host+remote ${HOST_CODES.length}）  预设=${PRESETS.length}`)
   console.log('')
 
-  await checkPackageVersion()
-  await checkHostRoutes()
-  await checkLibRoutes()
-  await checkClientLayer()
-  await checkErrorCodes()
-  await checkVersions()
-  await checkDaemonProtocol()
-  await checkSpecDoc()
-  await checkPresetsMoved()
+  for (const check of CHECKS) await check()
 
   console.log('')
+  const total = CHECKS.length
   if (failedChecks.length === 0) {
-    console.log(`契约校验通过：${passed}/9 项`)
+    console.log(`契约校验通过：${passed}/${total} 项`)
     return
   }
-  console.log(`契约校验失败：${failedChecks.length}/9 项未通过（${failedChecks.join(', ')}）`)
+  console.log(`契约校验失败：${failedChecks.length}/${total} 项未通过（${failedChecks.join(', ')}）`)
   process.exitCode = 1
 }
 

@@ -84,22 +84,39 @@ $env:OUR_FREE_IMAGEN_TOKEN = "dev-token"
 # 3. 重启 DSH Desktop，插件即刻进入 Ready 状态
 ```
 
-更多测试与真机验证命令：
+测试按层次划分（离线检查均不需要 Kaggle 账号与 GPU）：
+
 ```powershell
-# 一次跑完所有离线检查（构建 + 客户端文案/逻辑/渲染 + Host 端到端 + 会话状态机 + 本地库）
+# 一次跑完离线检查：构建 + 契约 + 客户端文案/逻辑/渲染 + Host 端到端 + 会话状态机/竞态 + 本地库
 npm test
 
-# 只跑 Host 端到端功能测试（21 项自动化断言）
-node test/host-e2e.mjs
+# 只跑契约校验：路由 / 错误码 / 参数边界 / 预设 / 远端协议的唯一来源是 shared/contract.js，
+# 改契约后必跑（也校验 remote/contract.json 是否与契约同步）
+npm run test:contract
 
-# 会话状态机 / start-stop 竞态 / 本地库的离线回归（无 Kaggle、无 GPU、无外网）
-node test/session-reliability.mjs
-node test/session-race.mjs
-node test/library-atomic.mjs
+# 只跑 Host 端到端（21 项自动化断言，起本地 mock daemon 跑完整链路）
+npm run test:host
 
-# 检查前端国际化文案键完整性
-node test/check-client-locale.mjs
+# 只跑客户端（文案键完整性 / 纯逻辑 / 渲染快照，需先构建 client.js）
+npm run test:client
+
+# Python daemon 的单元测试与协议冒烟（需要本机 python 环境）
+npm run test:daemon   # 纯函数单测（50 项）
+npm run test:smoke    # mock daemon 协议场景（9 项）
+
+# 重新生成 / 校验下发给远端 daemon 的契约 JSON（改了 shared/contract.js 后）
+npm run contract:gen
+npm run contract:check
 ```
+
+真机验证（手动执行，会消耗 Kaggle GPU 额度）：
+
+```powershell
+npm run test:live   # 真实 Kaggle CLI 链路（登录、推送、日志）
+npm run test:gpu    # 真实 GPU 出图链路（端到端出图）
+```
+
+> 契约改动流程：只改 `shared/contract.js`（及需要同步的生成物），然后依次跑 `npm run test:contract` 与 `npm test`；不要在各调用点重新写字面量。
 
 > 「检查环境」每点一次都会启动若干个 `kaggle` CLI 子进程（每个约 10 秒），因此首次检查需要 20~30 秒，面板会显示「检查中」。
 

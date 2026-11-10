@@ -9,6 +9,9 @@
   5. POST /shutdown 后进程退出
   6. warming 分支（--warm-seconds）
   7. 错误分类分支（--fail oom / load_failed / invalid_request / generation_failed）
+  8. 契约边界：越界返回 400 invalid_request（P9 起 daemon 不再静默钳制）
+  9. phase error 分支（--phase error）：/health status=error、/generate 503 load_failed
+ 10. --fail-generate 500 分支：/generate 返回 500 generation_failed
 
 用法：
   python test/smoke-daemon.py
@@ -259,7 +262,7 @@ def scenario_main(verbose: bool) -> list[str]:
                 "negative_prompt": "",
                 "seed": 43,
                 "width": 256,
-                "height": 192,
+                "height": 256,
                 "steps": 4,
                 "cfg": 0,
             },
@@ -340,7 +343,7 @@ def scenario_warming() -> list[str]:
             f"{daemon.base}/generate",
             method="POST",
             token=TOKEN,
-            payload=make_spec([{"name": "01", "prompt": "x", "seed": 1, "width": 128, "height": 128, "steps": 4, "cfg": 0}]),
+            payload=make_spec([{"name": "01", "prompt": "x", "seed": 1, "width": 256, "height": 256, "steps": 4, "cfg": 0}]),
         )
         check(status == 503, f"未 ready 时 /generate 应 503，实际 {status}")
         check(body.get("error", {}).get("code") == "warming", f"503 错误码应为 warming：{body}")
@@ -357,7 +360,7 @@ def scenario_warming() -> list[str]:
             f"{daemon.base}/generate",
             method="POST",
             token=TOKEN,
-            payload=make_spec([{"name": "01", "prompt": "x", "seed": 1, "width": 128, "height": 128, "steps": 4, "cfg": 0}]),
+            payload=make_spec([{"name": "01", "prompt": "x", "seed": 1, "width": 256, "height": 256, "steps": 4, "cfg": 0}]),
             timeout=60,
         )
         check(status == 200, f"ready 后 /generate 应 200，实际 {status}: {body}")
@@ -375,7 +378,7 @@ def scenario_failure(code: str) -> list[str]:
             f"{daemon.base}/generate",
             method="POST",
             token=TOKEN,
-            payload=make_spec([{"name": "01", "prompt": "x", "seed": 1, "width": 128, "height": 128, "steps": 4, "cfg": 0}]),
+            payload=make_spec([{"name": "01", "prompt": "x", "seed": 1, "width": 256, "height": 256, "steps": 4, "cfg": 0}]),
         )
         expected_status = 400 if code == "invalid_request" else 500
         check(status == expected_status, f"--fail {code} 应返回 {expected_status}，实际 {status}")
@@ -385,6 +388,117 @@ def scenario_failure(code: str) -> list[str]:
         daemon.stop()
 
 
+def scenario_boundaries() -> list[str]:
+    """契约边界：越界必须 400 invalid_request（P9 起 daemon 不再静默钳制）。"""
+    daemon = MockDaemon([])
+    notes: list[str] = []
+    base_task = {"name": "01", "prompt": "边界测试", "seed": 1, "width": 256, "height": 256, "steps": 4, "cfg": 0}
+
+    def expect_400(label: str, tasks: list[dict]) -> None:
+        status, body = http_json(
+            f"{daemon.base}/generate", method="POST", token=TOKEN, payload=make_spec(tasks)
+        )
+        check(status == 400, f"{label} 应返回 400，实际 {status}: {body}")
+        check(
+            body.get("error", {}).get("code") == "invalid_request",
+            f"{label} 错误码应为 invalid_request：{body}",
+        )
+        notes.append(f"{label} → 400 invalid_request")
+
+    try:
+        daemon.wait_health()
+        for field, value in (
+            ("width", 255),
+            ("width", 1537),
+            ("height", 255),
+            ("steps", 0),
+            ("steps", 61),
+            ("cfg", 20.5),
+            ("seed", 2147483648),
+        ):
+            task = dict(base_task)
+            task[field] = value
+            expect_400(f"{field}={value}", [task])
+        expect_400("tasks=5（契约 count.max=4）", [dict(base_task) for _ in range(5)])
+        long_prompt = dict(base_task)
+        long_prompt["prompt"] = "字" * 2001
+        expect_400("prompt=2001 字符", [long_prompt])
+
+        # 合法边界仍应接受：最小尺寸 + 最大步数 / 最大 cfg
+        status, body = http_json(
+            f"{daemon.base}/generate",
+            method="POST",
+            token=TOKEN,
+            payload=make_spec(
+                [
+                    {
+                        "name": "01",
+                        "prompt": "边界合法值",
+                        "seed": 1,
+                        "width": 256,
+                        "height": 256,
+                        "steps": 60,
+                        "cfg": 20,
+                    }
+                ]
+            ),
+            timeout=60,
+        )
+        check(status == 200, f"合法边界应返回 200，实际 {status}: {body}")
+        validate_png(base64.b64decode(body["results"][0]["image_b64"]))
+        notes.append("合法边界（256×256 / steps=60 / cfg=20）→ 200 且 PNG 合法")
+        return notes
+    finally:
+        daemon.stop()
+
+
+def scenario_phase_error() -> list[str]:
+    """--phase error：/health status=error，/generate → 503 load_failed。"""
+    daemon = MockDaemon(["--phase", "error"])
+    try:
+        health = daemon.wait_health()
+        check(health.get("phase") == "error", f"phase 应为 error，实际 {health.get('phase')!r}")
+        check(health.get("status") == "error", f"status 应为 error，实际 {health.get('status')!r}")
+        check(health.get("last_error_code") == "load_failed", f"last_error_code 异常：{health}")
+        check(isinstance(health.get("detail"), str) and bool(health["detail"]), "detail 应带失败原因")
+        status, body = http_json(
+            f"{daemon.base}/generate",
+            method="POST",
+            token=TOKEN,
+            payload=make_spec([{"name": "01", "prompt": "x", "seed": 1, "width": 256, "height": 256, "steps": 4, "cfg": 0}]),
+        )
+        check(status == 503, f"phase=error 时 /generate 应 503，实际 {status}: {body}")
+        check(body.get("error", {}).get("code") == "load_failed", f"503 错误码应为 load_failed：{body}")
+        return ["--phase error → /health status=error + /generate 503 load_failed"]
+    finally:
+        daemon.stop()
+
+
+def scenario_fail_generate() -> list[str]:
+    """--fail-generate 400/500：/generate 返回固定状态码 + 对象 envelope。"""
+    notes: list[str] = []
+    for status_code, error_code in ((500, "generation_failed"), (400, "invalid_request")):
+        daemon = MockDaemon(["--fail-generate", str(status_code)])
+        try:
+            daemon.wait_health()
+            status, body = http_json(
+                f"{daemon.base}/generate",
+                method="POST",
+                token=TOKEN,
+                payload=make_spec([{"name": "01", "prompt": "x", "seed": 1, "width": 256, "height": 256, "steps": 4, "cfg": 0}]),
+            )
+            check(status == status_code, f"--fail-generate {status_code} 应返回 {status_code}，实际 {status}: {body}")
+            check(
+                body.get("error", {}).get("code") == error_code,
+                f"--fail-generate {status_code} 错误码应为 {error_code}：{body}",
+            )
+            check(isinstance(body.get("error", {}).get("message"), str), "错误体应带 message")
+            notes.append(f"--fail-generate {status_code} → {status_code} {error_code}（对象 envelope）")
+        finally:
+            daemon.stop()
+    return notes
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="mock daemon 协议验收")
     parser.add_argument("--verbose", action="store_true", help="打印部分原始响应")
@@ -392,7 +506,10 @@ def main(argv: list[str] | None = None) -> int:
 
     scenarios = [
         ("主链路", lambda: scenario_main(args.verbose)),
+        ("契约边界（越界 400）", scenario_boundaries),
         ("warming", scenario_warming),
+        ("phase error（503 load_failed）", scenario_phase_error),
+        ("--fail-generate 500", scenario_fail_generate),
         ("错误分类 oom", lambda: scenario_failure("oom")),
         ("错误分类 load_failed", lambda: scenario_failure("load_failed")),
         ("错误分类 invalid_request", lambda: scenario_failure("invalid_request")),

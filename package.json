@@ -28,6 +28,9 @@
     "test:host": "node test/host-e2e.mjs && node test/session-pure.mjs && node test/library-atomic.mjs && node test/session-reliability.mjs && node test/session-race.mjs",
     "test:session-pure": "node test/session-pure.mjs",
     "test:daemon": "python test/daemon-unit.py",
+    "test:smoke": "python test/smoke-daemon.py",
+    "contract:gen": "node tools/gen-contract-json.mjs",
+    "contract:check": "node tools/gen-contract-json.mjs --check",
     "test:live": "node test/kaggle-live.mjs",
     "test:gpu": "node test/gpu-live.mjs"
   },
