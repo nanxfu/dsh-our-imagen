@@ -10,11 +10,20 @@ import { request } from '../api.js'
 import { useHostState } from '../hooks/useHostState.js'
 import { translator } from '../i18n.js'
 import { activeJobOf, stateJobs } from '../logic/jobs.js'
-import { clampInt, clampNumber, clampSize, parseSeed } from '../logic/clamp.js'
+import { clampInt, clampNumber, clampSize } from '../logic/clamp.js'
 import { STYLE_CAPSULES } from './capsules.js'
 import { DEFAULT_RATIOS, ratioToSize } from './ratios.js'
 import { formatSeconds } from '../logic/format.js'
 import { errorText } from '../logic/error.js'
+import { buildGenerateBody } from '../logic/generate.js'
+import { toggleStyle } from '../logic/prompt.js'
+import {
+  guidanceDetailOf,
+  guidanceKindOf,
+  KAGGLE_INSTALL_COMMAND,
+} from '../logic/guidance.js'
+import { iteratePatch, rerollOverrides, retryOverrides } from '../logic/recall.js'
+import { probeOutcomeOf } from '../logic/probe.js'
 
 const EMPTY_FORM = {
   prompt: '',
@@ -60,7 +69,10 @@ export function useStudio(props) {
   const [negativeOpen, setNegativeOpen] = React.useState(false)
   const [sending, setSending] = React.useState(false)
   const [busy, setBusy] = React.useState('')
+  const [probing, setProbing] = React.useState(false)
+  const [probeReport, setProbeReport] = React.useState(null)
   const [error, setError] = React.useState(null)
+  const [dismissed, setDismissed] = React.useState('')
   const [toast, setToast] = React.useState(null)
   const [selectedPath, setSelectedPath] = React.useState('')
   const [historyItems, setHistoryItems] = React.useState([])
@@ -214,6 +226,12 @@ export function useStudio(props) {
     setToast({ text, id: Date.now() })
   }
 
+  // 新的本地错误出现时，恢复之前被手动收起的指引卡。
+  function fail(code, message) {
+    setDismissed('')
+    setError({ code, message: message ?? '' })
+  }
+
   React.useEffect(() => {
     if (!toast) return undefined
     const timer = setTimeout(() => {
@@ -222,19 +240,27 @@ export function useStudio(props) {
     return () => clearTimeout(timer)
   }, [toast])
 
-  async function copyPath(value) {
-    const text = String(value ?? '').trim()
-    if (!text) return
+  async function copyText(text, okKey) {
+    const value = String(text ?? '').trim()
+    if (!value) return
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text)
-        showToast(t('studio.toast.copied'))
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(value)
+        showToast(t(okKey))
         return
       }
     } catch {
       // 非安全上下文或不给权限：退化为提示用户手动复制
     }
-    showToast(text)
+    showToast(value)
+  }
+
+  function copyPath(value) {
+    return copyText(value, 'studio.toast.copied')
+  }
+
+  function copyInstallCommand() {
+    return copyText(KAGGLE_INSTALL_COMMAND, 'studio.guidance.cli.copied')
   }
 
   async function startSession() {
@@ -243,7 +269,7 @@ export function useStudio(props) {
     const result = await request('imagen-api/session/start', { method: 'POST', body: JSON.stringify({ presetId: form.presetId || defaultPreset }) })
     if (!aliveRef.current) return
     setBusy('')
-    if (!result.ok) setError({ code: result.code, message: result.message })
+    if (!result.ok) fail(result.code, result.message)
     refresh()
   }
 
@@ -253,26 +279,12 @@ export function useStudio(props) {
     const result = await request('imagen-api/session/stop', { method: 'POST' })
     if (!aliveRef.current) return
     setBusy('')
-    if (!result.ok) setError({ code: result.code, message: result.message })
+    if (!result.ok) fail(result.code, result.message)
     refresh()
   }
 
   function buildBody(overrides) {
-    const base = {
-      prompt: form.prompt.trim().slice(0, 2000),
-      negativePrompt: form.negative.trim(),
-      width: clampSize(form.width),
-      height: clampSize(form.height),
-      steps: clampInt(form.steps, 1, 60, 4),
-      cfg: clampNumber(form.cfg, 0, 20, 0),
-      seed: parseSeed(form.seed),
-      count: clampInt(form.count, 1, 4, 1),
-      waitSeconds: 0,
-      autoStart: true,
-    }
-    const presetId = form.presetId || defaultPreset
-    if (presetId) base.presetId = presetId
-    return { ...base, ...overrides }
+    return buildGenerateBody(form, { styleSuffix, defaultPreset, overrides })
   }
 
   function pushMessages(entries) {
@@ -283,7 +295,7 @@ export function useStudio(props) {
     if (sending) return
     const body = buildBody(overrides)
     if (!body.prompt) {
-      setError({ code: 'need_prompt', message: '' })
+      fail('need_prompt', '')
       return
     }
     pendingRef.current = body
@@ -303,37 +315,51 @@ export function useStudio(props) {
       showToast(t('studio.toast.submitted'))
       return
     }
-    setError({ code: result.code, message: result.message })
+    fail(result.code, result.message)
   }
 
-  function reroll() {
-    generate({ seed: -1 })
+  /** 换种子抽卡：基于当前选中的作品，而不是左侧表单。 */
+  function reroll(entry) {
+    const target = entry || selected
+    const overrides = rerollOverrides(target, presets)
+    if (!overrides) {
+      showToast(t('workbench.needPrompt'))
+      return
+    }
+    generate(overrides)
   }
 
+  /** 以此图微调：提示词与尺寸来自作品本身，steps/cfg 才用 params 或预设推荐值。 */
   function iterate(entry) {
-    const image = entry && entry.image ? entry.image : entry
-    const item = entry && entry.item ? entry.item : null
-    const params = (item && item.params) || (focusedJob && focusedJob.params) || {}
-    patchForm({
-      prompt: params.prompt || form.prompt,
-      negative: params.negativePrompt || form.negative,
-      width: params.width || form.width,
-      height: params.height || form.height,
-      steps: params.steps || form.steps,
-      cfg: params.cfg ?? form.cfg,
-      seed: image && Number.isFinite(image.seed) ? String(image.seed) : form.seed,
-      ...(item && item.presetId ? { presetId: item.presetId } : {}),
-    })
+    const target = entry || selected
+    const patch = iteratePatch(target, form, presets)
+    if (Object.keys(patch).length === 0) return
+    patchForm(patch)
+    if (patch.width != null && patch.height != null) {
+      const match = DEFAULT_RATIOS.find((ratio) => {
+        const size = ratioToSize(ratio)
+        return size.width === patch.width && size.height === patch.height
+      })
+      setRatioId(match ? match.id : '')
+    }
     showToast(t('studio.toast.recalled'))
+  }
+
+  /** 按失败任务原来的参数重试；没有任务时退回上一次提交的 body。 */
+  function retryFocusedJob() {
+    const overrides = retryOverrides(focusedJob)
+      || (pendingRef.current ? retryOverrides(pendingRef.current) : null)
+    if (!overrides) {
+      showToast(t('workbench.needPrompt'))
+      return
+    }
+    generate(overrides)
   }
 
   function applyStyle(capsuleId) {
     const capsule = STYLE_CAPSULES.find((item) => item.id === capsuleId)
     if (!capsule) return
-    setForm((prev) => {
-      if (prev.styleId === capsuleId) return { ...prev, styleId: '' }
-      return { ...prev, styleId: capsuleId, negative: prev.negative.trim() ? prev.negative : capsule.negative }
-    })
+    setForm((prev) => toggleStyle(prev, capsule))
   }
 
   function applyRatio(id) {
@@ -365,7 +391,7 @@ export function useStudio(props) {
       return
     }
     setFavorites((prev) => (next ? prev.filter((item) => item !== target) : [...prev, target]))
-    setError({ code: result.code, message: result.message })
+    fail(result.code, result.message)
   }
 
   async function deleteImages(paths) {
@@ -377,13 +403,13 @@ export function useStudio(props) {
     })
     if (!aliveRef.current) return
     if (!result.ok) {
-      setError({ code: result.code, message: result.message })
+      fail(result.code, result.message)
       return
     }
     const removed = Array.isArray(result.data.removed) ? result.data.removed : []
     if (removed.length > 0) showToast(t('studio.toast.deleted'))
     if (Array.isArray(result.data.failed) && result.data.failed.length > 0) {
-      setError({ code: 'delete_failed', message: t('studio.error.deleteFailed') })
+      fail('delete_failed', t('studio.error.deleteFailed'))
     }
     setSelectedPath('')
     await Promise.all([loadHistory(), loadLibrary()])
@@ -396,10 +422,39 @@ export function useStudio(props) {
   }
 
   async function runProbe() {
-    const result = await request('imagen-api/probe', { method: 'POST' })
+    if (probing) return
+    setProbing(true)
+    // Host 的 /probe 会串行调用 kaggle CLI，首次检查约 20~30 秒；45 秒兜底，避免无限等待。
+    const controller = typeof AbortController === 'function' ? new AbortController() : null
+    const timer = controller ? setTimeout(() => controller.abort(), 45000) : null
+    let result
+    try {
+      result = await request('imagen-api/probe', {
+        method: 'POST',
+        ...(controller ? { signal: controller.signal } : {}),
+      })
+    } finally {
+      if (timer !== null) clearTimeout(timer)
+    }
     if (!aliveRef.current) return
-    if (result.ok) showToast(t('studio.compute.check'))
-    else setError({ code: result.code, message: result.message })
+    setProbing(false)
+    // Host 固定回 HTTP 200，成败只能看 payload.ok / probe.auth.ok。
+    if (!result.ok) {
+      setProbeReport({ status: result.code === 'timeout' ? 'timeout' : 'failed', message: result.message, probe: null })
+      showToast(result.code === 'timeout' ? t('studio.probe.timeout') : t('studio.probe.failed'))
+      return
+    }
+    const outcome = probeOutcomeOf(result.data)
+    if (outcome.ok) {
+      setProbeReport({ status: 'ok', message: '', probe: outcome.probe })
+      if (error && (error.code === 'cli_missing' || error.code === 'auth_required')) setError(null)
+      showToast(t('studio.probe.ok'))
+    } else {
+      setProbeReport({ status: 'failed', message: outcome.detail, probe: outcome.probe })
+      if (outcome.code === 'cli_missing' || outcome.code === 'auth_required') fail(outcome.code, outcome.detail)
+      else showToast(t('studio.probe.failed'))
+    }
+    refresh()
   }
 
   async function exportPaths(paths) {
@@ -432,7 +487,7 @@ export function useStudio(props) {
       setSuggestSource(result.data.source === 'model' ? 'model' : 'local')
       return
     }
-    setError({ code: result.code, message: result.message })
+    fail(result.code, result.message)
   }
 
   const styleSuffix = (() => {
@@ -440,24 +495,30 @@ export function useStudio(props) {
     return capsule ? capsule.suffix : ''
   })()
 
-  function composePrompt() {
-    const base = form.prompt.trim()
-    if (!base) return ''
-    if (!styleSuffix) return base
-    return `${base}, ${styleSuffix}`
-  }
-
   // 异常指引：操作失败优先，其次是会话错误，最后是当前任务的错误。
   const guidanceCode =
     (error && error.code) ||
     (session && session.error && session.error.code) ||
     (focusedJob && focusedJob.status === 'failed' && focusedJob.error && focusedJob.error.code) ||
     ''
+  const guidanceDetail = guidanceDetailOf({ error, session, job: focusedJob })
+  const guidanceKey = guidanceCode ? `${guidanceCode}|${guidanceDetail}` : ''
+  const guidanceKind = guidanceCode && dismissed !== guidanceKey ? guidanceKindOf(guidanceCode) : ''
+
+  function dismissGuidance() {
+    if (guidanceKey) setDismissed(guidanceKey)
+    setError(null)
+  }
 
   return {
-    guidanceCode,
+    guidanceKind,
+    guidanceDetail,
+    dismissGuidance,
     batches,
     quota: (state && state.probe && state.probe.quota) || null,
+    probe: (state && state.probe) || null,
+    probing,
+    probeReport,
     panelMode,
     setPanelMode,
     messages,
@@ -485,8 +546,6 @@ export function useStudio(props) {
     selectImage: (entry) => setSelectedPath(entry && entry.image ? entry.image.path : ''),
     form,
     patchForm,
-    styleSuffix,
-    composePrompt,
     styleId: form.styleId,
     applyStyle,
     ratioId,
@@ -498,7 +557,6 @@ export function useStudio(props) {
     sending,
     busy,
     error,
-    clearError: () => setError(null),
     toast,
     showToast,
     favorites,
@@ -519,7 +577,9 @@ export function useStudio(props) {
     generate,
     reroll,
     iterate,
+    retryFocusedJob,
     copyPath,
+    copyInstallCommand,
     startSession,
     stopSession,
     loadHistory,

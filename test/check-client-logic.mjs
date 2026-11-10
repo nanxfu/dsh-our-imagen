@@ -231,6 +231,241 @@ await check('样式 token 与命名空间自洽', () => {
   }
 })
 
+await check('错误码映射到指引类型', () => {
+  assert.equal(logic.guidanceKindOf(''), '')
+  assert.equal(logic.guidanceKindOf('need_prompt'), '', '本地校验错误不弹卡')
+  assert.equal(logic.guidanceKindOf('oom'), 'oom')
+  for (const code of ['session_ended', 'stopped']) assert.equal(logic.guidanceKindOf(code), 'sleep', code)
+  assert.equal(logic.guidanceKindOf('cli_missing'), 'cli')
+  assert.equal(logic.guidanceKindOf('auth_required'), 'auth')
+  for (const code of [
+    'push_failed',
+    'queue_timeout',
+    'tunnel_timeout',
+    'health_failed',
+    'remote_error',
+    'session_error',
+    'session_timeout',
+    'session_absent',
+  ]) {
+    assert.equal(logic.guidanceKindOf(code), 'session', `${code} 应能重新唤醒`)
+  }
+  for (const code of ['generation_failed', 'load_failed', 'invalid_request', 'empty_result', 'invalid_prompt', 'queue_full']) {
+    assert.equal(logic.guidanceKindOf(code), 'generate', `${code} 应能按原参数重试`)
+  }
+  for (const code of ['delete_failed', 'network', 'http_500', 'probe_failed', 'unknown_code']) {
+    assert.equal(logic.guidanceKindOf(code), 'generic', `${code} 只应关闭，不应触发重新出图`)
+  }
+})
+
+await check('指引卡详情优先级', () => {
+  assert.equal(logic.guidanceDetailOf({}), '')
+  assert.equal(logic.guidanceDetailOf({ error: { code: 'x', message: '本地失败' } }), '本地失败')
+  assert.equal(
+    logic.guidanceDetailOf({ session: { error: { message: '排队超时' } }, job: { error: { message: '任务失败' } } }),
+    '排队超时',
+    '会话错误优先于历史任务错误',
+  )
+  assert.equal(
+    logic.guidanceDetailOf({ job: { error: { message: '显存不足：CUDA out of memory' } } }),
+    '显存不足：CUDA out of memory',
+  )
+  assert.equal(logic.guidanceDetailOf({ session: { detail: '已关机' } }), '已关机')
+  assert.equal(logic.guidanceDetailOf({ error: { message: 'a\n  b' } }), 'a b', '换行折叠成一行')
+  assert.ok(logic.guidanceDetailOf({ error: { message: 'x'.repeat(400) } }).length <= 240, '详情应截断')
+})
+
+await check('风格后缀拼装', () => {
+  assert.equal(logic.composePrompt('一只猫', 'cinematic'), '一只猫, cinematic')
+  assert.equal(logic.composePrompt('  一只猫  ', '  '), '一只猫')
+  assert.equal(logic.composePrompt('', 'cinematic'), '', '没有原文时不产生只有后缀的提示词')
+  assert.equal(logic.composePrompt('a, film', 'film'), 'a, film', '后缀已存在时不重复追加')
+  assert.equal(logic.composePrompt('a, cinematic film', 'cinematic film'), 'a, cinematic film')
+})
+
+await check('最终请求体带风格后缀', () => {
+  const form = {
+    prompt: ' 一只赛博猫 ',
+    negative: ' blurry ',
+    presetId: 'sdxl-lightning',
+    width: 1024,
+    height: 1024,
+    steps: 4,
+    cfg: 0,
+    seed: '',
+    count: 1,
+  }
+  const body = logic.buildGenerateBody(form, { styleSuffix: 'cinematic film, 35mm', defaultPreset: 'sdxl-lightning' })
+  assert.equal(body.prompt, '一只赛博猫, cinematic film, 35mm', '风格后缀应进入最终请求体')
+  assert.equal(body.negativePrompt, 'blurry')
+  assert.equal(body.presetId, 'sdxl-lightning')
+  assert.equal(body.seed, -1)
+  assert.equal(body.waitSeconds, 0)
+  assert.equal(body.autoStart, true)
+
+  const chat = logic.buildGenerateBody(form, {
+    styleSuffix: 'cinematic film',
+    defaultPreset: 'sdxl-lightning',
+    overrides: { prompt: '聊天输入' },
+  })
+  assert.equal(chat.prompt, '聊天输入', '显式 prompt（对话 / 抽卡 / 重试）不追加风格后缀')
+  assert.equal(chat.seed, -1)
+
+  const empty = logic.buildGenerateBody({ ...form, prompt: '  ' }, { styleSuffix: 'cinematic film' })
+  assert.equal(empty.prompt, '', '没有原文时不产生只有后缀的提示词')
+})
+
+await check('风格切换同步负向提示词', () => {
+  const capsule = { id: 'film', negative: 'blurry, low quality' }
+  const on = logic.toggleStyle({ styleId: '', negative: '' }, capsule)
+  assert.equal(on.styleId, 'film')
+  assert.equal(on.negative, 'blurry, low quality')
+  const off = logic.toggleStyle(on, capsule)
+  assert.equal(off.styleId, '')
+  assert.equal(off.negative, '', '取消风格时收回它写入的负向')
+  const edited = logic.toggleStyle({ styleId: 'film', negative: 'my own' }, capsule)
+  assert.equal(edited.styleId, '')
+  assert.equal(edited.negative, 'my own', '用户改过的负向保留')
+  const keep = logic.toggleStyle({ styleId: '', negative: 'my own' }, capsule)
+  assert.equal(keep.negative, 'my own')
+})
+
+await check('以此图微调的回填参数', () => {
+  const presets = [
+    { id: 'sdxl-lightning', size: 1024, steps: 4, cfg: 0 },
+    { id: 'sdxl-base', size: 1024, steps: 25, cfg: 7.5 },
+  ]
+  const form = {
+    prompt: '正在写的草稿',
+    negative: '',
+    presetId: 'sdxl-lightning',
+    width: 1024,
+    height: 1024,
+    steps: 4,
+    cfg: 0,
+    seed: '',
+    count: 1,
+    styleId: 'film',
+  }
+  // 真实 Host 形状：只有 prompt / presetId / images，没有 params。
+  const real = {
+    image: { path: 'imagen-output/a/01.png', seed: 17, width: 1152, height: 648 },
+    item: { jobId: 'job-1', prompt: '作品自己的提示词', presetId: 'sdxl-base', images: [] },
+  }
+  const patch = logic.iteratePatch(real, form, presets)
+  assert.equal(patch.prompt, '作品自己的提示词', '提示词来自作品，而不是最近任务')
+  assert.equal(patch.width, 1152)
+  assert.equal(patch.height, 648)
+  assert.equal(patch.steps, 25, '没有 params 时回落到预设推荐值')
+  assert.equal(patch.cfg, 7.5)
+  assert.equal(patch.seed, '17')
+  assert.equal(patch.presetId, 'sdxl-base')
+  assert.equal(patch.styleId, '', '回填最终提示词后清空风格，避免后缀重复')
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, 'negative'), false, '没有作品负向提示词时不覆盖草稿')
+
+  const withParams = {
+    image: real.image,
+    item: { ...real.item, params: { negativePrompt: 'blurry', steps: 30, cfg: 5 } },
+  }
+  const patch2 = logic.iteratePatch(withParams, form, presets)
+  assert.equal(patch2.prompt, '作品自己的提示词')
+  assert.equal(patch2.steps, 30)
+  assert.equal(patch2.cfg, 5)
+  assert.equal(patch2.negative, 'blurry')
+  assert.equal(patch2.width, 1152, '尺寸始终以产物像素为准')
+
+  assert.deepEqual(logic.iteratePatch(null, form, presets), {})
+})
+
+await check('换种子抽卡参数', () => {
+  const presets = [
+    { id: 'sdxl-lightning', size: 1024, steps: 4, cfg: 0 },
+    { id: 'sdxl-base', size: 1024, steps: 25, cfg: 7.5 },
+  ]
+  const entry = {
+    image: { path: 'p', seed: 902, width: 1152, height: 648 },
+    item: { jobId: 'job-9', prompt: '黄昏的街道', presetId: 'sdxl-base', images: [] },
+  }
+  const overrides = logic.rerollOverrides(entry, presets)
+  assert.equal(overrides.prompt, '黄昏的街道', '抽卡使用当前图的提示词')
+  assert.equal(overrides.seed, -1, '种子换成随机')
+  assert.equal(overrides.count, 1, '再画一张')
+  assert.equal(overrides.width, 1152)
+  assert.equal(overrides.height, 648)
+  assert.equal(overrides.steps, 25)
+  assert.equal(overrides.cfg, 7.5)
+  assert.equal(overrides.presetId, 'sdxl-base')
+  assert.equal(logic.rerollOverrides({ image: { seed: 1 }, item: { prompt: '   ' } }, presets), null)
+  assert.equal(logic.rerollOverrides(null, presets), null)
+
+  const withParams = { ...entry, item: { ...entry.item, params: { negativePrompt: 'blur', steps: 30, cfg: 5 } } }
+  const more = logic.rerollOverrides(withParams, presets)
+  assert.equal(more.steps, 30)
+  assert.equal(more.cfg, 5)
+  assert.equal(more.negativePrompt, 'blur')
+})
+
+await check('重试参数构造', () => {
+  const job = {
+    id: 'job-1',
+    presetId: 'sdxl-base',
+    params: { prompt: '失败的任务', negativePrompt: 'blur', width: 512, height: 768, steps: 30, cfg: 5, count: 2 },
+  }
+  const retry = logic.retryOverrides(job)
+  assert.equal(retry.prompt, '失败的任务')
+  assert.equal(retry.seed, -1)
+  assert.equal(retry.count, 2)
+  assert.equal(retry.width, 512)
+  assert.equal(retry.height, 768)
+  assert.equal(retry.steps, 30)
+  assert.equal(retry.cfg, 5)
+  assert.equal(retry.negativePrompt, 'blur')
+  assert.equal(retry.presetId, 'sdxl-base')
+
+  const body = { prompt: '上一次提交', presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0, count: 1, negativePrompt: '' }
+  assert.equal(logic.retryOverrides(body).prompt, '上一次提交', '没有任务时可用上一次提交的 body')
+  assert.equal(logic.retryOverrides({ params: { prompt: '   ' } }), null)
+  assert.equal(logic.retryOverrides(null), null)
+})
+
+await check('探测结果归一化', () => {
+  assert.equal(logic.probeStatusOf(null), null)
+  const failed = logic.probeStatusOf({
+    cli: { present: false, error: 'not found' },
+    auth: { ok: false, errorCode: 'cli_missing' },
+    quota: { available: false },
+    notes: ['未找到 kaggle CLI，请先安装：pip install -U kaggle', '配额接口不可用'],
+  })
+  assert.equal(failed.cli, 'failed')
+  assert.equal(failed.auth, 'failed')
+  assert.equal(failed.quota, 'unavailable')
+  assert.equal(failed.notes.length, 2)
+  assert.equal(logic.probeFailureCode({ cli: { present: false } }), 'cli_missing')
+  assert.equal(logic.probeFailureCode({ cli: { present: true }, auth: { ok: false } }), 'auth_required')
+  assert.equal(logic.probeFailureCode({ cli: { present: true }, auth: { ok: true } }), '')
+  assert.match(logic.probeFailureDetail({ notes: ['安装 kaggle 后重试'] }), /安装 kaggle/)
+  assert.equal(logic.KAGGLE_INSTALL_COMMAND, 'pip install -U kaggle')
+  assert.equal(logic.KAGGLE_SETTINGS_URL, 'https://www.kaggle.com/settings/api')
+
+  // HTTP 200 但业务失败：不能当成检查成功。
+  const payload = {
+    ok: false,
+    probe: { cli: { present: false }, auth: { ok: false }, notes: ['未找到 kaggle CLI，请先安装：pip install -U kaggle'] },
+  }
+  const outcome = logic.probeOutcomeOf(payload)
+  assert.equal(outcome.ok, false)
+  assert.equal(outcome.code, 'cli_missing')
+  assert.match(outcome.detail, /pip install -U kaggle/)
+  assert.equal(logic.probeOutcomeOf({ ok: true, probe: { auth: { ok: true } } }).ok, true)
+  assert.equal(logic.probeOutcomeOf({}).ok, false, '缺字段的 200 响应按失败处理')
+  assert.equal(logic.probeOutcomeOf({}).code, 'probe_failed')
+
+  const ok = logic.probeStatusOf({ cli: true, auth: { ok: true }, quota: { available: true, usedHours: 3, totalHours: 30 } })
+  assert.equal(ok.cli, 'ok', '兼容布尔型 cli')
+  assert.equal(ok.auth, 'ok')
+  assert.equal(ok.quota, 'ok')
+})
+
 const failed = results.filter((item) => !item.ok)
 console.log(`\n${results.length - failed.length}/${results.length} 通过`)
 if (failed.length > 0) process.exitCode = 1

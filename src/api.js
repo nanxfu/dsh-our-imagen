@@ -40,11 +40,13 @@ export async function request(relative, init) {
     }
     return { ok: true, status: res.status, data: payload }
   } catch (cause) {
+    // 调用方用 AbortController 主动取消（例如探测超时）时单独归类，便于界面提示。
+    const aborted = Boolean(cause && (cause.name === 'AbortError' || cause.code === 'ABORT_ERR'))
     return {
       ok: false,
       status: 0,
-      code: 'network',
-      message: String((cause && cause.message) || cause || 'network error'),
+      code: aborted ? 'timeout' : 'network',
+      message: String((cause && cause.message) || cause || (aborted ? 'aborted' : 'network error')),
     }
   }
 }

@@ -2,7 +2,7 @@
  * Host 侧端到端测试（不依赖 Kaggle、不联网）。
  *
  * 做法：起一个 Node mock daemon 模仿远端协议，再用假的 cordis Context 加载 index.js，
- * 把插件路由挂到本地 HTTP 服务上，然后按 docs/API.md 的真实请求形状跑完整链路：
+ * 把插件路由挂到本地 HTTP 服务上，然后按 docs/SPEC.md 的真实请求形状跑完整链路：
  *   session/start → generate → 落盘 → history → file → Agent 工具
  *
  * 运行：node test/host-e2e.mjs
@@ -340,6 +340,17 @@ async function main() {
     assert.ok(item, '历史里应能查到刚生成的任务')
     assert.equal(item.images.length, 2)
     assert.match(item.prompt, /荷花/)
+    // 历史条目必须带回完整参数：舞台提示词与「以此图微调」都依赖它，
+    // 缺 params 会让旧图无法复现（曾经回退到「最近一次任务」的错参）。
+    assert.ok(item.params, '历史条目应带 params')
+    assert.equal(item.params.prompt, '测试用的荷花池塘')
+    assert.equal(item.params.negativePrompt, 'blurry')
+    assert.equal(item.params.seed, 7)
+    assert.equal(item.params.steps, 3)
+    assert.equal(item.params.width, 512)
+    assert.ok(item.finishedAt, '历史条目应带 finishedAt')
+    // 产物文件名由本地序号生成，不拼接远端返回的 name。
+    for (const image of item.images) assert.match(image.file, /^\d{2}\.png$/)
   })
 
   await check('文件路由返回 PNG', async () => {

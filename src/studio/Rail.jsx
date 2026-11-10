@@ -190,14 +190,17 @@ export function Rail(props) {
                 </span>
               </button>
               {negativeOpen ? (
-                <textarea
-                  className="ofs-row-textarea"
-                  rows={3}
-                  value={form.negative}
-                  placeholder={t('studio.negativePlaceholder')}
-                  spellCheck={false}
-                  onChange={(event) => patchForm({ negative: event.target.value })}
-                />
+                <>
+                  <textarea
+                    className="ofs-row-textarea"
+                    rows={3}
+                    value={form.negative}
+                    placeholder={t('studio.negativePlaceholder')}
+                    spellCheck={false}
+                    onChange={(event) => patchForm({ negative: event.target.value })}
+                  />
+                  {Number(form.cfg) <= 0 ? <p className="ofs-row-hint">{t('studio.negativeHintCfg')}</p> : null}
+                </>
               ) : null}
             </div>
 

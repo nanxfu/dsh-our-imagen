@@ -4,6 +4,7 @@ import React from 'react'
 
 import { Icon } from './icons.jsx'
 import { StudioIcon } from './StudioIcon.jsx'
+import { probeStatusOf } from '../logic/probe.js'
 
 function sessionPill(t, sessionState) {
   if (sessionState === 'ready') return { tone: 'ok', label: t('studio.compute.online') }
@@ -15,7 +16,7 @@ function sessionPill(t, sessionState) {
 }
 
 export function TopBar(props) {
-  const { t, view, setView, sessionState, session, quota, presets, form, patchForm, busy, onStart, onStop, onProbe, onRefresh } = props
+  const { t, view, setView, sessionState, session, quota, presets, form, patchForm, busy, probing, probe, probeReport, onStart, onStop, onProbe, onRefresh } = props
   const pill = sessionPill(t, sessionState)
   const [open, setOpen] = React.useState(false)
   const wrapRef = React.useRef(null)
@@ -43,6 +44,15 @@ export function TopBar(props) {
   const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null
   const notReady = sessionState === 'absent' || sessionState === 'error'
   const activePreset = presets.find((item) => item.id === form.presetId) || null
+  const probeInfo = probeStatusOf(probe || (probeReport && probeReport.probe))
+  const probeFailed = probeReport && probeReport.status && probeReport.status !== 'ok' ? probeReport : null
+  const probeNote = probeInfo && probeInfo.notes.length > 0 ? probeInfo.notes[0] : ''
+  const statusText = (status) => {
+    if (status === 'ok') return t('value.ok')
+    if (status === 'failed') return t('value.failed')
+    if (status === 'unavailable') return t('value.quotaUnavailable')
+    return t('value.unknown')
+  }
 
   return (
     <header className="ofs-topbar">
@@ -106,6 +116,27 @@ export function TopBar(props) {
               {idleMinutes > 0 ? <span className="ofs-muted">{t('studio.compute.idleFor')} {idleMinutes} {t('unit.min')}</span> : null}
               {session && session.device ? <span className="ofs-muted">{session.device}</span> : null}
             </div>
+
+            {probeInfo || probing || probeFailed ? (
+              <div className="ofs-popover-note">
+                {probing ? <span>{t('action.probing')}</span> : null}
+                {probeInfo ? (
+                  <>
+                    <span>{t('studio.probe.cli')} · {statusText(probeInfo.cli)}</span>
+                    <span>{t('studio.probe.account')} · {statusText(probeInfo.auth)}</span>
+                    <span>{t('studio.probe.quota')} · {statusText(probeInfo.quota)}</span>
+                  </>
+                ) : null}
+                {probeFailed ? (
+                  <span title={probeFailed.message || undefined}>
+                    {probeFailed.status === 'timeout' ? t('studio.probe.timeout') : t('studio.probe.failed')}
+                    {probeFailed.message ? ` · ${probeFailed.message}` : ''}
+                  </span>
+                ) : null}
+                {probeNote ? <span title={probeInfo.notes.join(' · ')}>{probeNote}</span> : null}
+              </div>
+            ) : null}
+
             <button type="button" role="menuitem" className="ofs-popover-row" onClick={onStart} disabled={!!busy || !notReady}>
               <Icon name="cloud" size={15} />
               {t('studio.compute.start')}
@@ -114,9 +145,16 @@ export function TopBar(props) {
               <Icon name="clock" size={15} />
               {t('studio.compute.stop')}
             </button>
-            <button type="button" role="menuitem" className="ofs-popover-row" onClick={onProbe} disabled={!!busy}>
+            <button
+              type="button"
+              role="menuitem"
+              className="ofs-popover-row"
+              onClick={onProbe}
+              disabled={!!busy || probing}
+              aria-busy={probing}
+            >
               <Icon name="refresh" size={15} />
-              {t('studio.compute.check')}
+              {probing ? t('action.probing') : t('studio.compute.check')}
             </button>
           </div>
         ) : null}

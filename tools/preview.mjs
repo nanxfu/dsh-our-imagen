@@ -129,6 +129,7 @@ const preset = {
 const turbo = { ...preset, id: 'sdxl-turbo', label: '极速草稿', license: '非商用研究许可', licenseKind: 'restricted', tier: 'usable' }
 const base = { ...preset, id: 'sdxl-base', label: '经典 · 30 步精修', size: 1024, steps: 30, cfg: 7, steadySeconds: 18, tier: 'usable' }
 
+// 与真实 Host 的 /imagen-api/history 一致：不提供 params，只给作品本身的信息。
 const historyItems = [
   {
     jobId: 'job-9001',
@@ -136,7 +137,6 @@ const historyItems = [
     prompt: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图',
     presetId: 'sdxl-lightning',
     finishedAt: at(-180),
-    params: { prompt: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图', width: 1152, height: 648, steps: 4, cfg: 0 },
     images: [image(902, 1152, 648), image(901, 1152, 648), image(903, 648, 1152), image(904, 1024, 1024)],
   },
   {
@@ -145,7 +145,6 @@ const historyItems = [
     prompt: '东方水墨风格的远山与孤舟，大面积留白',
     presetId: 'sdxl-turbo',
     finishedAt: at(-9 * 3600),
-    params: { prompt: '东方水墨风格的远山与孤舟，大面积留白', width: 1024, height: 1024, steps: 4, cfg: 0 },
     images: [image(900), image(910, 648, 1152)],
   },
   {
@@ -154,7 +153,6 @@ const historyItems = [
     prompt: '3D 黏土质感的小熊，柔和棚拍光',
     presetId: 'sdxl-lightning',
     finishedAt: at(-30 * 3600),
-    params: { prompt: '3D 黏土质感的小熊，柔和棚拍光', width: 1024, height: 1024, steps: 4, cfg: 0 },
     images: [image(899), image(898)],
   },
   {
@@ -163,7 +161,6 @@ const historyItems = [
     prompt: '极简主义的建筑光影，米白墙面与斜射晨光',
     presetId: 'sdxl-base',
     finishedAt: at(-4 * 24 * 3600),
-    params: { prompt: '极简主义的建筑光影，米白墙面与斜射晨光', width: 1152, height: 648, steps: 30, cfg: 7 },
     images: [image(897, 1152, 648), image(896, 1024, 1024), image(895, 648, 1152)],
   },
 ]
@@ -175,7 +172,13 @@ const states = {
     session: { state: 'ready', modelId: 'sdxl-lightning', device: 'Tesla T4', idleTimeoutSec: 1800, error: null },
     jobs: [],
     lastJob: null,
-    probe: { auth: { ok: true }, quota: { available: true, usedHours: 3, totalHours: 30 } },
+    probe: {
+      provider: 'kaggle',
+      cli: { present: true, version: '1.6.17' },
+      auth: { ok: true },
+      quota: { available: true, usedHours: 3, totalHours: 30 },
+      notes: ['kaggle CLI 1.6.17', '账号接入正常'],
+    },
   },
   empty: {
     defaultPreset: 'sdxl-lightning',
@@ -207,6 +210,24 @@ const states = {
       },
     ],
     lastJob: null,
+  },
+  cli: {
+    defaultPreset: 'sdxl-lightning',
+    presets: [preset, turbo],
+    session: {
+      state: 'error',
+      phase: null,
+      error: { code: 'cli_missing', message: '未找到 kaggle CLI，请先安装：pip install -U kaggle' },
+    },
+    jobs: [],
+    lastJob: null,
+    probe: {
+      provider: 'kaggle',
+      cli: { present: false, error: 'command not found' },
+      auth: { ok: false, errorCode: 'cli_missing' },
+      quota: { available: false },
+      notes: ['未找到 kaggle CLI，请先安装：pip install -U kaggle'],
+    },
   },
 }
 
@@ -419,6 +440,7 @@ async function main() {
     'studio-empty': await renderState(states.empty, { history: [] }),
     'studio-queued': await renderState(states.queued, { history: [] }),
     'studio-guidance': await renderState(states.guidance, { history: historyItems }),
+    'studio-cli': await renderState(states.cli, { history: [] }),
     'gallery-wide': await renderGallery(),
     'chat-standalone': await renderChat(),
   }

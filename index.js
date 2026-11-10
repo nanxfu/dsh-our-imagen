@@ -1,7 +1,7 @@
 /**
  * DSH 插件宿主端 (Host)
  *
- * 职责（协议见 docs/API.md）：
+ * 职责（协议见 docs/SPEC.md）：
  *  - 维护单例远端会话（Kaggle Kernel + Cloudflare 隧道）的生命周期；
  *  - 串行执行出图任务并把图片落到 `<workspace>/imagen-output/`；
  *  - 向 Web Client 暴露状态/任务/历史/文件路由；

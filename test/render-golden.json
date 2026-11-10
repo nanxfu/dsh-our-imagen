@@ -1,20 +1,32 @@
 {
   "ready": {
-    "view": "d6ba4a8a765eade9fab734fffb698ca3"
+    "view": "bd998ce80bba0600b0d1878e411dac55"
   },
   "chat": {
-    "view": "ecee147deed4c399b78466557a99cfe0"
+    "view": "68be88c2296ac41c45d5de01675a6714"
   },
   "empty": {
-    "view": "c6091001f2f05bdb4320ee34832d8145"
+    "view": "733148a6bb70e1d9efb40f8936e21ecb"
   },
   "gallery": {
     "view": "85d16f2ffe1b19337e4bc64c4b5002d4"
   },
   "guidance": {
-    "view": "95f08124cc8790d9ade1a211cf769509"
+    "view": "abb8f1a4ace914e534f6f882878e4698"
   },
   "queued": {
-    "view": "ad9b83b0c289dc0da32b6b0bb1479599"
+    "view": "8250bf108d8f50105af2567aa2f94251"
+  },
+  "cli": {
+    "view": "274a7171ee538c71cff144cc463c0efa"
+  },
+  "session": {
+    "view": "7bdcc08d17ea85ddf7075ef5db919da8"
+  },
+  "generic": {
+    "view": "61b2c507b6bdd19d3b1922f8b3537442"
+  },
+  "generate": {
+    "view": "d24fb2254c56f931e9b03b63b8a66e93"
   }
 }

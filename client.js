@@ -180,6 +180,7 @@ var zh = {
   "error.code.load_failed": "模型加载失败",
   "error.code.invalid_request": "请求参数不符合远端要求",
   "error.code.generation_failed": "生成失败",
+  "error.code.timeout": "检查超时",
   "studio.nav.label": "生图工作台",
   "studio.brand": "免费生图",
   "studio.brandSub": "Studio",
@@ -197,6 +198,12 @@ var zh = {
   "studio.compute.stop": "休眠",
   "studio.compute.quota": "免费额度",
   "studio.compute.idleFor": "闲置休眠",
+  "studio.probe.cli": "命令行",
+  "studio.probe.account": "账号",
+  "studio.probe.quota": "配额",
+  "studio.probe.ok": "环境检查通过",
+  "studio.probe.failed": "环境检查未通过",
+  "studio.probe.timeout": "检查环境超时，可重试；首次检查需要 20~30 秒",
   "studio.promptHint": "先写一句画面描述",
   "studio.preset": "模型",
   "studio.style": "风格",
@@ -204,6 +211,7 @@ var zh = {
   "studio.promptPlaceholder": "描述你想看到的画面，按 Ctrl+Enter 即刻生成",
   "studio.negative": "排除项",
   "studio.negativePlaceholder": "画面中不要出现的内容",
+  "studio.negativeHintCfg": "引导强度为 0 时，远端会忽略排除项",
   "studio.advanced": "专业参数",
   "studio.steps": "步数",
   "studio.cfg": "引导强度",
@@ -267,6 +275,11 @@ var zh = {
   "studio.guidance.cli.action": "重新检查环境",
   "studio.guidance.generic.title": "出图没有成功",
   "studio.guidance.generic.action": "重试一次",
+  "studio.guidance.session.title": "云端的连接中断了",
+  "studio.guidance.other.title": "操作没有完成",
+  "studio.guidance.close": "关闭",
+  "studio.guidance.cli.copy": "复制安装命令",
+  "studio.guidance.cli.copied": "已复制安装命令",
   "studio.compute.check": "检查凭据",
   "studio.gallery.search": "搜索提示词或模型",
   "studio.gallery.export": "复制路径",
@@ -423,6 +436,7 @@ var en = {
   "error.code.load_failed": "Model failed to load",
   "error.code.invalid_request": "Request was rejected by the daemon",
   "error.code.generation_failed": "Generation failed",
+  "error.code.timeout": "Check timed out",
   "studio.nav.label": "Imagen Studio",
   "studio.brand": "Free Imagen",
   "studio.brandSub": "Studio",
@@ -440,6 +454,12 @@ var en = {
   "studio.compute.stop": "Sleep",
   "studio.compute.quota": "Free quota",
   "studio.compute.idleFor": "Idle timeout",
+  "studio.probe.cli": "CLI",
+  "studio.probe.account": "Account",
+  "studio.probe.quota": "Quota",
+  "studio.probe.ok": "Environment check passed",
+  "studio.probe.failed": "Environment check did not pass",
+  "studio.probe.timeout": "The environment check timed out — try again; the first check takes 20–30 s",
   "studio.promptHint": "Write a line first",
   "studio.preset": "Model",
   "studio.style": "Style",
@@ -447,6 +467,7 @@ var en = {
   "studio.promptPlaceholder": "Describe the image you want. Press Ctrl+Enter to generate.",
   "studio.negative": "Exclusions",
   "studio.negativePlaceholder": "What should stay out of the picture",
+  "studio.negativeHintCfg": "The remote ignores exclusions while guidance is 0",
   "studio.advanced": "Advanced",
   "studio.steps": "Steps",
   "studio.cfg": "Guidance",
@@ -510,6 +531,11 @@ var en = {
   "studio.guidance.cli.action": "Check again",
   "studio.guidance.generic.title": "The generation did not finish",
   "studio.guidance.generic.action": "Try again",
+  "studio.guidance.session.title": "The cloud connection dropped",
+  "studio.guidance.other.title": "That action did not complete",
+  "studio.guidance.close": "Dismiss",
+  "studio.guidance.cli.copy": "Copy install command",
+  "studio.guidance.cli.copied": "Install command copied",
   "studio.compute.check": "Check credentials",
   "studio.gallery.search": "Search prompts or models",
   "studio.gallery.export": "Copy paths",
@@ -718,11 +744,12 @@ async function request(relative, init) {
     }
     return { ok: true, status: res.status, data: payload };
   } catch (cause) {
+    const aborted = Boolean(cause && (cause.name === "AbortError" || cause.code === "ABORT_ERR"));
     return {
       ok: false,
       status: 0,
-      code: "network",
-      message: String(cause && cause.message || cause || "network error")
+      code: aborted ? "timeout" : "network",
+      message: String(cause && cause.message || cause || (aborted ? "aborted" : "network error"))
     };
   }
 }
@@ -834,10 +861,10 @@ var tokens_default = '/*\n * 设计变量：黑白灰工作室。\n *\n * 视觉
 var base_default = "/*\n * 基础件：浏览器表面、通用原语（按钮 / 胶囊 / 图标钮 / 输入 / 分段控件）。\n *\n * 所有组件只从这里取原语，不在各自文件里重造按钮。类名都以 .ofs- 开头，\n * 避免污染宿主页面。\n */\n\n.ofs-root *,\n.ofs-root *::before,\n.ofs-root *::after {\n  box-sizing: border-box;\n}\n\n.ofs-root ::selection {\n  background: color-mix(in oklab, var(--ofs-ink) 16%, transparent);\n  color: var(--ofs-ink);\n}\n\n.ofs-root :focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-root :focus:not(:focus-visible) {\n  outline: none;\n}\n\n.ofs-root input,\n.ofs-root textarea,\n.ofs-root select {\n  font: inherit;\n  color: inherit;\n  caret-color: var(--ofs-accent);\n}\n\n.ofs-root button {\n  font: inherit;\n}\n\n.ofs-root img {\n  display: block;\n}\n\n.ofs-root h2,\n.ofs-root h3,\n.ofs-root h4,\n.ofs-root p {\n  margin: 0;\n}\n\n.ofs-root a {\n  color: var(--ofs-accent);\n  text-decoration-thickness: 1px;\n  text-underline-offset: 3px;\n}\n\n.ofs-icon {\n  display: block;\n  flex: 0 0 auto;\n}\n\n.ofs-grow {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ofs-muted {\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n}\n\n/* 滚动条：属于同一个世界，不做默认灰条 */\n.ofs-scroll,\n.ofs-panel-scroll,\n.ofs-thread,\n.ofs-gallery,\n.ofs-roll {\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-scroll::-webkit-scrollbar,\n.ofs-panel-scroll::-webkit-scrollbar,\n.ofs-thread::-webkit-scrollbar,\n.ofs-gallery::-webkit-scrollbar,\n.ofs-roll::-webkit-scrollbar {\n  width: 8px;\n  height: 8px;\n}\n\n.ofs-scroll::-webkit-scrollbar-thumb,\n.ofs-panel-scroll::-webkit-scrollbar-thumb,\n.ofs-thread::-webkit-scrollbar-thumb,\n.ofs-gallery::-webkit-scrollbar-thumb,\n.ofs-roll::-webkit-scrollbar-thumb {\n  border: 2px solid transparent;\n  border-radius: 8px;\n  background: var(--ofs-ink-4);\n  background-clip: content-box;\n}\n\n.ofs-scroll::-webkit-scrollbar-thumb:hover,\n.ofs-panel-scroll::-webkit-scrollbar-thumb:hover,\n.ofs-thread::-webkit-scrollbar-thumb:hover,\n.ofs-gallery::-webkit-scrollbar-thumb:hover,\n.ofs-roll::-webkit-scrollbar-thumb:hover {\n  background: var(--ofs-ink-3);\n  background-clip: content-box;\n}\n\n/* ── 按钮 ───────────────────────────────────────────────────── */\n.ofs-btn {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  height: 38px;\n  padding: 0 18px;\n  border: 1px solid transparent;\n  border-radius: 12px;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  font-weight: 600;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 160ms ease,\n    background-color 160ms ease,\n    border-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-btn:disabled {\n  cursor: default;\n}\n\n.ofs-btn.is-primary {\n  color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n.ofs-btn.is-primary:hover:not(:disabled) {\n  transform: translateY(-1px);\n  box-shadow: 0 14px 28px -12px rgb(16 16 20 / 50%);\n}\n\n.ofs-btn.is-primary:active:not(:disabled) {\n  transform: translateY(0) scale(0.99);\n}\n\n.ofs-btn.is-primary:disabled {\n  background: var(--ofs-accent-grad);\n  border-color: transparent;\n  color: color-mix(in oklab, #fff 82%, transparent);\n  box-shadow: none;\n  opacity: 0.36;\n  filter: saturate(0.6);\n}\n\n.ofs-btn.is-quiet {\n  background: var(--ofs-card);\n  border-color: var(--ofs-card-border);\n  color: var(--ofs-ink);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n.ofs-btn.is-quiet:hover:not(:disabled) {\n  background: var(--ofs-card-solid);\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-accent);\n}\n\n.ofs-btn.is-quiet:disabled {\n  color: var(--ofs-ink-4);\n  box-shadow: none;\n}\n\n.ofs-btn.is-ghost {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-btn.is-ghost:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-ink);\n}\n\n.ofs-btn--sm {\n  height: 30px;\n  padding: 0 12px;\n  border-radius: 10px;\n  font-size: 12px;\n  gap: 6px;\n}\n\n/* ── 图标按钮 ───────────────────────────────────────────────── */\n.ofs-icon-btn {\n  appearance: none;\n  display: inline-grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid transparent;\n  border-radius: 10px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    color 150ms ease,\n    border-color 150ms ease,\n    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-icon-btn:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-icon-btn:active:not(:disabled) {\n  transform: scale(0.96);\n}\n\n.ofs-icon-btn:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n.ofs-icon-btn.is-on {\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-accent);\n}\n\n/* ── 胶囊 / 标签 ────────────────────────────────────────────── */\n.ofs-chip {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 28px;\n  padding: 0 12px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-chip:hover:not(:disabled) {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-chip.is-on {\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-accent);\n}\n\n.ofs-chip.is-danger {\n  color: var(--ofs-error);\n  border-color: transparent;\n  background: var(--ofs-error-soft);\n}\n\n.ofs-chip.is-danger:hover:not(:disabled) {\n  color: var(--ofs-error);\n  border-color: var(--ofs-error);\n}\n\n.ofs-chip:disabled {\n  color: var(--ofs-ink-4);\n  background: transparent;\n  border-color: var(--ofs-sunken-border);\n  cursor: default;\n}\n\n.ofs-tag {\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  height: 22px;\n  padding: 0 8px;\n  border-radius: 6px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 500;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n/* ── 分段控件 ───────────────────────────────────────────────── */\n.ofs-seg {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  border: 1px solid var(--ofs-sunken-border);\n}\n\n.ofs-seg button {\n  appearance: none;\n  height: 26px;\n  padding: 0 12px;\n  border: 0;\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 500;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-seg button:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-seg button.is-on {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n  font-weight: 600;\n  box-shadow: 0 1px 2px rgb(16 16 20 / 8%);\n}\n\n/* ── 输入 ───────────────────────────────────────────────────── */\n.ofs-input {\n  width: 100%;\n  height: 34px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-sm);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 13px;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-input:focus-visible {\n  background: var(--ofs-card-solid);\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-input--search {\n  padding-left: 32px;\n  border-radius: var(--ofs-r-pill);\n}\n\n/* ── 状态点 ─────────────────────────────────────────────────── */\n.ofs-dot {\n  display: inline-block;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--ofs-idle);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-idle) 22%, transparent);\n}\n\n.ofs-dot.is-ok { background: var(--ofs-ok); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-ok) 20%, transparent); }\n.ofs-dot.is-warn { background: var(--ofs-warn); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-warn) 22%, transparent); }\n.ofs-dot.is-error { background: var(--ofs-error); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-error) 20%, transparent); }\n.ofs-dot.is-idle { background: var(--ofs-idle); }\n.ofs-dot.is-live { animation: ofs-pulse 2.4s ease-out infinite; }\n\n/* ── 动效 ───────────────────────────────────────────────────── */\n@keyframes ofs-pulse {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok) 34%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-ok) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok) 0%, transparent); }\n}\n\n@keyframes ofs-shimmer {\n  0% { background-position: -220% 0; }\n  100% { background-position: 220% 0; }\n}\n\n@keyframes ofs-fade-in {\n  from { opacity: 0; transform: translateY(4px); }\n  to { opacity: 1; transform: translateY(0); }\n}\n\n@keyframes ofs-pop-in {\n  from { opacity: 0; transform: translateY(6px) scale(0.985); }\n  to { opacity: 1; transform: translateY(0) scale(1); }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-root *,\n  .ofs-root *::before,\n  .ofs-root *::after {\n    animation-duration: 1ms !important;\n    animation-iteration-count: 1 !important;\n    transition-duration: 1ms !important;\n  }\n}";
 
 // src/styles/shell.css
-var shell_default = "/*\n * 外壳：整页容器、顶栏、图标栏、布局骨架、异常指引与 Toast。\n *\n * 页面是一张浮在柔光地面上的雾面玻璃大卡：\n *   .ofs-root = 柔光底，.ofs-app = 玻璃大卡，内部再分顶栏 / 主体 / 胶片坞。\n */\n\n.ofs-app {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-xl);\n  background: var(--ofs-window);\n  box-shadow: var(--ofs-shadow-window);\n  backdrop-filter: blur(24px) saturate(140%);\n  -webkit-backdrop-filter: blur(24px) saturate(140%);\n  overflow: hidden;\n}\n\n/* ── 顶栏 ───────────────────────────────────────────────────── */\n.ofs-topbar {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 14px;\n  height: 58px;\n  padding: 0 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-brand {\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  min-width: 0;\n}\n\n.ofs-brand-mark {\n  display: grid;\n  place-items: center;\n  width: 30px;\n  height: 30px;\n  border-radius: 9px;\n  color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n.ofs-brand-name {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-brand-sub {\n  padding-left: 2px;\n  font-size: 10px;\n  font-weight: 550;\n  letter-spacing: 0.14em;\n  text-transform: uppercase;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-tabs {\n  display: flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  margin-left: 4px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n}\n\n.ofs-tab {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 28px;\n  padding: 0 12px;\n  border: 0;\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-tab:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-tab.is-on {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n  font-weight: 600;\n  box-shadow: 0 1px 2px rgb(16 16 20 / 8%);\n}\n\n/* 云端算力胶囊 */\n.ofs-pill-wrap {\n  position: relative;\n  flex: 0 0 auto;\n}\n\n.ofs-compute {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    color 160ms ease,\n    background-color 160ms ease;\n}\n\n.ofs-compute:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-compute em {\n  font-style: normal;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-pill-caret {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-popover {\n  position: absolute;\n  top: calc(100% + 8px);\n  right: 0;\n  z-index: 40;\n  width: 248px;\n  padding: 6px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  animation: ofs-pop-in 160ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-popover-head {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  padding: 8px 10px 10px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-popover-head > span {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-popover-head > span b {\n  font-size: 12.5px;\n  font-weight: 650;\n  color: var(--ofs-ink);\n}\n\n.ofs-popover-row {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  width: 100%;\n  height: 32px;\n  padding: 0 10px;\n  border: 0;\n  border-radius: 9px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-popover-row:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-popover-row:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* 模型预设 */\n.ofs-preset {\n  position: relative;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 10px 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  box-shadow: var(--ofs-shadow-card);\n  cursor: pointer;\n}\n\n.ofs-preset-label {\n  font-size: 11.5px;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-preset:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-preset select {\n  appearance: none;\n  max-width: 168px;\n  padding: 0 18px 0 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  font-weight: 600;\n  cursor: pointer;\n  text-overflow: ellipsis;\n}\n\n.ofs-preset select:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-preset select option {\n  color: var(--ofs-ink);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-preset-meta {\n  padding-left: 8px;\n  border-left: 1px solid var(--ofs-hairline);\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-preset-caret {\n  position: absolute;\n  right: 10px;\n  color: var(--ofs-ink-3);\n  pointer-events: none;\n}\n\n/* ── 骨架 ───────────────────────────────────────────────────── */\n.ofs-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: grid;\n  grid-template-columns: 72px minmax(300px, 360px) minmax(0, 1fr);\n  grid-template-rows: minmax(0, 1fr);\n}\n\n.ofs-body.is-gallery {\n  grid-template-columns: 72px minmax(0, 1fr);\n}\n\n/* 左图标栏 */\n.ofs-rail {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  min-height: 0;\n  padding: 12px 0 14px;\n  border-right: 1px solid var(--ofs-hairline);\n  background: color-mix(in oklab, var(--ofs-card) 46%, transparent);\n}\n\n.ofs-rail-group {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 4px;\n  width: 100%;\n}\n\n.ofs-rail-btn {\n  appearance: none;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 3px;\n  width: 52px;\n  padding: 7px 0 5px;\n  border: 0;\n  border-radius: 13px;\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 10px;\n  font-weight: 500;\n  letter-spacing: 0.02em;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-rail-btn:hover {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-rail-btn.is-on {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: inset 0 0 0 1px var(--ofs-accent-soft-border);\n}\n\n.ofs-rail-btn span {\n  line-height: 1.1;\n}\n\n.ofs-rail-divider {\n  width: 22px;\n  height: 1px;\n  margin: 5px 0;\n  background: var(--ofs-hairline);\n}\n\n.ofs-rail-status {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 6px;\n  font-size: 10px;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-main {\n  position: relative;\n  min-width: 0;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  margin: 14px;\n}\n\n/* ── 异常指引 ───────────────────────────────────────────────── */\n.ofs-guidance,\n.ofs-error {\n  display: flex;\n  align-items: flex-start;\n  gap: 10px;\n  margin: 12px 16px 0;\n  padding: 10px 12px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n  border-radius: 14px;\n  background: var(--ofs-warn-soft);\n  animation: ofs-fade-in 220ms ease;\n}\n\n.ofs-guidance-icon {\n  display: grid;\n  place-items: center;\n  flex: 0 0 auto;\n  width: 28px;\n  height: 28px;\n  border-radius: 9px;\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  color: var(--ofs-warn);\n}\n\n.ofs-guidance-body {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  min-width: 0;\n}\n\n.ofs-guidance-title {\n  font-size: 12.5px;\n  color: var(--ofs-ink);\n}\n\n.ofs-guidance-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-guidance-actions .ofs-chip.is-on {\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);\n  color: var(--ofs-warn);\n  text-decoration: none;\n}\n\n/* ── Toast ──────────────────────────────────────────────────── */\n.ofs-toast {\n  position: absolute;\n  left: 50%;\n  bottom: 132px;\n  z-index: 60;\n  transform: translateX(-50%);\n  max-width: 78%;\n  padding: 9px 16px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 88%, transparent);\n  box-shadow: var(--ofs-shadow-lift);\n  backdrop-filter: blur(14px);\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  animation: ofs-pop-in 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}";
+var shell_default = '/*\n * 外壳：整页容器、顶栏、图标栏、布局骨架、异常指引与 Toast。\n *\n * 页面是一张浮在柔光地面上的雾面玻璃大卡：\n *   .ofs-root = 柔光底，.ofs-app = 玻璃大卡，内部再分顶栏 / 主体 / 胶片坞。\n */\n\n.ofs-app {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-xl);\n  background: var(--ofs-window);\n  box-shadow: var(--ofs-shadow-window);\n  backdrop-filter: blur(24px) saturate(140%);\n  -webkit-backdrop-filter: blur(24px) saturate(140%);\n  overflow: hidden;\n}\n\n/* ── 顶栏 ───────────────────────────────────────────────────── */\n.ofs-topbar {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 14px;\n  height: 58px;\n  padding: 0 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-brand {\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  min-width: 0;\n}\n\n.ofs-brand-mark {\n  display: grid;\n  place-items: center;\n  width: 30px;\n  height: 30px;\n  border-radius: 9px;\n  color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n.ofs-brand-name {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-brand-sub {\n  padding-left: 2px;\n  font-size: 10px;\n  font-weight: 550;\n  letter-spacing: 0.14em;\n  text-transform: uppercase;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-tabs {\n  display: flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  margin-left: 4px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n}\n\n.ofs-tab {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 28px;\n  padding: 0 12px;\n  border: 0;\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-tab:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-tab.is-on {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n  font-weight: 600;\n  box-shadow: 0 1px 2px rgb(16 16 20 / 8%);\n}\n\n/* 云端算力胶囊 */\n.ofs-pill-wrap {\n  position: relative;\n  flex: 0 0 auto;\n}\n\n.ofs-compute {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    color 160ms ease,\n    background-color 160ms ease;\n}\n\n.ofs-compute:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-compute em {\n  font-style: normal;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-pill-caret {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-popover {\n  position: absolute;\n  top: calc(100% + 8px);\n  right: 0;\n  z-index: 40;\n  width: 248px;\n  padding: 6px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  animation: ofs-pop-in 160ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-popover-head {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  padding: 8px 10px 10px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-popover-head > span {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-popover-head > span b {\n  font-size: 12.5px;\n  font-weight: 650;\n  color: var(--ofs-ink);\n}\n\n/* 检查结果 / 失败说明：弹层里的一行到三行小字，避免长 notes 撑开菜单。 */\n.ofs-popover-note {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 8px 10px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.ofs-popover-note span {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-popover-row {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  width: 100%;\n  height: 32px;\n  padding: 0 10px;\n  border: 0;\n  border-radius: 9px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-popover-row:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-popover-row:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* 模型预设 */\n.ofs-preset {\n  position: relative;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 10px 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  box-shadow: var(--ofs-shadow-card);\n  cursor: pointer;\n}\n\n.ofs-preset-label {\n  font-size: 11.5px;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-preset:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-preset select {\n  appearance: none;\n  max-width: 168px;\n  padding: 0 18px 0 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  font-weight: 600;\n  cursor: pointer;\n  text-overflow: ellipsis;\n}\n\n.ofs-preset select:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-preset select option {\n  color: var(--ofs-ink);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-preset-meta {\n  padding-left: 8px;\n  border-left: 1px solid var(--ofs-hairline);\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-preset-caret {\n  position: absolute;\n  right: 10px;\n  color: var(--ofs-ink-3);\n  pointer-events: none;\n}\n\n/* ── 骨架 ───────────────────────────────────────────────────── */\n.ofs-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: grid;\n  grid-template-columns: 72px minmax(300px, 360px) minmax(0, 1fr);\n  grid-template-rows: minmax(0, 1fr);\n}\n\n.ofs-body.is-gallery {\n  grid-template-columns: 72px minmax(0, 1fr);\n}\n\n/* 左图标栏 */\n.ofs-rail {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  min-height: 0;\n  padding: 12px 0 14px;\n  border-right: 1px solid var(--ofs-hairline);\n  background: color-mix(in oklab, var(--ofs-card) 46%, transparent);\n}\n\n.ofs-rail-group {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 4px;\n  width: 100%;\n}\n\n.ofs-rail-btn {\n  appearance: none;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 3px;\n  width: 52px;\n  padding: 7px 0 5px;\n  border: 0;\n  border-radius: 13px;\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 10px;\n  font-weight: 500;\n  letter-spacing: 0.02em;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-rail-btn:hover {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-rail-btn.is-on {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: inset 0 0 0 1px var(--ofs-accent-soft-border);\n}\n\n.ofs-rail-btn span {\n  line-height: 1.1;\n}\n\n.ofs-rail-divider {\n  width: 22px;\n  height: 1px;\n  margin: 5px 0;\n  background: var(--ofs-hairline);\n}\n\n.ofs-rail-status {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 6px;\n  font-size: 10px;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-main {\n  position: relative;\n  min-width: 0;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  margin: 14px;\n}\n\n/* ── 异常指引 ───────────────────────────────────────────────── */\n.ofs-guidance,\n.ofs-error {\n  display: flex;\n  align-items: flex-start;\n  gap: 10px;\n  margin: 12px 16px 0;\n  padding: 10px 12px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n  border-radius: 14px;\n  background: var(--ofs-warn-soft);\n  animation: ofs-fade-in 220ms ease;\n}\n\n.ofs-guidance-icon {\n  display: grid;\n  place-items: center;\n  flex: 0 0 auto;\n  width: 28px;\n  height: 28px;\n  border-radius: 9px;\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  color: var(--ofs-warn);\n}\n\n.ofs-guidance-body {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  min-width: 0;\n}\n\n.ofs-guidance-title {\n  font-size: 12.5px;\n  color: var(--ofs-ink);\n}\n\n.ofs-guidance-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-guidance-actions .ofs-chip.is-on {\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);\n  color: var(--ofs-warn);\n  text-decoration: none;\n}\n\n.ofs-guidance-detail {\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  overflow-wrap: anywhere;\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n  line-clamp: 2;\n  overflow: hidden;\n}\n\n.ofs-guidance-command {\n  display: inline-block;\n  max-width: 100%;\n  padding: 3px 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 8px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 70%, transparent);\n  color: var(--ofs-ink);\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  overflow-wrap: anywhere;\n}\n\n/* ── Toast ──────────────────────────────────────────────────── */\n.ofs-toast {\n  position: absolute;\n  left: 50%;\n  bottom: 132px;\n  z-index: 60;\n  transform: translateX(-50%);\n  max-width: 78%;\n  padding: 9px 16px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 88%, transparent);\n  box-shadow: var(--ofs-shadow-lift);\n  backdrop-filter: blur(14px);\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  animation: ofs-pop-in 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}';
 
 // src/styles/panel.css
-var panel_default = "/*\n * 左侧创作面板（表单 / 对话两种形态共用的卡片容器与表单控件）。\n */\n\n.ofs-panel,\n.ofs-rail--chat {\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n  min-width: 0;\n  margin: 14px 0 14px 14px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  overflow: hidden;\n}\n\n.ofs-panel-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 15px 15px 11px;\n}\n\n.ofs-panel-head h2 {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-panel-scroll {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 0 15px 14px;\n  display: flex;\n  flex-direction: column;\n  gap: 0;\n  scroll-behavior: smooth;\n}\n\n/* ── 分区 ───────────────────────────────────────────────────── */\n.ofs-fieldset {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 10px 0;\n}\n\n.ofs-fieldset:first-child {\n  padding-top: 2px;\n}\n\n.ofs-fieldset + .ofs-fieldset {\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-fieldset-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-fieldset-head h3 {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n/* ── 提示词输入 ─────────────────────────────────────────────── */\n.ofs-composer {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  padding: 10px 10px 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-sunken) 100%);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: 0 0 0 3px rgb(20 20 22 / 10%);\n}\n\n.ofs-composer-input {\n  width: 100%;\n  min-height: 66px;\n  resize: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  line-height: 1.62;\n}\n\n.ofs-composer-input:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-composer-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-composer-foot {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-counter {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-text-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  padding: 3px 7px;\n  border: 0;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transition: background-color 150ms ease;\n}\n\n.ofs-text-action:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-text-action:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* ── 建议 chips ─────────────────────────────────────────────── */\n.ofs-suggestions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-suggestion {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  max-width: 100%;\n  height: 24px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 10.5px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-suggestion:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 风格 tile ──────────────────────────────────────────────── */\n.ofs-tiles {\n  display: flex;\n  gap: 8px;\n}\n\n.ofs-tile {\n  appearance: none;\n  flex: 1 1 0;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  cursor: pointer;\n}\n\n.ofs-tile-art {\n  position: relative;\n  display: grid;\n  place-items: center;\n  width: 100%;\n  aspect-ratio: 1 / 1;\n  border-radius: var(--ofs-r-md);\n  border: 1px solid rgb(255 255 255 / 40%);\n  box-shadow:\n    inset 0 1px 0 rgb(255 255 255 / 40%),\n    0 8px 18px -12px rgb(16 16 20 / 22%);\n  color: rgb(255 255 255 / 94%);\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease;\n}\n\n.ofs-tile-art::after {\n  content: '';\n  position: absolute;\n  inset: 0;\n  border-radius: inherit;\n  background: linear-gradient(180deg, rgb(255 255 255 / 18%) 0%, transparent 42%, rgb(16 16 18 / 16%) 100%);\n}\n\n.ofs-tile-art .ofs-icon {\n  position: relative;\n  z-index: 1;\n  filter: drop-shadow(0 1px 2px rgb(16 16 18 / 35%));\n}\n\n.ofs-tile-art.is-film { background: linear-gradient(150deg, #5c5c64 0%, #2f2f34 52%, #19191c 100%); }\n.ofs-tile-art.is-concept { background: linear-gradient(150deg, #dcdce1 0%, #a6a6ae 52%, #7d7d86 100%); }\n.ofs-tile-art.is-cyberpunk { background: linear-gradient(150deg, #34343a 0%, #62626b 50%, #1d1d21 100%); }\n.ofs-tile-art.is-ink { background: linear-gradient(150deg, #f4f4f6 0%, #d3d3d9 52%, #a9a9b2 100%); }\n.ofs-tile-art.is-clay { background: linear-gradient(150deg, #ececef 0%, #c6c6cd 50%, #9d9da6 100%); }\n\n.ofs-tile-art.is-concept,\n.ofs-tile-art.is-ink,\n.ofs-tile-art.is-clay {\n  color: rgb(20 20 22 / 58%);\n}\n\n.ofs-tile:hover .ofs-tile-art {\n  transform: translateY(-1px);\n  box-shadow:\n    inset 0 1px 0 rgb(255 255 255 / 40%),\n    0 12px 22px -12px rgb(16 16 20 / 26%);\n}\n\n.ofs-tile-label {\n  font-size: 10.5px;\n  line-height: 1.3;\n  color: var(--ofs-ink-3);\n  text-align: center;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n.ofs-tile.is-on .ofs-tile-art {\n  box-shadow:\n    0 0 0 2px var(--ofs-card-solid),\n    0 0 0 4px var(--ofs-accent),\n    0 10px 20px -12px rgb(16 16 20 / 30%);\n}\n\n.ofs-tile.is-on .ofs-tile-label {\n  color: var(--ofs-accent);\n  font-weight: 600;\n}\n\n/* ── 画面比例 ───────────────────────────────────────────────── */\n.ofs-ratio-row {\n  display: flex;\n  gap: 8px;\n}\n\n.ofs-ratio {\n  appearance: none;\n  flex: 1 1 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 6px;\n  padding: 10px 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-3);\n  cursor: pointer;\n  transition:\n    border-color 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-ratio:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-ratio.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-ratio-glyph {\n  display: block;\n  border: 1.5px solid currentColor;\n  border-radius: 3px;\n}\n\n.ofs-ratio-glyph--1-1 { width: 19px; height: 19px; }\n.ofs-ratio-glyph--16-9 { width: 25px; height: 14px; }\n.ofs-ratio-glyph--9-16 { width: 14px; height: 25px; }\n\n.ofs-ratio-label {\n  font-size: 11px;\n  font-weight: 550;\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 高级设置行 ─────────────────────────────────────────────── */\n.ofs-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-row {\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  overflow: hidden;\n  transition: border-color 160ms ease;\n}\n\n.ofs-row.is-open,\n.ofs-row:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-row-head {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  padding: 9px 12px;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-row-head:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-chevron {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-4);\n  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-chevron.is-open {\n  transform: rotate(180deg);\n}\n\n.ofs-row-textarea {\n  display: block;\n  width: calc(100% - 20px);\n  min-height: 64px;\n  margin: 0 10px 10px;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-grid2 {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 8px;\n  padding: 0 10px 10px;\n}\n\n.ofs-field {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ofs-field > span {\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field input,\n.ofs-field select {\n  width: 100%;\n  height: 30px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-field input:focus-visible,\n.ofs-field select:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n/* ── 底部生成 ───────────────────────────────────────────────── */\n.ofs-panel-foot {\n  position: relative;\n  z-index: 1;\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 12px 15px 14px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card);\n  box-shadow: 0 -16px 20px -18px rgb(16 16 20 / 20%);\n}\n\n.ofs-generate {\n  width: 100%;\n  height: 42px;\n  border-radius: 14px;\n  font-size: 13.5px;\n  letter-spacing: 0.02em;\n}\n\n.ofs-hint {\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n  text-align: center;\n}\n\n.ofs-link {\n  appearance: none;\n  margin-left: 6px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: inherit;\n  cursor: pointer;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}";
+var panel_default = "/*\n * 左侧创作面板（表单 / 对话两种形态共用的卡片容器与表单控件）。\n */\n\n.ofs-panel,\n.ofs-rail--chat {\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n  min-width: 0;\n  margin: 14px 0 14px 14px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  overflow: hidden;\n}\n\n.ofs-panel-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 15px 15px 11px;\n}\n\n.ofs-panel-head h2 {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-panel-scroll {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 0 15px 14px;\n  display: flex;\n  flex-direction: column;\n  gap: 0;\n  scroll-behavior: smooth;\n}\n\n/* ── 分区 ───────────────────────────────────────────────────── */\n.ofs-fieldset {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 10px 0;\n}\n\n.ofs-fieldset:first-child {\n  padding-top: 2px;\n}\n\n.ofs-fieldset + .ofs-fieldset {\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-fieldset-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-fieldset-head h3 {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n/* ── 提示词输入 ─────────────────────────────────────────────── */\n.ofs-composer {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  padding: 10px 10px 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-sunken) 100%);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: 0 0 0 3px rgb(20 20 22 / 10%);\n}\n\n.ofs-composer-input {\n  width: 100%;\n  min-height: 66px;\n  resize: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  line-height: 1.62;\n}\n\n.ofs-composer-input:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-composer-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-composer-foot {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-counter {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-text-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  padding: 3px 7px;\n  border: 0;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transition: background-color 150ms ease;\n}\n\n.ofs-text-action:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-text-action:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* ── 建议 chips ─────────────────────────────────────────────── */\n.ofs-suggestions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-suggestion {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  max-width: 100%;\n  height: 24px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 10.5px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-suggestion:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 风格 tile ──────────────────────────────────────────────── */\n.ofs-tiles {\n  display: flex;\n  gap: 8px;\n}\n\n.ofs-tile {\n  appearance: none;\n  flex: 1 1 0;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  cursor: pointer;\n}\n\n.ofs-tile-art {\n  position: relative;\n  display: grid;\n  place-items: center;\n  width: 100%;\n  aspect-ratio: 1 / 1;\n  border-radius: var(--ofs-r-md);\n  border: 1px solid rgb(255 255 255 / 40%);\n  box-shadow:\n    inset 0 1px 0 rgb(255 255 255 / 40%),\n    0 8px 18px -12px rgb(16 16 20 / 22%);\n  color: rgb(255 255 255 / 94%);\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease;\n}\n\n.ofs-tile-art::after {\n  content: '';\n  position: absolute;\n  inset: 0;\n  border-radius: inherit;\n  background: linear-gradient(180deg, rgb(255 255 255 / 18%) 0%, transparent 42%, rgb(16 16 18 / 16%) 100%);\n}\n\n.ofs-tile-art .ofs-icon {\n  position: relative;\n  z-index: 1;\n  filter: drop-shadow(0 1px 2px rgb(16 16 18 / 35%));\n}\n\n.ofs-tile-art.is-film { background: linear-gradient(150deg, #5c5c64 0%, #2f2f34 52%, #19191c 100%); }\n.ofs-tile-art.is-concept { background: linear-gradient(150deg, #dcdce1 0%, #a6a6ae 52%, #7d7d86 100%); }\n.ofs-tile-art.is-cyberpunk { background: linear-gradient(150deg, #34343a 0%, #62626b 50%, #1d1d21 100%); }\n.ofs-tile-art.is-ink { background: linear-gradient(150deg, #f4f4f6 0%, #d3d3d9 52%, #a9a9b2 100%); }\n.ofs-tile-art.is-clay { background: linear-gradient(150deg, #ececef 0%, #c6c6cd 50%, #9d9da6 100%); }\n\n.ofs-tile-art.is-concept,\n.ofs-tile-art.is-ink,\n.ofs-tile-art.is-clay {\n  color: rgb(20 20 22 / 58%);\n}\n\n.ofs-tile:hover .ofs-tile-art {\n  transform: translateY(-1px);\n  box-shadow:\n    inset 0 1px 0 rgb(255 255 255 / 40%),\n    0 12px 22px -12px rgb(16 16 20 / 26%);\n}\n\n.ofs-tile-label {\n  font-size: 10.5px;\n  line-height: 1.3;\n  color: var(--ofs-ink-3);\n  text-align: center;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n.ofs-tile.is-on .ofs-tile-art {\n  box-shadow:\n    0 0 0 2px var(--ofs-card-solid),\n    0 0 0 4px var(--ofs-accent),\n    0 10px 20px -12px rgb(16 16 20 / 30%);\n}\n\n.ofs-tile.is-on .ofs-tile-label {\n  color: var(--ofs-accent);\n  font-weight: 600;\n}\n\n/* ── 画面比例 ───────────────────────────────────────────────── */\n.ofs-ratio-row {\n  display: flex;\n  gap: 8px;\n}\n\n.ofs-ratio {\n  appearance: none;\n  flex: 1 1 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 6px;\n  padding: 10px 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-3);\n  cursor: pointer;\n  transition:\n    border-color 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-ratio:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-ratio.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-ratio-glyph {\n  display: block;\n  border: 1.5px solid currentColor;\n  border-radius: 3px;\n}\n\n.ofs-ratio-glyph--1-1 { width: 19px; height: 19px; }\n.ofs-ratio-glyph--16-9 { width: 25px; height: 14px; }\n.ofs-ratio-glyph--9-16 { width: 14px; height: 25px; }\n\n.ofs-ratio-label {\n  font-size: 11px;\n  font-weight: 550;\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 高级设置行 ─────────────────────────────────────────────── */\n.ofs-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-row {\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  overflow: hidden;\n  transition: border-color 160ms ease;\n}\n\n.ofs-row.is-open,\n.ofs-row:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-row-head {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  padding: 9px 12px;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-row-head:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-chevron {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-4);\n  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-chevron.is-open {\n  transform: rotate(180deg);\n}\n\n.ofs-row-textarea {\n  display: block;\n  width: calc(100% - 20px);\n  min-height: 64px;\n  margin: 0 10px 10px;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n/* 负向提示词在 CFG=0 时不会生效，就地说明，不额外占一行标题。 */\n.ofs-row-hint {\n  margin: 0 10px 10px;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.ofs-grid2 {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 8px;\n  padding: 0 10px 10px;\n}\n\n.ofs-field {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ofs-field > span {\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field input,\n.ofs-field select {\n  width: 100%;\n  height: 30px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-field input:focus-visible,\n.ofs-field select:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n/* ── 底部生成 ───────────────────────────────────────────────── */\n.ofs-panel-foot {\n  position: relative;\n  z-index: 1;\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 12px 15px 14px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card);\n  box-shadow: 0 -16px 20px -18px rgb(16 16 20 / 20%);\n}\n\n.ofs-generate {\n  width: 100%;\n  height: 42px;\n  border-radius: 14px;\n  font-size: 13.5px;\n  letter-spacing: 0.02em;\n}\n\n.ofs-hint {\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n  text-align: center;\n}\n\n.ofs-link {\n  appearance: none;\n  margin-left: 6px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: inherit;\n  cursor: pointer;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}";
 
 // src/styles/stage.css
 var stage_default = "/*\n * 焦点舞台：画布卡、图片、浮动工具、信息行、动作坞、空态与放大层。\n */\n\n.ofs-stage {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.ofs-figure {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  padding: 26px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(120% 90% at 50% 0%, color-mix(in oklab, var(--ofs-card-solid) 88%, transparent) 0%, transparent 70%),\n    color-mix(in oklab, var(--ofs-card) 62%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  overflow: hidden;\n}\n\n.ofs-figure-button {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  max-width: 94%;\n  max-height: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  cursor: zoom-in;\n}\n\n.ofs-image {\n  width: auto;\n  height: auto;\n  max-width: 100%;\n  max-height: 100%;\n  border-radius: 16px;\n  box-shadow: 0 30px 64px -28px rgb(16 16 20 / 38%);\n  object-fit: contain;\n}\n\n.ofs-figure-tools {\n  position: absolute;\n  top: 14px;\n  right: 14px;\n  display: flex;\n  gap: 6px;\n}\n\n.ofs-glass-btn {\n  appearance: none;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: 11px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 68%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  color: var(--ofs-ink-2);\n  cursor: pointer;\n  transition:\n    color 150ms ease,\n    background-color 150ms ease,\n    border-color 150ms ease,\n    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-glass-btn:hover {\n  color: var(--ofs-accent);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-glass-btn:active {\n  transform: scale(0.95);\n}\n\n.ofs-glass-btn.is-on {\n  color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-stage-progress {\n  position: absolute;\n  left: 50%;\n  bottom: 16px;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  padding: 7px 13px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 74%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  transform: translateX(-50%);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  white-space: nowrap;\n}\n\n.ofs-progress-label {\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-shimmer {\n  display: block;\n  width: 54px;\n  height: 4px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(\n    90deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 70%, transparent) 50%,\n    transparent 100%\n  );\n  background-size: 220% 100%;\n  animation: ofs-shimmer 1.5s linear infinite;\n}\n\n/* ── 图片下的信息与动作 ─────────────────────────────────────── */\n.ofs-stage-foot {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 16px;\n  padding: 0 4px;\n  min-width: 0;\n}\n\n.ofs-stage-prompt {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n.ofs-stage-meta {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n.ofs-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-dock-button {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 30px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-dock-button:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-dock-button.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 空态 ───────────────────────────────────────────────────── */\n.ofs-figure--empty {\n  background:\n    radial-gradient(90% 80% at 18% 8%, color-mix(in oklab, var(--ofs-ink) 5%, transparent) 0%, transparent 62%),\n    radial-gradient(80% 70% at 86% 96%, color-mix(in oklab, var(--ofs-ink) 3%, transparent) 0%, transparent 60%),\n    color-mix(in oklab, var(--ofs-card) 58%, transparent);\n}\n\n.ofs-empty-card {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 9px;\n  max-width: 440px;\n  padding: 20px;\n  text-align: center;\n}\n\n.ofs-empty-icon {\n  display: grid;\n  place-items: center;\n  width: 54px;\n  height: 54px;\n  margin-bottom: 2px;\n  border: 1px solid var(--ofs-accent-soft-border);\n  border-radius: 18px;\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-empty-title {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n}\n\n.ofs-examples {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: center;\n  gap: 6px;\n  margin-top: 6px;\n}\n\n.ofs-examples-label {\n  width: 100%;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-example {\n  appearance: none;\n  padding: 5px 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 放大层 ─────────────────────────────────────────────────── */\n.ofs-lightbox {\n  position: absolute;\n  inset: -14px;\n  z-index: 80;\n  display: grid;\n  place-items: center;\n  padding: 3vw;\n  background: rgb(16 16 18 / 72%);\n  backdrop-filter: blur(16px);\n  -webkit-backdrop-filter: blur(16px);\n  animation: ofs-fade-in 180ms ease;\n}\n\n.ofs-lightbox img {\n  max-width: 94%;\n  max-height: 92%;\n  border-radius: 12px;\n  box-shadow: 0 40px 90px -30px rgb(0 0 0 / 70%);\n}\n\n.ofs-lightbox-close {\n  position: absolute;\n  top: 18px;\n  right: 18px;\n  display: grid;\n  place-items: center;\n  width: 36px;\n  height: 36px;\n  border: 1px solid rgb(255 255 255 / 26%);\n  border-radius: 11px;\n  background: rgb(255 255 255 / 12%);\n  color: rgb(255 255 255 / 88%);\n  cursor: pointer;\n}\n\n.ofs-lightbox-close:hover {\n  background: rgb(255 255 255 / 20%);\n  color: #fff;\n}";
@@ -1520,34 +1547,128 @@ function Gallery(props) {
 
 // src/studio/GuidanceCard.jsx
 var import_react5 = __toESM(require("react"), 1);
-var import_jsx_runtime5 = require("react/jsx-runtime");
-var KAGGLE_SETTINGS = "https://www.kaggle.com/settings";
+
+// src/logic/guidance.js
+var KAGGLE_SETTINGS_URL = "https://www.kaggle.com/settings/api";
+var KAGGLE_INSTALL_COMMAND = "pip install -U kaggle";
+var SESSION_CODES = /* @__PURE__ */ new Set([
+  "push_failed",
+  "queue_timeout",
+  "tunnel_timeout",
+  "health_failed",
+  "remote_error",
+  "session_error",
+  "session_timeout",
+  "session_absent",
+  "disposed"
+]);
+var GENERATION_CODES = /* @__PURE__ */ new Set([
+  "generation_failed",
+  "generate_failed",
+  "load_failed",
+  "invalid_request",
+  "empty_result",
+  "invalid_prompt",
+  "queue_full",
+  "warming"
+]);
 function guidanceKindOf(code) {
   if (!code) return "";
+  if (code === "need_prompt") return "";
   if (code === "oom") return "oom";
   if (code === "session_ended" || code === "stopped") return "sleep";
-  if (code === "auth_required" || code === "cli_missing") return "auth";
-  if (code === "need_prompt") return "";
+  if (code === "cli_missing") return "cli";
+  if (code === "auth_required") return "auth";
+  if (SESSION_CODES.has(code)) return "session";
+  if (GENERATION_CODES.has(code)) return "generate";
   return "generic";
 }
+function shortText(value, max = 240) {
+  if (typeof value !== "string") return "";
+  const text = value.replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+function guidanceDetailOf(input) {
+  const source = input || {};
+  const session = source.session || null;
+  const job = source.job || null;
+  const candidates = [
+    source.error && source.error.message,
+    session && session.error && session.error.message,
+    job && job.error && job.error.message,
+    session && session.detail
+  ];
+  for (const candidate of candidates) {
+    const text = shortText(candidate);
+    if (text) return text;
+  }
+  return "";
+}
+
+// src/studio/GuidanceCard.jsx
+var import_jsx_runtime5 = require("react/jsx-runtime");
 function GuidanceCard(props) {
-  const { t, kind, onReset, onWake, onRecheck, onRetry } = props;
+  const { t, kind, detail, onReset, onWake, onRecheck, onRetry, onClose, onCopyCommand } = props;
   if (!kind) return null;
-  const presets = {
-    oom: { title: t("studio.guidance.oom.title"), action: t("studio.guidance.oom.action"), run: onReset },
-    sleep: { title: t("studio.guidance.sleep.title"), action: t("studio.guidance.sleep.action"), run: onWake },
-    auth: { title: t("studio.guidance.auth.title"), action: t("studio.guidance.auth.action"), href: KAGGLE_SETTINGS },
-    generic: { title: t("studio.guidance.generic.title"), action: t("studio.guidance.generic.action"), run: onRetry }
+  const cards = {
+    oom: {
+      title: t("studio.guidance.oom.title"),
+      actions: [{ key: "reset", label: t("studio.guidance.oom.action"), run: onReset }]
+    },
+    sleep: {
+      title: t("studio.guidance.sleep.title"),
+      actions: [{ key: "wake", label: t("studio.guidance.sleep.action"), run: onWake }]
+    },
+    auth: {
+      title: t("studio.guidance.auth.title"),
+      actions: [
+        { key: "settings", label: t("studio.guidance.auth.action"), href: KAGGLE_SETTINGS_URL },
+        { key: "recheck", label: t("studio.guidance.cli.action"), run: onRecheck }
+      ]
+    },
+    cli: {
+      title: t("studio.guidance.cli.title"),
+      command: KAGGLE_INSTALL_COMMAND,
+      actions: [
+        { key: "copy", label: t("studio.guidance.cli.copy"), run: onCopyCommand },
+        { key: "recheck", label: t("studio.guidance.cli.action"), run: onRecheck }
+      ]
+    },
+    session: {
+      title: t("studio.guidance.session.title"),
+      actions: [{ key: "wake", label: t("studio.guidance.sleep.action"), run: onWake }]
+    },
+    generate: {
+      title: t("studio.guidance.generic.title"),
+      actions: [{ key: "retry", label: t("studio.guidance.generic.action"), run: onRetry }]
+    },
+    generic: {
+      title: t("studio.guidance.other.title"),
+      actions: []
+    }
   };
-  const preset = presets[kind] ?? presets.generic;
-  const secondary = kind === "auth" ? t("studio.guidance.cli.action") : "";
+  const card = cards[kind] || cards.generic;
+  const actions = card.actions.filter((action) => action.href ? true : typeof action.run === "function");
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance", role: "alert", children: [
     /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-guidance-icon", children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Icon, { name: "alert", size: 15 }) }),
     /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance-body", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { className: "ofs-guidance-title", children: preset.title }),
+      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { className: "ofs-guidance-title", children: card.title }),
+      card.command ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("code", { className: "ofs-guidance-command", children: card.command }) : null,
+      detail ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { className: "ofs-guidance-detail", title: detail, children: detail }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance-actions", children: [
-        preset.href ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("a", { className: "ofs-chip is-on", href: preset.href, target: "_blank", rel: "noreferrer noopener", children: preset.action }) : /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: preset.run, children: preset.action }),
-        secondary && onRecheck ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip", onClick: onRecheck, children: secondary }) : null
+        actions.map((action) => action.href ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+          "a",
+          {
+            className: "ofs-chip is-on",
+            href: action.href,
+            target: "_blank",
+            rel: "noreferrer noopener",
+            children: action.label
+          },
+          action.key
+        ) : /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: action.run, children: action.label }, action.key)),
+        typeof onClose === "function" ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip", onClick: onClose, children: t("studio.guidance.close") }) : null
       ] })
     ] })
   ] });
@@ -1820,17 +1941,20 @@ function Rail(props) {
               ]
             }
           ),
-          negativeOpen ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
-            "textarea",
-            {
-              className: "ofs-row-textarea",
-              rows: 3,
-              value: form.negative,
-              placeholder: t("studio.negativePlaceholder"),
-              spellCheck: false,
-              onChange: (event) => patchForm({ negative: event.target.value })
-            }
-          ) : null
+          negativeOpen ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(import_jsx_runtime6.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+              "textarea",
+              {
+                className: "ofs-row-textarea",
+                rows: 3,
+                value: form.negative,
+                placeholder: t("studio.negativePlaceholder"),
+                spellCheck: false,
+                onChange: (event) => patchForm({ negative: event.target.value })
+              }
+            ),
+            Number(form.cfg) <= 0 ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "ofs-row-hint", children: t("studio.negativeHintCfg") }) : null
+          ] }) : null
         ] }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: advancedOpen ? "ofs-row is-open" : "ofs-row", children: [
           /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(
@@ -1990,7 +2114,9 @@ var import_jsx_runtime8 = require("react/jsx-runtime");
 function Stage(props) {
   const { t, selected, activeJob, sessionQueued, onIterate, onReroll, onCopy, zoom, setZoom, isFavorite, onToggleFavorite, onUseExample } = props;
   const image = selected && selected.image ? selected.image : null;
-  const params = selected && selected.item && selected.item.params || null;
+  const item = selected && selected.item || null;
+  const params = item && item.params || null;
+  const prompt = item && typeof item.prompt === "string" && item.prompt || params && typeof params.prompt === "string" && params.prompt || "";
   const closeRef = import_react8.default.useRef(null);
   import_react8.default.useEffect(() => {
     if (!zoom) return void 0;
@@ -2044,7 +2170,7 @@ function Stage(props) {
       ] }) : null
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-stage-foot", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-stage-prompt", children: params && params.prompt ? params.prompt : "" }),
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-stage-prompt", title: prompt || void 0, children: prompt }),
       /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-stage-meta", children: [
         /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("span", { children: [
           image.width || "—",
@@ -2066,7 +2192,7 @@ function Stage(props) {
         /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "focus", size: 15 }),
         t("studio.action.iterate")
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: onReroll, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => onReroll(selected), children: [
         /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "reroll", size: 15 }),
         t("studio.action.reroll")
       ] }),
@@ -2142,6 +2268,54 @@ function StudioIcon(props) {
   );
 }
 
+// src/logic/probe.js
+function cliStatus(cli) {
+  if (cli === true) return "ok";
+  if (cli === false) return "failed";
+  if (!cli || typeof cli !== "object") return "unknown";
+  return cli.present === false ? "failed" : "ok";
+}
+function authStatus(auth) {
+  if (!auth || typeof auth !== "object") return "unknown";
+  return auth.ok === true ? "ok" : "failed";
+}
+function quotaStatus(quota) {
+  if (!quota || typeof quota !== "object") return "unknown";
+  return quota.available === true ? "ok" : "unavailable";
+}
+function probeStatusOf(probe) {
+  if (!probe || typeof probe !== "object") return null;
+  const notes = Array.isArray(probe.notes) ? probe.notes.filter((item) => typeof item === "string" && item.trim()) : [];
+  return {
+    cli: cliStatus(probe.cli),
+    auth: authStatus(probe.auth),
+    quota: quotaStatus(probe.quota),
+    notes
+  };
+}
+function probeFailureCode(probe) {
+  const status = probeStatusOf(probe);
+  if (!status) return "";
+  if (status.cli === "failed") return "cli_missing";
+  if (status.auth === "failed") return "auth_required";
+  return "";
+}
+function probeOutcomeOf(payload) {
+  const data = payload && typeof payload === "object" ? payload : {};
+  const probe = data.probe && typeof data.probe === "object" ? data.probe : null;
+  if (data.ok === true) return { ok: true, probe, code: "", detail: "" };
+  const code = probeFailureCode(probe) || "probe_failed";
+  return { ok: false, probe, code, detail: probeFailureDetail(probe) };
+}
+function probeFailureDetail(probe) {
+  const status = probeStatusOf(probe);
+  if (status && status.notes.length > 0) return shortText(status.notes.slice(0, 2).join(" · "));
+  const authDetail = probe && probe.auth && typeof probe.auth.detail === "string" ? probe.auth.detail : "";
+  if (authDetail) return shortText(authDetail);
+  const cliError = probe && probe.cli && typeof probe.cli.error === "string" ? probe.cli.error : "";
+  return shortText(cliError);
+}
+
 // src/studio/TopBar.jsx
 var import_jsx_runtime11 = require("react/jsx-runtime");
 function sessionPill(t, sessionState) {
@@ -2153,7 +2327,7 @@ function sessionPill(t, sessionState) {
   return { tone: "idle", label: t("studio.compute.offline") };
 }
 function TopBar(props) {
-  const { t, view, setView, sessionState, session, quota, presets, form, patchForm, busy, onStart, onStop, onProbe, onRefresh } = props;
+  const { t, view, setView, sessionState, session, quota, presets, form, patchForm, busy, probing, probe, probeReport, onStart, onStop, onProbe, onRefresh } = props;
   const pill = sessionPill(t, sessionState);
   const [open, setOpen] = import_react11.default.useState(false);
   const wrapRef = import_react11.default.useRef(null);
@@ -2178,6 +2352,15 @@ function TopBar(props) {
   const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null;
   const notReady = sessionState === "absent" || sessionState === "error";
   const activePreset = presets.find((item) => item.id === form.presetId) || null;
+  const probeInfo = probeStatusOf(probe || probeReport && probeReport.probe);
+  const probeFailed = probeReport && probeReport.status && probeReport.status !== "ok" ? probeReport : null;
+  const probeNote = probeInfo && probeInfo.notes.length > 0 ? probeInfo.notes[0] : "";
+  const statusText = (status) => {
+    if (status === "ok") return t("value.ok");
+    if (status === "failed") return t("value.failed");
+    if (status === "unavailable") return t("value.quotaUnavailable");
+    return t("value.unknown");
+  };
   return /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("header", { className: "ofs-topbar", children: [
     /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-brand", title: t("studio.nav.label"), children: [
       /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-brand-mark", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(StudioIcon, { size: 18 }) }),
@@ -2239,6 +2422,31 @@ function TopBar(props) {
           ] }) : null,
           session && session.device ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-muted", children: session.device }) : null
         ] }),
+        probeInfo || probing || probeFailed ? /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-popover-note", children: [
+          probing ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { children: t("action.probing") }) : null,
+          probeInfo ? /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(import_jsx_runtime11.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("span", { children: [
+              t("studio.probe.cli"),
+              " · ",
+              statusText(probeInfo.cli)
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("span", { children: [
+              t("studio.probe.account"),
+              " · ",
+              statusText(probeInfo.auth)
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("span", { children: [
+              t("studio.probe.quota"),
+              " · ",
+              statusText(probeInfo.quota)
+            ] })
+          ] }) : null,
+          probeFailed ? /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("span", { title: probeFailed.message || void 0, children: [
+            probeFailed.status === "timeout" ? t("studio.probe.timeout") : t("studio.probe.failed"),
+            probeFailed.message ? ` · ${probeFailed.message}` : ""
+          ] }) : null,
+          probeNote ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { title: probeInfo.notes.join(" · "), children: probeNote }) : null
+        ] }) : null,
         /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: onStart, disabled: !!busy || !notReady, children: [
           /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "cloud", size: 15 }),
           t("studio.compute.start")
@@ -2247,10 +2455,21 @@ function TopBar(props) {
           /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "clock", size: 15 }),
           t("studio.compute.stop")
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: onProbe, disabled: !!busy, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "refresh", size: 15 }),
-          t("studio.compute.check")
-        ] })
+        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
+          "button",
+          {
+            type: "button",
+            role: "menuitem",
+            className: "ofs-popover-row",
+            onClick: onProbe,
+            disabled: !!busy || probing,
+            "aria-busy": probing,
+            children: [
+              /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "refresh", size: 15 }),
+              probing ? t("action.probing") : t("studio.compute.check")
+            ]
+          }
+        )
       ] }) : null
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("label", { className: "ofs-preset", children: [
@@ -2303,6 +2522,145 @@ function errorText(t, error) {
   return t("error.http");
 }
 
+// src/logic/prompt.js
+function composePrompt(base, suffix) {
+  const head = String(base ?? "").trim();
+  const tail = String(suffix ?? "").trim();
+  if (!head) return "";
+  if (!tail) return head;
+  if (head.includes(tail)) return head;
+  return `${head}, ${tail}`;
+}
+function toggleStyle(form, capsule) {
+  const prev = form || {};
+  if (!capsule || !capsule.id) return { ...prev };
+  if (prev.styleId === capsule.id) {
+    return {
+      ...prev,
+      styleId: "",
+      negative: prev.negative === capsule.negative ? "" : prev.negative
+    };
+  }
+  return {
+    ...prev,
+    styleId: capsule.id,
+    negative: String(prev.negative ?? "").trim() ? prev.negative : capsule.negative
+  };
+}
+
+// src/logic/generate.js
+function buildGenerateBody(form, options = {}) {
+  const input = form || {};
+  const overrides = options.overrides && typeof options.overrides === "object" ? options.overrides : null;
+  const explicit = overrides && typeof overrides.prompt === "string" ? overrides.prompt : null;
+  const prompt = explicit !== null ? explicit.trim().slice(0, 2e3) : composePrompt(input.prompt, options.styleSuffix).slice(0, 2e3);
+  const body = {
+    prompt,
+    negativePrompt: String(input.negative ?? "").trim(),
+    width: clampSize(input.width),
+    height: clampSize(input.height),
+    steps: clampInt(input.steps, 1, 60, 4),
+    cfg: clampNumber(input.cfg, 0, 20, 0),
+    seed: parseSeed(input.seed),
+    count: clampInt(input.count, 1, 4, 1),
+    waitSeconds: 0,
+    autoStart: true
+  };
+  const presetId = input.presetId || options.defaultPreset || "";
+  if (presetId) body.presetId = presetId;
+  if (overrides) {
+    for (const [key, value] of Object.entries(overrides)) {
+      if (key === "prompt") continue;
+      body[key] = value;
+    }
+  }
+  return body;
+}
+
+// src/logic/recall.js
+function finiteNumber(value) {
+  if (value === null || value === void 0 || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+function positiveSize(value) {
+  const number = finiteNumber(value);
+  if (number === null || number <= 0) return null;
+  return Math.round(number);
+}
+function presetOf(presets, id) {
+  if (!id || !Array.isArray(presets)) return null;
+  return presets.find((item) => item && item.id === id) || null;
+}
+function recallOf(entry, presets) {
+  const image = entry && entry.image || null;
+  const item = entry && entry.item || null;
+  const params = item && item.params || null;
+  const presetId = item && item.presetId || "";
+  const preset = presetOf(presets, presetId);
+  const prompt = item && typeof item.prompt === "string" && item.prompt || params && typeof params.prompt === "string" && params.prompt || "";
+  const width = positiveSize(image && image.width) ?? positiveSize(params && params.width) ?? positiveSize(preset && preset.size);
+  const height = positiveSize(image && image.height) ?? positiveSize(params && params.height) ?? positiveSize(preset && preset.size);
+  const steps = finiteNumber(params && params.steps) ?? finiteNumber(preset && preset.steps);
+  const cfg = finiteNumber(params && params.cfg) ?? finiteNumber(preset && preset.cfg);
+  const seed = finiteNumber(image && image.seed) ?? finiteNumber(params && params.seed);
+  const negative = params && typeof params.negativePrompt === "string" ? params.negativePrompt : null;
+  return { image, item, params, presetId, prompt, width, height, steps, cfg, seed, negative };
+}
+function iteratePatch(entry, form, presets) {
+  const base = form || {};
+  const recall = recallOf(entry, presets);
+  const patch = {};
+  const prompt = recall.prompt.trim();
+  if (prompt) {
+    patch.prompt = prompt;
+    patch.styleId = "";
+  }
+  if (recall.negative !== null) patch.negative = recall.negative;
+  if (recall.width !== null) patch.width = recall.width;
+  if (recall.height !== null) patch.height = recall.height;
+  if (recall.steps !== null) patch.steps = recall.steps;
+  if (recall.cfg !== null) patch.cfg = recall.cfg;
+  if (recall.seed !== null && recall.seed >= 0) patch.seed = String(Math.trunc(recall.seed));
+  if (recall.presetId) patch.presetId = recall.presetId;
+  return patch;
+}
+function rerollOverrides(entry, presets) {
+  const recall = recallOf(entry, presets);
+  const prompt = recall.prompt.trim();
+  if (!prompt) return null;
+  const overrides = { prompt, seed: -1, count: 1 };
+  if (recall.negative !== null) overrides.negativePrompt = recall.negative;
+  if (recall.width !== null) overrides.width = recall.width;
+  if (recall.height !== null) overrides.height = recall.height;
+  if (recall.steps !== null) overrides.steps = recall.steps;
+  if (recall.cfg !== null) overrides.cfg = recall.cfg;
+  if (recall.presetId) overrides.presetId = recall.presetId;
+  return overrides;
+}
+function retryOverrides(source) {
+  const holder = source && typeof source === "object" ? source : null;
+  if (!holder) return null;
+  const params = holder.params && typeof holder.params === "object" ? holder.params : holder;
+  const prompt = typeof params.prompt === "string" ? params.prompt.trim() : "";
+  if (!prompt) return null;
+  const overrides = { prompt, seed: -1 };
+  const count = finiteNumber(params.count);
+  if (count !== null) overrides.count = Math.min(4, Math.max(1, Math.round(count)));
+  const width = positiveSize(params.width);
+  const height = positiveSize(params.height);
+  if (width !== null) overrides.width = width;
+  if (height !== null) overrides.height = height;
+  const steps = finiteNumber(params.steps);
+  const cfg = finiteNumber(params.cfg);
+  if (steps !== null) overrides.steps = steps;
+  if (cfg !== null) overrides.cfg = cfg;
+  if (typeof params.negativePrompt === "string") overrides.negativePrompt = params.negativePrompt;
+  const presetId = holder.presetId || params.presetId || "";
+  if (presetId) overrides.presetId = presetId;
+  return overrides;
+}
+
 // src/studio/useStudio.js
 var EMPTY_FORM = {
   prompt: "",
@@ -2343,7 +2701,10 @@ function useStudio(props) {
   const [negativeOpen, setNegativeOpen] = import_react12.default.useState(false);
   const [sending, setSending] = import_react12.default.useState(false);
   const [busy, setBusy] = import_react12.default.useState("");
+  const [probing, setProbing] = import_react12.default.useState(false);
+  const [probeReport, setProbeReport] = import_react12.default.useState(null);
   const [error, setError] = import_react12.default.useState(null);
+  const [dismissed, setDismissed] = import_react12.default.useState("");
   const [toast, setToast] = import_react12.default.useState(null);
   const [selectedPath, setSelectedPath] = import_react12.default.useState("");
   const [historyItems, setHistoryItems] = import_react12.default.useState([]);
@@ -2470,6 +2831,10 @@ function useStudio(props) {
   function showToast(text) {
     setToast({ text, id: Date.now() });
   }
+  function fail(code, message) {
+    setDismissed("");
+    setError({ code, message: message ?? "" });
+  }
   import_react12.default.useEffect(() => {
     if (!toast) return void 0;
     const timer = setTimeout(() => {
@@ -2477,18 +2842,24 @@ function useStudio(props) {
     }, 2600);
     return () => clearTimeout(timer);
   }, [toast]);
-  async function copyPath(value) {
-    const text = String(value ?? "").trim();
-    if (!text) return;
+  async function copyText(text, okKey) {
+    const value = String(text ?? "").trim();
+    if (!value) return;
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-        showToast(t("studio.toast.copied"));
+      if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(value);
+        showToast(t(okKey));
         return;
       }
     } catch {
     }
-    showToast(text);
+    showToast(value);
+  }
+  function copyPath(value) {
+    return copyText(value, "studio.toast.copied");
+  }
+  function copyInstallCommand() {
+    return copyText(KAGGLE_INSTALL_COMMAND, "studio.guidance.cli.copied");
   }
   async function startSession() {
     if (busy) return;
@@ -2496,7 +2867,7 @@ function useStudio(props) {
     const result = await request("imagen-api/session/start", { method: "POST", body: JSON.stringify({ presetId: form.presetId || defaultPreset }) });
     if (!aliveRef.current) return;
     setBusy("");
-    if (!result.ok) setError({ code: result.code, message: result.message });
+    if (!result.ok) fail(result.code, result.message);
     refresh();
   }
   async function stopSession() {
@@ -2505,25 +2876,11 @@ function useStudio(props) {
     const result = await request("imagen-api/session/stop", { method: "POST" });
     if (!aliveRef.current) return;
     setBusy("");
-    if (!result.ok) setError({ code: result.code, message: result.message });
+    if (!result.ok) fail(result.code, result.message);
     refresh();
   }
   function buildBody(overrides) {
-    const base = {
-      prompt: form.prompt.trim().slice(0, 2e3),
-      negativePrompt: form.negative.trim(),
-      width: clampSize(form.width),
-      height: clampSize(form.height),
-      steps: clampInt(form.steps, 1, 60, 4),
-      cfg: clampNumber(form.cfg, 0, 20, 0),
-      seed: parseSeed(form.seed),
-      count: clampInt(form.count, 1, 4, 1),
-      waitSeconds: 0,
-      autoStart: true
-    };
-    const presetId = form.presetId || defaultPreset;
-    if (presetId) base.presetId = presetId;
-    return { ...base, ...overrides };
+    return buildGenerateBody(form, { styleSuffix, defaultPreset, overrides });
   }
   function pushMessages(entries) {
     setMessages((prev) => [...prev, ...entries.map((entry) => ({ id: messageSeq.current += 1, ...entry }))]);
@@ -2532,7 +2889,7 @@ function useStudio(props) {
     if (sending) return;
     const body = buildBody(overrides);
     if (!body.prompt) {
-      setError({ code: "need_prompt", message: "" });
+      fail("need_prompt", "");
       return;
     }
     pendingRef.current = body;
@@ -2552,34 +2909,43 @@ function useStudio(props) {
       showToast(t("studio.toast.submitted"));
       return;
     }
-    setError({ code: result.code, message: result.message });
+    fail(result.code, result.message);
   }
-  function reroll() {
-    generate({ seed: -1 });
+  function reroll(entry) {
+    const target = entry || selected;
+    const overrides = rerollOverrides(target, presets);
+    if (!overrides) {
+      showToast(t("workbench.needPrompt"));
+      return;
+    }
+    generate(overrides);
   }
   function iterate(entry) {
-    const image = entry && entry.image ? entry.image : entry;
-    const item = entry && entry.item ? entry.item : null;
-    const params = item && item.params || focusedJob && focusedJob.params || {};
-    patchForm({
-      prompt: params.prompt || form.prompt,
-      negative: params.negativePrompt || form.negative,
-      width: params.width || form.width,
-      height: params.height || form.height,
-      steps: params.steps || form.steps,
-      cfg: params.cfg ?? form.cfg,
-      seed: image && Number.isFinite(image.seed) ? String(image.seed) : form.seed,
-      ...item && item.presetId ? { presetId: item.presetId } : {}
-    });
+    const target = entry || selected;
+    const patch = iteratePatch(target, form, presets);
+    if (Object.keys(patch).length === 0) return;
+    patchForm(patch);
+    if (patch.width != null && patch.height != null) {
+      const match = DEFAULT_RATIOS.find((ratio) => {
+        const size = ratioToSize(ratio);
+        return size.width === patch.width && size.height === patch.height;
+      });
+      setRatioId(match ? match.id : "");
+    }
     showToast(t("studio.toast.recalled"));
+  }
+  function retryFocusedJob() {
+    const overrides = retryOverrides(focusedJob) || (pendingRef.current ? retryOverrides(pendingRef.current) : null);
+    if (!overrides) {
+      showToast(t("workbench.needPrompt"));
+      return;
+    }
+    generate(overrides);
   }
   function applyStyle(capsuleId) {
     const capsule = STYLE_CAPSULES.find((item) => item.id === capsuleId);
     if (!capsule) return;
-    setForm((prev) => {
-      if (prev.styleId === capsuleId) return { ...prev, styleId: "" };
-      return { ...prev, styleId: capsuleId, negative: prev.negative.trim() ? prev.negative : capsule.negative };
-    });
+    setForm((prev) => toggleStyle(prev, capsule));
   }
   function applyRatio(id) {
     const ratio = DEFAULT_RATIOS.find((item) => item.id === id);
@@ -2607,7 +2973,7 @@ function useStudio(props) {
       return;
     }
     setFavorites((prev) => next ? prev.filter((item) => item !== target) : [...prev, target]);
-    setError({ code: result.code, message: result.message });
+    fail(result.code, result.message);
   }
   async function deleteImages(paths) {
     const list = (Array.isArray(paths) ? paths : []).filter(Boolean);
@@ -2618,13 +2984,13 @@ function useStudio(props) {
     });
     if (!aliveRef.current) return;
     if (!result.ok) {
-      setError({ code: result.code, message: result.message });
+      fail(result.code, result.message);
       return;
     }
     const removed = Array.isArray(result.data.removed) ? result.data.removed : [];
     if (removed.length > 0) showToast(t("studio.toast.deleted"));
     if (Array.isArray(result.data.failed) && result.data.failed.length > 0) {
-      setError({ code: "delete_failed", message: t("studio.error.deleteFailed") });
+      fail("delete_failed", t("studio.error.deleteFailed"));
     }
     setSelectedPath("");
     await Promise.all([loadHistory(), loadLibrary()]);
@@ -2635,10 +3001,37 @@ function useStudio(props) {
     showToast(t("studio.guidance.oom.action"));
   }
   async function runProbe() {
-    const result = await request("imagen-api/probe", { method: "POST" });
+    if (probing) return;
+    setProbing(true);
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 45e3) : null;
+    let result;
+    try {
+      result = await request("imagen-api/probe", {
+        method: "POST",
+        ...controller ? { signal: controller.signal } : {}
+      });
+    } finally {
+      if (timer !== null) clearTimeout(timer);
+    }
     if (!aliveRef.current) return;
-    if (result.ok) showToast(t("studio.compute.check"));
-    else setError({ code: result.code, message: result.message });
+    setProbing(false);
+    if (!result.ok) {
+      setProbeReport({ status: result.code === "timeout" ? "timeout" : "failed", message: result.message, probe: null });
+      showToast(result.code === "timeout" ? t("studio.probe.timeout") : t("studio.probe.failed"));
+      return;
+    }
+    const outcome = probeOutcomeOf(result.data);
+    if (outcome.ok) {
+      setProbeReport({ status: "ok", message: "", probe: outcome.probe });
+      if (error && (error.code === "cli_missing" || error.code === "auth_required")) setError(null);
+      showToast(t("studio.probe.ok"));
+    } else {
+      setProbeReport({ status: "failed", message: outcome.detail, probe: outcome.probe });
+      if (outcome.code === "cli_missing" || outcome.code === "auth_required") fail(outcome.code, outcome.detail);
+      else showToast(t("studio.probe.failed"));
+    }
+    refresh();
   }
   async function exportPaths(paths) {
     const list = (Array.isArray(paths) ? paths : []).filter(Boolean);
@@ -2668,23 +3061,29 @@ function useStudio(props) {
       setSuggestSource(result.data.source === "model" ? "model" : "local");
       return;
     }
-    setError({ code: result.code, message: result.message });
+    fail(result.code, result.message);
   }
   const styleSuffix = (() => {
     const capsule = STYLE_CAPSULES.find((item) => item.id === form.styleId);
     return capsule ? capsule.suffix : "";
   })();
-  function composePrompt() {
-    const base = form.prompt.trim();
-    if (!base) return "";
-    if (!styleSuffix) return base;
-    return `${base}, ${styleSuffix}`;
-  }
   const guidanceCode = error && error.code || session && session.error && session.error.code || focusedJob && focusedJob.status === "failed" && focusedJob.error && focusedJob.error.code || "";
+  const guidanceDetail = guidanceDetailOf({ error, session, job: focusedJob });
+  const guidanceKey = guidanceCode ? `${guidanceCode}|${guidanceDetail}` : "";
+  const guidanceKind = guidanceCode && dismissed !== guidanceKey ? guidanceKindOf(guidanceCode) : "";
+  function dismissGuidance() {
+    if (guidanceKey) setDismissed(guidanceKey);
+    setError(null);
+  }
   return {
-    guidanceCode,
+    guidanceKind,
+    guidanceDetail,
+    dismissGuidance,
     batches,
     quota: state && state.probe && state.probe.quota || null,
+    probe: state && state.probe || null,
+    probing,
+    probeReport,
     panelMode,
     setPanelMode,
     messages,
@@ -2712,8 +3111,6 @@ function useStudio(props) {
     selectImage: (entry) => setSelectedPath(entry && entry.image ? entry.image.path : ""),
     form,
     patchForm,
-    styleSuffix,
-    composePrompt,
     styleId: form.styleId,
     applyStyle,
     ratioId,
@@ -2725,7 +3122,6 @@ function useStudio(props) {
     sending,
     busy,
     error,
-    clearError: () => setError(null),
     toast,
     showToast,
     favorites,
@@ -2746,7 +3142,9 @@ function useStudio(props) {
     generate,
     reroll,
     iterate,
+    retryFocusedJob,
     copyPath,
+    copyInstallCommand,
     startSession,
     stopSession,
     loadHistory
@@ -2759,7 +3157,7 @@ function Studio(props) {
   const s = useStudio(props);
   const now = useNow(Boolean(s.activeJob));
   const elapsedMs = s.activeJob ? jobElapsed(s.activeJob, now) : 0;
-  const guidanceKind = guidanceKindOf(s.guidanceCode);
+  const guidanceKind = s.guidanceKind;
   const chatMode = s.panelMode === "chat";
   function focusSection(section) {
     s.setView("studio");
@@ -2834,6 +3232,9 @@ function Studio(props) {
           form: s.form,
           patchForm: s.patchForm,
           busy: s.busy,
+          probing: s.probing,
+          probe: s.probe,
+          probeReport: s.probeReport,
           onStart: s.startSession,
           onStop: s.stopSession,
           onProbe: s.runProbe,
@@ -2845,10 +3246,13 @@ function Studio(props) {
         {
           t: s.t,
           kind: guidanceKind,
+          detail: s.guidanceDetail,
           onReset: s.resetToSafe,
           onWake: s.startSession,
           onRecheck: s.runProbe,
-          onRetry: s.reroll
+          onRetry: s.retryFocusedJob,
+          onClose: s.dismissGuidance,
+          onCopyCommand: s.copyInstallCommand
         }
       ),
       /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: `ofs-body${s.view === "gallery" ? " is-gallery" : ""}${chatMode ? " is-chat" : ""}`, children: [

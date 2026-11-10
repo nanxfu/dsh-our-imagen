@@ -2,7 +2,7 @@
 """远端推理 Daemon（协议 v2）。
 
 运行位置：Kaggle GPU Kernel 容器内，由 Host 通过 ``kaggle kernels push`` 拉起。
-协议字段以 ``docs/API.md`` 第 6 节为准，本文件是 Daemon 侧唯一实现。
+协议字段以 ``docs/SPEC.md`` 与本文档顶部说明为准，本文件是 Daemon 侧唯一实现。
 
 设计要点（每一条都对应一次实测故障）：
 

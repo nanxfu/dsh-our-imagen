@@ -78,12 +78,22 @@ $env:OUR_FREE_IMAGEN_TOKEN = "dev-token"
 
 更多测试与真机验证命令：
 ```powershell
-# 运行 Host 端到端功能测试（15 项自动化断言）
+# 一次跑完所有离线检查（构建 + 客户端文案/逻辑/渲染 + Host 端到端 + 会话状态机 + 本地库）
+npm test
+
+# 只跑 Host 端到端功能测试（19 项自动化断言）
 node test/host-e2e.mjs
+
+# 会话状态机 / start-stop 竞态 / 本地库的离线回归（无 Kaggle、无 GPU、无外网）
+node test/session-reliability.mjs
+node test/session-race.mjs
+node test/library-atomic.mjs
 
 # 检查前端国际化文案键完整性
 node test/check-client-locale.mjs
 ```
+
+> 「检查环境」每点一次都会启动若干个 `kaggle` CLI 子进程（每个约 10 秒），因此首次检查需要 20~30 秒，面板会显示「检查中」。
 
 ---
 

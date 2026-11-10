@@ -398,6 +398,14 @@
   resize: vertical;
 }
 
+/* 负向提示词在 CFG=0 时不会生效，就地说明，不额外占一行标题。 */
+.ofs-row-hint {
+  margin: 0 10px 10px;
+  color: var(--ofs-ink-3);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .ofs-grid2 {
   display: grid;
   grid-template-columns: 1fr 1fr;

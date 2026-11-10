@@ -2,6 +2,19 @@
 
 ## 未发布
 
+### 可用性硬化（2026-11-10）
+
+- **会话失效可感知**：进入 `ready` 后不再停掉 Kernel 状态轮询（30s）；心跳连续失败时先查 Kernel——已结束转 `session_ended`/`remote_error`，仍 `RUNNING` 则重取隧道地址，恢复窗口内仍失败转 `health_failed`。修复「空闲 30 分钟后界面永远显示在线、每张图都失败」。
+- **会合失败快速报错**：解析 daemon 通过 ntfy 发出的 `type:'error'` 事件立即失败，并区分「仍在排队」与「容器已运行但未会合」；不再等满 45 分钟 `queue_timeout` 再给出归因错误的提示。
+- **代理环境可用**：`/health`、`/generate`、`/shutdown` 全部改走 `lib/net.js`（fetch 失败降级本机 curl），curl 兜底按真实 HTTP 状态码解析并支持大响应体。
+- **停止语义成立**：用户主动关机后排队任务不再自动拉起新 Kernel（`error.code='stopped'`）；start/stop 竞态不再留下僵尸轮询；dispose/fail 尽力通知远端退出，降低孤儿 Kernel 的配额浪费；push 失败清理含 token 的临时 Kernel 目录。
+- **启动异常兜底**：`kaggleUsername` / `buildKernelFolder` / `pushKernel` 抛异常时统一收敛为可读错误并清理目录，不再永久卡在 provisioning。
+- **历史与产物**：`/imagen-api/history` 回传完整 `params` 与 `finishedAt`（舞台提示词、以此图微调不再取错参数）；产物文件名改用本地序号，不再拼接远端返回的 name。
+- **环境探测**：version 之后 auth/quota/username 三路并发（一次检查从 90s 降到约 20~30s）；区分 `cli_missing` 与 `cli_timeout`，修正重复的版本串；CLI 超时放宽到 30s。
+- **客户端**：风格胶囊后缀真正进入最终 prompt、取消风格同步收回负向词；换种子抽卡基于当前选中图；风格/抽卡/重试均走可离线测试的纯逻辑模块；指引卡支持 cli/session/generate/generic 四类、可关闭、带详情行与正确动作；探测有进度、45s 超时兜底，成败只看 `payload.ok`；负向提示词在 cfg=0 时给出说明。
+- **本地库**：`library.json` 改为进程内串行队列 + 临时文件 rename 原子写，多窗口并发收藏/删除不丢更新；文件损坏时返回 `notes` 并备份 `.corrupt-*`。
+- **测试**：新增 `test/session-reliability.mjs`（26 项）、`test/session-race.mjs`（44 项）、`test/library-atomic.mjs`（12 项），客户端逻辑测试扩到 20 项、渲染场景扩到 12 项；`npm test` 纳入全部离线断言。
+
 ### 变更
 
 - **工作台视觉重建（黑白灰工作室）**：整页改成 `工坊 / 画廊` 两视图 + 左图标栏 + 创作面板 + 悬浮画布 + 底部胶片坞的结构；主题色收敛为黑白灰，唯一强调色是墨黑（主按钮、选中环、激活图标），去掉彩色渐变、彩色光晕与「AI 产品画布」式装饰。深色主题按同一明度关系反相：深灰底、浅灰字、浅色主操作。样式从单文件 `src/styles.css` 拆成 `src/styles/` 下的 tokens / base / shell / panel / stage / filmstrip / gallery / chat / responsive 九个模块，由 `src/styles.js` 聚合并仍以文本形式打进单文件 bundle。
@@ -41,7 +54,7 @@
 
 ### 文档
 
-- 新增 `docs/API.md` 作为三端实现契约；`docs/DESIGN.md` 重写为当前架构；`README.md` 补充使用与测试方式。
+- 新增 `docs/SPEC.md` 作为三端实现契约；根目录 `DESIGN.md` 重写为当前架构；`README.md` 补充使用与测试方式。
 
 ## 0.1.0 — 2026-11-09
 
@@ -49,7 +62,7 @@
 
 - **文档与工程体系精简**：
   - 清理冗余的规格文档、过度抽象的 Provider 接口及 ADR 记录，聚焦核心开发。
-  - 整合输出核心设计 `docs/DESIGN.md` 与实测基准 `docs/MODELS_AND_BENCHMARKS.md`。
+  - 整合输出核心设计 `DESIGN.md` 与实测基准 `docs/SPEC.md` 第 4 节。
   - 明确技术演进路线 `docs/ROADMAP.md`。
 - **DSH 插件骨架**：
   - Host 端：提供 `/imagen-api/state` 与 `/imagen-api/probe` 状态及探针路由。

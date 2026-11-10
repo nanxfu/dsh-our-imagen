@@ -8,7 +8,12 @@ import { formatSeconds } from '../logic/format.js'
 export function Stage(props) {
   const { t, selected, activeJob, sessionQueued, onIterate, onReroll, onCopy, zoom, setZoom, isFavorite, onToggleFavorite, onUseExample } = props
   const image = selected && selected.image ? selected.image : null
-  const params = (selected && selected.item && selected.item.params) || null
+  const item = (selected && selected.item) || null
+  const params = (item && item.params) || null
+  // 真实 Host 的历史条目只保证有 prompt，params 可能不存在；都不能时保持空串。
+  const prompt = (item && typeof item.prompt === 'string' && item.prompt)
+    || (params && typeof params.prompt === 'string' && params.prompt)
+    || ''
   const closeRef = React.useRef(null)
 
   // 看原图时 Esc 退出；打开时把焦点交给关闭按钮。
@@ -94,7 +99,7 @@ export function Stage(props) {
       </figure>
 
       <div className="ofs-stage-foot">
-        <p className="ofs-stage-prompt">{params && params.prompt ? params.prompt : ''}</p>
+        <p className="ofs-stage-prompt" title={prompt || undefined}>{prompt}</p>
         <div className="ofs-stage-meta">
           <span>
             {image.width || '—'} × {image.height || '—'}
@@ -113,7 +118,7 @@ export function Stage(props) {
           <Icon name="focus" size={15} />
           {t('studio.action.iterate')}
         </button>
-        <button type="button" className="ofs-dock-button" onClick={onReroll}>
+        <button type="button" className="ofs-dock-button" onClick={() => onReroll(selected)}>
           <Icon name="reroll" size={15} />
           {t('studio.action.reroll')}
         </button>

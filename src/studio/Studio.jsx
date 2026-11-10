@@ -17,7 +17,7 @@ import { jobElapsed } from '../logic/format.js'
 import { ChatPanel } from './ChatPanel.jsx'
 import { Filmstrip } from './Filmstrip.jsx'
 import { Gallery } from './Gallery.jsx'
-import { GuidanceCard, guidanceKindOf } from './GuidanceCard.jsx'
+import { GuidanceCard } from './GuidanceCard.jsx'
 import { Rail } from './Rail.jsx'
 import { RailNav } from './RailNav.jsx'
 import { Stage } from './Stage.jsx'
@@ -29,7 +29,7 @@ export function Studio(props) {
   const s = useStudio(props)
   const now = useNow(Boolean(s.activeJob))
   const elapsedMs = s.activeJob ? jobElapsed(s.activeJob, now) : 0
-  const guidanceKind = guidanceKindOf(s.guidanceCode)
+  const guidanceKind = s.guidanceKind
   const chatMode = s.panelMode === 'chat'
 
   // 图标栏跳分区：先把面板切回表单式，再滚到对应卡片。
@@ -108,6 +108,9 @@ export function Studio(props) {
           form={s.form}
           patchForm={s.patchForm}
           busy={s.busy}
+          probing={s.probing}
+          probe={s.probe}
+          probeReport={s.probeReport}
           onStart={s.startSession}
           onStop={s.stopSession}
           onProbe={s.runProbe}
@@ -117,10 +120,13 @@ export function Studio(props) {
         <GuidanceCard
           t={s.t}
           kind={guidanceKind}
+          detail={s.guidanceDetail}
           onReset={s.resetToSafe}
           onWake={s.startSession}
           onRecheck={s.runProbe}
-          onRetry={s.reroll}
+          onRetry={s.retryFocusedJob}
+          onClose={s.dismissGuidance}
+          onCopyCommand={s.copyInstallCommand}
         />
 
         <div className={`ofs-body${s.view === 'gallery' ? ' is-gallery' : ''}${chatMode ? ' is-chat' : ''}`}>

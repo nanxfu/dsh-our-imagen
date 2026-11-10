@@ -52,17 +52,18 @@ const image = (seed) => ({
   height: 1024,
 })
 
+// 与真实 Host 的 /imagen-api/history 形状一致：没有 params 字段。
+// 舞台提示词与「以此图微调」必须只靠 item.prompt / image 像素工作。
 const historyItem = {
   jobId: 'job-1',
   dir: 'imagen-output/20261109-120000-job-1',
   prompt: '测试用的荷花池塘',
   presetId: 'sdxl-lightning',
   finishedAt: at(-120),
-  params: { prompt: '测试用的荷花池塘', seed: 7, width: 1024, height: 1024, steps: 4, cfg: 1 },
   images: [image(7), image(8)],
 }
 
-const probeOk = { cli: true, auth: { ok: true }, quota: { available: true, usedHours: 3, totalHours: 30 } }
+const probeOk = { cli: { present: true }, auth: { ok: true }, quota: { available: true, usedHours: 3, totalHours: 30 }, notes: [] }
 
 const readyState = {
   defaultPreset: 'sdxl-lightning',
@@ -78,7 +79,7 @@ const scenarios = {
     state: readyState,
     history: { items: [historyItem] },
     props: {},
-    expect: ['创作设置', '提示词', '风格', '画面设置', '高级设置', '即刻生成', '以此图微调', '在线'],
+    expect: ['创作设置', '提示词', '风格', '画面设置', '高级设置', '即刻生成', '以此图微调', '在线', '测试用的荷花池塘'],
     reject: [],
   },
   chat: {
@@ -136,6 +137,80 @@ const scenarios = {
     history: { items: [historyItem] },
     props: {},
     expect: ['正在排队', '云端正在排队'],
+    reject: [],
+  },
+  cli: {
+    state: {
+      defaultPreset: 'sdxl-lightning',
+      presets: [preset],
+      session: {
+        state: 'error',
+        phase: null,
+        error: { code: 'cli_missing', message: '未找到 kaggle CLI，请先安装：pip install -U kaggle' },
+      },
+      jobs: [],
+      lastJob: null,
+    },
+    history: { items: [] },
+    props: {},
+    expect: ['本地没有检测到 kaggle 命令行', 'pip install -U kaggle', '复制安装命令', '重新检查环境', '关闭'],
+    reject: ['出图没有成功'],
+  },
+  session: {
+    state: {
+      defaultPreset: 'sdxl-lightning',
+      presets: [preset],
+      session: { state: 'error', error: { code: 'push_failed', message: 'Kernel 推送失败：权限不足' } },
+      jobs: [],
+      lastJob: null,
+    },
+    history: { items: [] },
+    props: {},
+    expect: ['云端的连接中断了', '重新唤醒', 'Kernel 推送失败：权限不足'],
+    reject: [],
+  },
+  generic: {
+    state: {
+      defaultPreset: 'sdxl-lightning',
+      presets: [preset],
+      session: { state: 'ready', modelId: 'sdxl-lightning', error: null },
+      jobs: [
+        {
+          id: 'job-del',
+          status: 'failed',
+          startedAt: at(-30),
+          finishedAt: at(-20),
+          params: { prompt: '任意' },
+          error: { code: 'delete_failed', message: '有图片没能删除' },
+        },
+      ],
+      lastJob: null,
+    },
+    history: { items: [] },
+    props: {},
+    expect: ['操作没有完成', '有图片没能删除', '关闭'],
+    reject: ['重试一次', '出图没有成功'],
+  },
+  generate: {
+    state: {
+      defaultPreset: 'sdxl-lightning',
+      presets: [preset],
+      session: { state: 'ready', modelId: 'sdxl-lightning', error: null },
+      jobs: [
+        {
+          id: 'job-gen',
+          status: 'failed',
+          startedAt: at(-30),
+          finishedAt: at(-20),
+          params: { prompt: '失败的画面', width: 1024, height: 1024, steps: 4, cfg: 0, count: 1 },
+          error: { code: 'generation_failed', message: '远端返回了非 JSON 响应' },
+        },
+      ],
+      lastJob: null,
+    },
+    history: { items: [] },
+    props: {},
+    expect: ['出图没有成功', '重试一次', '远端返回了非 JSON 响应'],
     reject: [],
   },
 }
