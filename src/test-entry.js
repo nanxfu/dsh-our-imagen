@@ -23,6 +23,7 @@ import { Rail } from './studio/Rail.jsx'
 import { ChatPanel } from './studio/ChatPanel.jsx'
 import { Stage } from './studio/Stage.jsx'
 import { TopBar } from './studio/TopBar.jsx'
+import { LogsDrawer } from './studio/LogsDrawer.jsx'
 
 export const __test = {
   dict,
@@ -42,5 +43,6 @@ export const __test = {
     ChatPanel,
     Stage,
     TopBar,
+    LogsDrawer,
   },
 }

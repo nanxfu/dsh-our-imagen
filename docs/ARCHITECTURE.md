@@ -75,6 +75,32 @@ Kaggle 容器运行在受限沙箱中，无法直接对外暴露端口。常规�
 排障时设置环境变量 `OUR_FREE_IMAGEN_LOG=debug|info|warn|error` 后重启 DSH，即可在宿主控制台看到带 `[imagen:<scope>]` 前缀的事件流；
 日志不会输出 token。实现见 `lib/log.js`，各模块用 `createLogger({ scope })` 获取实例。
 
+### 2.8 会话本地持久化与启动恢复
+Host 在启动流程的关键节点（构建 Kernel 目录后、push 成功后、拿到隧道地址、进入 ready）把会话记录写入
+`<workspace>/.imagen/session.json`：包含 `kernelId`、Bearer `token`、ntfy `topic`、`endpointUrl`、预设与设备信息。
+写入用「同目录临时文件 + rename」原子替换，目录 0700 / 文件 0600。下次启动时 `SessionManager.restore()`：
+
+1. `/health` 探活成功 → 直接接管现有会话（ready 走健康轮询，warming 走会合轮询）；
+2. 地址失效但 `topic` 存在 → 回 ntfy 会合点重新取隧道地址（远端会周期性重播 ready）；
+3. Kernel 已结束 / 无地址线索 / 记录损坏 → best-effort 关机并删除记录。
+
+记录里带 token，因此只落盘、不进日志与 `/state` 快照；`session/stop` 与成功的 `dispose` 会删除文件。
+开发模式（`devEndpoint`）不读写该记录，避免把本地 mock 当成远端会话恢复。
+
+### 2.9 隧道监管与备用通道
+`remote/daemon.py` 用常驻线程 `tunnel_monitor()` 监管隧道子进程：cloudflared 中途退出时清空发布状态，
+按 2→60 秒指数退避重拉；拿到新地址后重新向 ntfy 广播 ready，主循环每 300 秒再重播一次，
+Host 心跳丢失后即可靠会合点重新发现新地址。`/health` 会带上 `tunnel_provider` / `tunnel_state` / `tunnel_restarts`。
+
+如果配置了 `fallbackTunnelCommand`，cloudflared 失败或超时后会按通道计划尝试备用命令（自建 FRP 等），
+成功后 `provider=custom`。Host 侧只信任回环、`*.trycloudflare.com` 与 `trustedTunnelDomains` 白名单内的
+https 地址，未登记的域名不会收到 Bearer token。
+
+### 2.10 远端日志透传
+daemon 维护最多 400 行日志环，`GET /logs?since=N` 返回增量行与下一游标。Host 的
+`GET /imagen-api/logs?since=N` 原样透传（始终 HTTP 200，用 `ok` / `code` 表达可用性），
+工作台的日志抽屉按游标轮询并把安装、隧道、生成三阶段输出展示给用户；诊断导出会剔除 token 类字段。
+
 ---
 
 ## 3. 本地脱机调试技巧（不烧 Kaggle 额度）

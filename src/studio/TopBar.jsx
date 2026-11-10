@@ -3,9 +3,16 @@
 import React from 'react'
 
 import { Tooltip } from '../components/Tooltip.jsx'
+import { useNow } from '../hooks/useNow.js'
+import { formatDuration } from '../logic/format.js'
+import { elapsedMsSince, formatClockTime, quotaText } from '../logic/logs.js'
 import { Icon } from './icons.jsx'
 import { StudioIcon } from './StudioIcon.jsx'
 import { probeStatusOf } from '../logic/probe.js'
+import { useHostSnapshot } from './hooks/useStudioLogs.js'
+
+/** Kaggle 账户设置页：配额读不到时给用户一个直达入口。 */
+const KAGGLE_ACCOUNT_URL = 'https://www.kaggle.com/settings'
 
 function sessionPill(t, sessionState) {
   if (sessionState === 'ready') return { tone: 'ok', label: t('studio.compute.online') }
@@ -20,7 +27,7 @@ function sessionPill(t, sessionState) {
 export function TopBar(props) {
   const { t, ui, compute, library } = props
   const { form: fields, patchForm } = props.form
-  const { view, setView } = ui
+  const { view, setView, openLogs } = ui
   const {
     sessionState,
     session,
@@ -36,8 +43,13 @@ export function TopBar(props) {
     openFolder,
   } = compute
   const pill = sessionPill(t, sessionState)
-  const [open, setOpen] = React.useState(false)
+  // defaultOpen 只给预览 / 渲染测试用，正式界面从关闭态开始。
+  const [open, setOpen] = React.useState(Boolean(props.defaultOpen))
   const wrapRef = React.useRef(null)
+  const pillRef = React.useRef(null)
+  // 配额回退与隧道信息需要 /state 里的 probeLastGood 等字段：弹层展开时取一次快照。
+  const snapshot = useHostSnapshot(open)
+  const now = useNow(open)
 
   // 菜单：Esc 与点击外部都关闭。
   React.useEffect(() => {
@@ -68,9 +80,24 @@ export function TopBar(props) {
   const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null
   const notReady = sessionState === 'absent' || sessionState === 'error'
   const activePreset = presets.find((item) => item.id === fields.presetId) || null
-  const probeInfo = probeStatusOf(probe || (probeReport && probeReport.probe))
+  // 状态弹层优先用宿主轮询到的 probe；刚做过检查时用本次结果兜底。
+  const probePayload = probe || (snapshot && snapshot.probe) || (probeReport && probeReport.probe) || null
+  const probeInfo = probeStatusOf(probePayload)
   const probeFailed = probeReport && probeReport.status && probeReport.status !== 'ok' ? probeReport : null
   const probeNote = probeInfo && probeInfo.notes.length > 0 ? probeInfo.notes[0] : ''
+  // 配额不可读（接口不可用或本次检测失败）时改用本地统计回退展示。
+  const quotaUnavailable = Boolean(probeFailed || (probeInfo && probeInfo.quota !== 'ok'))
+  const lastGood = (snapshot && snapshot.probeLastGood) || null
+  const lastCheckTime = formatClockTime(snapshot && snapshot.probeLastGoodAt)
+  const lastGoodQuota = quotaText(lastGood && lastGood.quota)
+  const sessionRunMs = session ? elapsedMsSince(session.startedAt, now) : null
+  const tunnelProvider = session && session.tunnelProvider ? session.tunnelProvider : ''
+  const tunnelLabel =
+    tunnelProvider === 'cloudflare'
+      ? t('studio.compute.tunnel.cloudflare')
+      : tunnelProvider === 'custom'
+        ? t('studio.compute.tunnel.custom')
+        : ''
   const statusText = (status) => {
     if (status === 'ok') return t('value.ok')
     if (status === 'failed') return t('value.failed')
@@ -121,6 +148,7 @@ export function TopBar(props) {
 
       <div className="ofs-pill-wrap" ref={wrapRef}>
         <button
+          ref={pillRef}
           type="button"
           className={`ofs-compute is-${pill.tone}`}
           onClick={() => setOpen((value) => !value)}
@@ -152,6 +180,7 @@ export function TopBar(props) {
               </span>
               {idleMinutes > 0 ? <span className="ofs-muted">{t('studio.compute.idleFor')} {idleMinutes} {t('unit.min')}</span> : null}
               {session && session.device ? <span className="ofs-muted">{session.device}</span> : null}
+              {tunnelLabel ? <span className="ofs-muted">{t('studio.compute.tunnel')} · {tunnelLabel}</span> : null}
             </div>
 
             <div className="ofs-popover-note">
@@ -176,6 +205,32 @@ export function TopBar(props) {
               {probeNote ? <span title={probeInfo.notes.join(' · ')}>{probeNote}</span> : null}
             </div>
 
+            {/* 配额不可读时改看本地统计：最近一次成功检查、当时配额与本次会话运行时长。 */}
+            {quotaUnavailable ? (
+              <div className="ofs-popover-fallback">
+                <span className="ofs-popover-fallback-title">{t('studio.compute.quotaFallback')}</span>
+                {lastCheckTime ? (
+                  <span>
+                    {t('studio.compute.lastGood')} {lastCheckTime} · {t('studio.compute.quota')} {lastGoodQuota}
+                  </span>
+                ) : (
+                  <span>{t('studio.compute.neverChecked')}</span>
+                )}
+                {sessionRunMs !== null ? (
+                  <span>{t('studio.compute.sessionRan')} {formatDuration(t, sessionRunMs)}</span>
+                ) : null}
+                <a
+                  className="ofs-popover-link"
+                  href={KAGGLE_ACCOUNT_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  role="menuitem"
+                >
+                  {t('studio.compute.kaggleSettings')}
+                </a>
+              </div>
+            ) : null}
+
             <button type="button" role="menuitem" className="ofs-popover-row" onClick={startSession} disabled={!!busy || !notReady}>
               <Icon name="cloud" size={15} />
               {t('studio.compute.start')}
@@ -194,6 +249,19 @@ export function TopBar(props) {
             >
               <Icon name="refresh" size={15} />
               {probing ? t('action.probing') : t('studio.compute.check')}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="ofs-popover-row"
+              onClick={() => {
+                setOpen(false)
+                // 菜单收起后这一行会卸载，焦点交还给常驻的算力按钮。
+                if (openLogs) openLogs(pillRef.current)
+              }}
+            >
+              <Icon name="message" size={15} />
+              {t('studio.logs.open')}
             </button>
           </div>
         ) : null}

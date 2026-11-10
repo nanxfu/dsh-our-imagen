@@ -211,6 +211,39 @@
   white-space: nowrap;
 }
 
+/* 配额回退：接口不可读时给出的本地统计，与检查结果行区分开。 */
+.ofs-popover-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px 9px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--ofs-hairline);
+  color: var(--ofs-ink-3);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ofs-popover-fallback-title {
+  color: var(--ofs-ink-2);
+  font-weight: 600;
+}
+
+.ofs-popover-link {
+  align-self: flex-start;
+  margin-top: 2px;
+  border-radius: 4px;
+  color: var(--ofs-accent);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ofs-popover-link:focus-visible {
+  outline: none;
+  box-shadow: var(--ofs-focus-ring);
+}
+
 .ofs-popover-row {
   appearance: none;
   display: flex;
@@ -420,4 +453,105 @@
   overflow: hidden;
   text-overflow: ellipsis;
   animation: ofs-pop-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── 运行日志抽屉 ───────────────────────────────────────────── */
+.ofs-logs {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: flex-end;
+  background: rgb(16 16 18 / 38%);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: ofs-fade-in 160ms ease;
+}
+
+.ofs-logs-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  height: 100%;
+  border-left: 1px solid var(--ofs-window-border);
+  background: var(--ofs-card-solid);
+  box-shadow: var(--ofs-shadow-window);
+  animation: ofs-slide-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ofs-logs-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ofs-hairline);
+}
+
+.ofs-logs-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--ofs-ink);
+  white-space: nowrap;
+}
+
+.ofs-logs-copy {
+  height: 30px;
+}
+
+.ofs-logs-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--ofs-sunken);
+  scrollbar-width: thin;
+  scrollbar-color: var(--ofs-ink-4) transparent;
+}
+
+.ofs-logs-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ofs-logs-body::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: var(--ofs-ink-4);
+  background-clip: content-box;
+}
+
+.ofs-logs-lines {
+  margin: 0;
+  padding: 14px 16px 22px;
+  color: var(--ofs-ink-2);
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.65;
+  font-variant-numeric: tabular-nums;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ofs-logs-note {
+  margin: 0;
+  padding: 18px 16px;
+  color: var(--ofs-ink-3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ofs-logs-note.is-warn {
+  color: var(--ofs-warn);
+}
+
+@keyframes ofs-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }

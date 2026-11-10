@@ -4,7 +4,7 @@
 运行位置：Kaggle GPU Kernel 容器内，由 Host 通过 ``kaggle kernels push`` 拉起。
 协议字段以 ``docs/SPEC.md`` 与本文档顶部说明为准，本文件是 Daemon 侧唯一实现。
 
-设计要点（每一条都对应一次实测故障）：
+设计要点（第 1–6 条各对应一次实测故障，第 7–9 条为 0.3.1 起的加固项）：
 
 1. 模块顶层只依赖标准库。HTTP 服务必须**先**起来，pip 安装与模型加载放在后台线程里，
    否则排队 30 分钟才启动的 Kernel 在装依赖期间完全不可观测，Host 只能看到超时。
@@ -21,6 +21,13 @@
 6. 没有 ``auth_token`` 时不对外服务：``/health`` 等路由一律 401，启动阶段直接
    ``fail_boot('unauthorized')`` 并退出（不发布 ready）。本地调试必须显式配置
    ``allow_no_auth: true``，避免"配置注入失败 → 公网隧道变成无鉴权端点"。
+7. 隧道只是会合通道，进程必须自愈：cloudflared 中途退出时 Host 想重连也没用，
+   所以 daemon 内有常驻监管线程负责重拉、重播 ready，且每 ``TUNNEL_ANNOUNCE_SEC``
+   秒重播一次；``/health`` 的 ``tunnel_state`` / ``tunnel_restarts`` 用于排障。
+8. 冷启动失败要能归因：pip 装完必须做 import 自检（装成功 ≠ 能 import），
+   依赖约束、HF_TOKEN 与磁盘预检都在下载/加载前完成，失败给出可读原因。
+9. 权重可以来自预挂载的 Kaggle Dataset：``local_models`` 命中的仓库优先本地加载，
+   既省冷启动下载时间，也彻底避开 HuggingFace 匿名限流。
 """
 
 from __future__ import annotations
@@ -38,6 +45,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -55,7 +63,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # ─────────────────────────────────────────────────────────────────────────────
 EMBEDDED_CONFIG_B64 = ""
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 # 日志环容量：Host 侧按 docs/SPEC.md 实现，最多 400 行。
 LOG_MAX_LINES = 400
@@ -67,12 +75,34 @@ CLOUDFLARED_DOWNLOAD_URL = (
     "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
 )
 CLOUDFLARED_URL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
+# 备用通道（自建 FRP / bore 等）默认从进程输出里抓 https 地址；Host 可用
+# fallback_tunnel_url_regex 覆盖（例如自签名域名或带路径的地址）。
+DEFAULT_CUSTOM_URL_RE = re.compile(r"https://[^\s\"'<>]+")
 TUNNEL_WAIT_SEC = 120.0
+# P0.2 隧道自愈：进程异常退出后按指数退避重拉（2s 起、60s 封顶），
+# 并每 TUNNEL_ANNOUNCE_SEC 秒重播一次 ready，帮助 Host 在心跳丢失后重新会合。
+TUNNEL_RESTART_BASE_SEC = 2.0
+TUNNEL_RESTART_MAX_SEC = 60.0
+TUNNEL_ANNOUNCE_SEC = 300.0
+TUNNEL_PROVIDERS = ("cloudflare", "custom")
 
 # 与 bench/lightning/run.py 完全一致：镜像自带 torchao 0.10.0 与新版 diffusers 冲突，
 # 必须先卸载；随后升级这 4 个包。
 PIP_UNINSTALL = ("torchao",)
 PIP_INSTALL = ("diffusers", "transformers", "accelerate", "peft")
+
+# P1.2 依赖约束默认上限：Kaggle 镜像的默认版本组合未经 bench 验证，装出无法 import 的
+# 组合比装旧版更糟。键是包名（PEP 503 归一化），值是 pip 约束表达式；Host 注入的
+# pip_constraints 按包名覆盖/追加。
+PIP_CONSTRAINTS = {
+    "diffusers": "diffusers<1.0",
+    "transformers": "transformers<5",
+    "accelerate": "accelerate<2",
+    "peft": "peft<1",
+}
+IMPORT_CHECK_MODULES = ("torch", "diffusers", "transformers", "accelerate", "peft")
+# 磁盘预检在估算值上留 15% 余量：下载缓存、解压临时文件也会占空间。
+DISK_HEADROOM = 1.15
 
 SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2")
 
@@ -226,6 +256,14 @@ class DaemonConfig:
     contract: dict = field(default_factory=dict)
     # 本地调试专用：显式允许无鉴权（默认 false；正常路径必须带 auth_token）。
     allow_no_auth: bool = False
+    # 冷启动可靠性（P1.2）：HF Token 只写环境变量，值不落日志；pip 约束按包名合并。
+    hf_token: str = ""
+    pip_constraints: list = field(default_factory=list)
+    # 备用隧道（P2.2）：argv 模板（{port} 占位）与地址提取正则。
+    fallback_tunnel_command: list = field(default_factory=list)
+    fallback_tunnel_url_regex: str = ""
+    # 权重预挂载（P2.1）：HF 仓库 → 容器内本地目录（Kaggle Dataset 挂载路径）。
+    local_models: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -258,6 +296,14 @@ class BootState:
     tunnel_error: str | None = None
     cloudflared: object | None = None
     published_ready: bool = False
+    # P0.2：隧道监管状态（/health 与 ready 事件对外上报）。
+    tunnel_provider: str | None = None
+    tunnel_state: str = "starting"
+    tunnel_restarts: int = 0
+    # 隧道失败把 phase 打成 error 时记下原阶段；隧道恢复后还原，避免 Host 一直看到 error。
+    phase_before_error: str | None = None
+    # /shutdown 或信号置位后监管线程退出。整个进程只创建一个 Event。
+    stop_event: threading.Event = field(default_factory=threading.Event)
 
 
 CONFIG = DaemonConfig()
@@ -341,8 +387,60 @@ _KNOWN_CONFIG_KEYS = frozenset(
         "version",
         "contract",
         "allow_no_auth",
+        "hf_token",
+        "pip_constraints",
+        "fallback_tunnel_command",
+        "fallback_tunnel_url_regex",
+        "local_models",
     }
 )
+
+
+def normalize_pip_constraints(raw) -> list[str]:  # noqa: ANN001
+    """Host 注入的 pip 约束：只保留非空字符串（数组或单个字符串）。"""
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, (list, tuple)):
+        if raw is not None:
+            log("[config] pip_constraints 不是数组，已忽略")
+        return []
+    constraints: list[str] = []
+    for item in raw:
+        if isinstance(item, str) and item.strip():
+            constraints.append(item.strip())
+        elif item is not None:
+            log("[config] WARN pip_constraints 中的非字符串项已忽略")
+    return constraints
+
+
+def normalize_fallback_command(raw) -> list[str]:  # noqa: ANN001
+    """Host 注入的备用隧道 argv 模板：逐项过滤空串/非字符串。"""
+    if not isinstance(raw, (list, tuple)):
+        if raw is not None:
+            log("[config] fallback_tunnel_command 不是数组，已忽略")
+        return []
+    command: list[str] = []
+    for item in raw:
+        if isinstance(item, str) and item.strip():
+            command.append(item)
+        elif item is not None:
+            log("[config] WARN fallback_tunnel_command 中的非字符串项已忽略")
+    return command
+
+
+def normalize_local_models(raw) -> dict[str, str]:  # noqa: ANN001
+    """Host 注入的权重预挂载映射：repo → 容器内目录；非法项过滤并告警。"""
+    if not isinstance(raw, dict):
+        if raw is not None:
+            log("[config] local_models 不是对象，已忽略")
+        return {}
+    models: dict[str, str] = {}
+    for repo, path in raw.items():
+        if isinstance(repo, str) and repo.strip() and isinstance(path, str) and path.strip():
+            models[repo.strip()] = path.strip()
+        else:
+            log("[config] WARN local_models 中的非法映射已忽略（值应是目录字符串）")
+    return models
 
 
 def _build_config(cfg: dict) -> DaemonConfig:
@@ -377,6 +475,12 @@ def _build_config(cfg: dict) -> DaemonConfig:
     config.allow_no_auth = bool(cfg.get("allow_no_auth", False))
     if config.allow_no_auth:
         log("[config] WARN allow_no_auth=true：无 auth_token 也放行请求，仅限本地调试")
+    # P1.2 / P2.1 / P2.2：可选注入项。令牌与权重路径都不进日志（只打开关与数量）。
+    config.hf_token = str(cfg.get("hf_token") or "").strip()
+    config.pip_constraints = normalize_pip_constraints(cfg.get("pip_constraints"))
+    config.fallback_tunnel_command = normalize_fallback_command(cfg.get("fallback_tunnel_command"))
+    config.fallback_tunnel_url_regex = str(cfg.get("fallback_tunnel_url_regex") or "").strip()
+    config.local_models = normalize_local_models(cfg.get("local_models"))
     unknown = sorted(set(cfg) - _KNOWN_CONFIG_KEYS)
     if unknown:
         log(f"[config] WARN 未知配置键已忽略：{', '.join(unknown)}")
@@ -388,7 +492,11 @@ def _build_config(cfg: dict) -> DaemonConfig:
         f"preload={config.preload.get('loader') if config.preload else 'none'} "
         f"preset={config.preset_id or 'none'} log_level={config.log_level} "
         f"version={config.version or 'none'} contract={'on' if config.contract else 'off'} "
-        f"allow_no_auth={'on' if config.allow_no_auth else 'off'}"
+        f"allow_no_auth={'on' if config.allow_no_auth else 'off'} "
+        f"hf_token={'on' if config.hf_token else 'off'} "
+        f"pip_constraints={len(config.pip_constraints)} "
+        f"fallback_tunnel={'on' if config.fallback_tunnel_command else 'off'} "
+        f"local_models={len(config.local_models)}"
     )
     return config
 
@@ -413,6 +521,21 @@ def load_config() -> DaemonConfig:
 def auth_missing() -> bool:
     """既没有 auth_token 又没显式允许无鉴权 —— 必须拒绝启动的危险配置。"""
     return not CONFIG.auth_token and not CONFIG.allow_no_auth
+
+
+def apply_hf_token() -> bool:
+    """把 hf_token 写进 HuggingFace 官方约定的两个环境变量（值不落日志）。
+
+    gated 仓库与匿名限流都需要它；huggingface_hub 优先读环境变量，所以不需要
+    把它传进每个下载调用。
+    """
+    token = (CONFIG.hf_token or "").strip()
+    if not token:
+        return False
+    os.environ["HF_TOKEN"] = token
+    os.environ["HUGGING_FACE_HUB_TOKEN"] = token
+    log("[config] 已配置 HF_TOKEN / HUGGING_FACE_HUB_TOKEN（值不写入日志）")
+    return True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -458,6 +581,8 @@ def publish_ready() -> None:
     payload = {
         "type": "ready",
         "endpoint": BOOT.tunnel_url,
+        # P2.2：Host 据此展示通道类型，并决定可信域校验策略。
+        "provider": BOOT.tunnel_provider,
         "model_id": STATE.model_id,
         "device": STATE.device,
     }
@@ -467,6 +592,13 @@ def publish_ready() -> None:
 def publish_error(code: str, message: str) -> None:
     payload = {"type": "error", "code": code, "message": message[:800]}
     ntfy_publish(payload, f"error({code})")
+
+
+def request_shutdown() -> None:
+    """收到 /shutdown：标记停机并让隧道监管线程退出（进程随后由调用方安排退出）。"""
+    STATE.shutting_down = True
+    BOOT.stop_event.set()
+    log("[shutdown] 收到 /shutdown，0.3s 后退出进程")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -502,6 +634,78 @@ def run_streaming(argv: list[str], prefix: str) -> int:
     return code
 
 
+def package_name(spec: str) -> str:
+    """从 pip 约束表达式取包名（``diffusers<1.0`` → ``diffusers``），按 PEP 503 归一化。"""
+    match = re.match(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)", str(spec or ""))
+    if not match:
+        return ""
+    return re.sub(r"[-_.]+", "-", match.group(1)).lower()
+
+
+def merge_pip_constraints(injected) -> list[str]:  # noqa: ANN001
+    """默认约束按包名合并 Host 注入项：同名覆盖（保持原位置），新包追加。"""
+    specs = dict(PIP_CONSTRAINTS)
+    for item in normalize_pip_constraints(injected):
+        name = package_name(item)
+        if name:
+            specs[name] = item
+        else:
+            log(f"[pip] WARN 无法识别包名的约束已忽略：{item}")
+    return list(specs.values())
+
+
+def write_constraints_file(constraints: list[str], directory: str | None = None) -> str:
+    """把最终约束写成 pip ``-c`` 文件；目录缺省时用系统临时目录。"""
+    directory = directory or tempfile.mkdtemp(prefix="imagen-constraints-")
+    path = os.path.join(directory, "constraints.txt")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(constraints))
+        handle.write("\n")
+    return path
+
+
+# 独立进程做 import 自检：pip 显示安装成功 ≠ 能 import（ABI 不匹配、依赖冲突都在这暴露）。
+IMPORT_CHECK_CODE = (
+    "import importlib\n"
+    "for name in ('torch', 'diffusers', 'transformers', 'accelerate', 'peft'):\n"
+    "    module = importlib.import_module(name)\n"
+    "    print(name + '==' + str(getattr(module, '__version__', 'unknown')))\n"
+)
+
+
+def run_command_tail(argv: list[str], prefix: str, tail_lines: int = 20) -> tuple[int, list[str]]:
+    """跑一次性子进程并把输出写进日志环，返回退出码与尾部若干行（供错误文案）。"""
+    log(f"{prefix} $ {' '.join(argv)}")
+    env = dict(os.environ)
+    env.setdefault("PIP_DISABLE_PIP_VERSION_CHECK", "1")
+    env.setdefault("PIP_NO_INPUT", "1")
+    try:
+        proc = subprocess.run(
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=600,
+            env=env,
+        )
+    except Exception as exc:
+        log(f"{prefix} 启动失败：{short(exc)}")
+        return -1, [short(exc)]
+    lines = [line.strip() for line in (proc.stdout or "").splitlines() if line.strip()]
+    for line in lines:
+        log(f"{prefix} {line}")
+    return proc.returncode, lines[-tail_lines:]
+
+
+def verify_dependencies() -> None:
+    """安装后导入自检；失败抛 LoadError（由 runtime_boot 转成 load_failed）。"""
+    code, tail = run_command_tail([sys.executable, "-c", IMPORT_CHECK_CODE], "[verify]")
+    if code != 0:
+        detail = " / ".join(tail[-3:]) if tail else "无输出"
+        raise LoadError(f"依赖导入自检失败（退出码 {code}）：{detail}")
+    log("[verify] 依赖导入自检通过")
+
+
 def install_dependencies() -> None:
     """按 bench/lightning/run.py 已验证过的顺序处理依赖。"""
     set_phase("installing", "卸载 torchao 并升级 diffusers 相关依赖")
@@ -509,14 +713,30 @@ def install_dependencies() -> None:
         [sys.executable, "-m", "pip", "uninstall", "-y", "-q", *PIP_UNINSTALL],
         "[pip]",
     )
+    constraints = merge_pip_constraints(CONFIG.pip_constraints)
+    constraints_path = write_constraints_file(constraints)
+    # 约束本身不含敏感信息，完整打印便于对照「为什么装的是这个版本」。
+    log(f"[pip] 依赖约束：{' | '.join(constraints)}")
     code = run_streaming(
         # 不加 -q：Collecting / Downloading / Installing 这些行要留在日志环里，
         # 用户排队结束后才看得到"依赖还在装"，进度条本身由 _NOISE_RE 过滤。
-        [sys.executable, "-m", "pip", "install", "-U", "--progress-bar", "off", *PIP_INSTALL],
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-U",
+            "--progress-bar",
+            "off",
+            "-c",
+            constraints_path,
+            *PIP_INSTALL,
+        ],
         "[pip]",
     )
     if code != 0:
         raise LoadError(f"pip install 失败（退出码 {code}），请查看 /logs 的 [pip] 行")
+    verify_dependencies()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -546,6 +766,94 @@ def free_cuda_cache() -> None:
             log("[cuda] 已执行 empty_cache()")
     except Exception as exc:  # torch 没装好也不该盖掉原始错误
         log(f"[cuda] empty_cache 失败：{short(exc)}")
+
+
+def resolve_local_model(repo: str) -> str | None:
+    """repo 命中 local_models 且目录含 model_index.json 时返回本地目录。
+
+    预挂载目录可能因为 Dataset 版本切换而缺少关键文件，此时不能硬用本地路径，
+    必须回退在线加载，否则会把「权重没挂对」变成一次难排查的加载失败。
+    """
+    key = str(repo or "").strip()
+    path = CONFIG.local_models.get(key)
+    if not path:
+        return None
+    if os.path.isfile(os.path.join(path, "model_index.json")):
+        return path
+    log(f"[load] WARN 预挂载目录缺少 model_index.json，回退在线加载：{path}")
+    return None
+
+
+def resolve_local_weight(repo: str, weight_name: str) -> str | None:
+    """LoRA 仓库命中预挂载且权重文件存在时返回本地文件路径。"""
+    key = str(repo or "").strip()
+    name = str(weight_name or "").strip()
+    path = CONFIG.local_models.get(key)
+    if not path or not name:
+        return None
+    try:
+        base = os.path.normpath(path)
+        candidate = os.path.normpath(os.path.join(path, name))
+        inside = os.path.commonpath([base, candidate]) == base
+    except (ValueError, OSError):
+        inside = False
+    if not inside:
+        log(f"[load] WARN LoRA 权重路径越出预挂载目录，已忽略：{name}")
+        return None
+    if os.path.isfile(candidate):
+        return candidate
+    log(f"[load] 预挂载目录未找到 LoRA 权重 {name}，回退在线下载：{path}")
+    return None
+
+
+def required_download_gb(pipeline_spec: dict) -> float | None:
+    """按 pipeline spec 的 downloadGb 估算下载需求（含 15% 余量）；缺失/非法返回 None。"""
+    raw = pipeline_spec.get("downloadGb")
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
+        return None
+    return round(float(raw) * DISK_HEADROOM, 2)
+
+
+def disk_usage_root() -> str:
+    """Kaggle 容器里权重落在 /kaggle/working；其他环境（本地调试）退回当前目录。"""
+    return "/kaggle/working" if os.path.isdir("/kaggle/working") else os.getcwd()
+
+
+def disk_precheck(pipeline_spec: dict, root: str | None = None, usage=None) -> dict | None:  # noqa: ANN001
+    """磁盘预检：返回 ``{required_gb, free_gb, path, enough}``；没有体积信息时返回 None。"""
+    required = required_download_gb(pipeline_spec)
+    if required is None:
+        return None
+    target = root or disk_usage_root()
+    read_usage = usage or shutil.disk_usage
+    try:
+        info = read_usage(target)
+    except Exception as exc:
+        # 读不到剩余空间不应该拦住加载，只留排障线索。
+        log(f"[load] WARN 无法读取磁盘剩余空间（跳过预检）：{short(exc)}")
+        return None
+    free_gb = round(float(getattr(info, "free", 0)) / 2**30, 2)
+    return {"required_gb": required, "free_gb": free_gb, "path": target, "enough": free_gb >= required}
+
+
+def disk_usage_text(result: dict) -> str:
+    return f"需 {result['required_gb']:.1f} GiB / 可用 {result['free_gb']:.1f} GiB"
+
+
+def ensure_disk_capacity(pipeline_spec: dict) -> None:
+    """下载前磁盘预检：Flux.2 全量权重会撑爆 Kaggle 20GB 空间；预挂载时跳过。"""
+    if resolve_local_model(str(pipeline_spec.get("base") or "")):
+        log("[load] 底座已预挂载本地权重，跳过磁盘预检")
+        return
+    result = disk_precheck(pipeline_spec)
+    if result is None:
+        return
+    if result["enough"]:
+        log(f"[load] 磁盘预检通过：{disk_usage_text(result)}（{result['path']}）")
+        return
+    raise LoadError(
+        f"磁盘空间不足（{pipeline_spec.get('base')}）：{disk_usage_text(result)}（{result['path']}）"
+    )
 
 
 def _prefetch_weights(base: str, allow_patterns) -> None:  # noqa: ANN001
@@ -594,7 +902,14 @@ def build_pipeline(pipeline_spec: dict):
     allow_patterns = pipeline_spec.get("allowPatterns")
     device_map = pipeline_spec.get("deviceMap")
 
-    _prefetch_weights(base, allow_patterns)
+    # P2.1：命中预挂载目录时直接用本地权重（跳过下载与磁盘预检）。
+    local_base = resolve_local_model(base)
+    ensure_disk_capacity(pipeline_spec)
+    if local_base:
+        log(f"[load] 使用预挂载权重加载底座：{base} → {local_base}")
+    else:
+        _prefetch_weights(base, allow_patterns)
+    base_source = local_base or base
 
     import torch
     from diffusers import (
@@ -609,7 +924,7 @@ def build_pipeline(pipeline_spec: dict):
 
     if loader == "sdxl":
         # 整管直出：turbo / base 都走这里
-        pipe = _from_pretrained(AutoPipelineForText2Image, base, kwargs, loader)
+        pipe = _from_pretrained(AutoPipelineForText2Image, base_source, kwargs, loader)
         pipe = pipe.to("cuda")
         return pipe, f"sdxl:{base}"
 
@@ -620,7 +935,7 @@ def build_pipeline(pipeline_spec: dict):
         if not lora_repo or not lora_weight:
             raise RequestError("sdxl-lora 需要 lora.repo 与 lora.weight")
 
-        pipe = _from_pretrained(StableDiffusionXLPipeline, base, kwargs, loader)
+        pipe = _from_pretrained(StableDiffusionXLPipeline, base_source, kwargs, loader)
 
         scheduler_spec = pipeline_spec.get("scheduler") or {}
         scheduler_type = str(scheduler_spec.get("type") or "euler").lower()
@@ -633,12 +948,18 @@ def build_pipeline(pipeline_spec: dict):
         else:
             log(f"[load] 未识别的 scheduler.type={scheduler_type}，沿用底座默认调度器")
 
-        # 与 bench/lightning/run.py 一致的 LoRA 加载方式：先按文件名下载，再按 repo+weight_name 载入。
-        from huggingface_hub import hf_hub_download
+        # P2.1：LoRA 仓库预挂载时优先用本地权重文件；否则按文件名下载再按 repo+weight_name 载入
+        # （与 bench/lightning/run.py 一致）。
+        local_weight = resolve_local_weight(lora_repo, lora_weight)
+        if local_weight:
+            log(f"[load] 使用预挂载 LoRA 权重：{local_weight}")
+            pipe.load_lora_weights(os.path.dirname(local_weight) or ".", weight_name=os.path.basename(local_weight))
+        else:
+            from huggingface_hub import hf_hub_download
 
-        downloaded = hf_hub_download(lora_repo, lora_weight)
-        log(f"[load] LoRA 权重就绪：{downloaded}")
-        pipe.load_lora_weights(lora_repo, weight_name=lora_weight)
+            downloaded = hf_hub_download(lora_repo, lora_weight)
+            log(f"[load] LoRA 权重就绪：{downloaded}")
+            pipe.load_lora_weights(lora_repo, weight_name=lora_weight)
         log(f"[load] LoRA 已挂载：{lora_repo}/{lora_weight}")
 
         pipe = pipe.to("cuda")
@@ -649,7 +970,7 @@ def build_pipeline(pipeline_spec: dict):
         balanced = str(device_map or "balanced")
         kwargs["device_map"] = balanced
         log(f"[load] flux2 使用 device_map={balanced}")
-        pipe = _from_pretrained(AutoPipelineForText2Image, base, kwargs, loader)
+        pipe = _from_pretrained(AutoPipelineForText2Image, base_source, kwargs, loader)
         return pipe, f"flux2:{base}"
 
     # 到这里说明 validate 漏了分支，按请求错误处理。
@@ -942,6 +1263,10 @@ def health_payload() -> dict:
         "last_error_code": STATE.last_error_code,
         "detail": STATE.detail,
         "uptime_seconds": round(time.time() - STATE.started_at, 1),
+        # P0.2 / P2.2：隧道监管状态，Host 用于「重连中 / 通道类型」展示与故障归因。
+        "tunnel_provider": BOOT.tunnel_provider,
+        "tunnel_state": BOOT.tunnel_state,
+        "tunnel_restarts": BOOT.tunnel_restarts,
     }
 
 
@@ -1037,8 +1362,7 @@ class DaemonHandler(BaseHTTPRequestHandler):
         path = parts.path.rstrip("/") or "/"
 
         if path == "/shutdown":
-            log("[shutdown] 收到 /shutdown，0.3s 后退出进程")
-            STATE.shutting_down = True
+            request_shutdown()
             self._send_json(200, {"status": "shutting_down"})
             threading.Thread(target=self._delayed_exit, daemon=True).start()
             return
@@ -1135,7 +1459,12 @@ def start_http_server(port: int) -> ThreadingHTTPServer:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Cloudflare 隧道
+# 隧道（cloudflared quick tunnel + 可配置备用通道）
+#
+# P0.2：隧道启动/监管拆成小而纯的函数，子进程与输出读取用替身即可离线覆盖：
+#   normalize_tunnel_command / extract_tunnel_url / tunnel_url_regex / build_tunnel_plan /
+#   tunnel_attempt（单通道尝试）/ tunnel_monitor（常驻监管与指数退避重拉）。
+# P2.2：cloudflared 失败或超时后按 provider 计划尝试备用命令，成功后 provider='custom'。
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -1160,71 +1489,315 @@ def ensure_cloudflared() -> str:
     return CLOUDFLARED_PATH
 
 
-def _drain_cloudflared(proc: subprocess.Popen, url_event: threading.Event) -> None:
-    """持续读取 stderr，直到进程退出。
+def normalize_tunnel_command(command, port: int) -> list[str]:  # noqa: ANN001
+    """argv 模板规整：过滤空项、替换 ``{port}``；没有任何占位符时把端口追加到末尾。"""
+    if not isinstance(command, (list, tuple)):
+        return []
+    argv: list[str] = []
+    has_placeholder = False
+    for item in command:
+        if not isinstance(item, str) or not item.strip():
+            continue
+        if "{port}" in item:
+            has_placeholder = True
+            argv.append(item.replace("{port}", str(port)))
+        else:
+            argv.append(item)
+    if argv and not has_placeholder:
+        argv.append(str(port))
+    return argv
 
-    这一步是硬要求：拿到 URL 后如果不再读，管道缓冲区写满会阻塞 cloudflared 自身，
-    隧道随后表现为"能拿到域名但连不上"。
+
+def extract_tunnel_url(line, pattern) -> str | None:  # noqa: ANN001
+    """从一行输出里提取隧道地址（去掉句末标点）；匹配不到返回 None。"""
+    if not isinstance(line, str) or not line:
+        return None
+    try:
+        match = pattern.search(line)
+    except Exception:
+        return None
+    if not match:
+        return None
+    return match.group(0).rstrip(".,;)")
+
+
+def tunnel_url_regex(pattern: str | None = None):  # noqa: ANN202 - 返回编译后的正则
+    """备用通道的地址提取规则：配置优先，非法或缺省时回退内置 https 规则。"""
+    if isinstance(pattern, str) and pattern.strip():
+        try:
+            return re.compile(pattern)
+        except re.error as exc:
+            log(f"[tunnel] WARN fallback_tunnel_url_regex 非法（{exc}），改用默认规则")
+    return DEFAULT_CUSTOM_URL_RE
+
+
+def build_tunnel_plan(port: int) -> list[dict]:
+    """按尝试顺序给出通道计划：cloudflare 优先，配置了备用命令再追加 custom。"""
+    plan = [
+        {
+            "provider": "cloudflare",
+            "argv": [CLOUDFLARED_PATH, "tunnel", "--url", f"http://127.0.0.1:{port}", "--no-autoupdate"],
+            "url_re": CLOUDFLARED_URL_RE,
+            "wait_sec": TUNNEL_WAIT_SEC,
+        }
+    ]
+    custom = normalize_tunnel_command(CONFIG.fallback_tunnel_command, port)
+    if custom:
+        plan.append(
+            {
+                "provider": "custom",
+                "argv": custom,
+                "url_re": tunnel_url_regex(CONFIG.fallback_tunnel_url_regex),
+                "wait_sec": TUNNEL_WAIT_SEC,
+            }
+        )
+    return plan
+
+
+def tunnel_restart_delay(attempt: int) -> float:
+    """指数退避：2、4、8、16、32、60（封顶）；attempt 从 1 开始。"""
+    exponent = max(0, int(attempt) - 1)
+    return min(TUNNEL_RESTART_MAX_SEC, TUNNEL_RESTART_BASE_SEC * (2**exponent))
+
+
+def tunnel_should_stop() -> bool:
+    """隧道监管是否该退出（/shutdown、信号或显式置位）。"""
+    return BOOT.stop_event.is_set() or STATE.shutting_down
+
+
+def _spawn_tunnel_process(argv: list[str], provider: str = "cloudflare"):  # noqa: ANN202 - 返回 Popen 或 None
+    """启动隧道子进程；失败只记录原因，交给下一个通道或下一轮重试。
+
+    cloudflared 把地址打在 stderr；自建通道（bore / frpc 等）通常打在 stdout，
+    因此对 custom 合并两个流，避免「进程活着但永远读不到地址」。
     """
-    found_url: str | None = None
-    assert proc.stderr is not None
+    log(f"[tunnel] 启动隧道进程：{' '.join(argv)}")
     try:
-        for raw_line in proc.stderr:
-            line = raw_line.rstrip()
-            if not line:
-                continue
-            log(f"[cloudflared] {line}")
-            if found_url is None:
-                match = CLOUDFLARED_URL_RE.search(line)
-                if match:
-                    found_url = match.group(0)
-                    BOOT.tunnel_url = found_url
-                    url_event.set()
-    except Exception as exc:
-        log(f"[tunnel] 读取 cloudflared stderr 出错：{short(exc)}")
-    finally:
-        code = proc.poll()
-        log(f"[tunnel] cloudflared stderr 结束（退出码 {code}，URL={found_url}）")
-        if found_url is None:
-            BOOT.tunnel_error = f"cloudflared 未给出 trycloudflare 地址（退出码 {code}）"
-            url_event.set()
-
-
-def tunnel_boot(port: int) -> None:
-    try:
-        binary = ensure_cloudflared()
-    except Exception as exc:
-        fail_boot("tunnel_failed", f"cloudflared 下载失败：{short(exc)}", tunnel=True)
-        return
-
-    log(f"[tunnel] 启动 cloudflared tunnel --url http://127.0.0.1:{port}")
-    try:
-        proc = subprocess.Popen(
-            [binary, "tunnel", "--url", f"http://127.0.0.1:{port}", "--no-autoupdate"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
+        if provider == "cloudflare":
+            return subprocess.Popen(
+                argv,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+        return subprocess.Popen(
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
         )
     except Exception as exc:
-        fail_boot("tunnel_failed", f"cloudflared 启动失败：{short(exc)}", tunnel=True)
-        return
+        BOOT.tunnel_error = f"隧道命令启动失败：{short(exc)}"
+        log(f"[tunnel] {BOOT.tunnel_error}")
+        return None
 
+
+def _drain_tunnel_output(proc, provider: str, url_re, url_event: threading.Event) -> None:  # noqa: ANN001
+    """持续读取隧道输出，首个地址写入 BOOT 并置位事件；必须读到进程退出为止。
+
+    拿到地址后停止读取会让管道写满、隧道卡死（实测过的故障），所以这里不提前返回。
+    """
+    prefix = "cloudflared" if provider == "cloudflare" else f"tunnel:{provider or 'custom'}"
+    found_url: str | None = None
+    try:
+        # cloudflared 用 stderr，自建通道合并到 stdout；两者取其一即可。
+        stream = getattr(proc, "stderr", None)
+        if stream is None:
+            stream = getattr(proc, "stdout", None)
+        if stream is not None:
+            for raw_line in stream:
+                line = str(raw_line).rstrip()
+                if not line:
+                    continue
+                log(f"[{prefix}] {line}")
+                if found_url is None:
+                    candidate = extract_tunnel_url(line, url_re)
+                    if candidate:
+                        found_url = candidate
+                        BOOT.tunnel_url = candidate
+                        BOOT.tunnel_provider = provider
+                        url_event.set()
+    except Exception as exc:
+        log(f"[tunnel] 读取 {prefix} 输出出错：{short(exc)}")
+    finally:
+        try:
+            code = proc.poll()
+        except Exception:
+            code = None
+        log(f"[tunnel] {prefix} 输出结束（退出码 {code}，地址={found_url}）")
+        if found_url is None:
+            BOOT.tunnel_error = f"{prefix} 未给出隧道地址（退出码 {code}）"
+            url_event.set()
+
+
+def terminate_tunnel_process(proc) -> None:  # noqa: ANN001
+    """尽力结束隧道子进程（超时/退出后换通道或停机时调用）。"""
+    if proc is None:
+        return
+    try:
+        proc.terminate()
+    except Exception:
+        pass
+    try:
+        proc.wait(timeout=5)
+        return
+    except Exception:
+        pass
+    try:
+        proc.kill()
+    except Exception:
+        pass
+
+
+def tunnel_attempt(item: dict) -> tuple[str, object] | None:
+    """启动一个通道并等待地址：成功返回 (provider, proc)，失败返回 None。"""
+    provider = str(item.get("provider") or "")
+    argv = list(item.get("argv") or [])
+    if not argv:
+        BOOT.tunnel_error = f"{provider or '隧道'} 通道命令为空"
+        log(f"[tunnel] {BOOT.tunnel_error}")
+        return None
+    BOOT.tunnel_url = None
+    BOOT.tunnel_error = None
+    proc = _spawn_tunnel_process(argv, provider)
+    if proc is None:
+        return None
     BOOT.cloudflared = proc
     url_event = threading.Event()
     threading.Thread(
-        target=_drain_cloudflared,
-        args=(proc, url_event),
-        name="cloudflared-drain",
+        target=_drain_tunnel_output,
+        args=(proc, provider, item.get("url_re") or DEFAULT_CUSTOM_URL_RE, url_event),
+        name=f"tunnel-drain-{provider or 'custom'}",
         daemon=True,
     ).start()
+    wait_sec = float(item.get("wait_sec") or TUNNEL_WAIT_SEC)
+    if url_event.wait(wait_sec) and BOOT.tunnel_url:
+        return provider, proc
+    if BOOT.tunnel_error is None:
+        BOOT.tunnel_error = f"{provider or '隧道'} 在 {int(wait_sec)}s 内未给出隧道地址"
+    log(f"[tunnel] WARN 通道 {provider or 'unknown'} 未建立：{BOOT.tunnel_error}")
+    terminate_tunnel_process(proc)
+    return None
 
-    if url_event.wait(TUNNEL_WAIT_SEC) and BOOT.tunnel_url:
-        log(f"[tunnel] 隧道就绪：{BOOT.tunnel_url}")
+
+def start_tunnel(port: int) -> tuple[str, object] | None:
+    """按 provider 计划依次尝试；cloudflared 下载失败时仍会尝试备用通道。"""
+    for item in build_tunnel_plan(port):
+        if tunnel_should_stop():
+            return None
+        if item["provider"] == "cloudflare":
+            try:
+                binary = ensure_cloudflared()
+            except Exception as exc:
+                BOOT.tunnel_error = f"cloudflared 下载失败：{short(exc)}"
+                log(f"[tunnel] WARN {BOOT.tunnel_error}，尝试下一个通道")
+                continue
+            item["argv"] = [binary, *item["argv"][1:]]
+        result = tunnel_attempt(item)
+        if result is not None:
+            return result
+    return None
+
+
+def recover_tunnel_error() -> None:
+    """隧道恢复后清掉 tunnel_failed 错误态，避免 Host 把 /health 当成致命错误。
+
+    即使错误被运行时的 phase 覆盖过（runtime_boot 末尾会写 ready），last_error
+    也会残留给 Host 拼 UI，所以这里一并清掉。
+    """
+    if STATE.last_error_code != "tunnel_failed":
         return
+    STATE.last_error = None
+    STATE.last_error_code = None
+    if STATE.phase == "error":
+        phase = BOOT.phase_before_error if BOOT.phase_before_error not in (None, "error") else "booting"
+        set_phase(phase, "隧道已恢复")
+    else:
+        log(f"[tunnel] 隧道恢复，清除残留错误记录（phase={STATE.phase}）")
 
-    message = BOOT.tunnel_error or f"cloudflared 在 {int(TUNNEL_WAIT_SEC)}s 内没有给出隧道地址"
-    fail_boot("tunnel_failed", message, tunnel=True)
+
+def announce_tunnel_ready(provider: str, *, restarted: bool = False) -> None:
+    """隧道（重新）建立：记录通道类型、清隧道错误并重播 ready。"""
+    BOOT.tunnel_provider = provider
+    BOOT.tunnel_state = "up"
+    BOOT.tunnel_error = None
+    suffix = "（重连后重播 ready）" if restarted else ""
+    log(f"[tunnel] 通道 {provider} 就绪：{BOOT.tunnel_url}{suffix}")
+    recover_tunnel_error()
+    BOOT.published_ready = True
+    publish_ready()
+
+
+def tunnel_wait_exit(proc, poll_interval: float = 1.0):  # noqa: ANN001, ANN202
+    """常驻等待隧道进程退出；收到停机信号时返回 None。"""
+    while not tunnel_should_stop():
+        try:
+            code = proc.poll()
+        except Exception:
+            return None
+        if code is not None:
+            return code
+        time.sleep(max(0.01, float(poll_interval)))
+    return None
+
+
+def tunnel_monitor(port: int) -> None:
+    """常驻监管：拉起隧道 → 等进程退出 / 失败退避重拉；直到收到停机信号。
+
+    语义：
+      - 首次就失败：保留旧行为 ``fail_boot('tunnel_failed')`` 并继续在后台重试；
+      - 已就绪后进程中途退出：只记录 warn 并重拉（不把整个 daemon 判成 error）；
+      - 任何一次成功都重播 ready，让 Host 在心跳丢失后重新会合。
+    """
+    attempt = 0
+    ever_ready = False
+    failure_reported = False
+    while not tunnel_should_stop():
+        if attempt > 0:
+            BOOT.tunnel_restarts += 1
+            delay = tunnel_restart_delay(attempt)
+            log(f"[tunnel] {delay:.0f}s 后重拉隧道（累计重启 {BOOT.tunnel_restarts} 次）")
+            if BOOT.stop_event.wait(delay):
+                break
+        BOOT.tunnel_state = "starting"
+        result = start_tunnel(port)
+        if result is None:
+            if tunnel_should_stop():
+                break
+            BOOT.tunnel_state = "down"
+            attempt += 1
+            message = BOOT.tunnel_error or "隧道未建立（所有通道均失败）"
+            if not ever_ready and not failure_reported:
+                BOOT.phase_before_error = STATE.phase
+                fail_boot("tunnel_failed", message, tunnel=True)
+                failure_reported = True
+            else:
+                log(f"[tunnel] 重试仍失败：{message}")
+            continue
+        provider, proc = result
+        attempt = 0
+        ever_ready = True
+        announce_tunnel_ready(provider, restarted=BOOT.tunnel_restarts > 0)
+        code = tunnel_wait_exit(proc)
+        if tunnel_should_stop():
+            log("[tunnel] 收到停机信号，结束隧道监管")
+            terminate_tunnel_process(proc)
+            break
+        log(f"[tunnel] WARN 通道 {provider} 进程退出（退出码 {code}），准备重拉")
+        BOOT.tunnel_state = "down"
+        BOOT.tunnel_url = None
+        BOOT.published_ready = False
+        BOOT.tunnel_error = f"{provider} 进程异常退出（退出码 {code}）"
+        attempt = 1
+
+
+def tunnel_boot(port: int) -> None:
+    """启动常驻隧道监管线程（不阻塞 HTTP 服务与运行时启动）。"""
+    BOOT.tunnel_state = "starting"
+    log("[tunnel] 启动隧道监管（cloudflared 优先，失败自动重拉）")
+    threading.Thread(target=tunnel_monitor, args=(port,), name="tunnel-monitor", daemon=True).start()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1291,6 +1864,7 @@ def _install_signal_handlers() -> None:
 
         def _bye(signum, _frame):  # noqa: ANN001
             log(f"[signal] 收到信号 {signum}，退出进程")
+            BOOT.stop_event.set()
             os._exit(0)
 
         for sig in (signal.SIGTERM, signal.SIGINT):
@@ -1319,6 +1893,8 @@ def main() -> None:
         os._exit(2)
         return
     _log_environment()
+    # P1.2：HF_TOKEN 必须在任何下载/加载之前写好（gated 仓库与匿名限流都依赖它）。
+    apply_hf_token()
 
     # 0) 安全闸门：没有 auth_token 且没有显式允许无鉴权 → 拒绝对外服务（不发布 ready）。
     if auth_missing():
@@ -1336,15 +1912,16 @@ def main() -> None:
         os._exit(3)
         return
 
-    # 2) 隧道与运行时各自后台跑，互不阻塞。
-    threading.Thread(target=tunnel_boot, args=(CONFIG.port,), name="tunnel-boot", daemon=True).start()
+    # 2) 隧道与运行时各自后台跑，互不阻塞（tunnel_boot 自己拉起监管线程）。
+    tunnel_boot(CONFIG.port)
     threading.Thread(target=runtime_boot, name="runtime-boot", daemon=True).start()
 
-    # 3) 主线程：会合点发布 + 空闲看门狗。
+    # 3) 主线程：会合点发布 + 周期性重播 + 空闲看门狗。
     #    只要隧道地址到手就发布 ready，让 Host 立刻能建立 /health 心跳并从 phase
     #    看到 installing / loading 的进度；模型是否加载完由 /health 回答，不靠会合点。
-    #    published_ready 保证只发一次；model_id / device 在此刻可能还是 null。
+    #    隧道监管线程负责中途重拉后的重播，这里只兜底首次发布与周期重播。
     last_report = 0.0
+    last_announce = time.time()
     while True:
         time.sleep(2.0)
         now = time.time()
@@ -1352,6 +1929,15 @@ def main() -> None:
         if BOOT.tunnel_url and not BOOT.published_ready:
             BOOT.published_ready = True
             publish_ready()
+
+        # P0.2：每 TUNNEL_ANNOUNCE_SEC 秒重播一次 ready，Host 心跳丢失后可重新会合。
+        if BOOT.tunnel_url and now - last_announce >= TUNNEL_ANNOUNCE_SEC:
+            last_announce = now
+            log(
+                f"[tunnel] 周期重播 ready（通道 {BOOT.tunnel_provider or 'unknown'}，"
+                f"间隔 {int(TUNNEL_ANNOUNCE_SEC)}s）"
+            )
+            threading.Thread(target=publish_ready, name="announce-ready", daemon=True).start()
 
         idle = now - STATE.last_active
         busy = STATE.waiting > 0 or GEN_LOCK.locked()

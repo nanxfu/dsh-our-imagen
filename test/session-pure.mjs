@@ -3,8 +3,9 @@
  * 会话层纯函数与端口的离线回归（不连 Kaggle、不出外网，只起一个本机 mock /generate）。
  *
  * 覆盖 P5 拆分后仍保留的纯函数边界（session-race / session-reliability 继续覆盖状态机行为）：
- *  - state.js：空快照、快照拷贝、字段初始值、失败状态截断、时长文案；
+ *  - state.js：空快照、快照拷贝、字段初始值、失败状态截断、时长文案、隧道通道归一；
  *  - SessionManager：interval 注册/清理、轮询异常只记日志不抛出；
+ *  - remote.js：隧道地址可信判定（回环 / trycloudflare / 可信域后缀与协议限制）；
  *  - rendezvous.js：会合 URL、NDJSON 解析分类、daemon error 归一、排队超时判定；
  *  - health.js：phase → 文案映射、Kernel 结束判定、心跳丢失恢复动作；
  *  - provisioner.js：注入 daemon 的配置（版本 / 契约 / 预设展开）；
@@ -16,8 +17,9 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 
-import { LIMITS, VERSION } from '../shared/contract.js'
+import { LIMITS, PROTOCOL, VERSION } from '../shared/contract.js'
 import { JobQueue } from '../lib/jobs.js'
+import { isTrustedEndpoint } from '../lib/remote.js'
 import { SessionManager } from '../lib/session.js'
 import { describeHealthPhase, decideReadyHealthLoss, isKernelEnded } from '../lib/session/health.js'
 import { buildKernelConfig } from '../lib/session/provisioner.js'
@@ -32,6 +34,7 @@ import {
   createSessionFields,
   emptySession,
   formatDuration,
+  normalizeTunnelProvider,
   snapshotOf,
   writeFailure,
 } from '../lib/session/state.js'
@@ -94,7 +97,18 @@ async function scenarioState() {
     assert.equal(value.error, null)
     assert.equal(value.phase, null)
     assert.equal(value.idleTimeoutSec, 1800)
-    assert.equal(Object.keys(value).length, 16)
+    assert.equal(value.tunnelProvider, null)
+    assert.equal(Object.keys(value).length, 17)
+  })
+
+  await check('normalizeTunnelProvider 只放行契约取值域内的通道', () => {
+    assert.deepEqual(PROTOCOL.daemon.tunnelProviders, ['cloudflare', 'custom'])
+    for (const provider of PROTOCOL.daemon.tunnelProviders) {
+      assert.equal(normalizeTunnelProvider(provider), provider)
+    }
+    for (const value of ['Cloudflare', 'frp', '', undefined, null, 42]) {
+      assert.equal(normalizeTunnelProvider(value), null, `非法值应归一为 null：${value}`)
+    }
   })
 
   await check('snapshotOf 深拷贝 error，改副本不影响原状态', () => {
@@ -140,6 +154,58 @@ async function scenarioState() {
 
   await check('ACTIVE_STATES 覆盖 5 个活跃状态', () => {
     assert.deepEqual([...ACTIVE_STATES].sort(), ['connecting', 'provisioning', 'ready', 'stopping', 'warming'])
+  })
+}
+
+async function scenarioTrustedEndpoint() {
+  console.log('\n── remote.js 隧道地址可信判定')
+  await check('回环地址始终可信（http / https / IPv6）', () => {
+    for (const url of [
+      'http://127.0.0.1:8080',
+      'https://127.0.0.1:8443',
+      'http://localhost:1',
+      'https://localhost',
+      'http://[::1]:9000',
+    ]) {
+      assert.equal(isTrustedEndpoint(url), true, url)
+    }
+  })
+
+  await check('https 的 *.trycloudflare.com 可信，http 与仿冒域名不可信', () => {
+    assert.equal(isTrustedEndpoint('https://abc-def-ghi.trycloudflare.com'), true)
+    assert.equal(isTrustedEndpoint('https://ABC.TRYCLOUDFLARE.COM'), true)
+    assert.equal(isTrustedEndpoint('http://abc.trycloudflare.com'), false)
+    assert.equal(isTrustedEndpoint('https://eviltrycloudflare.com'), false)
+    assert.equal(isTrustedEndpoint('https://trycloudflare.com.evil.example'), false)
+  })
+
+  await check('可信域：精确命中、子域命中、大小写与前导点归一', () => {
+    const domains = ['tunnel.example.com']
+    assert.equal(isTrustedEndpoint('https://tunnel.example.com', domains), true)
+    assert.equal(isTrustedEndpoint('https://a.tunnel.example.com', domains), true)
+    assert.equal(isTrustedEndpoint('https://a.b.tunnel.example.com', domains), true)
+    assert.equal(isTrustedEndpoint('https://TUNNEL.Example.COM', domains), true)
+    assert.equal(isTrustedEndpoint('https://nottunnel.example.com', domains), false)
+    assert.equal(isTrustedEndpoint('https://tunnel.example.com.evil.example', domains), false)
+
+    // 配置项允许前导点与 *. 前缀（常见写法），两种都应视作同一个后缀。
+    for (const entry of ['.tunnel.example.com', '*.tunnel.example.com', '.Tunnel.Example.Com']) {
+      assert.equal(isTrustedEndpoint('https://a.tunnel.example.com', [entry]), true, entry)
+      assert.equal(isTrustedEndpoint('https://tunnel.example.com', [entry]), true, entry)
+    }
+  })
+
+  await check('可信域仅接受 https；空/非法输入一律拒绝', () => {
+    const domains = ['tunnel.example.com']
+    assert.equal(isTrustedEndpoint('http://tunnel.example.com', domains), false)
+    assert.equal(isTrustedEndpoint('ftp://tunnel.example.com', domains), false)
+    assert.equal(isTrustedEndpoint('https://a.tunnel.example.com', []), false)
+    assert.equal(isTrustedEndpoint('https://a.tunnel.example.com', undefined), false)
+    assert.equal(isTrustedEndpoint('not a url', domains), false)
+    assert.equal(isTrustedEndpoint('', domains), false)
+    assert.equal(isTrustedEndpoint(null, domains), false)
+    // 空串 / 空白 / 带路径的配置项不构成可信后缀。
+    assert.equal(isTrustedEndpoint('https://evil.example', ['', '  ', 'example.com/path']), false)
   })
 }
 
@@ -395,6 +461,7 @@ async function scenarioRemotePort() {
 async function main() {
   console.log('session-pure：会话层纯函数与端口离线回归（无 Kaggle / 无 GPU / 无外网）')
   await scenarioState()
+  await scenarioTrustedEndpoint()
   await scenarioTimers()
   await scenarioRendezvous()
   await scenarioHealth()

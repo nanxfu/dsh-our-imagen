@@ -238,7 +238,7 @@ export function Gallery(props) {
                           aria-pressed={selecting ? checked : undefined}
                           onClick={() => (selecting ? togglePick(key) : onOpen(entry))}
                         >
-                          <img src={entry.image.url} alt={prompt || entry.image.file || 'thumb'} loading="lazy" />
+                          <img src={entry.image.url} alt={prompt || entry.image.file || t('studio.image.alt')} loading="lazy" />
                           {selecting ? (
                             <span className={checked ? 'ofs-gallery-pick is-on' : 'ofs-gallery-pick'} aria-hidden="true">
                               {checked ? <Icon name="check" size={11} /> : null}

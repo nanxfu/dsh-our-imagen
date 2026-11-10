@@ -1,5 +1,33 @@
 # 变更记录
 
+## 0.4.0 — 2026-11-11
+
+### 稳定性（P0）
+
+- **会话本地持久化与启动恢复**：Host 把 `kernelId`、`token`、`topic`、`endpointUrl` 等实时写入 `<workspace>/.imagen/session.json`（同目录临时文件 + rename 原子写，目录 0700 / 文件 0600），DSH 重启或插件热重载后自动恢复：`/health` 探活成功直接接管（ready/warming），地址失效但有 topic 则回 ntfy 重新会合，Kernel 已结束或没有地址线索时尽力关机并清理记录。恢复与 `start`/`stop` 的代次机制共存，过期恢复不写状态、不挂定时器；`stop` 与成功的 `dispose` 删除记录，失败保留供下次清理。token 只落盘，不进日志与对外快照。
+- **远端隧道自愈**：`remote/daemon.py` 的隧道启动拆成可测试的纯函数（命令规整、地址提取、通道计划、退避），新增常驻监管线程：cloudflared 中途退出时记录 warn、清空发布状态、按 2→60 秒指数退避重拉，拿到新地址后重新广播 ready；主循环每 300 秒重播一次 ready，Host 心跳丢失后可重新会合。`/health` 新增 `tunnel_provider` / `tunnel_state` / `tunnel_restarts`，ready 事件新增 `provider`。
+
+### 可观测性与冷启动（P1）
+
+- **运行日志抽屉**：新增 `GET /imagen-api/logs?since=N`（始终 HTTP 200，用 `ok` 与 `code` 表达可用性），把远端 daemon 日志环透传给工作台。算力弹层新增「查看运行日志」：打开时增量轮询、关闭即停，支持空态/不可用原因/自动滚底，并可一键复制诊断信息（版本、会话快照（剔除 token）、探测结果、队列、最近 60 行日志）。新增错误码 `logs_unavailable`。
+- **冷启动加固**：依赖安装带上 constraints（默认 `diffusers<1.0`、`transformers<5`、`accelerate<2`、`peft<1`，可用 `pipConstraints` 按包名覆盖），安装后独立进程做 `import torch/diffusers/...` 自检并打印版本；支持可选 `hfToken`（HF_TOKEN / HUGGING_FACE_HUB_TOKEN，不落日志）；下载权重前按 `downloadGb` 做磁盘预检（需 1.15 倍余量），不足时报「需 X GiB / 可用 Y GiB」。
+- **配额可见性容错**：探测失败或配额不可读时，算力弹层回退展示本地统计——最近一次成功检查时间与当时配额、当前会话已运行时长，并给出 Kaggle 账户设置直达链接。`/state` 新增 `probeLastGood` / `probeLastGoodAt`。
+- **隧道通道可见**：会话快照新增 `tunnelProvider`，算力弹层显示当前隧道通道（Cloudflare / 自建通道）。
+
+### 体验与发布（P2）
+
+- **权重预挂载**：新增 `datasetSources`（写入 kernel-metadata 的 `dataset_sources`）与 `localModels`（仓库 → 容器内目录映射）；远端命中本地目录（含 `model_index.json`）时直接加载并跳过下载与磁盘预检，LoRA 优先使用本地权重文件。非法 Dataset 标识会告警并过滤，不影响会话启动。
+- **备用隧道通道**：新增 `fallbackTunnelCommand`（argv 模板，支持 `{port}`）与 `fallbackTunnelUrlRegex`；cloudflared 失败或超时后自动尝试备用命令，成功后 provider 记为 `custom` 并重播 ready，备用进程同样纳入监管重拉。Host 侧用 `trustedTunnelDomains` 白名单校验会合地址，未登记的域名不会收到 token。
+- **窄屏与完成提醒**：≤820px 时画面预览置顶、面板在下方自身滚动，提交任务后进度与图片始终留在视口；离开页面期间任务完成会在标签页标题加「● 生成完成 · 」，返回后恢复标题并提示一次，首次挂载不触发。
+- **无障碍**：大图预览与日志抽屉加焦点陷阱、Esc 关闭与关闭后焦点归还；所有图片补有意义的 alt（提示词 → 文件名 → 文案回退）；`pointer: coarse` 下图标按钮、玻璃按钮、dock/tab/画廊动作等热区 ≥44px。
+- **发布合规**：补齐 MIT `LICENSE`、`package.json` 的 `license` 字段与版本 0.4.0；新增 `npm run package`——构建 `client.js` 后按 `files` 清单产出 `dist/<name>-<version>/` 可加载目录并尽力压缩 zip；`dist/` 加入 `.gitignore`。
+
+### 工程与文档
+
+- 契约新增 `ROUTES.logs`、`TIMEOUTS.remoteLogsMs` / `clientLogsPollMs`、`ERROR_CODES.logs_unavailable`、`PROTOCOL.daemon.tunnelProviders`，预设 pipeline 增加 `downloadGb`；版本号单源升到 0.4.0（契约 / package.json / daemon / mock / probe 同步）。
+- 新增 `test/session-restore.mjs`（79 项）、`test/kernel-package.mjs`（5 项）；`test/daemon-unit.py` 51 → 101 项；`npm test` 与 `test:host` 纳入新测试。
+- `docs/SPEC.md` 补日志路由、会话持久化、快照与 `/state` 字段、错误码；`README.md` 增加可选配置表、日志/恢复/打包说明；`docs/ROADMAP.md` 标记 P0/P1/P2 完成状态。
+
 ## 0.3.0 — 2026-11-10
 
 ### 界面与文案去 AI 味（V2 规格）

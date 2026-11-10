@@ -5,7 +5,8 @@
 「探测 /health → 拉 /logs → POST /generate → 落盘 PNG → POST /shutdown」全链路。
 
 协议与 ``remote/daemon.py``（docs/SPEC.md）保持一致：
-  GET  /health              phase 报告 booting/installing/loading/ready/error
+  GET  /health              phase 报告 booting/installing/loading/ready/error，
+                            并带 tunnel_provider / tunnel_state / tunnel_restarts
   GET  /logs?since=N        {lines, next}，环形缓冲最多 400 行
   POST /generate            {status, model_id, load_seconds, results[...]}
   POST /shutdown            {"status": "shutting_down"} 后退出
@@ -60,7 +61,7 @@ except Exception:  # pragma: no cover - 只在极简环境触发
     ImageDraw = None  # type: ignore[assignment]
     _HAS_PILLOW = False
 
-VERSION = "0.3.0-mock"
+VERSION = "0.4.0-mock"
 LOG_MAX_LINES = 400
 SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2")
 FAIL_CHOICES = ("none", "oom", "load_failed", "invalid_request", "generation_failed")
@@ -73,7 +74,7 @@ CONTRACT_PATH = Path(__file__).resolve().parent.parent / "remote" / "contract.js
 # 契约文件缺失/损坏时的兜底：故意与 remote/daemon.py 的 _FALLBACK_LIMITS 保持一致（旧边界），
 # 保证"没有 contract.json"时 mock 与 daemon 的退化行为相同。
 FALLBACK_CONTRACT = {
-    "version": "0.3.0",
+    "version": "0.4.0",
     "limits": {
         "width": {"max": 2048, "min": 64, "step": 8},
         "height": {"max": 2048, "min": 64, "step": 8},
@@ -331,6 +332,10 @@ def health_payload(extra: dict | None = None) -> dict:
         "detail": (extra.get("detail") if extra else None)
         or (_LAST_ERROR["value"] if phase == "error" else None),
         "uptime_seconds": round(time.time() - _START_TS, 1),
+        # P0.2 / P2.2：与真实 daemon 的 /health 新字段对齐（mock 常驻一条 cloudflare 通道）。
+        "tunnel_provider": "cloudflare",
+        "tunnel_state": "up",
+        "tunnel_restarts": 0,
         "mock": True,
     }
     return payload

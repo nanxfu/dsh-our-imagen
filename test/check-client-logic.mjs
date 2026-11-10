@@ -14,6 +14,17 @@ import { en } from '../src/dict/en.js'
 import { DICT } from '../src/dict/index.js'
 import { fallbackTranslate, localized } from '../src/i18n.js'
 import * as logic from '../src/logic/index.js'
+import {
+  LOG_LINE_LIMIT,
+  appendLogLines,
+  buildDiagnostics,
+  elapsedMsSince,
+  formatClockTime,
+  quotaText,
+  readLogsPayload,
+  sanitizeSession,
+} from '../src/logic/logs.js'
+import { NOTICE_TITLE_PREFIX, completionNotice, isCompletion, stripNoticePrefix } from '../src/logic/notice.js'
 import { styles, token } from '../src/theme.js'
 import { ACTIVE_STATUS, TRANSIENT_SESSION, PHASE_STATE, NS } from '../src/constants.js'
 import { STYLE_CAPSULES } from '../src/studio/capsules.js'
@@ -537,6 +548,146 @@ await check('悬浮提示的定位夹在容器内', () => {
 
   const noFrame = logic.tooltipPlacement({ anchor: { left: 100, top: 200, bottom: 220, width: 16 }, frame: null, width: 400 })
   assert.equal(noFrame.maxWidth, 400)
+})
+
+await check('日志增量合并与端点归一', () => {
+  assert.deepEqual(appendLogLines([], ['a', 'b']), ['a', 'b'])
+  assert.deepEqual(appendLogLines(['a'], []), ['a'], '无新增时保留原数组')
+  assert.deepEqual(appendLogLines(['a'], [null, 3, 'b']), ['a', 'b'], '只保留字符串行')
+
+  const many = Array.from({ length: 450 }, (_, index) => `line-${index}`)
+  const capped = appendLogLines([], many)
+  assert.equal(capped.length, LOG_LINE_LIMIT, '超出上限时保留最近 400 行')
+  assert.equal(capped[0], 'line-50', '丢弃最早的日志')
+  assert.equal(capped[capped.length - 1], 'line-449')
+  assert.equal(appendLogLines(Array.from({ length: 399 }, (_, index) => `old-${index}`), ['new']).length, 400)
+
+  const ok = readLogsPayload({ ok: true, data: { ok: true, since: 0, next: 12, lines: ['x', 1, 'y'] } })
+  assert.equal(ok.ok, true)
+  assert.equal(ok.next, 12)
+  assert.deepEqual(ok.lines, ['x', 'y'])
+  assert.equal(ok.reason, null)
+
+  const absent = readLogsPayload({ ok: true, data: { ok: false, code: 'session_absent', message: '云端会话未启动', lines: [] } })
+  assert.equal(absent.ok, false)
+  assert.equal(absent.reason.code, 'session_absent')
+  assert.equal(absent.reason.message, '云端会话未启动')
+
+  const http = readLogsPayload({ ok: false, code: 'network', message: 'fetch failed' })
+  assert.equal(http.ok, false)
+  assert.equal(http.reason.code, 'network')
+
+  assert.equal(readLogsPayload({ ok: true, data: { ok: false } }).reason.code, 'logs_unavailable', '缺错误码时回退 logs_unavailable')
+  assert.equal(readLogsPayload({ ok: true, data: { ok: true, next: 'x', lines: [] } }).next, null, '非数字游标按 null 处理')
+})
+
+await check('本地时间与运行时长', () => {
+  const local = new Date(2026, 0, 2, 9, 5, 7)
+  assert.equal(formatClockTime(local), '09:05')
+  assert.equal(formatClockTime(local.toISOString()), '09:05', 'ISO 字符串按本地时区格式化')
+  assert.equal(formatClockTime('not-a-date'), '')
+  assert.equal(formatClockTime(null), '')
+
+  const start = new Date(2026, 0, 2, 9, 0, 0).toISOString()
+  const now = new Date(2026, 0, 2, 9, 4, 30).getTime()
+  assert.equal(elapsedMsSince(start, now), 270000)
+  assert.equal(elapsedMsSince('bad', now), null)
+  assert.equal(elapsedMsSince(new Date(now + 5000).toISOString(), now), 0, '未来时间按 0 处理')
+})
+
+await check('诊断信息拼装（不含 token）', () => {
+  const session = {
+    state: 'ready',
+    phase: 'warm',
+    presetId: 'sdxl-lightning',
+    modelId: 'sdxl-lightning',
+    device: 'Tesla T4',
+    tunnelProvider: 'cloudflare',
+    kernelStatus: 'running',
+    startedAt: '2026-11-11T00:00:00.000Z',
+    readyAt: '2026-11-11T00:01:00.000Z',
+    token: 'super-secret-token',
+    endpointUrl: 'https://tunnel.example.com',
+    error: { code: 'remote_error', message: 'boom' },
+  }
+  const lines = Array.from({ length: 80 }, (_, index) => `log-${index}`)
+  const text = buildDiagnostics(t, {
+    version: '0.4.0',
+    session,
+    probe: { cli: { present: true }, auth: { ok: true }, quota: { available: false }, notes: ['配额接口超时'] },
+    probeLastGood: { quota: { available: true, usedHours: 3, totalHours: 30 } },
+    probeLastGoodAt: '2026-11-10T10:00:00.000Z',
+    queue: { running: 'job-1', pending: 2 },
+    lastJob: { id: 'job-0', status: 'done', seconds: 6.2 },
+    lines,
+    now: Date.parse('2026-11-11T00:05:00.000Z'),
+  })
+
+  assert.equal(text.split('\n')[0], `${t('studio.logs.diag.title')} · 2026-11-11T00:05:00.000Z`)
+  for (const needle of [
+    'version: 0.4.0',
+    'session.state: ready',
+    'session.tunnelProvider: cloudflare',
+    'session.error: remote_error · boom',
+    'probe.quota: unavailable',
+    'probe.notes: 配额接口超时',
+    'probeLastGood.quota: 3 / 30 h',
+    'queue: running=job-1 pending=2',
+    'lastJob: job-0 done 6.2s',
+    'logs (last 60/80)',
+  ]) {
+    assert.ok(text.includes(needle), `诊断文本应包含：${needle}`)
+  }
+  assert.ok(!text.includes('super-secret-token'), '诊断文本不得包含 token')
+  assert.ok(!text.includes('token:'), '会话里的 token 字段应被剔除')
+
+  const tail = text.split('\n').filter((line) => /^log-\d+$/.test(line))
+  assert.equal(tail.length, 60, '只附带最近 60 行日志')
+  assert.ok(tail.includes('log-79'))
+  assert.ok(!tail.includes('log-19'), '更早的日志被截断')
+
+  const sanitized = sanitizeSession(session)
+  assert.equal(Object.prototype.hasOwnProperty.call(sanitized, 'token'), false)
+  assert.equal(session.token, 'super-secret-token', '清洗不应修改入参')
+  assert.equal(sanitizeSession(null), null)
+  assert.equal(quotaText({ available: false }), 'unavailable')
+  assert.equal(quotaText({ available: true, usedHours: 1.5, totalHours: 30 }), '1.5 / 30 h')
+  assert.equal(quotaText(null), '—')
+})
+
+await check('完成提醒纯函数', () => {
+  const running = { id: 'job-1', status: 'running' }
+  const done = { id: 'job-1', status: 'done', finishedAt: at(-1) }
+
+  assert.equal(
+    completionNotice({ previous: undefined, next: done, hidden: true, title: '工作台' }).notify,
+    false,
+    '首次挂载不触发',
+  )
+  assert.equal(
+    completionNotice({ previous: null, next: done, hidden: true, title: '工作台' }).completed,
+    false,
+    '没有基线快照不触发',
+  )
+
+  const hiddenDone = completionNotice({ previous: running, next: done, hidden: true, title: '工作台' })
+  assert.equal(hiddenDone.notify, true)
+  assert.equal(hiddenDone.completed, true)
+  assert.equal(hiddenDone.title, `${NOTICE_TITLE_PREFIX}工作台`)
+
+  const visibleDone = completionNotice({ previous: running, next: done, hidden: false, title: '工作台' })
+  assert.equal(visibleDone.notify, false, '页面可见时不改标题')
+  assert.equal(visibleDone.completed, true)
+  assert.equal(visibleDone.title, '工作台')
+
+  const again = completionNotice({ previous: running, next: done, hidden: true, title: `${NOTICE_TITLE_PREFIX}工作台` })
+  assert.equal(again.title, `${NOTICE_TITLE_PREFIX}工作台`, '已带前缀时不重复叠加')
+
+  assert.equal(isCompletion({ id: 'a', status: 'done' }, { id: 'b', status: 'done' }), true, '换一个任务完成也算')
+  assert.equal(isCompletion(done, done), false)
+  assert.equal(isCompletion(running, { id: 'job-1', status: 'failed' }), false)
+  assert.equal(stripNoticePrefix(`${NOTICE_TITLE_PREFIX}工作台`), '工作台')
+  assert.equal(stripNoticePrefix('工作台'), '工作台')
 })
 
 const failed = results.filter((item) => !item.ok)

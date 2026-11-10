@@ -53,6 +53,11 @@ export function apply(ctx, config = {}) {
       fallbackTunnelCommand: Array.isArray(config.fallbackTunnelCommand)
         ? config.fallbackTunnelCommand.filter((item) => typeof item === 'string')
         : [],
+      // 备用通道的输出格式千差万别（frpc / bore / 自建脚本），允许用户给提取正则。
+      fallbackTunnelUrlRegex:
+        typeof config.fallbackTunnelUrlRegex === 'string' && config.fallbackTunnelUrlRegex.trim()
+          ? config.fallbackTunnelUrlRegex.trim()
+          : null,
       // 权重预挂载（P2.1）：kernel 的 dataset_sources 与本地权重目录映射。
       datasetSources: Array.isArray(config.datasetSources) ? config.datasetSources.filter((item) => typeof item === 'string') : [],
       localModels:
@@ -135,6 +140,11 @@ export function apply(ctx, config = {}) {
   ])
 
   registerTools(ctx, { queue, session, defaultPreset })
+
+  // DSH 重启或插件热重载后，远端 Kernel 可能仍在消耗 Kaggle 配额：从工作区
+  // <workspace>/.imagen/session.json 尝试恢复连接；无法恢复时由 restore 自行清理记录，
+  // 内部吞掉全部异常，不阻塞插件加载。
+  void session.restore()
 
   ctx.effect(
     () => () => {

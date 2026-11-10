@@ -57,7 +57,7 @@ export function Filmstrip(props) {
                     onClick={() => selectImage(entry)}
                     title={batch.prompt || path}
                   >
-                    <img src={entry.image.url} alt={entry.image.file || 'thumb'} loading="lazy" />
+                    <img src={entry.image.url} alt={batch.prompt || entry.image.file || t('studio.image.alt')} loading="lazy" />
                   </button>
                 )
               })}

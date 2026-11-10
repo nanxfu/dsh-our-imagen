@@ -23,16 +23,50 @@ export function Stage(props) {
     || (params && typeof params.prompt === 'string' && params.prompt)
     || ''
   const closeRef = React.useRef(null)
+  const lightboxRef = React.useRef(null)
+  // 打开大图前的焦点位置：关闭后还给触发按钮。
+  const zoomOpenerRef = React.useRef(null)
 
-  // 看原图时 Esc 退出；打开时把焦点交给关闭按钮。
+  function openZoom() {
+    zoomOpenerRef.current = document.activeElement || null
+    setZoom(true)
+  }
+
+  // 看原图时 Esc 退出、Tab 在弹层内循环；打开时把焦点交给关闭按钮，关闭后还给触发按钮。
   React.useEffect(() => {
     if (!zoom) return undefined
     function onKey(event) {
-      if (event.key === 'Escape') setZoom(false)
+      if (event.key === 'Escape') {
+        setZoom(false)
+        return
+      }
+      if (event.key !== 'Tab') return
+      const node = lightboxRef.current
+      if (!node || typeof node.querySelectorAll !== 'function') return
+      const nodes = Array.prototype.slice
+        .call(node.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])'))
+        .filter((item) => !item.disabled)
+      if (nodes.length === 0) return
+      const first = nodes[0]
+      const last = nodes[nodes.length - 1]
+      const active = document.activeElement
+      const outside = !node.contains || !node.contains(active)
+      if (event.shiftKey && (active === first || outside)) {
+        if (event.preventDefault) event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (active === last || outside)) {
+        if (event.preventDefault) event.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener('keydown', onKey)
-    if (closeRef.current) closeRef.current.focus()
-    return () => document.removeEventListener('keydown', onKey)
+    if (closeRef.current && typeof closeRef.current.focus === 'function') closeRef.current.focus()
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      const opener = zoomOpenerRef.current
+      zoomOpenerRef.current = null
+      if (opener && typeof opener.focus === 'function' && opener.isConnected !== false) opener.focus()
+    }
   }, [zoom])
 
   if (!image) {
@@ -75,12 +109,12 @@ export function Stage(props) {
   return (
     <section className="ofs-stage">
       <figure className="ofs-figure">
-        <button type="button" className="ofs-figure-button" onClick={() => setZoom(true)} title={t('studio.stage.zoom')}>
-          <img src={image.url} alt={image.file || 'image'} className="ofs-image" />
+        <button type="button" className="ofs-figure-button" onClick={openZoom} title={t('studio.stage.zoom')}>
+          <img src={image.url} alt={prompt || image.file || t('studio.image.alt')} className="ofs-image" />
         </button>
 
         <div className="ofs-figure-tools">
-          <button type="button" className="ofs-glass-btn" onClick={() => setZoom(true)} title={t('studio.stage.zoom')} aria-label={t('studio.stage.zoom')}>
+          <button type="button" className="ofs-glass-btn" onClick={openZoom} title={t('studio.stage.zoom')} aria-label={t('studio.stage.zoom')}>
             <Icon name="expand" size={16} />
           </button>
           <button type="button" className="ofs-glass-btn" onClick={() => copyPath(copyTarget)} title={t('studio.action.copyPath')} aria-label={t('studio.action.copyPath')}>
@@ -144,9 +178,14 @@ export function Stage(props) {
           role="dialog"
           aria-modal="true"
           aria-label={t('studio.stage.zoom')}
+          ref={lightboxRef}
           onClick={() => setZoom(false)}
         >
-          <img src={image.url} alt={image.file || 'image'} onClick={(event) => event.stopPropagation()} />
+          <img
+            src={image.url}
+            alt={prompt || image.file || t('studio.image.alt')}
+            onClick={(event) => event.stopPropagation()}
+          />
           <button
             ref={closeRef}
             type="button"

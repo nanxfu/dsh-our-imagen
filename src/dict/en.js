@@ -115,6 +115,14 @@ export const en = {
   'studio.probe.ok': 'Environment check passed',
   'studio.probe.failed': 'Environment check did not pass',
   'studio.probe.timeout': 'The environment check timed out; try again. The first check takes 20–30 seconds.',
+  'studio.compute.tunnel': 'Tunnel',
+  'studio.compute.tunnel.cloudflare': 'Cloudflare',
+  'studio.compute.tunnel.custom': 'Custom tunnel',
+  'studio.compute.quotaFallback': 'Quota is unavailable; local stats below',
+  'studio.compute.lastGood': 'Last good check',
+  'studio.compute.neverChecked': 'No successful quota check yet',
+  'studio.compute.sessionRan': 'Session running for',
+  'studio.compute.kaggleSettings': 'Open Kaggle account settings',
 
   // ── Prompt ────────────────────────────────────────────────────
   'studio.promptHint': 'Write a description first',
@@ -150,6 +158,7 @@ export const en = {
   'studio.stage.examples': 'Ideas',
   'studio.stage.zoom': 'Click to view full size',
   'studio.stage.rendering': 'Generating…',
+  'studio.image.alt': 'Generated image',
   'studio.meta.seed': 'Seed',
   'studio.action.iterate': 'Recall settings',
   'studio.action.reroll': 'New variant',
@@ -164,6 +173,16 @@ export const en = {
   'studio.ghost.queued': 'Waiting in the cloud queue…',
   'studio.ghost.rendering': 'Generating, elapsed',
   'studio.toast.firstImage': 'The cloud is ready; your first image is here',
+
+  // ── Runtime logs ──────────────────────────────────────────────
+  'studio.logs.open': 'View runtime logs',
+  'studio.logs.title': 'Runtime logs',
+  'studio.logs.loading': 'Fetching remote logs…',
+  'studio.logs.empty': 'No logs yet. Install and runtime records appear after the cloud session starts.',
+  'studio.logs.copy': 'Copy diagnostics',
+  'studio.logs.copied': 'Diagnostics copied',
+  'studio.logs.close': 'Close logs',
+  'studio.logs.diag.title': 'Free imagen diagnostics',
 
   // ── Gallery ───────────────────────────────────────────────────
   'studio.gallery.title': 'Gallery',
@@ -194,6 +213,7 @@ export const en = {
   'studio.toast.unfavorited': 'Removed from favorites',
   'studio.toast.deleted': 'Deleted',
   'studio.toast.revealFailed': 'Could not open the folder',
+  'studio.toast.generationDone': 'Generation finished while the page was hidden',
   'studio.dismiss': 'Got it',
 
   // ── Guidance cards ────────────────────────────────────────────

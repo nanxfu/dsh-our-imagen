@@ -133,41 +133,53 @@
     margin-left: auto;
   }
 
+  /* 画布在上、面板在下：两块都留在视口内，提交后进度不会被整张表单挤出视野。 */
   .ofs-body,
   .ofs-body.is-gallery {
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
   }
 
-  .ofs-panel {
-    flex: 0 0 auto;
-    margin: 8px 8px 0;
-    max-height: none;
+  .ofs-body > .ofs-main {
+    order: -1;
   }
 
   .ofs-main {
     flex: 0 0 auto;
-    min-height: 340px;
-    height: 62vh;
+    min-height: 0;
+    height: 42vh;
     margin: 8px;
   }
 
-  .ofs-stage {
-    min-height: 300px;
+  .ofs-body.is-gallery .ofs-main {
+    flex: 1 1 auto;
+    height: auto;
   }
 
+  .ofs-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0 8px 8px;
+    max-height: none;
+  }
+
+  .ofs-stage,
   .ofs-figure {
-    min-height: 240px;
+    min-height: 0;
   }
 
   .ofs-image {
-    max-height: 42vh;
+    max-height: 100%;
   }
 
   .ofs-filmstrip {
     display: none;
+  }
+
+  .ofs-logs-panel {
+    width: 100%;
+    border-left: 0;
   }
 
   .ofs-panel-head {
@@ -240,5 +252,49 @@
 
   .ofs-empty-title {
     font-size: 15px;
+  }
+
+  /* 手机竖屏再收一点画布高度，给表单留出可滚动空间。 */
+  .ofs-main {
+    height: 38vh;
+  }
+}
+
+/*
+ * 触屏热区 ≥44px（P2.3）：只在粗指针设备（手指 / 触控笔）生效，
+ * 桌面鼠标的紧凑版式不受影响。图标按钮做正方形，文字按钮只抬最小高度。
+ */
+@media (pointer: coarse) {
+  .ofs-icon-btn,
+  .ofs-glass-btn,
+  .ofs-lightbox-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .ofs-popover-row,
+  .ofs-filmstrip-link {
+    height: auto;
+    min-height: 44px;
+  }
+
+  .ofs-tab,
+  .ofs-dock-button,
+  .ofs-chip,
+  .ofs-example,
+  .ofs-suggestion,
+  .ofs-text-action,
+  .ofs-gallery-action {
+    height: auto;
+    min-height: 44px;
+  }
+
+  .ofs-gallery-action {
+    padding: 0 12px;
+    font-size: 11px;
+  }
+
+  .ofs-dock-button {
+    padding: 0 12px;
   }
 }

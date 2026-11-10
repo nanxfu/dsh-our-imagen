@@ -608,6 +608,245 @@ await check('画廊悬停动作把完整作品条目交给回调', async () => {
   assert.equal(received.zoom && received.zoom.item, historyItem, '查看大图应收到完整条目')
 })
 
+await check('渲染：日志抽屉（就绪 / 空态 / 不可用）', async () => {
+  const fallbackState = {
+    ...readyState,
+    version: '0.4.0',
+    probe: { cli: { present: true }, auth: { ok: true }, quota: { available: false }, notes: ['配额接口超时'] },
+    probeLastGood: { quota: { available: true, usedHours: 3, totalHours: 30 } },
+    probeLastGoodAt: '2026-11-09T04:40:00.000Z',
+    queue: { running: null, pending: 0 },
+  }
+  const responses = {
+    '/imagen-api/state': fallbackState,
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+  }
+  const lines = ['[boot] 运行时就绪', '[tunnel] 隧道就绪：https://example.trycloudflare.com']
+
+  // 就绪：日志行进入等宽文本区，复制诊断信息走 ui.copyText。
+  let client = await loadClient({ now: NOW, responses, testBuild: true })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const copied = []
+  let tree = await client.mountRaw(client.components.LogsDrawer, {
+    t,
+    ui: { copyText: (text, key) => copied.push({ text, key }) },
+    compute: { session: { state: 'ready' }, probe: null },
+    logs: { status: 'ready', lines, reason: null },
+    onClose: () => {},
+  })
+  let text = collectText(tree).join(' | ')
+  assert.ok(text.includes('运行日志'), '[logs] 缺少标题')
+  assert.ok(text.includes('复制诊断信息'), '[logs] 缺少复制诊断按钮')
+  assert.ok(text.includes('[tunnel] 隧道就绪'), '[logs] 缺少日志内容')
+  assertStructure('logs-ready', tree, {
+    required: {
+      'ofs-logs': 1,
+      'ofs-logs-panel': 1,
+      'ofs-logs-head': 1,
+      'ofs-logs-title': 1,
+      'ofs-logs-body': 1,
+      'ofs-logs-lines': 1,
+      'ofs-logs-copy': 1,
+    },
+    forbidden: ['ofs-logs-note'],
+  })
+  const dialog = findNodes(tree, (node) => node.props && node.props.role === 'dialog')[0]
+  assert.ok(dialog, '[logs] 抽屉应以 role="dialog" 渲染')
+  assert.equal(dialog.props['aria-modal'], 'true')
+
+  const copyButton = findNodes(
+    tree,
+    (node) => node.type === 'button' && node.props && node.props.className === 'ofs-chip ofs-logs-copy',
+  )[0]
+  assert.ok(copyButton, '[logs] 缺少复制按钮元素')
+  copyButton.props.onClick()
+  assert.equal(copied.length, 1, '[logs] 复制应交给 ui.copyText')
+  assert.equal(copied[0].key, 'studio.logs.copied')
+  assert.ok(copied[0].text.includes('version: 0.4.0'), '[logs] 诊断文本应带版本')
+  assert.ok(copied[0].text.includes('session.state: ready'), '[logs] 诊断文本应带会话快照')
+  assert.ok(!copied[0].text.includes('token'), '[logs] 诊断文本不得出现 token 字段')
+  client.unmount()
+
+  // 空态：没有日志时只给一句提示，不渲染等宽日志区。
+  client = await loadClient({ now: NOW, responses, testBuild: true })
+  tree = await client.mountRaw(client.components.LogsDrawer, {
+    t,
+    ui: { copyText: () => {} },
+    compute: { session: null, probe: null },
+    logs: { status: 'empty', lines: [], reason: null },
+    onClose: () => {},
+  })
+  client.unmount()
+  text = collectText(tree).join(' | ')
+  assert.ok(text.includes('暂无日志'), '[logs] 缺少空态文案')
+  assertStructure('logs-empty', tree, { required: { 'ofs-logs-note': 1 }, forbidden: ['ofs-logs-lines'] })
+
+  // 不可用：展示原因，同时保留已经拿到的旧日志。
+  client = await loadClient({ now: NOW, responses, testBuild: true })
+  tree = await client.mountRaw(client.components.LogsDrawer, {
+    t,
+    ui: { copyText: () => {} },
+    compute: { session: null, probe: null },
+    logs: { status: 'unavailable', lines: ['[boot] 旧日志'], reason: { code: 'logs_unavailable', message: '隧道断开' } },
+    onClose: () => {},
+  })
+  client.unmount()
+  text = collectText(tree).join(' | ')
+  assert.ok(text.includes('暂时拿不到远端运行日志'), '[logs] 不可用时应给出错误文案')
+  assert.ok(text.includes('隧道断开'), '[logs] 不可用时应带远端原因')
+  assertStructure('logs-unavailable', tree, {
+    required: { 'ofs-logs-note': 1, 'ofs-logs-lines': 1 },
+    forbidden: [],
+  })
+})
+
+await check('渲染：算力弹层配额回退、隧道通道与日志入口', async () => {
+  const fallbackState = {
+    ...readyState,
+    version: '0.4.0',
+    probe: { cli: { present: true }, auth: { ok: true }, quota: { available: false }, notes: ['配额接口超时'] },
+    probeLastGood: { quota: { available: true, usedHours: 3, totalHours: 30 } },
+    probeLastGoodAt: '2026-11-09T04:40:00.000Z',
+    queue: { running: null, pending: 0 },
+    session: {
+      state: 'ready',
+      modelId: 'sdxl-lightning',
+      device: 'Tesla T4',
+      idleTimeoutSec: 1800,
+      tunnelProvider: 'cloudflare',
+      startedAt: new Date(NOW - 600000).toISOString(),
+      error: null,
+    },
+  }
+  const client = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/state': fallbackState,
+      '/imagen-api/history': { items: [] },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+    },
+    testBuild: true,
+  })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const openLogsCalls = []
+  const tree = await client.mountRaw(client.components.TopBar, {
+    t,
+    ui: {
+      view: 'studio',
+      setView: () => {},
+      openLogs: (trigger) => openLogsCalls.push(trigger),
+    },
+    compute: {
+      sessionState: 'ready',
+      session: fallbackState.session,
+      quota: null,
+      presets: [preset],
+      busy: '',
+      probing: false,
+      probe: null,
+      probeReport: null,
+      startSession: () => {},
+      stopSession: () => {},
+      runProbe: () => {},
+      openFolder: () => {},
+    },
+    form: {
+      form: { presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0 },
+      patchForm: () => {},
+    },
+    library: { loadHistory: () => {} },
+    // 正式界面从关闭态开始；这里为渲染断言直接展开弹层。
+    defaultOpen: true,
+  })
+  client.unmount()
+
+  const text = collectText(tree).join(' | ')
+  for (const needle of [
+    '配额暂时读不到，先看本地统计',
+    '最近一次成功检查',
+    '3 / 30 h',
+    '本次会话已运行',
+    '打开 Kaggle 账户设置',
+    '隧道通道',
+    'Cloudflare',
+    '查看运行日志',
+  ]) {
+    assert.ok(text.includes(needle), `[compute] 缺少文案：${needle}`)
+  }
+  assertStructure('compute-fallback', tree, {
+    required: { 'ofs-popover': 1, 'ofs-popover-fallback': 1, 'ofs-popover-link': 1 },
+    forbidden: [],
+  })
+
+  const link = findNodes(
+    tree,
+    (node) => node.type === 'a' && node.props && node.props.className === 'ofs-popover-link',
+  )[0]
+  assert.ok(link, '[compute] 缺少 Kaggle 设置链接')
+  assert.equal(link.props.href, 'https://www.kaggle.com/settings')
+  assert.equal(link.props.target, '_blank')
+  assert.match(String(link.props.rel), /noreferrer/)
+
+  const logsRow = findNodes(
+    tree,
+    (node) => node.type === 'button'
+      && node.props
+      && node.props.role === 'menuitem'
+      && collectText(node).join('').includes('查看运行日志'),
+  )[0]
+  assert.ok(logsRow, '[compute] 缺少查看运行日志入口')
+  logsRow.props.onClick()
+  assert.equal(openLogsCalls.length, 1, '[compute] 点击日志入口应交给 ui.openLogs')
+})
+
+await check('渲染：大图预览 dialog 与图片 alt', async () => {
+  const responses = {
+    '/imagen-api/state': readyState,
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+  }
+
+  // 工作台：舞台与胶片条的 alt 优先用提示词，不再回落成文件名。
+  let client = await loadClient({ now: NOW, responses, testBuild: true })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  let tree = await client.mountRaw(client.components.Studio, {})
+  client.unmount()
+  const studioImages = findNodes(tree, (node) => node.type === 'img')
+  assert.ok(studioImages.length >= 2, '舞台与胶片条都应渲染图片')
+  for (const node of studioImages) {
+    assert.ok(typeof node.props.alt === 'string' && node.props.alt.length > 0, '所有 img 都应有非空 alt')
+  }
+  assert.ok(
+    studioImages.some((node) => node.props.alt === '测试用的荷花池塘'),
+    'alt 应优先使用提示词',
+  )
+
+  // 大图预览：role="dialog" + aria-modal，图片同样带可读 alt。
+  client = await loadClient({ now: NOW, responses, testBuild: true })
+  tree = await client.mountRaw(client.components.Stage, {
+    t,
+    ui: { zoom: true, setZoom: () => {}, copyPath: () => {} },
+    compute: { activeJob: null, queued: false },
+    form: { useInspiration: () => {} },
+    library: {
+      selected: { image: historyItem.images[0], item: historyItem },
+      isFavorite: () => false,
+      toggleFavorite: () => {},
+    },
+    actions: { iterate: () => {}, reroll: () => {} },
+  })
+  client.unmount()
+  const dialog = findNodes(tree, (node) => node.props && node.props.role === 'dialog')[0]
+  assert.ok(dialog, '[stage] 放大层应带 role="dialog"')
+  assert.equal(dialog.props['aria-modal'], 'true')
+  const lightboxImages = findNodes(tree, (node) => node.type === 'img')
+  assert.ok(lightboxImages.length >= 2, '放大层应包含大图')
+  for (const node of lightboxImages) {
+    assert.ok(typeof node.props.alt === 'string' && node.props.alt.length > 0, '放大层 img 应有非空 alt')
+  }
+})
+
 // 测试内探针：校验假 React 替身自身的 hook 语义。替身坏了，上面所有渲染断言都会静默失真，
 // 所以这条回归留在测试侧。探针组件不再进入 src/。
 await check('渲染：hook 探针（useReducer/useMemo/useLayoutEffect/memo）', async () => {

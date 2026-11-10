@@ -115,6 +115,14 @@ export const zh = {
   'studio.probe.ok': '环境检查通过',
   'studio.probe.failed': '环境检查未通过',
   'studio.probe.timeout': '检查环境超时，可重试；首次检查需要 20~30 秒',
+  'studio.compute.tunnel': '隧道通道',
+  'studio.compute.tunnel.cloudflare': 'Cloudflare',
+  'studio.compute.tunnel.custom': '自建通道',
+  'studio.compute.quotaFallback': '配额暂时读不到，先看本地统计',
+  'studio.compute.lastGood': '最近一次成功检查',
+  'studio.compute.neverChecked': '还没有成功检查过配额',
+  'studio.compute.sessionRan': '本次会话已运行',
+  'studio.compute.kaggleSettings': '打开 Kaggle 账户设置',
 
   // ── 提示词 ───────────────────────────────────────────────────
   'studio.promptHint': '先写画面描述',
@@ -150,6 +158,7 @@ export const zh = {
   'studio.stage.examples': '灵感示例',
   'studio.stage.zoom': '点击查看原图',
   'studio.stage.rendering': '正在生成…',
+  'studio.image.alt': '生成的图片',
   'studio.meta.seed': '种子',
   'studio.action.iterate': '带回参数',
   'studio.action.reroll': '生成变体',
@@ -164,6 +173,16 @@ export const zh = {
   'studio.ghost.queued': '云端正在排队…',
   'studio.ghost.rendering': '正在生成，已耗时',
   'studio.toast.firstImage': '云端就绪，第一张图已生成',
+
+  // ── 运行日志 ─────────────────────────────────────────────────
+  'studio.logs.open': '查看运行日志',
+  'studio.logs.title': '运行日志',
+  'studio.logs.loading': '正在读取远端日志…',
+  'studio.logs.empty': '暂无日志，云端会话启动后会出现安装与运行记录。',
+  'studio.logs.copy': '复制诊断信息',
+  'studio.logs.copied': '诊断信息已复制',
+  'studio.logs.close': '关闭日志',
+  'studio.logs.diag.title': '免费生图诊断信息',
 
   // ── 作品画廊 ─────────────────────────────────────────────────
   'studio.gallery.title': '作品画廊',
@@ -194,6 +213,7 @@ export const zh = {
   'studio.toast.unfavorited': '已取消收藏',
   'studio.toast.deleted': '已删除',
   'studio.toast.revealFailed': '无法打开文件夹',
+  'studio.toast.generationDone': '页面隐藏期间，生成已完成',
   'studio.dismiss': '知道了',
 
   // ── 指引卡 ───────────────────────────────────────────────────

@@ -17,6 +17,9 @@
  */
 
 import { createServer } from 'node:http'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { JobQueue } from '../lib/jobs.js'
 import { SessionManager } from '../lib/session.js'
@@ -56,6 +59,17 @@ function listen(server) {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => resolve(server.address().port))
   })
+}
+
+// 会话记录会写入工作区：测试用独立临时目录，避免污染仓库根目录的 .imagen/。
+let workspace = null
+
+function createCtx() {
+  return {
+    get(name) {
+      return name === 'workingDirectory' ? { defaultDirectory: workspace } : undefined
+    },
+  }
 }
 
 async function closeServer(server) {
@@ -109,7 +123,7 @@ function fakeDeps() {
 
 function makeSession({ ntfyPort, deps = {}, options = {} } = {}) {
   return new SessionManager({
-    ctx: {},
+    ctx: createCtx(),
     defaultPreset: PRESET,
     deps,
     options: {
@@ -124,7 +138,7 @@ function makeSession({ ntfyPort, deps = {}, options = {} } = {}) {
 
 function makeQueue(session, options = {}) {
   return new JobQueue({
-    ctx: {},
+    ctx: createCtx(),
     session,
     defaultPreset: PRESET,
     options: { sessionWaitMs: 4000, generateTimeoutMs: 3000, ...options },
@@ -452,6 +466,7 @@ async function main() {
   watchdog.unref?.()
 
   console.log('session-race：Host 会话竞态离线回归（无 Kaggle / 无 GPU / 无外网）')
+  workspace = await mkdtemp(join(tmpdir(), 'imagen-session-race-'))
   await scenario('A _start 异常兜底与可重试', scenarioStartFailureRecovery)
   await scenario('B push 等待期间 stop', scenarioStopDuringPush)
   await scenario('C build 等待期间 stop', scenarioStopDuringBuild)
@@ -470,6 +485,16 @@ async function main() {
     console.log(`结果：${passed} 项全部通过`)
   }
   clearTimeout(watchdog)
+  // 会话记录异步写入：dispose 的收尾可能还在跑，Windows 下并发删除会 ENOTEMPTY，重试即可。
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      await rm(workspace, { recursive: true, force: true })
+      break
+    } catch (error) {
+      if (attempt === 9) throw error
+      await sleep(20)
+    }
+  }
 }
 
 main().catch((error) => {

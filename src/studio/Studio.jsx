@@ -18,10 +18,13 @@ import { ChatPanel } from './ChatPanel.jsx'
 import { Filmstrip } from './Filmstrip.jsx'
 import { Gallery } from './Gallery.jsx'
 import { GuidanceCard } from './GuidanceCard.jsx'
+import { LogsDrawer } from './LogsDrawer.jsx'
 import { Rail } from './Rail.jsx'
 import { Stage } from './Stage.jsx'
 import { Toast } from './Toast.jsx'
 import { TopBar } from './TopBar.jsx'
+import { useStudioLogs } from './hooks/useStudioLogs.js'
+import { useCompletionNotice } from './hooks/useStudioUi.js'
 import { useStudio } from './useStudio.js'
 
 export function Studio(props) {
@@ -29,6 +32,9 @@ export function Studio(props) {
   const now = useNow(Boolean(compute.activeJob))
   const elapsedMs = compute.activeJob ? jobElapsed(compute.activeJob, now) : 0
   const chatMode = ui.panelMode === 'chat'
+  // 日志抽屉只在打开时轮询；完成提醒在页面隐藏期间用标签页标题提示。
+  const logs = useStudioLogs(ui.logsOpen)
+  useCompletionNotice({ t, ui, job: compute.focusedJob, activeJob: compute.activeJob })
 
   const panel = chatMode
     ? <ChatPanel t={t} ui={ui} form={form} chat={chat} library={library} actions={actions} />
@@ -74,6 +80,8 @@ export function Studio(props) {
           <Filmstrip t={t} ui={ui} compute={compute} library={library} elapsedMs={elapsedMs} />
         ) : null}
       </div>
+
+      {ui.logsOpen ? <LogsDrawer t={t} ui={ui} compute={compute} logs={logs} onClose={ui.closeLogs} /> : null}
 
       <Toast toast={ui.toast} />
     </div>

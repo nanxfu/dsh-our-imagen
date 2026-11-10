@@ -15,6 +15,15 @@ export function fetchState() {
   return request(routePath('state'), { method: 'GET' })
 }
 
+/**
+ * 远端运行日志增量拉取；since 为上次响应的 next（非负整数，从 0 开始）。
+ * Host 始终回 HTTP 200，可用性看响应体的 ok（见 logic/logs.js 的 readLogsPayload）。
+ */
+export function fetchLogs(since = 0) {
+  const cursor = Number.isFinite(Number(since)) && Number(since) > 0 ? Math.floor(Number(since)) : 0
+  return request(`${routePath('logs')}?since=${cursor}`, { method: 'GET' })
+}
+
 /** 最近生成历史；limit 默认 60，与收敛前的调用点一致。 */
 export function fetchHistory(limit = 60) {
   return request(`${routePath('history')}?limit=${limit}`, { method: 'GET' })

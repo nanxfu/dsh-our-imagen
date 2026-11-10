@@ -36,7 +36,7 @@
 
 ## 二、 当前核心重点 (P0)
 
-> V2 工作台界面与交互（`docs/STUDIO_V2_SPEC.md`）已在 0.3.0 落地，见 §一.7。
+> **状态：✅ 已在 0.4.0 完成（2026-11-11）**，实现说明见本节各项末尾。
 
 ### 1. 会话状态本地持久化（防烧配额）
 - **问题现状**：当前会话仅保存在 Host 进程内存中。一旦 DSH Desktop 重启或插件热重载，内存状态丢失，但 Kaggle 上的 GPU 机器依然在后台运行，会持续消耗每周 30 小时宝贵额度。
@@ -44,45 +44,55 @@
   - 将当前会话的 `kernelId`、`token`、`topic`、`endpoint` 实时写入 `<workspace>/.imagen/session.json`；
   - 重启后先向已有 `endpoint` 发送 `/health` 探活，若存活直接无缝恢复连接；
   - 若隧道超时，使用保存的 `topic` 重新向 ntfy 订阅找回新隧道地址；确认失联才执行远端清理。
+- **实现**：`lib/session/persistence.js` + `SessionManager.restore()`。记录原子读写（目录 0700 / 文件 0600），启动关键节点落盘并做 60 秒节流；恢复顺序为「探活接管 → 用 topic 重新会合 → 尽力关机并清理」；`stop` / 成功的 `dispose` 删除记录，`fail` 保留记录供下次清理；token 不进入日志与对外快照。79 项离线断言见 `test/session-restore.mjs`。
 
 ### 2. 远端隧道自愈看护
 - **问题现状**：Host 侧已经具备了“心跳丢失后重新拉取隧道地址”的恢复逻辑，但远端守护进程（`remote/daemon.py`）只在开机时上报一次地址。如果 `cloudflared` 进程中途崩溃退出，虽然 Host 想重连，远端却不会重拉。
 - **实施方案**：
   - 在 `daemon.py` 内对 `cloudflared` 进程建立常驻守护线程，监控到子进程退出时立即重新拉起；
   - 获取新分配的 trycloudflare 域名后，周期性向 ntfy 重新广播 `ready` 事件，完成端到端隧道自愈。
+- **实现**：`tunnel_monitor()` 常驻监管，异常退出后 2→60 秒指数退避重拉并重播 ready；主循环每 300 秒重播一次；`/health` 上报 `tunnel_provider` / `tunnel_state` / `tunnel_restarts`，ready 事件带 `provider`。纯函数与假 Popen 覆盖见 `test/daemon-unit.py`。
 
 ---
 
 ## 三、 稳定性与可观测性 (P1)
 
+> **状态：✅ 已在 0.4.0 完成（2026-11-11）**。
+
 ### 1. 排错日志面板（激活死代码）
-- **现状与实施**：`remote/daemon.py` 内部已维护了最多 400 行的日志环，并支持 `GET /logs?since=N` 增量拉取；但 Host 侧的 `requestLogs` 目前未对前端暴露。需要在工作台出错或排队等待时打通日志通路，提供“展开查看安装与运行日志”抽屉，并支持“一键导出诊断信息”。
+- **现状与实施**：`remote/daemon.py` 内部已维护了最多 400 行的日志环，并支持 `GET /logs?since=N` 增量拉取；Host 侧新增 `GET /imagen-api/logs?since=N` 透传，工作台算力弹层可打开日志抽屉（增量轮询、空态/不可用原因、自动滚底、一键复制诊断信息）。
+- **实现**：`lib/routes/logs.js` + `src/studio/LogsDrawer.jsx` / `useStudioLogs` / `src/logic/logs.js`；诊断文本剔除 token 类字段。契约新增 `ROUTES.logs`、`logs_unavailable` 错误码与轮询间隔。
 
 ### 2. 冷启动可靠性防护
-- **依赖版本固化**：在 Kernel 构建中注入 `constraints.txt` 锁定 Python 包版本，依赖安装完成后增加简要的 `import diffusers, torch` 冒烟自检，失败提前报错。
-- **HuggingFace 匿名限流防护**：在配置中增加可选的 `HF_TOKEN` 字段，避免免登录从 HuggingFace 频繁拉取大模型时被平台 429 限流阻断。
-- **Flux.2 磁盘预检**：针对未来接入的大模型（如 Flux.2），在远端执行前校验 Kaggle `/working` 目录剩余磁盘（Kaggle 容器通常只有 20GB 空间，下载全量未修剪模型会直接撑爆磁盘）。
+- **依赖版本固化**：daemon 内置依赖上限 constraints（`diffusers<1.0` / `transformers<5` / `accelerate<2` / `peft<1`），写临时文件后 `pip install -c`，可用 `pipConstraints` 覆盖；安装后独立进程导入自检并打印版本。
+- **HuggingFace 匿名限流防护**：新增可选 `hfToken`，注入后设置 `HF_TOKEN` / `HUGGING_FACE_HUB_TOKEN`（不落日志）。
+- **Flux.2 磁盘预检**：按 pipeline 的 `downloadGb` 估算（1.15 倍余量）并检查 `/kaggle/working` 剩余空间，不足时在下载前给出「需 X GiB / 可用 Y GiB」的明确错误；使用预挂载权重时跳过。
+- **说明**：没有使用精确版本钉死，是因为 FLUX.2 需要较新的 diffusers 主线；内置约束只挡住破坏性大版本跃迁，需要完全复现时用 `pipConstraints` 显式钉死。
 
 ### 3. 配额可见性容错
-- **现状与实施**：Kaggle 平台的 `kaggle account quota` 指令由于官方接口变动或代理网络问题，经常出现超时或报错导致配额显示“不可用”。当 CLI 探测失败时，改为展示本地统计信息（最近一次成功检查时间、当前会话累计运行时长），并附带 Kaggle 账户设置直达链接。
+- **现状与实施**：Kaggle 平台的 `kaggle account quota` 指令由于官方接口变动或代理网络问题，经常出现超时或报错导致配额显示“不可用”。现在探测失败或配额不可读时，算力弹层展示最近一次成功检查时间与当时配额、当前会话已运行时长，并给出 Kaggle 账户设置直达链接。`/state` 增加 `probeLastGood` / `probeLastGoodAt`。
 
 ---
 
 ## 四、 体验与性能进阶 (P2)
 
+> **状态：✅ 已在 0.4.0 落地（2026-11-11）**，各项实现方式见下。
+
 ### 1. 权重预挂载（省 40 秒冷启动）
 - **实施方案**：将 SDXL Lightning / Base 的核心模型权重制作并托管为公开的 Kaggle Dataset。
 - **效果**：在 `kernel-metadata.json` 中配置 `dataset_sources` 直接挂载到容器只读目录，省去启动时每次通过网络从 HuggingFace 下载约 6.8GB 权重的 40~45 秒耗时，同时彻底消除下载失败风险。
+- **实现**：新增 `datasetSources` 配置写入 `dataset_sources`；`localModels`（仓库 → 容器内目录）命中后直接本地加载，跳过下载与磁盘预检。Dataset 需用户自行发布，仓库结构保持 HuggingFace 原样（含 `model_index.json`）。
 
 ### 2. 隧道备用通道（穿透多路复用）
 - **实施方案**：国内访问 Cloudflare trycloudflare 偶尔会遇到解析超时。当检测到 Cloudflare 隧道在 90 秒内未能建立时，自动回退到备用通道（如 Bore 或自建 FRP 实例），并在状态栏上报当前通道类型。
+- **实现**：`fallbackTunnelCommand`（argv 模板，支持 `{port}`）+ `fallbackTunnelUrlRegex`，cloudflared 失败/超时后按 provider 计划尝试备用命令；`tunnelProvider` 进入会话快照并在算力弹层展示。Host 只信任 `trustedTunnelDomains` 白名单内的 https 地址，避免自定义通道泄露 token。**没有内置公共 bore 服务**（明文 HTTP，跨公网传 token 不安全），备用通道需用户自建并显式配置。
 
 ### 3. 界面交互与可访问性打磨
-- **窄屏适配**：优化小窗口分屏场景（宽度 ≤820px），确保提交任务后依然能直观看到生成进度与图片。
-- **完成提醒**：离开工作台标签后，后台生成完成以桌面通知或轻量红点提示，返回后保留上一批产物视图。
-- **无障碍与细节**：大图预览弹窗增加 Esc 关闭焦点控制、图片补全 alt 属性、触控按钮热区规范为 ≥44px。
+- **窄屏适配**：≤820px 时画面预览置顶（42vh）、面板在下方自身滚动，提交任务后进度与图片始终留在视口。
+- **完成提醒**：离开工作台标签后，任务完成会在标签页标题加「● 生成完成 · 」，返回后恢复原标题并提示一次；桌面通知未采用（Web 插件不保证通知权限）。
+- **无障碍与细节**：大图预览与日志抽屉增加焦点陷阱、Esc 关闭与焦点归还；图片补齐 alt；触控热区 ≥44px。`docs/DESIGN.md` 的令牌与断点未变。
 
 ### 4. 发布与开源合规
-- 补齐开源 License 文件；
-- 将 package.json 版本号与 CHANGELOG 历史改动对齐；
-- 提供标准化、一键可加载的插件分发打包脚本。
+- 补齐 MIT `LICENSE` 与 `package.json` 的 `license` 字段；
+- `package.json` 版本与 `docs/SPEC.md`、`CHANGELOG.md` 对齐到 0.4.0；
+- 新增 `npm run package`：构建后按 `files` 清单产出 `dist/<name>-<version>/` 可加载目录，并尽力生成 zip。

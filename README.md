@@ -15,6 +15,10 @@
   - **创作助手**：用一句话描述画面，由宿主模型解析出提示词、比例与风格，先给确认卡再出图。
   - **对话调用**：在聊天窗口中直接对 AI 说 *“帮我画一张赛博朋克风格的雨夜街景”*，模型自动调用工具出图。
 - **省电与省额度**：空闲 30 分钟自动关机，也可在面板中一键关机，不浪费 Kaggle 免费算力。
+- **断点可恢复**：会话信息实时写入工作区 `.imagen/session.json`，DSH 重启或插件热重载后会先探活、再接管或清理，避免远端 GPU 空转。
+- **隧道自愈与备用通道**：远端 cloudflared 中途退出会自动重拉并重新广播；如配置了自建隧道命令，cloudflared 失败时可自动切换。
+- **排错可见**：工作台算力弹层可打开运行日志抽屉，直接查看安装 / 隧道 / 生成日志，并一键复制诊断信息。
+- **权重预挂载**：可把模型权重做成 Kaggle Dataset 挂载到容器，跳过每次冷启动的下载（见下文配置）。
 
 ---
 
@@ -69,6 +73,32 @@
 
 ---
 
+## 可选配置
+
+插件配置写在 DSH 的插件配置项里（键名区分大小写），全部可选：
+
+| 配置项 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| `defaultPreset` | `sdxl-lightning` | 默认模型预设 id |
+| `accelerator` | `NvidiaTeslaT4` | Kaggle 加速器类型 |
+| `idleTimeoutSec` | `1800` | 远端空闲多少秒后自动关机（300~10800） |
+| `provisionTimeoutMinutes` | `45` | 等待 Kaggle 分配 GPU 的最长分钟数（5~240） |
+| `sessionWaitMinutes` | `45` | 出图任务等待会话就绪的最长分钟数（5~240） |
+| `generateTimeoutSeconds` | `300` | 单次生成请求超时秒数（30~1800） |
+| `hfToken` | 空 | HuggingFace Token；设置后可避免匿名拉取大模型被 429 限流，也支持 gated 仓库 |
+| `pipConstraints` | `[]` | 额外 pip 约束，如 `["diffusers==0.36.0"]`；按包名覆盖内置上限 |
+| `datasetSources` | `[]` | 预挂载的 Kaggle Dataset，如 `["owner/sdxl-weights"]`，挂载到 `/kaggle/input/<dataset>` |
+| `localModels` | 空 | 权重仓库 → 容器内目录的映射，如 `{"stabilityai/stable-diffusion-xl-base-1.0": "/kaggle/input/sdxl-weights"}`；命中后跳过下载 |
+| `fallbackTunnelCommand` | `[]` | 备用隧道命令 argv，支持 `{port}` 占位，如 `["/kaggle/working/bore", "server", "bore.pub", "-p", "{port}"]` |
+| `fallbackTunnelUrlRegex` | 内置 https 规则 | 从备用通道输出里提取地址的正则 |
+| `trustedTunnelDomains` | `[]` | 备用通道的域名后缀（如 `["tunnel.example.com"]`），Host 只对可信 https 地址发送 token |
+| `devEndpoint` / `devToken` | 空 / `dev-token` | 本地联调：直连本机 mock daemon（也可用同名环境变量） |
+
+> 备用通道要求输出 **https** 地址；`trustedTunnelDomains` 是安全白名单，未登记的自建域名不会被信任。
+> 权重预挂载需要先自行把模型文件发布为 Kaggle Dataset，目录结构保持 HuggingFace 仓库原样（含 `model_index.json`）。
+
+---
+
 ## 开发与本地脱机联调
 
 如果你在开发插件本身，无需每次都等待 Kaggle 排队，可使用内置的本地 Mock 服务：
@@ -101,11 +131,23 @@ npm run test:host
 npm run test:client
 
 # Python daemon 的单元测试（需要本机 python 环境；已接入 npm test 与 npm run test:host）
-npm run test:daemon   # 纯函数单测（51 项）
+npm run test:daemon   # 纯函数单测（101 项：隧道监管 / 冷启动 / 预挂载 / 备用通道）
+
+# 会话持久化与启动恢复（79 项：探活接管、重新会合、清理、竞态、token 不落日志）
+node test/session-restore.mjs
+
+# Kernel 打包注入（dataset_sources / 配置 Base64 / metadata 合法）
+node test/kernel-package.mjs
 
 # 重新生成 / 校验下发给远端 daemon 的契约 JSON（改了 shared/contract.js 后）
 npm run contract:gen
 npm run contract:check
+```
+
+发布打包（先构建 client.js，再产出 `dist/` 下可加载目录与 zip）：
+
+```powershell
+npm run package
 ```
 
 真机验证（手动执行，会消耗 Kaggle GPU 额度）：

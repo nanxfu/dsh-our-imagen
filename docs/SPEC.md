@@ -4,7 +4,7 @@
 > 本文档只描述语义、请求/响应形状与使用约束，不重复维护数值。`node test/check-contract.mjs` 会校验
 > 宿主注册的路由、宿主错误码、客户端文案与本文档是否跟随契约。
 >
-> **版本**：0.3.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
+> **版本**：0.4.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
 
 ---
 
@@ -29,6 +29,13 @@
 `idleTimeoutSec`、`error`（`null` 或 `{ code, message }`）。鉴权 token 不进入任何对外快照
 （只在 Host 内部用于请求远端；`endpointUrl` 会下发，供前端展示隧道是否建立）。
 `tunnelProvider` 为 `cloudflare` / `custom` / `null`，对应 ready 事件与 `/health.tunnel_provider`。
+
+**会话本地持久化**：Host 在启动流程的关键节点把 `kernelId`、`token`、`topic`、`endpointUrl` 等写入
+`<workspace>/.imagen/session.json`（原子写，目录 0700 / 文件 0600，Windows 忽略 mode 差异）。
+下次 DSH 启动或插件热重载时，Host 先读取该记录：`/health` 探活成功则直接接管；地址失效但有 `topic`
+则回 ntfy 会合点重新取隧道地址；Kernel 已结束或记录不可用时尽力关机并删除记录。
+记录含远端 Bearer Token，只落盘、不进任何日志与对外快照；`session/stop` 与成功的 `dispose` 会删除它。
+开发模式（`devEndpoint`）不读写该记录。
 
 ### 1.2 任务状态（Job Status）
 
@@ -153,7 +160,7 @@
 
 ```json
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "defaultPreset": "sdxl-lightning",
   "presets": [
     {

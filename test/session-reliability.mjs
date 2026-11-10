@@ -28,6 +28,9 @@
  */
 
 import { createServer } from 'node:http'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { JobQueue } from '../lib/jobs.js'
 import { SessionManager } from '../lib/session.js'
@@ -68,6 +71,17 @@ function listen(server) {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => resolve(server.address().port))
   })
+}
+
+// 会话记录会写入工作区：测试用独立临时目录，避免污染仓库根目录的 .imagen/。
+let workspace = null
+
+function createCtx() {
+  return {
+    get(name) {
+      return name === 'workingDirectory' ? { defaultDirectory: workspace } : undefined
+    },
+  }
 }
 
 async function closeServer(server) {
@@ -152,7 +166,7 @@ function fakeDeps(overrides = {}) {
 
 function makeSession({ ntfyPort, deps = {}, options = {} }) {
   return new SessionManager({
-    ctx: {},
+    ctx: createCtx(),
     defaultPreset: PRESET,
     deps,
     options: {
@@ -408,6 +422,7 @@ async function main() {
   watchdog.unref?.()
 
   console.log('session-reliability：Host 会话可靠性离线回归（无 Kaggle / 无 GPU / 无外网）')
+  workspace = await mkdtemp(join(tmpdir(), 'imagen-session-reliability-'))
   checkDefaultDetectionBound()
   await scenario('A1 ready 后 Kernel 结束', scenarioKernelEndedAfterReady)
   await scenario('A2 ready 后心跳丢失但 Kernel 仍运行', scenarioHealthLostWhileKernelRunning)
@@ -425,6 +440,16 @@ async function main() {
     console.log(`结果：${passed} 项全部通过`)
   }
   clearTimeout(watchdog)
+  // 会话记录异步写入：dispose 的收尾可能还在跑，Windows 下并发删除会 ENOTEMPTY，重试即可。
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      await rm(workspace, { recursive: true, force: true })
+      break
+    } catch (error) {
+      if (attempt === 9) throw error
+      await sleep(20)
+    }
+  }
 }
 
 main().catch((error) => {
