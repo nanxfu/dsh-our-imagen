@@ -25,6 +25,7 @@ import {
 import { iteratePatch, rerollOverrides, retryOverrides } from '../logic/recall.js'
 import { probeOutcomeOf } from '../logic/probe.js'
 import { isRefineApplied, refineSeparator, toggleRefineTerm } from '../logic/refine.js'
+import { intentFormPatch, intentPrompt, lastIntentPrompt } from '../logic/intent.js'
 
 const EMPTY_FORM = {
   prompt: '',
@@ -86,6 +87,7 @@ export function useStudio(props) {
   // 初始形态可由 props 指定（预览与测试用）；正常运行时默认表单式。
   const [panelMode, setPanelMode] = React.useState(props && props.panelMode === 'chat' ? 'chat' : 'form')
   const [messages, setMessages] = React.useState([])
+  const [interpreting, setInterpreting] = React.useState(false)
   const messageSeq = React.useRef(0)
   const [zoom, setZoom] = React.useState(false)
   const [ratioId, setRatioId] = React.useState('1:1')
@@ -293,7 +295,7 @@ export function useStudio(props) {
     setMessages((prev) => [...prev, ...entries.map((entry) => ({ id: (messageSeq.current += 1), ...entry }))])
   }
 
-  async function generate(overrides) {
+  async function generate(overrides, options = {}) {
     if (sending) return
     const body = buildBody(overrides)
     if (!body.prompt) {
@@ -308,16 +310,84 @@ export function useStudio(props) {
     setSending(false)
     if (result.ok && result.data && result.data.id) {
       const jobId = result.data.id
-      pushMessages([
-        { role: 'user', text: body.prompt },
-        { role: 'assistant', jobId, stage: 'pending', text: t('studio.chat.pending') },
-      ])
+      const entries = []
+      if (options.pushUser !== false) entries.push({ role: 'user', text: body.prompt })
+      entries.push({ role: 'assistant', kind: 'job', jobId, stage: 'pending', text: t('studio.chat.pending') })
+      pushMessages(entries)
       refresh()
       loadHistory()
       showToast(t('studio.toast.submitted'))
       return
     }
     fail(result.code, result.message)
+  }
+
+  /**
+   * 对话模式：把一句话交给宿主模型解析成生成参数。
+   * 模型不可用时宿主会退回原文＋当前设置，界面仍然给出确认卡，不阻塞出图。
+   */
+  async function interpret(text) {
+    const value = String(text ?? '').trim()
+    if (!value || interpreting) return
+    const previousPrompt = lastIntentPrompt(messages)
+    pushMessages([{ role: 'user', text: value }])
+    setInterpreting(true)
+    const result = await request('imagen-api/intent', {
+      method: 'POST',
+      body: JSON.stringify({ text: value, previousPrompt, locale: isEn ? 'en' : 'zh' }),
+    })
+    if (!aliveRef.current) return
+    setInterpreting(false)
+    if (result.ok && result.data && typeof result.data.prompt === 'string') {
+      const data = result.data
+      const patch = intentFormPatch(data, DEFAULT_RATIOS)
+      if (Object.keys(patch).length > 0) patchForm(patch)
+      if (data.ratioId) setRatioId(data.ratioId)
+      pushMessages([{
+        role: 'assistant',
+        kind: 'intent',
+        prompt: data.prompt,
+        ratioId: typeof data.ratioId === 'string' ? data.ratioId : '',
+        styleId: typeof data.styleId === 'string' ? data.styleId : '',
+        clarify: data.clarify || null,
+        source: data.source === 'model' ? 'model' : 'local',
+      }])
+      return
+    }
+    pushMessages([{ role: 'assistant', kind: 'error', text: errorText(t, result) }])
+  }
+
+  /** 澄清卡选定后，把答案并回意图卡。 */
+  function resolveClarify(messageId, field, value) {
+    setMessages((prev) => prev.map((message) => {
+      if (!message || message.id !== messageId) return message
+      const next = { ...message, clarify: null }
+      if (field === 'ratio') next.ratioId = value || ''
+      if (field === 'style') next.styleId = value || ''
+      return next
+    }))
+  }
+
+  /** 生成意图卡：先落表单，再按卡片参数提交。 */
+  async function generateIntent(message) {
+    if (!message || !message.prompt) return
+    const overrides = { prompt: intentPrompt(message, STYLE_CAPSULES) }
+    const ratio = DEFAULT_RATIOS.find((item) => item.id === message.ratioId)
+    if (ratio) {
+      overrides.width = ratio.width
+      overrides.height = ratio.height
+    }
+    const patch = intentFormPatch(message, DEFAULT_RATIOS)
+    if (Object.keys(patch).length > 0) patchForm(patch)
+    if (message.ratioId) setRatioId(message.ratioId)
+    await generate(overrides, { pushUser: false })
+  }
+
+  /** 在系统文件管理器里打开产物目录。 */
+  async function openFolder() {
+    const result = await request('imagen-api/reveal', { method: 'POST', body: JSON.stringify({}) })
+    if (!aliveRef.current) return
+    if (!result.ok) showToast(t('studio.toast.revealFailed'))
   }
 
   /** 换种子抽卡：基于当前选中的作品，而不是左侧表单。 */
@@ -462,7 +532,13 @@ export function useStudio(props) {
   async function exportPaths(paths) {
     const list = (Array.isArray(paths) ? paths : []).filter(Boolean)
     if (list.length === 0) return
-    const text = list.join('\n')
+    // 导出的是「复制文件路径」，用宿主给的绝对路径；老记录没有绝对路径时退回原值。
+    const absoluteOf = new Map()
+    for (const entry of gallery) {
+      const image = (entry && entry.image) || {}
+      if (image.path && image.absolute) absoluteOf.set(image.path, image.absolute)
+    }
+    const text = list.map((item) => absoluteOf.get(item) || item).join('\n')
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text)
@@ -546,8 +622,12 @@ export function useStudio(props) {
     panelMode,
     setPanelMode,
     messages,
+    interpreting,
+    interpret,
+    resolveClarify,
+    generateIntent,
+    openFolder,
     clearThread: () => setMessages([]),
-    generateWithText: (text) => generate({ prompt: String(text ?? '').trim() }),
     openMessage: (path) => {
       if (path) setSelectedPath(path)
     },
@@ -556,7 +636,6 @@ export function useStudio(props) {
     runProbe,
     exportPaths,
     t,
-    isEn,
     view,
     setView,
     session,

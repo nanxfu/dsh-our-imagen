@@ -63,6 +63,8 @@ export function Stage(props) {
   }
 
   const favorite = isFavorite(image.path || image.file)
+  // 「复制文件路径」要给绝对路径：历史条目里带 absolute，老记录退回相对路径。
+  const copyTarget = image.absolute || image.path || image.file
 
   return (
     <section className="ofs-stage">
@@ -75,7 +77,7 @@ export function Stage(props) {
           <button type="button" className="ofs-glass-btn" onClick={() => setZoom(true)} title={t('studio.stage.zoom')} aria-label={t('studio.stage.zoom')}>
             <Icon name="expand" size={16} />
           </button>
-          <button type="button" className="ofs-glass-btn" onClick={() => onCopy(image.path || image.file)} title={t('studio.action.copyPath')} aria-label={t('studio.action.copyPath')}>
+          <button type="button" className="ofs-glass-btn" onClick={() => onCopy(copyTarget)} title={t('studio.action.copyPath')} aria-label={t('studio.action.copyPath')}>
             <Icon name="copy" size={16} />
           </button>
           <button
@@ -124,7 +126,7 @@ export function Stage(props) {
           <Icon name="reroll" size={15} />
           {t('studio.action.reroll')}
         </button>
-        <button type="button" className="ofs-dock-button" onClick={() => onCopy(image.path || image.file)}>
+        <button type="button" className="ofs-dock-button" onClick={() => onCopy(copyTarget)}>
           <Icon name="copy" size={15} />
           {t('studio.action.copyPath')}
         </button>

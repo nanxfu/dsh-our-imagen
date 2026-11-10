@@ -42,7 +42,7 @@ function presetNameOf(presets, id) {
 }
 
 export function Gallery(props) {
-  const { t, gallery, now, presets, favorites, onOpen, onDelete, onExport } = props
+  const { t, gallery, now, presets, favorites, onOpen, onDelete, onExport, onRecall, onVariant } = props
   const [presetFilter, setPresetFilter] = React.useState('')
   const [favoriteOnly, setFavoriteOnly] = React.useState(false)
   const [selecting, setSelecting] = React.useState(false)
@@ -223,38 +223,59 @@ export function Gallery(props) {
                   const aspect = aspectOf(entry)
                   const prompt = entry.item.prompt || ''
                   return (
-                    <button
-                      type="button"
-                      key={key}
-                      className={checked ? 'ofs-gallery-card is-picked' : 'ofs-gallery-card'}
-                      title={prompt || key}
-                      aria-pressed={selecting ? checked : undefined}
-                      onClick={() => (selecting ? togglePick(key) : onOpen(entry))}
-                    >
-                      <span
-                        className="ofs-gallery-media"
-                        style={aspect ? { aspectRatio: aspect } : undefined}
+                    <div className={checked ? 'ofs-gallery-card is-picked' : 'ofs-gallery-card'} key={key}>
+                      <div className="ofs-gallery-stage">
+                        <button
+                          type="button"
+                          className="ofs-gallery-media"
+                          style={aspect ? { aspectRatio: aspect } : undefined}
+                          title={prompt || key}
+                          aria-pressed={selecting ? checked : undefined}
+                          onClick={() => (selecting ? togglePick(key) : onOpen(entry))}
+                        >
+                          <img src={entry.image.url} alt={prompt || entry.image.file || 'thumb'} loading="lazy" />
+                          {selecting ? (
+                            <span className={checked ? 'ofs-gallery-pick is-on' : 'ofs-gallery-pick'} aria-hidden="true">
+                              {checked ? <Icon name="check" size={11} /> : null}
+                            </span>
+                          ) : null}
+                          {favorite ? (
+                            <span className="ofs-gallery-star" aria-hidden="true">
+                              <Icon name="starFilled" size={12} />
+                            </span>
+                          ) : null}
+                        </button>
+
+                        {selecting ? null : (
+                          <div className="ofs-gallery-hover">
+                            <button type="button" className="ofs-gallery-action" onClick={() => onRecall(entry.item)}>
+                              <Icon name="focus" size={12} />
+                              {t('studio.action.iterate')}
+                            </button>
+                            <button type="button" className="ofs-gallery-action" onClick={() => onVariant(entry.item)}>
+                              <Icon name="reroll" size={12} />
+                              {t('studio.action.reroll')}
+                            </button>
+                            <button type="button" className="ofs-gallery-action" onClick={() => onOpen(entry)}>
+                              <Icon name="expand" size={12} />
+                              {t('studio.gallery.open')}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="ofs-gallery-body"
+                        onClick={() => (selecting ? togglePick(key) : onOpen(entry))}
                       >
-                        <img src={entry.image.url} alt={prompt || entry.image.file || 'thumb'} loading="lazy" />
-                        {selecting ? (
-                          <span className={checked ? 'ofs-gallery-pick is-on' : 'ofs-gallery-pick'} aria-hidden="true">
-                            {checked ? <Icon name="check" size={11} /> : null}
-                          </span>
-                        ) : null}
-                        {favorite ? (
-                          <span className="ofs-gallery-star" aria-hidden="true">
-                            <Icon name="starFilled" size={12} />
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="ofs-gallery-body">
                         <span className="ofs-gallery-caption">{prompt || '—'}</span>
                         <span className="ofs-gallery-tags">
                           {entry.item.presetId ? <em>{entry.item.presetId}</em> : null}
                           {entry.image.seed != null ? <span>#{entry.image.seed}</span> : null}
                         </span>
-                      </span>
-                    </button>
+                      </button>
+                    </div>
                   )
                 })}
               </div>

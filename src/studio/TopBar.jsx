@@ -17,7 +17,7 @@ function sessionPill(t, sessionState) {
 }
 
 export function TopBar(props) {
-  const { t, view, setView, sessionState, session, quota, presets, form, patchForm, busy, probing, probe, probeReport, onStart, onStop, onProbe, onRefresh } = props
+  const { t, view, setView, sessionState, session, quota, presets, form, patchForm, busy, probing, probe, probeReport, onStart, onStop, onProbe, onRefresh, onOpenFolder } = props
   const pill = sessionPill(t, sessionState)
   const [open, setOpen] = React.useState(false)
   const wrapRef = React.useRef(null)
@@ -83,6 +83,18 @@ export function TopBar(props) {
       </nav>
 
       <span className="ofs-grow" />
+
+      {onOpenFolder ? (
+        <button
+          type="button"
+          className="ofs-icon-btn"
+          onClick={onOpenFolder}
+          title={t('studio.action.openFolder')}
+          aria-label={t('studio.action.openFolder')}
+        >
+          <Icon name="folder" size={16} />
+        </button>
+      ) : null}
 
       {onRefresh ? (
         <button type="button" className="ofs-icon-btn" onClick={onRefresh} title={t('studio.refresh')} aria-label={t('studio.refresh')}>

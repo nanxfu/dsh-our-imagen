@@ -502,6 +502,34 @@ async function main() {
     assert.deepEqual(blank.body.groups, [], '空描述不产生建议')
   })
 
+  await check('对话意图解析（无模型时走本地兜底）', async () => {
+    const result = await json(host.origin, '/imagen-api/intent', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: '给我画一张横版的雨夜街景，要写实一点', locale: 'zh' }),
+    })
+    assert.equal(result.status, 200)
+    assert.equal(result.body.ok, true)
+    assert.equal(result.body.source, 'local')
+    assert.equal(result.body.prompt, '给我画一张横版的雨夜街景，要写实一点')
+    assert.equal(result.body.ratioId, '')
+    assert.equal(result.body.styleId, '')
+    assert.equal(result.body.clarify, null)
+  })
+
+  await check('打开产物目录（dryRun 只解析路径）', async () => {
+    const result = await json(host.origin, '/imagen-api/reveal', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dryRun: true }),
+    })
+    assert.equal(result.status, 200)
+    assert.equal(result.body.ok, true)
+    assert.equal(result.body.dryRun, true)
+    assert.equal(typeof result.body.dir, 'string')
+    assert.ok(result.body.dir.endsWith('imagen-output'), `dir=${result.body.dir}`)
+  })
+
   await check('会话停止', async () => {
     const { body } = await json(host.origin, '/imagen-api/session/stop', { method: 'POST' })
     assert.equal(body.ok, true)

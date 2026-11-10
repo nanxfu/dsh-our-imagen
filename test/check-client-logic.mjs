@@ -503,6 +503,33 @@ await check('风格预设与灵感文案都在字典里', () => {
   }
 })
 
+await check('对话意图映射到表单与提示词', () => {
+  const messages = [
+    { id: 1, role: 'user', text: '画一张横版的雨夜街景' },
+    { id: 2, role: 'assistant', kind: 'intent', prompt: '雨夜街景，湿润地面倒映霓虹', ratioId: '16:9', styleId: 'cyberpunk' },
+    { id: 3, role: 'user', text: '背景加一只黑猫' },
+  ]
+  assert.equal(logic.lastIntentPrompt(messages), '雨夜街景，湿润地面倒映霓虹')
+  assert.equal(logic.lastIntentPrompt([]), '')
+  assert.equal(logic.lastIntentPrompt([{ role: 'assistant', kind: 'job', text: 'x' }]), '')
+
+  const ratios = [
+    { id: '1:1', width: 1024, height: 1024 },
+    { id: '16:9', width: 1152, height: 648 },
+  ]
+  assert.deepEqual(
+    logic.intentFormPatch({ prompt: '雨夜街景', ratioId: '16:9', styleId: 'cyberpunk' }, ratios),
+    { prompt: '雨夜街景', width: 1152, height: 648, styleId: 'cyberpunk' },
+  )
+  // 没有匹配的比例时不覆盖表单尺寸。
+  assert.deepEqual(logic.intentFormPatch({ prompt: 'x', ratioId: '' }, ratios), { prompt: 'x' })
+
+  const capsules = [{ id: 'cyberpunk', suffix: 'cyberpunk neon city' }]
+  assert.equal(logic.intentPrompt({ prompt: '雨夜街景', styleId: 'cyberpunk' }, capsules), '雨夜街景, cyberpunk neon city')
+  assert.equal(logic.intentPrompt({ prompt: '雨夜街景', styleId: '' }, capsules), '雨夜街景')
+  assert.equal(logic.intentPrompt({ prompt: '', styleId: 'cyberpunk' }, capsules), '')
+})
+
 const failed = results.filter((item) => !item.ok)
 console.log(`\n${results.length - failed.length}/${results.length} 通过`)
 if (failed.length > 0) process.exitCode = 1

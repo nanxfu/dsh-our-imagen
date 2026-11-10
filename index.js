@@ -12,11 +12,12 @@ import { readFile, unlink } from 'node:fs/promises'
 
 import { methodNotAllowed, readJsonBody, sendError, sendJson } from './lib/http.js'
 import { enhancePrompt } from './lib/enhance.js'
+import { parseIntent } from './lib/intent.js'
 import { JobQueue } from './lib/jobs.js'
 import { probeKaggle } from './lib/kaggle.js'
 import { readLibrary, recordDeleted, setFavorite } from './lib/library.js'
 import { scanHistory } from './lib/output.js'
-import { contentTypeOf, resolveOutputPath } from './lib/paths.js'
+import { contentTypeOf, resolveOutputDir, resolveOutputPath } from './lib/paths.js'
 import { DEFAULT_PRESET, PRESETS, presetById, publicPresets } from './lib/presets.js'
 import { SessionManager } from './lib/session.js'
 
@@ -39,6 +40,30 @@ function toInt(value, fallback, min, max) {
   const number = Number(value)
   if (!Number.isFinite(number)) return fallback
   return Math.min(max, Math.max(min, Math.round(number)))
+}
+
+/**
+ * 在系统文件管理器里打开产物目录。
+ *
+ * explorer.exe 打开目录后往往以非 0 退出，这里只关心进程能否起来，
+ * 不把退出码当失败；等待最多 1.5 秒，避免请求被文件管理器拖住。
+ */
+async function revealFolder(ctx, dir) {
+  const platform = process.platform
+  const command = platform === 'win32' ? 'explorer.exe' : platform === 'darwin' ? 'open' : 'xdg-open'
+  const exe = await ctx.subprocess.resolveExecutable(command)
+  const handle = ctx.subprocess.spawn({
+    argv: [exe, dir],
+    cwd: dir,
+    stdio: {
+      stdin: 'ignore',
+      stdout: { maxBytes: 4 * 1024 },
+      stderr: { maxBytes: 4 * 1024 },
+    },
+    graceMs: 2000,
+  })
+  const done = handle && typeof handle.done?.then === 'function' ? handle.done.catch(() => null) : Promise.resolve(null)
+  await Promise.race([done, new Promise((resolve) => setTimeout(resolve, 1500))])
 }
 
 /** 把 job 折叠成一段给模型看的文字。 */
@@ -377,6 +402,52 @@ export function apply(ctx, config = {}) {
         },
       }),
     'imagen:route-enhance',
+  )
+
+  // ---- 自然语言意图解析（对话模式） ---------------------------------------
+
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/imagen-api/intent',
+        async handler(req, res) {
+          if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
+          const body = await readJsonBody(req).catch(() => ({}))
+          const result = await parseIntent(ctx, {
+            text: typeof body?.text === 'string' ? body.text : '',
+            previousPrompt: typeof body?.previousPrompt === 'string' ? body.previousPrompt : '',
+            locale: body?.locale === 'en' ? 'en' : 'zh',
+          })
+          sendJson(res, 200, { ok: true, ...result })
+        },
+      }),
+    'imagen:route-intent',
+  )
+
+  // ---- 打开产物文件夹 -----------------------------------------------------
+
+  ctx.effect(
+    () =>
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/imagen-api/reveal',
+        async handler(req, res) {
+          if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
+          const body = await readJsonBody(req).catch(() => ({}))
+          const dir = await resolveOutputDir(ctx)
+          if (!dir) return sendError(res, 404, 'output_missing', '产物目录还不存在，先出一张图')
+          // dryRun 供无界面环境自检：只解析目录，不真的唤起文件管理器。
+          if (body && body.dryRun === true) return sendJson(res, 200, { ok: true, dryRun: true, dir })
+          try {
+            await revealFolder(ctx, dir)
+            sendJson(res, 200, { ok: true, dir })
+          } catch (error) {
+            sendError(res, 500, 'reveal_failed', String(error?.message ?? error))
+          }
+        },
+      }),
+    'imagen:route-reveal',
   )
 
   // ---- Agent 工具 ---------------------------------------------------------

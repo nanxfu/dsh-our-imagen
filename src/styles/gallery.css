@@ -258,7 +258,6 @@
 }
 
 .ofs-gallery-card {
-  appearance: none;
   display: block;
   width: 100%;
   margin: 0 0 var(--ofs-gap);
@@ -267,9 +266,6 @@
   border-radius: var(--ofs-r-lg);
   background: var(--ofs-card);
   color: var(--ofs-ink);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
   break-inside: avoid;
   box-shadow: var(--ofs-shadow-card);
   transition:
@@ -292,12 +288,24 @@
   box-shadow: var(--ofs-focus-ring), var(--ofs-shadow-lift);
 }
 
-.ofs-gallery-media {
+/* 图片区：按钮铺满，悬浮操作覆盖在图片底部 */
+.ofs-gallery-stage {
   position: relative;
   display: block;
-  overflow: hidden;
   border-radius: calc(var(--ofs-r-lg) - 7px);
+  overflow: hidden;
   background: var(--ofs-sunken);
+}
+
+.ofs-gallery-media {
+  appearance: none;
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .ofs-gallery-media img {
@@ -305,6 +313,49 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* 悬停操作：带回参数 / 生成变体 / 查看大图 */
+.ofs-gallery-hover {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  left: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.ofs-gallery-card:hover .ofs-gallery-hover,
+.ofs-gallery-card:focus-within .ofs-gallery-hover {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ofs-gallery-action {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid rgb(255 255 255 / 26%);
+  border-radius: var(--ofs-r-pill);
+  background: rgb(20 20 22 / 62%);
+  color: #fff;
+  font-size: 10px;
+  white-space: nowrap;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.ofs-gallery-action:hover {
+  background: rgb(20 20 22 / 82%);
 }
 
 /* 批量选择：左上角圆点，选中后墨黑填充 */
@@ -349,13 +400,21 @@
   -webkit-backdrop-filter: blur(4px);
 }
 
-/* 卡身：两行提示词 + 标签行 */
+/* 卡身：两行提示词 + 标签行；整块可点开大图 */
 .ofs-gallery-body {
+  appearance: none;
   display: flex;
   flex-direction: column;
   gap: 7px;
+  width: 100%;
   min-width: 0;
   padding: 10px 8px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .ofs-gallery-caption {

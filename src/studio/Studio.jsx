@@ -35,11 +35,13 @@ export function Studio(props) {
     ? (
         <ChatPanel
           t={s.t}
-          form={s.form}
           patchForm={s.patchForm}
           sending={s.sending}
-          onGenerate={s.generateWithText}
           messages={s.messages}
+          interpreting={s.interpreting}
+          onSend={s.interpret}
+          onGenerateIntent={s.generateIntent}
+          onResolveClarify={s.resolveClarify}
           onClearThread={s.clearThread}
           onOpenMessage={s.openMessage}
           mode={s.panelMode}
@@ -95,6 +97,7 @@ export function Studio(props) {
           onStop={s.stopSession}
           onProbe={s.runProbe}
           onRefresh={s.loadHistory}
+          onOpenFolder={s.openFolder}
         />
 
         <GuidanceCard
@@ -122,6 +125,8 @@ export function Studio(props) {
                 favorites={s.favorites}
                 onDelete={s.deleteImages}
                 onExport={s.exportPaths}
+                onRecall={s.iterate}
+                onVariant={(item) => s.reroll(item)}
                 onOpen={(entry) => {
                   s.selectImage(entry)
                   s.setView('studio')

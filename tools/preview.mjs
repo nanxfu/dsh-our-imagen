@@ -359,12 +359,21 @@ async function renderGallery(options = {}) {
     onDelete: () => {},
     onExport: () => {},
     onOpen: () => {},
+    onRecall: () => {},
+    onVariant: () => {},
   })
   client.unmount()
   return pageOf(
     `<div class="ofs-root"><div class="ofs-app"><div class="ofs-body is-gallery"><div class="ofs-main">${toHtml(tree)}</div></div></div></div>`,
     { ...options, injectCss: true },
   )
+}
+
+/** 悬浮操作不是静态渲染能体现的，这里用一条覆盖样式把操作条常显出来。 */
+async function renderGalleryHover() {
+  return renderGallery({
+    extraCss: '.ofs-gallery-hover{opacity:1 !important;pointer-events:auto !important}',
+  })
 }
 
 async function renderChat(options = {}) {
@@ -379,26 +388,40 @@ async function renderChat(options = {}) {
   })
   const first = historyItems[0]
   const messages = [
-    { id: 1, role: 'user', text: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图' },
+    { id: 1, role: 'user', text: '画一张横版的雨夜街景，要写实一点' },
     {
       id: 2,
       role: 'assistant',
+      kind: 'intent',
+      prompt: '雨夜街景，湿润地面倒映霓虹招牌，35mm 胶片质感',
+      ratioId: '16:9',
+      styleId: 'film',
+      clarify: null,
+      source: 'model',
+    },
+    { id: 3, role: 'user', text: '背景加一只撑伞的黑猫' },
+    {
+      id: 4,
+      role: 'assistant',
+      kind: 'job',
+      jobId: 'job-preview',
       stage: 'done',
       text: '已生成，点击缩略图放大。',
       image: first.images[0].url,
       meta: `6.2 秒 · 种子 ${first.images[0].seed}`,
     },
-    { id: 3, role: 'user', text: '把天空换成更深的紫蓝色，保留霓虹反光' },
-    { id: 4, role: 'assistant', stage: 'running', text: '正在生成…' },
   ]
   const tree = await client.mountRaw(client.components.ChatPanel, {
     t: client.internals.i18n.fallbackTranslate('zh'),
-    form: { prompt: '把天空换成更深的紫蓝色，保留霓虹反光' },
     patchForm: () => {},
     sending: false,
-    onGenerate: () => {},
     messages,
+    interpreting: false,
+    onSend: () => {},
+    onGenerateIntent: () => {},
+    onResolveClarify: () => {},
     onClearThread: () => {},
+    onOpenMessage: () => {},
     mode: 'chat',
     setMode: () => {},
   })
@@ -461,12 +484,13 @@ async function renderRefine(options = {}) {
 function pageOf(body, options = {}) {
   const themeStyle = options.dark ? `<style>${DARK_TOKENS}</style>` : ''
   const cssStyle = options.injectCss ? `<style>${CSS}</style>` : ''
+  const extraStyle = options.extraCss ? `<style>${options.extraCss}</style>` : ''
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <style>*{box-sizing:border-box}html,body{margin:0;height:100%;${FONT}}
 body{background:${options.dark ? '#0b0b0d' : '#e6e7e9'};padding:0;}
 #stage{height:100vh;width:100vw;overflow:hidden;}
 .ofs-root{height:100%;}
-</style>${cssStyle}${themeStyle}</head><body><div id="stage">${body}</div></body></html>`
+</style>${cssStyle}${themeStyle}${extraStyle}</head><body><div id="stage">${body}</div></body></html>`
 }
 
 async function main() {
@@ -484,6 +508,7 @@ async function main() {
     'studio-guidance': await renderState(states.guidance, { history: historyItems }),
     'studio-cli': await renderState(states.cli, { history: [] }),
     'gallery-wide': await renderGallery(),
+    'gallery-hover': await renderGalleryHover(),
     'chat-standalone': await renderChat(),
     'studio-refine': await renderRefine(),
   }

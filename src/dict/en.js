@@ -239,6 +239,7 @@ export const en = {
   'studio.gallery.confirmDelete': 'Delete now',
   'studio.gallery.favoriteOnly': 'Favorites only',
   'studio.gallery.export': 'Copy paths',
+  'studio.gallery.open': 'View image',
   'studio.toast.exported': 'Selected paths copied',
   'studio.error.deleteFailed': 'Some images could not be deleted',
 
@@ -249,6 +250,7 @@ export const en = {
   'studio.toast.favorited': 'Added to favorites',
   'studio.toast.unfavorited': 'Removed from favorites',
   'studio.toast.deleted': 'Deleted',
+  'studio.toast.revealFailed': 'Could not open the folder',
   'studio.dismiss': 'Got it',
 
   // ── Guidance cards ────────────────────────────────────────────
@@ -307,6 +309,15 @@ export const en = {
 
   // ── Creation assistant ────────────────────────────────────────
   'studio.chat.assistant': 'Assistant',
+  'studio.chat.parsing': 'Reading your description…',
+  'studio.chat.intent.title': 'Ready to generate',
+  'studio.chat.intent.generate': 'Generate this',
+  'studio.chat.clarify.title': 'One setting to confirm',
+  'studio.chat.clarify.ratio': 'Which aspect ratio?',
+  'studio.chat.clarify.style': 'Which style?',
+  'studio.chat.clarify.auto': 'Use current settings',
+  'studio.chat.ratioAuto': 'Ratio auto',
+  'studio.chat.styleAuto': 'Style auto',
   'studio.chat.pending': 'Submitted; queuing…',
   'studio.chat.queued': 'Waiting in the cloud queue…',
   'studio.chat.running': 'Generating…',

@@ -239,6 +239,7 @@ export const zh = {
   'studio.gallery.confirmDelete': '确认删除',
   'studio.gallery.favoriteOnly': '只看收藏',
   'studio.gallery.export': '复制路径',
+  'studio.gallery.open': '查看大图',
   'studio.toast.exported': '已复制所选路径',
   'studio.error.deleteFailed': '有图片没能删除',
 
@@ -249,6 +250,7 @@ export const zh = {
   'studio.toast.favorited': '已加入收藏',
   'studio.toast.unfavorited': '已取消收藏',
   'studio.toast.deleted': '已删除',
+  'studio.toast.revealFailed': '无法打开文件夹',
   'studio.dismiss': '知道了',
 
   // ── 指引卡 ───────────────────────────────────────────────────
@@ -307,6 +309,15 @@ export const zh = {
 
   // ── 创作助手 ─────────────────────────────────────────────────
   'studio.chat.assistant': '创作助手',
+  'studio.chat.parsing': '正在解析你的描述…',
+  'studio.chat.intent.title': '生成确认',
+  'studio.chat.intent.generate': '按此生成',
+  'studio.chat.clarify.title': '需要确认一个参数',
+  'studio.chat.clarify.ratio': '画面比例用哪个？',
+  'studio.chat.clarify.style': '风格用哪个？',
+  'studio.chat.clarify.auto': '按当前设置',
+  'studio.chat.ratioAuto': '比例自动',
+  'studio.chat.styleAuto': '风格自动',
   'studio.chat.pending': '已提交，正在排队…',
   'studio.chat.queued': '云端正在排队，请稍候…',
   'studio.chat.running': '正在生成…',
