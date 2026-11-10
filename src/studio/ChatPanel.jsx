@@ -13,7 +13,7 @@ import React from 'react'
 
 import { Icon } from './icons.jsx'
 
-const EXAMPLES = ['studio.example.1', 'studio.example.2', 'studio.example.3']
+const EXAMPLES = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
 
 // 助手消息左上角的状态点：完成是静默的绿点，排队/渲染是呼吸的琥珀点，失败是红点。
 const WORKING_STAGES = ['pending', 'queued', 'running']
@@ -39,10 +39,6 @@ export function ChatPanel(props) {
     onClearThread,
     mode,
     setMode,
-    onEnhance,
-    enhancing,
-    suggestions,
-    onApplySuggestion,
     onOpenMessage,
   } = props
 
@@ -114,8 +110,9 @@ export function ChatPanel(props) {
                     patchForm({ prompt: t(key) })
                     setDraft(t(key))
                   }}
+                  title={t(key)}
                 >
-                  {t(key)}
+                  {t(`${key}.label`)}
                 </button>
               ))}
             </div>
@@ -153,29 +150,9 @@ export function ChatPanel(props) {
         )}
       </div>
 
-      {/* 抽卡与微调在主舞台已经有入口，这里只留这个面板自己的动作，避免同屏重复 */}
+      {/* 清空会话放在输入区上方，避免和主舞台的动作重复 */}
       <div className="ofs-chat-dock">
-        {suggestions.length > 0 ? (
-          <div className="ofs-chat-suggest">
-            {suggestions.slice(0, 3).map((entry) => (
-              <button
-                type="button"
-                key={entry.id}
-                className="ofs-chip ofs-chat-suggest-chip"
-                onClick={() => onApplySuggestion(entry.text)}
-                title={entry.text}
-              >
-                {entry.text}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
         <div className="ofs-chat-tools">
-          <button type="button" className="ofs-chip" onClick={onEnhance} disabled={enhancing}>
-            <Icon name="expandText" size={13} />
-            {enhancing ? t('studio.enhance.thinking') : t('studio.enhance.button')}
-          </button>
           <button type="button" className="ofs-chip" onClick={onClearThread} disabled={messages.length === 0}>
             {t('studio.chat.clear')}
           </button>

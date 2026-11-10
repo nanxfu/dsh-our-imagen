@@ -1,7 +1,8 @@
 /**
- * 风格胶囊：点击后在提示词尾部注入对应的风格词，并补齐通用排除项。
- * 词表是本地常量，不依赖模型；后续要接 Harness 的模型扩写时，
- * 这里只作为「模型不可用」时的兜底。
+ * 风格预设：点击后在提示词尾部注入对应的风格词，并补齐通用排除项。
+ *
+ * 词表是本地常量，不依赖模型；名称走字典（labelKey），
+ * 这样中英文与其余界面文案同一套来源。
  *
  * icon 是 icons.jsx 里的图标名，不是 emoji —— 图标要跟其余控件同一套描边。
  */
@@ -10,59 +11,36 @@ export const STYLE_CAPSULES = [
   {
     id: 'film',
     icon: 'film',
-    zh: '真实胶片',
-    en: 'Cinematic Film',
+    labelKey: 'studio.style.photo',
     suffix: 'cinematic film photography, 35mm, natural skin texture, soft grain',
     negative: 'blurry, low quality, distorted, text, watermark',
   },
   {
     id: 'concept',
     icon: 'palette',
-    zh: '概念原画',
-    en: 'Concept Art',
+    labelKey: 'studio.style.concept',
     suffix: 'concept art, painterly, dramatic lighting, detailed brushwork',
     negative: 'photo, blurry, low quality, text, watermark',
   },
   {
     id: 'cyberpunk',
     icon: 'skyline',
-    zh: '赛博霓虹',
-    en: 'Cyberpunk',
+    labelKey: 'studio.style.cyberpunk',
     suffix: 'cyberpunk neon city, volumetric light, reflective surfaces, night atmosphere',
     negative: 'daylight, blurry, low quality, deformed, text',
   },
   {
     id: 'ink',
     icon: 'mountains',
-    zh: '东方水墨',
-    en: 'Ink Wash',
+    labelKey: 'studio.style.ink',
     suffix: 'traditional chinese ink wash painting, rice paper texture, negative space',
     negative: 'photo, 3d, saturated colors, blurry, text',
   },
   {
     id: 'clay',
     icon: 'cube',
-    zh: '3D 黏土',
-    en: 'Cute Clay',
+    labelKey: 'studio.style.clay',
     suffix: 'clay render, soft studio light, pastel palette, playful proportions',
     negative: 'photo, harsh shadows, blurry, distorted, text',
-  },
-]
-
-/** 追加到提示词的快速增强项。 */
-export const PROMPT_BOOSTS = [
-  {
-    id: 'light',
-    icon: 'sun',
-    zh: '丰富光影与材质细节',
-    en: 'Richer light and material detail',
-    suffix: 'rich cinematic lighting, detailed materials, subtle reflections',
-  },
-  {
-    id: 'cinema',
-    icon: 'focus',
-    zh: '增加电影级景深景别',
-    en: 'Cinematic depth of field',
-    suffix: 'cinematic composition, shallow depth of field, 35mm lens',
   },
 ]

@@ -24,6 +24,7 @@ import {
 } from '../logic/guidance.js'
 import { iteratePatch, rerollOverrides, retryOverrides } from '../logic/recall.js'
 import { probeOutcomeOf } from '../logic/probe.js'
+import { isRefineApplied, refineSeparator, toggleRefineTerm } from '../logic/refine.js'
 
 const EMPTY_FORM = {
   prompt: '',
@@ -49,6 +50,7 @@ function flattenHistory(items) {
 
 export function useStudio(props) {
   const t = translator(props)
+  const isEn = !/^zh/i.test(String((typeof document !== 'undefined' && document.documentElement && document.documentElement.lang) || 'en'))
   const host = useHostState()
   const state = host.state
   const refresh = host.refresh
@@ -78,8 +80,8 @@ export function useStudio(props) {
   const [historyItems, setHistoryItems] = React.useState([])
   const [historyDone, setHistoryDone] = React.useState(false)
   const [favorites, setFavorites] = React.useState([])
-  const [suggestions, setSuggestions] = React.useState([])
-  const [suggestSource, setSuggestSource] = React.useState('')
+  const [refineGroups, setRefineGroups] = React.useState([])
+  const [refineSource, setRefineSource] = React.useState('')
   const [enhancing, setEnhancing] = React.useState(false)
   // 初始形态可由 props 指定（预览与测试用）；正常运行时默认表单式。
   const [panelMode, setPanelMode] = React.useState(props && props.panelMode === 'chat' ? 'chat' : 'form')
@@ -475,19 +477,41 @@ export function useStudio(props) {
 
   async function enhance() {
     if (enhancing) return
+    if (!form.prompt.trim()) {
+      showToast(t('studio.promptHint'))
+      return
+    }
     setEnhancing(true)
     const result = await request('imagen-api/enhance', {
       method: 'POST',
-      body: JSON.stringify({ prompt: form.prompt }),
+      body: JSON.stringify({
+        prompt: form.prompt,
+        presetId: form.presetId,
+        locale: isEn ? 'en' : 'zh',
+      }),
     })
     if (!aliveRef.current) return
     setEnhancing(false)
-    if (result.ok && result.data && Array.isArray(result.data.suggestions)) {
-      setSuggestions(result.data.suggestions.filter((item) => item && item.text))
-      setSuggestSource(result.data.source === 'model' ? 'model' : 'local')
+    if (result.ok && result.data && Array.isArray(result.data.groups)) {
+      const groups = result.data.groups.filter((group) => group && Array.isArray(group.options) && group.options.length > 0)
+      setRefineGroups(groups)
+      setRefineSource(result.data.source === 'model' ? 'model' : 'local')
       return
     }
     fail(result.code, result.message)
+  }
+
+  /** 润色标签：点一次追加，再点一次撤销。 */
+  function toggleRefine(term) {
+    patchForm({ prompt: toggleRefineTerm(form.prompt, term, refineSeparator(form.prompt)) })
+  }
+
+  /** 灵感预设：输入框为空时直接填入，已有内容时换行追加。 */
+  function useInspiration(text) {
+    const value = String(text ?? '').trim()
+    if (!value) return
+    const base = form.prompt.trim()
+    patchForm({ prompt: base ? `${base}\n${value}` : value })
   }
 
   const styleSuffix = (() => {
@@ -532,7 +556,7 @@ export function useStudio(props) {
     runProbe,
     exportPaths,
     t,
-    isEn: !/^zh/i.test(String((typeof document !== 'undefined' && document.documentElement && document.documentElement.lang) || 'en')),
+    isEn,
     view,
     setView,
     session,
@@ -563,14 +587,15 @@ export function useStudio(props) {
     isFavorite,
     toggleFavorite,
     deleteImages,
-    suggestions,
-    suggestSource,
+    refineGroups: refineGroups.map((group) => ({
+      ...group,
+      options: group.options.map((option) => ({ ...option, applied: isRefineApplied(form.prompt, option.text) })),
+    })),
+    refineSource,
     enhancing,
     enhance,
-    applySuggestion: (text) => {
-      const base = form.prompt.trim()
-      patchForm({ prompt: base ? `${base}, ${text}` : text })
-    },
+    toggleRefine,
+    useInspiration,
     zoom,
     setZoom,
     historyDone,

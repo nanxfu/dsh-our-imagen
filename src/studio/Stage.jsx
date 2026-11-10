@@ -1,9 +1,11 @@
-/** 焦点舞台：大图居中，图下一条信息行与一条动作行。 */
+/** 画面预览：大图居中，图下一条信息行与一条动作行。 */
 
 import React from 'react'
 
 import { Icon } from './icons.jsx'
 import { formatSeconds } from '../logic/format.js'
+
+const INSPIRE_KEYS = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
 
 export function Stage(props) {
   const { t, selected, activeJob, sessionQueued, onIterate, onReroll, onCopy, zoom, setZoom, isFavorite, onToggleFavorite, onUseExample } = props
@@ -39,9 +41,9 @@ export function Stage(props) {
             <p className="ofs-muted">{t('studio.stage.emptyHint')}</p>
             <div className="ofs-examples">
               <span className="ofs-examples-label">{t('studio.stage.examples')}</span>
-              {['studio.example.1', 'studio.example.2', 'studio.example.3'].map((key) => (
-                <button type="button" key={key} className="ofs-example" onClick={() => onUseExample(t(key))}>
-                  {t(key)}
+              {INSPIRE_KEYS.map((key) => (
+                <button type="button" key={key} className="ofs-example" onClick={() => onUseExample(t(key))} title={t(key)}>
+                  {t(`${key}.label`)}
                 </button>
               ))}
             </div>

@@ -463,27 +463,43 @@ async function main() {
     assert.equal(item.images.length, 1, '历史里不应再出现已删除的图片')
   })
 
-  await check('提示词扩写（无模型时走本地兜底）', async () => {
+  await check('提示词润色（无模型时走本地兜底）', async () => {
     const result = await json(host.origin, '/imagen-api/enhance', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ prompt: '一只赛博猫' }),
+      body: JSON.stringify({ prompt: '一只赛博猫', presetId: 'sdxl-lightning', locale: 'zh' }),
     })
     assert.equal(result.status, 200)
     assert.equal(result.body.ok, true)
     assert.ok(['model', 'local'].includes(result.body.source), `source=${result.body.source}`)
-    assert.equal(result.body.suggestions.length, 3)
-    for (const item of result.body.suggestions) {
-      assert.equal(typeof item.text, 'string')
-      assert.ok(item.text.length > 0)
+    assert.equal(result.body.groups.length, 4, '应按四个维度返回')
+    assert.deepEqual(
+      result.body.groups.map((group) => group.dimension),
+      ['lighting', 'material', 'composition', 'atmosphere'],
+      '维度顺序固定',
+    )
+    for (const group of result.body.groups) {
+      assert.ok(group.options.length >= 2, `${group.dimension} 至少两条建议`)
+      for (const option of group.options) {
+        assert.equal(typeof option.id, 'string')
+        assert.equal(typeof option.text, 'string')
+        assert.ok(option.text.length > 0)
+      }
     }
+
+    const english = await json(host.origin, '/imagen-api/enhance', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: 'a cyber cat', locale: 'en' }),
+    })
+    assert.equal(english.body.groups[0].options[0].text, 'soft diffused light', '英文 locale 走英文本地建议')
 
     const blank = await json(host.origin, '/imagen-api/enhance', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ prompt: '   ' }),
     })
-    assert.deepEqual(blank.body.suggestions, [], '空描述不产生建议')
+    assert.deepEqual(blank.body.groups, [], '空描述不产生建议')
   })
 
   await check('会话停止', async () => {

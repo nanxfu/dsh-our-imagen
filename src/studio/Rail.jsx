@@ -9,10 +9,11 @@ import React from 'react'
 
 import { Tooltip } from '../components/Tooltip.jsx'
 import { Icon } from './icons.jsx'
-import { PROMPT_BOOSTS, STYLE_CAPSULES } from './capsules.js'
+import { STYLE_CAPSULES } from './capsules.js'
 import { DEFAULT_RATIOS } from './ratios.js'
 
 const PROMPT_MAX = 2000
+const INSPIRE_KEYS = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
 
 function Fieldset(props) {
   return (
@@ -31,7 +32,6 @@ export function Rail(props) {
     t,
     form,
     patchForm,
-    isEn,
     styleId,
     applyStyle,
     ratioId,
@@ -42,18 +42,18 @@ export function Rail(props) {
     setNegativeOpen,
     sending,
     onGenerate,
-    suggestions,
-    suggestSource,
+    refineGroups,
+    refineSource,
     enhancing,
     onEnhance,
-    onApplySuggestion,
+    onToggleRefine,
+    onInspire,
     mode,
     setMode,
   } = props
 
   const promptLength = form.prompt.length
   const hasPrompt = form.prompt.trim().length > 0
-  const activeSuggestion = suggestions.length > 0 ? suggestions : []
 
   return (
     <aside className="ofs-panel ofs-panel--form">
@@ -109,37 +109,51 @@ export function Rail(props) {
             </div>
           </div>
 
-          {activeSuggestion.length > 0 ? (
+          <div className="ofs-inspire">
+            <span className="ofs-inspire-label">{t('studio.inspire.title')}</span>
             <div className="ofs-suggestions">
-              {activeSuggestion.map((entry) => (
+              {INSPIRE_KEYS.map((key) => (
                 <button
                   type="button"
-                  key={entry.id}
+                  key={key}
                   className="ofs-suggestion"
-                  onClick={() => onApplySuggestion(entry.text)}
-                  title={entry.text}
+                  onClick={() => onInspire(t(key))}
+                  title={t(key)}
                 >
-                  {entry.text}
-                </button>
-              ))}
-              {suggestSource === 'local' ? <span className="ofs-muted">{t('studio.enhance.local')}</span> : null}
-            </div>
-          ) : (
-            <div className="ofs-suggestions">
-              {PROMPT_BOOSTS.map((entry) => (
-                <button
-                  type="button"
-                  key={entry.id}
-                  className="ofs-suggestion"
-                  onClick={() => onApplySuggestion(entry.suffix)}
-                  title={entry.suffix}
-                >
-                  <Icon name={entry.icon} size={13} />
-                  {isEn ? entry.en : entry.zh}
+                  {t(`${key}.label`)}
                 </button>
               ))}
             </div>
-          )}
+          </div>
+
+          {refineGroups.length > 0 ? (
+            <div className="ofs-refine">
+              <div className="ofs-refine-head">
+                <span>{t('studio.refine.title')}</span>
+                {refineSource === 'local' ? <span className="ofs-muted">{t('studio.enhance.local')}</span> : null}
+              </div>
+              {refineGroups.map((group) => (
+                <div className="ofs-refine-group" key={group.dimension}>
+                  <span className="ofs-refine-dim">{t(`studio.refine.${group.dimension}`)}</span>
+                  <div className="ofs-suggestions">
+                    {group.options.map((option) => (
+                      <button
+                        type="button"
+                        key={option.id}
+                        className={option.applied ? 'ofs-suggestion is-on' : 'ofs-suggestion'}
+                        onClick={() => onToggleRefine(option.text)}
+                        aria-pressed={option.applied}
+                        title={option.text}
+                      >
+                        {option.text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <p className="ofs-hint">{t('studio.refine.hint')}</p>
+            </div>
+          ) : null}
         </Fieldset>
 
         <Fieldset title={t('studio.style')}>
@@ -151,12 +165,12 @@ export function Rail(props) {
                 className={styleId === capsule.id ? 'ofs-tile is-on' : 'ofs-tile'}
                 onClick={() => applyStyle(capsule.id)}
                 aria-pressed={styleId === capsule.id}
-                title={isEn ? capsule.en : capsule.zh}
+                title={t(capsule.labelKey)}
               >
                 <span className={`ofs-tile-art is-${capsule.id}`} aria-hidden="true">
                   <Icon name={capsule.icon} size={16} />
                 </span>
-                <span className="ofs-tile-label">{isEn ? capsule.en : capsule.zh}</span>
+                <span className="ofs-tile-label">{t(capsule.labelKey)}</span>
               </button>
             ))}
           </div>

@@ -359,7 +359,7 @@ export function apply(ctx, config = {}) {
     'imagen:route-library-delete',
   )
 
-  // ---- 提示词扩写（走宿主已配置的模型） -----------------------------------
+  // ---- 提示词润色（走宿主已配置的模型） -----------------------------------
 
   ctx.effect(
     () =>
@@ -369,7 +369,10 @@ export function apply(ctx, config = {}) {
         async handler(req, res) {
           if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
           const body = await readJsonBody(req).catch(() => ({}))
-          const result = await enhancePrompt(ctx, body?.prompt)
+          const result = await enhancePrompt(ctx, body?.prompt, {
+            locale: body?.locale === 'en' ? 'en' : 'zh',
+            presetId: typeof body?.presetId === 'string' ? body.presetId : '',
+          })
           sendJson(res, 200, { ok: true, ...result })
         },
       }),

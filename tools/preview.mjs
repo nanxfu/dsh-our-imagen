@@ -362,7 +362,7 @@ async function renderGallery(options = {}) {
   })
   client.unmount()
   return pageOf(
-    `<div class="ofs-root"><div class="ofs-app"><div class="ofs-body is-gallery"><div class="ofs-rail" aria-hidden="true"></div><div class="ofs-main">${toHtml(tree)}</div></div></div></div>`,
+    `<div class="ofs-root"><div class="ofs-app"><div class="ofs-body is-gallery"><div class="ofs-main">${toHtml(tree)}</div></div></div></div>`,
     { ...options, injectCss: true },
   )
 }
@@ -384,12 +384,12 @@ async function renderChat(options = {}) {
       id: 2,
       role: 'assistant',
       stage: 'done',
-      text: '已生成，点击缩略图可放大。',
+      text: '已生成，点击缩略图放大。',
       image: first.images[0].url,
       meta: `6.2 秒 · 种子 ${first.images[0].seed}`,
     },
     { id: 3, role: 'user', text: '把天空换成更深的紫蓝色，保留霓虹反光' },
-    { id: 4, role: 'assistant', stage: 'running', text: '正在渲染中…' },
+    { id: 4, role: 'assistant', stage: 'running', text: '正在生成…' },
   ]
   const tree = await client.mountRaw(client.components.ChatPanel, {
     t: client.internals.i18n.fallbackTranslate('zh'),
@@ -398,20 +398,62 @@ async function renderChat(options = {}) {
     sending: false,
     onGenerate: () => {},
     messages,
-    onReroll: () => {},
-    onIterate: () => {},
     onClearThread: () => {},
-    hasSelection: true,
     mode: 'chat',
     setMode: () => {},
-    onEnhance: () => {},
-    enhancing: false,
-    suggestions: [],
-    onApplySuggestion: () => {},
   })
   client.unmount()
   return pageOf(
-    `<div class="ofs-root"><div class="ofs-app"><div class="ofs-body is-chat"><div class="ofs-rail" aria-hidden="true"></div>${toHtml(tree)}<div class="ofs-main"></div></div></div></div>`,
+    `<div class="ofs-root"><div class="ofs-app"><div class="ofs-body">${toHtml(tree)}<div class="ofs-main"></div></div></div></div>`,
+    { ...options, injectCss: true },
+  )
+}
+
+async function renderRefine(options = {}) {
+  const client = await loadClient({ now: NOW, testBuild: true })
+  const groups = [
+    { dimension: 'lighting', options: [{ id: 'a', text: '柔和漫射光', applied: true }, { id: 'b', text: '侧逆光轮廓' }] },
+    { dimension: 'material', options: [{ id: 'c', text: '湿润粗糙质感' }, { id: 'd', text: '金属拉丝高光' }] },
+    { dimension: 'composition', options: [{ id: 'e', text: '对称中心构图' }, { id: 'f', text: '浅景深电影画幅' }] },
+    { dimension: 'atmosphere', options: [{ id: 'g', text: '静谧雾气' }, { id: 'h', text: '漂浮尘埃粒子' }] },
+  ]
+  const tree = await client.mountRaw(client.components.Rail, {
+    t: client.internals.i18n.fallbackTranslate('zh'),
+    form: {
+      prompt: '雨夜的未来城市街景，湿润地面倒映霓虹招牌，柔和漫射光',
+      negative: '',
+      presetId: 'sdxl-lightning',
+      width: 1024,
+      height: 1024,
+      steps: 4,
+      cfg: 1.5,
+      seed: '',
+      count: 1,
+      styleId: 'cyberpunk',
+    },
+    patchForm: () => {},
+    styleId: 'cyberpunk',
+    applyStyle: () => {},
+    ratioId: '1:1',
+    applyRatio: () => {},
+    advancedOpen: false,
+    setAdvancedOpen: () => {},
+    negativeOpen: false,
+    setNegativeOpen: () => {},
+    sending: false,
+    onGenerate: () => {},
+    refineGroups: groups,
+    refineSource: 'model',
+    enhancing: false,
+    onEnhance: () => {},
+    onToggleRefine: () => {},
+    onInspire: () => {},
+    mode: 'form',
+    setMode: () => {},
+  })
+  client.unmount()
+  return pageOf(
+    `<div class="ofs-root"><div class="ofs-app"><div class="ofs-body">${toHtml(tree)}<div class="ofs-main"></div></div></div></div>`,
     { ...options, injectCss: true },
   )
 }
@@ -443,6 +485,7 @@ async function main() {
     'studio-cli': await renderState(states.cli, { history: [] }),
     'gallery-wide': await renderGallery(),
     'chat-standalone': await renderChat(),
+    'studio-refine': await renderRefine(),
   }
 
   for (const [name, html] of Object.entries(pages)) {

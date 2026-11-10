@@ -40,17 +40,10 @@ export function Studio(props) {
           sending={s.sending}
           onGenerate={s.generateWithText}
           messages={s.messages}
-          onReroll={s.reroll}
-          onIterate={() => s.iterate(s.selected)}
           onClearThread={s.clearThread}
           onOpenMessage={s.openMessage}
-          hasSelection={Boolean(s.selected)}
           mode={s.panelMode}
           setMode={s.setPanelMode}
-          onEnhance={s.enhance}
-          enhancing={s.enhancing}
-          suggestions={s.suggestions}
-          onApplySuggestion={s.applySuggestion}
         />
       )
     : (
@@ -58,7 +51,6 @@ export function Studio(props) {
           t={s.t}
           form={s.form}
           patchForm={s.patchForm}
-          isEn={s.isEn}
           styleId={s.styleId}
           applyStyle={s.applyStyle}
           ratioId={s.ratioId}
@@ -69,12 +61,12 @@ export function Studio(props) {
           setNegativeOpen={s.setNegativeOpen}
           sending={s.sending}
           onGenerate={() => s.generate()}
-          suggestions={s.suggestions}
-          suggestSource={s.suggestSource}
+          refineGroups={s.refineGroups}
+          refineSource={s.refineSource}
           enhancing={s.enhancing}
           onEnhance={s.enhance}
-          onApplySuggestion={s.applySuggestion}
-          presets={s.presets}
+          onToggleRefine={s.toggleRefine}
+          onInspire={s.useInspiration}
           mode={s.panelMode}
           setMode={s.setPanelMode}
         />
@@ -148,7 +140,7 @@ export function Studio(props) {
                 onCopy={s.copyPath}
                 isFavorite={s.isFavorite}
                 onToggleFavorite={s.toggleFavorite}
-                onUseExample={(text) => s.patchForm({ prompt: text })}
+                onUseExample={s.useInspiration}
               />
             )}
           </div>

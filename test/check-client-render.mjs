@@ -79,14 +79,14 @@ const scenarios = {
     state: readyState,
     history: { items: [historyItem] },
     props: {},
-    expect: ['创作设置', '提示词', '风格预设', '画面设置', '高级设置', '立即生成', '带回参数', '在线', '测试用的荷花池塘'],
+    expect: ['创作设置', '提示词', '风格预设', '画面设置', '高级设置', '立即生成', '带回参数', '在线', '灵感示例', '测试用的荷花池塘'],
     reject: [],
   },
   chat: {
     state: readyState,
     history: { items: [historyItem] },
     props: { panelMode: 'chat' },
-    expect: ['创作助手', '描述你想要的画面', '润色'],
+    expect: ['创作助手', '描述你想要的画面', '清空对话'],
     reject: [],
   },
   empty: {

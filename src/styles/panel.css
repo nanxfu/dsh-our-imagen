@@ -187,6 +187,52 @@
   color: var(--ofs-accent);
 }
 
+.ofs-suggestion.is-on {
+  border-color: var(--ofs-accent);
+  background: var(--ofs-accent);
+  color: var(--ofs-accent-ink);
+}
+
+/* ── 灵感与润色 ─────────────────────────────────────────────── */
+.ofs-inspire {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 2px;
+}
+
+.ofs-inspire-label,
+.ofs-refine-head,
+.ofs-refine-dim {
+  font-size: 10.5px;
+  color: var(--ofs-ink-3);
+}
+
+.ofs-refine {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-md);
+  background: var(--ofs-sunken);
+}
+
+.ofs-refine-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ofs-ink-2);
+  font-weight: 600;
+}
+
+.ofs-refine-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* ── 风格 tile ──────────────────────────────────────────────── */
 .ofs-tiles {
   display: flex;

@@ -16,6 +16,7 @@ import { fallbackTranslate, localized } from '../src/i18n.js'
 import * as logic from '../src/logic/index.js'
 import { styles, token } from '../src/theme.js'
 import { ACTIVE_STATUS, TRANSIENT_SESSION, PHASE_STATE, NS } from '../src/constants.js'
+import { STYLE_CAPSULES } from '../src/studio/capsules.js'
 
 const t = fallbackTranslate('zh')
 const te = fallbackTranslate('en')
@@ -464,6 +465,42 @@ await check('探测结果归一化', () => {
   assert.equal(ok.cli, 'ok', '兼容布尔型 cli')
   assert.equal(ok.auth, 'ok')
   assert.equal(ok.quota, 'ok')
+})
+
+await check('润色标签的追加与撤销', () => {
+  // 中文提示词用全角逗号，英文用半角逗号加空格。
+  assert.equal(logic.toggleRefineTerm('雨夜街景', '霓虹冷暖反光'), '雨夜街景，霓虹冷暖反光')
+  assert.equal(logic.toggleRefineTerm('雨夜街景，霓虹冷暖反光', '霓虹冷暖反光'), '雨夜街景')
+  assert.equal(logic.toggleRefineTerm('rainy street', 'neon reflections'), 'rainy street, neon reflections')
+  assert.equal(logic.toggleRefineTerm('rainy street, neon reflections', 'neon reflections'), 'rainy street')
+  // 已有分隔符时不重复追加。
+  assert.equal(logic.toggleRefineTerm('雨夜街景，', '雾气'), '雨夜街景，雾气')
+  // 空提示词直接填入标签本身。
+  assert.equal(logic.toggleRefineTerm('', '雾气'), '雾气')
+  // 同名标签只撤掉最后一次追加的那一段。
+  assert.equal(logic.toggleRefineTerm('雾气，雨夜，雾气', '雾气'), '雾气，雨夜')
+  // 撤销不误删用户自己写的内容。
+  assert.equal(logic.toggleRefineTerm('雨夜街景，霓虹', '雾'), '雨夜街景，霓虹，雾')
+  assert.equal(logic.isRefineApplied('雨夜街景，雾', '雾'), true)
+  assert.equal(logic.isRefineApplied('雨夜街景', '雾'), false)
+  assert.equal(logic.refineSeparator('雨夜'), '，')
+  assert.equal(logic.refineSeparator('rainy'), ', ')
+})
+
+await check('风格预设与灵感文案都在字典里', () => {
+  for (const capsule of STYLE_CAPSULES) {
+    assert.ok(zh[capsule.labelKey], `缺少中文风格名：${capsule.labelKey}`)
+    assert.ok(en[capsule.labelKey], `缺少英文风格名：${capsule.labelKey}`)
+    assert.equal(typeof capsule.suffix, 'string')
+    assert.ok(capsule.suffix.length > 0)
+  }
+  for (const suffix of ['1', '2', '3', '4', '5']) {
+    const key = `studio.inspire.${suffix}`
+    assert.ok(zh[key], `缺少中文灵感：${key}`)
+    assert.ok(en[key], `缺少英文灵感：${key}`)
+    assert.ok(zh[`${key}.label`], `缺少中文灵感名：${key}.label`)
+    assert.ok(en[`${key}.label`], `缺少英文灵感名：${key}.label`)
+  }
 })
 
 const failed = results.filter((item) => !item.ok)
