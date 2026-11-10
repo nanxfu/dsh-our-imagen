@@ -6,7 +6,7 @@
  *
  * 检查项（对应 docs/refactor/REFACTOR_PROPOSAL.md P1）：
  *   a. package.json.version === contract.VERSION
- *   b. index.js 注册路由集合 === ROUTES；index.js 内的 /imagen-api/ 字面量 ⊆ 路由表
+ *   b. 路由注册（index.js + lib/**）去重后 === ROUTES；出现的 /imagen-api/ 字面量 ⊆ 路由表
  *   c. lib/**\/*.js 内的 /imagen-api/ 字面量 ⊆ 路由表（lib/output.js 拼预览 URL 用得到）
  *   d. src/**\/*.js(x) 不出现 'imagen-api/' 字面量、不 import lib/（必须走 routePath）
  *   e. index.js + lib 内 emit 的错误码 ⊆ ERROR_CODES；hostErrorCodes() 在 zh/en 字典都有文案
@@ -20,7 +20,7 @@
 
 import { readFile, readdir } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import {
   VERSION,
@@ -106,35 +106,118 @@ async function checkPackageVersion() {
   fail('a', 'package.json 版本与契约不一致', [`package.json: ${pkg.version}`, `contract.VERSION: ${VERSION}`])
 }
 
-// ── b. index.js 路由注册 ───────────────────────────────────────────────────
-async function checkHostRoutes() {
-  const code = stripComments(await readText('index.js'))
-  const registered = []
-  const unresolved = []
+// ── b. 路由注册（index.js + lib/**）──────────────────────────────────────
+// 路由注册从 index.js 拆到 lib/routes/** 后，注册点可能分布在多处；这里统一扫描
+// index.js 与 lib 下所有 .js，支持「字面量」与「ROUTES 引用」两类写法，去重后比对契约。
 
-  // 支持三种写法：path: '/imagen-api/x'、path: ROUTES.x.path、path: ROUTES['x'].path
-  for (const match of code.matchAll(/\bpath\s*:\s*([^,\n]+)/g)) {
-    const expr = match[1].trim()
-    const literal = expr.match(/^'([^']+)'$/) ?? expr.match(/^"([^"]+)"$/)
-    if (literal) {
-      registered.push(literal[1])
-      continue
+/** camelCase → kebab-case，用于 effect 标签软检查（sessionStart → session-start）。 */
+function kebabCase(name) {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase()
+}
+
+/** 本文件里代表 ROUTES 的标识符：默认 ROUTES，外加 `import { ROUTES as R }` 的别名。 */
+function routeRoots(code) {
+  const roots = ['ROUTES']
+  for (const match of code.matchAll(/import\s*\{([^}]+)\}\s*from\s*['"][^'"]*shared\/contract\.js['"]/g)) {
+    for (const part of match[1].split(',')) {
+      const alias = part.trim().match(/^ROUTES\s+as\s+([A-Za-z_$][\w$]*)$/)
+      if (alias) roots.push(alias[1])
     }
-    const reference = expr.match(
-      /^ROUTES\s*(?:\.\s*([A-Za-z_$][\w$]*)|\[\s*['"]([A-Za-z_$][\w$]*)['"]\s*\])\s*\.\s*path$/,
-    )
-    if (reference) {
-      const name = reference[1] ?? reference[2]
-      if (ROUTES[name]) {
-        registered.push(ROUTES[name].path)
-        continue
+  }
+  return roots
+}
+
+/** 单文件内从 ROUTES 解构出的别名（`const { state, probe: p } = ROUTES` → p.path 可解析）。 */
+function routeAliases(code, roots) {
+  const rootPattern = roots.map(escapeRegExp).join('|')
+  const pattern = new RegExp(`const\\s*\\{([^}]+)\\}\\s*=\\s*(?:${rootPattern})\\b`, 'g')
+  const aliases = new Map()
+  for (const match of code.matchAll(pattern)) {
+    for (const part of match[1].split(',')) {
+      const piece = part.trim()
+      if (!piece) continue
+      const field = piece.match(/^([A-Za-z_$][\w$]*)\s*(?::\s*([A-Za-z_$][\w$]*))?$/)
+      if (!field) continue
+      aliases.set(field[2] ?? field[1], field[1])
+    }
+  }
+  return aliases
+}
+
+/**
+ * 解析一个 `path:` 表达式：
+ *  - literal：字符串或无插值模板字符串（`'/imagen-api/x'`）；
+ *  - route：`ROUTES.x.path`、`ROUTES['x'].path`（含 import 别名）或解构别名 `x.path`；
+ *  - unresolved：引用了 ROUTES 但无法静态解析（必须报出来，不能静默放过）；
+ *  - ignored：与路由无关的 path 属性（如 lib/output.js 的图片记录 `path: relative`）。
+ */
+function resolvePathExpression(expr, aliases, roots) {
+  // 去掉对象/调用收尾的噪音字符（`path: ROUTES.x.path }`、`path: relative })`），
+  // 否则同一行没有逗号时会把合法的字面量/引用误判成 ignored。
+  const text = expr.trim().replace(/[\s})\]]+$/, '')
+  const literal = text.match(/^'([^']*)'$/) ?? text.match(/^"([^"]*)"$/) ?? text.match(/^`([^`$]*)`$/)
+  if (literal) return { kind: 'literal', value: literal[1] }
+  const rootPattern = roots.map(escapeRegExp).join('|')
+  const routeRef = text.match(
+    new RegExp(`^(?:${rootPattern})\\s*(?:\\.\\s*([A-Za-z_$][\\w$]*)|\\[\\s*['"]([A-Za-z_$][\\w$]*)['"]\\s*\\])\\s*\\.\\s*path$`),
+  )
+  if (routeRef) return { kind: 'route', name: routeRef[1] ?? routeRef[2] }
+  const aliasRef = text.match(/^([A-Za-z_$][\w$]*)\s*\.\s*path$/)
+  if (aliasRef && aliases.has(aliasRef[1])) return { kind: 'route', name: aliases.get(aliasRef[1]) }
+  if (new RegExp(`\\b(?:${rootPattern})\\b`).test(text)) return { kind: 'unresolved', expr: text }
+  return { kind: 'ignored', expr: text }
+}
+
+/**
+ * 从 `[{ file, text }]` 收集路由注册；导出给 `%TEMP%` 模拟脚本复用。
+ * @returns {{ paths: {file:string,path:string}[], unresolved: {file:string,expr:string}[],
+ *             ignored: {file:string,expr:string}[], literals: {file:string,literal:string}[],
+ *             effectLabels: Set<string> }}
+ */
+export function collectRouteRegistrations(entries) {
+  const paths = []
+  const unresolved = []
+  const ignored = []
+  const literals = []
+  const effectLabels = new Set()
+  const routeNames = new Set()
+  for (const { file, text } of entries) {
+    const code = stripComments(text)
+    const roots = routeRoots(code)
+    const aliases = routeAliases(code, roots)
+    for (const match of code.matchAll(/\bpath\s*:\s*([^,\n]+)/g)) {
+      const resolved = resolvePathExpression(match[1], aliases, roots)
+      if (resolved.kind === 'literal') {
+        if (resolved.value.startsWith('/')) paths.push({ file, path: resolved.value })
+        else ignored.push({ file, expr: resolved.value })
+      } else if (resolved.kind === 'route') {
+        if (ROUTES[resolved.name]) paths.push({ file, path: ROUTES[resolved.name].path })
+        else unresolved.push({ file, expr: `ROUTES.${resolved.name}.path（契约未登记）` })
+      } else if (resolved.kind === 'unresolved') {
+        unresolved.push({ file, expr: resolved.expr })
+      } else {
+        ignored.push({ file, expr: resolved.expr })
       }
     }
-    unresolved.push(expr)
+    for (const literal of apiLiterals(code)) literals.push({ file, literal })
+    // effect 标签软检查素材：静态标签、路由描述对象的 name（lib/route-kit.js 生成 `imagen:route-${route.name}`）。
+    for (const match of code.matchAll(/imagen:route-([a-z0-9-]+)/g)) effectLabels.add(match[1])
+    for (const match of code.matchAll(/\bname\s*:\s*'([a-z][a-z0-9-]*)'/g)) routeNames.add(match[1])
   }
+  return { paths, unresolved, ignored, literals, effectLabels, routeNames }
+}
+
+async function checkHostRoutes() {
+  const files = ['index.js', ...(await listSourceFiles('lib', ['.js']))]
+  const entries = []
+  for (const file of files) entries.push({ file, text: await readFile(join(ROOT, file), 'utf8') })
+  const { paths, unresolved, ignored, literals, effectLabels, routeNames } = collectRouteRegistrations(entries)
 
   const details = []
-  const unique = [...new Set(registered)]
+  const unique = [...new Set(paths.map((item) => item.path))]
   if (unique.length !== ROUTE_LIST.length) {
     details.push(`注册路由数 ${unique.length}，契约 ${ROUTE_LIST.length}`)
   }
@@ -142,14 +225,46 @@ async function checkHostRoutes() {
   const extra = unique.filter((route) => !ROUTE_SET.has(route))
   if (missing.length) details.push(`缺：${missing.join(', ')}`)
   if (extra.length) details.push(`多：${extra.join(', ')}`)
-  if (unresolved.length) details.push(`无法静态解析的 path 表达式：${unresolved.join(' | ')}`)
+  if (unresolved.length) {
+    details.push(
+      `无法静态解析的 path 表达式：${unresolved.map((item) => `${item.file}: ${item.expr}`).join(' | ')}`,
+    )
+  }
 
-  const literals = apiLiterals(code)
-  const unknownLiterals = literals.filter((route) => !ROUTE_SET.has(route))
-  if (unknownLiterals.length) details.push(`未登记路由字面量：${unknownLiterals.join(', ')}`)
+  const uniqueLiterals = [...new Set(literals.map((item) => item.literal))]
+  const unknownLiterals = uniqueLiterals.filter((literal) => !ROUTE_SET.has(literal))
+  if (unknownLiterals.length) {
+    details.push(
+      `未登记路由字面量：${unknownLiterals
+        .map((literal) => {
+          const where = [...new Set(literals.filter((item) => item.literal === literal).map((item) => item.file))]
+          return `${literal}（${where.join('/')}）`
+        })
+        .join(', ')}`,
+    )
+  }
 
-  if (details.length) return fail('b', 'index.js 注册路由与契约不一致', details)
-  pass('b', 'index.js 的 15 条注册路由与契约一致', `字面量 ${literals.length} 处均在表内`)
+  if (ignored.length) {
+    const samples = [...new Set(ignored.map((item) => `${item.file}: path: ${item.expr}`))].slice(0, 3)
+    note(`忽略 ${ignored.length} 处非路由 path 表达式（如 ${samples.join('；')}）`)
+  }
+  // effect 标签软检查：拆分前每条路由注册的标签是 `imagen:route-<kebab(name)>`；
+  // 拆分后由 lib/route-kit.js 用 `imagen:route-${route.name}` 生成，因此同时接受
+  // “静态标签”和“路由描述对象的 name 字段”两种证据。只 note、不计失败。
+  const expectedNames = Object.keys(ROUTES).map((name) => kebabCase(name))
+  const covered = expectedNames.filter((name) => effectLabels.has(name) || routeNames.has(name))
+  const missingNames = expectedNames.filter((name) => !covered.includes(name))
+  if (covered.length > 0 && missingNames.length) {
+    note(
+      `effect 标签覆盖 ${covered.length}/${expectedNames.length}（不计失败）：缺 ${missingNames
+        .map((name) => `imagen:route-${name}`)
+        .join(', ')}`,
+    )
+  }
+
+  if (details.length) return fail('b', '路由注册（index.js + lib/**）与契约不一致', details)
+  const filesWithRoutes = [...new Set(paths.map((item) => item.file))]
+  pass('b', `路由注册与契约一致（去重 ${unique.length} 条）`, `扫描 ${files.length} 个文件，命中 ${filesWithRoutes.length} 个`)
 }
 
 // ── c. lib 层路由字面量 ────────────────────────────────────────────────────
@@ -326,7 +441,11 @@ async function main() {
   process.exitCode = 1
 }
 
-main().catch((error) => {
-  console.error('契约校验脚本自身出错：', error)
-  process.exitCode = 1
-})
+// 仅当本文件被直接执行时跑校验；被 `%TEMP%` 模拟脚本 import 时只复用 collectRouteRegistrations。
+const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
+if (invokedDirectly) {
+  main().catch((error) => {
+    console.error('契约校验脚本自身出错：', error)
+    process.exitCode = 1
+  })
+}
