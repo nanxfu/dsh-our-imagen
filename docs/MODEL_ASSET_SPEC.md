@@ -79,6 +79,10 @@
 
 ## 3. 录入与验证流程
 
+> Agent 执行入口：[`skills/model-asset-intake/SKILL.md`](../skills/model-asset-intake/SKILL.md)。
+> 该 skill 包含具体操作步骤、失败分类自愈表、硬性约束和 JSON 模板；本节只保留流程与约定。
+> 仓库内的 skill 需要复制到 `~/.dsh/skills/`（命令见 README）或由插件分发后，Agent 才能自动发现。
+
 ```
 外部素材 / 代码段 / 博客 / 论文 / 链接
         │
@@ -127,6 +131,7 @@ npm test               → 全仓回归
    - `node test/check-contract.mjs`：第 k 项检查 `shared/models.generated.js` 与 `models/` 同步；
    - `npm test` 已包含以上检查。
 4. 生成文件不含时间戳，相同输入产出相同内容，git diff 只反映模型变化。
+5. **双份 loader 维护约定**：`remote/daemon.py` 是生产常驻实现；`tools/payload/verify-model.py` 是一次性验证 payload（Kaggle 只接受单个 code_file，两者无法共享模块）。改动加载逻辑时必须同步两处：loader 分支、variant 回退、LoRA 挂载、scheduler、deviceMap。以 daemon 为准，verify payload 只保留采样所需的最小分支；`test/check-verify-model.mjs` 只覆盖编排侧，payload 的加载分支靠真机验证兜底。
 
 ## 5. 实施状态
 
@@ -138,4 +143,5 @@ npm test               → 全仓回归
   - `--timeout <min>` 整体超时，默认 30 分钟；
   - 成功后样张保存到 `.tmp/verify/<id>.png`，控制台打印显存/加载/首图/稳态/下载体积；`--write` 把 `measured` 写回原 JSON；
   - 失败按 `pip_conflict / cuda_oom / import_error / download_failed / disk_full / invalid_config / timeout / auth_required / push_failed / kernel_error` 分类，并打印最后 20 行日志，退出码非 0。
-- [ ] **阶段 C：特殊运行时**：按实际需求再开放 `runtime` 取值与 Host 重启会话提示；当前不实现。
+- [x] **阶段 C：Agent 操作闭环**：新增 [`skills/model-asset-intake/SKILL.md`](../skills/model-asset-intake/SKILL.md)，覆盖「外部链接 → 草稿 → dry-run → 真机验证（先确认配额）→ 失败自愈 → 入库 → build/check/test」全流程；skill 与本文档互为入口。
+- [ ] **后续：特殊运行时**：按实际需求再开放 `runtime` 取值与 Host 重启会话提示；当前不实现。
