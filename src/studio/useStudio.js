@@ -15,7 +15,7 @@ import { submitGenerate } from '../api/resources.js'
 import { useHostState } from '../hooks/useHostState.js'
 import { translator } from '../i18n.js'
 import { guidanceDetailOf, guidanceKindOf } from '../logic/guidance.js'
-import { iteratePatch, rerollOverrides, retryOverrides } from '../logic/recall.js'
+import { iteratePatch, rerollOverrides, retryOverrides } from '../logic/generate.js'
 import { useChatThread } from './hooks/useChatThread.js'
 import { useSessionControl } from './hooks/useSessionControl.js'
 import { useStudioForm } from './hooks/useStudioForm.js'
@@ -85,21 +85,25 @@ export function useStudio(props) {
     pendingRef.current = body
     setSending(true)
     ui.setError(null)
-    const result = await alive(submitGenerate(body))
-    if (!result) return
-    setSending(false)
-    if (result.ok && result.data && result.data.id) {
-      const jobId = result.data.id
-      const entries = []
-      if (options.pushUser !== false) entries.push({ role: 'user', text: body.prompt })
-      entries.push({ role: 'assistant', kind: 'job', jobId, stage: 'pending', text: t('studio.chat.pending') })
-      chat.pushMessages(entries)
-      host.refresh()
-      library.loadHistory()
-      ui.showToast(t('studio.toast.submitted'))
-      return
+    try {
+      const result = await alive(submitGenerate(body))
+      if (!result) return
+      if (result.ok && result.data && result.data.id) {
+        const jobId = result.data.id
+        const entries = []
+        if (options.pushUser !== false) entries.push({ role: 'user', text: body.prompt })
+        entries.push({ role: 'assistant', kind: 'job', jobId, stage: 'pending', text: t('studio.chat.pending') })
+        chat.pushMessages(entries)
+        host.refresh()
+        library.loadHistory()
+        ui.showToast(t('studio.toast.submitted'))
+        return
+      }
+      ui.fail(result.code, result.message)
+    } finally {
+      // 卸载导致 alive 返回 null、或后续逻辑抛错时也必须复位，否则按钮永远停在「提交中」。
+      setSending(false)
     }
-    ui.fail(result.code, result.message)
   }
 
   /** 生成变体：基于当前选中的作品，而不是左侧表单。 */

@@ -40,6 +40,8 @@ const REQUIRED_FIELDS = [
   'steps',
   'cfg',
   'negativeHint',
+  'promptStyle',
+  'qualityPrefix',
   'sizeOptions',
   'runtime',
   'pipeline',
@@ -48,6 +50,12 @@ const REQUIRED_FIELDS = [
 
 /** measured 里允许出现的实测指标；缺失或 null 表示尚未实测。 */
 const MEASURED_FIELDS = ['peakVramMb', 'loadSeconds', 'steadySeconds', 'downloadGb']
+
+/**
+ * 提示词配方：模型按什么口径理解提示词。`danbooru` 逗号标签、`natural` 自然语言段落、
+ * `concise` 简短短语；`lib/intent.js` 据此动态约束宿主模型整理出的英文提示词。
+ */
+export const PROMPT_STYLES = ['danbooru', 'natural', 'concise']
 
 function fail(message) {
   throw new Error(message)
@@ -132,6 +140,13 @@ export async function loadModels(modelsDir = MODELS_DIR) {
     if (!Array.isArray(model.sizeOptions) || model.sizeOptions.length === 0) {
       fail(`${where} 的 sizeOptions 必须是非空数组`)
     }
+    // 提示词配方：意图解析据此切换英文提示词的书写口径；qualityPrefix 允许为空串。
+    if (typeof model.promptStyle !== 'string' || !PROMPT_STYLES.includes(model.promptStyle)) {
+      fail(`${where} 的 promptStyle 必须是 ${PROMPT_STYLES.join(' | ')} 之一`)
+    }
+    if (typeof model.qualityPrefix !== 'string') {
+      fail(`${where} 的 qualityPrefix 必须是字符串（没有质量词前缀时写空串）`)
+    }
 
     models.push(model)
   }
@@ -170,6 +185,8 @@ function projectPresets(models) {
     steadySeconds: model.measured.steadySeconds,
     tier: model.tier,
     negativeHint: model.negativeHint,
+    promptStyle: model.promptStyle,
+    qualityPrefix: model.qualityPrefix,
     sizeOptions: model.sizeOptions,
     pipeline: model.pipeline,
   }))

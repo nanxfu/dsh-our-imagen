@@ -41,6 +41,8 @@ const preset = {
   cfg: 0,
   steadySeconds: 6.2,
   tier: 'fast',
+  promptStyle: 'concise',
+  negativeHint: 'blurry, low quality, deformed, extra limbs',
 }
 const turbo = { ...preset, id: 'sdxl-turbo', label: 'SDXL Turbo', short: 'Turbo', description: { zh: '实时低延迟，适合构图灵感与草稿速探', en: 'Real-time low latency, ideal for drafting' }, license: '非商用研究许可', licenseKind: 'restricted', tier: 'usable' }
 
@@ -832,6 +834,7 @@ await check('渲染：算力弹层配额回退、隧道通道与日志入口', a
     form: {
       form: { presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0 },
       patchForm: () => {},
+      selectPreset: () => {},
     },
     library: { loadHistory: () => {} },
     // 正式界面从关闭态开始；这里为渲染断言直接展开弹层。
@@ -954,6 +957,7 @@ await check('渲染：模型选择卡展开态', async () => {
     form: {
       form: { presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0 },
       patchForm: () => {},
+      selectPreset: () => {},
     },
     library: { loadHistory: () => {} },
     defaultModelOpen: true,
@@ -1079,6 +1083,167 @@ await check('渲染：大图预览 dialog 与图片 alt', async () => {
   for (const node of lightboxImages) {
     assert.ok(typeof node.props.alt === 'string' && node.props.alt.length > 0, '放大层 img 应有非空 alt')
   }
+})
+
+await check('渲染：意图确认卡同时展示英文提示词与中文摘要', async () => {
+  const mountIntent = async (message) => {
+    const client = await loadClient({
+      now: NOW,
+      responses: {
+        '/imagen-api/state': readyState,
+        '/imagen-api/history': { items: [] },
+        '/imagen-api/library': { favorites: [], deleted: [] },
+      },
+      testBuild: true,
+    })
+    const t = client.internals.i18n.fallbackTranslate('zh')
+    const tree = await client.mountRaw(client.components.ChatPanel, {
+      t,
+      ui: { panelMode: 'chat', setPanelMode: () => {} },
+      form: { patchForm: () => {} },
+      chat: {
+        messages: [message],
+        interpreting: false,
+        interpret: () => {},
+        generateIntent: () => {},
+        resolveClarify: () => {},
+        clearThread: () => {},
+      },
+      library: { openMessage: () => {} },
+      actions: { sending: false },
+    })
+    client.unmount()
+    return { tree, text: collectText(tree).join(' | ') }
+  }
+
+  const modelMessage = {
+    id: 1,
+    role: 'assistant',
+    kind: 'intent',
+    prompt: 'rainy night city street, wet pavement reflecting neon signs',
+    summary: '雨夜城市街景，湿润路面倒映霓虹招牌',
+    ratioId: '16:9',
+    styleId: 'film',
+    clarify: null,
+    source: 'model',
+  }
+  const model = await mountIntent(modelMessage)
+  assert.ok(model.text.includes('rainy night city street, wet pavement reflecting neon signs'), '[intent] 应展示英文提示词')
+  assert.ok(model.text.includes('雨夜城市街景，湿润路面倒映霓虹招牌'), '[intent] 应展示中文摘要')
+  assert.ok(model.text.includes('中文摘要'), '[intent] 摘要应有中文标签')
+  assertStructure('intent-model', model.tree, {
+    required: {
+      'ofs-intent': 1,
+      'ofs-intent-prompt': 1,
+      'ofs-intent-summary': 1,
+      'ofs-intent-summary-label': 1,
+      'ofs-intent-go': 1,
+    },
+    forbidden: ['ofs-intent-note', 'ofs-intent-question'],
+  })
+
+  // 本地兜底：prompt 与 summary 都是原文，不重复渲染摘要，改为标注「模型未响应」。
+  const local = await mountIntent({ ...modelMessage, prompt: '雨夜街景', summary: '雨夜街景', source: 'local', ratioId: '', styleId: '' })
+  assert.ok(local.text.includes('雨夜街景'))
+  assert.ok(!local.text.includes('中文摘要'), '[intent] 原文兜底时不应重复显示摘要')
+  assert.ok(local.text.includes('模型未响应'), '[intent] 本地兜底应说明来源')
+  assertStructure('intent-local', local.tree, {
+    required: { 'ofs-intent-note': 1 },
+    forbidden: ['ofs-intent-summary'],
+  })
+})
+
+await check('渲染：中文提示词的英文软提示（不拦截生成）', async () => {
+  const mountStudio = async (initialPrompt) => {
+    const client = await loadClient({
+      now: NOW,
+      responses: {
+        '/imagen-api/state': readyState,
+        '/imagen-api/history': { items: [historyItem] },
+        '/imagen-api/library': { favorites: [], deleted: [] },
+      },
+      testBuild: true,
+    })
+    const tree = await client.mountRaw(client.components.Studio, { initialPrompt })
+    client.unmount()
+    return tree
+  }
+
+  const tree = await mountStudio('雨夜街景，湿润地面')
+  const text = collectText(tree).join(' | ')
+  assert.ok(text.includes('中文描述可能出图偏差'), '[hint] 中文提示词应给英文软提示')
+  assertStructure('cjk-hint', tree, { required: { 'ofs-prompt-lang-hint': 1 }, forbidden: [] })
+  const generateButton = findNodes(
+    tree,
+    (node) => node.type === 'button'
+      && typeof node.props?.className === 'string'
+      && node.props.className.split(' ').includes('ofs-generate'),
+  )[0]
+  assert.ok(generateButton, '[hint] 缺少生成按钮')
+  assert.notEqual(generateButton.props.disabled, true, '软提示不应拦住生成')
+
+  const english = await mountStudio('rainy night street, wet pavement')
+  assertStructure('english-prompt', english, { required: {}, forbidden: ['ofs-prompt-lang-hint'] })
+})
+
+await check('渲染：润色标签显示中文 label、点击插入英文 text', async () => {
+  const client = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/state': readyState,
+      '/imagen-api/history': { items: [] },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+    },
+    testBuild: true,
+  })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const inserted = []
+  const tree = await client.mountRaw(client.components.Rail, {
+    t,
+    ui: {
+      advancedOpen: false,
+      setAdvancedOpen: () => {},
+      negativeOpen: false,
+      setNegativeOpen: () => {},
+      panelMode: 'form',
+      setPanelMode: () => {},
+    },
+    form: {
+      form: { prompt: '', negative: '', presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0, seed: '', count: 1, styleId: '' },
+      patchForm: () => {},
+      selectPreset: () => {},
+      styleId: '',
+      applyStyle: () => {},
+      ratioId: '1:1',
+      applyRatio: () => {},
+      refineGroups: [
+        {
+          dimension: 'lighting',
+          options: [{ id: 'local-lighting-0', text: 'soft diffused light', label: '柔和漫射光', applied: false }],
+        },
+      ],
+      refineSource: 'local',
+      enhancing: false,
+      enhance: () => {},
+      toggleRefine: (term) => inserted.push(term),
+      useInspiration: () => {},
+      englishPromptHint: false,
+    },
+    actions: { sending: false, generate: () => {} },
+  })
+  client.unmount()
+  const text = collectText(tree).join(' | ')
+  assert.ok(text.includes('柔和漫射光'), '[refine] 界面应显示中文 label')
+  assert.ok(!text.includes('soft diffused light'), '[refine] 英文本只作为插入值，不应直接显示为按钮文案')
+  const chip = findNodes(
+    tree,
+    (node) => node.type === 'button'
+      && node.props?.title === 'soft diffused light'
+      && collectText(node).join('').includes('柔和漫射光'),
+  )[0]
+  assert.ok(chip, '[refine] 缺少润色标签按钮')
+  chip.props.onClick()
+  assert.deepEqual(inserted, ['soft diffused light'], '点击应把英文本交给 toggleRefine')
 })
 
 // 测试内探针：校验假 React 替身自身的 hook 语义。替身坏了，上面所有渲染断言都会静默失真，

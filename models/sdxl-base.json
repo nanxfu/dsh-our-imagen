@@ -19,6 +19,8 @@
   "steps": 25,
   "cfg": 7.5,
   "negativeHint": "blurry, low quality, deformed, extra limbs",
+  "promptStyle": "natural",
+  "qualityPrefix": "",
   "sizeOptions": [768, 1024, 1152],
   "runtime": "default",
   "pipeline": {

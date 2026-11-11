@@ -74,10 +74,10 @@ export function enhancePromptRequest({ prompt, presetId, locale }) {
 }
 
 /** 把一句话解析成生成参数。 */
-export function parseIntentRequest({ text, previousPrompt, locale }) {
+export function parseIntentRequest({ text, previousPrompt, locale, presetId }) {
   return request(routePath('intent'), {
     method: 'POST',
-    body: JSON.stringify({ text, previousPrompt, locale }),
+    body: JSON.stringify({ text, previousPrompt, locale, presetId }),
   })
 }
 

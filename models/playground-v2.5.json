@@ -19,6 +19,8 @@
   "steps": 30,
   "cfg": 3,
   "negativeHint": "ugly, deformed, noisy, blurry, distorted",
+  "promptStyle": "natural",
+  "qualityPrefix": "",
   "sizeOptions": [
     768,
     1024

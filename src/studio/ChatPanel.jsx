@@ -14,7 +14,7 @@ import React from 'react'
 import { LIMITS } from '../../shared/contract.js'
 
 import { Icon } from './icons.jsx'
-import { STYLE_CAPSULES } from './capsules.js'
+import { STYLE_CAPSULES } from './presets.js'
 
 const EXAMPLES = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
 
@@ -103,7 +103,14 @@ export function ChatPanel(props) {
     return (
       <div className="ofs-msg-card ofs-intent" key={message.id}>
         <span className="ofs-intent-title">{t('studio.chat.intent.title')}</span>
+        {/* 英文提示词是真正发给模型的内容，主展示；summary 是 UI 语言的画面概述，只作确认参考。 */}
         <p className="ofs-intent-prompt">{message.prompt}</p>
+        {message.summary && message.summary !== message.prompt ? (
+          <p className="ofs-intent-summary">
+            <span className="ofs-intent-summary-label">{t('studio.chat.intent.summary')}</span>
+            {message.summary}
+          </p>
+        ) : null}
         <div className="ofs-intent-meta">
           <span>{ratioLabel(t, message.ratioId)}</span>
           <span aria-hidden="true">·</span>

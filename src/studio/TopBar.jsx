@@ -19,7 +19,7 @@ const KAGGLE_ACCOUNT_URL = 'https://www.kaggle.com/settings'
 /** 接收 { t, ui, compute, form, library }；ui/compute/form/library 是领域对象。 */
 export function TopBar(props) {
   const { t, isEn, ui, compute, library } = props
-  const { form: fields, patchForm } = props.form
+  const { form: fields, patchForm, selectPreset } = props.form
   const { view, setView, openLogs } = ui
   const {
     sessionState,
@@ -290,13 +290,9 @@ export function TopBar(props) {
           if (next) setOpen(false)
         }}
         onChange={(next) => {
-          patchForm({
-            presetId: next.id,
-            width: next.size || fields.width,
-            height: next.size || fields.height,
-            steps: next.steps ?? fields.steps,
-            cfg: next.cfg ?? fields.cfg,
-          })
+          // 切换预设统一走表单域的 selectPreset：参数与负向提示词跟随规则在一处维护。
+          if (selectPreset) selectPreset(next)
+          else patchForm({ presetId: next.id })
           setModelOpen(false)
         }}
       />

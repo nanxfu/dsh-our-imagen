@@ -13,8 +13,7 @@ import { stateJobs } from '../../logic/jobs.js'
 import { formatSeconds } from '../../logic/format.js'
 import { errorText } from '../../logic/error.js'
 import { intentFormPatch, intentPrompt, lastIntentPrompt } from '../../logic/intent.js'
-import { STYLE_CAPSULES } from '../capsules.js'
-import { DEFAULT_RATIOS } from '../ratios.js'
+import { DEFAULT_RATIOS, STYLE_CAPSULES } from '../presets.js'
 
 /**
  * 任务快照 → 气泡补丁。只映射真实状态，未知状态返回 null（保持原样）。
@@ -80,6 +79,7 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
 
   /**
    * 对话模式：把一句话交给宿主模型解析成生成参数。
+   * 宿主返回的 prompt 永远是英文（预设按英文提示词训练），summary 是 UI 语言的画面概述。
    * 模型不可用时宿主会退回原文＋当前设置，界面仍然给出确认卡，不阻塞出图。
    */
   async function interpret(text) {
@@ -89,7 +89,13 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     const previousPrompt = lastIntentPrompt(messages)
     pushMessages([{ role: 'user', text: value }])
     setInterpreting(true)
-    const result = await alive(parseIntentRequest({ text: value, previousPrompt, locale: isEn ? 'en' : 'zh' }))
+    const result = await alive(parseIntentRequest({
+      text: value,
+      previousPrompt,
+      locale: isEn ? 'en' : 'zh',
+      // 意图解析按当前预设的提示词配方（danbooru / natural / concise）约束英文提示词。
+      presetId: form.form.presetId,
+    }))
     interpretingRef.current = false
     if (!result) return
     setInterpreting(false)
@@ -101,6 +107,7 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
         role: 'assistant',
         kind: 'intent',
         prompt: data.prompt,
+        summary: typeof data.summary === 'string' ? data.summary : '',
         ratioId: typeof data.ratioId === 'string' ? data.ratioId : '',
         styleId: typeof data.styleId === 'string' ? data.styleId : '',
         clarify: data.clarify || null,

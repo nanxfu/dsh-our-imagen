@@ -24,6 +24,8 @@ export const MODELS = [
     "steps": 4,
     "cfg": 0,
     "negativeHint": "blurry, low quality, deformed, extra limbs",
+    "promptStyle": "concise",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024,
@@ -80,6 +82,8 @@ export const MODELS = [
     "steps": 8,
     "cfg": 0,
     "negativeHint": "blurry, low quality, deformed",
+    "promptStyle": "concise",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024
@@ -135,6 +139,8 @@ export const MODELS = [
     "steps": 4,
     "cfg": 0,
     "negativeHint": "blurry, low quality",
+    "promptStyle": "concise",
+    "qualityPrefix": "",
     "sizeOptions": [
       512,
       768,
@@ -185,6 +191,8 @@ export const MODELS = [
     "steps": 30,
     "cfg": 3,
     "negativeHint": "ugly, deformed, noisy, blurry, distorted",
+    "promptStyle": "natural",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024
@@ -237,6 +245,8 @@ export const MODELS = [
     "steps": 25,
     "cfg": 7.5,
     "negativeHint": "blurry, low quality, deformed, extra limbs",
+    "promptStyle": "natural",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024,
@@ -287,6 +297,8 @@ export const MODELS = [
     "steps": 25,
     "cfg": 5,
     "negativeHint": "blurry, low quality, deformed, extra limbs, ugly, bad anatomy",
+    "promptStyle": "natural",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024
@@ -339,6 +351,8 @@ export const MODELS = [
     "steps": 4,
     "cfg": 1,
     "negativeHint": "",
+    "promptStyle": "natural",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024
@@ -382,6 +396,8 @@ export const MODELS = [
     "steps": 28,
     "cfg": 7,
     "negativeHint": "nsfw, lowres, (bad), text, error, fewer, extra, missing, worst quality, jpeg artifacts, low quality, watermark, unfinished, displeasing, oldest, early, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract]",
+    "promptStyle": "danbooru",
+    "qualityPrefix": "masterpiece, best quality, highres",
     "sizeOptions": [
       768,
       1024
@@ -434,6 +450,8 @@ export const MODELS = [
     "steps": 25,
     "cfg": 4,
     "negativeHint": "",
+    "promptStyle": "natural",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024,
@@ -499,6 +517,8 @@ export const PRESETS = [
     "steadySeconds": 6.2,
     "tier": "fast",
     "negativeHint": "blurry, low quality, deformed, extra limbs",
+    "promptStyle": "concise",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024,
@@ -551,6 +571,8 @@ export const PRESETS = [
     "steadySeconds": 7.74,
     "tier": "fast",
     "negativeHint": "blurry, low quality, deformed",
+    "promptStyle": "concise",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024
@@ -602,6 +624,8 @@ export const PRESETS = [
     "steadySeconds": 1.87,
     "tier": "fast",
     "negativeHint": "blurry, low quality",
+    "promptStyle": "concise",
+    "qualityPrefix": "",
     "sizeOptions": [
       512,
       768,
@@ -648,6 +672,8 @@ export const PRESETS = [
     "steadySeconds": 28.34,
     "tier": "usable",
     "negativeHint": "ugly, deformed, noisy, blurry, distorted",
+    "promptStyle": "natural",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024
@@ -696,6 +722,8 @@ export const PRESETS = [
     "steadySeconds": 27.8,
     "tier": "usable",
     "negativeHint": "blurry, low quality, deformed, extra limbs",
+    "promptStyle": "natural",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024,
@@ -742,6 +770,8 @@ export const PRESETS = [
     "steadySeconds": 24.53,
     "tier": "usable",
     "negativeHint": "blurry, low quality, deformed, extra limbs, ugly, bad anatomy",
+    "promptStyle": "natural",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024
@@ -790,6 +820,8 @@ export const PRESETS = [
     "steadySeconds": 10.24,
     "tier": "fast",
     "negativeHint": "",
+    "promptStyle": "natural",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024
@@ -829,6 +861,8 @@ export const PRESETS = [
     "steadySeconds": 26.17,
     "tier": "usable",
     "negativeHint": "nsfw, lowres, (bad), text, error, fewer, extra, missing, worst quality, jpeg artifacts, low quality, watermark, unfinished, displeasing, oldest, early, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract]",
+    "promptStyle": "danbooru",
+    "qualityPrefix": "masterpiece, best quality, highres",
     "sizeOptions": [
       768,
       1024
@@ -877,6 +911,8 @@ export const PRESETS = [
     "steadySeconds": 80.64,
     "tier": "usable",
     "negativeHint": "",
+    "promptStyle": "natural",
+    "qualityPrefix": "",
     "sizeOptions": [
       768,
       1024,

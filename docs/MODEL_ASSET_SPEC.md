@@ -36,6 +36,8 @@
   "steps": 4,
   "cfg": 0,
   "negativeHint": "blurry, low quality, deformed, extra limbs",
+  "promptStyle": "concise",
+  "qualityPrefix": "",
   "sizeOptions": [768, 1024, 1152],
   "runtime": "default",
   "pipeline": {
@@ -75,6 +77,7 @@
 | `label` / `family` / `short` / `description` | 界面用的人类数据：完整商业名 / 家族徽标 / 触发器短名 / 双语定位描述 |
 | `params` / `license` / `licenseKind` / `gated` / `gpus` / `tier` | 说明与筛选用的人类数据 |
 | `size` / `steps` / `cfg` / `sizeOptions` / `negativeHint` | 推荐默认参数 |
+| `promptStyle` / `qualityPrefix` | 提示词配方：提示词的书写口径与质量词前缀，见 §2.1 |
 | `runtime` | 运行时底座。当前只允许 `"default"`（统一验证过的环境） |
 | `pipeline` | 下发给远端 Daemon 的加载描述；`downloadGb` 用于下载前磁盘预检 |
 | `measured` | 靶场实测指标：峰值显存、加载耗时、稳态耗时、实际下载量。未实测的字段填 `null` |
@@ -83,6 +86,27 @@
 
 - 默认全部使用统一验证过的运行时底座（`"default"`），由 daemon 全局的依赖安装流程负责；
 - 生产侧保持“一次会话一套环境”。未来出现需要特殊运行时的模型时，Host 只提示“切换该模型需要重启远端会话”，不做远端热重装。
+
+### 2.1 提示词配方（promptStyle / qualityPrefix）
+
+九个预设都按英文提示词训练，但不同模型对提示词的书写口径不同。这两个字段只描述“怎么写给这个模型看”，不参与远端加载。
+
+| 字段 | 说明 |
+| :--- | :--- |
+| `promptStyle` | 提示词书写口径，只允许 `danbooru` / `natural` / `concise`（见下表） |
+| `qualityPrefix` | 质量词前缀，字符串，可为空串；非空时写在提示词最前面（如 `masterpiece, best quality, highres`） |
+
+`promptStyle` 取值：
+
+| 取值 | 含义 | 要求 |
+| :--- | :--- | :--- |
+| `danbooru` | Danbooru 标签流模型（如 Animagine） | 英文逗号分隔的标签：质量词前缀、主体、外观、场景、构图、光影；不写完整句子 |
+| `natural` | 自然语言段落型模型（SDXL Base / RealVis / FLUX 等） | 一到两句完整英文句子：主体、环境、光线、材质、镜头 |
+| `concise` | 少步快速模型（Lightning / Hyper / Turbo） | 简短英文短语（约 25 词以内），优先主体、场景与光影，少用修辞 |
+
+消费方：`lib/intent.js` 的对话意图解析按当前预设的这两个字段动态约束宿主模型，要求 `prompt` 永远是英文；`qualityPrefix` 会作为固定质量词要求写进提示词开头。中文只出现在确认卡的 `summary`（UI 语言摘要）里，不进入发给模型的提示词。
+
+校验：`tools/build-assets.mjs` 要求两个字段必须存在，且 `promptStyle` 必须在上表枚举内；`npm run models:check` 会一并校验。
 
 ## 3. 录入与验证流程
 
@@ -138,7 +162,7 @@ npm test               → 全仓回归
    - `node test/check-contract.mjs`：第 k 项检查 `shared/models.generated.js` 与 `models/` 同步；
    - `npm test` 已包含以上检查。
 4. 生成文件不含时间戳，相同输入产出相同内容，git diff 只反映模型变化。
-5. **双份 loader 维护约定**：`remote/daemon.py` 是生产常驻实现；`tools/payload/verify-model.py` 是一次性验证 payload（Kaggle 只接受单个 code_file，两者无法共享模块）。改动加载逻辑时必须同步两处：loader 分支、variant 回退、LoRA 挂载、scheduler、deviceMap。以 daemon 为准，verify payload 只保留采样所需的最小分支；`test/check-verify-model.mjs` 只覆盖编排侧，payload 的加载分支靠真机验证兜底。
+5. **loader 单份源码 + 打包内联**：`remote/daemon.py` 是生产常驻实现；`tools/payload/verify-model.py` 是一次性验证 payload。Kaggle 只接受单个 `code_file`，但**不需要**在仓库里维护两份实现：公共运行时（当前是 Anima）只有 `remote/anima_runtime.py` 一份，两边各保留一行带 `# @@INLINE:<模块>.py@@` 标记的普通 import；`lib/kernel.js` 的 `inlineMarkedModules()` 在打包时把标记行整行替换为模块全文，最终推送产物仍是自包含单文件（`tools/verify-model.mjs` 复用同一打包器）。本地测试走同目录普通 import。改动加载逻辑时只改这一份，不要复制回去；`test/kernel-package.mjs` / `test/check-verify-model.mjs` 会断言打包产物没有未内联的 import、运行时只包含一份实现且能通过 Python 语法编译。
 
 ## 5. 实施状态
 
@@ -152,6 +176,6 @@ npm test               → 全仓回归
   - 失败按 `pip_conflict / cuda_oom / import_error / download_failed / disk_full / invalid_config / timeout / auth_required / push_failed / kernel_error` 分类，并打印最后 20 行日志，退出码非 0。
 - [x] **阶段 C：Agent 操作闭环**：新增 [`skills/model-asset-intake/SKILL.md`](../skills/model-asset-intake/SKILL.md)，覆盖「外部链接 → 草稿 → dry-run → 真机验证（先确认配额）→ 失败自愈 → 入库 → build/check/test」全流程；skill 与本文档互为入口。
 - [x] **阶段 D：模型资产扩容（2026-11-11）**：按 [`docs/MODEL_EXPERIMENT_GUIDE.md`](MODEL_EXPERIMENT_GUIDE.md) 完成 4 个 SDXL 系列候选的 Kaggle 真机验证并入库（`playground-v2.5`、`realvis-v5`、`animagine-xl-3.1`、`hyper-sdxl-8step`），模型总数 4 → 8；`measured` 全部由 `tools/verify-model.mjs --write` 回填。实测结果与草案修正见该指南 1.4 节。
-- [x] **阶段 E：新增 loader `anima`（2026-11-11）**：`anima-light-lavender` 是单文件 ComfyUI checkpoint（Cosmos-Predict2 2B DiT + Qwen3-0.6B 文本编码器 + Qwen-Image VAE + Qwen2/T5 双分词器），没有 diffusers 仓库结构，因此新增 loader `anima`：`tools/payload/verify-model.py` 与 `remote/daemon.py` 各含一份逐字一致的运行时（模型定义、结构化 caption、euler+simple 采样、CFG-Zero★、dtype 策略、文本编码器卸载与缓存、VAE 解码兜底），`pipeline` 增加 `weight` / `textEncoder` / `vae` / `tokenizers` / `dtype` / `shift` 字段。`models/` 模型总数 8 → 9；实测由 `tools/verify-model.mjs --write` 回填（峰值显存 8470 MB / 加载 43.5 s / 稳态 80.64 s / 下载 5.25 GiB）。模型事实、loader 契约、T4 上的 bf16/fp16 数值问题与三轮修复记录见 [`ANIMA_LOADER_SPEC.md`](ANIMA_LOADER_SPEC.md)。
+- [x] **阶段 E：新增 loader `anima`（2026-11-11）**：`anima-light-lavender` 是单文件 ComfyUI checkpoint（Cosmos-Predict2 2B DiT + Qwen3-0.6B 文本编码器 + Qwen-Image VAE + Qwen2/T5 双分词器），没有 diffusers 仓库结构，因此新增 loader `anima`：Anima 运行时抽成单份源码 `remote/anima_runtime.py`（模型定义、结构化 caption、euler+simple 采样、CFG-Zero★、dtype 策略、文本编码器卸载与缓存、VAE 解码兜底），`remote/daemon.py` 与 `tools/payload/verify-model.py` 各保留一行带 `@@INLINE@@` 标记的 import，由 `lib/kernel.js` 在打包时内联成自包含单文件，`pipeline` 增加 `weight` / `textEncoder` / `vae` / `tokenizers` / `dtype` / `shift` 字段。`models/` 模型总数 8 → 9；实测由 `tools/verify-model.mjs --write` 回填（峰值显存 8470 MB / 加载 43.5 s / 稳态 80.64 s / 下载 5.25 GiB）。模型事实、loader 契约、T4 上的 bf16/fp16 数值问题与三轮修复记录见 [`ANIMA_LOADER_SPEC.md`](ANIMA_LOADER_SPEC.md)。
 - [ ] **后续：特殊运行时**：按实际需求再开放 `runtime` 取值与 Host 重启会话提示；当前不实现。
 - [ ] **前沿大模型预研**：超大规模开源底座技术调研与部署规格详见 [`docs/MINIMAX_H3_IMAGE_SPEC.md`](MINIMAX_H3_IMAGE_SPEC.md)（针对 MiniMax-H3-Image 33.1B 的硬件边界、量化与部署路径评估）；Kaggle 真机可行性结论见该文档第 7 节。

@@ -179,6 +179,25 @@
   word-break: break-word;
 }
 
+/* 中文摘要：英文提示词之后的一行弱化说明，只用于确认画面是否符合本意。 */
+.ofs-intent-summary {
+  color: var(--ofs-ink-2);
+  font-size: 11.5px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.ofs-intent-summary-label {
+  margin-right: 6px;
+  color: var(--ofs-ink-3);
+  font-size: 10.5px;
+}
+
+/* 中文提示词软提示：跟在提示词输入框下方，样式沿用 .ofs-hint，只补一点间距。 */
+.ofs-prompt-lang-hint {
+  margin-top: 6px;
+}
+
 .ofs-intent-question {
   color: var(--ofs-ink-2);
   font-size: 12px;

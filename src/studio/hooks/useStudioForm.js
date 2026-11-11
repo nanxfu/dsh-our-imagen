@@ -8,15 +8,12 @@
 
 import React from 'react'
 
-import { LIMITS } from '../../../shared/contract.js'
-
 import { enhancePromptRequest } from '../../api/resources.js'
-import { clampInt, clampNumber, clampSize } from '../../logic/clamp.js'
 import { buildGenerateBody } from '../../logic/generate.js'
+import { detectCjk, presetNeedsEnglish, presetSelectPatch } from '../../logic/preset.js'
 import { toggleStyle } from '../../logic/prompt.js'
 import { isRefineApplied, refineSeparator, toggleRefineTerm } from '../../logic/refine.js'
-import { STYLE_CAPSULES } from '../capsules.js'
-import { DEFAULT_RATIOS, ratioToSize } from '../ratios.js'
+import { DEFAULT_RATIOS, STYLE_CAPSULES, ratioToSize } from '../presets.js'
 
 const EMPTY_FORM = {
   prompt: '',
@@ -55,7 +52,11 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     return capsule ? capsule.suffix : ''
   })()
 
-  // 预设同步：只在用户没手动改过时套用推荐值
+  // 当前预设决定提示词的书写口径；含中文提示时给一条软提示，不拦截生成。
+  const activePreset = presets.find((item) => item.id === form.presetId) || null
+  const englishPromptHint = detectCjk(form.prompt) && presetNeedsEnglish(activePreset)
+
+  // 预设同步：只在用户没手动改过时套用推荐值（初始预设同样回填 negativeHint）。
   React.useEffect(() => {
     if (presets.length === 0) return
     setForm((prev) => {
@@ -63,20 +64,21 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
       const initial = presets.some((item) => item.id === defaultPreset) ? defaultPreset : presets[0].id
       const item = presets.find((option) => option.id === initial)
       if (!item) return prev
-      const size = clampSize(item.size)
-      return {
-        ...prev,
-        presetId: initial,
-        width: size,
-        height: size,
-        steps: clampInt(item.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
-        cfg: clampNumber(item.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
-      }
+      return { ...prev, ...presetSelectPatch(item, prev, presets) }
     })
   }, [presets.length, defaultPreset])
 
   function patchForm(partial) {
     setForm((prev) => ({ ...prev, ...partial }))
+  }
+
+  /**
+   * 切换预设：套用推荐尺寸 / 步数 / 引导强度，并在负向提示词为空
+   * 或仍是上一个预设的推荐值时跟随新预设的 negativeHint。
+   */
+  function selectPreset(next) {
+    if (!next || !next.id) return
+    setForm((prev) => ({ ...prev, ...presetSelectPatch(next, prev, presets) }))
   }
 
   function buildBody(overrides) {
@@ -103,20 +105,38 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
       return
     }
     setEnhancing(true)
-    const result = await alive(enhancePromptRequest({
-      prompt: form.prompt,
-      presetId: form.presetId,
-      locale: isEn ? 'en' : 'zh',
-    }))
-    if (!result) return
-    setEnhancing(false)
-    if (result.ok && result.data && Array.isArray(result.data.groups)) {
-      const groups = result.data.groups.filter((group) => group && Array.isArray(group.options) && group.options.length > 0)
-      setRefineGroups(groups)
-      setRefineSource(result.data.source === 'model' ? 'model' : 'local')
-      return
+    try {
+      const result = await alive(enhancePromptRequest({
+        prompt: form.prompt,
+        presetId: form.presetId,
+        locale: isEn ? 'en' : 'zh',
+      }))
+      if (!result) return
+      if (result.ok && result.data && Array.isArray(result.data.groups)) {
+        // 服务端保证 text（英文短语）与 label（UI 语言标签）；这里再兜一层，避免旧宿主缺字段时界面渲染空白。
+        const groups = result.data.groups
+          .filter((group) => group && Array.isArray(group.options))
+          .map((group) => ({
+            ...group,
+            options: group.options
+              .map((option) => {
+                const text = option && typeof option.text === 'string' ? option.text.trim() : ''
+                if (!text) return null
+                const label = option && typeof option.label === 'string' && option.label.trim() ? option.label.trim() : text
+                return { ...option, text, label }
+              })
+              .filter(Boolean),
+          }))
+          .filter((group) => group.options.length > 0)
+        setRefineGroups(groups)
+        setRefineSource(result.data.source === 'model' ? 'model' : 'local')
+        return
+      }
+      ui.fail(result.code, result.message)
+    } finally {
+      // 卸载时 alive 返回 null 会提前 return，这里保证按钮的 loading 状态一定复位。
+      setEnhancing(false)
     }
-    ui.fail(result.code, result.message)
   }
 
   /** 润色标签：点一次追加，再点一次撤销。 */
@@ -135,9 +155,11 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   return {
     form,
     patchForm,
+    selectPreset,
     buildBody,
     ratioId,
     styleId: form.styleId,
+    englishPromptHint,
     applyStyle,
     applyRatio,
     refineGroups: refineGroups.map((group) => ({

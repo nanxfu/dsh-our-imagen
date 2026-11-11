@@ -27,8 +27,8 @@ import {
 import { NOTICE_TITLE_PREFIX, completionNotice, isCompletion, stripNoticePrefix } from '../src/logic/notice.js'
 import { styles, token } from '../src/theme.js'
 import { ACTIVE_STATUS, TRANSIENT_SESSION, PHASE_STATE, NS } from '../src/constants.js'
-import { STYLE_CAPSULES } from '../src/studio/capsules.js'
-import { LIMITS } from '../shared/contract.js'
+import { DEFAULT_RATIOS, STYLE_CAPSULES } from '../src/studio/presets.js'
+import { RATIO_IDS, STYLE_IDS, LIMITS } from '../shared/contract.js'
 
 const t = fallbackTranslate('zh')
 const te = fallbackTranslate('en')
@@ -393,6 +393,74 @@ await check('风格切换同步负向提示词', () => {
   assert.equal(keep.negative, 'my own')
 })
 
+await check('画面比例与风格 id 由契约唯一登记', () => {
+  // 前端只保留「id → 尺寸 / 词表」的数据，清单与顺序必须来自 shared/contract.js。
+  assert.deepEqual(DEFAULT_RATIOS.map((ratio) => ratio.id), RATIO_IDS)
+  assert.deepEqual(STYLE_CAPSULES.map((capsule) => capsule.id), STYLE_IDS)
+  for (const capsule of STYLE_CAPSULES) {
+    assert.ok(capsule.labelKey, `${capsule.id} 缺少 labelKey`)
+    assert.ok(capsule.suffix && capsule.negative, `${capsule.id} 缺少风格后缀或负向词`)
+  }
+})
+
+await check('切换预设回填 negativeHint', () => {
+  const presets = [
+    { id: 'sdxl-lightning', size: 1024, steps: 4, cfg: 0, negativeHint: 'blurry, low quality, deformed, extra limbs' },
+    { id: 'sdxl-base', size: 1024, steps: 25, cfg: 7, negativeHint: 'blurry, low quality, deformed, extra limbs' },
+    { id: 'animagine-xl-3.1', size: 1024, steps: 28, cfg: 7, negativeHint: 'nsfw, lowres, watermark' },
+  ]
+  const form = { presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0, negative: '' }
+
+  const filled = logic.presetSelectPatch(presets[2], form, presets)
+  assert.equal(filled.presetId, 'animagine-xl-3.1')
+  assert.equal(filled.steps, 28, '套用新预设推荐步数')
+  assert.equal(filled.cfg, 7, '套用新预设推荐引导强度')
+  assert.equal(filled.negative, 'nsfw, lowres, watermark', '负向为空时回填新预设的 negativeHint')
+
+  // 负向仍等于上一个预设的推荐值：属于系统写入，跟随切换。
+  const inherited = logic.presetSelectPatch(
+    presets[2],
+    { ...form, negative: 'blurry, low quality, deformed, extra limbs' },
+    presets,
+  )
+  assert.equal(inherited.negative, 'nsfw, lowres, watermark')
+
+  // 用户自己写过的负向提示词不覆盖。
+  const custom = logic.presetSelectPatch(presets[2], { ...form, negative: 'my own words' }, presets)
+  assert.equal(Object.prototype.hasOwnProperty.call(custom, 'negative'), false)
+
+  // 新预设没有推荐负向时不要写入空值把用户的草稿清掉。
+  const flux = { id: 'flux2-klein-4b', size: 1024, steps: 4, cfg: 1, negativeHint: '' }
+  const noHint = logic.presetSelectPatch(flux, { ...form, negative: 'keep me' }, [...presets, flux])
+  assert.equal(Object.prototype.hasOwnProperty.call(noHint, 'negative'), false)
+
+  // 越界推荐值按契约钳制；非法入参不产生补丁。
+  const oversized = logic.presetSelectPatch(
+    { id: 'x', size: 4096, steps: 999, cfg: 99, negativeHint: '' },
+    form,
+    presets,
+  )
+  assert.equal(oversized.width, LIMITS.width.max)
+  assert.equal(oversized.height, LIMITS.height.max)
+  assert.equal(oversized.steps, LIMITS.steps.max)
+  assert.equal(oversized.cfg, LIMITS.cfg.max)
+  assert.deepEqual(logic.presetSelectPatch(null, form, presets), {})
+})
+
+await check('中文提示词检测与英文软提示判定', () => {
+  assert.equal(logic.detectCjk('雨夜街景'), true)
+  assert.equal(logic.detectCjk('rainy street, 霓虹招牌'), true)
+  assert.equal(logic.detectCjk('rainy street at night'), false)
+  assert.equal(logic.detectCjk(''), false)
+  assert.equal(logic.detectCjk(null), false)
+  // 现役预设都按英文提示词训练；chinese 是将来原生中文模型的显式豁免值。
+  for (const style of ['concise', 'natural', 'danbooru']) {
+    assert.equal(logic.presetNeedsEnglish({ promptStyle: style }), true)
+  }
+  assert.equal(logic.presetNeedsEnglish({ promptStyle: 'chinese' }), false)
+  assert.equal(logic.presetNeedsEnglish(null), true)
+})
+
 await check('带回参数的回填参数', () => {
   const presets = [
     { id: 'sdxl-lightning', size: 1024, steps: 4, cfg: 0 },
@@ -569,6 +637,17 @@ await check('润色标签的追加与撤销', () => {
   assert.equal(logic.isRefineApplied('雨夜街景', '雾'), false)
   assert.equal(logic.refineSeparator('雨夜'), '，')
   assert.equal(logic.refineSeparator('rainy'), ', ')
+})
+
+await check('润色建议：界面显示中文 label，插入提示词的始终是英文 text', () => {
+  const option = { id: 'local-lighting-0', text: 'soft diffused light', label: '柔和漫射光' }
+  const prompt = '雨夜街景'
+  const next = logic.toggleRefineTerm(prompt, option.text, logic.refineSeparator(prompt))
+  assert.equal(next, '雨夜街景，soft diffused light', '插入的是可直接发给模型的英文本')
+  assert.equal(logic.isRefineApplied(next, option.text), true, 'applied 判断用 text')
+  assert.equal(logic.isRefineApplied(next, option.label), false, '中文 label 不参与 applied 判断')
+  // 再点一次撤销的也是英文本，中文 label 不会残留在提示词里。
+  assert.equal(logic.toggleRefineTerm(next, option.text, logic.refineSeparator(next)), '雨夜街景')
 })
 
 await check('风格预设与灵感文案都在字典里', () => {

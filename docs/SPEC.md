@@ -187,7 +187,9 @@
       "loadSeconds": 7.7,
       "steadySeconds": 6.2,
       "tier": "fast",
-      "negativeHint": "blurry, low quality, deformed, extra limbs"
+      "negativeHint": "blurry, low quality, deformed, extra limbs",
+      "promptStyle": "concise",
+      "qualityPrefix": ""
     }
   ],
   "session": {
@@ -437,7 +439,7 @@
 
 #### `POST /imagen-api/enhance`
 
-提示词润色：按光影 / 材质 / 构图 / 氛围四个维度返回可追加的短语。
+提示词润色：按光影 / 材质 / 构图 / 氛围四个维度返回可直接追加进提示词的英文短语。
 
 - **请求体**：`{ "prompt": "雨夜街景", "presetId": "sdxl-lightning", "locale": "zh" }`（`presetId` / `locale` 可选，locale 仅 `zh` / `en`）
 - **响应**：
@@ -447,19 +449,25 @@
   "ok": true,
   "source": "model",
   "groups": [
-    { "dimension": "lighting", "options": [{ "id": "model-lighting-0", "text": "柔和漫射光" }] },
+    {
+      "dimension": "lighting",
+      "options": [{ "id": "model-lighting-0", "text": "soft diffused light", "label": "柔和漫射光" }]
+    },
     { "dimension": "material", "options": [] }
   ]
 }
 ```
 
+- 每条建议固定拆成两段：`text` 是要追加进 prompt 的英文短语（九个预设都按英文提示词训练，发给模型的只能是英文），
+  `label` 是给用户看的 UI 语言短标签（`locale=en` 时与 `text` 相同）。
 - `source`：`model`（宿主模型）/ `local`（同结构本地兜底）；空提示词返回空 `groups`、`source: "local"`。
 
 #### `POST /imagen-api/intent`
 
 对话模式意图解析：把一句话整理成生成参数，必要时返回澄清项。
 
-- **请求体**：`{ "text": "画一张横版的雨夜街景", "previousPrompt": "", "locale": "zh" }`（后两者可选）
+- **请求体**：`{ "text": "画一张横版的雨夜街景", "previousPrompt": "", "presetId": "sdxl-lightning", "locale": "zh" }`
+  （后三者可选；`presetId` 决定 prompt 的书写口径：danbooru 标签 / 自然语言 / 短句，未知 id 回退默认预设）
 - **错误**：`400 invalid_request`（`text` 为空或超过 2000 字符）。
 - **响应**：
 
@@ -467,16 +475,19 @@
 {
   "ok": true,
   "source": "model",
-  "prompt": "雨夜街景，湿润地面倒映霓虹招牌",
+  "prompt": "masterpiece, best quality, highres, rainy night city street, wet pavement reflecting neon signs, cinematic lighting",
+  "summary": "雨夜城市街景，湿润路面倒映霓虹招牌，电影感光影",
   "ratioId": "16:9",
   "styleId": "film",
   "clarify": null
 }
 ```
 
+- `prompt` **恒为英文**（九个预设都按英文提示词训练），不随 `locale` 变化；`locale` 只决定 `summary` 用哪种语言写。
+- `summary` 是给用户确认用的本轮画面概述，只进界面、不会发给生图模型。
 - `ratioId` 取值 `1:1 / 16:9 / 9:16 / 4:3 / 3:4 / ""`；`styleId` 取值 `film / concept / cyberpunk / ink / clay / ""`，留空表示沿用当前设置。
 - `clarify` 仅在用户要求互相矛盾时出现：`{ "field": "ratio"|"style", "options": [...] }`。
-- 无可用模型时 `source` 为 `local`，`prompt` 为原文。
+- 无可用模型时 `source` 为 `local`，`prompt` 与 `summary` 都是原文（宿主不具备本地翻译能力，界面会提示这是本地兜底结果）。
 
 #### `POST /imagen-api/reveal`
 
@@ -533,6 +544,10 @@
 运行环境：Kaggle Nvidia Tesla T4（分配 2 块 T4，每卡可用显存 14.56 GiB，CUDA 12.x）。
 **数值以 `shared/contract.js` 的 `PRESETS` 为准**（`peakVramMb` 为实测峰值显存，`loadSeconds` 为首次加载耗时，
 `steadySeconds` 为加载完成后的单张稳定耗时）。
+
+`presets` 的公开视图另带三个提示词字段：`negativeHint`（该预设推荐的负向提示词，客户端切预设时在用户没写过
+负向词的前提下自动回填）、`promptStyle`（`danbooru` / `natural` / `concise`，决定意图解析时给模型的书写口径）
+与 `qualityPrefix`（danbooru 系模型的质量词前缀，无则为空串）。字段来源是 `models/*.json`。
 
 | 预设 ID | 基础模型与权重 | 默认尺寸（可选档位） | 步数 / CFG | 加载 / 单张耗时 | 峰值显存 | 下载量 | 卡数 | 档位 |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :--- |
@@ -592,9 +607,9 @@
 | **Kaggle 账号** | 账号 | `(!)` | Kaggle 账号必须完成手机号绑定。未绑定的账号会被平台静默降级为 CPU，无法出图。 |
 | **云端状态** | 云端就绪 / 正在准备模型 / 正在排队等 GPU | `(ℹ)` | 状态胶囊与状态条共用一套阶段文案：推送内核 → Kaggle 排队 → 建立隧道 → 加载模型 → 就绪；排队通常 3~10 分钟，已等待时长实时显示。 |
 | **空闲休眠** | 闲置休眠阈值 | `(ℹ)` | 云端实例默认闲置 30 分钟自动关机，以节省你的每周 30 小时免费 GPU 额度。 |
-| **提示词输入** | 提示词 | `(ℹ)` | 支持中英文输入。建议包含主体、光影、构图与画风。 |
+| **提示词输入** | 提示词 | `(ℹ)` | 请尽量用英文：九个预设都按英文提示词训练，中文提示词容易偏离预期。输入含中文时会给一条软提示（不拦截生成）。建议包含主体、光影、构图与画风。 |
 
 ### 5.4 启发式灵感与模块化分层润色
 
 1. **灵感示例预设**：在提示词输入框为空或点击灵感时，提供预置启发式场景卡（科幻赛博、人像摄影、东方意境、3D 萌系、微距自然），点击直接填入。
-2. **结构化维度润色**：当调用智能润色时，由大模型解析提取 4 个可点选追加的维度标签（光影材质、构图视角、画面氛围、色彩基调），用户按需点击追加到提示词末尾，禁止强制一次性替换原文本。
+2. **结构化维度润色**：当调用智能润色时，由大模型解析提取 4 个可点选追加的维度标签（光影材质、构图视角、画面氛围、色彩基调），用户按需点击追加到提示词末尾，禁止强制一次性替换原文本。追加进提示词的是英文短语（模型可读），界面上显示的是对应语言的短标签（人可读）。

@@ -192,7 +192,8 @@ var zh = {
   "studio.style.clay": "3D 渲染",
   "studio.prompt": "提示词",
   "studio.promptPlaceholder": "描述画面内容，Ctrl+Enter 生成",
-  "studio.promptTooltip": "支持中英文输入；英文提示词在多数开源模型上细节更丰富。",
+  "studio.promptTooltip": "请尽量用英文：九个预设都按英文提示词训练，中文描述容易偏离预期。提示词含中文时会给一条软提示，但不会阻止生成。",
+  "studio.prompt.englishHint": "当前模型按英文提示词训练，中文描述可能出图偏差；可先在「创作助手」里转成英文提示词。",
   "studio.negative": "排除项",
   "studio.negativePlaceholder": "画面中不希望出现的元素（如模糊、文字）",
   "studio.negativeTooltip": "画面中不希望出现的元素。仅在引导强度 (CFG) > 0 时生效。",
@@ -317,6 +318,7 @@ var zh = {
   "studio.chat.assistant": "创作助手",
   "studio.chat.parsing": "正在解析你的描述…",
   "studio.chat.intent.title": "生成确认",
+  "studio.chat.intent.summary": "中文摘要",
   "studio.chat.intent.generate": "按此生成",
   "studio.chat.clarify.title": "需要确认一个参数",
   "studio.chat.clarify.ratio": "画面比例用哪个？",
@@ -477,7 +479,8 @@ var en = {
   "studio.style.clay": "3D render",
   "studio.prompt": "Prompt",
   "studio.promptPlaceholder": "Describe the image; press Ctrl+Enter to generate.",
-  "studio.promptTooltip": "Chinese and English are both supported; English prompts tend to add more detail on most open models.",
+  "studio.promptTooltip": "Use English when possible: all nine presets are trained on English prompts, so a Chinese description often drifts. Chinese input shows a soft hint but is never blocked.",
+  "studio.prompt.englishHint": "This model is trained on English prompts, so a Chinese description may drift. Convert it in the Assistant first.",
   "studio.negative": "Exclusions",
   "studio.negativePlaceholder": "What should stay out of the picture (blur, text)",
   "studio.negativeTooltip": "Elements you do not want in the image. Only applies while guidance (CFG) is above 0.",
@@ -602,6 +605,7 @@ var en = {
   "studio.chat.assistant": "Assistant",
   "studio.chat.parsing": "Reading your description…",
   "studio.chat.intent.title": "Ready to generate",
+  "studio.chat.intent.summary": "Summary",
   "studio.chat.intent.generate": "Generate this",
   "studio.chat.clarify.title": "One setting to confirm",
   "studio.chat.clarify.ratio": "Which aspect ratio?",
@@ -834,7 +838,7 @@ function activeJobOf(state) {
 }
 
 // shared/contract.js
-var VERSION = "0.5.0";
+var VERSION = "0.6.0";
 var ROUTES = {
   state: { method: "GET", path: "/imagen-api/state" },
   probe: { method: "POST", path: "/imagen-api/probe" },
@@ -918,6 +922,8 @@ var TIMEOUTS = {
   clientStateActivePollMs: 2e3,
   clientLogsPollMs: 2e3
 };
+var RATIO_IDS = ["1:1", "16:9", "9:16", "4:3", "3:4"];
+var STYLE_IDS = ["film", "concept", "cyberpunk", "ink", "clay"];
 
 // src/api.js
 function apiUrl(relative) {
@@ -1009,10 +1015,10 @@ function enhancePromptRequest({ prompt, presetId, locale }) {
     body: JSON.stringify({ prompt, presetId, locale })
   });
 }
-function parseIntentRequest({ text, previousPrompt, locale }) {
+function parseIntentRequest({ text, previousPrompt, locale, presetId }) {
   return request(routePath("intent"), {
     method: "POST",
-    body: JSON.stringify({ text, previousPrompt, locale })
+    body: JSON.stringify({ text, previousPrompt, locale, presetId })
   });
 }
 function revealOutput() {
@@ -1138,7 +1144,7 @@ var filmstrip_default = "/*\n * 底部最近生成栏：悬浮玻璃条，左边
 var gallery_default = "/*\n * 作品画廊：作品集式的卡片墙。\n *\n * 结构：\n *   .ofs-gallery          自身滚动容器（高度由 .ofs-main 决定）\n *     .ofs-gallery-tools  轻浮的玻璃工具卡：标题 / 搜索 / 模型 / 收藏 / 批量动作\n *     .ofs-gallery-group  今天 / 本周 / 更早\n *       .ofs-gallery-wall CSS columns 瀑布流：图片按原始宽高比自然高度\n *\n * 卡片是「图片 + 两行提示词 + 标签行」的白卡：圆角、描边、阴影全部来自\n * tokens.css；网格只负责列宽，不裁切图片、不拉伸比例。\n */\n\n/* ── 容器 ───────────────────────────────────────────────────── */\n.ofs-gallery {\n  /* 吸顶工具卡要贴住滚动口，padding-top 用变量参与 top 偏移，避免内容从顶部缝隙露出 */\n  --ofs-gallery-pad-top: 18px;\n  position: relative;\n  flex: 1 1 auto;\n  height: 100%;\n  min-height: 0;\n  overflow-y: auto;\n  overflow-x: hidden;\n  display: flex;\n  flex-direction: column;\n  gap: var(--ofs-gap);\n  padding: var(--ofs-gallery-pad-top) 20px 26px;\n  overscroll-behavior: contain;\n}\n\n.ofs-gallery.is-empty {\n  min-height: 360px;\n}\n\n/* ── 工具卡 ─────────────────────────────────────────────────── */\n.ofs-gallery-tools {\n  position: sticky;\n  top: calc(-1 * var(--ofs-gallery-pad-top));\n  z-index: 3;\n  flex: 0 0 auto;\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 10px 12px;\n  padding: 12px 14px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-window);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(18px) saturate(140%);\n  -webkit-backdrop-filter: blur(18px) saturate(140%);\n}\n\n.ofs-gallery-headline {\n  display: flex;\n  align-items: baseline;\n  gap: 9px;\n  min-width: 0;\n}\n\n.ofs-gallery-title {\n  font-size: 15px;\n  font-weight: 650;\n  letter-spacing: -0.01em;\n  line-height: 1.3;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n.ofs-gallery-count {\n  font-size: 12px;\n  line-height: 1.4;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-gallery-count b {\n  font-weight: 600;\n  color: var(--ofs-ink-2);\n  font-variant-numeric: tabular-nums;\n}\n\n/* 搜索：胶囊内嵌放大镜 */\n.ofs-gallery-search {\n  position: relative;\n  display: flex;\n  align-items: center;\n  flex: 1 1 200px;\n  max-width: 320px;\n  height: 34px;\n  padding: 0 12px 0 32px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-3);\n  cursor: text;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease,\n    box-shadow 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-gallery-search:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-focus-ring);\n  color: var(--ofs-accent);\n}\n\n.ofs-gallery-search-icon {\n  position: absolute;\n  left: 11px;\n  top: 50%;\n  transform: translateY(-50%);\n  pointer-events: none;\n}\n\n.ofs-gallery-search-input {\n  width: 100%;\n  height: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n}\n\n.ofs-gallery-search-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-gallery-search-input:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-gallery-search-input::-webkit-search-cancel-button,\n.ofs-gallery-search-input::-webkit-search-decoration {\n  appearance: none;\n  -webkit-appearance: none;\n}\n\n/* 模型过滤：原生 select，外观融进胶囊体系 */\n.ofs-gallery-select {\n  position: relative;\n  display: inline-flex;\n  align-items: center;\n  flex: 0 0 auto;\n}\n\n.ofs-gallery-select-input {\n  appearance: none;\n  -webkit-appearance: none;\n  height: 34px;\n  max-width: 200px;\n  padding: 0 30px 0 13px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  text-overflow: ellipsis;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease;\n}\n\n.ofs-gallery-select-input:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-gallery-select-input:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-gallery-select-input option {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n}\n\n.ofs-gallery-select-caret {\n  position: absolute;\n  right: 11px;\n  top: 50%;\n  transform: translateY(-50%);\n  color: var(--ofs-ink-3);\n  pointer-events: none;\n}\n\n/* 工具条里的 chip 与输入同高，避免一排控件高低不齐 */\n.ofs-gallery-tools .ofs-chip {\n  height: 32px;\n  padding: 0 13px;\n  font-size: 12.5px;\n}\n\n.ofs-gallery-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 8px;\n  margin-left: auto;\n}\n\n.ofs-gallery-selected {\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  height: 32px;\n  padding: 0 12px;\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  font-size: 12px;\n  font-weight: 600;\n  white-space: nowrap;\n}\n\n.ofs-gallery-selected b {\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 分组：小字重对比 + 一条极淡分隔 ─────────────────────────── */\n.ofs-gallery-group {\n  flex: 0 0 auto;\n}\n\n.ofs-gallery-group-title {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  margin: 0 0 12px;\n  padding-left: 2px;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  line-height: 1.4;\n  letter-spacing: 0.02em;\n}\n\n.ofs-gallery-group-title::after {\n  content: '';\n  flex: 1 1 auto;\n  height: 1px;\n  border-radius: 1px;\n  background: var(--ofs-hairline);\n}\n\n/* ── 卡片墙：CSS columns，图片按原始比例撑高 ─────────────────── */\n.ofs-gallery-wall {\n  column-count: 5;\n  column-gap: var(--ofs-gap);\n}\n\n.ofs-gallery-card {\n  display: block;\n  width: 100%;\n  margin: 0 0 var(--ofs-gap);\n  padding: 6px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-card);\n  color: var(--ofs-ink);\n  break-inside: avoid;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease,\n    border-color 180ms ease;\n}\n\n.ofs-gallery-card:hover {\n  transform: translateY(-2px);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-gallery-card.is-picked {\n  border-color: var(--ofs-accent);\n  box-shadow: var(--ofs-focus-ring), var(--ofs-shadow-card);\n}\n\n.ofs-gallery-card.is-picked:hover {\n  box-shadow: var(--ofs-focus-ring), var(--ofs-shadow-lift);\n}\n\n/* 图片区：按钮铺满，悬浮操作覆盖在图片底部 */\n.ofs-gallery-stage {\n  position: relative;\n  display: block;\n  border-radius: calc(var(--ofs-r-lg) - 7px);\n  overflow: hidden;\n  background: var(--ofs-sunken);\n}\n\n.ofs-gallery-media {\n  appearance: none;\n  position: relative;\n  display: block;\n  width: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  cursor: pointer;\n}\n\n.ofs-gallery-media img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n/* 悬停操作：带回参数 / 生成变体 / 查看大图 */\n.ofs-gallery-hover {\n  position: absolute;\n  right: 6px;\n  bottom: 6px;\n  left: 6px;\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n  gap: 4px;\n  opacity: 0;\n  pointer-events: none;\n  transition: opacity 150ms ease;\n}\n\n.ofs-gallery-card:hover .ofs-gallery-hover,\n.ofs-gallery-card:focus-within .ofs-gallery-hover {\n  opacity: 1;\n  pointer-events: auto;\n}\n\n.ofs-gallery-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  height: 22px;\n  padding: 0 7px;\n  border: 1px solid rgb(255 255 255 / 26%);\n  border-radius: var(--ofs-r-pill);\n  background: rgb(20 20 22 / 62%);\n  color: #fff;\n  font-size: 10px;\n  white-space: nowrap;\n  cursor: pointer;\n  backdrop-filter: blur(6px);\n  -webkit-backdrop-filter: blur(6px);\n}\n\n.ofs-gallery-action:hover {\n  background: rgb(20 20 22 / 82%);\n}\n\n/* 触屏设备没有 hover：操作条常显，否则手机上无法「带回参数 / 生成变体」。 */\n@media (hover: none) {\n  .ofs-gallery-hover {\n    opacity: 1;\n    pointer-events: auto;\n  }\n}\n\n/* 批量选择：左上角圆点，选中后墨黑填充 */\n.ofs-gallery-pick {\n  position: absolute;\n  top: 9px;\n  left: 9px;\n  display: grid;\n  place-items: center;\n  width: 20px;\n  height: 20px;\n  border: 1.5px solid rgb(20 20 22 / 16%);\n  border-radius: 50%;\n  background: rgb(255 255 255 / 72%);\n  color: var(--ofs-accent-ink);\n  box-shadow: 0 1px 4px rgb(24 24 27 / 22%);\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease;\n}\n\n.ofs-gallery-pick.is-on {\n  border-color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n/* 收藏星标：右上角玻璃圆点，已收藏用墨黑 */\n.ofs-gallery-star {\n  position: absolute;\n  top: 8px;\n  right: 8px;\n  display: grid;\n  place-items: center;\n  width: 24px;\n  height: 24px;\n  border-radius: 50%;\n  background: color-mix(in oklab, var(--ofs-card-solid) 84%, transparent);\n  color: var(--ofs-ink);\n  box-shadow: 0 1px 4px rgb(24 24 27 / 22%);\n  backdrop-filter: blur(4px);\n  -webkit-backdrop-filter: blur(4px);\n}\n\n/* 卡身：两行提示词 + 标签行；整块可点开大图 */\n.ofs-gallery-body {\n  appearance: none;\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  width: 100%;\n  min-width: 0;\n  padding: 10px 8px 8px;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-gallery-caption {\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n  line-clamp: 2;\n  overflow: hidden;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  font-weight: 500;\n  line-height: 1.5;\n  word-break: break-word;\n}\n\n.ofs-gallery-tags {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.3;\n}\n\n.ofs-gallery-tags em {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-style: normal;\n  font-weight: 500;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-gallery-tags span {\n  flex: 0 0 auto;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 空态：一张柔光卡片，一句话 ─────────────────────────────── */\n.ofs-gallery-empty {\n  flex: 0 0 auto;\n  margin: auto;\n  width: 100%;\n  max-width: 380px;\n  padding: 40px 30px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(120% 150% at 50% -18%, color-mix(in oklab, var(--ofs-ink) 6%, transparent) 0%, transparent 62%),\n    var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  text-align: center;\n}\n\n.ofs-gallery-empty p {\n  color: var(--ofs-ink-2);\n  font-size: 13px;\n  line-height: 1.7;\n}\n\n.ofs-gallery-empty-actions {\n  display: flex;\n  justify-content: center;\n  margin-top: 14px;\n}\n\n/* ── 响应式 ─────────────────────────────────────────────────── */\n@media (max-width: 1400px) {\n  .ofs-gallery-wall {\n    column-count: 4;\n  }\n}\n\n@media (max-width: 1180px) {\n  .ofs-gallery {\n    --ofs-gallery-pad-top: 16px;\n    padding: 16px 18px 24px;\n  }\n\n  .ofs-gallery-wall {\n    column-count: 3;\n  }\n\n  .ofs-gallery-search {\n    max-width: 260px;\n  }\n}\n\n@media (max-width: 900px) {\n  .ofs-gallery-wall {\n    column-count: 2;\n  }\n\n  /* 窄窗里工具卡不再吸顶：它本身会折成两三行，吸顶太占高度 */\n  .ofs-gallery-tools {\n    position: static;\n  }\n}\n\n@media (max-width: 700px) {\n  .ofs-gallery {\n    --ofs-gallery-pad-top: 12px;\n    gap: 12px;\n    padding: 12px 12px 22px;\n  }\n\n  .ofs-gallery-tools {\n    gap: 8px;\n    padding: 10px 11px;\n  }\n\n  .ofs-gallery-search {\n    flex: 1 1 100%;\n    max-width: none;\n  }\n\n  .ofs-gallery-select-input {\n    max-width: 116px;\n  }\n\n  .ofs-gallery-tools .ofs-chip {\n    padding: 0 10px;\n  }\n\n  .ofs-gallery-empty {\n    padding: 32px 22px;\n  }\n}";
 
 // src/styles/chat.css
-var chat_default = "/*\n * 对话式面板：柔和消息流。\n *\n * 卡片外壳（背景 / 圆角 / 阴影 / 外边距）、头部与分段控件都由 panel.css 提供，\n * 这里只写卡片内部：消息流、空态、建议行与底部悬浮输入区。\n * 所有选择器挂在 .ofs-panel--chat 下，避免和表单式面板共用的类名互相影响；\n * 对话专属的类名统一用 ofs-chat- / ofs-msg- 前缀。\n */\n\n/* ── 消息流 ─────────────────────────────────────────────────── */\n/* 面板落在单轨布局的第一列；单独挂载预览时这句不影响其它容器。 */\n.ofs-panel--chat {\n  grid-column: 1;\n}\n\n.ofs-panel--chat .ofs-thread {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 6px 15px 10px;\n}\n\n/* 空态用 auto 外边距居中，内容超高时自然回到顶部可滚动，不会被裁掉。 */\n.ofs-panel--chat .ofs-thread.is-empty {\n  justify-content: flex-start;\n}\n\n.ofs-chat-empty {\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 13px;\n  margin: auto 0;\n  /* 稍微上提，避免视觉重心压在输入区上。 */\n  padding-bottom: 26px;\n  animation: ofs-fade-in 260ms ease both;\n}\n\n.ofs-chat-empty-text {\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  line-height: 1.7;\n  text-align: center;\n}\n\n.ofs-chat-examples {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-panel--chat .ofs-chat-example {\n  display: flex;\n  align-items: center;\n  height: auto;\n  min-height: 30px;\n  padding: 7px 12px;\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  text-align: left;\n  white-space: normal;\n}\n\n.ofs-panel--chat .ofs-chat-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 消息 ───────────────────────────────────────────────────── */\n.ofs-panel--chat .ofs-msg {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  max-width: 100%;\n  min-width: 0;\n  animation: ofs-fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;\n}\n\n.ofs-panel--chat .ofs-msg p {\n  font-size: 12.5px;\n  line-height: 1.62;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n\n/* 用户：右对齐的浅灰底，右下角收小圆角但不出气泡尾巴。 */\n.ofs-panel--chat .ofs-msg--user {\n  align-self: flex-end;\n  max-width: 88%;\n  padding: 8px 13px;\n  border: 1px solid var(--ofs-accent-soft-border);\n  border-radius: 16px 16px 6px 16px;\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-ink);\n}\n\n/* 助手：整宽白卡，左上角收小圆角，跟用户消息形成对角呼应。 */\n.ofs-panel--chat .ofs-msg--assistant {\n  align-self: stretch;\n}\n\n.ofs-chat-author {\n  display: flex;\n  align-items: center;\n  gap: 7px;\n  padding-left: 2px;\n}\n\n.ofs-chat-author-name {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.04em;\n}\n\n.ofs-chat-dot {\n  flex: 0 0 auto;\n}\n\n/* 排队与渲染中：状态点换成琥珀色呼吸，不用转圈。 */\n.ofs-panel--chat .ofs-chat-dot.is-live {\n  animation: ofs-chat-breathe 2.2s ease-out infinite;\n}\n\n@keyframes ofs-chat-breathe {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 36%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n}\n\n.ofs-msg-card {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px 13px 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 6px 16px 16px 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n/* 生成中：卡片留一条柔光微光条，扫过即表示在跑。 */\n.ofs-chat-shimmer {\n  display: block;\n  width: 58%;\n  height: 3px;\n  margin-top: -2px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(90deg, transparent 0%, var(--ofs-accent-2) 52%, transparent 100%);\n  background-size: 220% 100%;\n  opacity: 0.62;\n  animation: ofs-shimmer 2s linear infinite;\n}\n\n/* 意图确认卡：整理后的提示词、比例与风格，一个提交按钮。 */\n.ofs-intent {\n  gap: 7px;\n}\n\n.ofs-intent-title {\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-intent-prompt {\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  line-height: 1.55;\n  word-break: break-word;\n}\n\n.ofs-intent-question {\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n}\n\n.ofs-intent-meta {\n  display: flex;\n  align-items: center;\n  gap: 5px;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-intent-note {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  line-height: 1.5;\n}\n\n.ofs-intent-go {\n  align-self: flex-start;\n  height: 30px;\n  margin-top: 2px;\n  padding: 0 14px;\n  border-radius: 10px;\n  font-size: 12px;\n}\n\n/* 结果缩略图：整宽图片卡，元信息压在右下角。 */\n.ofs-msg-thumb {\n  appearance: none;\n  position: relative;\n  display: block;\n  width: 100%;\n  margin-top: 1px;\n  padding: 0;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 12px;\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  cursor: pointer;\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease,\n    border-color 180ms ease;\n}\n\n.ofs-msg-thumb img {\n  display: block;\n  width: 100%;\n  height: 132px;\n  object-fit: cover;\n}\n\n.ofs-msg-thumb:hover {\n  transform: translateY(-1px);\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-msg-thumb:active {\n  transform: translateY(0) scale(0.995);\n}\n\n.ofs-msg-thumb-meta {\n  position: absolute;\n  right: 7px;\n  bottom: 7px;\n  padding: 2px 8px;\n  border-radius: var(--ofs-r-pill);\n  background: rgb(17 17 20 / 52%);\n  backdrop-filter: blur(8px);\n  -webkit-backdrop-filter: blur(8px);\n  color: rgb(255 255 255 / 93%);\n  font-size: 10px;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.01em;\n}\n\n/* ── 底部：建议 / 动作 / 输入 ────────────────────────────────── */\n.ofs-chat-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px 15px 14px;\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-chat-tools {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-panel--chat .ofs-chat-tools .ofs-chip {\n  height: 27px;\n  padding: 0 11px;\n  font-size: 11.5px;\n}\n\n/* 输入区：白/玻璃的圆角卡，靠内发光描边和柔影浮起来。 */\n.ofs-chat-composer {\n  display: flex;\n  align-items: flex-end;\n  gap: 8px;\n  padding: 9px 9px 9px 12px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-card) 100%);\n  box-shadow:\n    inset 0 1px 0 var(--ofs-window-border),\n    var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-chat-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow:\n    inset 0 1px 0 var(--ofs-window-border),\n    0 0 0 3px color-mix(in oklab, var(--ofs-accent) 12%, transparent),\n    var(--ofs-shadow-card);\n}\n\n.ofs-chat-composer textarea {\n  flex: 1 1 auto;\n  min-width: 0;\n  min-height: 42px;\n  max-height: 128px;\n  padding: 2px 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  line-height: 1.6;\n  resize: none;\n  overflow-y: auto;\n  /* 支持的浏览器里让输入框随内容长到 max-height；不支持时退化成固定两行。 */\n  field-sizing: content;\n}\n\n.ofs-chat-composer textarea:focus,\n.ofs-chat-composer textarea:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-chat-composer textarea::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n/* 发送：墨黑实心圆钮（深色主题由 tokens 反相成浅灰），hover 轻抬升，禁用降饱和。 */\n.ofs-chat-send {\n  appearance: none;\n  flex: 0 0 auto;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  padding: 0;\n  border: 0;\n  border-radius: 50%;\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n  box-shadow: var(--ofs-shadow-accent);\n  cursor: pointer;\n  transition:\n    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-chat-send:hover:not(:disabled) {\n  transform: translateY(-1px);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-chat-send:active:not(:disabled) {\n  transform: translateY(0) scale(0.94);\n}\n\n.ofs-chat-send:disabled {\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-4);\n  box-shadow: none;\n  filter: saturate(0);\n  cursor: default;\n}\n\n/* 窄窗下面板被压到 46vh：收紧留白，让最后两条消息仍然可见。 */\n@media (max-width: 820px) {\n  .ofs-panel--chat .ofs-thread {\n    padding: 0 13px 8px;\n  }\n\n  .ofs-chat-dock {\n    padding: 8px 13px 12px;\n  }\n\n  .ofs-msg-thumb img {\n    height: 112px;\n  }\n}\n\n/* 动效停用时，微光条改成一条静态浅色线，信息不丢。 */\n@media (prefers-reduced-motion: reduce) {\n  .ofs-chat-shimmer {\n    background: var(--ofs-accent-soft-border);\n    opacity: 0.9;\n    animation: none;\n  }\n\n  .ofs-panel--chat .ofs-chat-dot.is-live {\n    animation: none;\n  }\n}";
+var chat_default = "/*\n * 对话式面板：柔和消息流。\n *\n * 卡片外壳（背景 / 圆角 / 阴影 / 外边距）、头部与分段控件都由 panel.css 提供，\n * 这里只写卡片内部：消息流、空态、建议行与底部悬浮输入区。\n * 所有选择器挂在 .ofs-panel--chat 下，避免和表单式面板共用的类名互相影响；\n * 对话专属的类名统一用 ofs-chat- / ofs-msg- 前缀。\n */\n\n/* ── 消息流 ─────────────────────────────────────────────────── */\n/* 面板落在单轨布局的第一列；单独挂载预览时这句不影响其它容器。 */\n.ofs-panel--chat {\n  grid-column: 1;\n}\n\n.ofs-panel--chat .ofs-thread {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 6px 15px 10px;\n}\n\n/* 空态用 auto 外边距居中，内容超高时自然回到顶部可滚动，不会被裁掉。 */\n.ofs-panel--chat .ofs-thread.is-empty {\n  justify-content: flex-start;\n}\n\n.ofs-chat-empty {\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 13px;\n  margin: auto 0;\n  /* 稍微上提，避免视觉重心压在输入区上。 */\n  padding-bottom: 26px;\n  animation: ofs-fade-in 260ms ease both;\n}\n\n.ofs-chat-empty-text {\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  line-height: 1.7;\n  text-align: center;\n}\n\n.ofs-chat-examples {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-panel--chat .ofs-chat-example {\n  display: flex;\n  align-items: center;\n  height: auto;\n  min-height: 30px;\n  padding: 7px 12px;\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  text-align: left;\n  white-space: normal;\n}\n\n.ofs-panel--chat .ofs-chat-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 消息 ───────────────────────────────────────────────────── */\n.ofs-panel--chat .ofs-msg {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  max-width: 100%;\n  min-width: 0;\n  animation: ofs-fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;\n}\n\n.ofs-panel--chat .ofs-msg p {\n  font-size: 12.5px;\n  line-height: 1.62;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n\n/* 用户：右对齐的浅灰底，右下角收小圆角但不出气泡尾巴。 */\n.ofs-panel--chat .ofs-msg--user {\n  align-self: flex-end;\n  max-width: 88%;\n  padding: 8px 13px;\n  border: 1px solid var(--ofs-accent-soft-border);\n  border-radius: 16px 16px 6px 16px;\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-ink);\n}\n\n/* 助手：整宽白卡，左上角收小圆角，跟用户消息形成对角呼应。 */\n.ofs-panel--chat .ofs-msg--assistant {\n  align-self: stretch;\n}\n\n.ofs-chat-author {\n  display: flex;\n  align-items: center;\n  gap: 7px;\n  padding-left: 2px;\n}\n\n.ofs-chat-author-name {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.04em;\n}\n\n.ofs-chat-dot {\n  flex: 0 0 auto;\n}\n\n/* 排队与渲染中：状态点换成琥珀色呼吸，不用转圈。 */\n.ofs-panel--chat .ofs-chat-dot.is-live {\n  animation: ofs-chat-breathe 2.2s ease-out infinite;\n}\n\n@keyframes ofs-chat-breathe {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 36%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n}\n\n.ofs-msg-card {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px 13px 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 6px 16px 16px 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n/* 生成中：卡片留一条柔光微光条，扫过即表示在跑。 */\n.ofs-chat-shimmer {\n  display: block;\n  width: 58%;\n  height: 3px;\n  margin-top: -2px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(90deg, transparent 0%, var(--ofs-accent-2) 52%, transparent 100%);\n  background-size: 220% 100%;\n  opacity: 0.62;\n  animation: ofs-shimmer 2s linear infinite;\n}\n\n/* 意图确认卡：整理后的提示词、比例与风格，一个提交按钮。 */\n.ofs-intent {\n  gap: 7px;\n}\n\n.ofs-intent-title {\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-intent-prompt {\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  line-height: 1.55;\n  word-break: break-word;\n}\n\n/* 中文摘要：英文提示词之后的一行弱化说明，只用于确认画面是否符合本意。 */\n.ofs-intent-summary {\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  word-break: break-word;\n}\n\n.ofs-intent-summary-label {\n  margin-right: 6px;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n}\n\n/* 中文提示词软提示：跟在提示词输入框下方，样式沿用 .ofs-hint，只补一点间距。 */\n.ofs-prompt-lang-hint {\n  margin-top: 6px;\n}\n\n.ofs-intent-question {\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n}\n\n.ofs-intent-meta {\n  display: flex;\n  align-items: center;\n  gap: 5px;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-intent-note {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  line-height: 1.5;\n}\n\n.ofs-intent-go {\n  align-self: flex-start;\n  height: 30px;\n  margin-top: 2px;\n  padding: 0 14px;\n  border-radius: 10px;\n  font-size: 12px;\n}\n\n/* 结果缩略图：整宽图片卡，元信息压在右下角。 */\n.ofs-msg-thumb {\n  appearance: none;\n  position: relative;\n  display: block;\n  width: 100%;\n  margin-top: 1px;\n  padding: 0;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 12px;\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  cursor: pointer;\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease,\n    border-color 180ms ease;\n}\n\n.ofs-msg-thumb img {\n  display: block;\n  width: 100%;\n  height: 132px;\n  object-fit: cover;\n}\n\n.ofs-msg-thumb:hover {\n  transform: translateY(-1px);\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-msg-thumb:active {\n  transform: translateY(0) scale(0.995);\n}\n\n.ofs-msg-thumb-meta {\n  position: absolute;\n  right: 7px;\n  bottom: 7px;\n  padding: 2px 8px;\n  border-radius: var(--ofs-r-pill);\n  background: rgb(17 17 20 / 52%);\n  backdrop-filter: blur(8px);\n  -webkit-backdrop-filter: blur(8px);\n  color: rgb(255 255 255 / 93%);\n  font-size: 10px;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.01em;\n}\n\n/* ── 底部：建议 / 动作 / 输入 ────────────────────────────────── */\n.ofs-chat-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px 15px 14px;\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-chat-tools {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-panel--chat .ofs-chat-tools .ofs-chip {\n  height: 27px;\n  padding: 0 11px;\n  font-size: 11.5px;\n}\n\n/* 输入区：白/玻璃的圆角卡，靠内发光描边和柔影浮起来。 */\n.ofs-chat-composer {\n  display: flex;\n  align-items: flex-end;\n  gap: 8px;\n  padding: 9px 9px 9px 12px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-card) 100%);\n  box-shadow:\n    inset 0 1px 0 var(--ofs-window-border),\n    var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-chat-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow:\n    inset 0 1px 0 var(--ofs-window-border),\n    0 0 0 3px color-mix(in oklab, var(--ofs-accent) 12%, transparent),\n    var(--ofs-shadow-card);\n}\n\n.ofs-chat-composer textarea {\n  flex: 1 1 auto;\n  min-width: 0;\n  min-height: 42px;\n  max-height: 128px;\n  padding: 2px 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  line-height: 1.6;\n  resize: none;\n  overflow-y: auto;\n  /* 支持的浏览器里让输入框随内容长到 max-height；不支持时退化成固定两行。 */\n  field-sizing: content;\n}\n\n.ofs-chat-composer textarea:focus,\n.ofs-chat-composer textarea:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-chat-composer textarea::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n/* 发送：墨黑实心圆钮（深色主题由 tokens 反相成浅灰），hover 轻抬升，禁用降饱和。 */\n.ofs-chat-send {\n  appearance: none;\n  flex: 0 0 auto;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  padding: 0;\n  border: 0;\n  border-radius: 50%;\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n  box-shadow: var(--ofs-shadow-accent);\n  cursor: pointer;\n  transition:\n    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-chat-send:hover:not(:disabled) {\n  transform: translateY(-1px);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-chat-send:active:not(:disabled) {\n  transform: translateY(0) scale(0.94);\n}\n\n.ofs-chat-send:disabled {\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-4);\n  box-shadow: none;\n  filter: saturate(0);\n  cursor: default;\n}\n\n/* 窄窗下面板被压到 46vh：收紧留白，让最后两条消息仍然可见。 */\n@media (max-width: 820px) {\n  .ofs-panel--chat .ofs-thread {\n    padding: 0 13px 8px;\n  }\n\n  .ofs-chat-dock {\n    padding: 8px 13px 12px;\n  }\n\n  .ofs-msg-thumb img {\n    height: 112px;\n  }\n}\n\n/* 动效停用时，微光条改成一条静态浅色线，信息不丢。 */\n@media (prefers-reduced-motion: reduce) {\n  .ofs-chat-shimmer {\n    background: var(--ofs-accent-soft-border);\n    opacity: 0.9;\n    animation: none;\n  }\n\n  .ofs-panel--chat .ofs-chat-dot.is-live {\n    animation: none;\n  }\n}";
 
 // src/styles/responsive.css
 var responsive_default = "/*\n * 响应式：这是桌面端的整页工作台，先保桌面；窄窗口按「面板在上、画布在下」收，\n * 不把桌面布局硬挤成不可用的三列。\n */\n\n@media (max-width: 1120px) {\n  .ofs-brand-sub {\n    display: none;\n  }\n\n  .ofs-model-eta,\n  .ofs-model-div {\n    display: none;\n  }\n\n  .ofs-dock-button {\n    padding: 0 9px;\n    font-size: 11px;\n  }\n}\n\n@media (max-width: 980px) {\n  .ofs-root {\n    padding: 10px;\n  }\n\n  .ofs-app {\n    border-radius: var(--ofs-r-lg);\n  }\n\n  .ofs-topbar {\n    gap: 10px;\n    padding: 0 12px;\n    height: 54px;\n  }\n\n  .ofs-brand-name {\n    font-size: 13px;\n  }\n\n  .ofs-tab {\n    padding: 0 9px;\n    font-size: 12px;\n  }\n\n  .ofs-panel {\n    margin: 10px 0 10px 10px;\n  }\n\n  .ofs-main {\n    margin: 10px;\n  }\n\n  .ofs-filmstrip {\n    margin: 0 10px 10px;\n    min-height: 84px;\n    padding: 8px 10px;\n    border-radius: var(--ofs-r-md);\n  }\n\n  .ofs-thumb {\n    width: 54px;\n    height: 54px;\n    border-radius: 10px;\n  }\n\n  .ofs-stage-foot {\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n\n  .ofs-stage-meta {\n    font-size: 10.5px;\n  }\n\n  .ofs-dock {\n    gap: 4px;\n  }\n\n  .ofs-dock-button {\n    height: 28px;\n    padding: 0 8px;\n    font-size: 10.5px;\n    gap: 4px;\n  }\n\n  .ofs-figure {\n    border-radius: var(--ofs-r-lg);\n  }\n}\n\n/* 窄窗：面板在上、画面预览在下 */\n@media (max-width: 820px) {\n  .ofs-root {\n    padding: 8px;\n    font-size: 12.5px;\n  }\n\n  .ofs-topbar {\n    flex-wrap: wrap;\n    height: auto;\n    min-height: 52px;\n    padding: 8px 10px;\n    row-gap: 6px;\n  }\n\n  .ofs-tabs {\n    margin-left: 0;\n    order: 3;\n    flex: 1 1 100%;\n    justify-content: flex-start;\n  }\n\n  .ofs-compute em {\n    display: none;\n  }\n\n  .ofs-model-wrap {\n    margin-left: auto;\n  }\n\n  /* 画布在上、面板在下：两块都留在视口内，提交后进度不会被整张表单挤出视野。 */\n  .ofs-body,\n  .ofs-body.is-gallery {\n    display: flex;\n    flex-direction: column;\n    overflow: hidden;\n  }\n\n  .ofs-body > .ofs-main {\n    order: -1;\n  }\n\n  .ofs-main {\n    flex: 0 0 auto;\n    min-height: 0;\n    height: 42vh;\n    margin: 8px;\n  }\n\n  .ofs-body.is-gallery .ofs-main {\n    flex: 1 1 auto;\n    height: auto;\n  }\n\n  .ofs-panel {\n    flex: 1 1 auto;\n    min-height: 0;\n    margin: 0 8px 8px;\n    max-height: none;\n  }\n\n  /* 窄窗优先保留状态标签与计时，提示句让位给半句省略。 */\n  .ofs-sessionbar {\n    margin: 8px 10px 0;\n    padding: 6px 10px;\n  }\n\n  .ofs-sessionbar-hint {\n    display: none;\n  }\n\n  .ofs-stage,\n  .ofs-figure {\n    min-height: 0;\n  }\n\n  /* 窄屏不再按比例约束取景框：空态文案要放得下，裁切标记随之收起。 */\n  .ofs-frame {\n    width: 100%;\n    height: 100%;\n    aspect-ratio: auto;\n  }\n\n  .ofs-frame-body {\n    padding: 12px 14px;\n  }\n\n  .ofs-marks {\n    display: none;\n  }\n\n  .ofs-filmstrip {\n    display: none;\n  }\n\n  .ofs-logs-panel {\n    width: 100%;\n    border-left: 0;\n  }\n\n  .ofs-panel-head {\n    padding: 12px 13px 9px;\n  }\n\n  .ofs-panel-scroll {\n    padding: 0 13px 12px;\n  }\n\n  .ofs-panel-foot {\n    padding: 10px 13px 12px;\n  }\n\n  .ofs-toast {\n    bottom: 24px;\n    max-width: 86%;\n  }\n\n  .ofs-stage-foot {\n    padding: 0 2px;\n  }\n\n  .ofs-stage-prompt {\n    flex: 1 1 100%;\n  }\n\n  .ofs-dock {\n    flex: 1 1 100%;\n    flex-wrap: wrap;\n  }\n\n  .ofs-tile-label {\n    font-size: 9.5px;\n  }\n\n  .ofs-composer-input {\n    min-height: 76px;\n  }\n}\n\n@media (max-width: 520px) {\n  .ofs-brand-name {\n    font-size: 12.5px;\n  }\n\n  .ofs-tab {\n    height: 26px;\n    padding: 0 8px;\n    font-size: 11.5px;\n  }\n\n  .ofs-model-menu {\n    width: calc(100vw - 20px);\n  }\n\n  .ofs-compute {\n    height: 30px;\n    padding: 0 9px;\n  }\n\n  .ofs-model {\n    height: 30px;\n    padding: 0 8px;\n    gap: 5px;\n  }\n\n  .ofs-model-family {\n    height: 15px;\n    font-size: 9.5px;\n  }\n\n  .ofs-panel-head h2 {\n    font-size: 14px;\n  }\n\n  .ofs-empty-title {\n    font-size: 15px;\n  }\n\n  /* 手机竖屏再收一点画布高度，给表单留出可滚动空间。 */\n  .ofs-main {\n    height: 38vh;\n  }\n}\n\n/*\n * 触屏热区 ≥44px（P2.3）：只在粗指针设备（手指 / 触控笔）生效，\n * 桌面鼠标的紧凑版式不受影响。图标按钮做正方形，文字按钮只抬最小高度。\n */\n@media (pointer: coarse) {\n  .ofs-icon-btn,\n  .ofs-glass-btn,\n  .ofs-lightbox-close {\n    width: 44px;\n    height: 44px;\n  }\n\n  .ofs-popover-row,\n  .ofs-filmstrip-link {\n    height: auto;\n    min-height: 44px;\n  }\n\n  .ofs-tab,\n  .ofs-dock-button,\n  .ofs-chip,\n  .ofs-example,\n  .ofs-suggestion,\n  .ofs-text-action,\n  .ofs-gallery-action {\n    height: auto;\n    min-height: 44px;\n  }\n\n  .ofs-gallery-action {\n    padding: 0 12px;\n    font-size: 11px;\n  }\n\n  .ofs-dock-button {\n    padding: 0 12px;\n  }\n}\n";
@@ -1308,39 +1314,73 @@ function Icon(props) {
   );
 }
 
-// src/studio/capsules.js
-var STYLE_CAPSULES = [
-  {
-    id: "film",
+// src/logic/clamp.js
+function clampInt(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(number)));
+}
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+function clampSize(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 1024;
+  const { min, max, step } = LIMITS.width;
+  return Math.min(max, Math.max(min, Math.round(number / step) * step));
+}
+function parseSeed(text) {
+  const raw = String(text ?? "").trim();
+  if (!raw) return -1;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return -1;
+  const int = Math.trunc(value);
+  if (int < 0) return -1;
+  return Math.min(int, LIMITS.seed.max);
+}
+
+// src/studio/presets.js
+var STYLE_SPECS = {
+  film: {
     labelKey: "studio.style.photo",
     suffix: "cinematic film photography, 35mm, natural skin texture, soft grain",
     negative: "blurry, low quality, distorted, text, watermark"
   },
-  {
-    id: "concept",
+  concept: {
     labelKey: "studio.style.concept",
     suffix: "concept art, painterly, dramatic lighting, detailed brushwork",
     negative: "photo, blurry, low quality, text, watermark"
   },
-  {
-    id: "cyberpunk",
+  cyberpunk: {
     labelKey: "studio.style.cyberpunk",
     suffix: "cyberpunk neon city, volumetric light, reflective surfaces, night atmosphere",
     negative: "daylight, blurry, low quality, deformed, text"
   },
-  {
-    id: "ink",
+  ink: {
     labelKey: "studio.style.ink",
     suffix: "traditional chinese ink wash painting, rice paper texture, negative space",
     negative: "photo, 3d, saturated colors, blurry, text"
   },
-  {
-    id: "clay",
+  clay: {
     labelKey: "studio.style.clay",
     suffix: "clay render, soft studio light, pastel palette, playful proportions",
     negative: "photo, harsh shadows, blurry, distorted, text"
   }
-];
+};
+var STYLE_CAPSULES = STYLE_IDS.map((id) => STYLE_SPECS[id] ? { id, ...STYLE_SPECS[id] } : null).filter(Boolean);
+var RATIO_SPECS = {
+  "1:1": { width: 1024, height: 1024 },
+  "16:9": { width: 1152, height: 648 },
+  "9:16": { width: 648, height: 1152 },
+  "4:3": { width: 1024, height: 768 },
+  "3:4": { width: 768, height: 1024 }
+};
+var DEFAULT_RATIOS = RATIO_IDS.map((id) => RATIO_SPECS[id] ? { id, ...RATIO_SPECS[id] } : null).filter(Boolean);
+function ratioToSize(ratio) {
+  return { width: clampSize(ratio.width), height: clampSize(ratio.height) };
+}
 
 // src/studio/ChatPanel.jsx
 var import_jsx_runtime2 = require("react/jsx-runtime");
@@ -1411,6 +1451,10 @@ function ChatPanel(props) {
     return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-msg-card ofs-intent", children: [
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-intent-title", children: t("studio.chat.intent.title") }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "ofs-intent-prompt", children: message.prompt }),
+      message.summary && message.summary !== message.prompt ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("p", { className: "ofs-intent-summary", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-intent-summary-label", children: t("studio.chat.intent.summary") }),
+        message.summary
+      ] }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-intent-meta", children: [
         /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { children: ratioLabel(t, message.ratioId) }),
         /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { "aria-hidden": "true", children: "·" }),
@@ -2530,46 +2574,7 @@ function Tooltip(props) {
   ] });
 }
 
-// src/logic/clamp.js
-function clampInt(value, min, max, fallback) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.min(max, Math.max(min, Math.round(number)));
-}
-function clampNumber(value, min, max, fallback) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.min(max, Math.max(min, number));
-}
-function clampSize(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return 1024;
-  const { min, max, step } = LIMITS.width;
-  return Math.min(max, Math.max(min, Math.round(number / step) * step));
-}
-function parseSeed(text) {
-  const raw = String(text ?? "").trim();
-  if (!raw) return -1;
-  const value = Number(raw);
-  if (!Number.isFinite(value)) return -1;
-  const int = Math.trunc(value);
-  if (int < 0) return -1;
-  return Math.min(int, LIMITS.seed.max);
-}
-
-// src/studio/ratios.js
-var DEFAULT_RATIOS = [
-  { id: "1:1", width: 1024, height: 1024 },
-  { id: "16:9", width: 1152, height: 648 },
-  { id: "9:16", width: 648, height: 1152 },
-  { id: "4:3", width: 1024, height: 768 },
-  { id: "3:4", width: 768, height: 1024 }
-];
-function ratioToSize(ratio) {
-  return { width: clampSize(ratio.width), height: clampSize(ratio.height) };
-}
-
-// src/studio/plates.jsx
+// src/studio/Rail.jsx
 var import_jsx_runtime8 = require("react/jsx-runtime");
 var SPECIMENS = {
   // 写实摄影：天空柔光 + 两道山脊的景深
@@ -2686,15 +2691,12 @@ function StylePlate(props) {
   if (!draw) return null;
   return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("svg", { className: "ofs-plate", viewBox: "0 0 64 64", preserveAspectRatio: "xMidYMid slice", "aria-hidden": "true", focusable: "false", children: draw(`ofs-plate-${props.id}`) });
 }
-
-// src/studio/Rail.jsx
-var import_jsx_runtime9 = require("react/jsx-runtime");
 var PROMPT_MAX = LIMITS.prompt.maxChars;
 var INSPIRE_KEYS = ["studio.inspire.1", "studio.inspire.2", "studio.inspire.3", "studio.inspire.4", "studio.inspire.5"];
 function Fieldset(props) {
-  return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("section", { className: "ofs-fieldset", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-fieldset-head", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("h3", { children: props.title }),
+  return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("section", { className: "ofs-fieldset", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-fieldset-head", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("h3", { children: props.title }),
       props.action ? props.action : null
     ] }),
     props.children
@@ -2722,16 +2724,17 @@ function Rail(props) {
     enhancing,
     enhance,
     toggleRefine,
-    useInspiration
+    useInspiration,
+    englishPromptHint
   } = form;
   const { sending, generate } = actions;
   const promptLength = fields.prompt.length;
   const hasPrompt = fields.prompt.trim().length > 0;
-  return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("aside", { className: "ofs-panel ofs-panel--form", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("header", { className: "ofs-panel-head", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("h2", { children: t("studio.rail.title") }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-seg", role: "tablist", "aria-label": t("studio.rail.title"), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("aside", { className: "ofs-panel ofs-panel--form", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("header", { className: "ofs-panel-head", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("h2", { children: t("studio.rail.title") }),
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-seg", role: "tablist", "aria-label": t("studio.rail.title"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
           "button",
           {
             type: "button",
@@ -2742,7 +2745,7 @@ function Rail(props) {
             children: t("studio.rail.modeForm")
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
           "button",
           {
             type: "button",
@@ -2755,15 +2758,15 @@ function Rail(props) {
         )
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-panel-scroll", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-panel-scroll", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
         Fieldset,
         {
           title: t("studio.prompt"),
-          action: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Tooltip, { text: t("studio.promptTooltip") }),
+          action: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Tooltip, { text: t("studio.promptTooltip") }),
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-composer", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-composer", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
                 "textarea",
                 {
                   className: "ofs-composer-input",
@@ -2777,21 +2780,22 @@ function Rail(props) {
                   }
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-composer-foot", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("span", { className: "ofs-counter", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-composer-foot", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("span", { className: "ofs-counter", children: [
                   promptLength,
                   " / ",
                   PROMPT_MAX
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("button", { type: "button", className: "ofs-text-action", onClick: enhance, disabled: enhancing, children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Icon, { name: "expandText", size: 13 }),
+                /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("button", { type: "button", className: "ofs-text-action", onClick: enhance, disabled: enhancing, children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "expandText", size: 13 }),
                   enhancing ? t("studio.enhance.thinking") : t("studio.enhance.button")
                 ] })
               ] })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-inspire", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "ofs-inspire-label", children: t("studio.inspire.title") }),
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-suggestions", children: INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+            englishPromptHint ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-hint ofs-prompt-lang-hint", children: t("studio.prompt.englishHint") }) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-inspire", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-inspire-label", children: t("studio.inspire.title") }),
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "ofs-suggestions", children: INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
                 "button",
                 {
                   type: "button",
@@ -2803,14 +2807,14 @@ function Rail(props) {
                 key
               )) })
             ] }),
-            refineGroups.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-refine", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-refine-head", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { children: t("studio.refine.title") }),
-                refineSource === "local" ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "ofs-muted", children: t("studio.enhance.local") }) : null
+            refineGroups.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-refine", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-refine-head", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { children: t("studio.refine.title") }),
+                refineSource === "local" ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-muted", children: t("studio.enhance.local") }) : null
               ] }),
-              refineGroups.map((group) => /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-refine-group", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "ofs-refine-dim", children: t(`studio.refine.${group.dimension}`) }),
-                /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-suggestions", children: group.options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+              refineGroups.map((group) => /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-refine-group", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-refine-dim", children: t(`studio.refine.${group.dimension}`) }),
+                /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "ofs-suggestions", children: group.options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
                   "button",
                   {
                     type: "button",
@@ -2818,17 +2822,17 @@ function Rail(props) {
                     onClick: () => toggleRefine(option.text),
                     "aria-pressed": option.applied,
                     title: option.text,
-                    children: option.text
+                    children: option.label || option.text
                   },
                   option.id
                 )) })
               ] }, group.dimension)),
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("p", { className: "ofs-hint", children: t("studio.refine.hint") })
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-hint", children: t("studio.refine.hint") })
             ] }) : null
           ]
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Fieldset, { title: t("studio.style"), children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-tiles", children: STYLE_CAPSULES.map((capsule) => /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Fieldset, { title: t("studio.style"), children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "ofs-tiles", children: STYLE_CAPSULES.map((capsule) => /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
         "button",
         {
           type: "button",
@@ -2837,13 +2841,13 @@ function Rail(props) {
           "aria-pressed": styleId === capsule.id,
           title: t(capsule.labelKey),
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "ofs-tile-art", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(StylePlate, { id: capsule.id }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "ofs-tile-label", children: t(capsule.labelKey) })
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-tile-art", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(StylePlate, { id: capsule.id }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-tile-label", children: t(capsule.labelKey) })
           ]
         },
         capsule.id
       )) }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Fieldset, { title: t("studio.rail.frame"), children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-ratio-row", children: DEFAULT_RATIOS.map((ratio) => /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Fieldset, { title: t("studio.rail.frame"), children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "ofs-ratio-row", children: DEFAULT_RATIOS.map((ratio) => /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
         "button",
         {
           type: "button",
@@ -2851,16 +2855,16 @@ function Rail(props) {
           onClick: () => applyRatio(ratio.id),
           "aria-pressed": ratioId === ratio.id,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: `ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(":", "-")}`, "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "ofs-ratio-label", children: ratio.id })
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: `ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(":", "-")}`, "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-ratio-label", children: ratio.id })
           ]
         },
         ratio.id
       )) }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Fieldset, { title: t("studio.rail.advanced"), children: /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-rows", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: negativeOpen ? "ofs-row is-open" : "ofs-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-row-head", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Fieldset, { title: t("studio.rail.advanced"), children: /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-rows", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: negativeOpen ? "ofs-row is-open" : "ofs-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-row-head", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
               "button",
               {
                 type: "button",
@@ -2868,14 +2872,14 @@ function Rail(props) {
                 onClick: () => setNegativeOpen((open) => !open),
                 "aria-expanded": negativeOpen,
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { children: t("studio.negative") }),
-                  /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: negativeOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Icon, { name: "chevronDown", size: 14 }) })
+                  /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { children: t("studio.negative") }),
+                  /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: negativeOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "chevronDown", size: 14 }) })
                 ]
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Tooltip, { text: t("studio.negativeTooltip") })
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Tooltip, { text: t("studio.negativeTooltip") })
           ] }),
-          negativeOpen ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+          negativeOpen ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
             "textarea",
             {
               className: "ofs-row-textarea",
@@ -2887,8 +2891,8 @@ function Rail(props) {
             }
           ) : null
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: advancedOpen ? "ofs-row is-open" : "ofs-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-row-head", children: /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: advancedOpen ? "ofs-row is-open" : "ofs-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "ofs-row-head", children: /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
             "button",
             {
               type: "button",
@@ -2896,18 +2900,18 @@ function Rail(props) {
               onClick: () => setAdvancedOpen((open) => !open),
               "aria-expanded": advancedOpen,
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { children: t("studio.rail.params") }),
-                /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: advancedOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Icon, { name: "chevronDown", size: 14 }) })
+                /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { children: t("studio.rail.params") }),
+                /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: advancedOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "chevronDown", size: 14 }) })
               ]
             }
           ) }),
-          advancedOpen ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-grid2", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("span", { className: "ofs-field-label", children: [
+          advancedOpen ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-grid2", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("span", { className: "ofs-field-label", children: [
                 t("studio.steps"),
-                /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Tooltip, { text: t("studio.stepsTooltip") })
+                /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Tooltip, { text: t("studio.stepsTooltip") })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
                 "input",
                 {
                   type: "number",
@@ -2919,12 +2923,12 @@ function Rail(props) {
                 }
               )
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("span", { className: "ofs-field-label", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("span", { className: "ofs-field-label", children: [
                 t("studio.cfg"),
-                /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Tooltip, { text: t("studio.cfgTooltip") })
+                /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Tooltip, { text: t("studio.cfgTooltip") })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
                 "input",
                 {
                   type: "number",
@@ -2937,9 +2941,9 @@ function Rail(props) {
                 }
               )
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { children: t("studio.seed") }),
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { children: t("studio.seed") }),
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
                 "input",
                 {
                   type: "text",
@@ -2951,15 +2955,15 @@ function Rail(props) {
                 }
               )
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { children: t("studio.count") }),
-              /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { children: t("studio.count") }),
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
                 "select",
                 {
                   value: fields.count,
                   "aria-label": t("studio.count"),
                   onChange: (event) => patchForm({ count: Number(event.target.value) }),
-                  children: [1, 2, 3, 4].map((value) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("option", { value, children: value }, value))
+                  children: [1, 2, 3, 4].map((value) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("option", { value, children: value }, value))
                 }
               )
             ] })
@@ -2967,8 +2971,8 @@ function Rail(props) {
         ] })
       ] }) })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-panel-foot", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-panel-foot", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
         "button",
         {
           type: "button",
@@ -2976,33 +2980,33 @@ function Rail(props) {
           onClick: () => generate(),
           disabled: sending || !hasPrompt,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Icon, { name: "sparkles", size: 16 }),
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "sparkles", size: 16 }),
             sending ? t("studio.generating") : t("studio.generate")
           ]
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("p", { className: "ofs-hint", children: hasPrompt ? t("studio.generateHint") : t("studio.promptHint") })
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-hint", children: hasPrompt ? t("studio.generateHint") : t("studio.promptHint") })
     ] })
   ] });
 }
 
 // src/studio/SessionBar.jsx
-var import_jsx_runtime10 = require("react/jsx-runtime");
+var import_jsx_runtime9 = require("react/jsx-runtime");
 function SessionBar(props) {
   const { t, status, elapsedMs } = props;
   if (!status || status.transient !== true) return null;
   const showElapsed = status.starting && Number.isFinite(elapsedMs) && elapsedMs > 0;
-  return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: `ofs-sessionbar is-${status.tone}`, role: "status", "aria-live": "polite", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: `ofs-sessionbar is-${status.tone}`, role: "status", "aria-live": "polite", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
       "i",
       {
         className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`,
         "aria-hidden": "true"
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("b", { className: "ofs-sessionbar-label", children: status.label }),
-    status.hint ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "ofs-sessionbar-hint", title: status.hint, children: status.hint }) : null,
-    showElapsed ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("span", { className: "ofs-sessionbar-time", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("b", { className: "ofs-sessionbar-label", children: status.label }),
+    status.hint ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "ofs-sessionbar-hint", title: status.hint, children: status.hint }) : null,
+    showElapsed ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("span", { className: "ofs-sessionbar-time", children: [
       t("studio.session.elapsed"),
       " ",
       formatDuration(t, elapsedMs)
@@ -3012,7 +3016,7 @@ function SessionBar(props) {
 
 // src/studio/Stage.jsx
 var import_react10 = __toESM(require("react"), 1);
-var import_jsx_runtime11 = require("react/jsx-runtime");
+var import_jsx_runtime10 = require("react/jsx-runtime");
 var INSPIRE_KEYS2 = ["studio.inspire.1", "studio.inspire.2", "studio.inspire.3", "studio.inspire.4", "studio.inspire.5"];
 var FRESH_MS = 6e4;
 function isFreshItem(item) {
@@ -3086,33 +3090,33 @@ function Stage(props) {
     const frameRatio = ratioOf(jobParams.width || fields.width, jobParams.height || fields.height);
     const preset = (compute.presets || []).find((option) => option && option.id === fields.presetId) || null;
     const steady = preset && Number.isFinite(Number(preset.steadySeconds)) ? Number(preset.steadySeconds) : null;
-    return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("section", { className: "ofs-stage", children: /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-figure ofs-figure--empty", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-frame", style: { "--ofs-frame-r": String(frameRatio) }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("span", { className: "ofs-marks", "aria-hidden": "true", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", {})
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("section", { className: "ofs-stage", children: /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-figure ofs-figure--empty", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-frame", style: { "--ofs-frame-r": String(frameRatio) }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("span", { className: "ofs-marks", "aria-hidden": "true", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", {})
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "ofs-frame-body", children: activeJob ? null : /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-empty-card", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.empty") }),
-          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("p", { className: "ofs-muted", children: stopped ? t("studio.stage.stoppedHint") : t("studio.stage.emptyHint") }),
-          /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-examples", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
-            INSPIRE_KEYS2.map((key) => /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "ofs-frame-body", children: activeJob ? null : /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-empty-card", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.empty") }),
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-muted", children: stopped ? t("studio.stage.stoppedHint") : t("studio.stage.emptyHint") }),
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-examples", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
+            INSPIRE_KEYS2.map((key) => /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
           ] }),
-          steady !== null ? /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("p", { className: "ofs-exposure", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" }),
+          steady !== null ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("p", { className: "ofs-exposure", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" }),
             t("studio.stage.steady"),
             " ",
             formatSeconds(t, steady),
-            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" })
+            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" })
           ] }) : null
         ] }) })
       ] }),
-      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-stage-progress is-inside", role: "status", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-progress-label", children: progressText })
+      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-stage-progress is-inside", role: "status", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "ofs-progress-label", children: progressText })
       ] }) : null
     ] }) });
   }
@@ -3121,9 +3125,9 @@ function Stage(props) {
   const imageKey = image.path || image.file || image.url;
   const printRatio = ratioOf(image.width, image.height);
   const developing = isFreshItem(item);
-  return /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("section", { className: "ofs-stage", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("figure", { className: "ofs-figure", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("section", { className: "ofs-stage", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("figure", { className: "ofs-figure", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
         "button",
         {
           type: "button",
@@ -3131,14 +3135,14 @@ function Stage(props) {
           style: { "--ofs-print-r": String(printRatio) },
           onClick: openZoom,
           title: t("studio.stage.zoom"),
-          children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("img", { src: image.url, alt: prompt || image.file || t("studio.image.alt"), className: "ofs-image" })
+          children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("img", { src: image.url, alt: prompt || image.file || t("studio.image.alt"), className: "ofs-image" })
         },
         imageKey
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-figure-tools", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: openZoom, title: t("studio.stage.zoom"), "aria-label": t("studio.stage.zoom"), children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "expand", size: 16 }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: () => copyPath(copyTarget), title: t("studio.action.copyPath"), "aria-label": t("studio.action.copyPath"), children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "copy", size: 16 }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-figure-tools", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: openZoom, title: t("studio.stage.zoom"), "aria-label": t("studio.stage.zoom"), children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Icon, { name: "expand", size: 16 }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: () => copyPath(copyTarget), title: t("studio.action.copyPath"), "aria-label": t("studio.action.copyPath"), children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Icon, { name: "copy", size: 16 }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
           "button",
           {
             type: "button",
@@ -3147,48 +3151,48 @@ function Stage(props) {
             title: favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
             "aria-label": favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
             "aria-pressed": favorite,
-            children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: favorite ? "starFilled" : "star", size: 16 })
+            children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Icon, { name: favorite ? "starFilled" : "star", size: 16 })
           }
         )
       ] }),
-      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-stage-progress", role: "status", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-progress-label", children: progressText })
+      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-stage-progress", role: "status", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "ofs-progress-label", children: progressText })
       ] }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-stage-foot", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("p", { className: "ofs-stage-prompt", title: prompt || void 0, children: prompt }),
-      /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-stage-meta", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("span", { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-stage-foot", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-stage-prompt", title: prompt || void 0, children: prompt }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-stage-meta", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("span", { children: [
           image.width || "—",
           " × ",
           image.height || "—"
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { "aria-hidden": "true", children: "·" }),
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { children: formatSeconds(t, image.seconds) }),
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { "aria-hidden": "true", children: "·" }),
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("span", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { "aria-hidden": "true", children: "·" }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { children: formatSeconds(t, image.seconds) }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { "aria-hidden": "true", children: "·" }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("span", { children: [
           t("studio.meta.seed"),
           " ",
           image.seed ?? "—"
         ] })
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-dock", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => iterate(selected), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "focus", size: 15 }),
+    /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-dock", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => iterate(selected), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Icon, { name: "focus", size: 15 }),
         t("studio.action.iterate")
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => reroll(selected), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "reroll", size: 15 }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => reroll(selected), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Icon, { name: "reroll", size: 15 }),
         t("studio.action.reroll")
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => copyPath(copyTarget), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "copy", size: 15 }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => copyPath(copyTarget), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Icon, { name: "copy", size: 15 }),
         t("studio.action.copyPath")
       ] })
     ] }),
-    zoom ? /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
+    zoom ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
       "div",
       {
         className: "ofs-lightbox",
@@ -3198,7 +3202,7 @@ function Stage(props) {
         ref: lightboxRef,
         onClick: () => setZoom(false),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
             "img",
             {
               src: image.url,
@@ -3206,7 +3210,7 @@ function Stage(props) {
               onClick: (event) => event.stopPropagation()
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
             "button",
             {
               ref: closeRef,
@@ -3214,7 +3218,7 @@ function Stage(props) {
               className: "ofs-lightbox-close",
               onClick: () => setZoom(false),
               "aria-label": t("studio.stage.close"),
-              children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "close", size: 16 })
+              children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Icon, { name: "close", size: 16 })
             }
           )
         ]
@@ -3225,11 +3229,11 @@ function Stage(props) {
 
 // src/studio/Toast.jsx
 var import_react11 = __toESM(require("react"), 1);
-var import_jsx_runtime12 = require("react/jsx-runtime");
+var import_jsx_runtime11 = require("react/jsx-runtime");
 function Toast(props) {
   const { toast } = props;
   if (!toast) return null;
-  return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "ofs-toast", role: "status", children: toast.text }, toast.id);
+  return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "ofs-toast", role: "status", children: toast.text }, toast.id);
 }
 
 // src/studio/TopBar.jsx
@@ -3266,7 +3270,7 @@ var realvis_v5_default = "data:image/webp;base64,UklGRmQFAABXRUJQVlA4IFgFAAAQJAC
 var sdxl_turbo_default = "data:image/webp;base64,UklGRkwLAABXRUJQVlA4IEALAACQLACdASpwAHAAPo06lUglI6IhNZdO+KARiWwAsv8hR2fK+ZFXH8FsJldeUq+N/tvUx+ht6d+6Pq5/bT9nffV9Mf/P9HL+zdbD6AHnO+sB5XPX6ad3xnxa9KIihxfVJ39/MHUCuOd3Bs3+o5R6eF+u6NPT7wlTSGl89H4ZbwsqMPCzFFT1xA7/1Hwgdf/zx//s4HTf+YQiPvW81nqOl8A2xN6o0G9ri0cXcduyW5uMLu5dwnCzsr52TzLvamBwPDWjAI9O9MFzWNsI7EtL6HdufnA1lMBeBtgovAksGg/Klqe5uC4Qtq+c/slf/W+Zq3U4EMc5ksQDegTrlJgL3WaYoDzHM6iE/uSiaLkvVN/QLC6Z6tzsJb7ZI0MtyhlN6B1UKDRfIL7s28SqNx1BOLi9N1LlWilbXS1n8YgxNH4oQW6EiUF7s+f7CgrsKG2pu2RiMUp2nyuKKSl8kKJ9utYCsY/z938dUEnuJkdDgAD+2IvRErU87UDtgc3To785vxbvrG9Y7uxklJG5T872jf6wxr+OWDMMClFgIzdIyrrwsAv+z9MySVMXqrNTReZTBymIQyIUvK1ys3TvSWMmvzvMGVyAA/t9mau9fsZQLFnvRqyuDOJm40Ji/YWjj471EDTlD+uW51wv6pz0W4aXaXHbvgPjFe+2uCuBlsqs4ULv4TQ5J67wUauutxlUm2QZ77Xt9F1/Nvph2Sq4rmvuSXxEc4tfBb8/ODBw5OifshVtDG3MYUnAOx9mlnV3Wbh7ti5gnoT+pk9MVmlgwtnpBcTXXnzx6McGNeDNsIQb7slBx4JdJWI6kI8Bx9zS1LKYFx9CGq7k3cBQS7QUHo+rCbFa0lXPfTtUKGk/H8jiK0HuTDvxoFaeCNu/cYhfewe/PRkQayjTAd2huSq5YACqQ4IGTBqm7JJq9lTQ0GcrQ76L+Zf2NjfVD5QmbQnaokgnk0Q/EFsLl8Sp5ve25LSRI32vmCyzTMu34jwhRRERm5tvVAFAO/nV0DS+6ZnO9MFUD5ct89HzyPFqNvcktQulN4du9KtuLIR+BhVvnw+HN2IamOt/tIeaGrKbqEdVfgJRLlnzmQMZZ9g6llz1zAe4pGT4fgaqhMbkZ7vCmHK5VbKeBNEzPgDKk5BDO71cyZXPmBwXLFdHK9Icq+yUT18lpMuSkweVV8bFIU4x754zPKLbt61N8Xi1SY6ss4T8HdIdPkmIr/BKwuxO7Mgw0zzAUyR3eGtm3i8xFaPaUCf9lOemLW0MoYimfrzDHU7KIWup5fDimmZcepwqHepdxlrn5DPAMguXeZy8vkTRMUhm6kNihDW0S0o3RrBj7YPBSbnUGM5hBtmdoWxZ1fKLb+9rLQQjCw28FKZULmWOWh9FjQHiFrQHG5QIXEx0LYnIDo15d+yLDbndpV2VFznQ+knpeNYPu8/aXgKCqM/8xYH8PCF3T628j+NKAf528r7MsAd1BH0XATPVtIhu6mK3PUlvJKbqQOylSP2QzpFIPDGCTkAEVDBF2DJ3tQAU4XP96r0FF7Uan94OWr5EoFqhHm9h3NVJ26gZCiyf21syyEHA0rCsBdJYz/rcQsD9ixzGUWu0u2aXy9SOFtNLjBfOSVyMJZz8zesgNuhw1aekEfUSw1EdnuYpF7dAN5UYhAxT4m7Ms75XkxJh1c3uHYEEbjYw5l/dezaKGVt95NhoD8K4F/wd1KuZWCNJXRDC/6rR2OZ8p22P97Ka5e6MD7SNf5vq2bfzd26CDoWFPqu17a8Vohvg8VxgSNe0M5Kj/IQPtTk7IoiTbCuDsgyFgX5JiZakIFhJHRu9jWCsU0QOLOwzdZzpvOp+Ky635rqqLQM7ACcCS6quaixQ3PS7xg8DBrlAPWGBBYujdSGsmnZi2ZdxSTN0Vh1hYHDmuLOLkn24jAmfg7Q8csiKaSq76BZIj5+G3Rp5h5xy8aZsuucCcENoqwrn+HVHFhVpQn7eo5Z0TGbd9kuu04z9av2LsHzJmXKD38U3e9eWdSvq84QK5dOIVBxJ3Jz7RLH/7Zub13NKuamJsGVPIjSgq/WUFtEmDOgV0s7oWCJ5H5dmwrjTcAkX5pOddRXi0PiZQ40hV9FFTzg61v1S3al0cvM9kAjIiroaUKuw5YtYY39NSOnW3xDWwXpPaB4etcxvX2Ou+BA57CxGBgCGJm487yuGbDdHpOjVGBV7/y5NiVNSK/dfp5mSruH55XOeGdRfcqmXj3Re3ykk49u0+lpJfiW5ox/PqibhL502IoWGd0d+b7Siza+ej3Oi6EsvgKxg5jWrMd53uEdewRPg9KIDtDHIwuKZ5DSd2e7ratdU3JdbacU6N+KfT/ZrIfRHLwUk22uxJy1sIXewegO1yxXRNlEoLHLTCK+wGyT2U9okgRdYVPqmax1SPXo2O30zubcnl3fZ74ODvEGlgQr/RMnjeCBDhjvXKweT0FhpEDlkWytlSBwxB65zc285Rv9AztBXNy6XgnAr6Tqh5RR97xdXNurY2N3ZKP+1j99ybEN2ZNiYJLYaZKYV6DaSVbXgcr2b83toq3L74X5wM7yUEeHBbpEBNvLtlWENpZtBkp8WTptCwTNT4UOlU6OFQTq5fdgoE+Z+UxDCDLCl98UWVfvSCE7gsuEGcrxv04iKo/qYv/MS+MWWWyWINjnlRgiPseEycbadm6IxmJC2/QHI7EWyx3D4GMsV3HWTj7kE00GO6w09G2jBUjCbM1MqwsinPzOXgkSEz8IJVWNPmvZHvnE3HsrpW9T8vJKYXfGfW0RCWs4XvOPXNltuwEqE91PtQP45JNSn/+kwfFrHCaXkBkM2Czo1Rmumqo6S+DrH85eaee5MHNHkzGFvjPYSnzynV48lxDntaS9iSMdzGlQc3LY7j8QwLBuN/JOFFjwIpy9bL7yAAAC3IEMqdhRHA6lQfgdlYHY4IaAx4Er/zF4tcnN97wTdLX7f9Fo9Dk0i6pfiwHNiAB9oPk5w70hY4/sPBXdTdRApd/c4lZfRg67R+JMwolB8Utn7NDDe3gaPo/7r8og2gxbaML30q9Ul4okz/pj/MjvNULV0Sg6Ao5vb6Zaf8wLCnV/6GI6B/v71rTQPwqSgpFY3Wlc+d48FBJMhHU4mZj2XCZIn2liDlDPdpA+LjIELb5JJMSYoyqnjv8l47blKRtbZ9rBQ+OMn56STv4ncrOdoWCHSPLZEp2icLw70lHdtjX6Mky7eVGv9lc+M4/UqbpOFAZbfvn0HEHrGgSijozpFiPqehnMtXdLpXv1EYGEpjaQ+BZuSD2v0iKrvCtwjrNgPQ+XDtz8tRpVD8SW3aZ7A1ylo+Txm2nD4Lg+jHNXKCjiAhBgOCA7I2Ovrl2v9p1TLYjFcOV/YKF/BQ/iK7GhCZkI7UFLkvD6synmPyE4/4OxdQEnzc84EK1ogK/8wuKowKItmfaBFkzhPtPsQ9/moVQHqR/G2P6BIQsF+fxzXprCxYMB8oj6177N+GXi8P5gPAiawl1sTbjB98GWLDjtaRzJPYXwYBmkxV6yR8VAiCIdzf3NZFq10mdzJuM8z1rbmr+dw9M3yX5OS6dtRoDQnTu51O+SCaKA5TBW1nsJs/2Lpb7VMSAZyFDrCiJ4M9j31BuqgpSpqnJdgyMMFOE3Ik+pYOdWZ92BOurYEDxZBNyySNiugFHYLIlZgqsOcYvXVWJJIa3n1Z8O/WmqRnqprSpfd7bAxVTk5odM7VhCCkFSSgUl+LKwLxrAc0MZHT3LEoURP885MjEg6sJodrCRLktMa6MyNO2FkplRaYbdb1ZbP6iB5rryzgUupUXWQBobhOivudDCeOCMWDAukjbEKSLer5kCgEAA=";
 
 // src/studio/ModelCardPicker.jsx
-var import_jsx_runtime13 = require("react/jsx-runtime");
+var import_jsx_runtime12 = require("react/jsx-runtime");
 var MENU_ID = "ofs-model-menu";
 var POSTERS = {
   "sdxl-lightning": sdxl_lightning_default,
@@ -3366,15 +3370,15 @@ function ModelCardPicker(props) {
     if (typeof next.scrollIntoView === "function") next.scrollIntoView({ block: "nearest" });
   }
   if (!active) {
-    return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "ofs-model is-empty", "aria-hidden": "true", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Icon, { name: "sliders", size: 14 }),
-      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-now", children: "—" })
+    return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { className: "ofs-model is-empty", "aria-hidden": "true", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Icon, { name: "sliders", size: 14 }),
+      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-now", children: "—" })
     ] });
   }
   const eta = etaOf(t, active);
   const poster = POSTERS[active.id] || "";
-  return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "ofs-model-wrap", ref: rootRef, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-model-wrap", ref: rootRef, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
       "button",
       {
         ref: triggerRef,
@@ -3392,29 +3396,29 @@ function ModelCardPicker(props) {
           }
         },
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Icon, { name: "sliders", size: 14 }),
-          active.family ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-family", children: active.family }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-now", children: shortOf(active) }),
-          eta ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(import_jsx_runtime13.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-div", "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-eta", children: eta })
+          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Icon, { name: "sliders", size: 14 }),
+          active.family ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-family", children: active.family }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-now", children: shortOf(active) }),
+          eta ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(import_jsx_runtime12.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-div", "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-eta", children: eta })
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Icon, { name: "chevronDown", size: 13, className: "ofs-model-caret" })
+          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Icon, { name: "chevronDown", size: 13, className: "ofs-model-caret" })
         ]
       }
     ),
-    open ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "ofs-model-menu", id: MENU_ID, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "ofs-model-head", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { children: `${t(LABELS.menuTitle)}${list.length > 1 ? ` · ${list.length}` : ""}` }),
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { children: t(LABELS.measured) })
+    open ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-model-menu", id: MENU_ID, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-model-head", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { children: `${t(LABELS.menuTitle)}${list.length > 1 ? ` · ${list.length}` : ""}` }),
+        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { children: t(LABELS.measured) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "ofs-model-list", role: "listbox", "aria-label": t(LABELS.menuTitle), ref: listRef, onKeyDown: onListKeyDown, children: list.map((preset) => {
+      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "ofs-model-list", role: "listbox", "aria-label": t(LABELS.menuTitle), ref: listRef, onKeyDown: onListKeyDown, children: list.map((preset) => {
         const selected = preset.id === active.id;
         const image = POSTERS[preset.id] || "";
         const isDefault = preset.id === defaultPreset;
         const optionEta = etaOf(t, preset);
         const description = descriptionOf(preset, isEn);
-        return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
+        return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
           "button",
           {
             type: "button",
@@ -3424,36 +3428,36 @@ function ModelCardPicker(props) {
             "data-preset-id": preset.id,
             onClick: () => choose(preset),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-poster", "aria-hidden": "true", children: image ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("img", { src: image, alt: "", width: "56", height: "56", draggable: "false" }) : /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-poster-fallback", children: (preset.family || preset.id || "M").slice(0, 1) }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "ofs-model-copy", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "ofs-model-line", children: [
-                  preset.family ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-fam", children: preset.family }) : null,
-                  /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-name", children: shortOf(preset) }),
-                  isDefault ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-default", children: t(LABELS.default) }) : null
+              /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-poster", "aria-hidden": "true", children: image ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("img", { src: image, alt: "", width: "56", height: "56", draggable: "false" }) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-poster-fallback", children: (preset.family || preset.id || "M").slice(0, 1) }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { className: "ofs-model-copy", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { className: "ofs-model-line", children: [
+                  preset.family ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-fam", children: preset.family }) : null,
+                  /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-name", children: shortOf(preset) }),
+                  isDefault ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-default", children: t(LABELS.default) }) : null
                 ] }),
-                description ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-desc", children: description }) : null,
-                /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-spec", children: specOf(t, preset) })
+                description ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-desc", children: description }) : null,
+                /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-spec", children: specOf(t, preset) })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "ofs-model-side", children: [
-                optionEta ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-option-eta", children: optionEta }) : /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-option-eta" }),
-                /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-model-check", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Icon, { name: "check", size: 15 }) })
+              /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { className: "ofs-model-side", children: [
+                optionEta ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-option-eta", children: optionEta }) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-option-eta" }),
+                /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-model-check", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Icon, { name: "check", size: 15 }) })
               ] })
             ]
           },
           preset.id
         );
       }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "ofs-model-foot", children: t(LABELS.footer) })
+      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "ofs-model-foot", children: t(LABELS.footer) })
     ] }) : null
   ] });
 }
 
 // src/studio/StudioIcon.jsx
 var import_react13 = __toESM(require("react"), 1);
-var import_jsx_runtime14 = require("react/jsx-runtime");
+var import_jsx_runtime13 = require("react/jsx-runtime");
 function StudioIcon(props) {
   const size = props && props.size || 20;
-  return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
     "svg",
     {
       width: size,
@@ -3466,22 +3470,22 @@ function StudioIcon(props) {
       strokeLinejoin: "round",
       "aria-hidden": "true",
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("path", { d: "M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8" }),
-        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("path", { d: "M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8" }),
-        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("path", { d: "M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16" }),
-        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("path", { d: "M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" }),
-        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("circle", { cx: "12", cy: "12", r: "3.2" })
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("path", { d: "M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8" }),
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("path", { d: "M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8" }),
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("path", { d: "M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16" }),
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("path", { d: "M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" }),
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("circle", { cx: "12", cy: "12", r: "3.2" })
       ]
     }
   );
 }
 
 // src/studio/TopBar.jsx
-var import_jsx_runtime15 = require("react/jsx-runtime");
+var import_jsx_runtime14 = require("react/jsx-runtime");
 var KAGGLE_ACCOUNT_URL = "https://www.kaggle.com/settings";
 function TopBar(props) {
   const { t, isEn, ui, compute, library } = props;
-  const { form: fields, patchForm } = props.form;
+  const { form: fields, patchForm, selectPreset } = props.form;
   const { view, setView, openLogs } = ui;
   const {
     sessionState,
@@ -3544,24 +3548,24 @@ function TopBar(props) {
     if (value === "unavailable") return t("value.quotaUnavailable");
     return t("value.unknown");
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("header", { className: "ofs-topbar", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-brand", title: t("studio.nav.label"), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "ofs-brand-mark", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(StudioIcon, { size: 18 }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "ofs-brand-name", children: t("studio.brand") }),
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "ofs-brand-sub", children: t("studio.brandSub") })
+  return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("header", { className: "ofs-topbar", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "ofs-brand", title: t("studio.nav.label"), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-brand-mark", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(StudioIcon, { size: 18 }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-brand-name", children: t("studio.brand") }),
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-brand-sub", children: t("studio.brandSub") })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("nav", { className: "ofs-tabs", "aria-label": t("studio.tabs"), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("button", { type: "button", className: view === "studio" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("studio"), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Icon, { name: "sparkles", size: 15 }),
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("nav", { className: "ofs-tabs", "aria-label": t("studio.tabs"), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("button", { type: "button", className: view === "studio" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("studio"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Icon, { name: "sparkles", size: 15 }),
         t("studio.tab.studio")
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("button", { type: "button", className: view === "gallery" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("gallery"), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Icon, { name: "images", size: 15 }),
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("button", { type: "button", className: view === "gallery" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("gallery"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Icon, { name: "images", size: 15 }),
         t("studio.tab.gallery")
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "ofs-grow" }),
-    openFolder ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-grow" }),
+    openFolder ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
       "button",
       {
         type: "button",
@@ -3569,12 +3573,12 @@ function TopBar(props) {
         onClick: openFolder,
         title: t("studio.action.openFolder"),
         "aria-label": t("studio.action.openFolder"),
-        children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Icon, { name: "folder", size: 16 })
+        children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Icon, { name: "folder", size: 16 })
       }
     ) : null,
-    library.loadHistory ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("button", { type: "button", className: "ofs-icon-btn", onClick: library.loadHistory, title: t("studio.refresh"), "aria-label": t("studio.refresh"), children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Icon, { name: "refresh", size: 16 }) }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-pill-wrap", ref: wrapRef, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
+    library.loadHistory ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("button", { type: "button", className: "ofs-icon-btn", onClick: library.loadHistory, title: t("studio.refresh"), "aria-label": t("studio.refresh"), children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Icon, { name: "refresh", size: 16 }) }) : null,
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "ofs-pill-wrap", ref: wrapRef, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
         "button",
         {
           ref: pillRef,
@@ -3590,85 +3594,85 @@ function TopBar(props) {
           "aria-expanded": open,
           "aria-haspopup": "menu",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { children: status.label }),
-            quotaUsed !== null && quotaTotal !== null ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("em", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { children: status.label }),
+            quotaUsed !== null && quotaTotal !== null ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("em", { children: [
               quotaUsed,
               " / ",
               quotaTotal,
               " ",
               t("unit.hour")
             ] }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "ofs-pill-caret", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Icon, { name: "chevronDown", size: 13 }) })
+            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-pill-caret", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Icon, { name: "chevronDown", size: 13 }) })
           ]
         }
       ),
-      open ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-popover", role: "menu", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-popover-head", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("b", { children: status.label }),
-            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Tooltip, { text: status.tooltip, side: "bottom" })
+      open ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "ofs-popover", role: "menu", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "ofs-popover-head", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("span", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("b", { children: status.label }),
+            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Tooltip, { text: status.tooltip, side: "bottom" })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { className: "ofs-muted", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.quota"),
             " ",
             quotaUsed !== null && quotaTotal !== null ? `${quotaUsed} / ${quotaTotal} ${t("unit.hour")}` : "—"
           ] }),
-          status.phaseLabel ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { className: "ofs-muted", children: [
+          status.phaseLabel ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.phase"),
             " · ",
             status.phaseLabel
           ] }) : null,
-          status.ready && steadySeconds !== null ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { className: "ofs-muted", children: [
+          status.ready && steadySeconds !== null ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.speedLine"),
             " ",
             formatSeconds(t, steadySeconds)
           ] }) : null,
-          idleMinutes > 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { className: "ofs-muted", children: [
+          idleMinutes > 0 ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.idleFor"),
             " ",
             idleMinutes,
             " ",
             t("unit.min")
           ] }) : null,
-          session && session.device ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "ofs-muted", children: session.device }) : null,
-          tunnelLabel ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { className: "ofs-muted", children: [
+          session && session.device ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-muted", children: session.device }) : null,
+          tunnelLabel ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.tunnel"),
             " · ",
             tunnelLabel
           ] }) : null
         ] }),
-        status.hint ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("p", { className: "ofs-popover-hint", children: status.hint }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-popover-note", children: [
-          probing ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { children: t("action.probing") }) : null,
-          probeInfo ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(import_jsx_runtime15.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { children: [
+        status.hint ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("p", { className: "ofs-popover-hint", children: status.hint }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "ofs-popover-note", children: [
+          probing ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { children: t("action.probing") }) : null,
+          probeInfo ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(import_jsx_runtime14.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("span", { children: [
               t("studio.probe.cli"),
               " · ",
               statusText(probeInfo.cli)
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("span", { children: [
               t("studio.probe.quota"),
               " · ",
               statusText(probeInfo.quota)
             ] })
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("span", { children: [
             t("studio.probe.account"),
             " · ",
             statusText(accountStatus),
-            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Tooltip, { text: t("studio.compute.authTooltip"), tone: "warn", side: "bottom" })
+            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Tooltip, { text: t("studio.compute.authTooltip"), tone: "warn", side: "bottom" })
           ] }),
-          probeFailed ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { title: probeFailed.message || void 0, children: [
+          probeFailed ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("span", { title: probeFailed.message || void 0, children: [
             probeFailed.status === "timeout" ? t("studio.probe.timeout") : t("studio.probe.failed"),
             probeFailed.message ? ` · ${probeFailed.message}` : ""
           ] }) : null,
-          probeNote ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { title: probeInfo.notes.join(" · "), children: probeNote }) : null
+          probeNote ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { title: probeInfo.notes.join(" · "), children: probeNote }) : null
         ] }),
-        quotaUnavailable ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-popover-fallback", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "ofs-popover-fallback-title", children: t("studio.compute.quotaFallback") }),
-          lastCheckTime ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { children: [
+        quotaUnavailable ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "ofs-popover-fallback", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-popover-fallback-title", children: t("studio.compute.quotaFallback") }),
+          lastCheckTime ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("span", { children: [
             t("studio.compute.lastGood"),
             " ",
             lastCheckTime,
@@ -3676,13 +3680,13 @@ function TopBar(props) {
             t("studio.compute.quota"),
             " ",
             lastGoodQuota
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { children: t("studio.compute.neverChecked") }),
-          sessionRunMs !== null ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { children: [
+          ] }) : /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { children: t("studio.compute.neverChecked") }),
+          sessionRunMs !== null ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("span", { children: [
             t("studio.compute.sessionRan"),
             " ",
             formatDuration(t, sessionRunMs)
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
             "a",
             {
               className: "ofs-popover-link",
@@ -3694,15 +3698,15 @@ function TopBar(props) {
             }
           )
         ] }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: startSession2, disabled: !!busy || !status.canStart, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Icon, { name: "cloud", size: 15 }),
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: startSession2, disabled: !!busy || !status.canStart, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Icon, { name: "cloud", size: 15 }),
           t("studio.compute.start")
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: stopSession2, disabled: !!busy || !status.canStop, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Icon, { name: "clock", size: 15 }),
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: stopSession2, disabled: !!busy || !status.canStop, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Icon, { name: "clock", size: 15 }),
           t("studio.compute.stop")
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
           "button",
           {
             type: "button",
@@ -3712,12 +3716,12 @@ function TopBar(props) {
             disabled: !!busy || probing,
             "aria-busy": probing,
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Icon, { name: "refresh", size: 15 }),
+              /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Icon, { name: "refresh", size: 15 }),
               probing ? t("action.probing") : t("studio.compute.check")
             ]
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
           "button",
           {
             type: "button",
@@ -3728,14 +3732,14 @@ function TopBar(props) {
               if (openLogs) openLogs(pillRef.current);
             },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Icon, { name: "message", size: 15 }),
+              /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Icon, { name: "message", size: 15 }),
               t("studio.logs.open")
             ]
           }
         )
       ] }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
       ModelCardPicker,
       {
         t,
@@ -3749,13 +3753,8 @@ function TopBar(props) {
           if (next) setOpen(false);
         },
         onChange: (next) => {
-          patchForm({
-            presetId: next.id,
-            width: next.size || fields.width,
-            height: next.size || fields.height,
-            steps: next.steps ?? fields.steps,
-            cfg: next.cfg ?? fields.cfg
-          });
+          if (selectPreset) selectPreset(next);
+          else patchForm({ presetId: next.id });
           setModelOpen(false);
         }
       }
@@ -3960,7 +3959,61 @@ function useCompletionNotice({ t, ui, job, activeJob }) {
 // src/studio/useStudio.js
 var import_react20 = __toESM(require("react"), 1);
 
-// src/logic/recall.js
+// src/logic/prompt.js
+function composePrompt(base, suffix) {
+  const head = String(base ?? "").trim();
+  const tail = String(suffix ?? "").trim();
+  if (!head) return "";
+  if (!tail) return head;
+  if (head.includes(tail)) return head;
+  return `${head}, ${tail}`;
+}
+function toggleStyle(form, capsule) {
+  const prev = form || {};
+  if (!capsule || !capsule.id) return { ...prev };
+  if (prev.styleId === capsule.id) {
+    return {
+      ...prev,
+      styleId: "",
+      negative: prev.negative === capsule.negative ? "" : prev.negative
+    };
+  }
+  return {
+    ...prev,
+    styleId: capsule.id,
+    negative: String(prev.negative ?? "").trim() ? prev.negative : capsule.negative
+  };
+}
+
+// src/logic/generate.js
+function buildGenerateBody(form, options = {}) {
+  const input = form || {};
+  const overrides = options.overrides && typeof options.overrides === "object" ? options.overrides : null;
+  const explicit = overrides && typeof overrides.prompt === "string" ? overrides.prompt : null;
+  const maxPromptChars = LIMITS.prompt.maxChars;
+  const prompt = explicit !== null ? explicit.trim().slice(0, maxPromptChars) : composePrompt(input.prompt, options.styleSuffix).slice(0, maxPromptChars);
+  const body = {
+    prompt,
+    negativePrompt: String(input.negative ?? "").trim(),
+    width: clampSize(input.width),
+    height: clampSize(input.height),
+    steps: clampInt(input.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
+    cfg: clampNumber(input.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
+    seed: parseSeed(input.seed),
+    count: clampInt(input.count, LIMITS.count.min, LIMITS.count.max, 1),
+    waitSeconds: 0,
+    autoStart: true
+  };
+  const presetId = input.presetId || options.defaultPreset || "";
+  if (presetId) body.presetId = presetId;
+  if (overrides) {
+    for (const [key, value] of Object.entries(overrides)) {
+      if (key === "prompt") continue;
+      body[key] = value;
+    }
+  }
+  return body;
+}
 function finiteNumber(value) {
   if (value === null || value === void 0 || value === "") return null;
   const number = Number(value);
@@ -4134,7 +4187,13 @@ function useChatThread({ t, isEn, alive, state, form, generate }) {
     const previousPrompt = lastIntentPrompt(messages);
     pushMessages([{ role: "user", text: value }]);
     setInterpreting(true);
-    const result = await alive(parseIntentRequest({ text: value, previousPrompt, locale: isEn ? "en" : "zh" }));
+    const result = await alive(parseIntentRequest({
+      text: value,
+      previousPrompt,
+      locale: isEn ? "en" : "zh",
+      // 意图解析按当前预设的提示词配方（danbooru / natural / concise）约束英文提示词。
+      presetId: form.form.presetId
+    }));
     interpretingRef.current = false;
     if (!result) return;
     setInterpreting(false);
@@ -4144,6 +4203,7 @@ function useChatThread({ t, isEn, alive, state, form, generate }) {
         role: "assistant",
         kind: "intent",
         prompt: data.prompt,
+        summary: typeof data.summary === "string" ? data.summary : "",
         ratioId: typeof data.ratioId === "string" ? data.ratioId : "",
         styleId: typeof data.styleId === "string" ? data.styleId : "",
         clarify: data.clarify || null,
@@ -4288,60 +4348,36 @@ function useSessionControl({ t, host, ui, alive }) {
 // src/studio/hooks/useStudioForm.js
 var import_react18 = __toESM(require("react"), 1);
 
-// src/logic/prompt.js
-function composePrompt(base, suffix) {
-  const head = String(base ?? "").trim();
-  const tail = String(suffix ?? "").trim();
-  if (!head) return "";
-  if (!tail) return head;
-  if (head.includes(tail)) return head;
-  return `${head}, ${tail}`;
+// src/logic/preset.js
+function detectCjk(text) {
+  return /[\u3400-\u9fff]/.test(String(text ?? ""));
 }
-function toggleStyle(form, capsule) {
-  const prev = form || {};
-  if (!capsule || !capsule.id) return { ...prev };
-  if (prev.styleId === capsule.id) {
-    return {
-      ...prev,
-      styleId: "",
-      negative: prev.negative === capsule.negative ? "" : prev.negative
-    };
-  }
-  return {
-    ...prev,
-    styleId: capsule.id,
-    negative: String(prev.negative ?? "").trim() ? prev.negative : capsule.negative
-  };
+function presetNeedsEnglish(preset) {
+  if (!preset || typeof preset !== "object") return true;
+  return preset.promptStyle !== "chinese";
 }
-
-// src/logic/generate.js
-function buildGenerateBody(form, options = {}) {
-  const input = form || {};
-  const overrides = options.overrides && typeof options.overrides === "object" ? options.overrides : null;
-  const explicit = overrides && typeof overrides.prompt === "string" ? overrides.prompt : null;
-  const maxPromptChars = LIMITS.prompt.maxChars;
-  const prompt = explicit !== null ? explicit.trim().slice(0, maxPromptChars) : composePrompt(input.prompt, options.styleSuffix).slice(0, maxPromptChars);
-  const body = {
-    prompt,
-    negativePrompt: String(input.negative ?? "").trim(),
-    width: clampSize(input.width),
-    height: clampSize(input.height),
-    steps: clampInt(input.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
-    cfg: clampNumber(input.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
-    seed: parseSeed(input.seed),
-    count: clampInt(input.count, LIMITS.count.min, LIMITS.count.max, 1),
-    waitSeconds: 0,
-    autoStart: true
+function hintOf(preset) {
+  return preset && typeof preset.negativeHint === "string" ? preset.negativeHint.trim() : "";
+}
+function presetSelectPatch(next, current, presets) {
+  const target = next && typeof next === "object" && next.id ? next : null;
+  if (!target) return {};
+  const form = current && typeof current === "object" ? current : {};
+  const patch = {
+    presetId: target.id,
+    width: clampSize(target.size || form.width),
+    height: clampSize(target.size || form.height)
   };
-  const presetId = input.presetId || options.defaultPreset || "";
-  if (presetId) body.presetId = presetId;
-  if (overrides) {
-    for (const [key, value] of Object.entries(overrides)) {
-      if (key === "prompt") continue;
-      body[key] = value;
-    }
-  }
-  return body;
+  const steps = clampInt(target.steps, LIMITS.steps.min, LIMITS.steps.max, null);
+  if (steps !== null) patch.steps = steps;
+  const cfg = clampNumber(target.cfg, LIMITS.cfg.min, LIMITS.cfg.max, null);
+  if (cfg !== null) patch.cfg = cfg;
+  const hint = hintOf(target);
+  const list = Array.isArray(presets) ? presets : [];
+  const previous = list.find((item) => item && item.id === form.presetId);
+  const negative = typeof form.negative === "string" ? form.negative.trim() : "";
+  if (hint && (!negative || negative === hintOf(previous))) patch.negative = hint;
+  return patch;
 }
 
 // src/logic/refine.js
@@ -4421,6 +4457,8 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     const capsule = STYLE_CAPSULES.find((item) => item.id === form.styleId);
     return capsule ? capsule.suffix : "";
   })();
+  const activePreset = presets.find((item) => item.id === form.presetId) || null;
+  const englishPromptHint = detectCjk(form.prompt) && presetNeedsEnglish(activePreset);
   import_react18.default.useEffect(() => {
     if (presets.length === 0) return;
     setForm((prev) => {
@@ -4428,19 +4466,15 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
       const initial = presets.some((item2) => item2.id === defaultPreset) ? defaultPreset : presets[0].id;
       const item = presets.find((option) => option.id === initial);
       if (!item) return prev;
-      const size = clampSize(item.size);
-      return {
-        ...prev,
-        presetId: initial,
-        width: size,
-        height: size,
-        steps: clampInt(item.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
-        cfg: clampNumber(item.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0)
-      };
+      return { ...prev, ...presetSelectPatch(item, prev, presets) };
     });
   }, [presets.length, defaultPreset]);
   function patchForm(partial) {
     setForm((prev) => ({ ...prev, ...partial }));
+  }
+  function selectPreset(next) {
+    if (!next || !next.id) return;
+    setForm((prev) => ({ ...prev, ...presetSelectPatch(next, prev, presets) }));
   }
   function buildBody(overrides) {
     return buildGenerateBody(form, { styleSuffix, defaultPreset, overrides });
@@ -4463,20 +4497,31 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
       return;
     }
     setEnhancing(true);
-    const result = await alive(enhancePromptRequest({
-      prompt: form.prompt,
-      presetId: form.presetId,
-      locale: isEn ? "en" : "zh"
-    }));
-    if (!result) return;
-    setEnhancing(false);
-    if (result.ok && result.data && Array.isArray(result.data.groups)) {
-      const groups = result.data.groups.filter((group) => group && Array.isArray(group.options) && group.options.length > 0);
-      setRefineGroups(groups);
-      setRefineSource(result.data.source === "model" ? "model" : "local");
-      return;
+    try {
+      const result = await alive(enhancePromptRequest({
+        prompt: form.prompt,
+        presetId: form.presetId,
+        locale: isEn ? "en" : "zh"
+      }));
+      if (!result) return;
+      if (result.ok && result.data && Array.isArray(result.data.groups)) {
+        const groups = result.data.groups.filter((group) => group && Array.isArray(group.options)).map((group) => ({
+          ...group,
+          options: group.options.map((option) => {
+            const text = option && typeof option.text === "string" ? option.text.trim() : "";
+            if (!text) return null;
+            const label = option && typeof option.label === "string" && option.label.trim() ? option.label.trim() : text;
+            return { ...option, text, label };
+          }).filter(Boolean)
+        })).filter((group) => group.options.length > 0);
+        setRefineGroups(groups);
+        setRefineSource(result.data.source === "model" ? "model" : "local");
+        return;
+      }
+      ui.fail(result.code, result.message);
+    } finally {
+      setEnhancing(false);
     }
-    ui.fail(result.code, result.message);
   }
   function toggleRefine(term) {
     patchForm({ prompt: toggleRefineTerm(form.prompt, term, refineSeparator(form.prompt)) });
@@ -4491,9 +4536,11 @@ ${value}` : value });
   return {
     form,
     patchForm,
+    selectPreset,
     buildBody,
     ratioId,
     styleId: form.styleId,
+    englishPromptHint,
     applyStyle,
     applyRatio,
     refineGroups: refineGroups.map((group) => ({
@@ -4712,21 +4759,24 @@ function useStudio(props) {
     pendingRef.current = body;
     setSending(true);
     ui.setError(null);
-    const result = await alive(submitGenerate(body));
-    if (!result) return;
-    setSending(false);
-    if (result.ok && result.data && result.data.id) {
-      const jobId = result.data.id;
-      const entries = [];
-      if (options.pushUser !== false) entries.push({ role: "user", text: body.prompt });
-      entries.push({ role: "assistant", kind: "job", jobId, stage: "pending", text: t("studio.chat.pending") });
-      chat.pushMessages(entries);
-      host.refresh();
-      library.loadHistory();
-      ui.showToast(t("studio.toast.submitted"));
-      return;
+    try {
+      const result = await alive(submitGenerate(body));
+      if (!result) return;
+      if (result.ok && result.data && result.data.id) {
+        const jobId = result.data.id;
+        const entries = [];
+        if (options.pushUser !== false) entries.push({ role: "user", text: body.prompt });
+        entries.push({ role: "assistant", kind: "job", jobId, stage: "pending", text: t("studio.chat.pending") });
+        chat.pushMessages(entries);
+        host.refresh();
+        library.loadHistory();
+        ui.showToast(t("studio.toast.submitted"));
+        return;
+      }
+      ui.fail(result.code, result.message);
+    } finally {
+      setSending(false);
     }
-    ui.fail(result.code, result.message);
   }
   function reroll(entry) {
     const target = entry || library.selected;
@@ -4780,7 +4830,7 @@ function useStudio(props) {
 }
 
 // src/studio/Studio.jsx
-var import_jsx_runtime16 = require("react/jsx-runtime");
+var import_jsx_runtime15 = require("react/jsx-runtime");
 function Studio(props) {
   const { t, isEn, ui, compute, form, chat, library, guidance, actions } = useStudio(props);
   const status = compute.status;
@@ -4789,16 +4839,16 @@ function Studio(props) {
   const chatMode = ui.panelMode === "chat";
   const logs = useStudioLogs(ui.logsOpen);
   useCompletionNotice({ t, ui, job: compute.focusedJob, activeJob: compute.activeJob });
-  const panel = chatMode ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(ChatPanel, { t, ui, form, chat, library, actions }) : /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Rail, { t, ui, form, actions });
-  return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-root", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("style", { children: CSS }),
-    /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-app", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(TopBar, { t, isEn, ui, compute, form, library, defaultModelOpen: props.defaultModelOpen }),
-      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(SessionBar, { t, status, elapsedMs: sessionElapsed }),
-      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(GuidanceCard, { t, guidance, compute, actions, ui }),
-      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: `ofs-body${ui.view === "gallery" ? " is-gallery" : ""}`, children: [
+  const panel = chatMode ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(ChatPanel, { t, ui, form, chat, library, actions }) : /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Rail, { t, ui, form, actions });
+  return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-root", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("style", { children: CSS }),
+    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-app", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(TopBar, { t, isEn, ui, compute, form, library, defaultModelOpen: props.defaultModelOpen }),
+      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(SessionBar, { t, status, elapsedMs: sessionElapsed }),
+      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(GuidanceCard, { t, guidance, compute, actions, ui }),
+      /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: `ofs-body${ui.view === "gallery" ? " is-gallery" : ""}`, children: [
         ui.view === "studio" ? panel : null,
-        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "ofs-main", children: ui.view === "gallery" ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "ofs-main", children: ui.view === "gallery" ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
           Gallery,
           {
             t,
@@ -4816,12 +4866,12 @@ function Studio(props) {
               ui.setView("studio");
             }
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Stage, { t, ui, compute, form, library, actions }) })
+        ) : /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Stage, { t, ui, compute, form, library, actions }) })
       ] }),
-      ui.view === "studio" ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Filmstrip, { t, ui, compute, library, now }) : null
+      ui.view === "studio" ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Filmstrip, { t, ui, compute, library, now }) : null
     ] }),
-    ui.logsOpen ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(LogsDrawer, { t, ui, compute, logs, onClose: ui.closeLogs }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Toast, { toast: ui.toast })
+    ui.logsOpen ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(LogsDrawer, { t, ui, compute, logs, onClose: ui.closeLogs }) : null,
+    /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Toast, { toast: ui.toast })
   ] });
 }
 

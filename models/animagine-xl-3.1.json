@@ -19,6 +19,8 @@
   "steps": 28,
   "cfg": 7,
   "negativeHint": "nsfw, lowres, (bad), text, error, fewer, extra, missing, worst quality, jpeg artifacts, low quality, watermark, unfinished, displeasing, oldest, early, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract]",
+  "promptStyle": "danbooru",
+  "qualityPrefix": "masterpiece, best quality, highres",
   "sizeOptions": [
     768,
     1024

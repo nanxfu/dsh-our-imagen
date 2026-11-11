@@ -19,6 +19,8 @@
   "steps": 4,
   "cfg": 0,
   "negativeHint": "blurry, low quality",
+  "promptStyle": "concise",
+  "qualityPrefix": "",
   "sizeOptions": [512, 768, 1024],
   "runtime": "default",
   "pipeline": {

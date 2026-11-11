@@ -12,7 +12,7 @@
  *    随注入配置下发（见 `remote/daemon.py` 的 config 解析）。
  */
 
-export const VERSION = '0.5.0'
+export const VERSION = '0.6.0'
 
 /**
  * Host HTTP 路由表（index.js 注册时必须逐一对应）。
@@ -111,6 +111,16 @@ export const TIMEOUTS = {
   clientStateActivePollMs: 2000,
   clientLogsPollMs: 2000,
 }
+
+/**
+ * 画面比例与风格 id 的唯一来源。
+ *
+ * 前端 `src/studio/ratios.js` / `capsules.js` 只保留「id → 尺寸 / 词表」的数据，
+ * 顺序与合法取值以本文件为准；`lib/intent.js` 校验模型返回的 clarify 也引用这里。
+ */
+export const RATIO_IDS = ['1:1', '16:9', '9:16', '4:3', '3:4']
+
+export const STYLE_IDS = ['film', 'concept', 'cyberpunk', 'ink', 'clay']
 
 /**
  * 错误码词表（唯一来源）。

@@ -23,6 +23,21 @@ const PNG_B64 =
 
 const DEV_TOKEN = 'dev-token-test'
 
+/**
+ * 假的宿主 llm 服务：记录每次调用的 system prompt / 消息，并回放固定文本。
+ * 用它验证「有模型」分支里 prompt / summary / text / label 的分工，而不是只测本地兜底。
+ */
+function createFakeLlm(reply) {
+  const calls = []
+  return {
+    calls,
+    stream: async function* (options) {
+      calls.push(options)
+      yield { text: reply }
+    },
+  }
+}
+
 function startMockDaemon() {
   // 异步 job 协议（v0.5.0）：POST /generate 只入队并返回 202 + job_id，
   // GET /job?id= 返回状态与结果。这里任务立即完成，Host 第一次轮询就能拿到结果，
@@ -109,10 +124,16 @@ function createFakeContext(workspace) {
   const tools = []
   const cleanups = []
   let origin = ''
+  // 默认没有可用模型：enhance / intent 走本地兜底。需要模型分支时用 setLlm 注入替身。
+  let llm = null
 
   const ctx = {
     get(name) {
       if (name === 'workingDirectory') return { defaultDirectory: workspace }
+      if (name === 'llm') return llm
+      if (name === 'agentDefaultModel') {
+        return llm ? { currentSelection: () => ({ provider: 'mock-provider', model: 'mock-model' }) } : undefined
+      }
       return undefined
     },
     effect(fn, _label) {
@@ -149,6 +170,10 @@ function createFakeContext(workspace) {
     tools,
     setOrigin(value) {
       origin = value
+    },
+    /** 注入 / 移除宿主模型替身；传 null 表示「没有可用模型」。 */
+    setLlm(next) {
+      llm = next
     },
     dispose() {
       for (const cleanup of cleanups.reverse()) {
@@ -488,7 +513,7 @@ async function main() {
     })
     assert.equal(result.status, 200)
     assert.equal(result.body.ok, true)
-    assert.ok(['model', 'local'].includes(result.body.source), `source=${result.body.source}`)
+    assert.equal(result.body.source, 'local', '测试环境没有宿主模型，应走本地兜底')
     assert.equal(result.body.groups.length, 4, '应按四个维度返回')
     assert.deepEqual(
       result.body.groups.map((group) => group.dimension),
@@ -501,8 +526,14 @@ async function main() {
         assert.equal(typeof option.id, 'string')
         assert.equal(typeof option.text, 'string')
         assert.ok(option.text.length > 0)
+        assert.equal(typeof option.label, 'string')
+        assert.ok(option.label.length > 0, '每条建议都要有 UI 语言标签')
+        assert.match(option.text, /^[A-Za-z0-9 ,'-]+$/, `text 必须是可直接追加进 prompt 的英文短语：${option.text}`)
+        assert.match(option.label, /[\u3400-\u9fff]/, `中文界面的 label 应为中文：${option.label}`)
       }
     }
+    assert.equal(result.body.groups[0].options[0].text, 'soft diffused light')
+    assert.equal(result.body.groups[0].options[0].label, '柔和漫射光')
 
     const english = await json(host.origin, '/imagen-api/enhance', {
       method: 'POST',
@@ -510,6 +541,7 @@ async function main() {
       body: JSON.stringify({ prompt: 'a cyber cat', locale: 'en' }),
     })
     assert.equal(english.body.groups[0].options[0].text, 'soft diffused light', '英文 locale 走英文本地建议')
+    assert.equal(english.body.groups[0].options[0].label, 'soft diffused light', '英文界面 label 与 text 相同')
 
     const blank = await json(host.origin, '/imagen-api/enhance', {
       method: 'POST',
@@ -519,16 +551,53 @@ async function main() {
     assert.deepEqual(blank.body.groups, [], '空描述不产生建议')
   })
 
+  await check('提示词润色（有模型）：英文短语 + UI 语言标签', async () => {
+    const llm = createFakeLlm(JSON.stringify({
+      groups: [
+        { dimension: 'lighting', options: [{ text: 'soft rim light', label: '柔和轮廓光' }, 'neon glow'] },
+        { dimension: 'material', options: [{ text: 'wet asphalt', label: '湿润沥青' }] },
+        { dimension: 'composition', options: [{ text: 'low angle', label: '低角度' }] },
+        { dimension: 'atmosphere', options: [{ text: 'quiet fog', label: '静谧雾气' }] },
+      ],
+    }))
+    fake.setLlm(llm)
+    try {
+      const result = await json(host.origin, '/imagen-api/enhance', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: '一只赛博猫', presetId: 'sdxl-lightning', locale: 'zh' }),
+      })
+      assert.equal(result.body.source, 'model')
+      const lighting = result.body.groups.find((group) => group.dimension === 'lighting')
+      assert.deepEqual(
+        [lighting.options[0].text, lighting.options[0].label],
+        ['soft rim light', '柔和轮廓光'],
+        '模型返回的 text / label 原样透传',
+      )
+      // 模型只给字符串时 label 回落到 text，建议不丢。
+      assert.deepEqual([lighting.options[1].text, lighting.options[1].label], ['neon glow', 'neon glow'])
+      assert.ok(llm.calls[0].system.includes('英文短语'), 'system prompt 应要求英文短语')
+      assert.ok(llm.calls[0].system.includes('label'), 'system prompt 应要求 UI 语言标签')
+    } finally {
+      fake.setLlm(null)
+    }
+  })
+
   await check('对话意图解析（无模型时走本地兜底）', async () => {
     const result = await json(host.origin, '/imagen-api/intent', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text: '给我画一张横版的雨夜街景，要写实一点', locale: 'zh' }),
+      body: JSON.stringify({
+        text: '给我画一张横版的雨夜街景，要写实一点',
+        presetId: 'animagine-xl-3.1',
+        locale: 'zh',
+      }),
     })
     assert.equal(result.status, 200)
     assert.equal(result.body.ok, true)
-    assert.equal(result.body.source, 'local')
-    assert.equal(result.body.prompt, '给我画一张横版的雨夜街景，要写实一点')
+    assert.equal(result.body.source, 'local', '测试环境没有宿主模型，应走本地兜底')
+    assert.equal(result.body.prompt, '给我画一张横版的雨夜街景，要写实一点', '无模型时 prompt 保持原文')
+    assert.equal(result.body.summary, '给我画一张横版的雨夜街景，要写实一点', '无模型时 summary 与原文一致')
     assert.equal(result.body.ratioId, '')
     assert.equal(result.body.styleId, '')
     assert.equal(result.body.clarify, null)
@@ -539,6 +608,50 @@ async function main() {
       body: JSON.stringify({ text: '   ' }),
     })
     assert.equal(blank.status, 400, '空对话内容应返回 400')
+  })
+
+  await check('意图解析（有模型）：中文输入产出英文 prompt 与 UI 语言摘要', async () => {
+    const llm = createFakeLlm(JSON.stringify({
+      prompt: 'masterpiece, best quality, highres, rainy night city street, wet pavement reflecting neon signs, cinematic lighting',
+      summary: '雨夜城市街景，湿润路面倒映霓虹招牌，电影感光影',
+      ratio: '16:9',
+      style: 'film',
+      clarify: null,
+    }))
+    fake.setLlm(llm)
+    try {
+      const result = await json(host.origin, '/imagen-api/intent', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: '画一张横版的雨夜街景，要写实一点', locale: 'zh', presetId: 'animagine-xl-3.1' }),
+      })
+      assert.equal(result.status, 200)
+      assert.equal(result.body.source, 'model')
+      assert.match(result.body.prompt, /^[A-Za-z0-9 ,'-]+$/, '发给模型的 prompt 必须是英文')
+      assert.ok(!/[\u3400-\u9fff]/.test(result.body.prompt), '中文不得进入提示词')
+      assert.match(result.body.summary, /[\u3400-\u9fff]/, '中文界面的摘要用中文')
+      assert.equal(result.body.ratioId, '16:9')
+      assert.equal(result.body.styleId, 'film')
+      assert.equal(result.body.clarify, null)
+
+      // danbooru 预设：system prompt 要求逗号标签流，并把预设的质量词前缀固定写进去。
+      const call = llm.calls[0]
+      assert.ok(call.messages[0].content[0].text.includes('雨夜街景'), '用户原话应原样发给模型')
+      assert.ok(call.system.includes('Danbooru'), 'danbooru 预设应要求标签流')
+      assert.ok(call.system.includes('masterpiece, best quality, highres'), '质量词前缀应写进 system prompt')
+      assert.ok(call.system.includes('summary'), 'system prompt 应约定 summary 字段')
+
+      // 自然语言预设：要求换成英文段落；同一个模型输出仍按同一套字段解析。
+      const natural = await json(host.origin, '/imagen-api/intent', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: '画一张横版的雨夜街景，要写实一点', locale: 'zh', presetId: 'realvis-v5' }),
+      })
+      assert.equal(natural.body.source, 'model')
+      assert.ok(llm.calls[1].system.includes('自然语言段落'), 'natural 预设应要求自然语言段落')
+    } finally {
+      fake.setLlm(null)
+    }
   })
 
   await check('打开产物目录（dryRun 只解析路径）', async () => {

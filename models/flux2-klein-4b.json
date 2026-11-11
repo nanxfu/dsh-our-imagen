@@ -19,6 +19,8 @@
   "steps": 4,
   "cfg": 1.0,
   "negativeHint": "",
+  "promptStyle": "natural",
+  "qualityPrefix": "",
   "sizeOptions": [768, 1024],
   "runtime": "default",
   "pipeline": {

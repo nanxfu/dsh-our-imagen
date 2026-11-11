@@ -19,6 +19,8 @@
   "steps": 25,
   "cfg": 4,
   "negativeHint": "",
+  "promptStyle": "natural",
+  "qualityPrefix": "",
   "sizeOptions": [
     768,
     1024,
