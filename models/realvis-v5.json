@@ -1,0 +1,52 @@
+{
+  "id": "realvis-v5",
+  "order": 35,
+  "label": "RealVisXL V5.0",
+  "family": "SDXL",
+  "short": "RealVis V5",
+  "description": {
+    "zh": "超写实摄影质感，人像与皮肤细节",
+    "en": "Photorealistic detail for portraits and skin"
+  },
+  "repo": "SG161222/RealVisXL_V5.0",
+  "params": "3.5B",
+  "license": "OpenRAIL++",
+  "licenseKind": "open",
+  "gated": false,
+  "gpus": 1,
+  "tier": "usable",
+  "size": 1024,
+  "steps": 25,
+  "cfg": 5,
+  "negativeHint": "blurry, low quality, deformed, extra limbs, ugly, bad anatomy",
+  "sizeOptions": [
+    768,
+    1024
+  ],
+  "runtime": "default",
+  "pipeline": {
+    "loader": "sdxl",
+    "base": "SG161222/RealVisXL_V5.0",
+    "lora": null,
+    "scheduler": null,
+    "variant": "fp16",
+    "downloadGb": 6.6,
+    "allowPatterns": [
+      "model_index.json",
+      "**/config.json",
+      "**/*.json",
+      "**/*.txt",
+      "unet/*.fp16.safetensors",
+      "text_encoder/model.fp16.safetensors",
+      "text_encoder_2/model.fp16.safetensors",
+      "vae/*.fp16.safetensors"
+    ],
+    "deviceMap": null
+  },
+  "measured": {
+    "peakVramMb": 9967,
+    "loadSeconds": 5.2,
+    "steadySeconds": 24.53,
+    "downloadGb": 6.46
+  }
+}

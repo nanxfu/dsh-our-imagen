@@ -1,7 +1,13 @@
 {
   "id": "sdxl-base",
   "order": 30,
-  "label": "标准 1024",
+  "label": "SDXL Base 1.0",
+  "family": "SDXL",
+  "short": "Base 1.0",
+  "description": {
+    "zh": "25 步原生精绘，结构完整细节扎实",
+    "en": "25-step native base, rich structural details"
+  },
   "repo": "stabilityai/stable-diffusion-xl-base-1.0",
   "params": "3.5B",
   "license": "OpenRAIL++",

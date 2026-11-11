@@ -13,7 +13,6 @@ import React from 'react'
 
 import { CSS } from '../styles.js'
 import { useNow } from '../hooks/useNow.js'
-import { jobElapsed } from '../logic/format.js'
 import { sessionElapsedMs } from '../logic/status.js'
 import { ChatPanel } from './ChatPanel.jsx'
 import { Filmstrip } from './Filmstrip.jsx'
@@ -30,11 +29,10 @@ import { useCompletionNotice } from './hooks/useStudioUi.js'
 import { useStudio } from './useStudio.js'
 
 export function Studio(props) {
-  const { t, ui, compute, form, chat, library, guidance, actions } = useStudio(props)
+  const { t, isEn, ui, compute, form, chat, library, guidance, actions } = useStudio(props)
   const status = compute.status
-  // 有任务或云端处于过渡态时每秒刷新，进度文案与「已等待」都能走字。
+  // 有任务或云端处于过渡态时每秒刷新，进度文案与各任务的已等待时长都能走字。
   const now = useNow(Boolean(compute.activeJob) || status.transient)
-  const elapsedMs = compute.activeJob ? jobElapsed(compute.activeJob, now) : 0
   const sessionElapsed = status.transient ? sessionElapsedMs(compute.session, now) : null
   const chatMode = ui.panelMode === 'chat'
   // 日志抽屉只在打开时轮询；完成提醒在页面隐藏期间用标签页标题提示。
@@ -50,7 +48,7 @@ export function Studio(props) {
       <style>{CSS}</style>
 
       <div className="ofs-app">
-        <TopBar t={t} ui={ui} compute={compute} form={form} library={library} />
+        <TopBar t={t} isEn={isEn} ui={ui} compute={compute} form={form} library={library} defaultModelOpen={props.defaultModelOpen} />
 
         <SessionBar t={t} status={status} elapsedMs={sessionElapsed} />
 
@@ -84,7 +82,7 @@ export function Studio(props) {
         </div>
 
         {ui.view === 'studio' ? (
-          <Filmstrip t={t} ui={ui} compute={compute} library={library} elapsedMs={elapsedMs} />
+          <Filmstrip t={t} ui={ui} compute={compute} library={library} now={now} />
         ) : null}
       </div>
 

@@ -31,7 +31,7 @@ web
 
 ## Capabilities and Constraints
 
-- **模型预设**：支持 SDXL Lightning（4 步极速，默认）、SDXL Turbo（1 步草图）、SDXL Base（25 步精修）与 FLUX.2-klein-4B（实验）。
+- **模型预设**：支持 9 个模型——SDXL Lightning（默认）、Hyper-SDXL 8-Step、SDXL Turbo、Playground v2.5、SDXL Base 1.0、RealVisXL V5.0、FLUX.2 Klein 4B、Animagine XL 3.1、Anima Light Lavender；名称、家族与定位描述以 `models/*.json` 为唯一来源。
 - **画面调优**：5 组比例预设（1:1、16:9、9:16、4:3、3:4）、5 类风格预设、4 维润色标签（光影、材质、构图、氛围）、高级参数抽屉（步数、CFG、种子、批量）。
 - **提示词工坊**：支持中英文自然语言输入；提供 5 组开箱即用的启发式场景灵感卡；支持大模型多维润色。
 - **工作台交互**：单轨创作面板（320px）、自适应居中画面预览、底部最近生成横向栏、全宽瀑布流作品画廊。
@@ -39,7 +39,7 @@ web
 - **对话助手**：支持大模型自然语言意图解析，生成参数确认卡片后再执行出图。
 - **技术与架构约束**：
   1. 客户端 Bundle：单文件打包（`client.js`），CSS 文本内联注入，不依赖外部 CSS 加载器或宿主样式管线。
-  2. 纯净零外部静态资产：不包含任何外部位图资产或外部字体，图标采用统一风格手写 SVG（1.6px 圆角描边），字体统一使用系统 UI 字栈。
+  2. 图像资产内联：模型选择卡的 8 张 56×56 海报以 112/96px WebP 在构建期转成 data URL（8 张合计 base64 ≤20KB），运行时零外部图片请求、离线可用；其余界面不引入外部位图资产与字体，图标采用统一风格手写 SVG（1.6px 圆角描边），字体统一使用系统 UI 字栈。
   3. 尺寸规范：输出图片尺寸限定在 256~1536 像素之间，且宽高必须是 8 的整数倍。
 
 ## Brand Commitments
@@ -51,9 +51,9 @@ web
 
 ## Evidence on Hand
 
-- 无外部真实商业摄影资产，视觉资产为 `icon.svg` 与 `src/studio/icons.jsx` 的手写 SVG 图标；
+- 模型选择卡的 9 张海报来自 Pexels（可商用，来源与作者见 `src/studio/posters/SOURCES.md`）；其余视觉资产为 `icon.svg` 与 `src/studio/icons.jsx` 的手写 SVG 图标；
 - 预览与测试中的渐变占位图为合成示例数据；
-- 界面视觉真相以已通过的 Golden 截图基准（`test/render-golden.json`）与实时代码为准。
+- 界面视觉真相以 `tools/preview.mjs` 生成的无头截图与实时代码为准。
 
 ## Product Principles
 

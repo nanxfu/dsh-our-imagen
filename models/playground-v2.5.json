@@ -1,0 +1,52 @@
+{
+  "id": "playground-v2.5",
+  "order": 25,
+  "label": "Playground v2.5",
+  "family": "SDXL",
+  "short": "Playground 2.5",
+  "description": {
+    "zh": "美学取向，画面干净耐看",
+    "en": "Aesthetic-first, clean and polished"
+  },
+  "repo": "playgroundai/playground-v2.5-1024px-aesthetic",
+  "params": "3.5B",
+  "license": "Playground v2.5 Community License",
+  "licenseKind": "open",
+  "gated": false,
+  "gpus": 1,
+  "tier": "usable",
+  "size": 1024,
+  "steps": 30,
+  "cfg": 3,
+  "negativeHint": "ugly, deformed, noisy, blurry, distorted",
+  "sizeOptions": [
+    768,
+    1024
+  ],
+  "runtime": "default",
+  "pipeline": {
+    "loader": "sdxl",
+    "base": "playgroundai/playground-v2.5-1024px-aesthetic",
+    "lora": null,
+    "scheduler": null,
+    "variant": "fp16",
+    "downloadGb": 6.6,
+    "allowPatterns": [
+      "model_index.json",
+      "**/config.json",
+      "**/*.json",
+      "**/*.txt",
+      "unet/*.fp16.safetensors",
+      "text_encoder/model.fp16.safetensors",
+      "text_encoder_2/model.fp16.safetensors",
+      "vae/*.fp16.safetensors"
+    ],
+    "deviceMap": null
+  },
+  "measured": {
+    "peakVramMb": 9967,
+    "loadSeconds": 5.7,
+    "steadySeconds": 28.34,
+    "downloadGb": 6.46
+  }
+}

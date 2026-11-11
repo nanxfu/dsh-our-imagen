@@ -16,7 +16,7 @@ import {
   startSession as startSessionRequest,
   stopSession as stopSessionRequest,
 } from '../../api/resources.js'
-import { activeJobOf, stateJobs } from '../../logic/jobs.js'
+import { pendingJobsOf, stateJobs } from '../../logic/jobs.js'
 import { probeOutcomeOf } from '../../logic/probe.js'
 import { computeStatusOf } from '../../logic/status.js'
 
@@ -28,7 +28,10 @@ export function useSessionControl({ t, host, ui, alive }) {
   const state = host.state
   const session = (state && state.session) || null
   const sessionState = (session && session.state) || 'absent'
-  const activeJob = activeJobOf(state)
+  // 待执行队列：第 1 个是真正在跑（或等云端）的任务，其余按提交顺序排队。
+  // 进度文案、舞台与底部胶片条都按这个顺序取「当前任务」，排队任务才不会被误当成进行中。
+  const pendingJobs = pendingJobsOf(state)
+  const activeJob = pendingJobs[0] ?? null
   // 焦点任务：进行中优先，其次最近完成的，再次列表首个（历史任务的异常也要能出指引）。
   const focusedJob = activeJob || (state && state.lastJob) || stateJobs(state)[0] || null
   // 云端展示状态（胶囊 / 状态条 / 弹层 / 对话页徽章共用）。
@@ -109,6 +112,7 @@ export function useSessionControl({ t, host, ui, alive }) {
     session,
     sessionState,
     status,
+    pendingJobs,
     activeJob,
     focusedJob,
     quota: (state && state.probe && state.probe.quota) || null,

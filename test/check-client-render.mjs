@@ -27,7 +27,10 @@ const at = (offsetSec) => new Date(NOW + offsetSec * 1000).toISOString()
 
 const preset = {
   id: 'sdxl-lightning',
-  label: '默认 · 1024 快档',
+  label: 'SDXL Lightning',
+  family: 'SDXL',
+  short: 'Lightning',
+  description: { zh: '4 步极速出图，平衡画质与耗时', en: '4-step fast generation, balanced quality' },
   params: '3.5B + LoRA',
   license: 'OpenRAIL++',
   licenseKind: 'open',
@@ -39,7 +42,7 @@ const preset = {
   steadySeconds: 6.2,
   tier: 'fast',
 }
-const turbo = { ...preset, id: 'sdxl-turbo', label: '极速草稿', license: '非商用研究许可', licenseKind: 'restricted', tier: 'usable' }
+const turbo = { ...preset, id: 'sdxl-turbo', label: 'SDXL Turbo', short: 'Turbo', description: { zh: '实时低延迟，适合构图灵感与草稿速探', en: 'Real-time low latency, ideal for drafting' }, license: '非商用研究许可', licenseKind: 'restricted', tier: 'usable' }
 
 const image = (seed) => ({
   path: `imagen-output/job-1/${seed}.png`,
@@ -249,6 +252,35 @@ const scenarios = {
         'ofs-image': 1,
       },
       forbidden: ['ofs-guidance', 'ofs-figure--empty', 'ofs-toast'],
+    },
+  },
+  queueTwo: {
+    state: {
+      defaultPreset: 'sdxl-lightning',
+      presets: [preset],
+      session: { state: 'ready', modelId: 'sdxl-lightning', device: 'Tesla T4', error: null },
+      // 同一时刻两个待执行任务：宿主的 jobs 最新在前，排队中的第二个排在列表首位。
+      // 胶片条必须给每个任务一张卡，进度也必须是正在生成的那一张，而不是排队的那张。
+      jobs: [
+        { id: 'job-second', status: 'queued', createdAt: at(-5), startedAt: null, params: { prompt: '排队中的第二张' } },
+        { id: 'job-first', status: 'running', createdAt: at(-30), startedAt: at(-8), params: { prompt: '正在出的第一张' } },
+      ],
+      lastJob: null,
+    },
+    history: { items: [] },
+    props: {},
+    expect: ['正在生成…', '排队等待出图…', '8.0秒', '5.0秒'],
+    reject: ['等待云端就绪…'],
+    structure: {
+      required: {
+        'ofs-ghost': 2,
+        'ofs-ghost-bar': 1,
+        'ofs-ghost-slot': 1,
+        'ofs-ghost-label': 2,
+        'ofs-ghost-time': 2,
+        'ofs-stage-progress': 1,
+      },
+      forbidden: ['ofs-filmstrip-empty', 'ofs-batch', 'ofs-guidance'],
     },
   },
   warming: {
@@ -887,6 +919,119 @@ await check('渲染：算力弹层配额回退、隧道通道与日志入口', a
   const idleFlat = await mountWithoutProbe('absent', null)
   assert.ok(idleFlat.includes('账号 · 未检查'), `[compute] 未探测时应显示未检查，实际：${idleFlat}`)
   assert.ok(!idleFlat.includes('账号 · 不可用'), '[compute] 未探测不应显示不可用')
+})
+
+await check('渲染：模型选择卡展开态', async () => {
+  const client = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/state': readyState,
+      '/imagen-api/history': { items: [] },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+    },
+    testBuild: true,
+  })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const tree = await client.mountRaw(client.components.TopBar, {
+    t,
+    isEn: false,
+    ui: { view: 'studio', setView: () => {}, openLogs: () => {} },
+    compute: {
+      sessionState: 'ready',
+      session: readyState.session,
+      quota: readyState.probe.quota,
+      presets: [preset, turbo],
+      defaultPreset: 'sdxl-lightning',
+      busy: '',
+      probing: false,
+      probe: readyState.probe,
+      probeReport: null,
+      startSession: () => {},
+      stopSession: () => {},
+      runProbe: () => {},
+      openFolder: () => {},
+    },
+    form: {
+      form: { presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0 },
+      patchForm: () => {},
+    },
+    library: { loadHistory: () => {} },
+    defaultModelOpen: true,
+  })
+  client.unmount()
+
+  const text = collectText(tree).join(' | ')
+  for (const needle of [
+    '出图模型 · 2',
+    '实测稳态耗时',
+    'Lightning',
+    'Turbo',
+    '默认',
+    '4 步极速出图，平衡画质与耗时',
+    '3.5B + LoRA · 1024px · 4 步',
+    '~6.2秒',
+    '海报为概念示意，非出图样例；切换会套用推荐尺寸与步数。',
+  ]) {
+    assert.ok(text.includes(needle), `[model-picker] 缺少文案：${needle}`)
+  }
+  assertStructure('model-picker', tree, {
+    required: {
+      'ofs-model': 1,
+      'ofs-model-menu': 1,
+      'ofs-model-option': 2,
+      'ofs-model-poster': 2,
+      'ofs-model-default': 1,
+    },
+    forbidden: ['ofs-preset'],
+  })
+
+  const options = findNodes(tree, (node) => node.props && node.props.role === 'option')
+  assert.equal(options.length, 2, '[model-picker] 应渲染两个模型选项')
+  const selected = options.find((node) => node.props['aria-selected'] === 'true')
+  assert.ok(selected, '[model-picker] 应有选中项')
+  assert.equal(selected.props['aria-selected'], 'true')
+  const trigger = findNodes(
+    tree,
+    (node) => node.type === 'button' && node.props && node.props.className === 'ofs-model',
+  )[0]
+  assert.ok(trigger, '[model-picker] 缺少触发胶囊')
+  assert.equal(trigger.props['aria-expanded'], 'true')
+  assert.equal(trigger.props['aria-haspopup'], 'listbox')
+
+  // 组件级：点选回调与中英切换（不依赖浏览器事件，直接调用渲染树上的回调）。
+  const pickerClient = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const calls = { open: [], change: [] }
+  const pickerTree = await pickerClient.mountRaw(pickerClient.components.ModelCardPicker, {
+    t: pickerClient.internals.i18n.fallbackTranslate('zh'),
+    isEn: false,
+    presets: [preset, turbo],
+    value: 'sdxl-lightning',
+    defaultPreset: 'sdxl-lightning',
+    open: true,
+    onOpenChange: (next) => calls.open.push(next),
+    onChange: (next) => calls.change.push(next.id),
+  })
+  pickerClient.unmount()
+  const pickerOptions = findNodes(pickerTree, (node) => node.props && node.props.role === 'option')
+  pickerOptions[1].props.onClick()
+  assert.deepEqual(calls.change, ['sdxl-turbo'], '[model-picker] 点选应把完整预设交给 onChange')
+  assert.deepEqual(calls.open, [false], '[model-picker] 点选后应请求关闭')
+
+  const enClient = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const enTree = await enClient.mountRaw(enClient.components.ModelCardPicker, {
+    t: enClient.internals.i18n.fallbackTranslate('en'),
+    isEn: true,
+    presets: [preset],
+    value: 'sdxl-lightning',
+    defaultPreset: 'sdxl-lightning',
+    open: true,
+    onOpenChange: () => {},
+    onChange: () => {},
+  })
+  enClient.unmount()
+  const enText = collectText(enTree).join(' | ')
+  assert.ok(enText.includes('4-step fast generation, balanced quality'), '[model-picker] 英文描述应取自 description.en')
+  assert.ok(enText.includes('~6.2s'), '[model-picker] 英文耗时单位应为 s')
 })
 
 await check('渲染：大图预览 dialog 与图片 alt', async () => {

@@ -53,7 +53,8 @@ export async function bundle({ test = false } = {}) {
     // JSX 交给 esbuild 转换，运行时走 react/jsx-runtime（平台共享模块表里有）。
     jsx: 'automatic',
     // 样式以文本形式打进 bundle，组件用 <style> 注入，避免依赖宿主的样式管线。
-    loader: { '.css': 'text' },
+    // 模型海报（112/96px WebP）在构建期内联为 data URL：运行时零网络请求，单文件分发不裂图。
+    loader: { '.css': 'text', '.webp': 'dataurl' },
     resolveExtensions: ['.jsx', '.js', '.json'],
   })
 

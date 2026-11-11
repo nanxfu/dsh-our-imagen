@@ -1,7 +1,13 @@
 {
   "id": "flux2-klein-4b",
   "order": 40,
-  "label": "质量优先",
+  "label": "FLUX.2 Klein 4B",
+  "family": "FLUX",
+  "short": "Klein 4B",
+  "description": {
+    "zh": "下一代前沿架构，商业级质感与光影",
+    "en": "Next-gen architecture, commercial grade"
+  },
   "repo": "black-forest-labs/FLUX.2-klein-4B",
   "params": "3.88B",
   "license": "Apache-2.0",

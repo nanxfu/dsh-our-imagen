@@ -1,7 +1,13 @@
 {
   "id": "sdxl-lightning",
   "order": 10,
-  "label": "默认 · 1024 快档",
+  "label": "SDXL Lightning",
+  "family": "SDXL",
+  "short": "Lightning",
+  "description": {
+    "zh": "4 步极速出图，平衡画质与耗时",
+    "en": "4-step fast generation, balanced quality"
+  },
   "repo": "stabilityai/stable-diffusion-xl-base-1.0 + ByteDance/SDXL-Lightning",
   "params": "3.5B + LoRA",
   "license": "OpenRAIL++",

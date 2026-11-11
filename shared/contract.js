@@ -12,7 +12,7 @@
  *    随注入配置下发（见 `remote/daemon.py` 的 config 解析）。
  */
 
-export const VERSION = '0.4.1'
+export const VERSION = '0.5.0'
 
 /**
  * Host HTTP 路由表（index.js 注册时必须逐一对应）。
@@ -73,7 +73,13 @@ export const TIMEOUTS = {
   // 远端 HTTP
   remoteHealthMs: 4000,
   remoteLogsMs: 4000,
-  remoteGenerateMs: 300000,
+  // 生成任务：远端改为异步 job（POST /generate 只入队，GET /job 轮询）。
+  // 提交与轮询都是短请求，长耗时只存在于远端队列里，隧道/代理不会因为长连接空闲掐断。
+  remoteSubmitMs: 15000,
+  remoteJobRequestMs: 8000,
+  remoteJobPollMs: 2000,
+  // 单个任务整体预算（可在配置里用 generateTimeoutSeconds 覆盖）。
+  remoteJobMs: 600000,
   remoteShutdownMs: 3000,
   remoteGenerateMaxBytes: 32 * 1024 * 1024,
   // ntfy 会合轮询单次请求
@@ -182,6 +188,8 @@ export const PROTOCOL = {
       health: { method: 'GET', path: '/health' },
       logs: { method: 'GET', path: '/logs' },
       generate: { method: 'POST', path: '/generate' },
+      // 异步 job：POST /generate 只入队并返回 job_id，Host 用 GET /job?id= 轮询。
+      job: { method: 'GET', path: '/job' },
       shutdown: { method: 'POST', path: '/shutdown' },
     },
     // /health.phase 的完整取值域；未知值按 warming 处理。

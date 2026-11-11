@@ -26,6 +26,9 @@ Thumbs.db
 # 设计预览产物
 tools/.preview/
 
+# 设计过程稿（截图与 HTML 预览，按 docs/PRE_RELEASE_SPEC.md 仅本地保留）
+design-demos/
+
 # 分发打包产物（npm run package）
 dist/
 

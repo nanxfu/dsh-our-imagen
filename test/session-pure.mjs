@@ -67,23 +67,43 @@ function closeServer(server) {
   })
 }
 
-/** 本机 mock /generate：只回固定结构，用来验证端口拼包与结果映射。 */
+/** 本机 mock 远端：异步 job 协议（POST /generate 入队 + GET /job 轮询），验证端口拼包与结果映射。 */
 async function startMockDaemon() {
-  const state = { calls: 0, lastBody: null }
+  const state = { calls: 0, jobCalls: 0, lastBody: null, jobs: new Map() }
   const server = createServer((req, res) => {
-    const chunks = []
-    req.on('data', (chunk) => chunks.push(chunk))
-    req.on('end', () => {
-      state.calls += 1
-      state.lastBody = JSON.parse(Buffer.concat(chunks).toString('utf8'))
-      const body = JSON.stringify({
-        status: 'ok',
-        model_id: 'test/model',
-        results: [{ name: '01', seed: 7, seconds: 0.1, width: 512, height: 512, image_b64: '' }],
+    const send = (code, value) => {
+      const payload = Buffer.from(JSON.stringify(value))
+      res.writeHead(code, { 'content-type': 'application/json', 'content-length': String(payload.length) })
+      res.end(payload)
+    }
+    if (req.method === 'POST' && req.url === '/generate') {
+      const chunks = []
+      req.on('data', (chunk) => chunks.push(chunk))
+      req.on('end', () => {
+        state.calls += 1
+        state.lastBody = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+        const jobId = state.lastBody.jobId || `job-${state.calls}`
+        state.jobs.set(jobId, {
+          status: 'done',
+          job_id: jobId,
+          model_id: 'test/model',
+          progress: { done: 1, total: 1 },
+          load_seconds: 0.1,
+          results: [{ name: '01', seed: 7, seconds: 0.1, width: 512, height: 512, image_b64: '' }],
+          error: null,
+        })
+        send(202, { status: 'accepted', job_id: jobId, model_id: 'test/model' })
       })
-      res.writeHead(200, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) })
-      res.end(body)
-    })
+      return
+    }
+    if (req.method === 'GET' && req.url.startsWith('/job?id=')) {
+      state.jobCalls += 1
+      const id = decodeURIComponent(req.url.slice('/job?id='.length))
+      const job = state.jobs.get(id)
+      if (!job) return send(404, { error: { code: 'unknown_job', message: '任务不存在或已过期' } })
+      return send(200, job)
+    }
+    send(404, { error: { code: 'not_found', message: 'not found' } })
   })
   const port = await listen(server)
   return { state, endpoint: `http://127.0.0.1:${port}`, close: () => closeServer(server) }
@@ -391,7 +411,7 @@ async function scenarioRemotePort() {
     const queue = makeGenerationQueue(() => ({ endpoint: mock.endpoint, token: 'test-token' }))
 
     await check('成功路径：tasks 递增 seed / 字段名转换 / 返回 modelId', async () => {
-      const { results, modelId } = await queue.generate('sdxl-turbo', params, 5000)
+      const { results, modelId } = await queue.generate({ id: 'job-1', presetId: 'sdxl-turbo', params })
       assert.equal(mock.state.calls, 1)
       assert.equal(mock.state.lastBody.pipeline.loader, 'sdxl')
       assert.equal(mock.state.lastBody.modelId, 'stabilityai/sdxl-turbo')
@@ -414,7 +434,7 @@ async function scenarioRemotePort() {
 
     await check('seed 接近上界时环形回绕：全部落在契约范围内且按序递增', async () => {
       const wrapped = { ...params, seed: LIMITS.seed.max - 1, count: 4 }
-      await queue.generate('sdxl-turbo', wrapped, 5000)
+      await queue.generate({ id: 'job-2', presetId: 'sdxl-turbo', params: wrapped })
       const seeds = mock.state.lastBody.tasks.map((task) => task.seed)
       assert.deepEqual(seeds, [LIMITS.seed.max - 1, 0, 1, 2], `回绕结果：${seeds}`)
       assert.ok(
@@ -426,7 +446,7 @@ async function scenarioRemotePort() {
     await check('连接不可用 → session_absent（原文案）', async () => {
       const offline = makeGenerationQueue(() => ({ endpoint: null, token: null }))
       await assert.rejects(
-        () => offline.generate('sdxl-turbo', params, 1000),
+        () => offline.generate({ id: 'job-3', presetId: 'sdxl-turbo', params }),
         (error) => error.code === 'session_absent' && error.message === '远端连接不可用',
       )
     })
@@ -435,21 +455,40 @@ async function scenarioRemotePort() {
   }
 
   await check('空结果 → empty_result（原文案）', async () => {
+    // 异步协议下「空结果」= 任务 done 但 results 为空数组。
     const server = createServer((req, res) => {
-      const body = JSON.stringify({ status: 'ok', model_id: 'm', results: [] })
-      res.writeHead(200, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) })
-      res.end(body)
+      const send = (code, value) => {
+        const payload = Buffer.from(JSON.stringify(value))
+        res.writeHead(code, { 'content-type': 'application/json', 'content-length': String(payload.length) })
+        res.end(payload)
+      }
+      if (req.method === 'POST' && req.url === '/generate') {
+        req.resume()
+        req.on('end', () => send(202, { status: 'accepted', job_id: 'empty-job', model_id: 'm' }))
+        return
+      }
+      if (req.method === 'GET' && req.url.startsWith('/job?id=')) {
+        return send(200, {
+          status: 'done',
+          job_id: 'empty-job',
+          model_id: 'm',
+          progress: { done: 0, total: 1 },
+          results: [],
+          error: null,
+        })
+      }
+      send(404, { error: { code: 'not_found', message: 'not found' } })
     })
     const port = await listen(server)
     try {
       const queue = makeGenerationQueue(() => ({ endpoint: `http://127.0.0.1:${port}`, token: 't' }))
       await assert.rejects(
         () =>
-          queue.generate(
-            'sdxl-turbo',
-            { prompt: 'x', negativePrompt: '', seed: 1, width: 512, height: 512, steps: 1, cfg: 0, count: 1 },
-            5000,
-          ),
+          queue.generate({
+            id: 'job-empty',
+            presetId: 'sdxl-turbo',
+            params: { prompt: 'x', negativePrompt: '', seed: 1, width: 512, height: 512, steps: 1, cfg: 0, count: 1 },
+          }),
         (error) => error.code === 'empty_result' && error.message === '远端没有返回图片',
       )
     } finally {

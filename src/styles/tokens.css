@@ -51,6 +51,17 @@
   --ofs-idle: #a0a0a8;
   --ofs-idle-soft: #f1f1f3;
 
+  /* 光桌与相纸：舞台是一张下凹的光桌，出图是一张落在桌上的相纸。
+     这是界面里唯一带实物感的表面，其余控件都保持扁平卡片。 */
+  --ofs-mat: #f0f0f2;
+  --ofs-mat-lit: rgb(255 255 255 / 92%);
+  --ofs-mat-inner: inset 0 1px 3px rgb(16 16 20 / 6%);
+  --ofs-print-paper: #ffffff;
+  --ofs-print-edge: rgb(18 18 22 / 10%);
+  --ofs-print-shadow: 0 20px 40px -24px rgb(16 16 20 / 42%), 0 4px 10px -6px rgb(16 16 20 / 18%);
+  --ofs-print-shadow-hover: 0 26px 50px -24px rgb(16 16 20 / 46%), 0 6px 14px -6px rgb(16 16 20 / 20%);
+  --ofs-mark: rgb(18 18 22 / 26%);
+
   /* 几何 */
   --ofs-r-xl: 24px;
   --ofs-r-lg: 18px;
@@ -125,6 +136,16 @@
     --ofs-error-soft: rgb(224 122 122 / 14%);
     --ofs-idle: #8a8a92;
     --ofs-idle-soft: rgb(255 255 255 / 6%);
+
+    /* 深色里相纸仍然是整间暗房里最亮的表面：光桌 > 相纸 > 卡片 > 地面 */
+    --ofs-mat: #1e1e22;
+    --ofs-mat-lit: rgb(255 255 255 / 7%);
+    --ofs-mat-inner: inset 0 1px 3px rgb(0 0 0 / 36%);
+    --ofs-print-paper: #2b2b31;
+    --ofs-print-edge: rgb(255 255 255 / 13%);
+    --ofs-print-shadow: 0 22px 44px -24px rgb(0 0 0 / 78%), 0 4px 12px -6px rgb(0 0 0 / 50%);
+    --ofs-print-shadow-hover: 0 28px 54px -24px rgb(0 0 0 / 82%), 0 6px 16px -6px rgb(0 0 0 / 54%);
+    --ofs-mark: rgb(255 255 255 / 28%);
 
     --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 28px -18px rgb(0 0 0 / 70%);
     --ofs-shadow-lift: 0 2px 6px rgb(0 0 0 / 44%), 0 20px 44px -22px rgb(0 0 0 / 76%);

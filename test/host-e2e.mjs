@@ -24,7 +24,10 @@ const PNG_B64 =
 const DEV_TOKEN = 'dev-token-test'
 
 function startMockDaemon() {
-  const state = { generateCalls: 0, healthCalls: 0, lastBody: null }
+  // 异步 job 协议（v0.5.0）：POST /generate 只入队并返回 202 + job_id，
+  // GET /job?id= 返回状态与结果。这里任务立即完成，Host 第一次轮询就能拿到结果，
+  // 端到端测试不会为了轮询间隔变慢。
+  const state = { generateCalls: 0, healthCalls: 0, lastBody: null, jobs: new Map() }
   const server = createServer((req, res) => {
     const send = (code, value) => {
       const body = Buffer.from(JSON.stringify(value))
@@ -56,24 +59,37 @@ function startMockDaemon() {
         state.generateCalls += 1
         const body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
         state.lastBody = body
-        send(200, {
-          status: 'ok',
+        const jobId = String(body.jobId || `mock-job-${state.generateCalls}`)
+        const results = body.tasks.map((task) => ({
+          name: task.name,
+          seed: task.seed,
+          seconds: 0.05,
+          width: task.width,
+          height: task.height,
+          steps: task.steps,
+          cfg: task.cfg,
+          png_bytes: 70,
+          image_b64: PNG_B64,
+        }))
+        state.jobs.set(jobId, {
+          status: 'done',
+          job_id: jobId,
           model_id: body.modelId,
+          progress: { done: results.length, total: results.length },
           load_seconds: 0.1,
-          results: body.tasks.map((task) => ({
-            name: task.name,
-            seed: task.seed,
-            seconds: 0.05,
-            width: task.width,
-            height: task.height,
-            steps: task.steps,
-            cfg: task.cfg,
-            png_bytes: 70,
-            image_b64: PNG_B64,
-          })),
+          results,
+          error: null,
         })
+        send(202, { status: 'accepted', job_id: jobId, model_id: body.modelId })
       })
       return
+    }
+
+    if (req.method === 'GET' && req.url.startsWith('/job?id=')) {
+      const id = decodeURIComponent(req.url.slice('/job?id='.length))
+      const job = state.jobs.get(id)
+      if (!job) return send(404, { error: { code: 'unknown_job', message: '任务不存在或已过期' } })
+      return send(200, job)
     }
 
     if (req.method === 'POST' && req.url === '/shutdown') return send(200, { status: 'shutting_down' })

@@ -13,7 +13,8 @@ export function formatDuration(t, ms) {
 export function formatSeconds(t, seconds) {
   const value = Number(seconds)
   if (!Number.isFinite(value)) return '—'
-  return `${value < 10 ? value.toFixed(1) : Math.round(value)}${t('unit.second')}`
+  // 统一保留 1 位小数：顶栏模型卡、舞台曝光单与算力弹层必须给出同一个精度（27.8 不取整成 28）。
+  return `${value.toFixed(1)}${t('unit.second')}`
 }
 
 export function jobElapsed(job, now) {

@@ -8,8 +8,12 @@
   GET  /health              phase 报告 booting/installing/loading/ready/error，
                             并带 tunnel_provider / tunnel_state / tunnel_restarts
   GET  /logs?since=N        {lines, next}，环形缓冲最多 400 行
-  POST /generate            {status, model_id, load_seconds, results[...]}
+  POST /generate            {status:"accepted", job_id, model_id, created_at}（202，入队即返回）
+  GET  /job?id=<job_id>     {status:queued|running|done|failed, progress, results|error, ...}
   POST /shutdown            {"status": "shutting_down"} 后退出
+
+0.5.0 起 /generate 是异步的：提交只做校验+入队，202 返回；后台 worker 线程串行执行，
+Host 用 GET /job 轮询。这样同步长请求不会再被代理/隧道当成「响应空闲」掐断。
 
 契约：启动时加载 ``remote/contract.json``（由 ``node tools/gen-contract-json.mjs`` 从
 shared/contract.js 生成），参数边界与 daemon 注入的 ``config.contract`` 同源；文件缺失或损坏
@@ -19,8 +23,9 @@ shared/contract.js 生成），参数边界与 daemon 注入的 ``config.contrac
 
 失败注入分支（供 Host 的错误分支回归使用）：
   --phase installing|loading|error   /generate 返回 503（warming / load_failed）
-  --fail oom|load_failed|...         固定错误码（旧错误分类分支）
-  --fail-generate 400|500            固定 HTTP 状态码的错误响应
+  --fail oom|load_failed|...         固定错误码（提交时同步报错，旧错误分类分支）
+  --fail-generate 400|500            固定 HTTP 状态码的错误响应（提交时同步报错）
+  --fail-job oom|load_failed|...     入队成功、worker 执行时让 job 变成 failed
 
 图片编码优先用 Pillow；没装 Pillow 时退回内置的最小 PNG 编码（zlib + CRC32），
 保证任何环境都能返回合法 PNG。
@@ -29,6 +34,7 @@ shared/contract.js 生成），参数边界与 daemon 注入的 ``config.contrac
   python test/mock-daemon.py --port 17860 --token test-token
   python test/mock-daemon.py --port 17860 --token test-token --delay 1.5
   python test/mock-daemon.py --port 17860 --token test-token --fail oom
+  python test/mock-daemon.py --port 17860 --token test-token --fail-job oom
   python test/mock-daemon.py --port 17860 --token test-token --warm-seconds 20
   python test/mock-daemon.py --port 17860 --token test-token --phase error
   python test/mock-daemon.py --port 17860 --token test-token --fail-generate 500
@@ -42,6 +48,7 @@ import hmac
 import io
 import json
 import os
+import re
 import struct
 import sys
 import threading
@@ -61,11 +68,13 @@ except Exception:  # pragma: no cover - 只在极简环境触发
     ImageDraw = None  # type: ignore[assignment]
     _HAS_PILLOW = False
 
-VERSION = "0.4.1-mock"
+VERSION = "0.5.0-mock"
 LOG_MAX_LINES = 400
-SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2")
+SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2", "anima")
 FAIL_CHOICES = ("none", "oom", "load_failed", "invalid_request", "generation_failed")
 FAIL_GENERATE_CHOICES = ("none", "400", "500")
+# --fail-job：入队成功、worker 执行阶段失败（用于 Host 的 job 失败分支回归）。
+FAIL_JOB_CHOICES = ("none", "oom", "load_failed", "generation_failed")
 # --phase 取值域：auto = 按 --warm-seconds 推导；其余与 remote/daemon.py 的 /health.phase 一致。
 PHASE_CHOICES = ("auto", "ready", "installing", "loading", "error")
 
@@ -88,7 +97,13 @@ FALLBACK_CONTRACT = {
 
 CONTRACT: dict = {}
 # HTTP 路由路径是 daemon 协议的一部分（与 remote/daemon.py 一致），不从契约文件读取。
-ROUTE_PATHS = {"health": "/health", "logs": "/logs", "generate": "/generate", "shutdown": "/shutdown"}
+ROUTE_PATHS = {
+    "health": "/health",
+    "logs": "/logs",
+    "generate": "/generate",
+    "job": "/job",
+    "shutdown": "/shutdown",
+}
 
 _START_TS = time.time()
 _ARGS: argparse.Namespace  # 在 main() 里赋值
@@ -326,7 +341,7 @@ def health_payload(extra: dict | None = None) -> dict:
         "idle_seconds": round(time.time() - _LAST_ACTIVE, 1),
         "idle_timeout_sec": int(_ARGS.idle_timeout),
         "jobs_done": _JOBS_DONE["count"],
-        "queue_depth": 0,
+        "queue_depth": queue_depth(),
         "last_error": _LAST_ERROR["value"],
         "last_error_code": _LAST_ERROR["code"],
         "detail": (extra.get("detail") if extra else None)
@@ -347,6 +362,185 @@ _JOBS_DONE = {"count": 0}
 _LAST_ERROR = {"value": None, "code": None}
 _AUTH_TOKEN = ""
 _GEN_LOCK = threading.Lock()
+
+# ── 异步 job（0.5.0）：与 remote/daemon.py 同名同形，语义一致 ────────────────
+JOB_MAX_FINISHED = 8
+JOB_TTL_SEC = 600.0
+JOB_ID_MAX_CHARS = 64
+JOB_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_JOB_LOCK = threading.RLock()
+_JOB_QUEUE: deque = deque()
+_JOB_TABLE: dict[str, dict] = {}
+_JOB_FINISHED: deque = deque()
+_JOB_WAKE = threading.Event()
+
+
+def iso_time(ts: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
+
+
+def new_job_id() -> str:
+    return f"job-{int(time.time() * 1000):x}-{os.urandom(4).hex()}"
+
+
+def normalize_job_id(value):  # noqa: ANN001, ANN201
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("jobId 必须是字符串")
+    text = value.strip()
+    if not text:
+        return None
+    if len(text) > JOB_ID_MAX_CHARS or not JOB_ID_RE.match(text):
+        raise ValueError("jobId 只能是 1~64 位的字母、数字、点、下划线或短横线")
+    return text
+
+
+def prune_jobs(now: float | None = None) -> None:
+    current = time.time() if now is None else now
+    while _JOB_FINISHED:
+        job_id = _JOB_FINISHED[0]
+        job = _JOB_TABLE.get(job_id)
+        if job is None:
+            _JOB_FINISHED.popleft()
+            continue
+        finished_at = job.get("finished_at")
+        expired = finished_at is not None and current - finished_at >= JOB_TTL_SEC
+        overflow = len(_JOB_FINISHED) > JOB_MAX_FINISHED
+        if not expired and not overflow:
+            break
+        _JOB_FINISHED.popleft()
+        _JOB_TABLE.pop(job_id, None)
+
+
+def submit_job(pipeline: dict, model_id: str, tasks: list[dict], job_id=None):  # noqa: ANN001, ANN201
+    with _JOB_LOCK:
+        prune_jobs()
+        if job_id:
+            existing = _JOB_TABLE.get(job_id)
+            if existing is not None:
+                return existing, False
+        job = {
+            "job_id": job_id or new_job_id(),
+            "model_id": str(model_id),
+            "pipeline": dict(pipeline),
+            "tasks": list(tasks),
+            "status": "queued",
+            "results": [],
+            "error": None,
+            "load_seconds": None,
+            "created_at": time.time(),
+            "updated_at": time.time(),
+            "finished_at": None,
+        }
+        _JOB_TABLE[job["job_id"]] = job
+        _JOB_QUEUE.append(job)
+        queue_len = len(_JOB_QUEUE)
+        _JOB_WAKE.set()
+        log(f"[job] 入队 {job['job_id']}（tasks={len(job['tasks'])}，排队 {queue_len}）")
+        return job, True
+
+
+def get_job(job_id: str):  # noqa: ANN201
+    with _JOB_LOCK:
+        prune_jobs()
+        return _JOB_TABLE.get(job_id)
+
+
+def queue_depth() -> int:
+    with _JOB_LOCK:
+        return len(_JOB_QUEUE)
+
+
+def job_payload(job: dict) -> dict:
+    with _JOB_LOCK:
+        return {
+            "status": job["status"],
+            "job_id": job["job_id"],
+            "model_id": job["model_id"],
+            "progress": {"done": len(job["results"]), "total": len(job["tasks"])},
+            "created_at": iso_time(job["created_at"]),
+            "updated_at": iso_time(job["updated_at"]),
+            "load_seconds": job.get("load_seconds"),
+            "results": list(job["results"]) if job["status"] == "done" else None,
+            "error": dict(job["error"]) if job.get("error") else None,
+        }
+
+
+def _finish_job(job: dict, status: str, error: dict | None = None) -> None:
+    now = time.time()
+    with _JOB_LOCK:
+        job["status"] = status
+        job["error"] = error
+        job["updated_at"] = now
+        job["finished_at"] = now
+        _JOB_FINISHED.append(job["job_id"])
+        prune_jobs(now)
+
+
+def _execute_job(job: dict) -> None:
+    """mock 的 job 执行：按 --delay / --fail-job 模拟出图与失败。"""
+    global _LAST_ACTIVE
+    job["status"] = "running"
+    job["updated_at"] = time.time()
+    _LAST_ACTIVE = time.time()
+    fail_job = str(getattr(_ARGS, "fail_job", "none") or "none")
+    try:
+        if fail_job != "none":
+            raise RuntimeError(f"mock 按 --fail-job 注入的错误：{fail_job}")
+        with _GEN_LOCK:
+            results = []
+            for task in job["tasks"]:
+                delay = max(0.0, float(_ARGS.delay or 0.0))
+                if delay:
+                    time.sleep(delay)
+                png = render_png(task["width"], task["height"], task["seed"])
+                results.append(
+                    {
+                        "name": task["name"],
+                        "seed": task["seed"],
+                        "seconds": round(max(delay, 0.001), 2),
+                        "width": task["width"],
+                        "height": task["height"],
+                        "steps": task["steps"],
+                        "cfg": task["cfg"],
+                        "png_bytes": len(png),
+                        "image_b64": base64.b64encode(png).decode("ascii"),
+                    }
+                )
+                log(
+                    f"[mock] 生成 {task['name']} seed={task['seed']} "
+                    f"{task['width']}x{task['height']} {len(png)} 字节"
+                )
+                with _JOB_LOCK:
+                    job["results"] = list(results)
+                    job["updated_at"] = time.time()
+                _LAST_ACTIVE = time.time()
+        _JOBS_DONE["count"] += len(results)
+        with _JOB_LOCK:
+            job["results"] = list(results)
+            job["load_seconds"] = 0.05
+        _finish_job(job, "done")
+        log(f"[job] {job['job_id']} 完成 {len(results)} 张")
+    except Exception as exc:  # noqa: BLE001 - mock 不区分错误类型，按注入值上报
+        code = fail_job if fail_job != "none" else "generation_failed"
+        message = str(exc)
+        _LAST_ERROR["value"] = f"{code}: {message}"
+        _LAST_ERROR["code"] = code
+        _finish_job(job, "failed", {"code": code, "message": message})
+        log(f"[job] {job['job_id']} 失败（{code}）：{message}")
+
+
+def _job_worker_loop() -> None:
+    log("[job] mock worker 启动，等待队列")
+    while True:
+        with _JOB_LOCK:
+            job = _JOB_QUEUE.popleft() if _JOB_QUEUE else None
+        if job is None:
+            _JOB_WAKE.wait(timeout=0.5)
+            _JOB_WAKE.clear()
+            continue
+        _execute_job(job)
 
 
 def _int_param(value, field: str, low: int, high: int) -> int:  # noqa: ANN001
@@ -512,6 +706,18 @@ class MockHandler(BaseHTTPRequestHandler):
             self._send_json(200, {"lines": lines, "next": nxt})
             return
 
+        if path == ROUTE_PATHS.get("job", "/job"):
+            job_id = str((query.get("id") or [""])[0]).strip()
+            if not job_id:
+                self._send_error(400, "invalid_request", "缺少 job id（GET /job?id=...）")
+                return
+            job = get_job(job_id)
+            if job is None:
+                self._send_error(404, "unknown_job", "任务不存在或已过期")
+                return
+            self._send_json(200, job_payload(job))
+            return
+
         self._send_error(404, "not_found", f"未知路径：{path}")
 
     def do_POST(self):  # noqa: N802
@@ -557,7 +763,8 @@ class MockHandler(BaseHTTPRequestHandler):
 
         try:
             spec = self._read_json()
-            _pipeline, model_id, tasks = validate_spec(spec)
+            pipeline, model_id, tasks = validate_spec(spec)
+            job_id = normalize_job_id(spec.get("jobId"))
         except ValueError as exc:
             log(f"[http] 400 /generate 校验失败：{exc}")
             self._send_error(400, "invalid_request", str(exc))
@@ -584,45 +791,18 @@ class MockHandler(BaseHTTPRequestHandler):
             self._send_error(status, code, message)
             return
 
-        global _LAST_ACTIVE
-        with _GEN_LOCK:
-            _LAST_ACTIVE = time.time()
-            started = time.time()
-            results = []
-            for task in tasks:
-                delay = max(0.0, float(_ARGS.delay or 0.0))
-                if delay:
-                    time.sleep(delay)
-                png = render_png(task["width"], task["height"], task["seed"])
-                results.append(
-                    {
-                        "name": task["name"],
-                        "seed": task["seed"],
-                        "seconds": round(max(delay, 0.001), 2),
-                        "width": task["width"],
-                        "height": task["height"],
-                        "steps": task["steps"],
-                        "cfg": task["cfg"],
-                        "png_bytes": len(png),
-                        "image_b64": base64.b64encode(png).decode("ascii"),
-                    }
-                )
-                log(
-                    f"[mock] 生成 {task['name']} seed={task['seed']} "
-                    f"{task['width']}x{task['height']} {len(png)} 字节"
-                )
-            _JOBS_DONE["count"] += len(results)
-            elapsed = round(time.time() - started, 2)
-            log(f"[http] 200 /generate tasks={len(results)} 总耗时 {elapsed}s")
-            self._send_json(
-                200,
-                {
-                    "status": "ok",
-                    "model_id": model_id,
-                    "load_seconds": 0.05,
-                    "results": results,
-                },
-            )
+        job, created = submit_job(pipeline, model_id, tasks, job_id)
+        if not created:
+            log(f"[http] 202 /generate 幂等命中 {job['job_id']}（status={job['status']}）")
+        self._send_json(
+            202,
+            {
+                "status": "accepted",
+                "job_id": job["job_id"],
+                "model_id": job["model_id"],
+                "created_at": iso_time(job["created_at"]),
+            },
+        )
 
 
 def parse_args(argv=None):  # noqa: ANN001, ANN201
@@ -645,6 +825,12 @@ def parse_args(argv=None):  # noqa: ANN001, ANN201
         choices=FAIL_GENERATE_CHOICES,
         default="none",
         help="让 /generate 返回固定 HTTP 状态码的错误（400 invalid_request / 500 generation_failed）",
+    )
+    parser.add_argument(
+        "--fail-job",
+        choices=FAIL_JOB_CHOICES,
+        default="none",
+        help="入队成功、后台执行阶段让 job 失败（用于 Host 的 job 失败分支回归）",
     )
     parser.add_argument(
         "--phase",
@@ -673,7 +859,7 @@ def main(argv=None) -> int:  # noqa: ANN001
     log(
         f"host={_ARGS.host} port={_ARGS.port} auth={'on' if _AUTH_TOKEN else 'off'} "
         f"delay={_ARGS.delay}s fail={_ARGS.fail} fail_generate={_ARGS.fail_generate} "
-        f"phase={_ARGS.phase} warm={_ARGS.warm_seconds}s"
+        f"fail_job={_ARGS.fail_job} phase={_ARGS.phase} warm={_ARGS.warm_seconds}s"
     )
     if _ARGS.phase == "error":
         # 模拟 daemon 启动失败：/health status=error，/generate → 503 load_failed。
@@ -690,6 +876,7 @@ def main(argv=None) -> int:  # noqa: ANN001
         return 2
     server.daemon_threads = True
     log(f"[mock] 监听 http://{_ARGS.host}:{_ARGS.port}")
+    threading.Thread(target=_job_worker_loop, name="mock-job-worker", daemon=True).start()
     try:
         server.serve_forever(poll_interval=0.2)
     except KeyboardInterrupt:

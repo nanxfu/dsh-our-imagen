@@ -1,4 +1,4 @@
-/** 画面预览：大图居中，图下一条信息行与一条动作行。 */
+/** 画面预览：光桌上的相纸。大图居中，图下一条题注与一条动作行。 */
 
 import React from 'react'
 
@@ -7,6 +7,24 @@ import { formatSeconds } from '../logic/format.js'
 import { jobProgressText } from '../logic/status.js'
 
 const INSPIRE_KEYS = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
+
+/** 出图后一分钟内才算「刚落定」，超过就当历史作品直接陈列。 */
+const FRESH_MS = 60_000
+
+function isFreshItem(item) {
+  const finishedAt = Date.parse(String((item && item.finishedAt) || ''))
+  if (!Number.isFinite(finishedAt)) return false
+  const delta = Date.now() - finishedAt
+  return delta > -5_000 && delta < FRESH_MS
+}
+
+/** 正数比例；宽高缺失时回落到正方形画幅。 */
+function ratioOf(width, height) {
+  const w = Number(width)
+  const h = Number(height)
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return 1
+  return w / h
+}
 
 /** 接收 { t, ui, compute, form, library, actions } 领域对象。 */
 export function Stage(props) {
@@ -75,27 +93,51 @@ export function Stage(props) {
   if (!image) {
     // 手动关闭云端后不能再说「点击生成即可出图」：生成会被宿主拒绝，先提示唤醒。
     const stopped = Boolean(compute.status && compute.status.stopped)
+    // 等待出图时取景框按这次任务的尺寸画；空闲时按当前表单比例画。
+    const jobParams = (activeJob && activeJob.params) || {}
+    const fields = (form && form.form) || {}
+    const frameRatio = ratioOf(jobParams.width || fields.width, jobParams.height || fields.height)
+    // 曝光单：这台机器在这个预设上大概多久出一张，先给个准话再让人点生成。
+    const preset = (compute.presets || []).find((option) => option && option.id === fields.presetId) || null
+    const steady = preset && Number.isFinite(Number(preset.steadySeconds)) ? Number(preset.steadySeconds) : null
     return (
       <section className="ofs-stage">
         <div className="ofs-figure ofs-figure--empty">
-          <div className="ofs-empty-card">
-            <span className="ofs-empty-icon" aria-hidden="true">
-              <Icon name="images" size={26} />
+          <div className="ofs-frame" style={{ '--ofs-frame-r': String(frameRatio) }}>
+            <span className="ofs-marks" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+              <span />
             </span>
-            <p className="ofs-empty-title">{t('studio.stage.empty')}</p>
-            <p className="ofs-muted">{stopped ? t('studio.stage.stoppedHint') : t('studio.stage.emptyHint')}</p>
-            <div className="ofs-examples">
-              <span className="ofs-examples-label">{t('studio.stage.examples')}</span>
-              {INSPIRE_KEYS.map((key) => (
-                <button type="button" key={key} className="ofs-example" onClick={() => useInspiration(t(key))} title={t(key)}>
-                  {t(`${key}.label`)}
-                </button>
-              ))}
+
+            <div className="ofs-frame-body">
+              {activeJob ? null : (
+                <div className="ofs-empty-card">
+                  <p className="ofs-empty-title">{t('studio.stage.empty')}</p>
+                  <p className="ofs-muted">{stopped ? t('studio.stage.stoppedHint') : t('studio.stage.emptyHint')}</p>
+                  <div className="ofs-examples">
+                    <span className="ofs-examples-label">{t('studio.stage.examples')}</span>
+                    {INSPIRE_KEYS.map((key) => (
+                      <button type="button" key={key} className="ofs-example" onClick={() => useInspiration(t(key))} title={t(key)}>
+                        {t(`${key}.label`)}
+                      </button>
+                    ))}
+                  </div>
+                  {steady !== null ? (
+                    <p className="ofs-exposure">
+                      <span className="ofs-exposure-rule" aria-hidden="true" />
+                      {t('studio.stage.steady')} {formatSeconds(t, steady)}
+                      <span className="ofs-exposure-rule" aria-hidden="true" />
+                    </p>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
 
           {activeJob ? (
-            <div className="ofs-stage-progress" role="status">
+            <div className="ofs-stage-progress is-inside" role="status">
               <span className="ofs-shimmer" aria-hidden="true" />
               <span className="ofs-progress-label">{progressText}</span>
             </div>
@@ -108,11 +150,22 @@ export function Stage(props) {
   const favorite = isFavorite(image.path || image.file)
   // 「复制文件路径」要给绝对路径：历史条目里带 absolute，老记录退回相对路径。
   const copyTarget = image.absolute || image.path || image.file
+  const imageKey = image.path || image.file || image.url
+  const printRatio = ratioOf(image.width, image.height)
+  // 刚落定的图才播一次显影；翻历史作品直接陈列。
+  const developing = isFreshItem(item)
 
   return (
     <section className="ofs-stage">
       <figure className="ofs-figure">
-        <button type="button" className="ofs-figure-button" onClick={openZoom} title={t('studio.stage.zoom')}>
+        <button
+          type="button"
+          key={imageKey}
+          className={developing ? 'ofs-print is-developing' : 'ofs-print'}
+          style={{ '--ofs-print-r': String(printRatio) }}
+          onClick={openZoom}
+          title={t('studio.stage.zoom')}
+        >
           <img src={image.url} alt={prompt || image.file || t('studio.image.alt')} className="ofs-image" />
         </button>
 

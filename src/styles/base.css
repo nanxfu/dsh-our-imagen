@@ -152,7 +152,9 @@
 .ofs-btn.is-primary:disabled {
   background: var(--ofs-accent-grad);
   border-color: transparent;
-  color: color-mix(in oklab, #fff 82%, transparent);
+  /* 文字色必须跟主题的主操作文字色（--ofs-accent-ink）：深色主题的主操作是浅色渐变
+     配墨黑字，写死白色会变成白字浅底，禁用时整行字看不见。 */
+  color: color-mix(in oklab, var(--ofs-accent-ink) 82%, transparent);
   box-shadow: none;
   opacity: 0.36;
   filter: saturate(0.6);

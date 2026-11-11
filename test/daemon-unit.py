@@ -13,7 +13,7 @@
   5. _require_auth / auth_missing：无 token 401、allow_no_auth 放行、Bearer 校验
   6. fail_boot：phase=error + 错误记录 + 隧道原因，且不发布 ready
   7. classify_failure：oom / invalid_request / load_failed / generation_failed
-  8. health_payload：字段齐全、phase=error → status=error、queue_depth 跟随 waiting、
+  8. health_payload：字段齐全、phase=error → status=error、queue_depth 跟随 job 队列、
      tunnel_provider / tunnel_state / tunnel_restarts 跟随 BOOT
   9. log_since：绝对序号、增量分页、环形裁剪
  10. _limit_spec / _max_tasks：契约合并与兜底
@@ -25,6 +25,9 @@
  15. 隧道监管：输出读取（假 Popen/假 stream）、单通道尝试、备用通道回退、
      失败重拉与 ready 重播、/shutdown 停止监管
  16. ready payload 增加 provider，隧道恢复后清掉 tunnel_failed 错误态
+ 17. 异步 job（0.5.0）：POST /generate 202 入队、jobId 幂等与格式校验、
+     GET /job 的 queued/running/done/failed 视图、未知 id 404、保留/淘汰、
+     worker 执行成功与失败、/health.queue_depth
 
 运行：python test/daemon-unit.py
 """
@@ -39,6 +42,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import types
 import unittest
 from pathlib import Path
@@ -69,7 +73,7 @@ AUTH_TOKEN = "test-token-0123456789"
 
 # 与 shared/contract.js 的 daemonContract() 同形：daemon 只消费 version 与 limits。
 CONTRACT = {
-    "version": "0.4.1",
+    "version": "0.5.0",
     "limits": {
         "width": {"min": 256, "max": 1536, "step": 8},
         "height": {"min": 256, "max": 1536, "step": 8},
@@ -100,6 +104,46 @@ def make_handler(auth_header: str | None = None):
     sent: list[tuple[int, dict]] = []
     handler._send_json = lambda code, payload, extra_headers=None: sent.append((code, payload))
     return handler, sent
+
+
+def make_generate_handler(spec):
+    """伪造 DaemonHandler：只桩掉 _handle_generate 用到的 _read_json / _send_*。"""
+    handler = object.__new__(d.DaemonHandler)
+    sent: list[tuple[int, dict]] = []
+    handler._send_json = lambda code, payload, extra_headers=None: sent.append((code, payload))
+    handler._send_error = lambda code, error_code, message, headers=None: sent.append(
+        (code, {"error": {"code": error_code, "message": message}})
+    )
+    handler._read_json = lambda: spec
+    return handler, sent
+
+
+def make_get_handler(path: str):
+    """伪造 DaemonHandler：只跑 do_GET 的路由分派（鉴权直接放行）。"""
+    handler = object.__new__(d.DaemonHandler)
+    handler.path = path
+    handler._require_auth = lambda: True
+    sent: list[tuple[int, dict]] = []
+    handler._send_json = lambda code, payload, extra_headers=None: sent.append((code, payload))
+    handler._send_error = lambda code, error_code, message, headers=None: sent.append(
+        (code, {"error": {"code": error_code, "message": message}})
+    )
+    return handler, sent
+
+
+# 一次合法的任务（字段与 validate_generate_spec 的输出一致，直接喂给 job 逻辑）。
+TASKS = [
+    {
+        "name": "01",
+        "prompt": "雾中荷塘，工笔",
+        "negative_prompt": "",
+        "seed": 42,
+        "width": 256,
+        "height": 256,
+        "steps": 4,
+        "cfg": 0.0,
+    }
+]
 
 
 class FakeProc:
@@ -144,6 +188,12 @@ class DaemonUnitTest(unittest.TestCase):
         d._ORIG_STDOUT = io.StringIO()
         d._LOG_LINES.clear()
         d._LOG_SEQ = 0
+        # 异步 job registry 是模块级可变状态，用例之间必须清干净。
+        with d.JOB_LOCK:
+            d.JOB_QUEUE.clear()
+            d.JOB_TABLE.clear()
+            d.JOB_FINISHED_ORDER.clear()
+        d.JOB_WAKE.clear()
 
     def tearDown(self) -> None:
         d.CONFIG, d.STATE, d.BOOT, d._ORIG_STDOUT = self._saved
@@ -166,7 +216,7 @@ class ImportSideEffectTest(unittest.TestCase):
         self.assertIsInstance(d.CONFIG, d.DaemonConfig)
         self.assertIsInstance(d.STATE, d.RuntimeState)
         self.assertIsInstance(d.BOOT, d.BootState)
-        self.assertEqual(d.VERSION, "0.4.1")
+        self.assertEqual(d.VERSION, "0.5.0")
         self.assertEqual(d.STATE.phase, "booting")
         self.assertIsNone(d.BOOT.tunnel_url)
         self.assertFalse(d.BOOT.published_ready)
@@ -283,7 +333,7 @@ class BuildConfigTest(DaemonUnitTest):
         with mock.patch.object(d, "EMBEDDED_CONFIG_B64", encoded):
             config = d.load_config()
         self.assertEqual(config.auth_token, "embedded-token")
-        self.assertEqual(config.contract["version"], "0.4.1")
+        self.assertEqual(config.contract["version"], "0.5.0")
 
     def test_load_config_without_payload_returns_defaults(self) -> None:
         with mock.patch.object(d, "EMBEDDED_CONFIG_B64", ""), mock.patch.dict(os.environ, {}, clear=True):
@@ -303,7 +353,7 @@ class BuildConfigTest(DaemonUnitTest):
 
 class ProtocolVersionTest(DaemonUnitTest):
     def test_falls_back_to_file_version(self) -> None:
-        self.assertEqual(d.protocol_version(), "0.4.1")
+        self.assertEqual(d.protocol_version(), "0.5.0")
 
     def test_prefers_injected_version(self) -> None:
         d.CONFIG.version = "0.3.1-injected"
@@ -568,7 +618,7 @@ class HealthPayloadTest(DaemonUnitTest):
         self.assertEqual(set(payload), self.REQUIRED_KEYS)
         self.assertEqual(payload["phase"], "booting")
         self.assertEqual(payload["status"], "ok")
-        self.assertEqual(payload["version"], "0.4.1")
+        self.assertEqual(payload["version"], "0.5.0")
         self.assertEqual(payload["idle_timeout_sec"], 1800)
         self.assertGreaterEqual(payload["idle_seconds"], 0)
         self.assertGreaterEqual(payload["uptime_seconds"], 0)
@@ -583,15 +633,230 @@ class HealthPayloadTest(DaemonUnitTest):
         self.assertEqual(payload["last_error"], "load_failed: pip 失败")
         self.assertEqual(payload["detail"], "启动失败")
 
-    def test_queue_depth_follows_waiting(self) -> None:
-        d.STATE.waiting = 3
-        self.assertEqual(d.health_payload()["queue_depth"], 3)
+    def test_queue_depth_follows_job_queue(self) -> None:
+        d.STATE.waiting = 3  # 0.4.x 的旧字段不再参与统计
+        self.assertEqual(d.health_payload()["queue_depth"], 0)
+        d.submit_job(make_pipeline(), "org/base-model", [{"prompt": "x"}])
+        self.assertEqual(d.health_payload()["queue_depth"], 1)
 
     def test_loaded_list_is_a_copy(self) -> None:
         d.STATE.loaded = ["sdxl:org/base"]
         payload = d.health_payload()
         self.assertEqual(payload["loaded"], ["sdxl:org/base"])
         self.assertIsNot(payload["loaded"], d.STATE.loaded)
+
+
+class JobProtocolTest(DaemonUnitTest):
+    """0.5.0 异步 job：202 入队 + GET /job 轮询 + worker 执行与保留策略。"""
+
+    def ready(self) -> None:
+        d.STATE.phase = "ready"
+
+    def submit(self, task_count: int = 1, job_id: str | None = None):
+        tasks = [dict(TASKS[0], name=f"{index + 1:02d}") for index in range(task_count)]
+        return d.submit_job(make_pipeline(), "org/base-model", tasks, job_id)
+
+    # ---- POST /generate：入队即返回 ----
+
+    def test_generate_returns_202_and_enqueues(self) -> None:
+        self.ready()
+        handler, sent = make_generate_handler(make_spec(tasks=TASKS))
+        d.DaemonHandler._handle_generate(handler)
+        self.assertEqual(sent[0][0], 202)
+        payload = sent[0][1]
+        self.assertEqual(payload["status"], "accepted")
+        self.assertEqual(payload["model_id"], "org/base-model")
+        self.assertTrue(payload["job_id"])
+        self.assertTrue(payload["created_at"].endswith("Z"))
+        self.assertEqual(d.queue_depth(), 1)
+
+    def test_generate_honours_job_id_and_is_idempotent(self) -> None:
+        self.ready()
+        spec = dict(make_spec(tasks=TASKS), jobId="host-job-1")
+        handler, sent = make_generate_handler(spec)
+        d.DaemonHandler._handle_generate(handler)
+        d.DaemonHandler._handle_generate(handler)
+        self.assertEqual([item[0] for item in sent], [202, 202])
+        self.assertEqual([item[1]["job_id"] for item in sent], ["host-job-1", "host-job-1"])
+        self.assertEqual(d.queue_depth(), 1)
+        self.assertLogContains("幂等命中")
+
+    def test_generate_rejects_invalid_job_id(self) -> None:
+        self.ready()
+        handler, sent = make_generate_handler(dict(make_spec(tasks=TASKS), jobId="bad id!"))
+        d.DaemonHandler._handle_generate(handler)
+        self.assertEqual(sent[0][0], 400)
+        self.assertEqual(sent[0][1]["error"]["code"], "invalid_request")
+        self.assertEqual(d.queue_depth(), 0)
+
+    def test_generate_warms_up_when_not_ready(self) -> None:
+        handler, sent = make_generate_handler(make_spec(tasks=TASKS))
+        d.DaemonHandler._handle_generate(handler)
+        self.assertEqual(sent[0][0], 503)
+        self.assertEqual(sent[0][1]["error"]["code"], "warming")
+
+    def test_generate_rejects_invalid_spec_synchronously(self) -> None:
+        self.ready()
+        bad = {"pipeline": {"loader": "nope", "base": "x"}, "tasks": [{"prompt": "x"}]}
+        handler, sent = make_generate_handler(bad)
+        d.DaemonHandler._handle_generate(handler)
+        self.assertEqual(sent[0][0], 400)
+        self.assertEqual(sent[0][1]["error"]["code"], "invalid_request")
+
+    # ---- job_payload 三态 ----
+
+    def test_queued_payload(self) -> None:
+        job, created = self.submit(task_count=2)
+        self.assertTrue(created)
+        payload = d.job_payload(job)
+        self.assertEqual(payload["status"], "queued")
+        self.assertEqual(payload["progress"], {"done": 0, "total": 2})
+        self.assertIsNone(payload["results"])
+        self.assertIsNone(payload["error"])
+        self.assertIsNone(payload["load_seconds"])
+        self.assertEqual(payload["job_id"], job.job_id)
+
+    def test_done_payload_carries_results(self) -> None:
+        job, _ = self.submit()
+        job.results = [{"name": "01", "image_b64": "x"}]
+        d._finish_job(job, d.JOB_STATUS_DONE)
+        payload = d.job_payload(job)
+        self.assertEqual(payload["status"], "done")
+        self.assertEqual(payload["progress"], {"done": 1, "total": 1})
+        self.assertEqual(payload["results"], [{"name": "01", "image_b64": "x"}])
+        self.assertIsNone(payload["error"])
+
+    def test_failed_payload_carries_error(self) -> None:
+        job, _ = self.submit()
+        d._finish_job(job, d.JOB_STATUS_FAILED, {"code": "oom", "message": "显存不足"})
+        payload = d.job_payload(job)
+        self.assertEqual(payload["status"], "failed")
+        self.assertEqual(payload["error"]["code"], "oom")
+        self.assertIsNone(payload["results"])
+
+    # ---- GET /job ----
+
+    def test_get_job_returns_payload(self) -> None:
+        job, _ = self.submit()
+        handler, sent = make_get_handler(f"/job?id={job.job_id}")
+        d.DaemonHandler.do_GET(handler)
+        self.assertEqual(sent[0][0], 200)
+        self.assertEqual(sent[0][1]["job_id"], job.job_id)
+        self.assertEqual(sent[0][1]["status"], "queued")
+
+    def test_unknown_job_returns_404(self) -> None:
+        handler, sent = make_get_handler("/job?id=missing")
+        d.DaemonHandler.do_GET(handler)
+        self.assertEqual(sent[0][0], 404)
+        self.assertEqual(sent[0][1]["error"]["code"], "unknown_job")
+
+    def test_missing_job_id_returns_400(self) -> None:
+        handler, sent = make_get_handler("/job")
+        d.DaemonHandler.do_GET(handler)
+        self.assertEqual(sent[0][0], 400)
+        self.assertEqual(sent[0][1]["error"]["code"], "invalid_request")
+
+    def test_unknown_path_stays_404(self) -> None:
+        handler, sent = make_get_handler("/nope")
+        d.DaemonHandler.do_GET(handler)
+        self.assertEqual(sent[0][0], 404)
+        self.assertEqual(sent[0][1]["error"]["code"], "not_found")
+
+    # ---- 保留 / 淘汰 ----
+
+    def test_prunes_oldest_finished_beyond_limit(self) -> None:
+        for index in range(d.JOB_MAX_FINISHED + 3):
+            job, _ = self.submit(job_id=f"job-{index}")
+            d._finish_job(job, d.JOB_STATUS_DONE)
+        with d.JOB_LOCK:
+            d.prune_jobs()
+            self.assertEqual(len(d.JOB_TABLE), d.JOB_MAX_FINISHED)
+        self.assertIsNone(d.get_job("job-0"))
+        self.assertIsNotNone(d.get_job(f"job-{d.JOB_MAX_FINISHED + 2}"))
+
+    def test_prunes_ttl_expired_finished(self) -> None:
+        job, _ = self.submit(job_id="ttl-job")
+        d._finish_job(job, d.JOB_STATUS_DONE)
+        with d.JOB_LOCK:
+            job.finished_at = time.time() - d.JOB_TTL_SEC - 1
+            d.prune_jobs()
+        self.assertIsNone(d.get_job("ttl-job"))
+
+    def test_active_jobs_are_never_pruned(self) -> None:
+        self.submit(job_id="queued-job")
+        running, _ = self.submit(job_id="running-job")
+        with d.JOB_LOCK:
+            running.status = d.JOB_STATUS_RUNNING
+            d.prune_jobs(time.time() + d.JOB_TTL_SEC * 10)
+            self.assertEqual(len(d.JOB_TABLE), 2)
+        self.assertIsNotNone(d.get_job("queued-job"))
+
+    # ---- worker 执行 ----
+
+    def test_execute_job_success_updates_progress_and_state(self) -> None:
+        job, _ = self.submit(task_count=2)
+
+        def fake_run_tasks(pipe, tasks, on_progress=None):  # noqa: ANN001, ANN202
+            results = []
+            for task in tasks:
+                results.append({"name": task["name"], "image_b64": "x"})
+                if on_progress is not None:
+                    on_progress(results)
+            return results
+
+        with mock.patch.object(d, "ensure_pipeline", return_value=("pipe", 1.25)), mock.patch.object(
+            d, "run_tasks", side_effect=fake_run_tasks
+        ):
+            d.execute_job(job)
+        self.assertEqual(job.status, d.JOB_STATUS_DONE)
+        self.assertEqual(job.load_seconds, 1.25)
+        self.assertEqual(len(job.results), 2)
+        self.assertEqual(d.STATE.jobs_done, 2)
+        self.assertIsNone(job.error)
+        self.assertLogContains("完成：2 张")
+
+    def test_execute_job_failure_records_error(self) -> None:
+        job, _ = self.submit()
+        with mock.patch.object(d, "ensure_pipeline", side_effect=d.LoadError("pip 失败")):
+            d.execute_job(job)
+        self.assertEqual(job.status, d.JOB_STATUS_FAILED)
+        self.assertEqual(job.error["code"], "load_failed")
+        self.assertEqual(d.STATE.last_error_code, "load_failed")
+        self.assertLogContains("失败（load_failed）")
+
+    def test_queue_depth_ignores_running_job(self) -> None:
+        job, _ = self.submit(job_id="running-only")
+        with d.JOB_LOCK:
+            d.JOB_QUEUE.clear()
+            job.status = d.JOB_STATUS_RUNNING
+        self.assertEqual(d.queue_depth(), 0)
+        self.assertEqual(d.active_job_count(), 1)
+
+    def test_worker_drains_queue(self) -> None:
+        drained = threading.Event()
+
+        def fake_run_tasks(pipe, tasks, on_progress=None):  # noqa: ANN001, ANN202
+            return []
+
+        with mock.patch.object(d, "ensure_pipeline", return_value=("pipe", 0.0)), mock.patch.object(
+            d, "run_tasks", side_effect=fake_run_tasks
+        ):
+            self.submit(job_id="worker-job")
+            d.BOOT.stop_event.clear()
+            thread = d.start_job_worker()
+            try:
+                deadline = time.time() + 3
+                while time.time() < deadline:
+                    job = d.get_job("worker-job")
+                    if job is not None and job.status == d.JOB_STATUS_DONE:
+                        drained.set()
+                        break
+                    time.sleep(0.02)
+            finally:
+                d.BOOT.stop_event.set()
+                d.JOB_WAKE.set()
+                thread.join(timeout=2)
+        self.assertTrue(drained.is_set(), "worker 未在 3s 内消费完 job")
 
 
 class LogRingTest(DaemonUnitTest):

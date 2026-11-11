@@ -123,6 +123,8 @@ const publicPreset = (id) => {
 const preset = publicPreset('sdxl-lightning')
 const turbo = publicPreset('sdxl-turbo')
 const base = publicPreset('sdxl-base')
+// 真实 Host 下发全部预设；预览的「就绪 / 空态」也用全量，模型卡才能截到八档。
+const allPresets = PRESETS.map(({ pipeline, ...rest }) => rest)
 
 // 真实 Host 的 /imagen-api/history 每条含完整 params（用于「带回参数」）；预览只用提示词与图片，故这里省略。
 const historyItems = [
@@ -163,7 +165,7 @@ const historyItems = [
 const states = {
   ready: {
     defaultPreset: 'sdxl-lightning',
-    presets: [preset, turbo, base],
+    presets: allPresets,
     session: { state: 'ready', modelId: 'sdxl-lightning', device: 'Tesla T4', idleTimeoutSec: 1800, error: null },
     jobs: [],
     lastJob: null,
@@ -177,7 +179,7 @@ const states = {
   },
   empty: {
     defaultPreset: 'sdxl-lightning',
-    presets: [preset, turbo, base],
+    presets: allPresets,
     session: { state: 'absent', error: null },
     jobs: [],
     lastJob: null,
@@ -187,6 +189,17 @@ const states = {
     presets: [preset],
     session: { state: 'provisioning', phase: 'queue', startedAt: at(-120), error: null },
     jobs: [{ id: 'job-x', status: 'waiting-session', startedAt: at(-60), params: { prompt: '排队中的画面' } }],
+    lastJob: null,
+  },
+  // 两个任务同时在队：第一张在生成，第二张排在后面（宿主的 jobs 最新在前）。
+  queueTwo: {
+    defaultPreset: 'sdxl-lightning',
+    presets: [preset],
+    session: { state: 'ready', modelId: 'sdxl-lightning', device: 'Tesla T4', idleTimeoutSec: 1800, error: null },
+    jobs: [
+      { id: 'job-two', status: 'queued', createdAt: at(-5), startedAt: null, params: { prompt: '排队等待的第二张画面' } },
+      { id: 'job-one', status: 'running', createdAt: at(-30), startedAt: at(-8), params: { prompt: '正在出的第一张画面' } },
+    ],
     lastJob: null,
   },
   pushing: {
@@ -263,6 +276,18 @@ const states = {
 
 const libraryResponse = { favorites: [image(901).path, image(903).path], deleted: [] }
 
+// 竖构图单独出一页：相纸/取景框的尺寸按比例算，竖图是最容易露馅的一种。
+const portraitHistory = [
+  { ...historyItems[0], images: [image(903, 648, 1152), image(902, 1152, 648)] },
+  ...historyItems.slice(1),
+]
+
+// 刚落定的图（60 秒内）会播一次显影；这一页把动画停在半程，用来核对显影中的样子。
+const freshHistory = [
+  { ...historyItems[0], finishedAt: at(-5) },
+  ...historyItems.slice(1),
+]
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -283,6 +308,29 @@ function styleToText(style) {
 
 const VOID_TAGS = new Set(['img', 'input', 'br', 'hr', 'meta', 'link'])
 
+// React 用驼峰写 SVG 属性，静态 HTML 里必须是连字符名，否则属性失效（渐变会变黑、描边变 1px）。
+// 预览是视觉真相，这里补齐，别让截图和真机不一样。
+const SVG_ATTRS = {
+  strokeWidth: 'stroke-width',
+  strokeLinecap: 'stroke-linecap',
+  strokeLinejoin: 'stroke-linejoin',
+  strokeDasharray: 'stroke-dasharray',
+  strokeDashoffset: 'stroke-dashoffset',
+  strokeOpacity: 'stroke-opacity',
+  fillOpacity: 'fill-opacity',
+  fillRule: 'fill-rule',
+  clipPath: 'clip-path',
+  clipRule: 'clip-rule',
+  stopColor: 'stop-color',
+  stopOpacity: 'stop-opacity',
+  paintOrder: 'paint-order',
+  textAnchor: 'text-anchor',
+  fontFamily: 'font-family',
+  fontSize: 'font-size',
+  fontWeight: 'font-weight',
+  letterSpacing: 'letter-spacing',
+}
+
 function attrsOf(props) {
   const attrs = []
   for (const [key, value] of Object.entries(props)) {
@@ -295,11 +343,12 @@ function attrsOf(props) {
     }
     if (typeof value === 'function') continue
     if (key.startsWith('on')) continue
+    const name = SVG_ATTRS[key] || key
     if (key === 'className') {
       attrs.push(`class="${escapeHtml(value)}"`)
       continue
     }
-    attrs.push(`${key}="${escapeHtml(String(value))}"`)
+    attrs.push(`${name}="${escapeHtml(String(value))}"`)
   }
   return attrs
 }
@@ -349,6 +398,11 @@ body .ofs-root {
   --ofs-shadow-window: 0 1px 3px rgb(0 0 0 / 40%), 0 40px 88px -48px rgb(0 0 0 / 88%);
   --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);
   --ofs-focus-ring: 0 0 0 3px rgb(255 255 255 / 22%);
+  --ofs-mat: #1e1e22; --ofs-mat-lit: rgb(255 255 255 / 7%); --ofs-mat-inner: inset 0 1px 3px rgb(0 0 0 / 36%);
+  --ofs-print-paper: #2b2b31; --ofs-print-edge: rgb(255 255 255 / 13%);
+  --ofs-print-shadow: 0 22px 44px -24px rgb(0 0 0 / 78%), 0 4px 12px -6px rgb(0 0 0 / 50%);
+  --ofs-print-shadow-hover: 0 28px 54px -24px rgb(0 0 0 / 82%), 0 6px 16px -6px rgb(0 0 0 / 54%);
+  --ofs-mark: rgb(255 255 255 / 28%);
   background: #101012;
 }
 `
@@ -365,8 +419,10 @@ async function renderState(state, options = {}) {
   })
   if (options.prepare) options.prepare(client)
   const tree = await client.mountRaw(client.components.Studio, options.props ?? {})
+  // 序列化要在 unmount 之前：unmount 会还原 Date.now，晚序列化会让「刚出图」判断走样。
+  const html = toHtml(tree)
   client.unmount()
-  return pageOf(toHtml(tree), options)
+  return pageOf(html, options)
 }
 
 async function renderGallery(options = {}) {
@@ -577,11 +633,33 @@ async function main() {
 
   const pages = {
     'studio-ready': await renderState(states.ready, { props: { initialPrompt: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图' } }),
+    'studio-portrait': await renderState(states.ready, {
+      history: portraitHistory,
+      props: { initialPrompt: '东方水墨风格的远山与孤舟，大面积留白' },
+    }),
+    // 显影动画停在半程：核对「刚落定」这一下的观感，而不是终帧。
+    'studio-fresh': await renderState(states.ready, {
+      history: freshHistory,
+      props: { initialPrompt: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图' },
+    }),
+    // 第一次出图：还没有任何历史，光桌上只有一只按任务尺寸画出的取景框。
+    'studio-pending': await renderState(
+      {
+        ...states.ready,
+        jobs: [{ id: 'job-first', status: 'running', startedAt: at(-8), params: { prompt: '第一张画面', width: 720, height: 1280 } }],
+      },
+      { history: [] },
+    ),
     'studio-chat': await renderState(states.ready, { props: { panelMode: 'chat' } }),
     'studio-gallery': await renderState(states.ready, { props: { view: 'gallery' } }),
     'studio-dark': await renderState(states.ready, { dark: true, props: { initialPrompt: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图' } }),
+    // 深色 + 空提示词：主操作按钮处于禁用态，用来核对深色下禁用文字仍然可读。
+    'studio-disabled-dark': await renderState(states.ready, { dark: true, history: [] }),
     'studio-empty': await renderState(states.empty, { history: [] }),
     'studio-queued': await renderState(states.queued, { history: [] }),
+    // 两个任务同时在队：底部左侧应该出现两张卡（进行中 + 排队位次）。
+    'studio-queue-two': await renderState(states.queueTwo, { history: [] }),
+    'studio-queue-two-dark': await renderState(states.queueTwo, { dark: true, history: [] }),
     'studio-pushing': await renderState(states.pushing, { history: [] }),
     'studio-connecting': await renderState(states.connecting, { history: [] }),
     'studio-warming': await renderState(states.warming, { history: [] }),
@@ -594,6 +672,13 @@ async function main() {
     'chat-standalone': await renderChat(),
     'studio-refine': await renderRefine(),
     'compute-popover': await renderComputePopover(),
+    'model-picker': await renderState(states.ready, {
+      props: { defaultModelOpen: true, initialPrompt: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图' },
+    }),
+    'model-picker-dark': await renderState(states.ready, {
+      dark: true,
+      props: { defaultModelOpen: true, initialPrompt: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图' },
+    }),
   }
 
   for (const [name, html] of Object.entries(pages)) {

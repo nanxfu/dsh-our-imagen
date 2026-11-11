@@ -165,7 +165,13 @@
   "presets": [
     {
       "id": "sdxl-lightning",
-      "label": "默认 · 1024 快档",
+      "label": "SDXL Lightning",
+      "family": "SDXL",
+      "short": "Lightning",
+      "description": {
+        "zh": "4 步极速出图，平衡画质与耗时",
+        "en": "4-step fast generation, balanced quality"
+      },
       "repo": "stabilityai/stable-diffusion-xl-base-1.0 + ByteDance/SDXL-Lightning",
       "params": "3.5B + LoRA",
       "license": "OpenRAIL++",
@@ -293,6 +299,14 @@
 ### 2.2 出图任务
 
 队列在 Host 侧串行执行：同一时刻最多 1 个 `running`，其余按提交顺序排队。
+
+> **远端异步 job 协议（v0.5.0 起）**：Host 不再同步等待整段采样。提交路径是
+> `POST /generate`（远端只校验并返回 `202 {status:"accepted", job_id}`，耗时 <100ms）+
+> 每 `TIMEOUTS.remoteJobPollMs`（2s）一次 `GET /job?id=<job_id>` 轮询，
+> 直到 `status=done`（带 `results`）、`failed`（带 `error.code`）或宿主整体预算耗尽。
+> 这样一条 HTTP 连接不会挂住几十秒而无任何响应字节，Cloudflare quick tunnel 与本地代理
+> 不会把「空闲连接」判死；远端失败也仍能通过正常的 HTTP 语义（job 的 `error.code`）表达，
+> 不需要提前写 200 而丢掉 500。轮询期间的单次网络抖动会被容忍（连续失败 5 次才判失败）。
 
 #### `POST /imagen-api/generate`
 
@@ -523,9 +537,14 @@
 | 预设 ID | 基础模型与权重 | 默认尺寸（可选档位） | 步数 / CFG | 加载 / 单张耗时 | 峰值显存 | 下载量 | 卡数 | 档位 |
 | :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :--- |
 | **`sdxl-lightning`** *(默认)* | `stabilityai/stable-diffusion-xl-base-1.0` + `ByteDance/SDXL-Lightning` (4-step LoRA) | 1024（768 / 1024 / 1152） | 4 步 / 0 | 7.7s / 6.2s | 10347 MB | 6.78 GB | 1 | fast |
+| **`hyper-sdxl-8step`** | `stabilityai/stable-diffusion-xl-base-1.0` + `ByteDance/Hyper-SD` (8-step LoRA) | 1024（768 / 1024） | 8 步 / 0 | 14.3s / 7.74s | 10347 MB | 7.35 GB | 1 | fast |
 | **`sdxl-turbo`** | `stabilityai/sdxl-turbo` | 512（512 / 768 / 1024） | 4 步 / 0 | 4.0s / 1.87s | 7666 MB | 6.62 GB | 1 | fast |
+| **`playground-v2.5`** | `playgroundai/playground-v2.5-1024px-aesthetic` | 1024（768 / 1024） | 30 步 / 3 | 5.7s / 28.34s | 9967 MB | 6.46 GB | 1 | usable |
 | **`sdxl-base`** | `stabilityai/stable-diffusion-xl-base-1.0` | 1024（768 / 1024 / 1152） | 25 步 / 7.5 | 5.8s / 27.8s | 9966 MB | 6.78 GB | 1 | usable |
+| **`realvis-v5`** | `SG161222/RealVisXL_V5.0` | 1024（768 / 1024） | 25 步 / 5 | 5.2s / 24.53s | 9967 MB | 6.46 GB | 1 | usable |
 | **`flux2-klein-4b`** *(实验)* | `black-forest-labs/FLUX.2-klein-4B` | 1024（768 / 1024） | 4 步 / 1.0 | 28.2s / 10.24s | 7929 MB | 15.2 GB | 2 | fast |
+| **`animagine-xl-3.1`** | `cagliostrolab/animagine-xl-3.1` | 1024（768 / 1024） | 28 步 / 7 | 4.8s / 26.17s | 9176 MB | 6.46 GB | 1 | usable |
+| **`anima-light-lavender`** | `Johnny-Z/Anima-Light-Lavender`（Cosmos-Predict2 2B DiT + Qwen3-0.6B + Qwen-Image VAE，单文件 checkpoint，`anima` loader） | 1024（768 / 1024 / 1152） | 25 步 / 4 | 43.5s / 80.64s | 8470 MB | 5.25 GB | 1 | usable |
 
 > **双卡说明**：`flux2-klein-4b` 的 pipeline 使用 `deviceMap: "balanced"`，Kernel 申请 2×T4 时按 `gpus: 2` 下发；
 > 其余预设单卡即可。
@@ -558,7 +577,7 @@
 工作台采用桌面优先的**单轨创作面板 + 居中画面自适应预览**布局：
 1. **单轨面板 (320px 恒定)**：固定在左侧，自上而下承载提示词、灵感预设/智能润色、风格画幅、高级参数（采样步数、CFG、种子、张数，默认折叠抽屉）与生成 CTA。
 2. **画面预览区 (自适应填充)**：大图按比例 contain 居中渲染，图下配操作胶囊（带回参数、生成变体、复制绝对路径、在文件夹中打开）。
-3. **最近生成栏 (底部常驻)**：横向滚动展示最近批次缩略图（62×62、12px 圆角），支持快速点选切图。
+3. **最近生成栏 (底部常驻)**：横向滚动展示待执行任务与最近批次缩略图（62×62、12px 圆角），支持快速点选切图。队列串行执行，但待执行任务可能不止一个：每个任务各占一张卡，按真实执行顺序从左到右排列——进行中的卡带一份显影扫描光与已用时间，排队中的卡只写位次与已排队时长。
 4. **画廊卡片墙 (独立全宽视图)**：5 列自然高度卡片墙，不裁切图片，按时间线分段，支持搜索、模型筛选与批量管理。
 
 ### 5.3 悬浮提示 (Tooltip) 部署明细

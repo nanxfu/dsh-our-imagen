@@ -94,40 +94,92 @@
   text-overflow: ellipsis;
 }
 
-/* 进行中的骨架卡 */
+/* 进行中的暗房计时卡：一格还在显影的相纸 + 阶段与已用时间 */
 .ofs-ghost {
   flex: 0 0 auto;
-  width: 148px;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  padding: 11px 12px;
-  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 36%, transparent);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid var(--ofs-hairline);
   border-radius: 14px;
-  background: linear-gradient(140deg, var(--ofs-accent-soft) 0%, transparent 78%);
+  background: color-mix(in oklab, var(--ofs-card) 70%, transparent);
 }
 
-.ofs-ghost-bar {
-  height: 34px;
+.ofs-ghost-frame {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  overflow: hidden;
+  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 30%, transparent);
   border-radius: 10px;
+  background: var(--ofs-sunken);
+}
+
+/* 一道从下往上推的显影光，说明这一格还在出 */
+.ofs-ghost-bar {
+  width: 100%;
+  height: 100%;
   background: linear-gradient(
-    90deg,
-    color-mix(in oklab, var(--ofs-accent) 10%, transparent) 0%,
-    color-mix(in oklab, var(--ofs-accent) 32%, transparent) 50%,
-    color-mix(in oklab, var(--ofs-accent) 10%, transparent) 100%
+    180deg,
+    transparent 0%,
+    color-mix(in oklab, var(--ofs-accent) 18%, transparent) 46%,
+    color-mix(in oklab, var(--ofs-accent) 4%, transparent) 100%
   );
-  background-size: 220% 100%;
-  animation: ofs-shimmer 1.8s linear infinite;
+  background-size: 100% 240%;
+  animation: ofs-develop-scan 2.8s ease-in-out infinite;
+}
+
+@keyframes ofs-develop-scan {
+  0% {
+    background-position: 0 110%;
+  }
+  100% {
+    background-position: 0 -130%;
+  }
+}
+
+/* 排队中的卡：这一格还没开始显影，取景框里写位次，旁边写已排队时长 */
+.ofs-ghost.is-queued {
+  background: color-mix(in oklab, var(--ofs-card) 52%, transparent);
+}
+
+.ofs-ghost.is-queued .ofs-ghost-frame {
+  border-color: var(--ofs-sunken-border);
+}
+
+.ofs-ghost-slot {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ofs-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.ofs-ghost.is-queued .ofs-ghost-label {
+  color: var(--ofs-ink-3);
+}
+
+.ofs-ghost-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .ofs-ghost-label {
-  font-size: 10.5px;
+  max-width: 168px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
   color: var(--ofs-ink-2);
+  white-space: nowrap;
 }
 
 .ofs-ghost-time {
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--ofs-ink-3);
   font-variant-numeric: tabular-nums;
 }

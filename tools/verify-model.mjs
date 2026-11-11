@@ -36,7 +36,7 @@ const ACCELERATOR = 'NvidiaTeslaT4'
 const DEFAULT_TIMEOUT_MIN = 30
 const POLL_MS = 15000
 const TERMINAL_STATES = new Set(['COMPLETE', 'ERROR', 'CANCEL_ACKNOWLEDGED'])
-const VALID_LOADERS = new Set(['sdxl', 'sdxl-lora', 'flux2'])
+const VALID_LOADERS = new Set(['sdxl', 'sdxl-lora', 'flux2', 'anima'])
 
 // ── 失败分类（导出给测试用） ─────────────────────────────────────────────
 
@@ -131,6 +131,20 @@ export async function loadModelConfig(relativePath) {
   if (pipeline.loader === 'sdxl-lora') {
     const lora = pipeline.lora || {}
     if (!lora.repo || !lora.weight) throw new Error('sdxl-lora 需要 pipeline.lora.repo 与 pipeline.lora.weight')
+  }
+  if (pipeline.loader === 'anima') {
+    // 单文件 DiT + 独立文本编码器/VAE/分词器：缺任何一项远端都加载不起来，提前拦下。
+    if (typeof pipeline.weight !== 'string' || !pipeline.weight.trim()) {
+      throw new Error('anima 需要 pipeline.weight（DiT 单文件权重名）')
+    }
+    const textEncoder = pipeline.textEncoder || {}
+    if (!textEncoder.repo || !textEncoder.weight) {
+      throw new Error('anima 需要 pipeline.textEncoder.repo 与 pipeline.textEncoder.weight')
+    }
+    const vae = pipeline.vae || {}
+    if (!vae.repo) throw new Error('anima 需要 pipeline.vae.repo')
+    const tokenizers = pipeline.tokenizers || {}
+    if (!tokenizers.repo) throw new Error('anima 需要 pipeline.tokenizers.repo（Qwen3 + T5 分词器所在仓库）')
   }
   for (const field of ['size', 'steps', 'cfg']) {
     if (!Number.isFinite(Number(model[field]))) throw new Error(`配置缺少数值字段 ${field}`)

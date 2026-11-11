@@ -1,0 +1,52 @@
+{
+  "id": "animagine-xl-3.1",
+  "order": 45,
+  "label": "Animagine XL 3.1",
+  "family": "SDXL",
+  "short": "Animagine 3.1",
+  "description": {
+    "zh": "二次元插画与角色表现",
+    "en": "Anime illustration and character art"
+  },
+  "repo": "cagliostrolab/animagine-xl-3.1",
+  "params": "3.5B",
+  "license": "OpenRAIL++",
+  "licenseKind": "open",
+  "gated": false,
+  "gpus": 1,
+  "tier": "usable",
+  "size": 1024,
+  "steps": 28,
+  "cfg": 7,
+  "negativeHint": "nsfw, lowres, (bad), text, error, fewer, extra, missing, worst quality, jpeg artifacts, low quality, watermark, unfinished, displeasing, oldest, early, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract]",
+  "sizeOptions": [
+    768,
+    1024
+  ],
+  "runtime": "default",
+  "pipeline": {
+    "loader": "sdxl",
+    "base": "cagliostrolab/animagine-xl-3.1",
+    "lora": null,
+    "scheduler": null,
+    "variant": null,
+    "downloadGb": 6.5,
+    "allowPatterns": [
+      "model_index.json",
+      "**/config.json",
+      "**/*.json",
+      "**/*.txt",
+      "unet/*.safetensors",
+      "text_encoder/model.safetensors",
+      "text_encoder_2/model.safetensors",
+      "vae/*.safetensors"
+    ],
+    "deviceMap": null
+  },
+  "measured": {
+    "peakVramMb": 9176,
+    "loadSeconds": 4.8,
+    "steadySeconds": 26.17,
+    "downloadGb": 6.46
+  }
+}

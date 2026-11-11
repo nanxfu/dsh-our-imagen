@@ -77,7 +77,7 @@ export function apply(ctx, config = {}) {
     defaultPreset,
     options: {
       sessionWaitMs: toInt(config.sessionWaitMinutes, TIMEOUTS.sessionWaitMs / 60000, 5, 240) * 60 * 1000,
-      generateTimeoutMs: toInt(config.generateTimeoutSeconds, TIMEOUTS.remoteGenerateMs / 1000, 30, 1800) * 1000,
+      generateTimeoutMs: toInt(config.generateTimeoutSeconds, TIMEOUTS.remoteJobMs / 1000, 30, 1800) * 1000,
     },
   })
 

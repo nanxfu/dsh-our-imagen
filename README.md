@@ -1,194 +1,228 @@
-# our-free-imagen
+<div align="center">
 
-> 借用 Kaggle 每周免费 30 小时 GPU，让你的 DSH Desktop 免费、不卡顿地跑开源文生图大模型。
+# 生图工作台 (dsh-our-imagen)
 
-无需本机配备高端显卡，也无需在电脑上折腾复杂的 PyTorch/CUDA 环境。安装本插件后，你可以在 DSH Desktop 的独立整页工作台里一键唤醒远端 GPU 并连续出图，也可以在对话里让 Agent 调用生图工具。图片直接保存在当前工作区，不经过任何第三方图床。
+**借 Kaggle 每周免费 30 小时 GPU，在 DeepSeek Harness 里免费出图。**<br/>
+不吃本机显卡，开机一次随画随出，图片全部直接落盘在本地。
 
----
+[![Status: Preview](https://img.shields.io/badge/Status-Preview-orange?style=flat-square)](#)
+[![DeepSeek Harness](https://img.shields.io/badge/DSH-Plugin-0066FF?style=flat-square)](https://github.com/deepseek-ai/DeepSeek-Harness)
+[![License: MIT](https://img.shields.io/badge/License-MIT-black?style=flat-square)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/yourusername/dsh-our-imagen?style=flat-square)](https://github.com/yourusername/dsh-our-imagen)
 
-## 核心特性
+> 🚧 **当前处于 Preview 早期预览阶段**：部分复杂网络环境下的保活机制正在持续打磨。更稳定的插件版本、更强大的开源生图模型（如更高画质与长文本驱动的新架构）正在紧密接入中，欢迎体验与反馈 issue！
 
-- **零本地负担**：模型推理全部运行在 Kaggle 免费的 2×Nvidia Tesla T4 云端容器中，本地轻量无压力。
-- **开机一次，随画随出**：一次会话只拉起一个 Kernel，加载完成后连续出图（SDXL Lightning 单张仅需约 6 秒）。
-- **双模使用**：
-  - **可视化工作台**：独立整页视图，单轨创作面板 + 画面预览 + 最近生成；支持参数微调、5 组灵感预设、光影 / 材质 / 构图 / 氛围四维润色、作品画廊与「带回参数」。
-  - **创作助手**：用一句话描述画面，由宿主模型解析出提示词、比例与风格，先给确认卡再出图。
-  - **对话调用**：在聊天窗口中直接对 AI 说 *“帮我画一张赛博朋克风格的雨夜街景”*，模型自动调用工具出图。
-- **省电与省额度**：空闲 30 分钟自动关机，也可在面板中一键关闭云端，不浪费 Kaggle 免费算力。
-- **断点可恢复**：会话信息实时写入工作区 `.imagen/session.json`，DSH 重启或插件热重载后会先探活、再接管或清理，避免远端 GPU 空转。
-- **隧道自愈与备用通道**：远端 cloudflared 中途退出会自动重拉并重新广播；如配置了自建隧道命令，cloudflared 失败时可自动切换。
-- **排错可见**：工作台算力弹层可打开运行日志抽屉，直接查看安装 / 隧道 / 生成日志，并一键复制诊断信息。
-- **权重预挂载**：可把模型权重做成 Kaggle Dataset 挂载到容器，跳过每次冷启动的下载（见下文配置）。
+[快速上手](#-三步上手) · [它是什么](#-它是什么) · [问答](#-常见问答) · [开发与测试](#-开发与测试) · [English](README.en.md)
+
+</div>
 
 ---
 
-## 3 步快速上手
+## 💡 它是什么
 
-### 步骤 1：安装与配置 Kaggle 凭证
-插件通过本机 `kaggle` 命令行与云端调度，插件本身不保存任何账号密码。
+**生图工作台**（仓库：`dsh-our-imagen`）是运行在 [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness) 上的开源文生图工作台插件。
 
-1. 在终端安装官方命令行：
-   ```powershell
-   pip install -U kaggle
-   ```
-2. 前往 [Kaggle 账号设置页](https://www.kaggle.com/settings/api)，点击 **Create New Token**。
-3. 将下载的 Token 写入本地配置：
-   ```powershell
-   Set-Content -NoNewline "$env:USERPROFILE\.kaggle\access_token" "你的_Kaggle_Token"
-   ```
+它解决一个很实在的问题：很多人想在本地用开源大模型画图，但自己的笔记本或台式机没有大显存独显，或者懒得在本地折腾一套数百兆甚至数千兆的 PyTorch、CUDA、ComfyUI 环境。
 
-> ⚠️ **重要提示**：Kaggle 账号**必须绑定手机号**。未完成手机验证的账号会被平台静默降级为 CPU 运行，导致无法启动 GPU 实例。
-
-### 步骤 2：在 DSH Desktop 中加载插件
-1. 打开 DSH Desktop 设置，进入插件管理。
-2. 以「本地 Bundle」方式选择本项目目录完成加载。
-3. 点击左侧边栏新增的 **免费生图** 入口，进入整页工作台。
-
-### 步骤 3：开始出图
-- **首次启动**：输入提示词并点击「立即生成」。若云端实例未启动，插件会自动推送任务到 Kaggle。
-- **排队等待**：首次启动通常需要 3~10 分钟分配云端机器并加载模型（顶栏 GPU 状态与状态条会分别显示推送、排队、连接与加载阶段）。
-- **极速产出**：云端就绪后，状态变为「云端就绪」，点开状态胶囊可以看到当前已载模型的实测单张耗时。生成图片自动存放在当前工程的 `imagen-output/` 目录下，可用顶栏的「在文件夹中打开」直接定位。
+装上它之后：
+1. **你得到一个整页可视化工作台**：开机唤醒 Kaggle 2×T4 云端算力，选好模型、敲下灵感、一键生图；
+2. **你得到一组开箱即用的对话工具**：在聊天窗口里直接跟 AI 说「帮我画一张赛博朋克雨夜街道」，Agent 会自动整理参数、展示确认卡片并调用云端生成；
+3. **不用担心算力浪费与图床隐私**：空闲 30 分钟自动关机，图片通过加密安全隧道直接存进你本地工作区的 `imagen-output/` 文件夹。
 
 ---
 
-## 日常使用方式
+## 🎨 核心能力
 
-### 1. 工作台操作（独立整页视图）
-- **参数预设**：内置 `SDXL Lightning`（推荐，4步高画质）、`SDXL Turbo`（极速草图）、`SDXL Base` 等。切换预设会自动回填实测最佳参数。
-- **创作面板**：提示词下方常驻 5 组灵感预设；「润色」按光影 / 材质 / 构图 / 氛围给出四维标签，点一次追加、再点撤销。
-- **自定义微调**：支持调整画面比例、采样步数、引导强度、随机种子与生成张数；长篇说明藏在字段旁的 `(i)` 悬浮提示里。
-- **画面与历史**：右侧画面预览可放大；底部最近生成按批次展示缩略图，点击可带回主预览。
-- **作品画廊**：卡片悬停提供「带回参数 / 生成变体 / 查看大图」；批量模式下可删除或复制绝对路径。
+<table>
+<tr>
+<td width="48%">
 
-### 2. 创作助手
-选面板头部的「创作助手」标签，直接说想画什么：
-- *“画一张横版的雨夜街景，要写实一点，画质高一些”* → 助手解析成提示词、16:9 与写实摄影，先给确认卡，点「按此生成」出图。
-- 后续消息作为增量修改：“背景加一只撑伞的黑猫”，会继承上一轮描述与参数。
+### 1. 独立整页工作台
+* **多款实测开源模型卡片**：从疾速出图的 `SDXL Lightning`、`Hyper-SDXL`，到画风扎实的 `SDXL Base`、`RealVisXL`，再到动漫专项 `Animagine XL 3.1` 与轻量前沿 `FLUX.2 Klein 4B` 等。
+* **单轨专注面板**：提示词、反向词、尺寸比例（1:1 / 16:9 / 9:16 / 4:3 / 3:4）、步数、随机种子一目了然。
+* **四维轻量润色**：光影、材质、构图、氛围一键追加，不破坏原生提示词意图。
+* **底栏轻胶卷与历史抽屉**：刚生成的图随时回看，支持一键「带回全部参数」与「继续生成变体」。
 
-### 3. 对话中让 AI 帮你画
-安装插件后，你的 DSH 会话模型会自动获得 3 个画图工具（`imagen_generate`、`imagen_session`、`imagen_history`）：
-- *“帮我画一只戴着太空头盔的柴犬，写实风格”*
-- *“查看当前生图服务的状态”*
-- *“关闭生图云端实例”*
+</td>
+<td width="52%">
+
+<!-- 建议将真实截图命名为 studio.png 放置于 docs/assets/ -->
+<div align="center">
+  <img src="docs/assets/studio.png" alt="生图工作台 独立界面" width="100%" onerror="this.src='https://via.placeholder.com/800x480/1a1a1a/888888?text=dsh-our-imagen+Studio+Interface'" />
+  <p><sub>独立整页工作台：参数面板 + 实时画布 + 最近胶卷</sub></p>
+</div>
+
+</td>
+</tr>
+
+<tr>
+<td width="48%">
+
+### 2. 创作助手与对话调用
+* **对话直接出图**：宿主自动挂载 `imagen_generate`、`imagen_session`、`imagen_history` 等工具，与你的日常对话无缝集成。
+* **自然语言意图对齐**：随口说一句画面想法，内置创作助手先帮你翻译为规范的英文提示词、推断合适的比例与推荐模型，**先出确认卡片，确认后再跑**。
+* **双向无缝流转**：聊天中生成的图片，随时可在右侧胶卷点击展开并在整页工作台里二次编辑。
+
+</td>
+<td width="52%">
+
+<!-- 建议将真实截图命名为 chat-tool.png 放置于 docs/assets/ -->
+<div align="center">
+  <img src="docs/assets/chat-tool.png" alt="对话卡片与生图预览" width="100%" onerror="this.src='https://via.placeholder.com/800x480/1a1a1a/888888?text=DSH+Chat+Agent+Integration'" />
+  <p><sub>对话卡片：先给确认卡，点确定即出图，成果进本地工作区</sub></p>
+</div>
+
+</td>
+</tr>
+
+<tr>
+<td width="48%">
+
+### 3. 本地落盘与自愈防烧
+* **资产 100% 留存本地**：生成完毕的数据流通过临时单次 Token 隧道直接写进你工作区的 `imagen-output/` 目录，不经过任何第三方公共商业图床。
+* **省心防烧机制**：云端 Kernel 空闲超过 30 分钟（时间可配置）自动关机，或者在工作台右上角随时手动关机。
+* **意外断点恢复**：本地实时记录 `.imagen/session.json`。DSH 重启或窗口刷新后，插件会自动探活旧实例并无缝接管，避免重复开机浪费额度。
+
+</td>
+<td width="52%">
+
+```text
+[ DSH 工作台 / 聊天窗口 ]
+          │  /imagen-api/* (本地通信)
+          ▼
+[ 本地插件 Host (Node.js) ] ── (写入) ──▶ [ 本地 imagen-output/ ]
+          │  kaggle kernels push
+          ▼
+[ Kaggle 云端 (2×Tesla T4) ]
+   daemon.py (diffusers)
+          │  单次 Bearer Token 加密隧道
+          └─────────────────────────────▶ (安全返回本地)
+```
+
+</td>
+</tr>
+</table>
 
 ---
 
-## 可选配置
+## ⚡ 三步上手
 
-插件配置写在 DSH 的插件配置项里（键名区分大小写），全部可选：
+### 第一步：准备 Kaggle Token
 
-| 配置项 | 默认值 | 说明 |
+> 提示：Kaggle 账号必须在个人设置里完成**手机号绑定验证**（Phone Verification），平台才会给分配免费 GPU；未绑定的账号会被降级为纯 CPU。
+
+1. 打开 [Kaggle API Settings](https://www.kaggle.com/settings/api)，点击 **Create New Token**。
+2. 拿到你的 Token（或 `kaggle.json`），写入本地配置文件：
+
+* **Windows (PowerShell)**：
+  ```powershell
+  New-Item -ItemType Directory -Force "$env:USERPROFILE\.kaggle" | Out-Null
+  Set-Content -NoNewline "$env:USERPROFILE\.kaggle\access_token" "你的_Kaggle_Token"
+  ```
+* **macOS / Linux (Bash / Zsh)**：
+  ```bash
+  mkdir -p ~/.kaggle
+  printf '%s' '你的_Kaggle_Token' > ~/.kaggle/access_token
+  chmod 600 ~/.kaggle/access_token
+  ```
+
+---
+
+### 第二步：在 DSH 中加载插件
+
+你可以任选下面一种方式：
+
+* **方式 A：1024 插件市场或 CLI 安装**（推荐）：
+  ```bash
+  dsh plugin --profile web add dsh-our-free-imagen
+  ```
+* **方式 B：本地源码或 Release Bundle 加载**：
+  1. 下载 Release 里的 `dist/dsh-our-free-imagen-<version>.zip` 并解压（或克隆本仓库后执行 `npm install && npm run package`）；
+  2. 打开 DSH 设置 → **插件管理** → 选择 **本地加载（Load Bundle）** 选中该目录；
+  3. 点击左侧工具栏新增的 **生图工作台** 图标。
+
+---
+
+### 第三步：点击唤醒并开始出图
+
+1. 进入工作台，点击顶部的 **开机 / 唤醒云端**；
+2. 首次开机 Kaggle 约需 3~10 分钟分配资源并加载模型权重；
+3. 云端就绪变绿（`Online`）后，随写随出，每张仅需数秒。
+
+---
+
+## ❓ 常见问答
+
+<details>
+<summary><b>Q1: 使用这个插件要花钱吗？每周 30 小时 GPU 够用吗？</b></summary>
+
+**完全免费，且额度非常充裕。**
+- 插件代码采用宽松的 MIT 协议开源。
+- 算力直接借用 Kaggle 平台向所有通过手机认证用户每周免费赠送的 **30 小时 GPU（2×Nvidia T4）**，额度内完全不花一分钱。
+- **每周能出多少张图？**
+  - 以日常主力 1024 高清模型（`SDXL Lightning` 1024px，实测约 6.2 秒/张）为例，30 小时额度**每周最高可出图 17,000+ 张**；
+  - 即使每天重度画图几十到上百张，一周通常也只消耗 1~2 小时额度，日常个人创作额度根本用不完。
+</details>
+
+<details>
+<summary><b>Q2: 我的电脑需要配独立显卡吗？</b></summary>
+
+**完全不需要。**
+所有的模型加载与扩散去噪推理都在 Kaggle 的云端双卡 T4 上执行。你的本地电脑（甚至是轻薄办公本）只负责显示工作台界面以及把图片写到硬盘里。
+</details>
+
+<details>
+<summary><b>Q3: 首次开机为什么需要等几分钟？</b></summary>
+
+云端冷启动包含几个固定步骤：
+1. Kaggle 调度分配免费 2×T4 虚拟机；
+2. 远端运行环境初始化与依赖检查；
+3. 下载并装载所选模型权重（若未挂载缓存数据集）。
+这个过程通常需要 3~10 分钟。**一旦就绪，后续连续生成无需等待，稳态下每张图只需要数秒。** 插件提供了 30 分钟空闲保活，用完也可以随时点击关机。
+</details>
+
+<details>
+<summary><b>Q4: 我的图片会传到第三方云盘或公共图床吗？</b></summary>
+
+**不会。**
+远端生成完毕的图像数据，只通过该次会话随机生成的专属 Bearer Token 隧道直接流式传回本地 Host，并直接保存到你电脑的 `imagen-output/` 文件夹下。没有中间商业图床，也不保留公开访问链接。
+</details>
+
+<details>
+<summary><b>Q5: 支持哪些模型？</b></summary>
+
+目前开箱内置多款实测可用的模型配置（定义在 [`models/*.json`](models/)）：
+- `SDXL Lightning`（默认，4 步疾速，~2s/张）
+- `Hyper-SDXL 8-Step`（兼顾细节与速度，~2.5s/张）
+- `SDXL Turbo`（实时去噪，极速草图）
+- `Playground v2.5`（美感表现优异，色彩丰富）
+- `SDXL Base 1.0`（经典标准底模）
+- `RealVisXL V5.0`（写实人像与摄影质感专项）
+- `FLUX.2 Klein 4B`（轻量新一代扩散模型架构）
+- `Animagine XL 3.1`（二次元与动漫风格专项）
+- `Anima Light Lavender`（二次元插画专项，Cosmos-Predict2 2B 底座）
+</details>
+
+---
+
+## 🛠 开发与测试
+
+如果你想修改代码、贡献新功能或调试模型：
+
+| 操作 | 命令 | 说明 |
 | :--- | :--- | :--- |
-| `defaultPreset` | `sdxl-lightning` | 默认模型预设 id |
-| `accelerator` | `NvidiaTeslaT4` | Kaggle 加速器类型 |
-| `idleTimeoutSec` | `1800` | 远端空闲多少秒后自动关机（300~10800） |
-| `provisionTimeoutMinutes` | `45` | 等待 Kaggle 分配 GPU 的最长分钟数（5~240） |
-| `sessionWaitMinutes` | `45` | 出图任务等待会话就绪的最长分钟数（5~240） |
-| `generateTimeoutSeconds` | `300` | 单次生成请求超时秒数（30~1800） |
-| `hfToken` | 空 | HuggingFace Token；设置后可避免匿名拉取大模型被 429 限流，也支持 gated 仓库 |
-| `pipConstraints` | `[]` | 可选 pip 版本约束，如 `["diffusers==0.42.1"]`；**默认不钉版本**（硬编码上限会与 diffusers 新版依赖冲突，见 TROUBLESHOOTING）；带约束装不上时会自动去掉约束重试 |
-| `datasetSources` | `[]` | 预挂载的 Kaggle Dataset，如 `["owner/sdxl-weights"]`，挂载到 `/kaggle/input/<dataset>` |
-| `localModels` | 空 | 权重仓库 → 容器内目录的映射，如 `{"stabilityai/stable-diffusion-xl-base-1.0": "/kaggle/input/sdxl-weights"}`；命中后跳过下载 |
-| `fallbackTunnelCommand` | `[]` | 备用隧道命令 argv，支持 `{port}` 占位，如 `["/kaggle/working/bore", "server", "bore.pub", "-p", "{port}"]` |
-| `fallbackTunnelUrlRegex` | 内置 https 规则 | 从备用通道输出里提取地址的正则 |
-| `trustedTunnelDomains` | `[]` | 备用通道的域名后缀（如 `["tunnel.example.com"]`），Host 只对可信 https 地址发送 token |
-| `devEndpoint` / `devToken` | 空 / `dev-token` | 本地联调：直连本机 mock daemon（也可用同名环境变量） |
-
-> 备用通道要求输出 **https** 地址；`trustedTunnelDomains` 是安全白名单，未登记的自建域名不会被信任。
-> 权重预挂载需要先自行把模型文件发布为 Kaggle Dataset，目录结构保持 HuggingFace 仓库原样（含 `model_index.json`）。
+| **安装依赖** | `npm install` | 安装开发与打包依赖 |
+| **运行单元测试** | `npm test` | 校验核心状态机与工作流逻辑 |
+| **契约测试** | `npm run test:contract` | 校验全套模型配置与接口契约 |
+| **离线联调** | `node test/mock-daemon.mjs` | 本地模拟云端双向通信，无需真实 Kaggle 算力 |
+| **构建工作台** | `node build.mjs` | 编译前端单文件 Bundle `client.js` |
+| **生产打包** | `npm run package` | 生成可发布的 `dist/` 独立插件 Bundle |
 
 ---
 
-## 开发与本地脱机联调
+## 📄 开源许可与致谢
 
-如果你在开发插件本身，无需每次都等待 Kaggle 排队，可使用内置的本地 Mock 服务：
-
-```powershell
-# 1. 启动本地 Mock 推理服务（秒级返回占位图，无需显卡）
-python test/mock-daemon.py --port 17860 --token dev-token
-
-# 2. 注入联调环境变量
-$env:OUR_FREE_IMAGEN_ENDPOINT = "http://127.0.0.1:17860"
-$env:OUR_FREE_IMAGEN_TOKEN = "dev-token"
-
-# 3. 重启 DSH Desktop，插件即刻进入 Ready 状态
-```
-
-测试按层次划分（离线检查均不需要 Kaggle 账号与 GPU）：
-
-```powershell
-# 一次跑完离线检查：构建 + 契约 + 客户端文案/逻辑/渲染 + Host 端到端 + 会话状态机/竞态 + 本地库
-npm test
-
-# 只跑契约校验：路由 / 错误码 / 参数边界 / 预设 / 远端协议的唯一来源是 shared/contract.js，
-# 改契约后必跑（也校验 remote/contract.json 是否与契约同步）
-npm run test:contract
-
-# 只跑 Host 端到端（21 项自动化断言，起本地 mock daemon 跑完整链路）
-npm run test:host
-
-# 只跑客户端（文案键完整性 / 纯逻辑 / 渲染结构，需先构建 client.js）
-npm run test:client
-
-# Python daemon 的单元测试（需要本机 python 环境；已接入 npm test 与 npm run test:host）
-npm run test:daemon   # 纯函数单测（101 项：隧道监管 / 冷启动 / 预挂载 / 备用通道）
-
-# 会话持久化与启动恢复（79 项：探活接管、重新会合、清理、竞态、token 不落日志）
-node test/session-restore.mjs
-
-# Kernel 打包注入（dataset_sources / 配置 Base64 / metadata 合法）
-node test/kernel-package.mjs
-
-# 重新生成 / 校验下发给远端 daemon 的契约 JSON（改了 shared/contract.js 后）
-npm run contract:gen
-npm run contract:check
-
-# 模型资产：编辑 models/<id>.json 后重新生成并校验（详见 docs/MODEL_ASSET_SPEC.md）
-npm run models:build
-npm run models:check
-
-# 验证一个模型（真实 Kaggle GPU，会消耗配额；--write 把实测数据写回 JSON）
-node tools/verify-model.mjs --config .tmp/models/xxx.json
-node tools/verify-model.mjs --config models/sdxl-lightning.json --write --timeout 30
-
-# 离线演练：只校验配置与 Kernel 打包，不调用 Kaggle
-node tools/verify-model.mjs --config models/sdxl-lightning.json --dry-run
-```
-
-模型录入的操作流程已封装成 Agent Skill（`skills/model-asset-intake/`）。让当前 DSH 会话能发现它，把目录复制到全局 skills 目录：
-
-```powershell
-Copy-Item -Recurse -Force skills\model-asset-intake "$env:USERPROFILE\.dsh\skills\model-asset-intake"
-```
-
-发布打包（先构建 client.js，再产出 `dist/` 下可加载目录与 zip）：
-
-```powershell
-npm run package
-```
-
-真机验证（手动执行，会消耗 Kaggle GPU 额度）：
-
-```powershell
-npm run test:live   # 真实 Kaggle CLI 链路（登录、推送、日志）
-npm run test:gpu    # 真实 GPU 出图链路（端到端出图）
-```
-
-> 契约改动流程：只改 `shared/contract.js`（及需要同步的生成物），然后依次跑 `npm run test:contract` 与 `npm test`；不要在各调用点重新写字面量。
-
-> 「检查环境」每点一次都会启动若干个 `kaggle` CLI 子进程（每个约 10 秒），因此首次检查需要 20~30 秒，面板会显示「检查中」。
-
----
-
-## 进阶技术文档
-
-- **[技术规格与契约 (docs/SPEC.md)](docs/SPEC.md)**：接口契约单一真理源、生命周期、错误码定义以及 Studio 工作台 UI 交互规范。
-- **[架构设计 (docs/ARCHITECTURE.md)](docs/ARCHITECTURE.md)**：底层通信链路、Cloudflare 穿透、心跳保活与 Kaggle 容器避坑指南。
-- **[产品定位与约束 (docs/PRODUCT.md)](docs/PRODUCT.md)**：目标人群、运行环境、功能全景矩阵与无障碍设计标准。
-- **[设计系统令牌 (docs/DESIGN.md)](docs/DESIGN.md)**：黑白灰视觉令牌、排版字阶、间距网格、阴影体系与响应式断点。
-- **[演进路线 (docs/ROADMAP.md)](docs/ROADMAP.md)**：版本里程碑与后续功能规划。
-- **[故障排查 (docs/TROUBLESHOOTING.md)](docs/TROUBLESHOOTING.md)**：pip 版本冲突复盘、venv 取舍、磁盘/隧道/凭证等已知环境问题与判断依据。
-- **[代码重构与整洁化规范 (docs/CODE_REFACTOR_SPEC.md)](docs/CODE_REFACTOR_SPEC.md)**：针对过度设计、伪解耦与测试自嗨的工程整洁化实施指南。
-- **[模型资产规范 (docs/MODEL_ASSET_SPEC.md)](docs/MODEL_ASSET_SPEC.md)**：模型 JSON 格式、实测数据回填、`models/ → models.generated.js` 生成与校验流程。
-- **[模型录入 SOP (skills/model-asset-intake/SKILL.md)](skills/model-asset-intake/SKILL.md)**：把外部链接/代码片段引入为 `models/*.json` 的 Agent 操作流程（含失败自愈与硬性约束）。
-- **[历史归档库 (docs/archive/)](docs/archive/README.md)**：归档历史重构调研底稿与已废弃的前序版本规格。
+- 本项目基于 [MIT License](LICENSE) 开源。
+- 感谢 [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness) 团队提供出色的宿主扩展体系与设计规范。
+- 感谢 Kaggle 为全球开发者提供稳定的免费 GPU 算力支持。
+- 感谢 Hugging Face diffusers 与各大开源模型团队（Stability AI、ByteDance、Playground AI、CagliostroLab 等）。

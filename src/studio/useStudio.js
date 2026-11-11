@@ -158,6 +158,7 @@ export function useStudio(props) {
 
   return {
     t,
+    isEn,
     ui,
     compute,
     form,

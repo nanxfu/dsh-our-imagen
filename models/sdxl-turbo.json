@@ -1,7 +1,13 @@
 {
   "id": "sdxl-turbo",
   "order": 20,
-  "label": "极速草稿",
+  "label": "SDXL Turbo",
+  "family": "SDXL",
+  "short": "Turbo",
+  "description": {
+    "zh": "实时低延迟，适合构图灵感与草稿速探",
+    "en": "Real-time low latency, ideal for drafting"
+  },
   "repo": "stabilityai/sdxl-turbo",
   "params": "3.5B",
   "license": "非商用研究许可",

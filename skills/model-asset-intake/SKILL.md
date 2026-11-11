@@ -22,10 +22,10 @@ user-invocable: true
 
 - 底座仓库（`pipeline.base`）与权重变体（fp16 / safetensors）；
 - 是否 LoRA：LoRA 仓库 + 权重文件名 + 底座仓库；
-- 架构/loader：`sdxl`（整管 SDXL 类）、`sdxl-lora`、`flux2`（FLUX.2 klein 这类需要双卡 `deviceMap: "balanced"`）；
+- 架构/loader：`sdxl`（整管 SDXL 类）、`sdxl-lora`、`flux2`（FLUX.2 klein 这类需要双卡 `deviceMap: "balanced"`）、`anima`（单文件 ComfyUI checkpoint：Cosmos-Predict2 2B DiT + Qwen3-0.6B 文本编码器 + Qwen-Image VAE + Qwen2/T5 双分词器；`pipeline` 必须带 `weight`、`textEncoder{repo,weight}`、`vae{repo,subfolder}`、`tokenizers{repo,repoType}` 四块）；
 - 推荐参数：尺寸、步数、CFG、负向提示词、许可证、是否 gated。
 
-判断不了 loader 时停下来问用户，或读取模型卡 `model_index.json` 的 `_class_name`。不要用 `trust_remote_code` 的模型（当前 daemon 不支持，也不建议收录）。
+判断不了 loader 时停下来问用户，或读取模型卡 `model_index.json` 的 `_class_name`。**单文件 ComfyUI 仓库（`library_name: diffusion-single-file`）没有 `model_index.json`**：此时读作者随仓库提供的工作流 JSON、HF 官方 demo Space 的实现，或直接用 HTTP Range 只取 safetensors 文件头（前 8 字节是头长度，随后是 JSON 张量表）核对层数、通道与参数总量，再决定 loader。不要用 `trust_remote_code` 的模型（当前 daemon 不支持，也不建议收录）。
 
 ## 2. 生成草稿 `.tmp/models/<id>.json`
 

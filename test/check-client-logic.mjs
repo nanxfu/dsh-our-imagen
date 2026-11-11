@@ -89,7 +89,8 @@ await check('时长格式化', () => {
   assert.equal(logic.formatDuration(t, 120000), '2分')
   assert.equal(logic.formatDuration(t, NaN), '—')
   assert.equal(logic.formatSeconds(t, 6.2), '6.2秒')
-  assert.equal(logic.formatSeconds(t, 11.6), '12秒')
+  assert.equal(logic.formatSeconds(t, 11.6), '11.6秒')
+  assert.equal(logic.formatSeconds(t, 27.8), '27.8秒')
   assert.equal(logic.formatSeconds(te, 6.2), '6.2s')
 })
 
@@ -107,6 +108,37 @@ await check('任务耗时与活跃任务查询', () => {
   }
   assert.equal(logic.activeJobOf(state).id, 'job-2')
   assert.deepEqual(logic.stateJobs({ jobs: [null, { noId: true }, { id: 'x' }] }).map((job) => job.id), ['x'])
+})
+
+await check('待执行队列排序：进行中在前，其余按提交先后', () => {
+  // 宿主 /state 的 jobs 是「最新在前」：后提交的排队任务排在正在生成的任务前面。
+  // 若直接取首个活跃任务，进度文案会显示成「排队等待出图…」而把真正在跑的那张藏起来。
+  const state = {
+    jobs: [
+      { id: 'job-b', status: 'queued', createdAt: at(-5) },
+      { id: 'job-a', status: 'running', createdAt: at(-30) },
+      { id: 'job-c', status: 'queued', createdAt: at(-9) },
+      { id: 'job-0', status: 'done', createdAt: at(-60) },
+    ],
+  }
+  assert.deepEqual(
+    logic.pendingJobsOf(state).map((job) => job.id),
+    ['job-a', 'job-c', 'job-b'],
+    '进行中排第一，其余排队任务按提交时间升序',
+  )
+  assert.equal(logic.activeJobOf(state).id, 'job-a', '活动任务必须是真正在跑的那个')
+  // 同一时刻只有一个 running / waiting-session：等云端的排在纯排队任务之前。
+  const waiting = {
+    jobs: [
+      { id: 'q1', status: 'queued', createdAt: at(-2) },
+      { id: 'w1', status: 'waiting-session', createdAt: at(-8) },
+      { id: 'q2', status: 'queued', createdAt: at(-5) },
+    ],
+  }
+  assert.deepEqual(logic.pendingJobsOf(waiting).map((job) => job.id), ['w1', 'q2', 'q1'])
+  assert.deepEqual(logic.pendingJobsOf({ jobs: [] }), [])
+  assert.deepEqual(logic.pendingJobsOf(null), [])
+  assert.equal(logic.activeJobOf(null), null)
 })
 
 await check('阶段提示映射到会话态', () => {

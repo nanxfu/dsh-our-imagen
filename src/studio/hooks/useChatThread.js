@@ -9,12 +9,39 @@
 import React from 'react'
 
 import { parseIntentRequest } from '../../api/resources.js'
-import { activeJobOf } from '../../logic/jobs.js'
+import { stateJobs } from '../../logic/jobs.js'
 import { formatSeconds } from '../../logic/format.js'
 import { errorText } from '../../logic/error.js'
 import { intentFormPatch, intentPrompt, lastIntentPrompt } from '../../logic/intent.js'
 import { STYLE_CAPSULES } from '../capsules.js'
 import { DEFAULT_RATIOS } from '../ratios.js'
+
+/**
+ * 任务快照 → 气泡补丁。只映射真实状态，未知状态返回 null（保持原样）。
+ * 图片与耗时只在完成态给出；调用方按 stage/text/image 比对，相同内容不会重复写入。
+ */
+function bubblePatch(t, job, current) {
+  if (job.status === 'waiting-session') return { stage: 'queued', text: t('studio.chat.waitingSession') }
+  if (job.status === 'queued') return { stage: 'queued', text: t('studio.chat.queued') }
+  if (job.status === 'running') return { stage: 'running', text: t('studio.chat.running') }
+  if (job.status === 'done') {
+    const images = Array.isArray(job.output && job.output.images) ? job.output.images : []
+    const first = images[0] || null
+    return {
+      stage: 'done',
+      text: t('studio.chat.done'),
+      image: first ? first.url : current.image,
+      imagePath: first ? first.path : current.imagePath,
+      meta: first
+        ? `${formatSeconds(t, first.seconds)} · ${t('studio.meta.seed')} ${first.seed ?? '—'}`
+        : current.meta,
+    }
+  }
+  if (job.status === 'failed') {
+    return { stage: 'failed', text: errorText(t, job.error || { code: '', message: '' }) }
+  }
+  return null
+}
 
 export function useChatThread({ t, isEn, alive, state, form, generate }) {
   const [messages, setMessages] = React.useState([])
@@ -24,45 +51,28 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
   const interpretingRef = React.useRef(false)
 
   // 助手气泡跟着任务状态走，只反映真实进度。
-  const activeJob = activeJobOf(state)
-  const threadJob = activeJob || (state && state.lastJob) || null
-  const threadJobKey = threadJob ? `${threadJob.id}:${threadJob.status}` : ''
+  // 队列串行执行但可能同时有多个待执行任务：每个气泡按自己的任务更新，
+  // 不能只看「当前那一个」，否则排队中与先完成的任务都会停在提交时的文案。
+  const jobs = stateJobs(state)
+  const threadJobs = jobs.length > 0 ? jobs : (state && state.lastJob ? [state.lastJob] : [])
+  const threadKey = threadJobs.map((job) => `${job.id}:${job.status}`).join('|')
   React.useEffect(() => {
-    if (!threadJob || messages.length === 0) return
+    if (messages.length === 0 || threadJobs.length === 0) return
     setMessages((prev) => {
-      const index = prev.map((item) => item.jobId).lastIndexOf(threadJob.id)
-      if (index < 0) return prev
-      const current = prev[index]
-      let next = null
-      if (threadJob.status === 'waiting-session') {
-        next = { ...current, stage: 'queued', text: t('studio.chat.waitingSession') }
-      } else if (threadJob.status === 'queued') {
-        next = { ...current, stage: 'queued', text: t('studio.chat.queued') }
-      } else if (threadJob.status === 'running') {
-        next = { ...current, stage: 'running', text: t('studio.chat.running') }
-      } else if (threadJob.status === 'done') {
-        const images = Array.isArray(threadJob.output?.images) ? threadJob.output.images : []
-        const first = images[0] || null
-        next = {
-          ...current,
-          stage: 'done',
-          text: t('studio.chat.done'),
-          image: first ? first.url : current.image,
-          imagePath: first ? first.path : current.imagePath,
-          meta: first
-            ? `${formatSeconds(t, first.seconds)} · ${t('studio.meta.seed')} ${first.seed ?? '—'}`
-            : current.meta,
-        }
-      } else if (threadJob.status === 'failed') {
-        next = { ...current, stage: 'failed', text: errorText(t, threadJob.error || { code: '', message: '' }) }
+      let next = prev
+      for (const job of threadJobs) {
+        const index = prev.map((item) => item.jobId).lastIndexOf(job.id)
+        if (index < 0) continue
+        const current = (next === prev ? prev : next)[index]
+        const patch = bubblePatch(t, job, current)
+        if (!patch) continue
+        if (current.stage === patch.stage && current.text === patch.text && current.image === patch.image) continue
+        if (next === prev) next = prev.slice()
+        next[index] = { ...current, ...patch }
       }
-      if (!next) return prev
-      if (current.stage === next.stage && current.text === next.text && current.image === next.image) return prev
-      const copy = prev.slice()
-      copy[index] = next
-      return copy
+      return next
     })
-  }, [threadJobKey])
+  }, [threadKey])
 
   function pushMessages(entries) {
     setMessages((prev) => [...prev, ...entries.map((entry) => ({ id: (messageSeq.current += 1), ...entry }))])

@@ -1,5 +1,20 @@
 # 变更记录
 
+## 0.5.0 — 2026-11-11
+
+### 改进
+
+- **远端生成改为异步 job 协议，修掉长请求被隧道/代理掐断**：此前 `POST /generate` 同步挂起整段采样，期间不返回任何字节；实测在 Cloudflare quick tunnel + 本地代理链路上，80 秒级的请求（新增的 Anima 模型）会在中途被 `context canceled` 掐断，daemon 仍算完但结果无处可送。协议改为：`POST /generate` 只校验并入队，立即返回 `202 {status:"accepted", job_id}`；Host 每 2 秒 `GET /job?id=<job_id>` 轮询到 `done`（带 `results`）/ `failed`（带 `error.code`）。请求体新增 `jobId` 幂等键，重复提交不会在远端产生重复任务；任务整体预算默认 10 分钟（`generateTimeoutSeconds` 可覆盖），轮询期间容忍连续 5 次网络抖动。
+- **远端失败语义不变**：校验失败仍是同步 400 `invalid_request`，phase 未就绪仍是同步 503 `warming`/`load_failed`；运行期失败写进 job 的 `error.code`（`oom` / `load_failed` / `generation_failed` …），Host 原样透传，不需要「提前 200 再丢 500」。
+
+### 工程
+
+- `shared/contract.js`：`VERSION` 0.4.1 → 0.5.0；`PROTOCOL.daemon.routes` 增加 `GET /job`；`TIMEOUTS` 用 `remoteSubmitMs` / `remoteJobRequestMs` / `remoteJobPollMs` / `remoteJobMs` 取代 `remoteGenerateMs`。
+- `remote/daemon.py`：新增常驻 worker 线程、job 表（保留 8 个已结束任务，TTL 600 秒）与 `GET /job`；`/health.queue_depth` 改为排队中任务数。
+- `lib/remote.js`：新增 `submitGenerate` / `fetchJob` / `waitForJob`，`requestGenerate` 变成「提交 + 轮询」的便捷封装；`lib/jobs.js` 用 `job.id` 做幂等键并按轮询进度更新 `stage`。
+- `test/mock-daemon.py`、`test/host-e2e.mjs`、`test/session-pure.mjs`、`test/daemon-unit.py` 跟随新协议；`remote/contract.json` 重新生成。
+- 文档：`docs/SPEC.md` 补异步 job 协议说明；`docs/ANIMA_LOADER_SPEC.md` 的批处理限制按新超时更新。
+
 ## 未发布
 
 ### 改进
@@ -15,6 +30,8 @@
 
 ### 修复
 
+- **深色模式下禁用的主操作文字看不见**：主操作按钮（立即生成、对话确认卡的「按此生成」）被禁用时沿用 36% 透明度，但文字色写死成 `#fff`。浅色主题的主操作是墨黑渐变、白字正好；深色主题的主操作反相成浅色渐变，白字落在浅底上几乎不可见。禁用态文字色改为跟随 `--ofs-accent-ink`（浅色主题白、深色主题墨黑），浅色主题的观感逐像素不变。
+- **多个排队任务只显示一个**：队列串行执行，但同时提交的两个任务会被宿主按顺序排好（`/state.jobs` 是「最新在前」）。客户端此前把列表里第一个活跃任务当成「当前任务」，于是后提交的排队任务顶替了真正在生成的那张——进度文案写「排队等待出图…」，底部最近生成栏也只画得出一张卡。现在 `pendingJobsOf()` 按「进行中 → 等待云端 → 排队中（提交顺序）」排序：进行中的任务永远是第 1 位，胶片条给每个待执行任务各画一张卡（进行中带显影扫描光与已用时间，排队中带位次与已排队时长），进度文案、舞台与对话气泡都跟随真正在跑的任务。对话线程也改为每个任务气泡按自己的任务更新，先完成的那条不会再停在「已提交，等待开始…」。
 - **算力弹层账号状态误报「不可用」**：此前只要本轮没有手动点过「检查环境」，`/state` 的 `probe` 就是 `null`，弹层里的账号行会落到硬编码的 `unavailable`，于是一边正常出图、一边提示「账号 · 不可用」。现在账号状态由 `accountStatusOf()` 统一推导：探测通过、或会话已推进到 provisioning/connecting/warming/ready/stopping（内核推得上去、GPU 连得上，本身就是真实 API 调用成功），都显示「正常」；只有确实没有任何成功证据时才保留上次探测的失败结论；从未探测过显示「未检查」。新增 `sessionProvesAuth()` 与对应的逻辑/渲染回归测试。
 
 ### 工程
@@ -23,6 +40,20 @@
 - **模型验证脚本**：新增 `tools/verify-model.mjs` + 远端 payload `tools/payload/verify-model.py`，支持 `--config / --write / --dry-run / --timeout`；复用 `lib/kernel.js` 打包与 `lib/kaggle.js` 推送/日志/产物下载，实跑回填显存、加载、首图、稳态与下载体积；失败按类别归因并打印最后 20 行日志。离线回归 `test/check-verify-model.mjs` 已接入 `npm test`。
 - **模型录入 Agent Skill**：新增 `skills/model-asset-intake/SKILL.md`，把「外部链接 → 草稿 → dry-run → 真机验证（先确认配额）→ 失败自愈 → 入库 → build/check/test」固化成可执行 SOP；`docs/MODEL_ASSET_SPEC.md` 补双份 loader 维护约定与阶段状态。
 - `.gitignore` 增加 `.tmp/`（模型草稿与验证产物目录）。
+- **模型资产扩容（Kaggle 真机实测）**：新增 4 个预设 `playground-v2.5`（美学旗舰）、`realvis-v5`（超写实摄影）、`animagine-xl-3.1`（二次元插画）、`hyper-sdxl-8step`（8 步蒸馏快档），模型总数 4 → 8；`measured` 全部由 `tools/verify-model.mjs --write` 真机回填。四个模型在单张 T4 上显存峰值均低于 10.4 GB，稳态耗时 7.74–28.34 s，全部一次推通、零重试。
+- **MiniMax-H3-Image 部署可行性试验（结论：不可部署）**：最小可用文件集 24.74 GB 超出 `/kaggle/working` 实测的 19.52 GiB；官方 diffusers 路线需约 65 GB 峰值显存；ComfyUI + GGUF 路线在 2×T4 上默认模式因 32B 文本编码器差 0.46 GiB 而 OOM，CPU 流式能跑完 6 步但 1 MP 产物为纯白。该模型不纳入 `models/`，定量证据与改造清单写入文档。
+- **新增 `anima` loader 与预设 `anima-light-lavender`（Kaggle 真机实测）**：`Johnny-Z/Anima-Light-Lavender` 是 ComfyUI 单文件 checkpoint（Cosmos-Predict2 2B DiT + Qwen3-0.6B 文本编码器 + Qwen-Image VAE + Qwen2/T5 双分词器），没有 diffusers 仓库结构，`from_pretrained` 无从加载。护展 loader 枚举（`sdxl` / `sdxl-lora` / `flux2` / `anima`），`tools/payload/verify-model.py` 与 `remote/daemon.py` 各内嵌一份逐字一致的运行时：按权重布局构造 DiT 与 LLMAdapter、结构化 Danbooru caption 包装、euler + simple（shift 3.0）采样、CFG-Zero★、dtype 按 compute capability 判定（T4 → fp16）、文本编码器编码后卸到 CPU 并按文本缓存 embedding、逐 step latent 有限性检查、解码 OOM/NaN 兜底。模型总数 8 → 9，实测（1024×1024/25 步/CFG 4.0）显存峰值 8470 MB、加载 43.5 s、首图 87.63 s、稳态中位 80.64 s、下载 5.25 GiB，样张与提示词一致。GPU 侧排障两轮：bf16 在 sm_75 上被模拟执行（8.7 s/前向）且 VAE 解码 OOM；fp16 因残差流在 block27 冲到 5.1e4~5.6e4（fp16 上限 65504）而溢出，改为「权重 fp16、残差流与归一化 fp32」后稳定。
+- **模型选择卡扩到 9 个预设**：新增 `anima-light-lavender` 海报（Pexels 二次元角色手办特写，概念示意）与选择器映射；9 张海报 base64 合计 20116 字符（含 `data:` 前缀 20323），仍在 20 KB 预算内；家族徽标新增 `Anima`。
+
+### 文档
+
+- **`docs/MODEL_EXPERIMENT_GUIDE.md`**：新增 1.4 实跑结果（4 个模型的显存/加载/稳态/下载实测表与 6 处草案修正）、2.4 MiniMax 实测结论；修正许可证标注（OpenRAIL++ / OpenRAIL++-M）、Hyper-SD LoRA 与非 CFG 配置、`allowPatterns` 收窄与 fp16 变体，并纠正「7.3 GB 轻量文本编码器」的错误表述。
+- **`docs/MINIMAX_H3_IMAGE_SPEC.md`**：新增第 7 节 Kaggle 真机实测（磁盘/显存/下载速度/最小文件集/路线对比/出图尝试/上线改造清单），并修正原文「Q4_K_M 可在 Kaggle 跑通」「9B 轻量文本端」两处结论。
+- **`docs/MODEL_ASSET_SPEC.md`**：实施状态补阶段 D（模型资产扩容）与阶段 E（新增 `anima` loader、模型总数 8 → 9）。
+- **`docs/ANIMA_LOADER_SPEC.md`**（新增）：`anima-light-lavender` 的模型事实、为什么需要新 loader、`pipeline` 字段契约、双份实现落点、Kaggle T4 三轮实测与故障记录、已知限制与量化路线结论。
+- **`docs/MODEL_CARD_SPEC.md`**：模型数量 8 → 9，补 `anima-light-lavender` 行与海报来源、更新海报体积预算（20116 字符）与验收标准。
+- **`docs/MODEL_EXPERIMENT_GUIDE.md`**：新增 1.5 节，记录 `anima` loader 的实测结论与「为什么 INT4/INT8 量化不是提速手段（T4 缺 FP8 tensor core、无该 checkpoint 的量化版本、weight-only 量化不省时间）」。`README.md` 的模型清单同步为 9 个。
+- **`skills/model-asset-intake/SKILL.md`**：loader 清单补 `anima` 与「单文件 ComfyUI 仓库没有 `model_index.json` 时如何判定架构」的说明。
 
 ## 0.4.1 — 2026-11-11
 

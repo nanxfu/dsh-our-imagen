@@ -1,34 +1,55 @@
-/** 底部最近生成栏：按批次聚合的创作轨迹 + 进行态骨架卡。 */
+/** 底部最近生成栏：按批次聚合的创作轨迹 + 每个待执行任务的暗房计时卡。 */
 
 import React from 'react'
 
 import { Icon } from './icons.jsx'
-import { formatDuration } from '../logic/format.js'
+import { formatDuration, jobElapsed } from '../logic/format.js'
 import { jobProgressText } from '../logic/status.js'
 
-/** 接收 { t, ui, compute, library, elapsedMs }；elapsedMs 由 Studio 用 useNow 算好传入。 */
+/**
+ * 接收 { t, ui, compute, library, now }；now 由 Studio 用 useNow 算好传入。
+ *
+ * 队列串行执行，但待执行的任务可能不止一个：每个任务各占一张卡，按真实执行顺序
+ * 从左到右排列。第一张是正在跑的（带显影扫描光与已用时间），其余是排队中的
+ * （虚线取景框里写位次，附已排队时长）——只展示真实阶段，不画假进度。
+ */
 export function Filmstrip(props) {
-  const { t, ui, compute, library, elapsedMs } = props
+  const { t, ui, compute, library, now } = props
   const { setView } = ui
-  const { activeJob, sessionState, startSession, status } = compute
+  const { pendingJobs, sessionState, startSession, status } = compute
   const stopped = Boolean(status && status.stopped)
   const { batches, selected, selectImage } = library
-  const progressText = activeJob ? jobProgressText(t, activeJob, sessionState) : ''
 
   const selectedPath = selected && selected.image ? selected.image.path : ''
 
   return (
     <footer className="ofs-filmstrip">
       <div className="ofs-roll">
-        {activeJob ? (
-          <div className="ofs-ghost">
-            <span className="ofs-ghost-bar" aria-hidden="true" />
-            <span className="ofs-ghost-label">{progressText}</span>
-            {formatDuration(t, elapsedMs) ? <span className="ofs-ghost-time">{formatDuration(t, elapsedMs)}</span> : null}
-          </div>
-        ) : null}
+        {pendingJobs.map((job, index) => {
+          const queued = job.status === 'queued'
+          // 时间缺失（老快照没有 createdAt）时宁可不写，也不要显示成「0.0秒」或「—」。
+          const elapsedMs = jobElapsed(job, now)
+          const elapsed = Number.isFinite(elapsedMs) ? formatDuration(t, elapsedMs) : ''
+          return (
+            <div
+              className={queued ? 'ofs-ghost is-queued' : 'ofs-ghost'}
+              key={job.id}
+              title={job.params && typeof job.params.prompt === 'string' ? job.params.prompt : undefined}
+            >
+              <span className="ofs-ghost-frame" aria-hidden="true">
+                {queued
+                  ? <span className="ofs-ghost-slot">{index + 1}</span>
+                  : <span className="ofs-ghost-bar" />}
+              </span>
+              <span className="ofs-ghost-text">
+                <span className="ofs-ghost-label">{jobProgressText(t, job, sessionState)}</span>
+                {elapsed ? <span className="ofs-ghost-time">{elapsed}</span> : null}
+              </span>
+            </div>
+          )
+        })}
 
-        {batches.length === 0 && !activeJob ? (
+        {batches.length === 0 && pendingJobs.length === 0 ? (
           <div className="ofs-filmstrip-empty">
             <div className="ofs-slots" aria-hidden="true">
               <span className="ofs-slot" />

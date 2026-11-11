@@ -1,0 +1,55 @@
+{
+  "id": "hyper-sdxl-8step",
+  "order": 15,
+  "label": "Hyper-SDXL 8-Step",
+  "family": "SDXL",
+  "short": "Hyper-SD 8",
+  "description": {
+    "zh": "8 步蒸馏，速度与画质的折中",
+    "en": "8-step distilled balance of speed and quality"
+  },
+  "repo": "stabilityai/stable-diffusion-xl-base-1.0 + ByteDance/Hyper-SD",
+  "params": "3.5B + LoRA",
+  "license": "OpenRAIL++-M",
+  "licenseKind": "open",
+  "gated": false,
+  "gpus": 1,
+  "tier": "fast",
+  "size": 1024,
+  "steps": 8,
+  "cfg": 0,
+  "negativeHint": "blurry, low quality, deformed",
+  "sizeOptions": [
+    768,
+    1024
+  ],
+  "runtime": "default",
+  "pipeline": {
+    "loader": "sdxl-lora",
+    "base": "stabilityai/stable-diffusion-xl-base-1.0",
+    "lora": {
+      "repo": "ByteDance/Hyper-SD",
+      "weight": "Hyper-SDXL-8steps-lora.safetensors"
+    },
+    "scheduler": {
+      "type": "euler",
+      "timestepSpacing": "trailing"
+    },
+    "variant": "fp16",
+    "downloadGb": 6.78,
+    "allowPatterns": [
+      "model_index.json",
+      "**/config.json",
+      "**/*.json",
+      "**/*.txt",
+      "**/*.fp16.safetensors"
+    ],
+    "deviceMap": null
+  },
+  "measured": {
+    "peakVramMb": 10347,
+    "loadSeconds": 14.3,
+    "steadySeconds": 7.74,
+    "downloadGb": 7.35
+  }
+}

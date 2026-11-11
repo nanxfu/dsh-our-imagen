@@ -12,6 +12,7 @@ import { Tooltip } from '../components/Tooltip.jsx'
 import { Icon } from './icons.jsx'
 import { STYLE_CAPSULES } from './capsules.js'
 import { DEFAULT_RATIOS } from './ratios.js'
+import { StylePlate } from './plates.jsx'
 
 const PROMPT_MAX = LIMITS.prompt.maxChars
 const INSPIRE_KEYS = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
@@ -169,8 +170,8 @@ export function Rail(props) {
                 aria-pressed={styleId === capsule.id}
                 title={t(capsule.labelKey)}
               >
-                <span className={`ofs-tile-art is-${capsule.id}`} aria-hidden="true">
-                  <Icon name={capsule.icon} size={16} />
+                <span className="ofs-tile-art" aria-hidden="true">
+                  <StylePlate id={capsule.id} />
                 </span>
                 <span className="ofs-tile-label">{t(capsule.labelKey)}</span>
               </button>
@@ -302,7 +303,12 @@ export function Rail(props) {
       </div>
 
       <div className="ofs-panel-foot">
-        <button type="button" className="ofs-btn is-primary ofs-generate" onClick={() => generate()} disabled={sending || !hasPrompt}>
+        <button
+          type="button"
+          className={sending ? 'ofs-btn is-primary ofs-generate is-busy' : 'ofs-btn is-primary ofs-generate'}
+          onClick={() => generate()}
+          disabled={sending || !hasPrompt}
+        >
           <Icon name="sparkles" size={16} />
           {sending ? t('studio.generating') : t('studio.generate')}
         </button>

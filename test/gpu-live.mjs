@@ -142,7 +142,7 @@ async function main() {
         },
       ],
     },
-    600000,
+    { timeoutMs: 600000 },
   )
   const elapsed = ((Date.now() - begin) / 1000).toFixed(1)
   const result = response.results?.[0]

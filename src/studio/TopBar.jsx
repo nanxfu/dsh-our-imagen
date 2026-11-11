@@ -8,6 +8,7 @@ import { formatDuration, formatSeconds } from '../logic/format.js'
 import { elapsedMsSince, formatClockTime, quotaText } from '../logic/logs.js'
 import { computeStatusOf } from '../logic/status.js'
 import { Icon } from './icons.jsx'
+import { ModelCardPicker } from './ModelCardPicker.jsx'
 import { StudioIcon } from './StudioIcon.jsx'
 import { accountStatusOf, probeStatusOf } from '../logic/probe.js'
 import { useHostSnapshot } from './hooks/useStudioLogs.js'
@@ -17,7 +18,7 @@ const KAGGLE_ACCOUNT_URL = 'https://www.kaggle.com/settings'
 
 /** 接收 { t, ui, compute, form, library }；ui/compute/form/library 是领域对象。 */
 export function TopBar(props) {
-  const { t, ui, compute, library } = props
+  const { t, isEn, ui, compute, library } = props
   const { form: fields, patchForm } = props.form
   const { view, setView, openLogs } = ui
   const {
@@ -38,6 +39,8 @@ export function TopBar(props) {
   const status = compute.status || computeStatusOf(t, { session })
   // defaultOpen 只给预览 / 渲染测试用，正式界面从关闭态开始。
   const [open, setOpen] = React.useState(Boolean(props.defaultOpen))
+  // 模型卡与算力弹层互斥：两者同时只允许一个展开。
+  const [modelOpen, setModelOpen] = React.useState(Boolean(props.defaultModelOpen))
   const wrapRef = React.useRef(null)
   const pillRef = React.useRef(null)
   // 配额回退与隧道信息需要 /state 里的 probeLastGood 等字段：弹层展开时取一次快照。
@@ -65,9 +68,8 @@ export function TopBar(props) {
   const idleMinutes = session && session.idleTimeoutSec ? Math.round(session.idleTimeoutSec / 60) : 0
   const quotaUsed = quota && Number.isFinite(quota.usedHours) ? quota.usedHours : null
   const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null
-  const activePreset = presets.find((item) => item.id === fields.presetId) || null
   // 速度只讲实测值，且优先讲云端已加载的模型；没有测量数据的预设不编时间。
-  const loadedPreset = presets.find((item) => item.id === (session && session.presetId)) || activePreset
+  const loadedPreset = presets.find((item) => item.id === (session && session.presetId)) || presets.find((item) => item.id === fields.presetId) || null
   // 客户端预设有两代形状：公开视图是扁平 steadySeconds，旧测试替身放在 measured 里。
   const steadyRaw = loadedPreset && loadedPreset.steadySeconds !== undefined
     ? loadedPreset.steadySeconds
@@ -147,7 +149,13 @@ export function TopBar(props) {
           ref={pillRef}
           type="button"
           className={`ofs-compute is-${status.tone}`}
-          onClick={() => setOpen((value) => !value)}
+          onClick={() => {
+            setOpen((value) => {
+              const next = !value
+              if (next) setModelOpen(false)
+              return next
+            })
+          }}
           aria-expanded={open}
           aria-haspopup="menu"
         >
@@ -270,39 +278,28 @@ export function TopBar(props) {
         ) : null}
       </div>
 
-      <label className="ofs-preset">
-        <Icon name="sliders" size={14} />
-        <span className="ofs-preset-label">{t('studio.preset')}</span>
-        <select
-          value={fields.presetId}
-          disabled={presets.length === 0}
-          aria-label={t('studio.preset')}
-          onChange={(event) => {
-            const id = event.target.value
-            const next = presets.find((item) => item.id === id)
-            patchForm({
-              presetId: id,
-              ...(next
-                ? {
-                    width: next.size || fields.width,
-                    height: next.size || fields.height,
-                    steps: next.steps ?? fields.steps,
-                    cfg: next.cfg ?? fields.cfg,
-                  }
-                : {}),
-            })
-          }}
-        >
-          {presets.length === 0 ? <option value="">—</option> : null}
-          {presets.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.label || item.id}
-            </option>
-          ))}
-        </select>
-        <span className="ofs-preset-meta">{activePreset && activePreset.params ? activePreset.params : ''}</span>
-        <Icon name="chevronDown" size={13} className="ofs-preset-caret" />
-      </label>
+      <ModelCardPicker
+        t={t}
+        isEn={isEn}
+        presets={presets}
+        value={fields.presetId}
+        defaultPreset={compute.defaultPreset}
+        open={modelOpen}
+        onOpenChange={(next) => {
+          setModelOpen(next)
+          if (next) setOpen(false)
+        }}
+        onChange={(next) => {
+          patchForm({
+            presetId: next.id,
+            width: next.size || fields.width,
+            height: next.size || fields.height,
+            steps: next.steps ?? fields.steps,
+            cfg: next.cfg ?? fields.cfg,
+          })
+          setModelOpen(false)
+        }}
+      />
     </header>
   )
 }

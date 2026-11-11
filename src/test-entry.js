@@ -24,6 +24,7 @@ import { ChatPanel } from './studio/ChatPanel.jsx'
 import { Stage } from './studio/Stage.jsx'
 import { TopBar } from './studio/TopBar.jsx'
 import { LogsDrawer } from './studio/LogsDrawer.jsx'
+import { ModelCardPicker } from './studio/ModelCardPicker.jsx'
 
 export const __test = {
   dict,
@@ -44,5 +45,6 @@ export const __test = {
     Stage,
     TopBar,
     LogsDrawer,
+    ModelCardPicker,
   },
 }

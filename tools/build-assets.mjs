@@ -26,6 +26,9 @@ const REQUIRED_FIELDS = [
   'id',
   'order',
   'label',
+  'family',
+  'short',
+  'description',
   'repo',
   'params',
   'license',
@@ -92,6 +95,22 @@ export async function loadModels(modelsDir = MODELS_DIR) {
     if (seenOrders.has(model.order)) fail(`模型 order 重复：${model.order}（用于决定预设顺序，必须唯一）`)
     seenOrders.add(model.order)
 
+    // 展示字段：家族、触发器短名与中英双语定位描述。卡面直接消费这三项，缺一不可。
+    if (typeof model.family !== 'string' || !model.family.trim()) {
+      fail(`${where} 的 family 必须是非空字符串（如 SDXL / FLUX）`)
+    }
+    if (typeof model.short !== 'string' || !model.short.trim()) {
+      fail(`${where} 的 short 必须是非空字符串（触发器用的短名）`)
+    }
+    if (!model.description || typeof model.description !== 'object' || Array.isArray(model.description)) {
+      fail(`${where} 的 description 必须是 { zh, en } 对象`)
+    }
+    for (const lang of ['zh', 'en']) {
+      if (typeof model.description[lang] !== 'string' || !model.description[lang].trim()) {
+        fail(`${where} 的 description.${lang} 必须是非空字符串`)
+      }
+    }
+
     if (model.runtime !== 'default') {
       fail(`${where} 的 runtime 目前只支持 "default"；特殊运行时模型等后续阶段再开放`)
     }
@@ -128,11 +147,14 @@ function projectModels(models) {
   }))
 }
 
-/** 契约使用的预设定视图：保持与改造前 PRESETS 完全相同的字段形状。 */
+/** 契约使用的预设视图：模型事实字段 + 卡面展示字段（family / short / description）。 */
 function projectPresets(models) {
   return models.map((model) => ({
     id: model.id,
     label: model.label,
+    family: model.family,
+    short: model.short,
+    description: model.description,
     repo: model.repo,
     params: model.params,
     license: model.license,
