@@ -34,7 +34,9 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
       if (index < 0) return prev
       const current = prev[index]
       let next = null
-      if (threadJob.status === 'queued' || threadJob.status === 'waiting-session') {
+      if (threadJob.status === 'waiting-session') {
+        next = { ...current, stage: 'queued', text: t('studio.chat.waitingSession') }
+      } else if (threadJob.status === 'queued') {
         next = { ...current, stage: 'queued', text: t('studio.chat.queued') }
       } else if (threadJob.status === 'running') {
         next = { ...current, stage: 'running', text: t('studio.chat.running') }

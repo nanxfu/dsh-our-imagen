@@ -139,7 +139,7 @@ export function useStudio(props) {
   function resetToSafe() {
     form.patchForm({ width: 1024, height: 1024, steps: 4, cfg: 1 })
     ui.setError(null)
-    ui.showToast(t('studio.guidance.oom.action'))
+    ui.showToast(t('studio.guidance.oom.reset'))
   }
 
   function dismissGuidance() {

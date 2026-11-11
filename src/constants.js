@@ -6,10 +6,10 @@ export const ACTIVE_STATUS = { queued: true, 'waiting-session': true, running: t
 
 export const TRANSIENT_SESSION = { provisioning: true, connecting: true, warming: true, stopping: true }
 
+// 宿主会写入的会话阶段：push（推送内核）→ queue（Kaggle 排队）→ tunnel（会合/握手）→ warm（装载模型）。
 export const PHASE_STATE = {
   push: 'provisioning',
   queue: 'provisioning',
   tunnel: 'connecting',
-  health: 'connecting',
   warm: 'warming',
 }

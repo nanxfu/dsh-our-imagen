@@ -1,12 +1,11 @@
-/** 对话页头部徽章。 */
+/** 对话页头部徽章：与工作台顶栏共用同一套云端状态文案。 */
 
 import { h } from '../runtime.js'
 import { styles } from '../theme.js'
 import { translator } from '../i18n.js'
-import { jobStatusText } from '../logic/status.js'
-import { jobColor } from '../logic/color.js'
+import { computeStatusOf, jobStatusText } from '../logic/status.js'
+import { jobColor, toneColor } from '../logic/color.js'
 import { activeJobOf } from '../logic/jobs.js'
-import { buildSessionView } from '../logic/view.js'
 import { useHostState } from '../hooks/useHostState.js'
 
 export function StatusChip(props) {
@@ -14,23 +13,15 @@ export function StatusChip(props) {
   const host = useHostState()
   const state = host.state
   const session = (state && state.session) || null
-  const view = buildSessionView(t, {
-    session,
-    probe: state && state.probe,
-    defaultPreset: state && state.defaultPreset,
-    sessionBusy: '',
-    probeBusy: false,
-  })
+  // 状态文案只走 computeStatusOf，避免对话页显示「排队中」而工作台显示「正在申请 GPU」。
+  const status = computeStatusOf(t, { session })
   const running = activeJobOf(state)
-  const label = running ? jobStatusText(t, running.status) : view.headline
-  const color = running ? jobColor(running.status) : view.color
+  const label = running ? jobStatusText(t, running.status) : status.label
+  const color = running ? jobColor(running.status) : toneColor(status.tone)
   const title = [
     running ? jobStatusText(t, running.status) : '',
-    view.ended ? t('workbench.restartSession') : '',
-    view.warming ? t('error.code.warming') : '',
-    view.stateText,
-    view.note,
-    view.chipLabel,
+    status.label,
+    status.hint,
   ]
     .filter(Boolean)
     .join(' · ')

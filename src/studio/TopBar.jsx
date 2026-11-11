@@ -4,8 +4,9 @@ import React from 'react'
 
 import { Tooltip } from '../components/Tooltip.jsx'
 import { useNow } from '../hooks/useNow.js'
-import { formatDuration } from '../logic/format.js'
+import { formatDuration, formatSeconds } from '../logic/format.js'
 import { elapsedMsSince, formatClockTime, quotaText } from '../logic/logs.js'
+import { computeStatusOf } from '../logic/status.js'
 import { Icon } from './icons.jsx'
 import { StudioIcon } from './StudioIcon.jsx'
 import { accountStatusOf, probeStatusOf } from '../logic/probe.js'
@@ -13,15 +14,6 @@ import { useHostSnapshot } from './hooks/useStudioLogs.js'
 
 /** Kaggle 账户设置页：配额读不到时给用户一个直达入口。 */
 const KAGGLE_ACCOUNT_URL = 'https://www.kaggle.com/settings'
-
-function sessionPill(t, sessionState) {
-  if (sessionState === 'ready') return { tone: 'ok', label: t('studio.compute.online') }
-  if (sessionState === 'provisioning') return { tone: 'warn', label: t('studio.compute.queued') }
-  if (sessionState === 'connecting' || sessionState === 'warming') return { tone: 'warn', label: t('studio.compute.warming') }
-  if (sessionState === 'stopping') return { tone: 'warn', label: t('studio.compute.stopping') }
-  if (sessionState === 'error') return { tone: 'error', label: t('studio.compute.error') }
-  return { tone: 'idle', label: t('studio.compute.offline') }
-}
 
 /** 接收 { t, ui, compute, form, library }；ui/compute/form/library 是领域对象。 */
 export function TopBar(props) {
@@ -42,7 +34,8 @@ export function TopBar(props) {
     runProbe,
     openFolder,
   } = compute
-  const pill = sessionPill(t, sessionState)
+  // 云端状态只走 computeStatusOf：顶栏胶囊与状态条、弹层共用同一份标签与提示。
+  const status = compute.status || computeStatusOf(t, { session })
   // defaultOpen 只给预览 / 渲染测试用，正式界面从关闭态开始。
   const [open, setOpen] = React.useState(Boolean(props.defaultOpen))
   const wrapRef = React.useRef(null)
@@ -70,16 +63,16 @@ export function TopBar(props) {
   }, [open])
 
   const idleMinutes = session && session.idleTimeoutSec ? Math.round(session.idleTimeoutSec / 60) : 0
-  const createTooltip =
-    sessionState === 'provisioning'
-      ? t('studio.compute.queuedTooltip')
-      : sessionState === 'ready'
-        ? t('studio.compute.idleTooltip')
-        : t('studio.compute.offlineTooltip')
   const quotaUsed = quota && Number.isFinite(quota.usedHours) ? quota.usedHours : null
   const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null
-  const notReady = sessionState === 'absent' || sessionState === 'error'
   const activePreset = presets.find((item) => item.id === fields.presetId) || null
+  // 速度只讲实测值，且优先讲云端已加载的模型；没有测量数据的预设不编时间。
+  const loadedPreset = presets.find((item) => item.id === (session && session.presetId)) || activePreset
+  // 客户端预设有两代形状：公开视图是扁平 steadySeconds，旧测试替身放在 measured 里。
+  const steadyRaw = loadedPreset && loadedPreset.steadySeconds !== undefined
+    ? loadedPreset.steadySeconds
+    : loadedPreset && loadedPreset.measured ? loadedPreset.measured.steadySeconds : null
+  const steadySeconds = Number.isFinite(steadyRaw) ? steadyRaw : null
   // 状态弹层优先用宿主轮询到的 probe；刚做过检查时用本次结果兜底。
   const probePayload = probe || (snapshot && snapshot.probe) || (probeReport && probeReport.probe) || null
   const probeInfo = probeStatusOf(probePayload)
@@ -101,10 +94,10 @@ export function TopBar(props) {
       : tunnelProvider === 'custom'
         ? t('studio.compute.tunnel.custom')
         : ''
-  const statusText = (status) => {
-    if (status === 'ok') return t('value.ok')
-    if (status === 'failed') return t('value.failed')
-    if (status === 'unavailable') return t('value.quotaUnavailable')
+  const statusText = (value) => {
+    if (value === 'ok') return t('value.ok')
+    if (value === 'failed') return t('value.failed')
+    if (value === 'unavailable') return t('value.quotaUnavailable')
     return t('value.unknown')
   }
 
@@ -153,13 +146,13 @@ export function TopBar(props) {
         <button
           ref={pillRef}
           type="button"
-          className={`ofs-compute is-${pill.tone}`}
+          className={`ofs-compute is-${status.tone}`}
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
           aria-haspopup="menu"
         >
-          <i className={`ofs-dot is-${pill.tone}${pill.tone === 'ok' || pill.tone === 'warn' ? ' is-live' : ''}`} aria-hidden="true" />
-          <span>{pill.label}</span>
+          <i className={`ofs-dot is-${status.tone}${status.tone === 'ok' || status.tone === 'warn' ? ' is-live' : ''}`} aria-hidden="true" />
+          <span>{status.label}</span>
           {quotaUsed !== null && quotaTotal !== null ? (
             <em>
               {quotaUsed} / {quotaTotal} {t('unit.hour')}
@@ -174,17 +167,24 @@ export function TopBar(props) {
           <div className="ofs-popover" role="menu">
             <div className="ofs-popover-head">
               <span>
-                <i className={`ofs-dot is-${pill.tone}${pill.tone === 'ok' || pill.tone === 'warn' ? ' is-live' : ''}`} aria-hidden="true" />
-                <b>{pill.label}</b>
-                <Tooltip text={createTooltip} side="bottom" />
+                <i className={`ofs-dot is-${status.tone}${status.tone === 'ok' || status.tone === 'warn' ? ' is-live' : ''}`} aria-hidden="true" />
+                <b>{status.label}</b>
+                <Tooltip text={status.tooltip} side="bottom" />
               </span>
               <span className="ofs-muted">
                 {t('studio.compute.quota')} {quotaUsed !== null && quotaTotal !== null ? `${quotaUsed} / ${quotaTotal} ${t('unit.hour')}` : '—'}
               </span>
+              {status.phaseLabel ? <span className="ofs-muted">{t('studio.compute.phase')} · {status.phaseLabel}</span> : null}
+              {status.ready && steadySeconds !== null ? (
+                <span className="ofs-muted">{t('studio.compute.speedLine')} {formatSeconds(t, steadySeconds)}</span>
+              ) : null}
               {idleMinutes > 0 ? <span className="ofs-muted">{t('studio.compute.idleFor')} {idleMinutes} {t('unit.min')}</span> : null}
               {session && session.device ? <span className="ofs-muted">{session.device}</span> : null}
               {tunnelLabel ? <span className="ofs-muted">{t('studio.compute.tunnel')} · {tunnelLabel}</span> : null}
             </div>
+
+            {/* 当前阶段的一句话说明：排队/连接/预热分别是不同的等待原因，不能混用同一条提示。 */}
+            {status.hint ? <p className="ofs-popover-hint">{status.hint}</p> : null}
 
             <div className="ofs-popover-note">
               {probing ? <span>{t('action.probing')}</span> : null}
@@ -234,11 +234,11 @@ export function TopBar(props) {
               </div>
             ) : null}
 
-            <button type="button" role="menuitem" className="ofs-popover-row" onClick={startSession} disabled={!!busy || !notReady}>
+            <button type="button" role="menuitem" className="ofs-popover-row" onClick={startSession} disabled={!!busy || !status.canStart}>
               <Icon name="cloud" size={15} />
               {t('studio.compute.start')}
             </button>
-            <button type="button" role="menuitem" className="ofs-popover-row" onClick={stopSession} disabled={!!busy || sessionState === 'absent'}>
+            <button type="button" role="menuitem" className="ofs-popover-row" onClick={stopSession} disabled={!!busy || !status.canStop}>
               <Icon name="clock" size={15} />
               {t('studio.compute.stop')}
             </button>

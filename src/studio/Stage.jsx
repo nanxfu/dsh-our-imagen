@@ -4,6 +4,7 @@ import React from 'react'
 
 import { Icon } from './icons.jsx'
 import { formatSeconds } from '../logic/format.js'
+import { jobProgressText } from '../logic/status.js'
 
 const INSPIRE_KEYS = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
 
@@ -11,7 +12,9 @@ const INSPIRE_KEYS = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3'
 export function Stage(props) {
   const { t, ui, compute, form, library, actions } = props
   const { zoom, setZoom, copyPath } = ui
-  const { activeJob, queued: sessionQueued } = compute
+  const { activeJob, sessionState } = compute
+  // 进度文案区分「等云端就绪」与「等前一张图」：就绪后排队不能再写成申请 GPU。
+  const progressText = activeJob ? jobProgressText(t, activeJob, sessionState) : ''
   const { useInspiration } = form
   const { selected, isFavorite, toggleFavorite } = library
   const { iterate, reroll } = actions
@@ -70,6 +73,8 @@ export function Stage(props) {
   }, [zoom])
 
   if (!image) {
+    // 手动关闭云端后不能再说「点击生成即可出图」：生成会被宿主拒绝，先提示唤醒。
+    const stopped = Boolean(compute.status && compute.status.stopped)
     return (
       <section className="ofs-stage">
         <div className="ofs-figure ofs-figure--empty">
@@ -78,7 +83,7 @@ export function Stage(props) {
               <Icon name="images" size={26} />
             </span>
             <p className="ofs-empty-title">{t('studio.stage.empty')}</p>
-            <p className="ofs-muted">{t('studio.stage.emptyHint')}</p>
+            <p className="ofs-muted">{stopped ? t('studio.stage.stoppedHint') : t('studio.stage.emptyHint')}</p>
             <div className="ofs-examples">
               <span className="ofs-examples-label">{t('studio.stage.examples')}</span>
               {INSPIRE_KEYS.map((key) => (
@@ -92,9 +97,7 @@ export function Stage(props) {
           {activeJob ? (
             <div className="ofs-stage-progress" role="status">
               <span className="ofs-shimmer" aria-hidden="true" />
-              <span className="ofs-progress-label">
-                {sessionQueued ? t('studio.compute.queued') : t('studio.stage.rendering')}
-              </span>
+              <span className="ofs-progress-label">{progressText}</span>
             </div>
           ) : null}
         </div>
@@ -135,9 +138,7 @@ export function Stage(props) {
         {activeJob ? (
           <div className="ofs-stage-progress" role="status">
             <span className="ofs-shimmer" aria-hidden="true" />
-            <span className="ofs-progress-label">
-              {sessionQueued ? t('studio.compute.queued') : t('studio.stage.rendering')}
-            </span>
+            <span className="ofs-progress-label">{progressText}</span>
           </div>
         ) : null}
       </figure>
@@ -191,7 +192,7 @@ export function Stage(props) {
             type="button"
             className="ofs-lightbox-close"
             onClick={() => setZoom(false)}
-            aria-label={t('studio.dismiss')}
+            aria-label={t('studio.stage.close')}
           >
             <Icon name="close" size={16} />
           </button>

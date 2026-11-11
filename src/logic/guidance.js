@@ -38,13 +38,15 @@ const GENERATION_CODES = new Set([
 /**
  * 错误码 → 指引卡类型。
  * - ''：不弹卡（没有错误，或纯本地校验错误）
- * - oom / sleep / cli / auth / session / generate / generic
+ * - oom / sleep / closed / cli / auth / session / generate / generic
  */
 export function guidanceKindOf(code) {
   if (!code) return ''
   if (code === 'need_prompt') return ''
   if (code === 'oom') return 'oom'
-  if (code === 'session_ended' || code === 'stopped') return 'sleep'
+  // 会话自然结束（闲置退出）与用户主动关机要分开：原因不同，动作都是重新唤醒。
+  if (code === 'session_ended') return 'sleep'
+  if (code === 'stopped') return 'closed'
   if (code === 'cli_missing') return 'cli'
   if (code === 'auth_required') return 'auth'
   if (SESSION_CODES.has(code)) return 'session'

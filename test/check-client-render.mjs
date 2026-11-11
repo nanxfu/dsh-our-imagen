@@ -84,7 +84,7 @@ const scenarios = {
     state: readyState,
     history: { items: [historyItem] },
     props: {},
-    expect: ['创作设置', '提示词', '风格预设', '画面设置', '高级设置', '立即生成', '带回参数', '在线', '灵感示例', '测试用的荷花池塘'],
+    expect: ['创作设置', '提示词', '风格预设', '画面设置', '高级设置', '立即生成', '带回参数', '云端就绪', '灵感示例', '测试用的荷花池塘'],
     reject: [],
     structure: {
       required: {
@@ -226,8 +226,9 @@ const scenarios = {
     },
     history: { items: [historyItem] },
     props: {},
-    expect: ['正在申请 GPU', '云端正在排队'],
-    reject: [],
+    // 胶囊跟随 phase 显示「排队」，进度位说明在等云端；两者不再是同一个词。
+    expect: ['正在排队等 GPU', '正在等待 Kaggle 分配 GPU', '等待云端就绪…', '已等待'],
+    reject: ['正在装载模型', '云端正在排队'],
     structure: {
       required: {
         'ofs-root': 1,
@@ -237,6 +238,10 @@ const scenarios = {
         'ofs-stage': 1,
         'ofs-stage-progress': 1,
         'ofs-progress-label': 1,
+        'ofs-sessionbar': 1,
+        'ofs-sessionbar-label': 1,
+        'ofs-sessionbar-hint': 1,
+        'ofs-sessionbar-time': 1,
         'ofs-ghost': 1,
         'ofs-ghost-label': 1,
         'ofs-ghost-time': 1,
@@ -244,6 +249,47 @@ const scenarios = {
         'ofs-image': 1,
       },
       forbidden: ['ofs-guidance', 'ofs-figure--empty', 'ofs-toast'],
+    },
+  },
+  warming: {
+    state: {
+      defaultPreset: 'sdxl-lightning',
+      presets: [preset],
+      // 用户反馈的场景：连接阶段不再冒充「正在装载模型」；重连沿用旧 startedAt，不显示已等待。
+      session: { state: 'warming', phase: 'warm', startedAt: at(-3600), device: 'Tesla T4', error: null },
+      jobs: [{ id: 'job-w', status: 'waiting-session', startedAt: at(-200), params: { prompt: '等着出图' } }],
+      lastJob: null,
+    },
+    history: { items: [historyItem] },
+    props: {},
+    expect: ['正在准备模型', '正在安装运行环境并加载模型权重', '等待云端就绪…'],
+    reject: ['正在装载模型', '正在申请 GPU', '已等待'],
+    structure: {
+      required: {
+        'ofs-sessionbar': 1,
+        'ofs-sessionbar-label': 1,
+        'ofs-stage-progress': 1,
+        'ofs-ghost': 1,
+      },
+      forbidden: ['ofs-sessionbar-time', 'ofs-guidance', 'ofs-figure--empty'],
+    },
+  },
+  stopped: {
+    state: {
+      defaultPreset: 'sdxl-lightning',
+      presets: [preset],
+      // 用户手动关机：不能再承诺「直接生成会自动启动」，空态也不许说「点击生成即可出图」。
+      session: { state: 'absent', stoppedByUser: true, error: null },
+      jobs: [],
+      lastJob: null,
+    },
+    history: { items: [] },
+    props: {},
+    expect: ['云端已关闭', '云端已关闭，先点「唤醒」再生成'],
+    reject: ['云端未启动', '云端尚未启动', '点击生成即可开始出图'],
+    structure: {
+      required: { 'ofs-topbar': 1, 'ofs-filmstrip': 1, 'ofs-figure--empty': 1 },
+      forbidden: ['ofs-sessionbar', 'ofs-guidance'],
     },
   },
   cli: {
@@ -286,7 +332,7 @@ const scenarios = {
     },
     history: { items: [] },
     props: {},
-    expect: ['云端连接中断', '重新唤醒', 'Kernel 推送失败：权限不足'],
+    expect: ['云端会话没有就绪', '唤醒云端', 'Kernel 推送失败：权限不足'],
     reject: [],
     structure: {
       required: {
@@ -771,6 +817,7 @@ await check('渲染：算力弹层配额回退、隧道通道与日志入口', a
     '隧道通道',
     'Cloudflare',
     '查看运行日志',
+    '云端模型实测',
   ]) {
     assert.ok(text.includes(needle), `[compute] 缺少文案：${needle}`)
   }

@@ -6,7 +6,7 @@
 
 ## 0. 先拿到错误详情
 
-工作台顶栏 → 点击「云端在线 / 云端离线」胶囊 → 「查看运行日志」：
+工作台顶栏 → 点击云端状态胶囊（显示「云端就绪 / 正在准备模型 / 正在排队等 GPU」等）→「查看运行日志」：
 
 - 日志抽屉展示远端 daemon 的安装、隧道、模型加载与生成日志（增量轮询，最多 400 行）；
 - 「复制诊断信息」会拼出版本、会话快照（不含 token）、环境探测、队列与最近 60 行日志，便于贴给开发者或模型排查；
@@ -116,7 +116,7 @@ Kaggle 容器的 `/kaggle/working` 通常只有 20 GB，写入层满了会转只
 
 | 现象 | 排查 |
 | :--- | :--- |
-| 一直「排队中」 | Kaggle 账号是否绑定手机号；`kaggle kernels status <kernelId>` 看是否 PENDING |
+| 一直显示「正在排队等 GPU」 | Kaggle 账号是否绑定手机号；`kaggle kernels status <kernelId>` 看是否 PENDING |
 | 「隧道握手超时」 | 容器内 cloudflared 没拿到地址；日志里搜 `[tunnel]` 与 `[cloudflared]` |
 | 在线但每张图都失败 | Host 心跳丢失后会重取隧道地址；0.4.x 远端会在隧道重建后重播 ready，搜 `[tunnel] 通道 ... 就绪` |
 | 国内网络访问 Cloudflare 不稳定 | 可配置自建 https 隧道（`fallbackTunnelCommand` + `trustedTunnelDomains`）；未登记域名不会被信任 |

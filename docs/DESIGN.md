@@ -1,7 +1,8 @@
 ---
 name: Imagen Studio Design System
+description: '一间黑白灰的印相室：画布居中，控制件退到边缘的灰阶卡片里。'
 colors:
-  # Primary — 强调色体系
+  # Primary — 墨黑本身就是唯一强调色
   studio-ink: "#141416"
   ink-lift: "#2b2b30"
   ink-soft: "#3f3f46"
@@ -72,18 +73,59 @@ rounded:
 spacing:
   pad: "18px"
   gap: "14px"
+components:
+  button-primary:
+    backgroundColor: "{colors.studio-ink}"
+    textColor: "{colors.ink-on}"
+    rounded: "{rounded.md}"
+    height: "42px"
+    padding: "0 20px"
+  button-secondary:
+    backgroundColor: "{colors.print-white}"
+    textColor: "{colors.studio-ink}"
+    rounded: "{rounded.sm}"
+    height: "38px"
+    padding: "0 14px"
+  session-bar:
+    backgroundColor: "{colors.print-white}"
+    textColor: "{colors.studio-ink}"
+    rounded: "{rounded.md}"
+    height: "34px"
+    padding: "0 12px"
+  chip:
+    backgroundColor: "{colors.print-white}"
+    textColor: "{colors.ink-secondary}"
+    rounded: "{rounded.pill}"
+    height: "28px"
+    padding: "0 10px"
+  input-field:
+    backgroundColor: "{colors.sunken-well}"
+    textColor: "{colors.studio-ink}"
+    rounded: "{rounded.sm}"
+    height: "34px"
+    padding: "0 12px"
 ---
 
 # UI 设计规范与系统设计令牌 (DESIGN)
 
-本文档定义 Imagen Studio 的设计系统令牌、排版阶梯、布局网格与组件视觉规范。代码实现位于 `src/styles/`。
+**Creative North Star: "The Monochrome Print Room"**
+
+Imagen Studio 是一间黑白灰的数字印相室：画面始终处于最核心的聚焦位置，控制面板收敛在边缘的灰阶卡片中。全界面摒弃杂乱渐变与彩色光晕，纯粹通过明度层次、发丝细线与克制的触感构建高品质专业生图体验。
 
 ---
 
-## 1. 颜色体系与设计令牌 (Color Tokens)
+## Overview
 
-### 1.1 强调色与灰阶 (Primary & Neutrals)
-- **Studio Ink (`#141416`)**：系统主强调色。应用于主按钮渐变、选中边框、激活图标与关键状态。深色模式下反相为近白 `#f2f2f4`。
+- **设计主旨**：黑白灰为底，墨黑为唯一强调色。图片资产是视觉的核心与主角，界面元素整体退后，形成沉浸、克制、安静的创作环境。
+- **色彩策略**：以墨黑（`#141416`）作为主按钮、选中态与激活状态的唯一强调；语义色仅以小圆点或窄提示条形式存在，绝不侵占主界面。
+- **排版原则**：严格基于操作系统 UI 原生字体栈，排布清晰的 6 级字阶体系，数字一律启用等宽对齐。
+
+---
+
+## Colors
+
+### 1. 强调色体系 (Primary & Neutrals)
+- **Studio Ink (`#141416`)**：系统主强调色。应用于主生成按钮、选中边框、激活图标与关键状态。深色模式下反相为近白 `#f2f2f4`。
 - **Ink Lift (`#2b2b30`)**：用于主操作按钮渐变上限。
 - **Ink Wash (`#f0f0f2`)**：轻量选中背景（Tab 选中、Chip 激活），深色模式对应 14% 白色透明底。
 - **Print White (`#ffffff`)**：卡片、主面板与弹出层的主背景色。
@@ -94,16 +136,16 @@ spacing:
   - `Panel Edge` (`rgb(18 18 22 / 9%)`)：面板与卡片外轮廓。
   - `Shell Edge` (`rgb(18 18 22 / 8%)`)：外壳与玻璃按钮轮廓。
 
-### 1.2 语义色 (Signal Colors)
+### 2. 状态指示色 (Signal Colors)
 语义色仅以 7px 圆点或窄幅提示条形式出现，禁止大面积填充或用作主按钮底色：
 - **在线/就绪**：`#2f8a5c`（浅底 `#eaf5ef`）。
 - **排队/预热**：`#a96a18`（浅底 `#f7f0e4`）。
 - **失败/异常**：`#c04444`（浅底 `#f9ecec`）。
-- **离线/休眠**：`#a0a0a8`（浅底 `#f1f1f3`）。
+- **离线/已关闭**：`#a0a0a8`（浅底 `#f1f1f3`）。
 
 ---
 
-## 2. 排版字阶规范 (Typography Hierarchy)
+## Typography
 
 全站严格采用宿主系统 UI 字体栈：`-apple-system, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`。不外链任何第三方字体，数字一律启用 `font-variant-numeric: tabular-nums` 对齐。
 
@@ -118,9 +160,9 @@ spacing:
 
 ---
 
-## 3. 布局网格与响应式断点 (Layout & Breakpoints)
+## Layout
 
-页面整体采用单轨面板加画面预览结构：
+页面整体采用单轨创作面板加居中画面预览结构：
 - **外边距与间距**：`--ofs-pad: 18px`，`--ofs-gap: 14px`。
 - **创作面板宽度**：恒定 320px。
 - **画廊网格**：基础为 5 列瀑布流，卡片内边距 6px，列间距 14px，图片按原生比例自适应撑高。
@@ -135,7 +177,7 @@ spacing:
 
 ---
 
-## 4. 阴影与深度 (Elevation & Shadows)
+## Elevation & Depth
 
 所有阴影均为中性黑（`rgb(16 16 20)`）带正向 Y 轴偏移，严禁使用彩色阴影或零偏移发光：
 - **Card (静止卡片)**：`0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%)`
@@ -145,20 +187,57 @@ spacing:
 
 ---
 
-## 5. 组件尺寸阶梯 (Component Sizing)
+## Shapes
 
-全系统控件高度严格受控在以下阶梯：
-- **42px**：主操作生成按钮（Primary CTA）。
-- **38px**：常规表单按钮。
-- **34px**：提示词相关图标按钮、搜索框胶囊、顶栏状态胶囊。
-- **30px**：次级小按钮、Dock 胶囊。
-- **28px**：属性 Chip 胶囊、顶栏 View 切换 Tab。
-- **26px**：分段控件内嵌切换项。
+- **圆角梯度**：
+  - `xl (24px)`：外壳与居中主画布外框。
+  - `lg (18px)`：创作面板主卡片、画廊卡片容器。
+  - `md (14px)`：主操作按钮、云端状态条（Session Bar）、弹出层。
+  - `sm (10px)`：次级按钮、常规输入框、参数滑块轨道。
+  - `pill (999px)`：属性 Chip 胶囊、分段切换轨道、顶栏 View 切换 Tab、Dock 按钮。
+- **同心圆角规则**：内层元素圆角须满足 `内圆角 = 外圆角 - 间距`（例如 18px 卡片配 7px 边距时，内部图片框为 11px），避免视觉厚薄不均。
 
 ---
 
-## 6. 设计红线与约束 (Design Constraints)
+## Components
 
-1. **单实心操作**：每个视图当前可见范围最多只允许 1 个实心强调按钮（立即生成或发送），其余操作一律采用描边、Ghost 或次级样式。
-2. **纯净矢量**：图标仅使用 `24×24` 视口、1.6px 圆角描边的单色 SVG；全系统禁止使用任何外部位图资产或 Emoji 字符作为图标。
-3. **同心圆角规则**：内层元素圆角须满足 `内圆角 = 外圆角 - 间距`（例如 18px 卡片配 7px 边距时，内部图片框为 11px），避免视觉错位。
+控件风格如同暗室印相器材：金属灰胶囊、圆角灰块与白色相纸卡，唯有主操作由墨黑实心凸显。
+
+### 1. 按钮 (Buttons)
+- **Primary CTA**：高 42px、14px 圆角；墨黑两段渐变（`Ink Lift` → `Studio Ink`），文字为白色 13.5px / 650；悬停上移 1px 并加深阴影，按下微缩至 0.99，禁用时保留渐变但降至 36% 透明度。
+- **Secondary / Ghost**：次级按钮白底 + Panel Edge 细线 + Card 阴影；Ghost 按钮为透明底搭配 `Ink Secondary` 文字，悬停切换至 `Ink Wash` 底色。
+- **单实心原则**：每个独立视口最多只允许出现 1 个实心墨黑主操作按钮（立即生成或发送）。
+
+### 2. 云端状态条 (Session Bar)
+过渡态（申请 GPU / 连接云端 / 准备模型 / 关闭云端）在顶栏下方常驻一条 34px 状态条，说明当前在等什么、已经等了多久：
+- **结构**：7px 语义色圆点 + 状态标签（12px / 600 / 墨黑）+ 一句话提示（12px / ink-3，单行省略）+ 右对齐「已等待」计时（11px / tabular-nums，左侧 1px 发丝分隔）。
+- **表面**：卡片底色 `--ofs-card` + 1px `--ofs-hairline` 描边 + 14px 圆角，不使用阴影；语义色只出现在圆点上，条体保持中性，不作为主操作强调。
+- **响应式**：≤ 820px 隐藏提示句，只保留状态标签与计时，避免单行被挤成碎片；状态条与顶栏胶囊共用同一份文案，不重复造词。
+
+### 3. 标签与分段控件 (Chips & Segmented Controls)
+- **Chips**：28px 高胶囊，白色背景、Sunken 发丝描边；激活态切换为 `Ink Wash` 底色 + 墨黑文字。
+- **分段控件**：3px 内边距的 Sunken Well 药丸轨道，内部切换项 26px 高；选中项使用白色背景、600 字重与 1px 微阴影。
+
+### 4. 输入框 (Inputs & Search)
+- **提示词区域**：外层 18px 卡片内嵌 14px 渐变浅槽（Print White → Sunken Well）；获取焦点时边框高亮并带有 3px 墨黑微光晕。
+- **常规参数输入**：30px 高度、9px 圆角；单行搜索框采用 34px 高度全圆角胶囊。
+
+### 5. 画布与画廊 (Canvas & Gallery)
+- **焦点画布 (Stage)**：居中自适应容器，右上角配悬浮三联玻璃图标（放大 / 复制绝对路径 / 收藏）；渲染中展示墨黑动态扫光条。
+- **作品画廊 (Gallery)**：5 列自然高度瀑布流卡片墙，展示图片预览、参数题注与模型/种子胶囊；悬停卡片上浮 2px。
+
+---
+
+## Do's and Don'ts
+
+### Do
+- **Do** 坚持以画面为主角，让所有控件与参数面板退守至边缘灰阶卡片中。
+- **Do** 仅使用 1.6px 圆角描边的轻量手写 SVG 图标，保持全站视觉语言完全同构。
+- **Do** 保持中性黑阴影（`rgb(16 16 20)`）并配合正向 Y 轴位移，呈现真实物理投射感。
+- **Do** 保证所有交互按键具备可见的键盘焦点环（Focus Ring），支持动效减退。
+
+### Don't
+- **Don't** 使用大面积彩色渐变、炫光或饱和彩色阴影。
+- **Don't** 引入外部位图文件、字体包或 Emoji 符号作为系统图标。
+- **Don't** 在单屏视口内放置两个或以上的实心深色按钮。
+- **Don't** 破坏同心圆角规则导致内层切角外露或边距不协调。

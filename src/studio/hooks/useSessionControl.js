@@ -18,6 +18,7 @@ import {
 } from '../../api/resources.js'
 import { activeJobOf, stateJobs } from '../../logic/jobs.js'
 import { probeOutcomeOf } from '../../logic/probe.js'
+import { computeStatusOf } from '../../logic/status.js'
 
 export function useSessionControl({ t, host, ui, alive }) {
   const [busy, setBusy] = React.useState('')
@@ -30,9 +31,8 @@ export function useSessionControl({ t, host, ui, alive }) {
   const activeJob = activeJobOf(state)
   // 焦点任务：进行中优先，其次最近完成的，再次列表首个（历史任务的异常也要能出指引）。
   const focusedJob = activeJob || (state && state.lastJob) || stateJobs(state)[0] || null
-  const queued =
-    sessionState === 'provisioning' ||
-    Boolean(activeJob && (activeJob.status === 'queued' || activeJob.status === 'waiting-session'))
+  // 云端展示状态（胶囊 / 状态条 / 弹层 / 对话页徽章共用）。
+  const status = computeStatusOf(t, { session })
 
   // 宿主状态轮询失败：当前已有更具体的错误时保留它，否则借现有 error/指引通道提示；
   // 按 code+message 去重，避免每 10 秒把同一失败重复弹一遍。
@@ -108,9 +108,9 @@ export function useSessionControl({ t, host, ui, alive }) {
   return {
     session,
     sessionState,
+    status,
     activeJob,
     focusedJob,
-    queued,
     quota: (state && state.probe && state.probe.quota) || null,
     probe: (state && state.probe) || null,
     busy,

@@ -164,6 +164,16 @@
     max-height: none;
   }
 
+  /* 窄窗优先保留状态标签与计时，提示句让位给半句省略。 */
+  .ofs-sessionbar {
+    margin: 8px 10px 0;
+    padding: 6px 10px;
+  }
+
+  .ofs-sessionbar-hint {
+    display: none;
+  }
+
   .ofs-stage,
   .ofs-figure {
     min-height: 0;

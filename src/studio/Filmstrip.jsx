@@ -4,13 +4,16 @@ import React from 'react'
 
 import { Icon } from './icons.jsx'
 import { formatDuration } from '../logic/format.js'
+import { jobProgressText } from '../logic/status.js'
 
 /** 接收 { t, ui, compute, library, elapsedMs }；elapsedMs 由 Studio 用 useNow 算好传入。 */
 export function Filmstrip(props) {
   const { t, ui, compute, library, elapsedMs } = props
   const { setView } = ui
-  const { activeJob, sessionState, queued: sessionQueued, startSession } = compute
+  const { activeJob, sessionState, startSession, status } = compute
+  const stopped = Boolean(status && status.stopped)
   const { batches, selected, selectImage } = library
+  const progressText = activeJob ? jobProgressText(t, activeJob, sessionState) : ''
 
   const selectedPath = selected && selected.image ? selected.image.path : ''
 
@@ -18,9 +21,9 @@ export function Filmstrip(props) {
     <footer className="ofs-filmstrip">
       <div className="ofs-roll">
         {activeJob ? (
-          <div className="ofs-ghost" role="status">
+          <div className="ofs-ghost">
             <span className="ofs-ghost-bar" aria-hidden="true" />
-            <span className="ofs-ghost-label">{sessionQueued ? t('studio.ghost.queued') : t('studio.ghost.rendering')}</span>
+            <span className="ofs-ghost-label">{progressText}</span>
             {formatDuration(t, elapsedMs) ? <span className="ofs-ghost-time">{formatDuration(t, elapsedMs)}</span> : null}
           </div>
         ) : null}
@@ -33,7 +36,9 @@ export function Filmstrip(props) {
               <span className="ofs-slot" />
             </div>
             <span>
-              {sessionState === 'absent' ? t('studio.filmstrip.offline') : t('studio.filmstrip.empty')}
+              {sessionState === 'absent'
+                ? (stopped ? t('studio.filmstrip.offlineClosed') : t('studio.filmstrip.offline'))
+                : t('studio.filmstrip.empty')}
               {sessionState === 'absent' ? (
                 <button type="button" className="ofs-link" onClick={startSession}>
                   {t('studio.compute.start')}

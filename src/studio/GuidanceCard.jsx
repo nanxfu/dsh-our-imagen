@@ -34,6 +34,10 @@ export function GuidanceCard(props) {
       title: t('studio.guidance.sleep.title'),
       actions: [{ key: 'wake', label: t('studio.guidance.sleep.action'), run: startSession }],
     },
+    closed: {
+      title: t('studio.guidance.closed.title'),
+      actions: [{ key: 'wake', label: t('studio.guidance.sleep.action'), run: startSession }],
+    },
     auth: {
       title: t('studio.guidance.auth.title'),
       actions: [

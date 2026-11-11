@@ -26,7 +26,7 @@
 
 会话快照（`/state` 的 `session` 字段）包含：`state`、`phase`、`detail`、`presetId`、`kernelId`、`kernelUrl`、
 `kernelStatus`、`endpointUrl`、`device`、`deviceCount`、`modelId`、`tunnelProvider`、`startedAt`、`readyAt`、`lastProbeAt`、
-`idleTimeoutSec`、`error`（`null` 或 `{ code, message }`）。鉴权 token 不进入任何对外快照
+`idleTimeoutSec`、`stoppedByUser`、`error`（`null` 或 `{ code, message }`）。鉴权 token 不进入任何对外快照
 （只在 Host 内部用于请求远端；`endpointUrl` 会下发，供前端展示隧道是否建立）。
 `tunnelProvider` 为 `cloudflare` / `custom` / `null`，对应 ready 事件与 `/health.tunnel_provider`。
 
@@ -42,7 +42,7 @@
 | `status` | 含义 |
 | :--- | :--- |
 | `queued` | 已入本地队列，尚未开始 |
-| `waiting-session` | 正在等待/唤起远端会话 |
+| `waiting-session` | 正在等待/唤醒远端会话 |
 | `running` | 远端生成中 |
 | `done` | 完成，`output` 内有图片 |
 | `failed` | 失败，`error` 内是错误码与原因 |
@@ -311,7 +311,7 @@
 | `seed` | integer | 0~2147483647；省略则随机。多张时第 `i` 张为 `seed + i` |
 | `count` | integer | 1~4，默认 1 |
 | `waitSeconds` | integer | 0~600：>0 时该请求最多等待任务结束 N 秒再返回（默认 0，立即返回） |
-| `autoStart` | boolean | 默认 `true`；`false` 时不自动唤起会话 |
+| `autoStart` | boolean | 默认 `true`；`false` 时不自动唤醒会话 |
 
 - **响应**：**裸 `Job` 对象**（不是 `{ ok, job }` 包装）。`waitSeconds > 0` 时返回的是等待结束后的快照，
   任务可能仍在 `queued` / `running`。
@@ -570,8 +570,9 @@
 | **排除项** | 排除项 | `(ℹ)` | 画面中不希望出现的元素。注意：仅在引导强度 (CFG) > 0 时生效。 |
 | **采样步数** | 采样步数 | `(ℹ)` | 模型迭代去噪的步数。SDXL Lightning 推荐 4~8 步，SDXL Base 推荐 25~30 步。 |
 | **引导强度** | 引导强度 (CFG) | `(ℹ)` | 数值越高越贴合提示词，过高可能产生色彩失真。默认推荐 1.5~7.0。 |
-| **Kaggle 账号** | Kaggle 状态 | `(!)` | Kaggle 账号必须完成手机号绑定。未绑定的账号会被平台静默降级为 CPU，无法出图。 |
-| **空闲休眠** | 在线 · 单张约 6s | `(ℹ)` | 云端实例空闲超过 30 分钟将自动关机，以节省你的每周 30 小时免费 GPU 额度。 |
+| **Kaggle 账号** | 账号 | `(!)` | Kaggle 账号必须完成手机号绑定。未绑定的账号会被平台静默降级为 CPU，无法出图。 |
+| **云端状态** | 云端就绪 / 正在准备模型 / 正在排队等 GPU | `(ℹ)` | 状态胶囊与状态条共用一套阶段文案：推送内核 → Kaggle 排队 → 建立隧道 → 加载模型 → 就绪；排队通常 3~10 分钟，已等待时长实时显示。 |
+| **空闲休眠** | 闲置休眠阈值 | `(ℹ)` | 云端实例默认闲置 30 分钟自动关机，以节省你的每周 30 小时免费 GPU 额度。 |
 | **提示词输入** | 提示词 | `(ℹ)` | 支持中英文输入。建议包含主体、光影、构图与画风。 |
 
 ### 5.4 启发式灵感与模块化分层润色

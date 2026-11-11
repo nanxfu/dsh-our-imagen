@@ -2,10 +2,11 @@
 
 import { token } from '../theme.js'
 
-export function sessionColor(state) {
-  if (state === 'ready') return token.ok
-  if (state === 'error') return token.error
-  if (state === 'provisioning' || state === 'connecting' || state === 'warming' || state === 'stopping') return token.warn
+/** 云端状态的语义色调 → 宿主状态色（与 computeStatusOf().tone 对应）。 */
+export function toneColor(tone) {
+  if (tone === 'ok') return token.ok
+  if (tone === 'warn') return token.warn
+  if (tone === 'error') return token.error
   return token.idle
 }
 

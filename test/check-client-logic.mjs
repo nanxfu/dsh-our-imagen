@@ -110,11 +110,17 @@ await check('任务耗时与活跃任务查询', () => {
 })
 
 await check('阶段提示映射到会话态', () => {
-  assert.equal(logic.phaseHint(t, { state: 'provisioning', phase: 'queue' }), zh['session.hint.provisioning'])
-  assert.equal(logic.phaseHint(t, { state: 'provisioning', phase: 'push' }), zh['session.hint.provisioning'])
+  assert.equal(logic.phaseHint(t, { state: 'provisioning', phase: 'push' }), zh['session.hint.push'])
+  assert.equal(logic.phaseHint(t, { state: 'provisioning', phase: 'queue' }), zh['session.hint.queue'])
+  assert.equal(logic.phaseHint(t, { state: 'provisioning' }), zh['session.hint.provisioning'], '未知 phase 回落通用文案')
   assert.equal(logic.phaseHint(t, { state: 'connecting', phase: 'tunnel' }), zh['session.hint.connecting'])
   assert.equal(logic.phaseHint(t, { state: 'warming', phase: 'warm' }), zh['session.hint.warming'])
   assert.equal(logic.phaseHint(t, { state: 'stopping' }), zh['session.hint.stopping'])
+  assert.equal(
+    logic.phaseHint(t, { state: 'error', error: { code: 'session_ended' } }),
+    zh['session.hint.asleep'],
+    '会话自然结束按休眠说明，不落到错误态',
+  )
   assert.equal(logic.phaseHint(t, { state: 'ready' }), '')
   assert.equal(logic.phaseHint(t, null), '')
   assert.equal(logic.phaseHint(te, { state: 'warming' }), en['session.hint.warming'])
@@ -129,70 +135,103 @@ await check('错误文案拼装顺序', () => {
   assert.equal(logic.errorText(t, null), '')
 })
 
-await check('会话视图派生', () => {
-  const absent = logic.buildSessionView(t, { session: null, probe: null, defaultPreset: '', sessionBusy: '', probeBusy: false })
+await check('云端状态派生：阶段标签、色调与可执行动作', () => {
+  const absent = logic.computeStatusOf(t, { session: null })
   assert.equal(absent.state, 'absent')
-  assert.equal(absent.headline, t('session.state.absent'))
+  assert.equal(absent.label, t('session.state.absent'))
+  assert.equal(absent.tone, 'idle')
+  assert.equal(absent.transient, false)
   assert.equal(absent.canStart, true)
   assert.equal(absent.canStop, false)
-  assert.equal(absent.accountLabel, t('value.unknown'))
-  assert.equal(absent.quotaLabel, t('value.unknown'))
-  assert.equal(absent.defaultModel, '—')
-  assert.equal(absent.transient, false)
+  assert.equal(absent.tooltip, t('studio.compute.offlineTooltip'))
 
-  const queue = logic.buildSessionView(t, {
-    session: { state: 'provisioning', phase: 'queue', detail: 'provisioning: waiting for container' },
-    probe: { auth: { ok: true }, quota: { available: true, usedHours: 3, totalHours: 30 } },
-    defaultPreset: 'sdxl-lightning',
-    sessionBusy: '',
-    probeBusy: false,
-  })
-  assert.equal(queue.headline, t('session.state.provisioning'))
-  assert.equal(queue.hint, zh['session.hint.provisioning'], '有本地提示时不展示远端 detail')
-  assert.equal(queue.note, queue.hint)
+  // 推送环境与等待配额是两件事：标签与提示必须跟随 phase，不能都写「正在申请 GPU」。
+  const pushing = logic.computeStatusOf(t, { session: { state: 'provisioning', phase: 'push' } })
+  assert.equal(pushing.label, t('session.state.push'))
+  assert.equal(pushing.hint, zh['session.hint.push'])
+  assert.match(pushing.label, /准备/, '推送阶段应说明在准备云端')
+  assert.equal(pushing.tone, 'warn')
+
+  const queue = logic.computeStatusOf(t, { session: { state: 'provisioning', phase: 'queue' } })
+  assert.equal(queue.label, t('session.state.queue'))
+  assert.equal(queue.hint, zh['session.hint.queue'])
   assert.equal(queue.transient, true)
-  assert.equal(queue.canStop, true)
-  assert.equal(queue.accountLabel, t('value.ok'))
-  assert.equal(queue.quotaLabel, '3 / 30 h')
-  assert.equal(queue.chipLabel, t('chip.online'))
 
-  const ended = logic.buildSessionView(t, { session: { state: 'error', error: { code: 'session_ended' } }, probe: null })
-  assert.equal(ended.ended, true)
-  assert.equal(ended.headline, t('workbench.sessionEnded'))
-  assert.equal(ended.stateText, t('session.state.error'), '徽章标题仍用状态名')
-  assert.equal(ended.canStart, true, 'session_ended 允许重新启动')
+  const connecting = logic.computeStatusOf(t, { session: { state: 'connecting', phase: 'tunnel' } })
+  assert.equal(connecting.label, t('session.state.connecting'))
+  assert.notEqual(connecting.label, t('session.state.warming'), '连接隧道不能写成装载模型')
 
-  const warming = logic.buildSessionView(t, { session: { state: 'error', error: { code: 'warming' } }, probe: null })
-  assert.equal(warming.warming, true)
-  assert.equal(warming.headline, t('session.state.error'))
+  const warming = logic.computeStatusOf(t, { session: { state: 'warming', phase: 'warm' } })
+  assert.equal(warming.label, t('session.state.warming'))
+  assert.equal(warming.phaseLabel, t('session.phase.warm'))
 
-  const stopping = logic.buildSessionView(t, {
-    session: { state: 'stopping', detail: 'stopping session' },
-    probe: null,
-    sessionBusy: 'stop',
-    probeBusy: true,
-  })
-  assert.equal(stopping.canStop, false)
-  assert.equal(stopping.canStart, false, '关机进行中不允许再启动')
-  assert.equal(stopping.probing, true)
-  assert.equal(stopping.hint, zh['session.hint.stopping'])
-  assert.equal(stopping.note, zh['session.hint.stopping'])
+  const ready = logic.computeStatusOf(t, { session: { state: 'ready' } })
+  assert.equal(ready.label, t('session.state.ready'))
+  assert.equal(ready.tone, 'ok')
+  assert.equal(ready.transient, false)
+  assert.equal(ready.tooltip, t('studio.compute.idleTooltip'))
 
-  // 未知 phase 回落到会话态的提示；会话态也没有文案时，note 回落到远端 detail。
+  // 会话自然结束：按「已关闭」展示，不落成红色异常；原因由指引卡给出。
+  const ended = logic.computeStatusOf(t, { session: { state: 'error', error: { code: 'session_ended' } } })
+  assert.equal(ended.asleep, true)
+  assert.equal(ended.label, t('session.state.asleep'))
+  assert.equal(ended.tone, 'idle')
+  assert.equal(ended.canStart, true)
+  assert.equal(ended.tooltip, t('studio.compute.asleepTooltip'))
+
+  // 用户手动关机：absent + stoppedByUser，不再承诺「直接生成会自动启动」。
+  const stopped = logic.computeStatusOf(t, { session: { state: 'absent', stoppedByUser: true } })
+  assert.equal(stopped.stopped, true)
+  assert.equal(stopped.label, t('session.state.asleep'))
+  assert.equal(stopped.tooltip, t('studio.compute.asleepTooltip'))
+  assert.notEqual(stopped.hint, '')
+
+  // 错误态按错误码缩短标签，未知码回落到通用异常。
+  const auth = logic.computeStatusOf(t, { session: { state: 'error', error: { code: 'auth_required', message: '缺少凭据' } } })
+  assert.equal(auth.label, t('session.state.errorAuth'))
+  assert.equal(auth.tone, 'error')
+  const timeout = logic.computeStatusOf(t, { session: { state: 'error', error: { code: 'queue_timeout' } } })
+  assert.equal(timeout.label, t('session.state.errorTimeout'))
+  const unknown = logic.computeStatusOf(t, { session: { state: 'error', error: { code: 'boom' } } })
+  assert.equal(unknown.label, t('session.state.error'))
+  assert.equal(unknown.tooltip, t('studio.compute.errorTooltip'))
+  const pushFailed = logic.computeStatusOf(t, { session: { state: 'error', error: { code: 'push_failed' } } })
+  assert.equal(pushFailed.label, t('session.state.errorPush'), '推送失败发生在云端介入前，不能归成云端异常')
+})
+
+await check('任务进度区分「等云端」与「等前一张图」', () => {
+  const running = { status: 'running' }
+  const waiting = { status: 'waiting-session' }
+  const queued = { status: 'queued' }
+  assert.equal(logic.jobProgressText(t, running, 'ready'), t('studio.progress.running'))
+  assert.equal(logic.jobProgressText(t, waiting, 'provisioning'), t('studio.progress.waitingSession'))
+  assert.equal(logic.jobProgressText(t, queued, 'provisioning'), t('studio.progress.waitingSession'))
+  assert.equal(logic.jobProgressText(t, queued, 'ready'), t('studio.progress.queued'))
+  assert.equal(logic.jobProgressText(t, null, 'ready'), '')
+  assert.equal(logic.jobProgressText(te, queued, 'ready'), en['studio.progress.queued'])
+})
+
+await check('过渡态已等待时长', () => {
+  const session = { state: 'provisioning', startedAt: at(-90) }
+  assert.equal(logic.sessionElapsedMs(session, NOW), 90000)
   assert.equal(
-    logic.buildSessionView(t, { session: { state: 'connecting', phase: 'unknown', detail: 'detail text' } }).hint,
-    zh['session.hint.connecting'],
+    logic.sessionElapsedMs({ state: 'connecting', startedAt: at(-9000) }, NOW),
+    null,
+    '重连沿用旧 startedAt，不能拿来算等待时长',
   )
-  const noHint = logic.buildSessionView(t, { session: { state: 'ready', detail: 'ready detail' } })
-  assert.equal(noHint.hint, '')
-  assert.equal(noHint.note, 'ready detail')
+  assert.equal(logic.sessionElapsedMs({ state: 'warming', startedAt: at(-9000) }, NOW), null)
+  assert.equal(logic.sessionElapsedMs({ state: 'stopping', startedAt: at(-90) }, NOW), null)
+  assert.equal(logic.sessionElapsedMs({ state: 'error', startedAt: at(-90) }, NOW), null)
+  assert.equal(logic.sessionElapsedMs({ state: 'provisioning' }, NOW), null)
+  assert.equal(logic.sessionElapsedMs(null, NOW), null)
 })
 
 await check('状态色与常量表一致', () => {
-  assert.equal(logic.sessionColor('ready'), token.ok)
-  assert.equal(logic.sessionColor('error'), token.error)
-  assert.equal(logic.sessionColor('provisioning'), token.warn)
-  assert.equal(logic.sessionColor('absent'), token.idle)
+  assert.equal(logic.toneColor('ok'), token.ok)
+  assert.equal(logic.toneColor('warn'), token.warn)
+  assert.equal(logic.toneColor('error'), token.error)
+  assert.equal(logic.toneColor('idle'), token.idle)
+  assert.equal(logic.toneColor('unknown'), token.idle)
   assert.equal(logic.jobColor('running'), token.brand)
   assert.equal(logic.jobColor('unknown'), token.idle)
   for (const state of Object.keys(TRANSIENT_SESSION)) {
@@ -226,7 +265,8 @@ await check('错误码映射到指引类型', () => {
   assert.equal(logic.guidanceKindOf(''), '')
   assert.equal(logic.guidanceKindOf('need_prompt'), '', '本地校验错误不弹卡')
   assert.equal(logic.guidanceKindOf('oom'), 'oom')
-  for (const code of ['session_ended', 'stopped']) assert.equal(logic.guidanceKindOf(code), 'sleep', code)
+  assert.equal(logic.guidanceKindOf('session_ended'), 'sleep', '自然结束按休眠卡处理')
+  assert.equal(logic.guidanceKindOf('stopped'), 'closed', '手动关机单独归因，不套用闲置休眠文案')
   assert.equal(logic.guidanceKindOf('cli_missing'), 'cli')
   assert.equal(logic.guidanceKindOf('auth_required'), 'auth')
   for (const code of [

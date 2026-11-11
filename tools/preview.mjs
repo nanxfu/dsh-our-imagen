@@ -189,6 +189,41 @@ const states = {
     jobs: [{ id: 'job-x', status: 'waiting-session', startedAt: at(-60), params: { prompt: '排队中的画面' } }],
     lastJob: null,
   },
+  pushing: {
+    defaultPreset: 'sdxl-lightning',
+    presets: [preset],
+    session: { state: 'provisioning', phase: 'push', startedAt: at(-20), error: null },
+    jobs: [{ id: 'job-p', status: 'waiting-session', startedAt: at(-10), params: { prompt: '推送中的画面' } }],
+    lastJob: null,
+  },
+  connecting: {
+    defaultPreset: 'sdxl-lightning',
+    presets: [preset],
+    session: { state: 'connecting', phase: 'tunnel', startedAt: at(-150), error: null },
+    jobs: [{ id: 'job-c', status: 'waiting-session', startedAt: at(-60), params: { prompt: '连接中的画面' } }],
+    lastJob: null,
+  },
+  warming: {
+    defaultPreset: 'sdxl-lightning',
+    presets: [preset],
+    session: { state: 'warming', phase: 'warm', startedAt: at(-330), device: 'Tesla T4', error: null },
+    jobs: [{ id: 'job-w', status: 'waiting-session', startedAt: at(-200), params: { prompt: '装载中的画面' } }],
+    lastJob: null,
+  },
+  asleep: {
+    defaultPreset: 'sdxl-lightning',
+    presets: [preset],
+    session: { state: 'error', error: { code: 'session_ended', message: 'Kernel 已结束（COMPLETE），点「唤醒」可重新启动会话' } },
+    jobs: [],
+    lastJob: null,
+  },
+  stopped: {
+    defaultPreset: 'sdxl-lightning',
+    presets: [preset],
+    session: { state: 'absent', stoppedByUser: true, error: null },
+    jobs: [],
+    lastJob: null,
+  },
   guidance: {
     defaultPreset: 'sdxl-lightning',
     presets: [preset, turbo],
@@ -480,6 +515,49 @@ async function renderRefine(options = {}) {
   )
 }
 
+/** 算力弹层：展开态不是静态渲染能体现的，直接挂 TopBar 并给 defaultOpen 截一张。 */
+async function renderComputePopover(options = {}) {
+  const state = states.ready
+  const client = await loadClient({
+    now: NOW,
+    testBuild: true,
+    responses: {
+      '/imagen-api/state': state,
+      '/imagen-api/history': { items: historyItems },
+      '/imagen-api/library': libraryResponse,
+    },
+  })
+  const tree = await client.mountRaw(client.components.TopBar, {
+    t: client.internals.i18n.fallbackTranslate('zh'),
+    ui: { view: 'studio', setView: () => {}, openLogs: () => {} },
+    compute: {
+      sessionState: 'ready',
+      session: state.session,
+      quota: state.probe.quota,
+      presets: state.presets,
+      busy: '',
+      probing: false,
+      probe: state.probe,
+      probeReport: null,
+      startSession: () => {},
+      stopSession: () => {},
+      runProbe: () => {},
+      openFolder: () => {},
+    },
+    form: {
+      form: { presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0 },
+      patchForm: () => {},
+    },
+    library: { loadHistory: () => {} },
+    defaultOpen: true,
+  })
+  client.unmount()
+  return pageOf(
+    `<div class="ofs-root"><div class="ofs-app" style="overflow:visible"><div class="ofs-topbar-slot">${toHtml(tree)}</div></div></div>`,
+    { ...options, injectCss: true },
+  )
+}
+
 function pageOf(body, options = {}) {
   const themeStyle = options.dark ? `<style>${DARK_TOKENS}</style>` : ''
   const cssStyle = options.injectCss ? `<style>${CSS}</style>` : ''
@@ -504,12 +582,18 @@ async function main() {
     'studio-dark': await renderState(states.ready, { dark: true, props: { initialPrompt: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图' } }),
     'studio-empty': await renderState(states.empty, { history: [] }),
     'studio-queued': await renderState(states.queued, { history: [] }),
+    'studio-pushing': await renderState(states.pushing, { history: [] }),
+    'studio-connecting': await renderState(states.connecting, { history: [] }),
+    'studio-warming': await renderState(states.warming, { history: [] }),
+    'studio-asleep': await renderState(states.asleep, { history: historyItems }),
+    'studio-stopped': await renderState(states.stopped, { history: [] }),
     'studio-guidance': await renderState(states.guidance, { history: historyItems }),
     'studio-cli': await renderState(states.cli, { history: [] }),
     'gallery-wide': await renderGallery(),
     'gallery-hover': await renderGalleryHover(),
     'chat-standalone': await renderChat(),
     'studio-refine': await renderRefine(),
+    'compute-popover': await renderComputePopover(),
   }
 
   for (const [name, html] of Object.entries(pages)) {
@@ -526,8 +610,10 @@ async function main() {
     const frameOf = (src) => `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#e9eaf2}iframe{display:block;width:390px;height:844px;border:0}</style></head><body><iframe src="${src}"></iframe></body></html>`
     await writeFile(join(OUT_DIR, 'mobile-frame.html'), frameOf('studio-ready.html'), 'utf8')
     await writeFile(join(OUT_DIR, 'mobile-frame-gallery.html'), frameOf('studio-gallery.html'), 'utf8')
+    await writeFile(join(OUT_DIR, 'mobile-frame-warming.html'), frameOf('studio-warming.html'), 'utf8')
     shots.push({ name: 'mobile-frame', width: 390, height: 844, out: 'studio-ready-mobile.png' })
     shots.push({ name: 'mobile-frame-gallery', width: 390, height: 844, out: 'studio-gallery-mobile.png' })
+    shots.push({ name: 'mobile-frame-warming', width: 390, height: 844, out: 'studio-warming-mobile.png' })
   }
 
   for (const shot of shots) {

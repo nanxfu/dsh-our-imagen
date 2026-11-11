@@ -57,16 +57,30 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     loadLibrary()
   }, [loadLibrary])
 
-  // 首张出图提示：本次会话第一张成品落地时报一次。
-  const firstImageRef = React.useRef(false)
-  const finished = state && state.lastJob && state.lastJob.status === 'done' ? state.lastJob : null
+  // 首张出图提示：只对本次页面观察到的新完成批次、且云端仍就绪时报一次。
+  // 首次拿到 /state 时把历史 lastJob 记为基线，避免重挂载后对旧结果再次提示；
+  // 云端已关闭时不再宣称「云端就绪」。
+  const baselineRef = React.useRef(false)
+  const seenJobRef = React.useRef('')
+  const announcedRef = React.useRef(false)
+  const lastJob = state && state.lastJob ? state.lastJob : null
+  const lastJobKey = lastJob ? `${lastJob.id}:${lastJob.status}` : ''
+  const sessionState = (state && state.session && state.session.state) || 'absent'
   React.useEffect(() => {
-    if (!finished || firstImageRef.current) return
-    const images = Array.isArray(finished.output?.images) ? finished.output.images : []
+    if (!state) return
+    if (!baselineRef.current) {
+      baselineRef.current = true
+      seenJobRef.current = lastJob ? lastJob.id : ''
+      return
+    }
+    if (!lastJob || lastJob.id === seenJobRef.current) return
+    seenJobRef.current = lastJob.id
+    if (announcedRef.current || lastJob.status !== 'done' || sessionState !== 'ready') return
+    const images = Array.isArray(lastJob.output?.images) ? lastJob.output.images : []
     if (images.length === 0) return
-    firstImageRef.current = true
+    announcedRef.current = true
     ui.showToast(t('studio.toast.firstImage'))
-  }, [finished && finished.id])
+  }, [lastJobKey, sessionState])
 
   // 任务完成后刷新历史，让新图自动出现在最近生成最前面
   const lastJobId = state && state.lastJob ? `${state.lastJob.id}:${state.lastJob.finishedAt ?? ''}` : ''
