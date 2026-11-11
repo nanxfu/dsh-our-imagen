@@ -85,7 +85,7 @@ async function main() {
     if (listed) await cp(join(ROOT, entry.name), join(target, entry.name))
   }
 
-  const required = ['index.js', 'client.js', 'package.json', 'cordis.patch.yml', 'lib/route-kit.js', 'shared/contract.js', 'remote/daemon.py']
+  const required = ['index.js', 'client.js', 'package.json', 'cordis.patch.yml', 'lib/route-kit.js', 'shared/contract.js', 'remote/daemon.py', 'remote/anima_runtime.py']
   const missing = []
   for (const file of required) {
     if (!(await pathExists(join(target, ...file.split('/'))))) missing.push(file)

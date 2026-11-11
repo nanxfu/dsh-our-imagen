@@ -28,6 +28,8 @@
  17. 异步 job（0.5.0）：POST /generate 202 入队、jobId 幂等与格式校验、
      GET /job 的 queued/running/done/failed 视图、未知 id 404、保留/淘汰、
      worker 执行成功与失败、/health.queue_depth
+  18. anima 运行时单份源码（remote/anima_runtime.py，daemon 只留 @@INLINE 标记）与
+      run_task 回传实际出图尺寸（PIL image.size，而不是请求宽高）
 
 运行：python test/daemon-unit.py
 """
@@ -50,6 +52,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 DAEMON_PATH = ROOT / "remote" / "daemon.py"
+ANIMA_RUNTIME_PATH = ROOT / "remote" / "anima_runtime.py"
 
 
 def _load_daemon():
@@ -57,7 +60,14 @@ def _load_daemon():
 
     必须先把自己注册进 sys.modules：dataclass 在 class 创建时要按 ``cls.__module__``
     回查模块命名空间，模块不在 sys.modules 里会抛 AttributeError。
+
+    另外要把 remote/ 放进 sys.path：daemon.py 用 ``from anima_runtime import ...`` 取
+    同目录的 anima 运行时，而按路径加载时 sys.path 里没有这个目录；推 Kaggle 的产物
+    已被打包器内联成单文件，不依赖这一步。
     """
+    remote_dir = str(ROOT / "remote")
+    if remote_dir not in sys.path:
+        sys.path.insert(0, remote_dir)
     spec = importlib.util.spec_from_file_location("imagen_daemon_under_test", DAEMON_PATH)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"无法加载 {DAEMON_PATH}")
@@ -73,7 +83,7 @@ AUTH_TOKEN = "test-token-0123456789"
 
 # 与 shared/contract.js 的 daemonContract() 同形：daemon 只消费 version 与 limits。
 CONTRACT = {
-    "version": "0.5.0",
+    "version": "0.6.0",
     "limits": {
         "width": {"min": 256, "max": 1536, "step": 8},
         "height": {"min": 256, "max": 1536, "step": 8},
@@ -216,7 +226,7 @@ class ImportSideEffectTest(unittest.TestCase):
         self.assertIsInstance(d.CONFIG, d.DaemonConfig)
         self.assertIsInstance(d.STATE, d.RuntimeState)
         self.assertIsInstance(d.BOOT, d.BootState)
-        self.assertEqual(d.VERSION, "0.5.0")
+        self.assertEqual(d.VERSION, "0.6.0")
         self.assertEqual(d.STATE.phase, "booting")
         self.assertIsNone(d.BOOT.tunnel_url)
         self.assertFalse(d.BOOT.published_ready)
@@ -231,6 +241,19 @@ class ImportSideEffectTest(unittest.TestCase):
         self.assertEqual(d._limit_spec("width")["min"], 64)
         self.assertEqual(d._limit_spec("width")["max"], 2048)
         self.assertEqual(d._max_tasks(), 8)
+
+    def test_anima_runtime_comes_from_single_source_module(self) -> None:
+        """anima 运行时只有 remote/anima_runtime.py 一份；daemon 里只留带标记的 import 行。"""
+        self.assertEqual(d.load_anima_runtime.__module__, "anima_runtime")
+        runtime_module = sys.modules.get("anima_runtime")
+        self.assertIsNotNone(runtime_module, "daemon 应从同目录 anima_runtime 导入运行时")
+        self.assertTrue(hasattr(runtime_module, "_anima_toolkit"))
+        self.assertEqual(Path(runtime_module.__file__).resolve(), ANIMA_RUNTIME_PATH)
+        source = DAEMON_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("def _anima_toolkit", source)
+        self.assertNotIn("def load_anima_runtime", source)
+        self.assertEqual(source.count("# @@INLINE:anima_runtime.py@@"), 1)
+        self.assertIn("from anima_runtime import load_anima_runtime", source)
 
 
 class BuildConfigTest(DaemonUnitTest):
@@ -333,7 +356,7 @@ class BuildConfigTest(DaemonUnitTest):
         with mock.patch.object(d, "EMBEDDED_CONFIG_B64", encoded):
             config = d.load_config()
         self.assertEqual(config.auth_token, "embedded-token")
-        self.assertEqual(config.contract["version"], "0.5.0")
+        self.assertEqual(config.contract["version"], "0.6.0")
 
     def test_load_config_without_payload_returns_defaults(self) -> None:
         with mock.patch.object(d, "EMBEDDED_CONFIG_B64", ""), mock.patch.dict(os.environ, {}, clear=True):
@@ -353,7 +376,7 @@ class BuildConfigTest(DaemonUnitTest):
 
 class ProtocolVersionTest(DaemonUnitTest):
     def test_falls_back_to_file_version(self) -> None:
-        self.assertEqual(d.protocol_version(), "0.5.0")
+        self.assertEqual(d.protocol_version(), "0.6.0")
 
     def test_prefers_injected_version(self) -> None:
         d.CONFIG.version = "0.3.1-injected"
@@ -591,6 +614,79 @@ class ClassifyFailureTest(DaemonUnitTest):
         self.assertEqual(d.classify_failure(ValueError("boom"), default="load_failed")[0], "load_failed")
 
 
+class RunTaskTest(DaemonUnitTest):
+    """run_task：回传实际出图尺寸（PIL image.size），协议字段名保持不变。"""
+
+    RESULT_KEYS = {
+        "name",
+        "seed",
+        "seconds",
+        "width",
+        "height",
+        "steps",
+        "cfg",
+        "png_bytes",
+        "image_b64",
+    }
+
+    def make_pipe(self, image_size):  # noqa: ANN001, ANN202
+        """假 pipe：记录本次调用参数，返回给定 PIL 尺寸的假图。"""
+
+        class FakeImage:
+            def __init__(self, size):
+                self.size = size
+
+            def save(self, buffer, format=None):  # noqa: A002, ANN001
+                buffer.write(b"fake-png")
+
+        class FakePipe:
+            def __init__(self):
+                self.calls = []
+
+            def __call__(self, **kwargs):
+                self.calls.append(kwargs)
+                return types.SimpleNamespace(images=[FakeImage(image_size)])
+
+        return FakePipe()
+
+    @staticmethod
+    def fake_torch():
+        """run_task 只用到 torch.Generator 与 torch.cuda，注入替身避免依赖真 torch。"""
+        torch_module = types.ModuleType("torch")
+        torch_module.cuda = types.SimpleNamespace(
+            is_available=lambda: False, synchronize=lambda: None
+        )
+        torch_module.Generator = lambda device: types.SimpleNamespace(manual_seed=lambda seed: device)
+        return torch_module
+
+    def run_with(self, image_size, task):  # noqa: ANN001, ANN202
+        pipe = self.make_pipe(image_size)
+        with mock.patch.dict(sys.modules, {"torch": self.fake_torch()}):
+            result = d.run_task(pipe, task)
+        return pipe, result
+
+    def test_reports_actual_image_size(self) -> None:
+        # anima 会把 648 向下取整到 640：回传必须是 PIL 的实际尺寸，而不是请求值。
+        pipe, result = self.run_with((640, 640), dict(TASKS[0], width=648, height=648))
+        self.assertEqual(pipe.calls[0]["width"], 648)
+        self.assertEqual(pipe.calls[0]["height"], 648)
+        self.assertEqual((result["width"], result["height"]), (640, 640))
+        self.assertIn("实际出图 640x640（请求 648x648）", self.logs())
+
+    def test_size_tuple_is_width_height_order(self) -> None:
+        # PIL Image.size 的顺序是 (width, height)，不能写反。
+        _pipe, result = self.run_with((768, 512), dict(TASKS[0], width=768, height=512))
+        self.assertEqual((result["width"], result["height"]), (768, 512))
+        self.assertNotIn("实际出图", self.logs())
+
+    def test_protocol_fields_unchanged(self) -> None:
+        _pipe, result = self.run_with((256, 256), TASKS[0])
+        self.assertEqual(set(result), self.RESULT_KEYS)
+        self.assertEqual(result["name"], TASKS[0]["name"])
+        self.assertEqual(result["png_bytes"], len(b"fake-png"))
+        self.assertEqual(base64.b64decode(result["image_b64"]), b"fake-png")
+
+
 class HealthPayloadTest(DaemonUnitTest):
     REQUIRED_KEYS = {
         "status",
@@ -618,7 +714,7 @@ class HealthPayloadTest(DaemonUnitTest):
         self.assertEqual(set(payload), self.REQUIRED_KEYS)
         self.assertEqual(payload["phase"], "booting")
         self.assertEqual(payload["status"], "ok")
-        self.assertEqual(payload["version"], "0.5.0")
+        self.assertEqual(payload["version"], "0.6.0")
         self.assertEqual(payload["idle_timeout_sec"], 1800)
         self.assertGreaterEqual(payload["idle_seconds"], 0)
         self.assertGreaterEqual(payload["uptime_seconds"], 0)

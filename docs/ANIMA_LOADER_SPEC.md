@@ -1,6 +1,6 @@
 # Anima-Light-Lavender 接入规格 (ANIMA_LOADER_SPEC)
 
-本文档记录 `anima-light-lavender` 从「外部单文件 ComfyUI 模型」到「工作台可用预设」的接入方式：模型事实、为何需要新 loader、loader 契约、双份实现落点与实测数据。模型资产本身见 [`models/anima-light-lavender.json`](../models/anima-light-lavender.json)，通用格式见 [`MODEL_ASSET_SPEC.md`](MODEL_ASSET_SPEC.md)。
+本文档记录 `anima-light-lavender` 从「外部单文件 ComfyUI 模型」到「工作台可用预设」的接入方式：模型事实、为何需要新 loader、loader 契约、单份源码与打包内联落点、实测数据。模型资产本身见 [`models/anima-light-lavender.json`](../models/anima-light-lavender.json)，通用格式见 [`MODEL_ASSET_SPEC.md`](MODEL_ASSET_SPEC.md)。
 
 **结论**：该模型可以在 Kaggle 单卡 Tesla T4 上部署出图，但它是**单文件 ComfyUI checkpoint**，仓库没有 diffusers 目录结构，也不是任何 `AutoPipelineForText2Image` 能加载的管道。仓库因此新增 loader `anima`：按 Hugging Face 官方 demo Space 的纯 PyTorch 复刻实现自包含运行时（Cosmos-Predict2 MiniTrainDIT + Anima LLMAdapter + Qwen3-0.6B 文本编码器 + Qwen-Image VAE），不启用 `trust_remote_code`。
 
@@ -76,20 +76,24 @@
 
 ## 4. 实现落点
 
-按 [`MODEL_ASSET_SPEC.md`](MODEL_ASSET_SPEC.md) 第 4 节的双份维护约定，两种运行位置各有一份**逐字相同**的运行时（Kaggle 只接受单个 `code_file`，无法共享模块）：
+Anima 运行时只有**一份源码** `remote/anima_runtime.py`。Kaggle 只接受单个 `code_file`，但两份实现是打包阶段的问题，不是源码组织的问题：
 
 | 文件 | 角色 | 关键符号 |
 | :--- | :--- | :--- |
-| `tools/payload/verify-model.py` | 一次性 Kaggle 验证 payload | `_anima_toolkit()`（模型定义 + caption/分词/RoPE/调度/CFGZeroStar）、`load_anima_runtime()`、`AnimaRuntime`、`load_pipe()` 的 anima 分支 |
-| `remote/daemon.py` | 生产常驻 daemon | 同上前提下另有 `SUPPORTED_LOADERS` 增加 `"anima"`、`anima_local_assets()`（预挂载解析）、`build_pipeline()` 的 anima 分支、`release_pipeline()` 调用 `pipe.release()` |
+| `remote/anima_runtime.py` | 唯一实现（模型定义 + caption/分词/RoPE/调度/CFGZeroStar + `load_anima_runtime()`） | `_anima_toolkit()`、`load_anima_runtime()`、`AnimaRuntime` |
+| `tools/payload/verify-model.py` | 一次性 Kaggle 验证 payload | 一行带 `# @@INLINE:anima_runtime.py@@` 的 import；打包时被替换为模块全文 |
+| `remote/daemon.py` | 生产常驻 daemon | 同样一行标记 import；另有 `SUPPORTED_LOADERS` 的 `"anima"`、`anima_local_assets()`（预挂载解析）、`build_pipeline()` 的 anima 分支、`release_pipeline()` 调用 `pipe.release()` |
+
+打包链路：`lib/kernel.js` 的 `inlineMarkedModules()` 把标记行整行替换为 `remote/anima_runtime.py` 全文，因此最终推送的 Kernel 仍是自包含单文件（`tools/verify-model.mjs` 复用同一打包器）；仓库内本地运行走同目录普通 import。日志函数保持参数注入（`load_anima_runtime(spec, log=...)`）：daemon 传「日志环 + print」版，payload 传纯 print 版，模块里不写死任何一种。修改时只改 `remote/anima_runtime.py`，不要复制回两个入口文件。
 
 运行期设计要点：
 
 1. **dtype**：`auto` 按 compute capability 判定。T4（sm_75）在 CUDA 13 上 `is_bf16_supported()` 会返回 True，但 bf16 是模拟执行（实测 8.7 s/次前向），必须降到 fp16；A100/H100 等 sm_80+ 用 bf16。
 2. **文本编码器卸载与缓存**：编码完 cond/uncond 立即把 Qwen3 移到 CPU，按文本缓存 embedding（≤8 条，CPU 存储），后续采样与 VAE 解码期间文本编码器不占显存。
-3. **解码前释放**：采样中间张量出作用域后 `gc.collect()` + `torch.cuda.empty_cache()`，并在两个文件顶部（任何 torch import 之前）`os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")`。
+3. **解码前释放**：采样中间张量出作用域后 `gc.collect()` + `torch.cuda.empty_cache()`，并在入口文件顶部（任何 torch import 之前）`os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")`。
 4. **解码兜底**：`vae.decode` 捕获 `torch.OutOfMemoryError` → VAE 临时转 CPU float32 解码（慢但出图）；出现 NaN/Inf 先 VAE fp32 重试；仍失败且当前是 fp16 时，返回占位图并切 bf16、同 seed 重跑当前张，后续沿用 bf16——避免十分钟跑出一张废图却静默成功。
 5. **预挂载**：`localModels` 命中时，DiT/文本编码器按单文件、VAE/分词器按子目录判定，命中即跳过下载与磁盘预检。
+6. **真实尺寸回传**：Anima 采样前会把宽高向下取整到 16 的倍数（例如 648 → 640），`run_task` 统一回传 PIL 实际出图尺寸，宿主 `meta.json` 记录的是真实像素而非请求值。
 
 ---
 

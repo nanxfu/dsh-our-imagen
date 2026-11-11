@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url'
 
 import { TIMEOUTS } from '../shared/contract.js'
 import { downloadKernelOutput, kaggleUsername, kernelLogs, kernelStatus, pushKernel } from '../lib/kaggle.js'
-import { buildKernelFolder, randomSlug, removeKernelFolder } from '../lib/kernel.js'
+import { buildKernelFolder, hasInlineMarkerLine, randomSlug, removeKernelFolder } from '../lib/kernel.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const PAYLOAD_SOURCE = join(ROOT, 'tools', 'payload', 'verify-model.py')
@@ -244,13 +244,21 @@ async function packageKernel(model, username) {
   return { folder, config }
 }
 
-/** 校验打包结果：注入配置能解码且与预期一致。 */
+/** 校验打包结果：注入配置能解码且与预期一致；payload 已内联成单文件（Kaggle 只收单个 code_file）。 */
 async function inspectPackage(folder, config) {
   const source = await readFile(join(folder.dir, 'daemon.py'), 'utf8')
   const match = source.match(/^EMBEDDED_CONFIG_B64 = "([^"]*)"$/m)
   if (!match) throw new Error('打包后的脚本缺少 EMBEDDED_CONFIG_B64 注入行')
   const injected = JSON.parse(Buffer.from(match[1], 'base64').toString('utf8'))
   if (JSON.stringify(injected) !== JSON.stringify(config)) throw new Error('注入配置与预期不一致')
+  if (/^[ \t]*from anima_runtime import /m.test(source)) {
+    throw new Error('打包后的 payload 仍含未内联的 anima_runtime import 行')
+  }
+  if (hasInlineMarkerLine(source)) throw new Error('打包后的 payload 仍有未处理的 @@INLINE 标记')
+  const runtimeDefs = source.match(/^def load_anima_runtime\(/gm) ?? []
+  if (runtimeDefs.length !== 1) {
+    throw new Error(`打包后的 payload 中 load_anima_runtime 定义 ${runtimeDefs.length} 份，应为 1 份`)
+  }
   const metadata = JSON.parse(await readFile(join(folder.dir, 'kernel-metadata.json'), 'utf8'))
   if (metadata.code_file !== 'daemon.py') throw new Error('kernel-metadata.code_file 不是 daemon.py')
   if (metadata.enable_gpu !== true) throw new Error('kernel-metadata.enable_gpu 不是 true')
