@@ -1,5 +1,5 @@
 /**
- * Host 离线回归测试：library 原子写/并发安全 + kaggle probe 超时判定。
+ * Host 离线回归测试：library / output 原子写与并发安全 + kaggle probe 超时判定。
  *
  * 不联网、不起端口、不调用真实 kaggle CLI：
  *  - 每个用例用独立临时工作区（mkdtemp），避免与并行任务抢目录；
@@ -15,6 +15,7 @@ import { join } from 'node:path'
 
 import { probeKaggle, runCli } from '../lib/kaggle.js'
 import { readLibrary, recordDeleted, setFavorite } from '../lib/library.js'
+import { saveJobOutput, stamp } from '../lib/output.js'
 
 const tempDirs = []
 
@@ -43,6 +44,32 @@ async function readLibraryFile(workspace) {
 
 function favoritePaths(prefix, count) {
   return Array.from({ length: count }, (_, index) => `imagen-output/${prefix}/img-${index}.png`)
+}
+
+// ---- output 测试数据 -----------------------------------------------------
+
+// 1×1 透明 PNG：验证落盘内容是完整 PNG，不是半截文件。
+const PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+function outputJob(id) {
+  return {
+    id,
+    presetId: 'sdxl-turbo',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    finishedAt: '2026-01-01T00:00:01.000Z',
+    params: { prompt: '原子写测试', negativePrompt: 'blurry', width: 512, height: 512, steps: 4, cfg: 1, seed: 7, count: 2 },
+  }
+}
+
+function outputResults(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    image_b64: PNG_B64,
+    seed: 7 + index,
+    seconds: 0.1,
+    width: 512,
+    height: 512,
+  }))
 }
 
 // ---- kaggle 假 CLI -------------------------------------------------------
@@ -249,6 +276,70 @@ async function main() {
     assert.equal(library.deleted.length, 1)
     assert.equal(library.deleted[0].path, 'imagen-output/c/d.png')
     assert.deepEqual(library.favorites, ['imagen-output/a/b.png'], '删除非收藏路径不影响收藏')
+  })
+
+  // ================= output 原子写 =================
+
+  await check('saveJobOutput：图片与 meta 完整落盘，无临时文件残留', async () => {
+    const workspace = await makeWorkspace()
+    const ctx = libraryContext(workspace)
+    const job = outputJob('atomic-ok')
+    const out = await saveJobOutput(ctx, job, outputResults(2))
+
+    assert.equal(out.images.length, 2)
+    assert.match(out.dir, /^imagen-output\/\d{8}-\d{6}-atomic-ok$/)
+    const dirAbsolute = join(workspace, ...out.dir.split('/'))
+    const entries = await readdir(dirAbsolute)
+    assert.deepEqual([...entries].sort(), ['01.png', '02.png', 'meta.json'], `目录内容：${entries.join(', ')}`)
+
+    for (const image of out.images) {
+      const bytes = await readFile(join(dirAbsolute, image.file))
+      assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', `${image.file} 不是完整 PNG`)
+    }
+    const meta = JSON.parse(await readFile(join(workspace, ...out.metaFile.split('/')), 'utf8'))
+    assert.equal(meta.jobId, job.id)
+    assert.equal(meta.images.length, 2)
+    assert.equal(meta.params.prompt, '原子写测试')
+    assert.ok(!entries.some((name) => name.includes('.tmp-')), `不应残留临时文件：${entries.join(', ')}`)
+  })
+
+  await check('saveJobOutput：写入失败不破坏已有产物且清理临时文件', async () => {
+    const workspace = await makeWorkspace()
+    const ctx = libraryContext(workspace)
+    const job = outputJob('atomic-fail')
+    const results = outputResults(2)
+
+    // 产物目录名带秒级时间戳：在同一秒内先写一次，再把 01.png 换成同名目录，
+    // 下一次 rename 的目标就不是文件，必然失败。跨秒会换目录，重试直到落在同一秒内。
+    let prepared = null
+    for (let attempt = 0; attempt < 5 && !prepared; attempt += 1) {
+      const before = stamp()
+      let out
+      try {
+        out = await saveJobOutput(ctx, job, results)
+      } catch {
+        continue
+      }
+      if (stamp() !== before) continue
+      const dirAbsolute = join(workspace, ...out.dir.split('/'))
+      await rm(join(dirAbsolute, '01.png'))
+      await mkdir(join(dirAbsolute, '01.png'))
+      if (stamp() !== before) continue
+      let rejected = false
+      try {
+        await saveJobOutput(ctx, job, results)
+      } catch {
+        rejected = true
+      }
+      if (rejected) prepared = { dirAbsolute }
+    }
+    assert.ok(prepared, '未能在同一秒内构造写入失败场景')
+
+    const entries = await readdir(prepared.dirAbsolute)
+    assert.ok(!entries.some((name) => name.includes('.tmp-')), `失败后不应残留临时文件：${entries.join(', ')}`)
+    assert.equal((await stat(join(prepared.dirAbsolute, '01.png'))).isDirectory(), true, '冲突目标不应被替换或删除')
+    const meta = JSON.parse(await readFile(join(prepared.dirAbsolute, 'meta.json'), 'utf8'))
+    assert.equal(meta.jobId, job.id, '旧 meta.json 应保持完整（未被半截覆盖）')
   })
 
   // ================= kaggle probe =================

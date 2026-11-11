@@ -273,6 +273,81 @@ async function scenarioTimers() {
       session.clearTimers()
     }
   })
+
+  await check('轮询循环单飞自调度：上一拍未结束时不重叠执行', async () => {
+    const session = new SessionManager({ ctx: {}, defaultPreset: 'sdxl-turbo' })
+    let calls = 0
+    let inFlight = 0
+    let peak = 0
+    try {
+      session.every(async () => {
+        calls += 1
+        inFlight += 1
+        peak = Math.max(peak, inFlight)
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        inFlight -= 1
+      }, 5)
+      const deadline = Date.now() + 3000
+      while (calls < 2 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      }
+      session.clearTimers()
+      assert.ok(calls >= 2, `应至少跑两拍，实际 ${calls}`)
+      assert.equal(peak, 1, `轮询拍数不应重叠，实际峰值 ${peak}`)
+    } finally {
+      session.clearTimers()
+    }
+  })
+
+  await check('clearTimers 取消正在飞的一拍后不再续拍', async () => {
+    const session = new SessionManager({ ctx: {}, defaultPreset: 'sdxl-turbo' })
+    let calls = 0
+    try {
+      session.every(async () => {
+        calls += 1
+        // 拉长单拍，保证「清理发生在拍子还在飞时」；否则测不出「结束后不再排期」。
+        await new Promise((resolve) => setTimeout(resolve, 150))
+      }, 5)
+      const deadline = Date.now() + 3000
+      while (calls === 0 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 5))
+      }
+      assert.equal(calls, 1, '第一拍应正在飞')
+      session.clearTimers()
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      assert.equal(calls, 1, '清理后正在飞的一拍结束也不应重新排期')
+      assert.equal(session.timers.size, 0)
+    } finally {
+      session.clearTimers()
+    }
+  })
+
+  await check('pollHealth 单飞：并发调用复用同一请求', async () => {
+    let hits = 0
+    const server = createServer((_req, res) => {
+      hits += 1
+      const body = JSON.stringify({ status: 'ok', phase: 'ready', model_id: 'test/model' })
+      res.writeHead(200, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) })
+      res.end(body)
+    })
+    const port = await listen(server)
+    const session = new SessionManager({
+      ctx: {},
+      defaultPreset: 'sdxl-turbo',
+      options: { devEndpoint: `http://127.0.0.1:${port}` },
+    })
+    try {
+      await session.start('sdxl-turbo')
+      const first = session.pollHealth()
+      const second = session.pollHealth()
+      assert.equal(first, second, '上一拍还在飞时应复用同一个 Promise')
+      await Promise.all([first, second])
+      assert.equal(hits, 1, `同一拍不应重复发请求，实际 ${hits} 次`)
+    } finally {
+      session.dispose()
+      await closeServer(server)
+    }
+  })
 }
 
 async function scenarioRendezvous() {
