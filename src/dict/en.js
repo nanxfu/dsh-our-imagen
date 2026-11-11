@@ -90,8 +90,8 @@ export const en = {
   'error.code.unauthorized': 'Remote access was not authorized',
 
   // ── Workbench shell ───────────────────────────────────────────
-  'studio.nav.label': 'Free imagen',
-  'studio.brand': 'Free imagen',
+  'studio.nav.label': 'Imagen Studio',
+  'studio.brand': 'Imagen Studio',
   'studio.brandSub': 'Studio',
   'studio.refresh': 'Refresh history',
   'studio.tabs': 'Views',
@@ -197,7 +197,8 @@ export const en = {
   'studio.logs.copy': 'Copy diagnostics',
   'studio.logs.copied': 'Diagnostics copied',
   'studio.logs.close': 'Close logs',
-  'studio.logs.diag.title': 'Free imagen diagnostics',
+  'studio.logs.diag.title': 'Imagen Studio diagnostics',
+  'studio.logs.hostNote': 'No remote logs yet; showing the local host log (redacted) below.',
 
   // ── Gallery ───────────────────────────────────────────────────
   'studio.gallery.title': 'Gallery',

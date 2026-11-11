@@ -779,6 +779,47 @@ await check('渲染：日志抽屉（就绪 / 空态 / 不可用）', async () =
     required: { 'ofs-logs-note': 1, 'ofs-logs-lines': 1 },
     forbidden: [],
   })
+
+  // 只有 Host 本地日志（无远端会话）：仍渲染日志区并注明来源，复制诊断带 host logs 段落。
+  client = await loadClient({ now: NOW, responses, testBuild: true })
+  const hostCopied = []
+  const hostLogs = [
+    '[2026-11-11T23:10:00.123Z] [info] [jobs] enqueue jobId=j_1',
+    '[2026-11-11T23:10:03.456Z] [warn] [session] transition absent->starting',
+  ]
+  tree = await client.mountRaw(client.components.LogsDrawer, {
+    t,
+    ui: { copyText: (copy, key) => hostCopied.push({ text: copy, key }) },
+    compute: { session: null, probe: null },
+    logs: {
+      status: 'unavailable',
+      lines: [],
+      hostLines: hostLogs,
+      reason: { code: 'session_absent', message: '云端会话未启动' },
+    },
+    onClose: () => {},
+  })
+  text = collectText(tree).join(' | ')
+  assert.ok(text.includes('Host 本地运行日志'), '[logs] 只有 Host 日志时应注明来源')
+  assert.ok(text.includes('[info] [jobs] enqueue jobId=j_1'), '[logs] 应展示 Host 本地日志内容')
+  assert.ok(text.includes('云端会话未启动'), '[logs] 无远端会话时应保留原因提示')
+  assertStructure('logs-host-only', tree, {
+    required: { 'ofs-logs-note': 2, 'ofs-logs-lines': 1 },
+    forbidden: [],
+  })
+  const hostCopyButton = findNodes(
+    tree,
+    (node) => node.type === 'button' && node.props && node.props.className === 'ofs-chip ofs-logs-copy',
+  )[0]
+  assert.ok(hostCopyButton, '[logs] 缺少复制按钮元素')
+  hostCopyButton.props.onClick()
+  assert.equal(hostCopied.length, 1, '[logs] 复制应交给 ui.copyText')
+  assert.ok(hostCopied[0].text.includes('host logs (last 2/2):'), '[logs] 诊断文本应带 Host 日志段落')
+  assert.ok(
+    hostCopied[0].text.includes('[warn] [session] transition absent->starting'),
+    '[logs] 诊断文本应带 Host 日志内容',
+  )
+  client.unmount()
 })
 
 await check('渲染：算力弹层配额回退、隧道通道与日志入口', async () => {

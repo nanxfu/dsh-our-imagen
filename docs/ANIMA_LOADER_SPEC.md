@@ -99,7 +99,7 @@ Anima 运行时只有**一份源码** `remote/anima_runtime.py`。Kaggle 只接�
 
 ## 5. 实测记录（Kaggle Tesla T4 ×1）
 
-**环境**：Kaggle 账号 `mogudd`，加速器 `NvidiaTeslaT4`（2×Tesla T4，本轮只用 1 张，单卡容量 14.56 GiB），Python 3.13.16 / torch 2.11.0+cu130 / CUDA 13.0，diffusers·transformers 由 payload 现场安装最新兼容版。工具 `node tools/verify-model.mjs --config .tmp/models/anima-light-lavender.json --write --timeout 45`，提示词与采样次数由工具固定（3 次采样，丢弃首张取中位）。
+**环境**：Kaggle 账号 `<kaggle-username>`，加速器 `NvidiaTeslaT4`（2×Tesla T4，本轮只用 1 张，单卡容量 14.56 GiB），Python 3.13.16 / torch 2.11.0+cu130 / CUDA 13.0，diffusers·transformers 由 payload 现场安装最新兼容版。工具 `node tools/verify-model.mjs --config .tmp/models/anima-light-lavender.json --write --timeout 45`，提示词与采样次数由工具固定（3 次采样，丢弃首张取中位）。
 
 **最终配置**：`size=1024`、`steps=25`、`cfg=4`、`dtype=auto`（T4 → fp16），`status=ok`。
 

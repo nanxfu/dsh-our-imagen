@@ -137,8 +137,8 @@ var zh = {
   "error.code.unknown": "未识别的错误",
   "error.code.unauthorized": "远端访问未授权",
   // ── 工作台骨架 ───────────────────────────────────────────────
-  "studio.nav.label": "免费生图",
-  "studio.brand": "免费生图",
+  "studio.nav.label": "生图工作台",
+  "studio.brand": "生图工作台",
   "studio.brandSub": "Studio",
   "studio.refresh": "刷新历史",
   "studio.tabs": "视图切换",
@@ -237,7 +237,8 @@ var zh = {
   "studio.logs.copy": "复制诊断信息",
   "studio.logs.copied": "诊断信息已复制",
   "studio.logs.close": "关闭日志",
-  "studio.logs.diag.title": "免费生图诊断信息",
+  "studio.logs.diag.title": "生图工作台诊断信息",
+  "studio.logs.hostNote": "云端暂无远端日志，以下为 Host 本地运行日志（已脱敏），可据此排查启动与连接问题。",
   // ── 作品画廊 ─────────────────────────────────────────────────
   "studio.gallery.title": "作品画廊",
   "studio.gallery.empty": "暂无历史作品，前往创作页生成第一张图。",
@@ -424,8 +425,8 @@ var en = {
   "error.code.unknown": "Unrecognized error",
   "error.code.unauthorized": "Remote access was not authorized",
   // ── Workbench shell ───────────────────────────────────────────
-  "studio.nav.label": "Free imagen",
-  "studio.brand": "Free imagen",
+  "studio.nav.label": "Imagen Studio",
+  "studio.brand": "Imagen Studio",
   "studio.brandSub": "Studio",
   "studio.refresh": "Refresh history",
   "studio.tabs": "Views",
@@ -524,7 +525,8 @@ var en = {
   "studio.logs.copy": "Copy diagnostics",
   "studio.logs.copied": "Diagnostics copied",
   "studio.logs.close": "Close logs",
-  "studio.logs.diag.title": "Free imagen diagnostics",
+  "studio.logs.diag.title": "Imagen Studio diagnostics",
+  "studio.logs.hostNote": "No remote logs yet; showing the local host log (redacted) below.",
   // ── Gallery ───────────────────────────────────────────────────
   "studio.gallery.title": "Gallery",
   "studio.gallery.empty": "No images yet. Generate your first one on the Generate tab.",
@@ -838,7 +840,7 @@ function activeJobOf(state) {
 }
 
 // shared/contract.js
-var VERSION = "0.6.0";
+var VERSION = "0.7.0";
 var ROUTES = {
   state: { method: "GET", path: "/imagen-api/state" },
   probe: { method: "POST", path: "/imagen-api/probe" },
@@ -2162,7 +2164,9 @@ function probeFailureDetail(probe) {
 
 // src/logic/logs.js
 var LOG_LINE_LIMIT = 400;
+var HOST_LOG_LINE_LIMIT = 120;
 var DIAG_LOG_TAIL = 60;
+var DIAG_HOST_LOG_TAIL = 40;
 var SENSITIVE_KEY = /token|secret|password|authorization|cookie/i;
 function isLogLine(value) {
   return typeof value === "string";
@@ -2183,13 +2187,20 @@ function reasonOf(code, message) {
 }
 function readLogsPayload(result) {
   if (!result || result.ok !== true) {
-    return { ok: false, lines: [], next: null, reason: reasonOf(result && result.code, result && result.message) };
+    return {
+      ok: false,
+      lines: [],
+      hostLines: [],
+      next: null,
+      reason: reasonOf(result && result.code, result && result.message)
+    };
   }
   const data = result.data && typeof result.data === "object" ? result.data : {};
   const lines = Array.isArray(data.lines) ? data.lines.filter(isLogLine) : [];
+  const hostLines = Array.isArray(data.hostLines) ? data.hostLines.filter(isLogLine).slice(-HOST_LOG_LINE_LIMIT) : [];
   const next = Number.isFinite(data.next) && data.next >= 0 ? Math.floor(data.next) : null;
-  if (data.ok === true) return { ok: true, lines, next, reason: null };
-  return { ok: false, lines, next, reason: reasonOf(data.code, data.message) };
+  if (data.ok === true) return { ok: true, lines, hostLines, next, reason: null };
+  return { ok: false, lines, hostLines, next, reason: reasonOf(data.code, data.message) };
 }
 function formatClockTime(value) {
   const time = value instanceof Date ? value.getTime() : typeof value === "number" ? value : Date.parse(String(value ?? ""));
@@ -2275,6 +2286,8 @@ function buildDiagnostics(t, input = {}) {
   const lastGood = source.probeLastGood && typeof source.probeLastGood === "object" ? source.probeLastGood : null;
   const lines = Array.isArray(source.lines) ? source.lines.filter(isLogLine) : [];
   const tail = lines.slice(Math.max(0, lines.length - DIAG_LOG_TAIL));
+  const hostLogs = Array.isArray(source.hostLogs) ? source.hostLogs.filter(isLogLine) : [];
+  const hostTail = hostLogs.slice(Math.max(0, hostLogs.length - DIAG_HOST_LOG_TAIL));
   const now = Number.isFinite(source.now) ? source.now : Date.now();
   const rows = [
     `${t("studio.logs.diag.title")} · ${new Date(now).toISOString()}`,
@@ -2287,26 +2300,37 @@ function buildDiagnostics(t, input = {}) {
     ...lastJobBlock(source.lastJob),
     "",
     `logs (last ${tail.length}/${lines.length}):`,
-    ...tail
+    ...tail,
+    "",
+    `host logs (last ${hostTail.length}/${hostLogs.length}):`,
+    ...hostTail
   ];
   return rows.join("\n");
 }
 
 // src/studio/hooks/useStudioLogs.js
 var import_react6 = __toESM(require("react"), 1);
+function sameLines(previous, next) {
+  if (previous.length !== next.length) return false;
+  return previous.every((line, index) => line === next[index]);
+}
 function useStudioLogs(open) {
   const [status, setStatus] = import_react6.default.useState("idle");
   const [lines, setLines] = import_react6.default.useState([]);
+  const [hostLines, setHostLines] = import_react6.default.useState([]);
   const [reason, setReason] = import_react6.default.useState(null);
   const linesRef = import_react6.default.useRef([]);
+  const hostLinesRef = import_react6.default.useRef([]);
   const sinceRef = import_react6.default.useRef(0);
   import_react6.default.useEffect(() => {
     if (!open) return void 0;
     let alive = true;
     let timer = null;
     linesRef.current = [];
+    hostLinesRef.current = [];
     sinceRef.current = 0;
     setLines([]);
+    setHostLines([]);
     setReason(null);
     setStatus("loading");
     const tick = async () => {
@@ -2319,6 +2343,10 @@ function useStudioLogs(open) {
       if (merged !== linesRef.current) {
         linesRef.current = merged;
         setLines(merged);
+      }
+      if (!sameLines(hostLinesRef.current, payload.hostLines)) {
+        hostLinesRef.current = payload.hostLines;
+        setHostLines(payload.hostLines);
       }
       if (payload.ok) {
         setStatus(merged.length === 0 ? "empty" : "ready");
@@ -2335,7 +2363,7 @@ function useStudioLogs(open) {
       if (timer !== null) clearTimeout(timer);
     };
   }, [open]);
-  return { status, lines, reason };
+  return { status, lines, hostLines, reason };
 }
 function useHostSnapshot(enabled) {
   const [snapshot, setSnapshot] = import_react6.default.useState(null);
@@ -2362,6 +2390,8 @@ function LogsDrawer(props) {
   const closeRef = import_react7.default.useRef(null);
   const bodyRef = import_react7.default.useRef(null);
   const snapshot = useHostSnapshot(true);
+  const hostLines = Array.isArray(logs.hostLines) ? logs.hostLines : [];
+  const showHost = logs.lines.length === 0 && hostLines.length > 0;
   import_react7.default.useEffect(() => {
     if (closeRef.current && typeof closeRef.current.focus === "function") closeRef.current.focus();
     function onKey(event) {
@@ -2394,7 +2424,7 @@ function LogsDrawer(props) {
     const node = bodyRef.current;
     if (!node) return;
     node.scrollTop = node.scrollHeight;
-  }, [logs.lines.length]);
+  }, [logs.lines.length, hostLines.length]);
   function copyDiagnostics() {
     const context = snapshot || {};
     const session = context.session || compute && compute.session || null;
@@ -2408,6 +2438,7 @@ function LogsDrawer(props) {
       queue: context.queue,
       lastJob: context.lastJob,
       lines: logs.lines,
+      hostLogs: hostLines,
       now: Date.now()
     });
     ui.copyText(text, "studio.logs.copied");
@@ -2446,10 +2477,12 @@ function LogsDrawer(props) {
           )
         ] }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-logs-body", ref: bodyRef, role: "log", children: [
-          loading && logs.lines.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "ofs-logs-note", children: t("studio.logs.loading") }) : null,
-          empty ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "ofs-logs-note", children: t("studio.logs.empty") }) : null,
+          loading && logs.lines.length === 0 && !showHost ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "ofs-logs-note", children: t("studio.logs.loading") }) : null,
+          empty && !showHost ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "ofs-logs-note", children: t("studio.logs.empty") }) : null,
           unavailable ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "ofs-logs-note is-warn", children: errorText(t, logs.reason) || t("error.code.logs_unavailable") }) : null,
-          logs.lines.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("pre", { className: "ofs-logs-lines", children: logs.lines.join("\n") }) : null
+          logs.lines.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("pre", { className: "ofs-logs-lines", children: logs.lines.join("\n") }) : null,
+          showHost ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "ofs-logs-note", children: t("studio.logs.hostNote") }) : null,
+          showHost ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("pre", { className: "ofs-logs-lines", children: hostLines.join("\n") }) : null
         ] })
       ]
     }

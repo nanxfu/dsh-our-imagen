@@ -8,7 +8,7 @@
 [![Status: Preview](https://img.shields.io/badge/Status-Preview-orange?style=flat-square)](#)
 [![DeepSeek Harness](https://img.shields.io/badge/DSH-Plugin-0066FF?style=flat-square)](https://github.com/deepseek-ai/DeepSeek-Harness)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=flat-square)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/yourusername/dsh-our-imagen?style=flat-square)](https://github.com/yourusername/dsh-our-imagen)
+[![GitHub Stars](https://img.shields.io/github/stars/nanxfu/dsh-our-imagen?style=flat-square)](https://github.com/nanxfu/dsh-our-imagen)
 
 > 🚧 **当前处于 Preview 早期预览阶段**：部分复杂网络环境下的保活机制正在持续打磨。更稳定的插件版本、更强大的开源生图模型（如更高画质与长文本驱动的新架构）正在紧密接入中，欢迎体验与反馈 issue！
 
@@ -46,9 +46,8 @@
 </td>
 <td width="52%">
 
-<!-- 建议将真实截图命名为 studio.png 放置于 docs/assets/ -->
 <div align="center">
-  <img src="docs/assets/studio.png" alt="生图工作台 独立界面" width="100%" onerror="this.src='https://via.placeholder.com/800x480/1a1a1a/888888?text=dsh-our-imagen+Studio+Interface'" />
+  <img src="docs/assets/studio-light.png" alt="生图工作台 独立界面" width="100%" />
   <p><sub>独立整页工作台：参数面板 + 实时画布 + 最近胶卷</sub></p>
 </div>
 
@@ -66,9 +65,8 @@
 </td>
 <td width="52%">
 
-<!-- 建议将真实截图命名为 chat-tool.png 放置于 docs/assets/ -->
 <div align="center">
-  <img src="docs/assets/chat-tool.png" alt="对话卡片与生图预览" width="100%" onerror="this.src='https://via.placeholder.com/800x480/1a1a1a/888888?text=DSH+Chat+Agent+Integration'" />
+  <img src="docs/assets/chat-tool.png" alt="对话卡片与生图预览" width="100%" />
   <p><sub>对话卡片：先给确认卡，点确定即出图，成果进本地工作区</sub></p>
 </div>
 
@@ -98,6 +96,31 @@
           │  单次 Bearer Token 加密隧道
           └─────────────────────────────▶ (安全返回本地)
 ```
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🖼 界面速览
+
+<table>
+<tr>
+<td width="50%">
+
+<div align="center">
+  <img src="docs/assets/model-picker-dark.png" alt="生图工作台 深色主题模型选择卡" width="100%" />
+  <p><sub>深色主题的模型选择卡：九款内置模型逐一对比，标注实测出图耗时</sub></p>
+</div>
+
+</td>
+<td width="50%">
+
+<div align="center">
+  <img src="docs/assets/gallery.png" alt="生图工作台 作品画廊" width="100%" />
+  <p><sub>作品画廊：按日期归档，支持搜索、收藏与批量选择</sub></p>
+</div>
 
 </td>
 </tr>

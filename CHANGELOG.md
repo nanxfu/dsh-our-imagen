@@ -1,5 +1,24 @@
 # 变更记录
 
+## 0.7.0 — 2026-11-11
+
+### 改进
+
+- **Host 本地滚动日志与诊断闭环**：运行时的排障信息不再只留在内存里，崩溃、隧道断开或代理异常后仍有本地现场。
+  - `lib/log.js` 新增本地文件日志：写入 `<workspace>/.imagen/logs/host.log`，默认记录 info/warn/error（`OUR_FREE_IMAGEN_LOG` 仍只控制控制台噪音）；单文件 2 MiB 轮转、保留 1 个归档（总量约 4 MiB 封顶）；写入走串行内存队列 + 异步 append，任何 IO 错误静默降级，不阻塞请求或状态机。文件出口统一脱敏 Bearer Token、`token`/`secret`/`password`/`authorization`/`api key` 键值、`hf_`/`KGAT_`/`ghp_`/`sk-` 前缀与 URL 敏感 query 参数，并把结构化对象里的 `prompt`/`negativePrompt` 替换为 `promptLen`/`negativePromptLen`。
+  - 关键链路补齐结构化打点：出图队列（enqueue / 会话等待 / 远端提交与轮询 / 完成与失败 / 关机取消）、会话状态机（`transition` 统一收口全部状态跃迁，restore 的 `probe_health_ok` / `ntfy_rejoin` / `kernel_ended_cleanup` / `invalid_record` / `no_record` 分支，心跳丢失与隧道重连的 warn）、网络降级（fetch→curl 的主机名、错误类型、耗时、状态码）与 kaggle CLI（子命令类别、耗时、退出码、failure 类型）。会话进入 error 时尽力把 Kernel 日志尾（约 30 行 / 4000 字符）写入 Host 日志，容器销毁后仍保留失败现场。
+  - `GET /imagen-api/logs` 在原有 `{ ok, since, next, lines }` 上新增 `hostLines`：最近 120 行已脱敏 Host 日志，成功、`session_absent`、`logs_unavailable` 三个分支都会带，老字段语义与取值不变。工作台日志抽屉在远端日志为空时直接展示 Host 日志；「复制诊断信息」新增 `host logs` 段落，没有活跃云端会话时也能一键导出。
+- **中文产品名定为「生图工作台」**：侧边栏标题、品牌名、诊断信息标题与 locale 标题统一为「生图工作台」（英文侧为 “Imagen Studio”）。
+- **README 视觉截图**：`docs/assets/` 新增工作台浅色主界面、深色模型选择卡、画廊与创作助手截图，README / README.en 的图片引用改为真实文件。
+
+### 工程
+
+- **仓库卫生与本地开发文档保留**：新增 `.gitattributes` 统一 LF 换行，避免 Windows 下整篇换行符假 diff；`.impeccable/`、`bench/`、`docs/archive/` 与 4 份本地规格草稿改为「`.gitignore` + `git rm --cached`」仅从 Git 索引移除，磁盘文件零删除；`docs/ANIMA_LOADER_SPEC.md` 中的真实 Kaggle 账号脱敏为 `<kaggle-username>`。
+- **公开发布元信息**：`package.json` 去掉 `private`，补齐 author / repository / homepage / bugs / engines / keywords，`exports` 增加 `./package.json` 与 `./cordis.patch.yml`；`npm pack --dry-run` 产物只含运行必需文件，不含 `docs/`、`test/`、`tools/`、`bench/`。
+- **CI / Release 配套**：新增 `.github/workflows/ci.yml`（ubuntu + windows、Node 20 + Python 3.11，跑契约/模型/构建/测试/npm pack 校验）与 `release.yml`（`v*` tag 触发：校验 tag 与版本一致、跑测试、打包 zip 并创建 GitHub Release，配置 `NPM_TOKEN` 时可选发布 npm）；新增 Bug 报告模板与 `CONTRIBUTING.md`。
+- **版本升到 0.7.0**：契约 / `package.json` / daemon / mock / tunnel-probe / `remote/contract.json` / `client.js` 同步；`docs/SPEC.md` 的版本标识从 0.4.1 补正为 0.7.0。
+- **测试**：新增 `test/host-log.mjs`（11 项：落盘、轮转、脱敏、尾读、无工作区退化、IO 失败静默）与 `test/host-log-events.mjs`（9 项：队列事件、状态跃迁、失败现场、prompt 正文零泄露）；`host-e2e` 增加 `hostLines` 三分支与从临时工作区直读 Host 日志的断言；客户端逻辑/渲染补 hostLines 与离线诊断用例。
+
 ## 0.6.0 — 2026-11-11
 
 ### 改进

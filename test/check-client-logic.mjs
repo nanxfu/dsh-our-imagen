@@ -15,6 +15,8 @@ import { DICT } from '../src/dict/index.js'
 import { fallbackTranslate, localized } from '../src/i18n.js'
 import * as logic from '../src/logic/index.js'
 import {
+  DIAG_HOST_LOG_TAIL,
+  HOST_LOG_LINE_LIMIT,
   LOG_LINE_LIMIT,
   appendLogLines,
   buildDiagnostics,
@@ -744,6 +746,36 @@ await check('日志增量合并与端点归一', () => {
 
   assert.equal(readLogsPayload({ ok: true, data: { ok: false } }).reason.code, 'logs_unavailable', '缺错误码时回退 logs_unavailable')
   assert.equal(readLogsPayload({ ok: true, data: { ok: true, next: 'x', lines: [] } }).next, null, '非数字游标按 null 处理')
+
+  // hostLines：Host 本地日志尾部与远端 lines 分开返回，只保留字符串、最多 120 行。
+  const withHost = readLogsPayload({
+    ok: true,
+    data: { ok: true, next: 3, lines: ['remote-1'], hostLines: ['host-1', 2, null, 'host-2'] },
+  })
+  assert.equal(withHost.ok, true)
+  assert.deepEqual(withHost.lines, ['remote-1'], '远端 lines 不受 hostLines 影响')
+  assert.deepEqual(withHost.hostLines, ['host-1', 'host-2'], 'hostLines 只保留字符串行')
+  assert.equal(withHost.next, 3)
+
+  // 不可用分支同样带 hostLines（会话未启动时抽屉仍要能展示 Host 日志）。
+  const absentHost = readLogsPayload({
+    ok: true,
+    data: { ok: false, code: 'session_absent', message: '云端会话未启动', lines: [], hostLines: ['host-a'] },
+  })
+  assert.equal(absentHost.ok, false)
+  assert.deepEqual(absentHost.hostLines, ['host-a'])
+  assert.equal(absentHost.reason.code, 'session_absent')
+
+  // 老路由没有 hostLines / HTTP 层失败时按空数组处理，保持向后兼容。
+  assert.deepEqual(readLogsPayload({ ok: true, data: { ok: true, lines: [] } }).hostLines, [])
+  assert.deepEqual(readLogsPayload({ ok: false, code: 'network', message: 'fetch failed' }).hostLines, [])
+
+  const manyHost = readLogsPayload({
+    ok: true,
+    data: { ok: true, hostLines: Array.from({ length: HOST_LOG_LINE_LIMIT + 30 }, (_, index) => `host-${index}`) },
+  })
+  assert.equal(manyHost.hostLines.length, HOST_LOG_LINE_LIMIT, 'hostLines 最多保留 120 行')
+  assert.equal(manyHost.hostLines[HOST_LOG_LINE_LIMIT - 1], `host-${HOST_LOG_LINE_LIMIT + 29}`, '保留最新的尾部')
 })
 
 await check('本地时间与运行时长', () => {
@@ -776,6 +808,7 @@ await check('诊断信息拼装（不含 token）', () => {
     error: { code: 'remote_error', message: 'boom' },
   }
   const lines = Array.from({ length: 80 }, (_, index) => `log-${index}`)
+  const hostLogs = Array.from({ length: DIAG_HOST_LOG_TAIL + 20 }, (_, index) => `host-${index}`)
   const text = buildDiagnostics(t, {
     version: '0.4.1',
     session,
@@ -785,6 +818,7 @@ await check('诊断信息拼装（不含 token）', () => {
     queue: { running: 'job-1', pending: 2 },
     lastJob: { id: 'job-0', status: 'done', seconds: 6.2 },
     lines,
+    hostLogs,
     now: Date.parse('2026-11-11T00:05:00.000Z'),
   })
 
@@ -810,6 +844,21 @@ await check('诊断信息拼装（不含 token）', () => {
   assert.equal(tail.length, 60, '只附带最近 60 行日志')
   assert.ok(tail.includes('log-79'))
   assert.ok(!tail.includes('log-19'), '更早的日志被截断')
+
+  // Host 本地日志单独成段，跟在远端日志之后，不混排。
+  assert.ok(text.includes(`host logs (last ${DIAG_HOST_LOG_TAIL}/${hostLogs.length}):`), '诊断文本应包含 host logs 段落')
+  const hostTail = text.split('\n').filter((line) => /^host-\d+$/.test(line))
+  assert.equal(hostTail.length, DIAG_HOST_LOG_TAIL, 'Host 日志只附带最近一段尾部')
+  assert.ok(hostTail.includes(`host-${hostLogs.length - 1}`), 'Host 日志应包含最新行')
+  assert.ok(!hostTail.includes('host-0'), '更早的 Host 日志被截断')
+  assert.ok(text.indexOf('logs (last') < text.indexOf('host logs (last'), 'host logs 段落排在远端日志之后')
+
+  // 离线 / 无远端会话：没有 lines 也能复制诊断，Host 日志段落仍在。
+  const offline = buildDiagnostics(t, { version: '0.4.1', hostLogs: ['[info] [session] transition absent->starting'], now: Date.parse('2026-11-11T00:05:00.000Z') })
+  assert.ok(offline.includes('version: 0.4.1'))
+  assert.ok(offline.includes('host logs (last 1/1):'))
+  assert.ok(offline.includes('[info] [session] transition absent->starting'))
+  assert.ok(offline.includes('logs (last 0/0):'), '没有远端日志时也给空段标题')
 
   const sanitized = sanitizeSession(session)
   assert.equal(Object.prototype.hasOwnProperty.call(sanitized, 'token'), false)

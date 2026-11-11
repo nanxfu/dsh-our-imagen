@@ -10,8 +10,12 @@ import { probeStatusOf } from './probe.js'
 
 /** 客户端保留的最大日志行数（与远端 daemon 的日志环一致）。 */
 export const LOG_LINE_LIMIT = 400
-/** 诊断信息里附带的最近日志行数。 */
+/** Host 本地日志路由固定返回的尾部行数（与 lib/routes/logs.js 对齐）。 */
+export const HOST_LOG_LINE_LIMIT = 120
+/** 诊断信息里附带的最近远端日志行数。 */
 export const DIAG_LOG_TAIL = 60
+/** 诊断信息里附带的最近 Host 本地日志行数（比远端更短，控制粘贴长度）。 */
+export const DIAG_HOST_LOG_TAIL = 40
 
 /** 会话快照里不应出现在诊断文本中的字段（token 只留在 Host 内存里）。 */
 const SENSITIVE_KEY = /token|secret|password|authorization|cookie/i
@@ -41,16 +45,28 @@ function reasonOf(code, message) {
 /**
  * 归一端点响应：HTTP 层失败 / 业务不可用（ok:false）/ 成功三种情况。
  * Host 的日志路由始终回 HTTP 200，因此不能只看 request() 的 ok。
+ *
+ * `hostLines` 是 Host 本地滚动日志的尾部（已脱敏，固定最多 120 行），与远端
+ * `lines` 分开返回、不混排；老路由没有该字段时按空数组处理，保持向后兼容。
  */
 export function readLogsPayload(result) {
   if (!result || result.ok !== true) {
-    return { ok: false, lines: [], next: null, reason: reasonOf(result && result.code, result && result.message) }
+    return {
+      ok: false,
+      lines: [],
+      hostLines: [],
+      next: null,
+      reason: reasonOf(result && result.code, result && result.message),
+    }
   }
   const data = result.data && typeof result.data === 'object' ? result.data : {}
   const lines = Array.isArray(data.lines) ? data.lines.filter(isLogLine) : []
+  const hostLines = Array.isArray(data.hostLines)
+    ? data.hostLines.filter(isLogLine).slice(-HOST_LOG_LINE_LIMIT)
+    : []
   const next = Number.isFinite(data.next) && data.next >= 0 ? Math.floor(data.next) : null
-  if (data.ok === true) return { ok: true, lines, next, reason: null }
-  return { ok: false, lines, next, reason: reasonOf(data.code, data.message) }
+  if (data.ok === true) return { ok: true, lines, hostLines, next, reason: null }
+  return { ok: false, lines, hostLines, next, reason: reasonOf(data.code, data.message) }
 }
 
 /** 时间值（ISO 字符串 / 毫秒数 / Date）→ 本地 HH:mm；无法解析时返回空串。 */
@@ -159,7 +175,7 @@ function lastJobBlock(job) {
  * @param {(key: string) => string} t 翻译函数，只用于首行标题
  * @param {{ version?: string, session?: object, probe?: object, probeLastGood?: object,
  *           probeLastGoodAt?: string, queue?: object, lastJob?: object, lines?: string[],
- *           now?: number }} input
+ *           hostLogs?: string[], now?: number }} input
  */
 export function buildDiagnostics(t, input = {}) {
   const source = input || {}
@@ -168,6 +184,8 @@ export function buildDiagnostics(t, input = {}) {
   const lastGood = source.probeLastGood && typeof source.probeLastGood === 'object' ? source.probeLastGood : null
   const lines = Array.isArray(source.lines) ? source.lines.filter(isLogLine) : []
   const tail = lines.slice(Math.max(0, lines.length - DIAG_LOG_TAIL))
+  const hostLogs = Array.isArray(source.hostLogs) ? source.hostLogs.filter(isLogLine) : []
+  const hostTail = hostLogs.slice(Math.max(0, hostLogs.length - DIAG_HOST_LOG_TAIL))
   const now = Number.isFinite(source.now) ? source.now : Date.now()
 
   const rows = [
@@ -182,6 +200,9 @@ export function buildDiagnostics(t, input = {}) {
     '',
     `logs (last ${tail.length}/${lines.length}):`,
     ...tail,
+    '',
+    `host logs (last ${hostTail.length}/${hostLogs.length}):`,
+    ...hostTail,
   ]
   return rows.join('\n')
 }

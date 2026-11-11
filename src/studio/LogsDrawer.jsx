@@ -4,7 +4,9 @@
  * - 由算力弹层的「查看运行日志」打开，Esc / 遮罩 / 关闭按钮都能关；
  * - 打开期间每 TIMEOUTS.clientLogsPollMs 增量轮询，关闭即停（数据域见 useStudioLogs）；
  * - 日志区等宽字体、自动滚到底，空态与不可用原因分开提示；
- * - 「复制诊断信息」把版本、会话快照（不含 token）、probe、队列与最近日志拼成纯文本。
+ * - 远程日志为空时展示 Host 本地滚动日志（已脱敏）并注明来源，会话未启动时也能排障；
+ * - 「复制诊断信息」把版本、会话快照（不含 token）、probe、队列、远端日志与 Host 日志
+ *   拼成纯文本，离线状态也能直接贴进 Issue。
  *
  * 接收 { t, ui, compute, logs, onClose } 领域对象。
  */
@@ -28,6 +30,10 @@ export function LogsDrawer(props) {
   const bodyRef = React.useRef(null)
   // 诊断信息需要 probeLastGood / queue / version：打开时向 /state 取一次最新快照。
   const snapshot = useHostSnapshot(true)
+  // 老调用方不传 hostLines 时当作空数组，行为与改造前一致。
+  const hostLines = Array.isArray(logs.hostLines) ? logs.hostLines : []
+  // 远端日志（含历史累计）为空时才用 Host 本地日志兜底，两者不混排。
+  const showHost = logs.lines.length === 0 && hostLines.length > 0
 
   // Esc 关闭 + Tab 在弹层内循环；打开时焦点落到关闭按钮。
   React.useEffect(() => {
@@ -68,7 +74,7 @@ export function LogsDrawer(props) {
     const node = bodyRef.current
     if (!node) return
     node.scrollTop = node.scrollHeight
-  }, [logs.lines.length])
+  }, [logs.lines.length, hostLines.length])
 
   function copyDiagnostics() {
     const context = snapshot || {}
@@ -83,6 +89,7 @@ export function LogsDrawer(props) {
       queue: context.queue,
       lastJob: context.lastJob,
       lines: logs.lines,
+      hostLogs: hostLines,
       now: Date.now(),
     })
     ui.copyText(text, 'studio.logs.copied')
@@ -122,12 +129,16 @@ export function LogsDrawer(props) {
         </header>
 
         <div className="ofs-logs-body" ref={bodyRef} role="log">
-          {loading && logs.lines.length === 0 ? <p className="ofs-logs-note">{t('studio.logs.loading')}</p> : null}
-          {empty ? <p className="ofs-logs-note">{t('studio.logs.empty')}</p> : null}
+          {loading && logs.lines.length === 0 && !showHost ? (
+            <p className="ofs-logs-note">{t('studio.logs.loading')}</p>
+          ) : null}
+          {empty && !showHost ? <p className="ofs-logs-note">{t('studio.logs.empty')}</p> : null}
           {unavailable ? (
             <p className="ofs-logs-note is-warn">{errorText(t, logs.reason) || t('error.code.logs_unavailable')}</p>
           ) : null}
           {logs.lines.length > 0 ? <pre className="ofs-logs-lines">{logs.lines.join('\n')}</pre> : null}
+          {showHost ? <p className="ofs-logs-note">{t('studio.logs.hostNote')}</p> : null}
+          {showHost ? <pre className="ofs-logs-lines">{hostLines.join('\n')}</pre> : null}
         </div>
       </div>
     </div>

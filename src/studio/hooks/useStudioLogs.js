@@ -13,17 +13,27 @@ import { TIMEOUTS } from '../../../shared/contract.js'
 import { fetchLogs, fetchState } from '../../api/resources.js'
 import { appendLogLines, readLogsPayload } from '../../logic/logs.js'
 
+/** 两段日志内容是否相同（hostLines 每次轮询都是新数组，相同内容不触发重渲染）。 */
+function sameLines(previous, next) {
+  if (previous.length !== next.length) return false
+  return previous.every((line, index) => line === next[index])
+}
+
 /**
  * @param {boolean} open 抽屉是否打开；关闭时清理定时器并停止请求
  * @returns {{ status: 'idle'|'loading'|'ready'|'empty'|'unavailable',
- *             lines: string[], reason: { code: string, message: string } | null }}
+ *             lines: string[], hostLines: string[],
+ *             reason: { code: string, message: string } | null }}
  */
 export function useStudioLogs(open) {
   const [status, setStatus] = React.useState('idle')
   const [lines, setLines] = React.useState([])
+  // Host 本地日志尾部：每次轮询整段替换（不按游标累加，也不与远端 lines 混排）。
+  const [hostLines, setHostLines] = React.useState([])
   const [reason, setReason] = React.useState(null)
   // 轮询回调不依赖渲染闭包：行缓冲与游标都放在 ref 里。
   const linesRef = React.useRef([])
+  const hostLinesRef = React.useRef([])
   const sinceRef = React.useRef(0)
 
   React.useEffect(() => {
@@ -32,8 +42,10 @@ export function useStudioLogs(open) {
     let timer = null
 
     linesRef.current = []
+    hostLinesRef.current = []
     sinceRef.current = 0
     setLines([])
+    setHostLines([])
     setReason(null)
     setStatus('loading')
 
@@ -47,6 +59,11 @@ export function useStudioLogs(open) {
       if (merged !== linesRef.current) {
         linesRef.current = merged
         setLines(merged)
+      }
+      // hostLines 是固定长度的尾部快照：每次都用最新响应整体替换，内容没变就不重渲染。
+      if (!sameLines(hostLinesRef.current, payload.hostLines)) {
+        hostLinesRef.current = payload.hostLines
+        setHostLines(payload.hostLines)
       }
       if (payload.ok) {
         setStatus(merged.length === 0 ? 'empty' : 'ready')
@@ -66,7 +83,7 @@ export function useStudioLogs(open) {
     }
   }, [open])
 
-  return { status, lines, reason }
+  return { status, lines, hostLines, reason }
 }
 
 /**

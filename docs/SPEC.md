@@ -4,7 +4,7 @@
 > 本文档只描述语义、请求/响应形状与使用约束，不重复维护数值。`node test/check-contract.mjs` 会校验
 > 宿主注册的路由、宿主错误码、客户端文案与本文档是否跟随契约。
 >
-> **版本**：0.4.1（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
+> **版本**：0.7.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
 
 ---
 
@@ -118,7 +118,7 @@
 | :--- | :--- | :--- |
 | GET | `/imagen-api/state` | 插件运行状态全貌（前端轮询数据源） |
 | POST | `/imagen-api/probe` | 主动触发本地 Kaggle 环境检测 |
-| GET | `/imagen-api/logs?since=` | 拉取远端 daemon 的增量运行日志 |
+| GET | `/imagen-api/logs?since=` | 拉取远端 daemon 的增量运行日志 + Host 本地日志尾部（`hostLines`） |
 | POST | `/imagen-api/session/start` | 启动远端 GPU 会话（幂等） |
 | POST | `/imagen-api/session/stop` | 关机 |
 | POST | `/imagen-api/generate` | 提交生图任务 |
@@ -160,7 +160,7 @@
 
 ```json
 {
-  "version": "0.4.1",
+  "version": "0.7.0",
   "defaultPreset": "sdxl-lightning",
   "presets": [
     {
@@ -286,17 +286,27 @@
 
 #### `GET /imagen-api/logs?since=<n>`
 
-把远端 daemon 的日志环增量透传给工作台日志抽屉（协议见 `remote/daemon.py` 的 `GET /logs`）。
+把远端 daemon 的日志环增量透传给工作台日志抽屉（协议见 `remote/daemon.py` 的 `GET /logs`），
+同时附带 Host 本地滚动日志的尾部，便于在会话未启动或隧道断开时排障。
 
 - `since`：上次拿到的游标 `next`，非负整数，默认 0；环形缓冲只保留最近 400 行。
+- `hostLines`：Host 本地日志文件 `<workspace>/.imagen/logs/host.log` 的最近 120 行（已脱敏，旧的在前），
+  与 `lines` **分开返回、不混排**；无文件或读取失败时为 `[]`。该字段在所有响应分支（成功 /
+  `session_absent` / `logs_unavailable`）都会出现，老客户端忽略即可。
 - **响应**（始终 HTTP 200，用 `ok` 表达可用性，避免客户端把「暂时拿不到日志」当成网络故障）：
 
 ```json
-{ "ok": true, "since": 0, "next": 128, "lines": ["[boot] 运行时就绪…", "[tunnel] 隧道就绪：https://…"] }
+{
+  "ok": true,
+  "since": 0,
+  "next": 128,
+  "lines": ["[boot] 运行时就绪…", "[tunnel] 隧道就绪：https://…"],
+  "hostLines": ["[2026-11-11T23:10:00.123Z] [info] [index] 插件已加载", "[2026-11-11T23:10:03.456Z] [warn] [session] transition absent->starting"]
+}
 ```
 
-- 会话未启动 / 没有远端连接：`{ "ok": false, "code": "session_absent", "message": "…", "since": 0, "next": 0, "lines": [] }`
-- 远端不可达或协议漂移：`{ "ok": false, "code": "logs_unavailable", "message": "…", "since": n, "next": n, "lines": [] }`
+- 会话未启动 / 没有远端连接：`{ "ok": false, "code": "session_absent", "message": "…", "since": 0, "next": 0, "lines": [], "hostLines": [...] }`
+- 远端不可达或协议漂移：`{ "ok": false, "code": "logs_unavailable", "message": "…", "since": n, "next": n, "lines": [], "hostLines": [...] }`
 
 ### 2.2 出图任务
 

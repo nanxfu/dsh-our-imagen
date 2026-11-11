@@ -90,8 +90,8 @@ export const zh = {
   'error.code.unauthorized': '远端访问未授权',
 
   // ── 工作台骨架 ───────────────────────────────────────────────
-  'studio.nav.label': '免费生图',
-  'studio.brand': '免费生图',
+  'studio.nav.label': '生图工作台',
+  'studio.brand': '生图工作台',
   'studio.brandSub': 'Studio',
   'studio.refresh': '刷新历史',
   'studio.tabs': '视图切换',
@@ -197,7 +197,8 @@ export const zh = {
   'studio.logs.copy': '复制诊断信息',
   'studio.logs.copied': '诊断信息已复制',
   'studio.logs.close': '关闭日志',
-  'studio.logs.diag.title': '免费生图诊断信息',
+  'studio.logs.diag.title': '生图工作台诊断信息',
+  'studio.logs.hostNote': '云端暂无远端日志，以下为 Host 本地运行日志（已脱敏），可据此排查启动与连接问题。',
 
   // ── 作品画廊 ─────────────────────────────────────────────────
   'studio.gallery.title': '作品画廊',

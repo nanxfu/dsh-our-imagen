@@ -83,7 +83,7 @@ AUTH_TOKEN = "test-token-0123456789"
 
 # 与 shared/contract.js 的 daemonContract() 同形：daemon 只消费 version 与 limits。
 CONTRACT = {
-    "version": "0.6.0",
+    "version": "0.7.0",
     "limits": {
         "width": {"min": 256, "max": 1536, "step": 8},
         "height": {"min": 256, "max": 1536, "step": 8},
@@ -226,7 +226,7 @@ class ImportSideEffectTest(unittest.TestCase):
         self.assertIsInstance(d.CONFIG, d.DaemonConfig)
         self.assertIsInstance(d.STATE, d.RuntimeState)
         self.assertIsInstance(d.BOOT, d.BootState)
-        self.assertEqual(d.VERSION, "0.6.0")
+        self.assertEqual(d.VERSION, "0.7.0")
         self.assertEqual(d.STATE.phase, "booting")
         self.assertIsNone(d.BOOT.tunnel_url)
         self.assertFalse(d.BOOT.published_ready)
@@ -356,7 +356,7 @@ class BuildConfigTest(DaemonUnitTest):
         with mock.patch.object(d, "EMBEDDED_CONFIG_B64", encoded):
             config = d.load_config()
         self.assertEqual(config.auth_token, "embedded-token")
-        self.assertEqual(config.contract["version"], "0.6.0")
+        self.assertEqual(config.contract["version"], "0.7.0")
 
     def test_load_config_without_payload_returns_defaults(self) -> None:
         with mock.patch.object(d, "EMBEDDED_CONFIG_B64", ""), mock.patch.dict(os.environ, {}, clear=True):
@@ -376,7 +376,7 @@ class BuildConfigTest(DaemonUnitTest):
 
 class ProtocolVersionTest(DaemonUnitTest):
     def test_falls_back_to_file_version(self) -> None:
-        self.assertEqual(d.protocol_version(), "0.6.0")
+        self.assertEqual(d.protocol_version(), "0.7.0")
 
     def test_prefers_injected_version(self) -> None:
         d.CONFIG.version = "0.3.1-injected"
@@ -714,7 +714,7 @@ class HealthPayloadTest(DaemonUnitTest):
         self.assertEqual(set(payload), self.REQUIRED_KEYS)
         self.assertEqual(payload["phase"], "booting")
         self.assertEqual(payload["status"], "ok")
-        self.assertEqual(payload["version"], "0.6.0")
+        self.assertEqual(payload["version"], "0.7.0")
         self.assertEqual(payload["idle_timeout_sec"], 1800)
         self.assertGreaterEqual(payload["idle_seconds"], 0)
         self.assertGreaterEqual(payload["uptime_seconds"], 0)

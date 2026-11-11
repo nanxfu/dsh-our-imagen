@@ -32,8 +32,15 @@ design-demos/
 # 分发打包产物（npm run package）
 dist/
 
-# impeccable 工作产物（截图、live 会话、决策稿）
-.impeccable/review/
-.impeccable/live/
-.impeccable/mocks/
-.impeccable/critique/
+# impeccable 工作产物（截图、live 会话、决策稿；仅本地保留）
+.impeccable/
+
+# 本地基准实验（含个人 Kaggle 账号元数据；仅本地保留）
+bench/
+
+# 本地开发文档与规格草稿（仅本地保留，磁盘文件不删）
+docs/archive/
+docs/CODE_REFACTOR_SPEC.md
+docs/MINIMAX_H3_IMAGE_SPEC.md
+docs/MODEL_EXPERIMENT_GUIDE.md
+docs/PRE_RELEASE_SPEC.md

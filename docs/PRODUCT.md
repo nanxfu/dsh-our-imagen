@@ -44,7 +44,7 @@ web
 
 ## Brand Commitments
 
-- 产品名「免费生图工作台 / Imagen Studio」；
+- 产品名「生图工作台 / Imagen Studio」；
 - 中文语气现代、专业、克制（见 `docs/UI_COPYWRITING.md`）；
 - 图标统一采用 1.6px 圆角描边线稿；
 - 中英双语必须严格同时成立且同构。

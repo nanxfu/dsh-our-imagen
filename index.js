@@ -11,7 +11,7 @@
 import { TIMEOUTS, VERSION } from './shared/contract.js'
 import { JobQueue } from './lib/jobs.js'
 import { probeKaggle } from './lib/kaggle.js'
-import { createLogger } from './lib/log.js'
+import { createLogger, installFileLog } from './lib/log.js'
 import { DEFAULT_PRESET, presetById, publicPresets } from './lib/presets.js'
 import { registerRoutes, toInt } from './lib/route-kit.js'
 import { createFileRoutes } from './lib/routes/files.js'
@@ -31,6 +31,8 @@ export const inject = ['webServer', 'subprocess', 'tools']
 const log = createLogger({ scope: 'index' })
 
 export function apply(ctx, config = {}) {
+  // 本地滚动日志：尽早安装，保证后续模块（含模块级 createLogger）的日志都能落盘。
+  const fileLog = installFileLog(ctx)
   const defaultPreset = presetById(config.defaultPreset ?? DEFAULT_PRESET).id
   const devEndpoint = config.devEndpoint ?? process.env.OUR_FREE_IMAGEN_ENDPOINT ?? null
   const devToken = config.devToken ?? process.env.OUR_FREE_IMAGEN_TOKEN ?? 'dev-token'
@@ -132,7 +134,7 @@ export function apply(ctx, config = {}) {
 
   registerRoutes(ctx, [
     ...createSessionRoutes({ session, probes, statePayload, defaultPreset, log }),
-    ...createLogRoutes({ session, log }),
+    ...createLogRoutes({ session, log, ctx }),
     ...createJobRoutes({ ctx, queue, log }),
     ...createFileRoutes({ ctx, log }),
     ...createLibraryRoutes({ ctx, log }),
@@ -150,6 +152,8 @@ export function apply(ctx, config = {}) {
     () => () => {
       session.dispose()
       queue.dispose()
+      // 卸载尽力 flush 后关闭文件日志；不阻塞插件卸载，异常在 dispose 内部吞掉。
+      void fileLog.dispose()
     },
     'imagen:dispose',
   )

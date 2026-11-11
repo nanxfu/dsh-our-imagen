@@ -8,7 +8,7 @@ No local GPU needed, boot once for continuous generations, 100% stored locally.
 [![Status: Preview](https://img.shields.io/badge/Status-Preview-orange?style=flat-square)](#)
 [![DeepSeek Harness](https://img.shields.io/badge/DSH-Plugin-0066FF?style=flat-square)](https://github.com/deepseek-ai/DeepSeek-Harness)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=flat-square)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/yourusername/dsh-our-imagen?style=flat-square)](https://github.com/yourusername/dsh-our-imagen)
+[![GitHub Stars](https://img.shields.io/github/stars/nanxfu/dsh-our-imagen?style=flat-square)](https://github.com/nanxfu/dsh-our-imagen)
 
 > 🚧 **Early Preview**: We are continuously refining connection reliability across diverse network setups. A more robust release and more capable text-to-image models (including higher fidelity and long-prompt driven architectures) are actively being integrated. Feedback and issues are warmly welcomed!
 
@@ -47,7 +47,7 @@ With this plugin installed:
 <td width="52%">
 
 <div align="center">
-  <img src="docs/assets/studio.png" alt="Imagen Studio View" width="100%" onerror="this.src='https://via.placeholder.com/800x480/1a1a1a/888888?text=dsh-our-imagen+Studio+Interface'" />
+  <img src="docs/assets/studio-light.png" alt="Imagen Studio View" width="100%" />
   <p><sub>Dedicated full-page studio: parameters, live canvas, and recent filmstrip</sub></p>
 </div>
 
@@ -66,7 +66,7 @@ With this plugin installed:
 <td width="52%">
 
 <div align="center">
-  <img src="docs/assets/chat-tool.png" alt="Chat Confirmation Card and Preview" width="100%" onerror="this.src='https://via.placeholder.com/800x480/1a1a1a/888888?text=DSH+Chat+Agent+Integration'" />
+  <img src="docs/assets/chat-tool.png" alt="Chat Confirmation Card and Preview" width="100%" />
   <p><sub>Chat integration: review card first, confirm to run, saved locally</sub></p>
 </div>
 
@@ -96,6 +96,31 @@ With this plugin installed:
           │  Single-use Bearer Token Tunnel
           └─────────────────────────────▶ (Secure Local Stream)
 ```
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🖼 More Screens
+
+<table>
+<tr>
+<td width="50%">
+
+<div align="center">
+  <img src="docs/assets/model-picker-dark.png" alt="Imagen Studio dark-theme model picker" width="100%" />
+  <p><sub>Dark-theme model picker: nine built-in models compared, with measured generation time</sub></p>
+</div>
+
+</td>
+<td width="50%">
+
+<div align="center">
+  <img src="docs/assets/gallery.png" alt="Imagen Studio gallery" width="100%" />
+  <p><sub>Gallery: grouped by date, with search, favorites, and batch selection</sub></p>
+</div>
 
 </td>
 </tr>

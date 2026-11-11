@@ -10,11 +10,12 @@
 
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { apply as applyPlugin } from '../index.js'
+import { createLogRoutes } from '../lib/routes/logs.js'
 import { VERSION } from '../shared/contract.js'
 
 // 1×1 透明 PNG，用于伪造远端返回
@@ -279,6 +280,19 @@ async function main() {
     assert.equal(body.presets[0].pipeline, undefined, '预设不应泄露 pipeline 细节')
   })
 
+  await check('日志路由无会话时仍返回 hostLines 与老字段', async () => {
+    const { status, body } = await json(host.origin, '/imagen-api/logs?since=0')
+    assert.equal(status, 200, '日志路由必须始终 HTTP 200')
+    assert.equal(body.ok, false)
+    assert.equal(body.code, 'session_absent')
+    assert.equal(body.since, 0)
+    assert.equal(body.next, 0)
+    assert.deepEqual(body.lines, [])
+    assert.ok(Array.isArray(body.hostLines), 'hostLines 必须是数组')
+    for (const line of body.hostLines) assert.equal(typeof line, 'string', 'hostLines 只能是字符串行')
+    assert.ok(body.hostLines.length <= 120, 'hostLines 最多 120 行')
+  })
+
   await check('会话启动（开发模式直连）', async () => {
     const { status, body } = await json(host.origin, '/imagen-api/session/start', {
       method: 'POST',
@@ -289,6 +303,18 @@ async function main() {
     assert.equal(body.ok, true)
     assert.equal(body.session.state, 'ready')
     assert.equal(body.session.endpointUrl, mock.endpoint)
+  })
+
+  await check('日志路由远端不可用时降级并保留 hostLines', async () => {
+    const { status, body } = await json(host.origin, '/imagen-api/logs?since=0')
+    assert.equal(status, 200)
+    assert.equal(body.ok, false)
+    assert.equal(body.code, 'logs_unavailable', 'mock daemon 没有 /logs，应走降级分支')
+    assert.equal(typeof body.since, 'number')
+    assert.equal(typeof body.next, 'number')
+    assert.deepEqual(body.lines, [])
+    assert.ok(Array.isArray(body.hostLines), 'hostLines 在异常分支也要出现')
+    for (const line of body.hostLines) assert.equal(typeof line, 'string')
   })
 
   let firstJob = null
@@ -665,6 +691,32 @@ async function main() {
     assert.equal(result.body.dryRun, true)
     assert.equal(typeof result.body.dir, 'string')
     assert.ok(result.body.dir.endsWith('imagen-output'), `dir=${result.body.dir}`)
+  })
+
+  await check('日志路由直连：hostLines 读取工作区本地日志尾部', async () => {
+    // 独立起一份路由，用临时工作区验证 hostLines 的真实读取路径（不依赖 index.js 的装配）。
+    const dir = await mkdtemp(join(tmpdir(), 'imagen-logs-route-'))
+    const logDir = join(dir, '.imagen', 'logs')
+    await mkdir(logDir, { recursive: true })
+    await writeFile(join(logDir, 'host.log'), 'host-line-1\nhost-line-2\nhost-line-3\n', 'utf8')
+    const routes = createLogRoutes({
+      session: { ctx: null, connection: () => ({ endpoint: null, token: null }) },
+      log: { debug() {}, info() {}, warn() {}, error() {} },
+      ctx: { get: (name) => (name === 'workingDirectory' ? { defaultDirectory: dir } : undefined) },
+    })
+    const local = await startHost(routes)
+    try {
+      const { status, body } = await json(local.origin, '/imagen-api/logs?since=0')
+      assert.equal(status, 200)
+      assert.equal(body.ok, false)
+      assert.equal(body.code, 'session_absent')
+      assert.ok(Array.isArray(body.hostLines), 'hostLines 必须是数组')
+      assert.ok(body.hostLines.includes('host-line-3'), `应从 <workspace>/.imagen/logs/host.log 读到尾部：${JSON.stringify(body.hostLines)}`)
+      assert.ok(body.hostLines.length <= 120)
+    } finally {
+      local.server.close()
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 
   await check('会话停止', async () => {

@@ -1,0 +1,87 @@
+name: 问题反馈 / Bug Report
+description: 报告插件运行、出图或安装问题
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！提交前请先搜索已有 Issue，确认没有重复。
+
+        **粘贴诊断信息前请先脱敏**：删除其中可能包含的 Kaggle Token、API Key、本地绝对路径与个人账号。
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS
+        - Linux
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DSH 版本
+      description: 在 DSH「设置 → 关于」查看，或运行 `dsh --version`
+    validations:
+      required: true
+
+  - type: input
+    id: kaggle-version
+    attributes:
+      label: Kaggle CLI 版本
+      description: 粘贴 `kaggle --version` 的输出；未安装或未登录请注明
+    validations:
+      required: true
+
+  - type: dropdown
+    id: preset
+    attributes:
+      label: 使用的模型预设
+      options:
+        - SDXL Lightning
+        - Hyper-SDXL 8-Step
+        - SDXL Turbo
+        - Playground v2.5
+        - SDXL Base 1.0
+        - RealVisXL V5.0
+        - FLUX.2 Klein 4B
+        - Animagine XL 3.1
+        - Anima Light Lavender
+        - 不确定 / 与预设无关
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 问题描述
+      description: 实际发生了什么？期望的结果是什么？是否有报错文案或错误码？
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开生图工作台
+        2. 点击「开机 / 唤醒云端」
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 诊断信息（已脱敏）
+      description: 工作台 → 日志抽屉 →「复制诊断信息」，粘贴到这里；粘贴前请自行核对并删除敏感内容
+      render: text
+    validations:
+      required: true
