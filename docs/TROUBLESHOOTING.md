@@ -142,3 +142,21 @@ Host 侧网络问题（代理环境）由 `lib/net.js` 处理：内置 fetch 失
 | `cli_timeout` | CLI 启动或调用超过 30 秒 | 检查代理/DNS；重试环境检查 |
 | `auth_required` | 没找到凭证或凭证失效 | 重新在 Kaggle 设置页生成 token，写入 `%USERPROFILE%\.kaggle\access_token` |
 | 配额一直显示不可用 | Kaggle quota 接口偶发失败 | 算力弹层会回退展示最近一次成功检查时间与当时配额 |
+---
+
+## 7. 模型验证失败（tools/verify-model.mjs）
+
+验证脚本会把失败归到一类并打印最后 20 行日志：
+
+| 分类 | 常见原因 | 处理 |
+| :--- | :--- | :--- |
+| `pip_conflict` | 模型配置里钉的版本组合不可解析，或 PyPI 暂不可用 | 先去掉 `runtime` 里的版本约束重试；仍失败见第 1 节 |
+| `cuda_oom` | 显存不足（单卡 14.5 GiB，FLUX.2 需要双卡 balanced） | 降低分辨率/步数，或检查 `deviceMap` 是否为 `balanced` |
+| `import_error` | 依赖装上了但 import 失败（torchao ABI、版本组合） | 见第 2 节 |
+| `download_failed` | 权重下载失败、仓库不存在、匿名限流 | 配置 `hfToken`；确认 `pipeline.base` 拼写 |
+| `disk_full` | `/kaggle/working` 写满 | 清理或改用预挂载权重，见第 3 节 |
+| `invalid_config` | 模型 JSON 缺字段、loader 不支持 | 对照 `docs/MODEL_ASSET_SPEC.md` 修正 |
+| `timeout` | 排队+冷启动超过 `--timeout`（默认 30 分钟） | 调大 `--timeout`，或避开 Kaggle 高峰 |
+| `auth_required` / `push_failed` | Kaggle 凭证或推送失败 | 见第 6 节 |
+
+成功产物在 `.tmp/verify/`：`<id>.png` 样张与 `<id>.report.json` 完整报告；带 `--write` 时 `measured` 会写回原 JSON。

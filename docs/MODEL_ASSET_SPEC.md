@@ -83,10 +83,10 @@
 外部素材 / 代码段 / 博客 / 论文 / 链接
         │
         ▼
-编写草稿 .tmp/<id>.json（只填展示字段、pipeline、runtime，measured 先留 null）
+编写草稿 .tmp/models/<id>.json（只填展示字段、pipeline、runtime，measured 先留 null）
         │
         ▼
-node tools/verify-model.mjs --config .tmp/<id>.json
+node tools/verify-model.mjs --config .tmp/models/<id>.json
         │
    ┌────┴────┐
    ▼         ▼
@@ -105,7 +105,7 @@ npm test               → 全仓回归
 `tools/verify-model.mjs` 在远端只检查两件事：
 
 1. Python 进程正常退出（无未捕获异常、无 CUDA OOM）；
-2. 指定输出路径存在可解码的图片文件（校验 PNG/JPEG 文件头，不只看字节数）。
+2. 指定输出路径存在可解码的图片文件（校验 PNG 文件头，不只看字节数）。
 
 ### 3.2 实测数据采集
 
@@ -130,6 +130,12 @@ npm test               → 全仓回归
 
 ## 5. 实施状态
 
-- [x] **阶段 A：资产抽象**（0.4.1 之后）：`models/*.json` 拆出 4 个现有预设；`tools/build-assets.mjs` 生成 `shared/models.generated.js`；`contract.js` re-export；`check-contract` 增加同步检查；旧 `PRESETS` 深度对比一致。
-- [ ] **阶段 B：验证脚本**：`tools/verify-model.mjs` 复用 `lib/kaggle.js` 与 Kernel 打包逻辑，支持草稿配置 → 靶场实跑 → 回填 `measured`。
+- [x] **阶段 A：资产抽象**：`models/*.json` 拆出 4 个现有预设；`tools/build-assets.mjs` 生成 `shared/models.generated.js`；`contract.js` re-export；`check-contract` 增加同步检查；旧 `PRESETS` 深度对比一致。
+- [x] **阶段 B：验证脚本**：`tools/verify-model.mjs` + 远端 payload `tools/payload/verify-model.py`：
+  - `--config <path>` 读取草稿或正式文件，复跑 `--config models/<id>.json` 可刷新实测数据；
+  - 复用 `lib/kernel.js` 打包、`lib/kaggle.js` 推送/日志/产物下载，不另写推送轮子；
+  - `--dry-run` 只做配置校验与 Kernel 打包演练，不调用 Kaggle，可进离线回归（`test/check-verify-model.mjs`）；
+  - `--timeout <min>` 整体超时，默认 30 分钟；
+  - 成功后样张保存到 `.tmp/verify/<id>.png`，控制台打印显存/加载/首图/稳态/下载体积；`--write` 把 `measured` 写回原 JSON；
+  - 失败按 `pip_conflict / cuda_oom / import_error / download_failed / disk_full / invalid_config / timeout / auth_required / push_failed / kernel_error` 分类，并打印最后 20 行日志，退出码非 0。
 - [ ] **阶段 C：特殊运行时**：按实际需求再开放 `runtime` 取值与 Host 重启会话提示；当前不实现。

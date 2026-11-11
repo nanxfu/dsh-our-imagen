@@ -146,6 +146,13 @@ npm run contract:check
 # 模型资产：编辑 models/<id>.json 后重新生成并校验（详见 docs/MODEL_ASSET_SPEC.md）
 npm run models:build
 npm run models:check
+
+# 验证一个模型（真实 Kaggle GPU，会消耗配额；--write 把实测数据写回 JSON）
+node tools/verify-model.mjs --config .tmp/models/xxx.json
+node tools/verify-model.mjs --config models/sdxl-lightning.json --write --timeout 30
+
+# 离线演练：只校验配置与 Kernel 打包，不调用 Kaggle
+node tools/verify-model.mjs --config models/sdxl-lightning.json --dry-run
 ```
 
 发布打包（先构建 client.js，再产出 `dist/` 下可加载目录与 zip）：

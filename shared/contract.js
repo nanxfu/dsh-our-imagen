@@ -98,6 +98,7 @@ export const TIMEOUTS = {
   cliQuotaMs: 20000,
   cliPushMs: 180000,
   cliLogsMs: 45000,
+  cliOutputMs: 180000,
   // 客户端
   clientProbeMs: 45000,
   clientStatePollMs: 10000,
