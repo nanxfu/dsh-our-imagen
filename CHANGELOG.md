@@ -1,5 +1,40 @@
 # 变更记录
 
+## 0.6.0 — 2026-11-11
+
+### 改进
+
+- **中文提示词不再原样送给英文模型**：九个预设都是英文提示词模型，此前中文界面下 `/intent` 会按 UI 语言输出中文 `prompt`（与 README「先翻译为规范的英文提示词」的承诺相反），`/enhance` 也往 prompt 里追加中文短语。现在：
+  - `/intent` 的 `prompt` 恒定输出英文，新增 `summary`（UI 语言的本轮画面概述）只用于确认卡展示；
+  - 模型资产新增 `promptStyle`（`danbooru` / `natural` / `concise`）与 `qualityPrefix`，意图解析按当前预设动态拼书写口径（Animagine 出 Danbooru 标签、FLUX/Anima 出自然语言段落、蒸馏快档出短句）；
+  - `/enhance` 每条建议拆成 `text`（英文短语，真正追加进 prompt）与 `label`（界面语言短标签，中文界面显示中文、插入英文）；
+  - 提示词输入框里出现中文时给一条软提示（不拦截生成），Tooltip 文案改为「请尽量用英文」。
+- **切换模型自动回填负向提示词**：`models/*.json` 的 `negativeHint` 此前只被验证脚本读取，界面上完全没用上。现在切换预设时，只有在用户没写过负向词（或仍是上一个预设的推荐值）时才填入新预设的 `negativeHint`；用户自己写的负向词不会被覆盖。Animagine 这类 Danbooru 模型因此自动带上 `text, watermark, low quality…` 排除项，减少伪文字。
+- **确认卡同时给出英文提示词与中文摘要**：意图卡主展示最终英文 prompt，下面补一行中文概述，用户点「按此生成」前就能看到究竟会发什么给模型。
+
+### 修复
+
+- **`meta.json` 记录的尺寸与真实图不一致**：Anima loader 会把宽高向下取整到 16 的倍数（16:9 档 1152×648 → 实际 1152×640），但远端 `run_task` 回传的是请求值。现在统一回传 PIL 实际出图尺寸，请求与实际不一致时远端日志会打印差异。
+- **任务等待是 700ms 一次的进程内轮询**：`JobQueue.waitFor` 原先 `while + sleep(700)` 反复查自己的内存数组，Agent 工具默认要等 90 秒。改为事件驱动：任务进入终态时唤醒全部等待者，超时/卸载路径各自收敛，返回形状不变。
+- **轮询定时器会重叠执行**：`SessionManager.every()` 用 `setInterval` 且不感知回调 Promise，网络慢或 `kaggle.exe` 慢时 `pollTunnel` / `pollKernelStatus` 会叠加多个请求与子进程。改为单飞自调度延时链（上一拍 settle 后才排下一拍），`clearTimers()` 能阻断在飞的一拍续排；立即首拍与排期拍复用同一 Promise。
+- **产物落盘不是原子的**：PNG 与 `meta.json` 原先直接 `writeFile`，中断会留下半截文件。改为同目录临时文件 + rename（图片先落、`meta.json` 最后作为完成标记），失败清理临时文件。
+- **前端 `sending` 状态可能不复位**：`generate()` 在 `alive()` 返回 null 或后续抛错时会跳过 `setSending(false)`，改用 `try/finally` 兜底。
+
+### 工程
+
+- **Anima 运行时改为单份源码 + 打包内联**：`remote/daemon.py` 与 `tools/payload/verify-model.py` 曾各内嵌一份约 1100 行、注释要求「必须逐字同步」的 Anima 实现。现在抽成唯一的 `remote/anima_runtime.py`，两个入口各保留一行带 `# @@INLINE:anima_runtime.py@@` 标记的普通 import；`lib/kernel.js` 新增 `inlineMarkedModules()`，打包时把标记行整行替换为模块全文，Kaggle 推送产物仍是自包含单文件。daemon 由 3478 行降到 2360 行，验证 payload 由 1442 行降到 315 行；`test/kernel-package.mjs` / `test/check-verify-model.mjs` 增加「无未内联 import / 无残留标记 / 运行时恰好一份 / Python 语法可编译」断言。未做真机 GPU 复跑，推理链路与改动前是同一份源码。
+- **前端碎屑文件合并**：`capsules.js` + `ratios.js` 合并为 `src/studio/presets.js`；`plates.jsx`（试印条 SVG）内联进 `Rail.jsx`；`recall.js`（历史回填）并入 `src/logic/generate.js`；意图/预设的纯逻辑改名为 `src/logic/preset.js`，避免两个 `presets.js`。`RATIO_IDS` / `STYLE_IDS` 收敛到契约唯一来源。
+- **版本升到 0.6.0**：契约 / package.json / daemon / mock / tunnel-probe / `remote/contract.json` / `client.js` 同步；契约新增 `RATIO_IDS`、`STYLE_IDS` 导出，`PRESETS` 公开视图随模型资产新增 `promptStyle`、`qualityPrefix`。
+- **测试**：新增 `test/jobs-wait.mjs`（8 项）；`session-pure` +3（自调度不重叠、清定时器不续拍、健康轮询单飞）；`library-atomic` +2（原子写与失败保留旧产物）；`host-e2e` 增加假宿主 LLM 的意图/润色模型路径断言；`daemon-unit` 127 项、`kernel-package` 8 项、`check-verify-model` 7 项；客户端逻辑 35 项、渲染 24 项。`npm test` 已接入 `jobs-wait`。
+
+### 文档
+
+- `docs/SPEC.md`：`/intent` 新增 `presetId` 请求参数与 `summary` 响应字段并写明「prompt 恒英文」；`/enhance` 响应改为 `{id, text, label}`；预设字段补 `promptStyle` / `qualityPrefix` / `negativeHint` 的回填规则；提示词 Tooltip 与润色说明按新行为改写。
+- `docs/MODEL_ASSET_SPEC.md`：新增 §2.1 提示词配方字段；把「双份 loader 逐字同步」改为「单份源码 + 打包内联」。
+- `docs/ANIMA_LOADER_SPEC.md`：第 4 节按 `remote/anima_runtime.py` + 标记 import + 打包内联重写，补「真实尺寸回传」说明。
+- `docs/DESIGN.md`：试印条出处由已删除的 `plates.jsx` 改为 `Rail.jsx` 内的 `StylePlate`。
+- 新增 [docs/EXTERNAL_AUDIT_REVIEW.md](docs/EXTERNAL_AUDIT_REVIEW.md)：外部代码审计的逐条复核结论（属实 / 不成立 / 风格或高风险项），以及 `kaggle kernels logs` 延迟实测数据与「不替换 ntfy」的决策依据。
+
 ## 0.5.0 — 2026-11-11
 
 ### 改进
@@ -15,7 +50,7 @@
 - `test/mock-daemon.py`、`test/host-e2e.mjs`、`test/session-pure.mjs`、`test/daemon-unit.py` 跟随新协议；`remote/contract.json` 重新生成。
 - 文档：`docs/SPEC.md` 补异步 job 协议说明；`docs/ANIMA_LOADER_SPEC.md` 的批处理限制按新超时更新。
 
-## 未发布
+## 0.5.0 补记：模型选择卡、9 个预设与状态文案（已随 0.5.0 发布）
 
 ### 改进
 

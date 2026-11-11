@@ -40,7 +40,7 @@ With this plugin installed:
 ### 1. Dedicated Full-Page Studio
 * **Curated Open-Source Models**: From ultra-fast `SDXL Lightning` and `Hyper-SDXL`, to cinematic `SDXL Base` and `RealVisXL`, anime-tailored `Animagine XL 3.1` / `Anima`, and cutting-edge `FLUX.2 Klein 4B`.
 * **Single-Track Creative Rail**: Prompt, negative prompt, aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4), step count, and seed all in one clear view.
-* **4-Dimension Prompt Polish**: Non-destructive quick additions for Lighting, Material, Composition, and Mood.
+* **4-Dimension Prompt Polish**: Non-destructive quick additions for Lighting, Material, Composition, and Mood — English fragments go into the prompt while the UI shows localized labels.
 * **Bottom Filmstrip & History Drawer**: Review recent generations instantly, with one-click actions to bring back parameters or generate variants.
 
 </td>
