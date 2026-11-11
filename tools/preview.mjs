@@ -2,14 +2,16 @@
  * 设计预览：把工作台渲染成静态 HTML，再用无头浏览器截图。
  *
  * 用途：改样式时先看图，不靠猜。预览用的数据和真实 host 一致，
- * 图片换成本地 SVG 柔光占位图，避免真的去请求 imagen-api。
+ * 图片优先用 docs/assets/showcase 下的真实出图（manifest 索引），
+ * 只有在 showcase 资产缺失时（干净 clone）才退回本地 SVG 柔光占位图。
  *
  *   node tools/preview.mjs            生成 tools/.preview/*.html
  *   node tools/preview.mjs --shot     生成后调用 Edge 无头截图（1440×900）
+ *   node tools/preview.mjs --shot --readme  同时把 4 张 README 截图写回 docs/assets
  *   node tools/preview.mjs --shot --mobile  额外截一张 390 宽的窄屏
  */
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { access, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
@@ -103,15 +105,87 @@ function placeholder(seed, width = 1024, height = 1024) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
 
-const image = (seed, width = 1024, height = 1024, seconds = 6.2) => ({
-  path: `imagen-output/job-${seed}/${seed}.png`,
-  file: `${seed}.png`,
-  url: placeholder(seed, width, height),
-  seed,
-  seconds,
-  width,
-  height,
-})
+// ── 真实作品：docs/assets/showcase 下的 WebP 是用户实际出图（manifest.json 索引） ──
+// HTML 落在 tools/.preview/，图片用相对路径引，file:// 打开即可加载。
+// manifest 缺失或条目对应文件不在时，下面所有取图都退回 placeholder()，干净 clone 仍可预览。
+const SHOWCASE_DIR = join(ROOT, 'docs/assets/showcase')
+const SHOWCASE_URL = '../../docs/assets/showcase'
+
+async function readShowcase() {
+  try {
+    const manifest = JSON.parse(await readFile(join(SHOWCASE_DIR, 'manifest.json'), 'utf8'))
+    const items = Array.isArray(manifest.items) ? manifest.items : []
+    const usable = []
+    for (const item of items) {
+      const file = item && typeof item.file === 'string' ? item.file : ''
+      const width = Number(item && item.width)
+      const height = Number(item && item.height)
+      if (!file || !(width > 0) || !(height > 0)) continue
+      try {
+        await access(join(SHOWCASE_DIR, file))
+      } catch {
+        continue
+      }
+      usable.push({ ...item, width, height, url: `${SHOWCASE_URL}/${file}` })
+    }
+    return usable
+  } catch {
+    return []
+  }
+}
+
+const SHOWCASE = await readShowcase()
+
+// 宽高比接近的样张放同一个池：请求 16:9 就从 16:9 的图里轮换，不把竖图塞进横框。
+const RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4']
+const RATIO_VALUE = { '1:1': 1, '16:9': 16 / 9, '9:16': 9 / 16, '4:3': 4 / 3, '3:4': 3 / 4 }
+function ratioIdOf(width, height) {
+  const target = Number(width) / Number(height)
+  if (!Number.isFinite(target) || target <= 0) return '1:1'
+  let best = RATIOS[0]
+  for (const id of RATIOS) {
+    if (Math.abs(RATIO_VALUE[id] - target) < Math.abs(RATIO_VALUE[best] - target)) best = id
+  }
+  return best
+}
+const SHOWCASE_POOLS = new Map()
+for (const entry of SHOWCASE) {
+  const id = ratioIdOf(entry.width, entry.height)
+  const pool = SHOWCASE_POOLS.get(id) ?? []
+  pool.push(entry)
+  SHOWCASE_POOLS.set(id, pool)
+}
+
+/** manifest 条目 → 组件期望的 image 视图（字段与 /imagen-api/history 一致）。 */
+const sampleImage = (entry) => {
+  const file = entry.file.replace(/\.webp$/, '.png')
+  return {
+    path: `imagen-output/showcase/${file}`,
+    file,
+    url: entry.url,
+    seed: entry.seed,
+    seconds: entry.seconds,
+    width: entry.width,
+    height: entry.height,
+  }
+}
+
+const image = (seed, width = 1024, height = 1024, seconds = 6.2) => {
+  const pool = SHOWCASE_POOLS.get(ratioIdOf(width, height))
+  if (!pool || pool.length === 0) {
+    return {
+      path: `imagen-output/job-${seed}/${seed}.png`,
+      file: `${seed}.png`,
+      url: placeholder(seed, width, height),
+      seed,
+      seconds,
+      width,
+      height,
+    }
+  }
+  // 同一个 seed 永远落到同一张真实图，页面之间不会互相错位。
+  return sampleImage(pool[Math.abs(Math.round(seed)) % pool.length])
+}
 
 // 预览用的预设来自契约（与 /imagen-api/state 的公开视图同形）：去掉仅下发远端使用的 pipeline。
 const publicPreset = (id) => {
@@ -126,8 +200,84 @@ const base = publicPreset('sdxl-base')
 // 真实 Host 下发全部预设；预览的「就绪 / 空态」也用全量，模型卡才能截到八档。
 const allPresets = PRESETS.map(({ pipeline, ...rest }) => rest)
 
-// 真实 Host 的 /imagen-api/history 每条含完整 params（用于「带回参数」）；预览只用提示词与图片，故这里省略。
-const historyItems = [
+// 历史条目的展示文案要与图片内容对应，避免「图是动漫、文案写赛博朋克」的错位：
+// 有真实样张时按标题给一句中文短句；manifest 里的真实提示词留在 rawPrompt，给对话页意图卡用。
+const SHOWCASE_COPY = {
+  '雨夜霓虹街道': '雨夜霓虹街道，湿地面反射灯光，青绿与品红配色，远处有人撑伞',
+  '海边老渔民肖像': '海边老渔民的写实肖像，羊毛衫与围巾，侧窗自然光',
+  '云端瀑布梦境': '云端浮岛与瀑布，粉与薄荷色天空，绘本感的梦幻插画',
+  '高山湖泊的金色黄昏': '高山湖泊的金色黄昏，雪山倒影与前景松林',
+  '巴洛克静物': '巴洛克静物，瓷瓶玫瑰、葡萄与黄铜烛台，深色木桌侧光',
+  '赤月下的武士': '赤月下的武士剪影，深色天空与高对比极简构图',
+  '极简京都旅行海报': '极简京都旅行海报，红色鸟居与竹林，顶部 KYOTO 字样',
+  '樱花巷口的少女': '樱花巷口的动漫少女，校服与飘落花瓣，柔和春日光线',
+  '薰衣草花田的黄昏': '薰衣草花田里的白裙少女，日落暖金光，手绘插画感',
+  '水墨山水小舟': '水墨山水与江上一叶小舟，大面积留白，角上一枚红印',
+  '兔耳双马尾少女': '兔耳双马尾少女坐在圆舱里挥手，白裙与蓝色蝴蝶结，梦幻感的动漫插画',
+  '舱中的少女': '灰发绿眼的少女坐在圆舱里挥手，浅蓝色上衣，明快的动漫配色',
+  '哥特教堂': '黄昏的哥特教堂，银发少女穿白裙站在彩窗前，石板地面反光',
+  '兔耳蓝裙少女': '兔耳发饰的金发双马尾少女，蓝白蝴蝶结裙，明亮柔光',
+  '浪与舟': '浮世绘风格的巨浪与一叶小舟，红橙色调，浪尖上的红衣船夫',
+  '红日与浪': '红日下的巨浪与一叶小舟，远山与红橙色调的国风海报',
+  '初音未来': '初音未来坐在窗边，蓝绿色长双马尾，自然光',
+  'Q 版角色四格': '四格 Q 版角色贴纸，赛车帽、独角兽角、海军帽与王冠',
+  '荧光森林': '荧光蘑菇撑起树冠的奇幻森林，青绿色微光，漂浮的孢子',
+  '和室里的少女': '和室里的黑发少女，白色和服与红色腰带，纸门透光',
+  '白发少女': '白发绿眼的动漫少女半身，浅绿色上衣，柔和室内光',
+  '和服少女肖像': '和服少女肖像，红色腰带与樱花发饰，浅色背景与竖排题字',
+}
+// 对话页首条用户消息：跟舞台首图同主题，读起来像真人在提需求。
+const SHOWCASE_ASK = {
+  '雨夜霓虹街道': '画一张横版的雨夜霓虹街道，要电影感',
+  '极简京都旅行海报': '画一张横版的京都旅行海报，红鸟居和竹林',
+  '兔耳双马尾少女': '画一张横版的兔耳双马尾少女',
+}
+
+const copyOf = (entry) => SHOWCASE_COPY[entry.title] || entry.prompt
+
+/** 意图卡展示的提示词：英文提示词取开头一句；中文提示词原样返回。 */
+function intentOf(item) {
+  const raw = String(item.rawPrompt || '').trim()
+  if (!raw) return item.prompt
+  if (!/^[\x20-\x7E]+$/.test(raw.slice(0, 24))) return item.prompt
+  // 控制在两行以内：意图卡在对话面板里放不下更长的提示词。
+  const head = raw.slice(0, 60)
+  const stop = Math.max(head.lastIndexOf('. '), head.lastIndexOf(', '))
+  return stop > 25 ? head.slice(0, stop) : head
+}
+
+const DAY_SECONDS = 24 * 3600
+
+/** 画廊按 finishedAt 分今天/本周/更早，这里让三档都有内容。 */
+function finishedAtOf(index) {
+  if (index < 4) return at(-180 - index * 720)
+  if (index < 8) return at(-6 * 3600 - (index - 4) * 18 * 3600)
+  return at(-(2 + (index - 8)) * DAY_SECONDS - 1800)
+}
+
+/** 一张真实样张就是一次生成；第一张是舞台首图，其余按横 / 方 / 竖排，胶卷顺序稳定。 */
+function buildShowcaseHistory(entries) {
+  const [hero, ...rest] = entries
+  const ordered = [
+    hero,
+    ...rest.filter((entry) => entry.width > entry.height),
+    ...rest.filter((entry) => entry.width === entry.height),
+    ...rest.filter((entry) => entry.width < entry.height),
+  ]
+  return ordered.map((entry, index) => ({
+    jobId: `job-${9001 + index}`,
+    dir: `imagen-output/showcase-${index + 1}`,
+    title: entry.title,
+    prompt: copyOf(entry),
+    rawPrompt: entry.prompt,
+    presetId: entry.presetId,
+    finishedAt: finishedAtOf(index),
+    images: [sampleImage(entry)],
+  }))
+}
+
+// 兜底：仓库里没有 showcase 资产时（干净 clone），仍旧用占位图把整页预览跑通。
+const fallbackHistory = [
   {
     jobId: 'job-9001',
     dir: 'imagen-output/20261109-120301-job-9001',
@@ -162,6 +312,19 @@ const historyItems = [
   },
 ]
 
+// 真实 Host 的 /imagen-api/history 每条含完整 params（用于「带回参数」）；预览只用提示词与图片，故这里省略。
+const historyItems = SHOWCASE.length > 0 ? buildShowcaseHistory(SHOWCASE) : fallbackHistory
+
+// 首图与文案：舞台、表单预填、对话页都从这里取，保证三处口径一致。
+const HERO_ITEM = historyItems[0]
+const HERO_IMAGE = HERO_ITEM.images[0]
+const HERO_PROMPT = HERO_ITEM.prompt
+// 对话页演示的是「横版画面」，单独挑一张横图，不和舞台首图的方构图混用。
+const CHAT_ITEM = historyItems.find((item) => item.title === '极简京都旅行海报') || historyItems.find((item) => item.images[0].width > item.images[0].height) || HERO_ITEM
+const CHAT_IMAGE = CHAT_ITEM.images[0]
+const CHAT_ASK = SHOWCASE_ASK[CHAT_ITEM.title] || `帮我画一张：${CHAT_ITEM.prompt}`
+const CHAT_INTENT = intentOf(CHAT_ITEM)
+
 const states = {
   ready: {
     defaultPreset: 'sdxl-lightning',
@@ -188,7 +351,7 @@ const states = {
     defaultPreset: 'sdxl-lightning',
     presets: [preset],
     session: { state: 'provisioning', phase: 'queue', startedAt: at(-120), error: null },
-    jobs: [{ id: 'job-x', status: 'waiting-session', startedAt: at(-60), params: { prompt: '排队中的画面' } }],
+    jobs: [{ id: 'job-x', status: 'waiting-session', startedAt: at(-60), params: { prompt: '荧光森林（排队中）' } }],
     lastJob: null,
   },
   // 两个任务同时在队：第一张在生成，第二张排在后面（宿主的 jobs 最新在前）。
@@ -197,8 +360,8 @@ const states = {
     presets: [preset],
     session: { state: 'ready', modelId: 'sdxl-lightning', device: 'Tesla T4', idleTimeoutSec: 1800, error: null },
     jobs: [
-      { id: 'job-two', status: 'queued', createdAt: at(-5), startedAt: null, params: { prompt: '排队等待的第二张画面' } },
-      { id: 'job-one', status: 'running', createdAt: at(-30), startedAt: at(-8), params: { prompt: '正在出的第一张画面' } },
+      { id: 'job-two', status: 'queued', createdAt: at(-5), startedAt: null, params: { prompt: '哥特街道（等待中）' } },
+      { id: 'job-one', status: 'running', createdAt: at(-30), startedAt: at(-8), params: { prompt: '兔耳双马尾少女（生成中）' } },
     ],
     lastJob: null,
   },
@@ -206,21 +369,21 @@ const states = {
     defaultPreset: 'sdxl-lightning',
     presets: [preset],
     session: { state: 'provisioning', phase: 'push', startedAt: at(-20), error: null },
-    jobs: [{ id: 'job-p', status: 'waiting-session', startedAt: at(-10), params: { prompt: '推送中的画面' } }],
+    jobs: [{ id: 'job-p', status: 'waiting-session', startedAt: at(-10), params: { prompt: '正在推送任务：荧光森林' } }],
     lastJob: null,
   },
   connecting: {
     defaultPreset: 'sdxl-lightning',
     presets: [preset],
     session: { state: 'connecting', phase: 'tunnel', startedAt: at(-150), error: null },
-    jobs: [{ id: 'job-c', status: 'waiting-session', startedAt: at(-60), params: { prompt: '连接中的画面' } }],
+    jobs: [{ id: 'job-c', status: 'waiting-session', startedAt: at(-60), params: { prompt: '正在建立隧道：和室里的少女' } }],
     lastJob: null,
   },
   warming: {
     defaultPreset: 'sdxl-lightning',
     presets: [preset],
     session: { state: 'warming', phase: 'warm', startedAt: at(-330), device: 'Tesla T4', error: null },
-    jobs: [{ id: 'job-w', status: 'waiting-session', startedAt: at(-200), params: { prompt: '装载中的画面' } }],
+    jobs: [{ id: 'job-w', status: 'waiting-session', startedAt: at(-200), params: { prompt: '正在装载模型：兔耳蓝裙少女' } }],
     lastJob: null,
   },
   asleep: {
@@ -247,7 +410,7 @@ const states = {
         status: 'failed',
         startedAt: at(-40),
         finishedAt: at(-30),
-        params: { prompt: '过大的画面' },
+        params: { prompt: '过大的画面：4096 × 4096' },
         error: { code: 'oom', message: 'CUDA out of memory' },
         output: { images: [] },
       },
@@ -274,13 +437,22 @@ const states = {
   },
 }
 
-const libraryResponse = { favorites: [image(901).path, image(903).path], deleted: [] }
+const libraryResponse = {
+  favorites: [historyItems[0]?.images[0]?.path, historyItems[2]?.images[0]?.path].filter(Boolean),
+  deleted: [],
+}
 
 // 竖构图单独出一页：相纸/取景框的尺寸按比例算，竖图是最容易露馅的一种。
-const portraitHistory = [
-  { ...historyItems[0], images: [image(903, 648, 1152), image(902, 1152, 648)] },
-  ...historyItems.slice(1),
-]
+// 把第一张竖图提到最前，舞台首图才是竖幅。
+const portraitHistory = (() => {
+  const index = historyItems.findIndex((item) => {
+    const first = item.images[0]
+    return first && first.height > first.width
+  })
+  if (index <= 0) return historyItems
+  const portrait = historyItems[index]
+  return [portrait, ...historyItems.filter((item) => item !== portrait)]
+})()
 
 // 刚落定的图（60 秒内）会播一次显影；这一页把动画停在半程，用来核对显影中的样子。
 const freshHistory = [
@@ -462,6 +634,34 @@ async function renderGalleryHover() {
   })
 }
 
+/** 对话线程的演示消息：首条需求、意图卡、确认、出图结果，都围绕对话页那张横版真实作品。 */
+function chatMessages() {
+  return [
+    { id: 1, role: 'user', text: CHAT_ASK },
+    {
+      id: 2,
+      role: 'assistant',
+      kind: 'intent',
+      prompt: CHAT_INTENT,
+      ratioId: '16:9',
+      styleId: 'concept',
+      clarify: null,
+      source: 'model',
+    },
+    { id: 3, role: 'user', text: '可以，就这样生成' },
+    {
+      id: 4,
+      role: 'assistant',
+      kind: 'job',
+      jobId: CHAT_ITEM.jobId,
+      stage: 'done',
+      text: '已生成，点击缩略图放大。',
+      image: CHAT_IMAGE.url,
+      meta: `${CHAT_IMAGE.seconds} 秒 · 种子 ${CHAT_IMAGE.seed}`,
+    },
+  ]
+}
+
 async function renderChat(options = {}) {
   const client = await loadClient({
     now: NOW,
@@ -472,37 +672,12 @@ async function renderChat(options = {}) {
       '/imagen-api/library': libraryResponse,
     },
   })
-  const first = historyItems[0]
-  const messages = [
-    { id: 1, role: 'user', text: '画一张横版的雨夜街景，要写实一点' },
-    {
-      id: 2,
-      role: 'assistant',
-      kind: 'intent',
-      prompt: '雨夜街景，湿润地面倒映霓虹招牌，35mm 胶片质感',
-      ratioId: '16:9',
-      styleId: 'film',
-      clarify: null,
-      source: 'model',
-    },
-    { id: 3, role: 'user', text: '背景加一只撑伞的黑猫' },
-    {
-      id: 4,
-      role: 'assistant',
-      kind: 'job',
-      jobId: 'job-preview',
-      stage: 'done',
-      text: '已生成，点击缩略图放大。',
-      image: first.images[0].url,
-      meta: `6.2 秒 · 种子 ${first.images[0].seed}`,
-    },
-  ]
   const tree = await client.mountRaw(client.components.ChatPanel, {
     t: client.internals.i18n.fallbackTranslate('zh'),
     ui: { panelMode: 'chat', setPanelMode: () => {} },
     form: { patchForm: () => {} },
     chat: {
-      messages,
+      messages: chatMessages(),
       interpreting: false,
       interpret: () => {},
       generateIntent: () => {},
@@ -517,6 +692,109 @@ async function renderChat(options = {}) {
     `<div class="ofs-root"><div class="ofs-app"><div class="ofs-body">${toHtml(tree)}<div class="ofs-main"></div></div></div></div>`,
     { ...options, injectCss: true },
   )
+}
+
+/**
+ * 对话模式的完整工作台：左侧对话线程（含意图卡与出图结果），右侧画面预览，底部胶卷。
+ * 单独挂四个真实组件拼成整页，比 studio-chat（右半边空）和 chat-standalone（无舞台）更适合截图。
+ */
+async function renderChatComposed(options = {}) {
+  const client = await loadClient({
+    now: NOW,
+    testBuild: true,
+    responses: {
+      '/imagen-api/state': states.ready,
+      '/imagen-api/history': { items: historyItems },
+      '/imagen-api/library': libraryResponse,
+    },
+  })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const { TopBar, ChatPanel, Stage, Filmstrip } = client.components
+  const selected = { image: CHAT_IMAGE, item: CHAT_ITEM }
+
+  const topBar = await client.mountRaw(TopBar, {
+    t,
+    isEn: false,
+    ui: { view: 'studio', setView: () => {}, openLogs: () => {} },
+    compute: {
+      sessionState: 'ready',
+      session: states.ready.session,
+      quota: states.ready.probe.quota,
+      presets: states.ready.presets,
+      busy: '',
+      probing: false,
+      probe: states.ready.probe,
+      probeReport: null,
+      startSession: () => {},
+      stopSession: () => {},
+      runProbe: () => {},
+      openFolder: () => {},
+    },
+    form: {
+      form: { presetId: CHAT_ITEM.presetId, width: CHAT_IMAGE.width, height: CHAT_IMAGE.height, steps: 4, cfg: 0 },
+      patchForm: () => {},
+    },
+    library: { loadHistory: () => {} },
+  })
+
+  const chatPanel = await client.mountRaw(ChatPanel, {
+    t,
+    ui: { panelMode: 'chat', setPanelMode: () => {} },
+    form: { patchForm: () => {} },
+    chat: {
+      messages: chatMessages(),
+      interpreting: false,
+      interpret: () => {},
+      generateIntent: () => {},
+      resolveClarify: () => {},
+      clearThread: () => {},
+    },
+    library: { openMessage: () => {} },
+    actions: { sending: false },
+  })
+
+  const stage = await client.mountRaw(Stage, {
+    t,
+    ui: { zoom: false, setZoom: () => {}, copyPath: () => {} },
+    compute: { activeJob: null, sessionState: 'ready', presets: states.ready.presets, status: { stopped: false } },
+    form: {
+      form: {
+        presetId: CHAT_ITEM.presetId,
+        width: CHAT_IMAGE.width,
+        height: CHAT_IMAGE.height,
+        steps: 4,
+        cfg: 1.5,
+        seed: '',
+        count: 1,
+      },
+      useInspiration: () => {},
+    },
+    library: { selected, isFavorite: () => true, toggleFavorite: () => {} },
+    actions: { iterate: () => {}, reroll: () => {} },
+  })
+
+  const batches = historyItems.map((item) => ({
+    key: item.jobId,
+    presetId: item.presetId,
+    prompt: item.prompt,
+    entries: item.images.map((image) => ({ image, item })),
+  }))
+  const filmstrip = await client.mountRaw(Filmstrip, {
+    t,
+    ui: { setView: () => {} },
+    compute: { pendingJobs: [], sessionState: 'ready', startSession: () => {}, status: { stopped: false } },
+    library: { batches, selected, selectImage: () => {} },
+    now: NOW,
+  })
+
+  client.unmount()
+
+  const body = `<div class="ofs-root"><div class="ofs-app">
+${toHtml(topBar)}
+<div class="ofs-body">${toHtml(chatPanel)}<div class="ofs-main">${toHtml(stage)}</div></div>
+${toHtml(filmstrip)}
+</div></div>`
+  return pageOf(body, { ...options, injectCss: true })
 }
 
 async function renderRefine(options = {}) {
@@ -632,27 +910,27 @@ async function main() {
   await writeFile(TEST_ARTIFACT, testBundle, 'utf8')
 
   const pages = {
-    'studio-ready': await renderState(states.ready, { props: { initialPrompt: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图' } }),
+    'studio-ready': await renderState(states.ready, { props: { initialPrompt: HERO_PROMPT } }),
     'studio-portrait': await renderState(states.ready, {
       history: portraitHistory,
-      props: { initialPrompt: '东方水墨风格的远山与孤舟，大面积留白' },
+      props: { initialPrompt: portraitHistory[0].prompt },
     }),
     // 显影动画停在半程：核对「刚落定」这一下的观感，而不是终帧。
     'studio-fresh': await renderState(states.ready, {
       history: freshHistory,
-      props: { initialPrompt: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图' },
+      props: { initialPrompt: HERO_PROMPT },
     }),
     // 第一次出图：还没有任何历史，光桌上只有一只按任务尺寸画出的取景框。
     'studio-pending': await renderState(
       {
         ...states.ready,
-        jobs: [{ id: 'job-first', status: 'running', startedAt: at(-8), params: { prompt: '第一张画面', width: 720, height: 1280 } }],
+        jobs: [{ id: 'job-first', status: 'running', startedAt: at(-8), params: { prompt: '第一张画面：兔耳双马尾少女', width: 720, height: 1280 } }],
       },
       { history: [] },
     ),
     'studio-chat': await renderState(states.ready, { props: { panelMode: 'chat' } }),
     'studio-gallery': await renderState(states.ready, { props: { view: 'gallery' } }),
-    'studio-dark': await renderState(states.ready, { dark: true, props: { initialPrompt: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图' } }),
+    'studio-dark': await renderState(states.ready, { dark: true, props: { initialPrompt: HERO_PROMPT } }),
     // 深色 + 空提示词：主操作按钮处于禁用态，用来核对深色下禁用文字仍然可读。
     'studio-disabled-dark': await renderState(states.ready, { dark: true, history: [] }),
     'studio-empty': await renderState(states.empty, { history: [] }),
@@ -670,14 +948,15 @@ async function main() {
     'gallery-wide': await renderGallery(),
     'gallery-hover': await renderGalleryHover(),
     'chat-standalone': await renderChat(),
+    'chat-composed': await renderChatComposed(),
     'studio-refine': await renderRefine(),
     'compute-popover': await renderComputePopover(),
     'model-picker': await renderState(states.ready, {
-      props: { defaultModelOpen: true, initialPrompt: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图' },
+      props: { defaultModelOpen: true, initialPrompt: HERO_PROMPT },
     }),
     'model-picker-dark': await renderState(states.ready, {
       dark: true,
-      props: { defaultModelOpen: true, initialPrompt: '黄昏的赛博朋克街道，湿润地面反射霓虹灯，电影感构图' },
+      props: { defaultModelOpen: true, initialPrompt: HERO_PROMPT },
     }),
   }
 
@@ -714,6 +993,20 @@ async function main() {
       `file:///${htmlPath.replace(/\\/g, '/')}`,
     ])
     console.log(`截图：${shotPath}`)
+  }
+
+  // README 里的 4 张图固定用这四个页面，路径在 README 中已引用，这里只更新内容。
+  if (process.argv.includes('--readme')) {
+    const targets = [
+      ['studio-ready.png', 'studio-light.png'],
+      ['model-picker-dark.png', 'model-picker-dark.png'],
+      ['gallery-wide.png', 'gallery.png'],
+      ['chat-composed.png', 'chat-tool.png'],
+    ]
+    for (const [source, target] of targets) {
+      await copyFile(join(OUT_DIR, source), join(ROOT, 'docs/assets', target))
+      console.log(`README 截图：docs/assets/${target}`)
+    }
   }
 }
 

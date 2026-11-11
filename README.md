@@ -128,6 +128,77 @@
 
 ---
 
+## 🎨 模型示例
+
+以下 9 张样张按内置模型逐一给出，均由本插件调用 Kaggle 2×T4 实际生成，仅转存为 WebP，未做后期修图；耗时取自当次生成记录。
+
+<table>
+<tr>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/sdxl-lightning-cyberpunk-street.webp" alt="SDXL Lightning 生成的雨夜霓虹街道" width="100%" />
+  <p><sub>SDXL Lightning · 雨夜霓虹街道 · 约 9.8 秒</sub></p>
+</div>
+</td>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/hyper-sdxl-8step-baroque-still-life.webp" alt="Hyper-SDXL 8-Step 生成的巴洛克静物" width="100%" />
+  <p><sub>Hyper-SDXL 8-Step · 巴洛克静物 · 约 8.0 秒</sub></p>
+</div>
+</td>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/sdxl-turbo-crimson-moon.webp" alt="SDXL Turbo 生成的赤月下的武士" width="100%" />
+  <p><sub>SDXL Turbo · 赤月下的武士 · 约 3.9 秒</sub></p>
+</div>
+</td>
+</tr>
+
+<tr>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/playground-v2.5-floating-islands.webp" alt="Playground v2.5 生成的云端瀑布梦境" width="100%" />
+  <p><sub>Playground v2.5 · 云端瀑布梦境 · 约 19.6 秒</sub></p>
+</div>
+</td>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/sdxl-base-alpine-lake.webp" alt="SDXL Base 1.0 生成的高山湖泊的金色黄昏" width="100%" />
+  <p><sub>SDXL Base 1.0 · 高山湖泊的金色黄昏 · 约 17.1 秒</sub></p>
+</div>
+</td>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/realvis-v5-fisherman-portrait.webp" alt="RealVisXL V5.0 生成的海边老渔民肖像" width="100%" />
+  <p><sub>RealVisXL V5.0 · 海边老渔民肖像 · 约 21.1 秒</sub></p>
+</div>
+</td>
+</tr>
+
+<tr>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/flux2-klein-4b-kyoto-poster.webp" alt="FLUX.2 Klein 4B 生成的极简京都旅行海报" width="100%" />
+  <p><sub>FLUX.2 Klein 4B · 极简京都旅行海报 · 约 6.8 秒</sub></p>
+</div>
+</td>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/animagine-xl-3.1-sakura-girl.webp" alt="Animagine XL 3.1 生成的樱花巷口的少女" width="100%" />
+  <p><sub>Animagine XL 3.1 · 樱花巷口的少女 · 约 21.1 秒</sub></p>
+</div>
+</td>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/anima-light-lavender-lavender-field.webp" alt="Anima Light Lavender 生成的薰衣草花田的黄昏" width="100%" />
+  <p><sub>Anima Light Lavender · 薰衣草花田的黄昏 · 约 63.4 秒</sub></p>
+</div>
+</td>
+</tr>
+</table>
+
+---
+
 ## ⚡ 三步上手
 
 ### 第一步：准备 Kaggle Token
@@ -239,6 +310,7 @@
 | **契约测试** | `npm run test:contract` | 校验全套模型配置与接口契约 |
 | **离线联调** | `node test/mock-daemon.mjs` | 本地模拟云端双向通信，无需真实 Kaggle 算力 |
 | **构建工作台** | `node build.mjs` | 编译前端单文件 Bundle `client.js` |
+| **预览与截图** | `node tools/preview.mjs --shot` | 生成设计预览页（加 `--readme` 同时刷新 README 截图） |
 | **生产打包** | `npm run package` | 生成可发布的 `dist/` 独立插件 Bundle |
 
 ---

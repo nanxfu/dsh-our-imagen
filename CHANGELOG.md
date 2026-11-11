@@ -9,7 +9,7 @@
   - 关键链路补齐结构化打点：出图队列（enqueue / 会话等待 / 远端提交与轮询 / 完成与失败 / 关机取消）、会话状态机（`transition` 统一收口全部状态跃迁，restore 的 `probe_health_ok` / `ntfy_rejoin` / `kernel_ended_cleanup` / `invalid_record` / `no_record` 分支，心跳丢失与隧道重连的 warn）、网络降级（fetch→curl 的主机名、错误类型、耗时、状态码）与 kaggle CLI（子命令类别、耗时、退出码、failure 类型）。会话进入 error 时尽力把 Kernel 日志尾（约 30 行 / 4000 字符）写入 Host 日志，容器销毁后仍保留失败现场。
   - `GET /imagen-api/logs` 在原有 `{ ok, since, next, lines }` 上新增 `hostLines`：最近 120 行已脱敏 Host 日志，成功、`session_absent`、`logs_unavailable` 三个分支都会带，老字段语义与取值不变。工作台日志抽屉在远端日志为空时直接展示 Host 日志；「复制诊断信息」新增 `host logs` 段落，没有活跃云端会话时也能一键导出。
 - **中文产品名定为「生图工作台」**：侧边栏标题、品牌名、诊断信息标题与 locale 标题统一为「生图工作台」（英文侧为 “Imagen Studio”）。
-- **README 视觉截图**：`docs/assets/` 新增工作台浅色主界面、深色模型选择卡、画廊与创作助手截图，README / README.en 的图片引用改为真实文件。
+- **README 视觉截图与模型示例**：`docs/assets/` 新增工作台浅色主界面、深色模型选择卡、画廊与创作助手四张真实截图；新增 `docs/assets/showcase/`（9 个内置模型的实拍样张 + 索引清单），README / README.en 增加「模型示例」表格；`tools/preview.mjs` 的预览改用真实生图（manifest 缺失时仍退回占位图），并新增 `--readme` 一键刷新截图。
 
 ### 工程
 
