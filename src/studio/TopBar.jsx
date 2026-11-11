@@ -8,7 +8,7 @@ import { formatDuration } from '../logic/format.js'
 import { elapsedMsSince, formatClockTime, quotaText } from '../logic/logs.js'
 import { Icon } from './icons.jsx'
 import { StudioIcon } from './StudioIcon.jsx'
-import { probeStatusOf } from '../logic/probe.js'
+import { accountStatusOf, probeStatusOf } from '../logic/probe.js'
 import { useHostSnapshot } from './hooks/useStudioLogs.js'
 
 /** Kaggle 账户设置页：配额读不到时给用户一个直达入口。 */
@@ -83,6 +83,9 @@ export function TopBar(props) {
   // 状态弹层优先用宿主轮询到的 probe；刚做过检查时用本次结果兜底。
   const probePayload = probe || (snapshot && snapshot.probe) || (probeReport && probeReport.probe) || null
   const probeInfo = probeStatusOf(probePayload)
+  // 账号状态不只看探测：会话能启动、能出图同样证明凭据有效；从未探测时显示「未检查」，
+  // 不能默认成「不可用」（可出图却提示账号不可用属于误报）。
+  const accountStatus = accountStatusOf(probePayload, sessionState)
   const probeFailed = probeReport && probeReport.status && probeReport.status !== 'ok' ? probeReport : null
   const probeNote = probeInfo && probeInfo.notes.length > 0 ? probeInfo.notes[0] : ''
   // 配额不可读（接口不可用或本次检测失败）时改用本地统计回退展示。
@@ -191,9 +194,9 @@ export function TopBar(props) {
                   <span>{t('studio.probe.quota')} · {statusText(probeInfo.quota)}</span>
                 </>
               ) : null}
-              {/* 手机号绑定警告在任何状态下都要能查到，所以账号行常驻。 */}
+              {/* 手机号绑定警告在任何状态下都要能查到，所以账号行常驻；状态由探测与会话结果共同判定。 */}
               <span>
-                {t('studio.probe.account')} · {statusText(probeInfo ? probeInfo.auth : 'unavailable')}
+                {t('studio.probe.account')} · {statusText(accountStatus)}
                 <Tooltip text={t('studio.compute.authTooltip')} tone="warn" side="bottom" />
               </span>
               {probeFailed ? (

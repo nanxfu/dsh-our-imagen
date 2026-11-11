@@ -39,6 +39,31 @@ export function probeStatusOf(probe) {
   }
 }
 
+/**
+ * 会话已经推进到这些状态，说明内核推送与远端连通确实成功过。本插件的判定原则是
+ * 「鉴权以真实 API 调用成败为准」（见 lib/kaggle.js），因此这些状态足以证明凭据有效。
+ */
+const AUTH_PROVEN_SESSION_STATES = ['provisioning', 'connecting', 'warming', 'ready', 'stopping']
+
+/** 会话状态是否足以证明 Kaggle 凭据有效。 */
+export function sessionProvesAuth(sessionState) {
+  return AUTH_PROVEN_SESSION_STATES.includes(sessionState)
+}
+
+/**
+ * 账号状态的展示值：`ok` / `failed` / `unknown`。
+ *
+ * - 有成功证据一律按正常显示：探测通过，或会话能启动、能出图（会话本身即真实 API 调用成功），
+ *   上一次探测的偶发失败不该盖过它；
+ * - 都没有成功证据时，有探测结果就如实报失败；
+ * - 完全没有探测记录时给 `unknown`（未检查）——没检查过不等于账号不可用。
+ */
+export function accountStatusOf(probe, sessionState) {
+  const status = probeStatusOf(probe)
+  if ((status && status.auth === 'ok') || sessionProvesAuth(sessionState)) return 'ok'
+  return status ? status.auth : 'unknown'
+}
+
 /** 根据 probe 结果给出应弹哪类指引卡：cli_missing / auth_required / ''。 */
 export function probeFailureCode(probe) {
   const status = probeStatusOf(probe)

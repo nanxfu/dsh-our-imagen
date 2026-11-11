@@ -798,6 +798,48 @@ await check('渲染：算力弹层配额回退、隧道通道与日志入口', a
   assert.ok(logsRow, '[compute] 缺少查看运行日志入口')
   logsRow.props.onClick()
   assert.equal(openLogsCalls.length, 1, '[compute] 点击日志入口应交给 ui.openLogs')
+
+  // 回归：本轮从未点过「检查环境」时 /state 的 probe 为 null，账号状态不能落成「不可用」。
+  // 故意不给 /state 应答，避免宿主快照里的 probe 掩盖问题。
+  const mountWithoutProbe = async (sessionState, session) => {
+    const bare = await loadClient({ now: NOW, responses: {}, testBuild: true })
+    const bareTree = await bare.mountRaw(bare.components.TopBar, {
+      t,
+      ui: { view: 'studio', setView: () => {}, openLogs: () => {} },
+      compute: {
+        sessionState,
+        session,
+        quota: null,
+        presets: [preset],
+        busy: '',
+        probing: false,
+        probe: null,
+        probeReport: null,
+        startSession: () => {},
+        stopSession: () => {},
+        runProbe: () => {},
+        openFolder: () => {},
+      },
+      form: {
+        form: { presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0 },
+        patchForm: () => {},
+      },
+      library: { loadHistory: () => {} },
+      defaultOpen: true,
+    })
+    bare.unmount()
+    return collectText(bareTree).join('')
+  }
+
+  // 会话已就绪（能出图）→ 账号正常：会话本身就是凭据有效的证据。
+  const readyFlat = await mountWithoutProbe('ready', fallbackState.session)
+  assert.ok(readyFlat.includes('账号 · 正常'), `[compute] 会话就绪时账号应为正常，实际：${readyFlat}`)
+  assert.ok(!readyFlat.includes('账号 · 不可用'), '[compute] 会话就绪时不应把账号判成不可用')
+
+  // 既没探测过、也没有会话 → 未检查，同样不能落成「不可用」。
+  const idleFlat = await mountWithoutProbe('absent', null)
+  assert.ok(idleFlat.includes('账号 · 未检查'), `[compute] 未探测时应显示未检查，实际：${idleFlat}`)
+  assert.ok(!idleFlat.includes('账号 · 不可用'), '[compute] 未探测不应显示不可用')
 })
 
 await check('渲染：大图预览 dialog 与图片 alt', async () => {

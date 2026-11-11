@@ -455,6 +455,20 @@ await check('探测结果归一化', () => {
   assert.equal(ok.cli, 'ok', '兼容布尔型 cli')
   assert.equal(ok.auth, 'ok')
   assert.equal(ok.quota, 'ok')
+
+  // 账号状态：没探测过不等于账号不可用；会话能跑通本身就是凭据有效的证据。
+  const probeOk = { cli: { present: true }, auth: { ok: true }, quota: { available: true } }
+  const probeFailed = { cli: { present: true }, auth: { ok: false, errorCode: 'auth_required' }, quota: { available: false } }
+  assert.equal(logic.sessionProvesAuth('ready'), true)
+  assert.equal(logic.sessionProvesAuth('provisioning'), true)
+  assert.equal(logic.sessionProvesAuth('absent'), false)
+  assert.equal(logic.sessionProvesAuth('error'), false)
+  assert.equal(logic.accountStatusOf(null, 'absent'), 'unknown', '从未探测时应是未检查，不能是不可用')
+  assert.equal(logic.accountStatusOf(null, 'ready'), 'ok', '会话已就绪（能出图）即证明凭据有效')
+  assert.equal(logic.accountStatusOf(null, 'provisioning'), 'ok')
+  assert.equal(logic.accountStatusOf(probeOk, 'absent'), 'ok')
+  assert.equal(logic.accountStatusOf(probeFailed, 'absent'), 'failed', '探测失败且没有成功证据时如实报失败')
+  assert.equal(logic.accountStatusOf(probeFailed, 'ready'), 'ok', '会话跑通优先于上一次探测失败')
 })
 
 await check('润色标签的追加与撤销', () => {

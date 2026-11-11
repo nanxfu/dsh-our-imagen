@@ -809,6 +809,7 @@ var TIMEOUTS = {
   cliQuotaMs: 2e4,
   cliPushMs: 18e4,
   cliLogsMs: 45e3,
+  cliOutputMs: 18e4,
   // 客户端
   clientProbeMs: 45e3,
   clientStatePollMs: 1e4,
@@ -1972,6 +1973,15 @@ function probeStatusOf(probe) {
     notes
   };
 }
+var AUTH_PROVEN_SESSION_STATES = ["provisioning", "connecting", "warming", "ready", "stopping"];
+function sessionProvesAuth(sessionState) {
+  return AUTH_PROVEN_SESSION_STATES.includes(sessionState);
+}
+function accountStatusOf(probe, sessionState) {
+  const status = probeStatusOf(probe);
+  if (status && status.auth === "ok" || sessionProvesAuth(sessionState)) return "ok";
+  return status ? status.auth : "unknown";
+}
 function probeFailureCode(probe) {
   const status = probeStatusOf(probe);
   if (!status) return "";
@@ -3002,6 +3012,7 @@ function TopBar(props) {
   const activePreset = presets.find((item) => item.id === fields.presetId) || null;
   const probePayload = probe || snapshot && snapshot.probe || probeReport && probeReport.probe || null;
   const probeInfo = probeStatusOf(probePayload);
+  const accountStatus = accountStatusOf(probePayload, sessionState);
   const probeFailed = probeReport && probeReport.status && probeReport.status !== "ok" ? probeReport : null;
   const probeNote = probeInfo && probeInfo.notes.length > 0 ? probeInfo.notes[0] : "";
   const quotaUnavailable = Boolean(probeFailed || probeInfo && probeInfo.quota !== "ok");
@@ -3113,7 +3124,7 @@ function TopBar(props) {
           /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { children: [
             t("studio.probe.account"),
             " · ",
-            statusText(probeInfo ? probeInfo.auth : "unavailable"),
+            statusText(accountStatus),
             /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Tooltip, { text: t("studio.compute.authTooltip"), tone: "warn", side: "bottom" })
           ] }),
           probeFailed ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { title: probeFailed.message || void 0, children: [

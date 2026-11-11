@@ -1,5 +1,18 @@
 # 变更记录
 
+## 未发布
+
+### 修复
+
+- **算力弹层账号状态误报「不可用」**：此前只要本轮没有手动点过「检查环境」，`/state` 的 `probe` 就是 `null`，弹层里的账号行会落到硬编码的 `unavailable`，于是一边正常出图、一边提示「账号 · 不可用」。现在账号状态由 `accountStatusOf()` 统一推导：探测通过、或会话已推进到 provisioning/connecting/warming/ready/stopping（内核推得上去、GPU 连得上，本身就是真实 API 调用成功），都显示「正常」；只有确实没有任何成功证据时才保留上次探测的失败结论；从未探测过显示「未检查」。新增 `sessionProvesAuth()` 与对应的逻辑/渲染回归测试。
+
+### 工程
+
+- **模型资产抽象（无行为变化）**：`shared/contract.js` 里的 4 个预设拆成 `models/<id>.json`（单模型单文件、字段扁平，新增 `order`、`runtime: "default"` 与 `measured` 实测块）；新增 `tools/build-assets.mjs` 生成 `shared/models.generated.js`，`contract.js` 只做 re-export；`check-contract` 增加第 k 项「生成文件与 models/ 同步」，`npm test` 接入 `models:check`。生成后的 `PRESETS` 与改造前逐字段深比较一致。
+- **模型验证脚本**：新增 `tools/verify-model.mjs` + 远端 payload `tools/payload/verify-model.py`，支持 `--config / --write / --dry-run / --timeout`；复用 `lib/kernel.js` 打包与 `lib/kaggle.js` 推送/日志/产物下载，实跑回填显存、加载、首图、稳态与下载体积；失败按类别归因并打印最后 20 行日志。离线回归 `test/check-verify-model.mjs` 已接入 `npm test`。
+- **模型录入 Agent Skill**：新增 `skills/model-asset-intake/SKILL.md`，把「外部链接 → 草稿 → dry-run → 真机验证（先确认配额）→ 失败自愈 → 入库 → build/check/test」固化成可执行 SOP；`docs/MODEL_ASSET_SPEC.md` 补双份 loader 维护约定与阶段状态。
+- `.gitignore` 增加 `.tmp/`（模型草稿与验证产物目录）。
+
 ## 0.4.1 — 2026-11-11
 
 ### 修复
