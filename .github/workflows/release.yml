@@ -12,6 +12,8 @@ permissions:
 jobs:
   release:
     name: Build and publish release
+    # 删除 tag 也会触发 push 事件；此时 tag 已不存在，跳过以免产生一次必然失败的运行。
+    if: github.event.deleted != true
     runs-on: ubuntu-latest
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
