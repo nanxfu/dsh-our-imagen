@@ -50,6 +50,12 @@ jobs:
       - name: Build offline bundle
         run: npm run package
 
+      - name: Verify offline bundle zip
+        shell: bash
+        run: |
+          ls -lh dist
+          compgen -G "dist/*.zip" > /dev/null || { echo "::error::离线 zip 未生成，无法创建 Release"; exit 1; }
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

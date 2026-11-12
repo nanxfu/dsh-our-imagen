@@ -108,7 +108,13 @@ async function main() {
           { cwd: ROOT, stdio: 'inherit' },
         )
       : null
-  const zipped = powershell ? powershell.status === 0 : run('zip', ['-qr', zipPath, relative(DIST, target)]).status === 0
+  const zipped = powershell
+    ? powershell.status === 0
+    // POSIX：在 dist/ 内用相对目录名压缩，避免 zip 在仓库根目录找不到目标目录。
+    : spawnSync('zip', ['-qr', `${pkg.name}-${pkg.version}.zip`, `${pkg.name}-${pkg.version}`], {
+        cwd: DIST,
+        stdio: 'inherit',
+      }).status === 0
 
   console.log('')
   console.log(`版本 ${pkg.version} 打包完成。`)

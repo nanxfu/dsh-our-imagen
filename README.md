@@ -238,16 +238,16 @@
 
 ### 第二步：在 DSH 中加载插件
 
-你可以任选下面一种方式：
+> 当前版本尚未发布到 npm，1024 插件市场也尚未收录，**请先用方式 B 安装**；上架后方式 A 即可一条命令安装。
 
-* **方式 A：1024 插件市场或 CLI 安装**（推荐）：
+* **方式 B：Release Bundle 或本地源码加载**（当前推荐）：
+  1. 从 [Releases](https://github.com/nanxfu/dsh-our-imagen/releases) 下载最新的 `dsh-our-free-imagen-<version>.zip` 并解压（或克隆本仓库后执行 `npm install && npm run package`，产物在 `dist/`）；
+  2. 打开 DSH 设置 → **插件管理** → 选择 **本地加载（Load Bundle）** 选中该目录；
+  3. 点击左侧工具栏新增的 **生图工作台** 图标。
+* **方式 A：CLI / 1024 插件市场安装**（npm 发布后可用，推荐长期使用）：
   ```bash
   dsh plugin --profile web add dsh-our-free-imagen
   ```
-* **方式 B：本地源码或 Release Bundle 加载**：
-  1. 下载 Release 里的 `dist/dsh-our-free-imagen-<version>.zip` 并解压（或克隆本仓库后执行 `npm install && npm run package`）；
-  2. 打开 DSH 设置 → **插件管理** → 选择 **本地加载（Load Bundle）** 选中该目录；
-  3. 点击左侧工具栏新增的 **生图工作台** 图标。
 
 ---
 
