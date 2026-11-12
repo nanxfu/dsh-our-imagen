@@ -1,0 +1,60 @@
+name: Publish npm
+
+# 手动触发的 npm 发布。Release 流程只负责 GitHub Release 与离线包，
+# 这样未配置 npm 凭据时不会让发版运行失败。
+#
+# 首次使用前：仓库 Settings → Secrets and variables → Actions →
+# 新建 repository secret `NPM_TOKEN`（npm granular access token，Read and Publish 权限）。
+# token 权限不足时 npm 会返回 404，按 npm 官方说明检查 token 的包权限。
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "dry run（只校验打包，不真正发布）"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "::error::仓库没有配置 NPM_TOKEN secret，无法发布。请先在 Settings → Secrets 中添加。"
+            exit 1
+          fi
+          if [ "${DRY_RUN}" = "true" ]; then
+            npm publish --dry-run --access public
+          else
+            npm publish --provenance --access public
+          fi

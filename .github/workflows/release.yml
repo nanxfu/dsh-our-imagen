@@ -15,8 +15,6 @@ jobs:
     # 删除 tag 也会触发 push 事件；此时 tag 已不存在，跳过以免产生一次必然失败的运行。
     if: github.event.deleted != true
     runs-on: ubuntu-latest
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -71,7 +69,6 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
 
-      - name: Publish to npm (optional)
-        # 未配置 NPM_TOKEN 时该 env 为 null；只写 `!= ''` 会把 null 判成「有值」而误触发发布。
-        if: ${{ env.NODE_AUTH_TOKEN != null && env.NODE_AUTH_TOKEN != '' }}
-        run: npm publish --provenance --access public
+      # npm 发布拆到独立的 Publish npm workflow（.github/workflows/publish-npm.yml）：
+      # Release 流程不该因为「暂未配置 npm 凭据」而整条运行变红。
+
