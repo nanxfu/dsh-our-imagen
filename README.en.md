@@ -2,17 +2,17 @@
 
 # Imagen Studio (dsh-our-imagen)
 
-**Generate images for free in DeepSeek Harness powered by Kaggle's 30 hrs/week free GPU.**<br/>
-No local GPU needed, boot once for continuous generations, 100% stored locally.
+**Open-source text-to-image studio & agent visual tool for DeepSeek Harness.**<br/>
+Out-of-the-box support for Kaggle free 2×T4 cloud GPUs (30 hrs/week). No local GPU needed, continuous generations, 100% saved locally.
 
 [![Status: Preview](https://img.shields.io/badge/Status-Preview-orange?style=flat-square)](#)
 [![DeepSeek Harness](https://img.shields.io/badge/DSH-Plugin-0066FF?style=flat-square)](https://github.com/deepseek-ai/DeepSeek-Harness)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=flat-square)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/nanxfu/dsh-our-imagen?style=flat-square)](https://github.com/nanxfu/dsh-our-imagen)
 
-> 🚧 **Early Preview**: We are continuously refining connection reliability across diverse network setups. A more robust release and more capable text-to-image models (including higher fidelity and long-prompt driven architectures) are actively being integrated. Feedback and issues are warmly welcomed!
+> 🚧 **Early Preview**: Designed with pluggable backend drivers. Ships with Kaggle 2×T4 free GPU as the default driver; Google Colab, local GPU, and self-hosted worker drivers are actively being integrated. More stable releases and cutting-edge models are on the way!
 
-[Quick Start](#-quick-start-in-3-steps) · [What is it](#-what-is-it) · [FAQ](#-faq) · [Development](#-development--testing) · [简体中文](README.md)
+[Quick Start](#-quick-start-in-3-steps) · [What is it](#-what-is-it) · [Backends](#-backend-drivers) · [FAQ](#-faq) · [Development](#-development--testing) · [简体中文](README.md)
 
 </div>
 
@@ -20,14 +20,28 @@ No local GPU needed, boot once for continuous generations, 100% stored locally.
 
 ## 💡 What is it
 
-**Imagen Studio** (repo: `dsh-our-imagen`) is an open-source image generation studio plugin built for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness).
+**Imagen Studio** (repo: `dsh-our-imagen`) is an open-source image generation studio & visual agent plugin built for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness).
 
 It solves a very practical problem: many creators and developers want to use modern open-source text-to-image models, but lack a machine with high VRAM, or don't want to maintain a hefty multi-gigabyte local environment (PyTorch, CUDA, ComfyUI, etc.).
 
-With this plugin installed:
-1. **You get a full-page visual studio**: wake up Kaggle 2×T4 cloud GPUs with one click, select a curated model, type your prompt, and generate.
-2. **You get out-of-the-box chat agent tools**: simply ask your assistant in chat "generate a cyberpunk rain street", and the agent reviews the intent, shows a confirmation card, and invokes the generation.
-3. **No quota waste or third-party image hosting**: auto-shuts down after 30 minutes of inactivity, and generated images are streamed directly into your local `imagen-output/` workspace folder over an encrypted one-time tunnel.
+Built with a **decoupled, pluggable backend architecture**:
+1. **You get a full-page visual studio**: wake up cloud GPUs with one click, select a curated model, type your prompt, and generate.
+2. **You get out-of-the-box chat agent tools**: ask your assistant in chat "generate a cyberpunk rain street", and the agent reviews the intent, shows a confirmation card, and invokes the generation.
+3. **Zero-cost computing out of the box**: ships with a default Kaggle 2×T4 driver (30 hrs/week free quota), with Google Colab and custom worker integrations coming soon.
+4. **No quota waste or third-party image hosting**: auto-shuts down after 30 minutes of inactivity, and generated images are streamed directly into your local `imagen-output/` workspace folder over an encrypted one-time tunnel.
+
+---
+
+## 🔌 Backend Drivers
+
+Imagen Studio decouples the visual user experience from the underlying diffusion inference engine:
+
+| Backend Driver | Status | Hardware Tier | Cost / Barrier | Note |
+| :--- | :---: | :--- | :--- | :--- |
+| **Kaggle GPU Driver** | **Built-in (Default)** | 2×Nvidia Tesla T4 (30G VRAM) | **100% Free** (30 hrs/wk) | Default out-of-the-box driver, zero local GPU requirements, encrypted peer rendezvous |
+| **Google Colab Driver** | **In Progress** | Nvidia T4 / A100 | **Free / Pro** | One-click notebook attach & tunnel link, expanding free compute sources |
+| **Custom Remote Worker** | **Planned** | Self-hosted / AutoDL / RunPod | Pay-per-use / Private | Ideal for creators with existing private GPU servers or 24/7 needs |
+| **Local Direct (ComfyUI)** | **Planned** | Local Dedicated GPU (RTX 3060/4090) | Own Hardware | Ideal for users with local high-VRAM hardware seeking zero latency and offline usage |
 
 ---
 

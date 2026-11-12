@@ -2,17 +2,17 @@
 
 # 生图工作台 (dsh-our-imagen)
 
-**借 Kaggle 每周免费 30 小时 GPU，在 DeepSeek Harness 里免费出图。**<br/>
-不吃本机显卡，开机一次随画随出，图片全部直接落盘在本地。
+**DeepSeek Harness 的开源文生图工作台与 Agent 视觉工具。**<br/>
+首发支持 Kaggle 免费云端双卡 GPU（每周赠送 30 小时），不吃本机显卡，开机随画随出，图片全部直接落盘在本地。
 
 [![Status: Preview](https://img.shields.io/badge/Status-Preview-orange?style=flat-square)](#)
 [![DeepSeek Harness](https://img.shields.io/badge/DSH-Plugin-0066FF?style=flat-square)](https://github.com/deepseek-ai/DeepSeek-Harness)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=flat-square)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/nanxfu/dsh-our-imagen?style=flat-square)](https://github.com/nanxfu/dsh-our-imagen)
 
-> 🚧 **当前处于 Preview 早期预览阶段**：部分复杂网络环境下的保活机制正在持续打磨。更稳定的插件版本、更强大的开源生图模型（如更高画质与长文本驱动的新架构）正在紧密接入中，欢迎体验与反馈 issue！
+> 🚧 **当前处于 Preview 早期预览阶段**：可插拔后端架构正在演进，首发默认驱动为 Kaggle 免费双卡 GPU；Colab、本地 GPU 及自建 Worker 支持正在接入中。更稳定的插件版本、更多前沿模型正在持续更新，欢迎体验与反馈 issue！
 
-[快速上手](#-三步上手) · [它是什么](#-它是什么) · [问答](#-常见问答) · [开发与测试](#-开发与测试) · [English](README.en.md)
+[快速上手](#-三步上手) · [它是什么](#-它是什么) · [后端支持](#-算力后端支持) · [问答](#-常见问答) · [开发与测试](#-开发与测试) · [English](README.en.md)
 
 </div>
 
@@ -20,14 +20,28 @@
 
 ## 💡 它是什么
 
-**生图工作台**（仓库：`dsh-our-imagen`）是运行在 [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness) 上的开源文生图工作台插件。
+**生图工作台**（仓库：`dsh-our-imagen`）是运行在 [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness) 上的开源文生图工作台与视觉 Agent 插件。
 
 它解决一个很实在的问题：很多人想在本地用开源大模型画图，但自己的笔记本或台式机没有大显存独显，或者懒得在本地折腾一套数百兆甚至数千兆的 PyTorch、CUDA、ComfyUI 环境。
 
-装上它之后：
-1. **你得到一个整页可视化工作台**：开机唤醒 Kaggle 2×T4 云端算力，选好模型、敲下灵感、一键生图；
-2. **你得到一组开箱即用的对话工具**：在聊天窗口里直接跟 AI 说「帮我画一张赛博朋克雨夜街道」，Agent 会自动整理参数、展示确认卡片并调用云端生成；
-3. **不用担心算力浪费与图床隐私**：空闲 30 分钟自动关机，图片通过加密安全隧道直接存进你本地工作区的 `imagen-output/` 文件夹。
+本插件采用**宿主工作台与算力后端解耦**的可插拔设计：
+1. **你得到一个整页可视化工作台**：开机唤醒云端算力，选好模型、敲下灵感、一键生图；
+2. **你得到一组开箱即用的对话工具**：在聊天窗口里直接跟 AI 说「帮我画一张赛博朋克雨夜街道」，Agent 会自动整理参数、展示确认卡片并调用算力生成；
+3. **零门槛免费算力驱动**：首发提供开箱即用的 Kaggle 2×T4 免费云端驱动（每周 30 小时免费额度），后续将陆续接入 Google Colab 等免费/自建后端；
+4. **不用担心算力浪费与图床隐私**：空闲 30 分钟自动关机，图片通过加密安全隧道直接存进你本地工作区的 `imagen-output/` 文件夹。
+
+---
+
+## 🔌 算力后端支持 (Backend Drivers)
+
+本插件将文生图交互界面与底层推理引擎解耦，支持按需接入不同的算力驱动：
+
+| 后端驱动 | 状态 | 算力规格 | 成本 / 门槛 | 说明 |
+| :--- | :---: | :--- | :--- | :--- |
+| **Kaggle GPU Driver** | **已内置 (默认)** | 2×Nvidia Tesla T4 (30G 显存) | **完全免费**（每周 30 小时额度） | 首发开箱即用，零本地显存负担，自动会合与加密直连 |
+| **Google Colab Driver** | **接入中** | Nvidia T4 / A100 | **免费 / 订阅** | 一键 Notebook 挂载与隧道直连，丰富免费算力来源 |
+| **自建远端 Worker** | **规划中** | 自建服务器 / AutoDL / RunPod | 按需计费 / 私有部署 | 适合拥有私有 GPU 服务器或需要长驻不关机的创作者 |
+| **本地直连 (Local/ComfyUI)** | **规划中** | 本机独显 (RTX 3060/4090 等) | 本地硬件 | 适合拥有本地大显存显卡、追求绝对零延迟与离线运行的用户 |
 
 ---
 
