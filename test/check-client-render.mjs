@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url'
 
 import { bundle } from '../build.mjs'
 import { loadClient, serializeTree, TEST_ARTIFACT } from './load-client.mjs'
+import { LIMITS } from '../shared/contract.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const PROD_ARTIFACT = join(ROOT, 'client.js')
@@ -107,7 +108,7 @@ const scenarios = {
         'ofs-image': 1,
         'ofs-dock': 1,
       },
-      forbidden: ['ofs-guidance', 'ofs-panel--chat', 'ofs-gallery', 'ofs-figure--empty', 'ofs-toast', 'ofs-stage-progress'],
+      forbidden: ['ofs-guidance', 'ofs-panel--chat', 'ofs-gallery', 'ofs-figure--empty', 'ofs-toast', 'ofs-stage-progress', 'ofs-queue-pill'],
     },
   },
   chat: {
@@ -178,6 +179,9 @@ const scenarios = {
         'ofs-gallery-group': 1,
         'ofs-gallery-card': 1,
         'ofs-gallery-action': 3,
+        // 画廊列由 JS 分桶（行优先）：1280px 视口下 4 列，卡片直接收藏的星标每张一个。
+        'ofs-gallery-col': 4,
+        'ofs-gallery-star': 1,
       },
       // 画廊是独立视图：不应带整页外壳、舞台、单轨面板或胶片条。
       forbidden: ['ofs-root', 'ofs-topbar', 'ofs-stage', 'ofs-panel', 'ofs-filmstrip', 'ofs-guidance', 'ofs-toast'],
@@ -250,6 +254,8 @@ const scenarios = {
         'ofs-ghost': 1,
         'ofs-ghost-label': 1,
         'ofs-ghost-time': 1,
+        // 窄屏胶片条收起后，队列状态由预览区的迷你胶囊兜底（宽屏由 CSS 隐藏）。
+        'ofs-queue-pill': 1,
         'ofs-batch': 1,
         'ofs-image': 1,
       },
@@ -271,7 +277,7 @@ const scenarios = {
     },
     history: { items: [] },
     props: {},
-    expect: ['正在生成…', '排队等待出图…', '8.0秒', '5.0秒'],
+    expect: ['正在生成…', '排队等待出图…', '8.0秒', '5.0秒', '另有 1 张排队'],
     reject: ['等待云端就绪…'],
     structure: {
       required: {
@@ -281,8 +287,46 @@ const scenarios = {
         'ofs-ghost-label': 2,
         'ofs-ghost-time': 2,
         'ofs-stage-progress': 1,
+        // 迷你胶囊只报「当前任务 + 后续排队数」：1 个在跑、1 个排队。
+        'ofs-queue-pill': 1,
+        'ofs-queue-pill-count': 1,
       },
       forbidden: ['ofs-filmstrip-empty', 'ofs-batch', 'ofs-guidance'],
+    },
+  },
+  // 宿主新下发的 stageCode + progress：进度位必须显示「正在生成第 k/总数 张」，
+  // 而不是笼统的「正在生成…」，也不能把宿主硬编码的中文 stage 直接搬上界面。
+  progress: {
+    state: {
+      defaultPreset: 'sdxl-lightning',
+      presets: [preset],
+      session: { state: 'ready', modelId: 'sdxl-lightning', device: 'Tesla T4', error: null },
+      jobs: [
+        {
+          id: 'job-progress',
+          status: 'running',
+          stageCode: 'running',
+          progress: { done: 1, total: 4 },
+          createdAt: at(-30),
+          startedAt: at(-8),
+          params: { prompt: '正在出四张里的第二张' },
+        },
+      ],
+      lastJob: null,
+    },
+    history: { items: [historyItem] },
+    props: {},
+    expect: ['正在生成第 2/4 张'],
+    reject: ['生成中 2/4'],
+    structure: {
+      required: {
+        'ofs-stage-progress': 1,
+        'ofs-progress-label': 1,
+        'ofs-ghost': 1,
+        'ofs-queue-pill': 1,
+        'ofs-image': 1,
+      },
+      forbidden: ['ofs-guidance', 'ofs-figure--empty', 'ofs-toast'],
     },
   },
   warming: {
@@ -413,6 +457,34 @@ const scenarios = {
         'ofs-figure--empty': 1,
       },
       forbidden: ['ofs-guidance-command', 'ofs-panel--chat', 'ofs-image', 'ofs-toast'],
+    },
+  },
+  // 回归：宿主 /state 请求在网络层直接失败时，界面曾经把浏览器原文
+  // "Failed to fetch" 原样塞进「操作没有完成」卡片；现在必须是可读文案 + 重试动作。
+  network: {
+    state: {
+      defaultPreset: 'sdxl-lightning',
+      presets: [preset],
+      session: { state: 'ready', modelId: 'sdxl-lightning', error: null },
+      jobs: [],
+      lastJob: null,
+    },
+    // state 请求直接抛 TypeError，等价于浏览器里的 "Failed to fetch"。
+    failures: { '/imagen-api/state': 'Failed to fetch' },
+    history: { items: [] },
+    props: {},
+    expect: ['连不上本地服务', '本地服务暂无响应，请稍后重试。', '重试', '关闭'],
+    reject: ['操作没有完成', 'Failed to fetch'],
+    structure: {
+      required: {
+        'ofs-root': 1,
+        'ofs-app': 1,
+        'ofs-guidance': 1,
+        'ofs-guidance-title': 1,
+        'ofs-guidance-detail': 1,
+        'ofs-guidance-actions': 1,
+      },
+      forbidden: ['ofs-guidance-command', 'ofs-image', 'ofs-toast'],
     },
   },
   generate: {
@@ -620,7 +692,12 @@ for (const [name, scenario] of Object.entries(scenarios)) {
       '/imagen-api/history': scenario.history,
       '/imagen-api/library': { favorites: [], deleted: [] },
     }
-    const client = await loadClient({ now: NOW, responses, testBuild: true })
+    const client = await loadClient({
+      now: NOW,
+      responses,
+      failures: scenario.failures ?? {},
+      testBuild: true,
+    })
     const tree = scenario.view === 'gallery'
       // 画廊是工作台内的一个视图，用组件自身的初始 state 无法直达，这里直接挂 Gallery
       ? await client.mountRaw(client.components.Gallery, {
@@ -686,6 +763,168 @@ await check('画廊悬停动作把完整作品条目交给回调', async () => {
   assert.equal(received.recall && received.recall.image, historyItem.images[0], '条目里应带图片信息')
   assert.equal(received.variant && received.variant.item, historyItem, '生成变体应收到完整条目')
   assert.equal(received.zoom && received.zoom.item, historyItem, '查看大图应收到完整条目')
+})
+
+// 画廊列分配：行优先，第一行从左到右就是最新顺序；列内部保留自然高度。
+await check('渲染：画廊按行优先分列，最新作品在第一行最左', async () => {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const entries = [image(101), image(102), image(103)].map((img) => ({ image: img, item: historyItem }))
+  const tree = await client.mountRaw(client.components.Gallery, {
+    t,
+    gallery: entries,
+    now: NOW,
+    presets: [preset],
+    favorites: [],
+    onDelete: () => {},
+    onExport: () => {},
+    onOpen: () => {},
+    onRecall: () => {},
+    onVariant: () => {},
+    onZoom: () => {},
+    onToggleFavorite: () => {},
+  })
+  client.unmount()
+
+  const columns = findNodes(tree, (node) => node.props && node.props.className === 'ofs-gallery-col')
+  assert.equal(columns.length, 4, '1280px 视口下应是 4 列')
+  const srcOf = (column) => findNodes(column, (node) => node.type === 'img').map((node) => node.props.src)
+  assert.deepEqual(srcOf(columns[0]), [image(101).url], '最新作品落在第一列第一格')
+  assert.deepEqual(srcOf(columns[1]), [image(102).url], '第二新落在第二列')
+  assert.deepEqual(srcOf(columns[2]), [image(103).url], '第三新落在第三列')
+  assert.deepEqual(srcOf(columns[3]), [], '条目用完后不再往后面的列补位')
+})
+
+// 卡片直接收藏：星标是图片按钮的兄弟节点，点击只切收藏，不连带打开大图。
+await check('渲染：画廊卡片星标切换收藏，不影响打开大图', async () => {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const entries = [image(7), image(8)].map((img) => ({ image: img, item: historyItem }))
+  const favoriteCalls = []
+  const opened = []
+  const baseProps = (extra = {}) => ({
+    t,
+    gallery: entries,
+    now: NOW,
+    presets: [preset],
+    favorites: [entries[0].image.path],
+    onDelete: () => {},
+    onExport: () => {},
+    onOpen: (entry) => opened.push(entry),
+    onRecall: () => {},
+    onVariant: () => {},
+    onZoom: () => {},
+    onToggleFavorite: (path) => favoriteCalls.push(path),
+    ...extra,
+  })
+  const tree = await client.mountRaw(client.components.Gallery, baseProps())
+  client.unmount()
+
+  const starButtons = findNodes(
+    tree,
+    (node) => node.type === 'button'
+      && typeof node.props?.className === 'string'
+      && node.props.className.split(' ').includes('ofs-gallery-star'),
+  )
+  assert.equal(starButtons.length, 2, '每张卡片都应有一个星标按钮')
+  assert.equal(starButtons[0].props['aria-pressed'], true, '已收藏的星标是选中态')
+  assert.equal(starButtons[1].props['aria-pressed'], false)
+  // 星标必须是图片按钮的兄弟节点：嵌套 button 既不合规，也会让点击互相干扰。
+  const mediaButtons = findNodes(
+    tree,
+    (node) => node.type === 'button' && node.props && node.props.className === 'ofs-gallery-media',
+  )
+  assert.equal(mediaButtons.length, 2)
+  for (const media of mediaButtons) {
+    assert.equal(countByClass(media, 'ofs-gallery-star'), 0, '星标不应嵌在图片按钮内部')
+  }
+
+  starButtons[1].props.onClick({ stopPropagation: () => {} })
+  assert.deepEqual(favoriteCalls, [entries[1].image.path], '点星标只把该图路径交给收藏动作')
+  assert.equal(opened.length, 0, '点星标不应打开大图')
+
+  // 批量选择态：星标整颗收起，点图片只切换选中，不打开大图也不误触收藏。
+  const selectingClient = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const selectingTree = await selectingClient.mountRaw(
+    selectingClient.components.Gallery,
+    baseProps({ defaultSelecting: true }),
+  )
+  selectingClient.unmount()
+  assert.equal(
+    findNodes(
+      selectingTree,
+      (node) => node.props && typeof node.props.className === 'string'
+        && node.props.className.split(' ').includes('ofs-gallery-star'),
+    ).length,
+    0,
+    '批量选择模式下不应出现可点击的星标',
+  )
+  assert.equal(
+    findNodes(selectingTree, (node) => node.props && node.props.className === 'ofs-gallery-pick').length,
+    2,
+    '批量选择模式下每张卡片显示选择圆点',
+  )
+  const selectingMedia = findNodes(
+    selectingTree,
+    (node) => node.type === 'button' && node.props && node.props.className === 'ofs-gallery-media',
+  )
+  selectingMedia[0].props.onClick()
+  assert.equal(opened.length, 0, '批量选择时点图片只切换选中，不打开大图')
+  assert.deepEqual(favoriteCalls, [entries[1].image.path], '批量选择时不应触发收藏')
+})
+
+// 历史一次取契约允许的最大批量：画廊不能停在旧的 60 张上限。
+await check('渲染：历史加载取契约上限', async () => {
+  const client = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/state': readyState,
+      '/imagen-api/history': { items: [historyItem] },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+    },
+    testBuild: true,
+  })
+  await client.mountRaw(client.components.Studio, {})
+  client.unmount()
+  assert.ok(
+    client.fetches.includes(`/imagen-api/history?limit=${LIMITS.history.maxLimit}`),
+    `历史请求应取契约上限，实际请求：${client.fetches.join(', ')}`,
+  )
+  assert.ok(!client.fetches.includes('/imagen-api/history?limit=60'), '不应再写死旧的 60 张上限')
+})
+
+// 英文界面：窄屏队列胶囊走本地化，不能出现宿主硬编码的中文 stage。
+await check('渲染：英文界面的窄屏队列胶囊', async () => {
+  const client = await loadClient({
+    now: NOW,
+    locale: 'en-US',
+    responses: {
+      '/imagen-api/state': {
+        ...readyState,
+        jobs: [
+          { id: 'job-e2', status: 'queued', createdAt: at(-5), params: { prompt: 'queued second' } },
+          {
+            id: 'job-e1',
+            status: 'running',
+            stageCode: 'running',
+            progress: { done: 1, total: 3 },
+            createdAt: at(-30),
+            startedAt: at(-8),
+            params: { prompt: 'running first' },
+          },
+        ],
+      },
+      '/imagen-api/history': { items: [] },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+    },
+    testBuild: true,
+  })
+  const tree = await client.mountRaw(client.components.Studio, {})
+  client.unmount()
+  const text = collectText(tree).join(' | ')
+  assert.ok(text.includes('Generating image 2 of 3'), `[queue-pill] 英文分张进度应本地化：${text}`)
+  assert.ok(text.includes('1 more queued'), '[queue-pill] 英文排队数量应本地化')
+  assert.ok(!text.includes('另有'), '[queue-pill] 英文界面不应出现中文队列文案')
 })
 
 await check('渲染：日志抽屉（就绪 / 空态 / 不可用）', async () => {
@@ -1127,7 +1366,8 @@ await check('渲染：大图预览 dialog 与图片 alt', async () => {
 })
 
 await check('渲染：意图确认卡同时展示英文提示词与中文摘要', async () => {
-  const mountIntent = async (message) => {
+  const mountIntent = async (message, options = {}) => {
+    const lockCalls = []
     const client = await loadClient({
       now: NOW,
       responses: {
@@ -1147,6 +1387,8 @@ await check('渲染：意图确认卡同时展示英文提示词与中文摘要'
         interpreting: false,
         interpret: () => {},
         generateIntent: () => {},
+        toggleIntentLockSeed: (id) => lockCalls.push(id),
+        canLockSeed: options.canLockSeed !== false,
         resolveClarify: () => {},
         clearThread: () => {},
       },
@@ -1154,7 +1396,7 @@ await check('渲染：意图确认卡同时展示英文提示词与中文摘要'
       actions: { sending: false },
     })
     client.unmount()
-    return { tree, text: collectText(tree).join(' | ') }
+    return { tree, text: collectText(tree).join(' | '), lockCalls }
   }
 
   const modelMessage = {
@@ -1178,10 +1420,42 @@ await check('渲染：意图确认卡同时展示英文提示词与中文摘要'
       'ofs-intent-prompt': 1,
       'ofs-intent-summary': 1,
       'ofs-intent-summary-label': 1,
+      'ofs-intent-lock': 1,
       'ofs-intent-go': 1,
     },
     forbidden: ['ofs-intent-note', 'ofs-intent-question'],
   })
+
+  // 锁种开关默认关闭：不传 lockSeed 的确认卡渲染成未勾选，点一下才把这张卡的状态交回 hook。
+  const lockCheckbox = findNodes(
+    model.tree,
+    (node) => node.type === 'input' && node.props && node.props.type === 'checkbox',
+  )[0]
+  assert.ok(lockCheckbox, '[intent] 缺少「沿用上张构图」开关')
+  assert.equal(lockCheckbox.props.checked, false, '[intent] 锁种开关默认关闭')
+  assert.notEqual(lockCheckbox.props.disabled, true, '[intent] 有上一张图时开关可用')
+  lockCheckbox.props.onChange()
+  assert.deepEqual(model.lockCalls, [1], '[intent] 点开关应把这张卡的 id 交给 toggleIntentLockSeed')
+
+  // 已勾选 + 没有可复用种子两种状态：勾选态来自 message.lockSeed；无种子时置灰。
+  const locked = await mountIntent({ ...modelMessage, lockSeed: true })
+  const lockedBox = findNodes(
+    locked.tree,
+    (node) => node.type === 'input' && node.props && node.props.type === 'checkbox',
+  )[0]
+  assert.equal(lockedBox.props.checked, true, '[intent] lockSeed 打开时开关应勾选')
+
+  const noSeed = await mountIntent(modelMessage, { canLockSeed: false })
+  const noSeedBox = findNodes(
+    noSeed.tree,
+    (node) => node.type === 'input' && node.props && node.props.type === 'checkbox',
+  )[0]
+  assert.equal(noSeedBox.props.disabled, true, '[intent] 没有上一张图时锁种开关置灰')
+  const disabledLabel = findNodes(
+    noSeed.tree,
+    (node) => node.props && node.props.className === 'ofs-intent-lock is-disabled',
+  )[0]
+  assert.ok(disabledLabel, '[intent] 置灰态应有对应的结构类名')
 
   // 本地兜底：prompt 与 summary 都是原文，不重复渲染摘要，改为标注「模型未响应」。
   const local = await mountIntent({ ...modelMessage, prompt: '雨夜街景', summary: '雨夜街景', source: 'local', ratioId: '', styleId: '' })

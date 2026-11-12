@@ -8,6 +8,7 @@
 
 import React from 'react'
 
+import { galleryColumnCount, galleryColumns } from '../logic/gallery.js'
 import { Icon } from './icons.jsx'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -41,14 +42,47 @@ function presetNameOf(presets, id) {
   return (found && found.label) || id
 }
 
+/**
+ * 画廊列数。CSS 多列是列优先填充、没有行优先选项，所以按视口宽度算好列数后由 JS 分桶；
+ * 断点统一在 logic/gallery.js 维护，gallery.css 只负责每列内部的排布。
+ */
+function useColumnCount() {
+  const [columns, setColumns] = React.useState(() => (
+    typeof window === 'undefined' ? 5 : galleryColumnCount(window.innerWidth)
+  ))
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return undefined
+    const onResize = () => setColumns(galleryColumnCount(window.innerWidth))
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return columns
+}
+
 export function Gallery(props) {
-  const { t, gallery, now, presets, favorites, onOpen, onZoom, onDelete, onExport, onRecall, onVariant } = props
+  const {
+    t,
+    gallery,
+    now,
+    presets,
+    favorites,
+    onOpen,
+    onZoom,
+    onDelete,
+    onExport,
+    onRecall,
+    onVariant,
+    onToggleFavorite,
+    defaultSelecting,
+  } = props
   const [presetFilter, setPresetFilter] = React.useState('')
   const [favoriteOnly, setFavoriteOnly] = React.useState(false)
-  const [selecting, setSelecting] = React.useState(false)
+  // defaultSelecting 只给渲染测试直达批量选择态，正式界面从关闭开始。
+  const [selecting, setSelecting] = React.useState(Boolean(defaultSelecting))
   const [picked, setPicked] = React.useState([])
   const [confirming, setConfirming] = React.useState(false)
   const [keyword, setKeyword] = React.useState('')
+  const columns = useColumnCount()
 
   const items = Array.isArray(gallery) ? gallery : []
   const favoriteSet = new Set(favorites ?? [])
@@ -72,7 +106,6 @@ export function Gallery(props) {
 
   const usedPresets = [...new Set(items.map((entry) => entry.item.presetId).filter(Boolean))]
   const visibleCount = BUCKETS.reduce((total, bucket) => total + groups[bucket].length, 0)
-  const visiblePaths = BUCKETS.flatMap((bucket) => groups[bucket].map((entry) => keyOf(entry)))
 
   function togglePick(key) {
     setPicked((prev) => (prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]))
@@ -90,6 +123,12 @@ export function Gallery(props) {
     setFavoriteOnly(false)
   }
 
+  /** 星标只切换收藏；批量选择时星标整颗收起，避免和「点卡片选中」抢同一次点击。 */
+  function toggleFavorite(entry) {
+    if (typeof onToggleFavorite !== 'function') return
+    onToggleFavorite(keyOf(entry))
+  }
+
   async function confirmDelete() {
     if (picked.length === 0) return
     const result = await onDelete(picked)
@@ -99,6 +138,83 @@ export function Gallery(props) {
       return
     }
     exitSelect()
+  }
+
+  function renderCard(entry) {
+    const key = keyOf(entry)
+    const checked = picked.includes(key)
+    const favorite = favoriteSet.has(key)
+    const aspect = aspectOf(entry)
+    const prompt = entry.item.prompt || ''
+    const favoriteLabel = favorite ? t('studio.action.favorited') : t('studio.action.favorite')
+    return (
+      <div className={checked ? 'ofs-gallery-card is-picked' : 'ofs-gallery-card'} key={key}>
+        <div className="ofs-gallery-stage">
+          <button
+            type="button"
+            className="ofs-gallery-media"
+            style={aspect ? { aspectRatio: aspect } : undefined}
+            title={prompt || key}
+            aria-pressed={selecting ? checked : undefined}
+            onClick={() => (selecting ? togglePick(key) : onOpen(entry))}
+          >
+            <img src={entry.image.url} alt={prompt || entry.image.file || t('studio.image.alt')} loading="lazy" />
+            {selecting ? (
+              <span className={checked ? 'ofs-gallery-pick is-on' : 'ofs-gallery-pick'} aria-hidden="true">
+                {checked ? <Icon name="check" size={11} /> : null}
+              </span>
+            ) : null}
+          </button>
+
+          {/* 星标是图片上方的独立按钮：只切换收藏，不连带打开大图。 */}
+          {selecting ? null : (
+            <button
+              type="button"
+              className={favorite ? 'ofs-gallery-star is-on' : 'ofs-gallery-star'}
+              aria-pressed={favorite}
+              aria-label={favoriteLabel}
+              title={favoriteLabel}
+              onClick={(event) => {
+                // 虽然和图片按钮是兄弟节点，仍显式阻止冒泡，避免将来外包一层可点区域后误触。
+                if (event && typeof event.stopPropagation === 'function') event.stopPropagation()
+                toggleFavorite(entry)
+              }}
+            >
+              <Icon name={favorite ? 'starFilled' : 'star'} size={12} />
+            </button>
+          )}
+
+          {selecting ? null : (
+            <div className="ofs-gallery-hover">
+              <button type="button" className="ofs-gallery-action" onClick={() => onRecall(entry)}>
+                <Icon name="focus" size={12} />
+                {t('studio.action.iterate')}
+              </button>
+              <button type="button" className="ofs-gallery-action" onClick={() => onVariant(entry)}>
+                <Icon name="reroll" size={12} />
+                {t('studio.action.reroll')}
+              </button>
+              <button type="button" className="ofs-gallery-action" onClick={() => onZoom(entry)}>
+                <Icon name="expand" size={12} />
+                {t('studio.gallery.open')}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className="ofs-gallery-body"
+          onClick={() => (selecting ? togglePick(key) : onOpen(entry))}
+        >
+          <span className="ofs-gallery-caption">{prompt || '—'}</span>
+          <span className="ofs-gallery-tags">
+            {entry.item.presetId ? <em>{entry.item.presetId}</em> : null}
+            {entry.image.seed != null ? <span>#{entry.image.seed}</span> : null}
+          </span>
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -220,69 +336,13 @@ export function Gallery(props) {
           return (
             <section className="ofs-gallery-group" key={bucket}>
               <h4 className="ofs-gallery-group-title">{t(`studio.gallery.${bucket}`)}</h4>
+              {/* 每个时间分组各自按行优先分列，最新作品排在第一行最左侧。 */}
               <div className="ofs-gallery-wall">
-                {entries.map((entry) => {
-                  const key = keyOf(entry)
-                  const checked = picked.includes(key)
-                  const favorite = favoriteSet.has(key)
-                  const aspect = aspectOf(entry)
-                  const prompt = entry.item.prompt || ''
-                  return (
-                    <div className={checked ? 'ofs-gallery-card is-picked' : 'ofs-gallery-card'} key={key}>
-                      <div className="ofs-gallery-stage">
-                        <button
-                          type="button"
-                          className="ofs-gallery-media"
-                          style={aspect ? { aspectRatio: aspect } : undefined}
-                          title={prompt || key}
-                          aria-pressed={selecting ? checked : undefined}
-                          onClick={() => (selecting ? togglePick(key) : onOpen(entry))}
-                        >
-                          <img src={entry.image.url} alt={prompt || entry.image.file || t('studio.image.alt')} loading="lazy" />
-                          {selecting ? (
-                            <span className={checked ? 'ofs-gallery-pick is-on' : 'ofs-gallery-pick'} aria-hidden="true">
-                              {checked ? <Icon name="check" size={11} /> : null}
-                            </span>
-                          ) : null}
-                          {favorite ? (
-                            <span className="ofs-gallery-star" aria-hidden="true">
-                              <Icon name="starFilled" size={12} />
-                            </span>
-                          ) : null}
-                        </button>
-
-                        {selecting ? null : (
-                          <div className="ofs-gallery-hover">
-                            <button type="button" className="ofs-gallery-action" onClick={() => onRecall(entry)}>
-                              <Icon name="focus" size={12} />
-                              {t('studio.action.iterate')}
-                            </button>
-                            <button type="button" className="ofs-gallery-action" onClick={() => onVariant(entry)}>
-                              <Icon name="reroll" size={12} />
-                              {t('studio.action.reroll')}
-                            </button>
-                            <button type="button" className="ofs-gallery-action" onClick={() => onZoom(entry)}>
-                              <Icon name="expand" size={12} />
-                              {t('studio.gallery.open')}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      <button
-                        type="button"
-                        className="ofs-gallery-body"
-                        onClick={() => (selecting ? togglePick(key) : onOpen(entry))}
-                      >
-                        <span className="ofs-gallery-caption">{prompt || '—'}</span>
-                        <span className="ofs-gallery-tags">
-                          {entry.item.presetId ? <em>{entry.item.presetId}</em> : null}
-                          {entry.image.seed != null ? <span>#{entry.image.seed}</span> : null}
-                        </span>
-                      </button>
-                    </div>
-                  )
-                })}
+                {galleryColumns(entries, columns).map((column, index) => (
+                  <div className="ofs-gallery-col" key={index}>
+                    {column.map((entry) => renderCard(entry))}
+                  </div>
+                ))}
               </div>
             </section>
           )

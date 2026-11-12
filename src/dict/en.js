@@ -51,7 +51,7 @@ export const en = {
   'job.status.failed': 'Failed',
 
   // ── Error codes ───────────────────────────────────────────────
-  'error.network': 'The local service is not responding; retrying automatically.',
+  'error.network': 'The local service is not responding; try again shortly.',
   'error.http': 'Request failed',
   'error.code.need_prompt': 'Write a prompt first',
   'error.code.cli_missing': 'kaggle CLI is not installed',
@@ -128,7 +128,9 @@ export const en = {
   // ── Progress ──────────────────────────────────────────────────
   'studio.progress.waitingSession': 'Waiting for the cloud…',
   'studio.progress.queued': 'Waiting for the previous image…',
+  'studio.progress.loading': 'Loading the model…',
   'studio.progress.running': 'Generating…',
+  'studio.progress.generatingCount': 'Generating image {done} of {total}',
   'studio.session.elapsed': 'Waiting for',
 
   // ── Prompt ────────────────────────────────────────────────────
@@ -187,6 +189,8 @@ export const en = {
   'studio.filmstrip.empty': 'Each batch you generate shows up here',
   'studio.filmstrip.offline': 'The cloud is not running yet',
   'studio.filmstrip.offlineClosed': 'The cloud is closed',
+  // Narrow-screen queue pill: the filmstrip is hidden below 820px, this keeps the pending count visible.
+  'studio.queue.waiting': '{count} more queued',
   'studio.toast.firstImage': 'The cloud is ready; your first image is here',
 
   // ── Runtime logs ──────────────────────────────────────────────
@@ -245,6 +249,8 @@ export const en = {
   'studio.guidance.generic.title': 'The generation did not finish',
   'studio.guidance.generic.action': 'Try again',
   'studio.guidance.session.title': 'The cloud session is not ready',
+  'studio.guidance.network.title': 'Cannot reach the local service',
+  'studio.guidance.network.action': 'Retry',
   'studio.guidance.other.title': 'That action did not complete',
   'studio.guidance.close': 'Dismiss',
   'studio.guidance.cli.copy': 'Copy install command',
@@ -287,6 +293,7 @@ export const en = {
   'studio.chat.intent.title': 'Ready to generate',
   'studio.chat.intent.summary': 'Summary',
   'studio.chat.intent.generate': 'Generate this',
+  'studio.chat.intent.lockSeed': 'Reuse last composition (lock seed)',
   'studio.chat.clarify.title': 'One setting to confirm',
   'studio.chat.clarify.ratio': 'Which aspect ratio?',
   'studio.chat.clarify.style': 'Which style?',

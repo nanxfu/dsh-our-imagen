@@ -44,7 +44,7 @@ export function ChatPanel(props) {
   const { t, ui, form, chat, library, actions } = props
   const { panelMode: mode, setPanelMode: setMode } = ui
   const { patchForm } = form
-  const { messages, interpreting, interpret, generateIntent, resolveClarify, clearThread } = chat
+  const { messages, interpreting, interpret, generateIntent, toggleIntentLockSeed, canLockSeed, resolveClarify, clearThread } = chat
   const { openMessage: openImage } = library
   const { sending } = actions
 
@@ -117,6 +117,16 @@ export function ChatPanel(props) {
           <span>{styleLabel(t, message.styleId)}</span>
         </div>
         {message.source === 'local' ? <p className="ofs-intent-note">{t('studio.chat.intent.local')}</p> : null}
+        {/* 种子默认随机；想对比同一构图时才显式打开，避免跨主题对话被上一张的构图绑住。 */}
+        <label className={canLockSeed === false ? 'ofs-intent-lock is-disabled' : 'ofs-intent-lock'}>
+          <input
+            type="checkbox"
+            checked={message.lockSeed === true}
+            disabled={canLockSeed === false}
+            onChange={() => toggleIntentLockSeed(message.id)}
+          />
+          <span>{t('studio.chat.intent.lockSeed')}</span>
+        </label>
         <button
           type="button"
           className="ofs-btn is-primary ofs-intent-go"

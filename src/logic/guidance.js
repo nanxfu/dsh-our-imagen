@@ -36,9 +36,22 @@ const GENERATION_CODES = new Set([
 ])
 
 /**
+ * 客户端网络层错误：页面根本没拿到宿主响应（浏览器原文是 "Failed to fetch"）。
+ *
+ * 这类错误由 Host 状态轮询自动重试，界面不该把浏览器英文原文抛给用户，
+ * 也不该沿用「操作没有完成」这种什么都说明不了的兜底文案。
+ */
+const CONNECTION_CODES = new Set(['network'])
+
+/** 是否属于「连不上本地服务」这类客户端网络错误。 */
+export function isConnectionCode(code) {
+  return CONNECTION_CODES.has(code)
+}
+
+/**
  * 错误码 → 指引卡类型。
  * - ''：不弹卡（没有错误，或纯本地校验错误）
- * - oom / sleep / closed / cli / auth / session / generate / generic
+ * - oom / sleep / closed / cli / auth / network / session / generate / generic
  */
 export function guidanceKindOf(code) {
   if (!code) return ''
@@ -49,6 +62,7 @@ export function guidanceKindOf(code) {
   if (code === 'stopped') return 'closed'
   if (code === 'cli_missing') return 'cli'
   if (code === 'auth_required') return 'auth'
+  if (CONNECTION_CODES.has(code)) return 'network'
   if (SESSION_CODES.has(code)) return 'session'
   if (GENERATION_CODES.has(code)) return 'generate'
   return 'generic'

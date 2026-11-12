@@ -8,6 +8,9 @@
  *   A2. ready 之后心跳丢失但 Kernel 仍 RUNNING：重取一次隧道地址仍失败 →
  *       health_failed（不再无限抖动）。
  *   A3. 短暂心跳抖动：恢复后回到 ready，不误判为失效。
+ *   A4. Kernel 仍 RUNNING 时恢复窗口按跳续期：超过单个 recoveryTimeoutMs 仍不判死，
+ *       恢复后回到 ready（续期轮数用尽前）。
+ *   A5. 续期轮数用尽：收敛为 health_failed，不无限续命。
  *   B.  会合点收到 daemon 的 type:'error' 事件：立即转 error（tunnel_timeout），
  *       不再等 45 分钟 queue_timeout。
  *   D.  push 失败：清理临时 Kernel 目录（目录里的 daemon.py 含 token）。
@@ -37,7 +40,14 @@ import { SessionManager } from '../lib/session.js'
 
 const PRESET = 'sdxl-lightning'
 // 加速时钟：默认健康轮询 10s、Kernel 轮询 30s；测试里压到几十毫秒。
-const ACCELERATED = { tickMs: 40, kernelPollMs: 80, healthyIntervalMs: 40, recoveryTimeoutMs: 2000 }
+// recoveryMaxRenewals 也压小：默认 10 轮在加速时钟下会拉长 A2 的收敛时间。
+const ACCELERATED = {
+  tickMs: 40,
+  kernelPollMs: 80,
+  healthyIntervalMs: 40,
+  recoveryTimeoutMs: 2000,
+  recoveryMaxRenewals: 3,
+}
 
 const failures = []
 let passed = 0
@@ -189,10 +199,14 @@ function checkDefaultDetectionBound() {
     defaults.options.kernelPollMs,
   )
   const recoveryBound = defaults.options.recoveryTimeoutMs
+  // 续期总上限 = 单轮窗口 + 续期轮数 × Kernel 状态轮询间隔（每次确认 RUNNING 续一轮）。
+  const recoveryCap = recoveryBound + defaults.options.recoveryMaxRenewals * defaults.options.kernelPollMs
   defaults.dispose()
   check('默认时钟下 ready 失联检测 ≤ 60s', bound <= 60000, `${bound}ms`)
   // recoveryTimeoutMs 只兜底「会合点也不再返回地址」的少见路径，正常路径在 2 个健康周期内收敛。
-  check('默认时钟下隧道重建兜底 ≤ 3min', recoveryBound <= 180000, `${recoveryBound}ms`)
+  check('默认时钟下隧道重建单轮兜底 ≤ 3min', recoveryBound <= 180000, `${recoveryBound}ms`)
+  // 只要 Kernel 仍 RUNNING 就按跳续期，续期用尽才放弃；总上限必须仍是有限值。
+  check('默认时钟下恢复窗口续期总上限 ≤ 10min', recoveryCap <= 10 * 60 * 1000, `${recoveryCap}ms`)
 }
 
 async function scenarioKernelEndedAfterReady() {
@@ -404,6 +418,89 @@ async function scenarioRecoverySucceeds() {
   }
 }
 
+/**
+ * 恢复窗口续期：ready 失联后只要向 Kaggle 确认 Kernel 仍 RUNNING，每次确认都把
+ * 恢复窗口续一轮；隧道重建时间远超单个 recoveryTimeoutMs 也不判死，恢复后回到 ready。
+ */
+async function scenarioRecoveryWindowRenewed() {
+  const ntfy = await startFakeNtfy()
+  const health = await startFakeDaemonHealth()
+  ntfy.state.line = ntfyMessage({ type: 'ready', endpoint: `http://127.0.0.1:${health.port}` })
+  const { deps } = fakeDeps()
+  const session = makeSession({
+    ntfyPort: ntfy.port,
+    deps,
+    // 单轮窗口 200ms、Kernel 每 30ms 确认一次 RUNNING：不续期的话 200ms 后就该判死。
+    options: { recoveryTimeoutMs: 200, kernelPollMs: 30, tickMs: 20, recoveryMaxRenewals: 100 },
+  })
+  try {
+    await session.start(PRESET)
+    await waitFor('会话进入 ready', () => session.snapshot().state === 'ready')
+
+    health.state.mode = 'down'
+    await waitFor('进入恢复期', () => session.recoveringFromReady === true, { timeoutMs: 3000 })
+    // 等待 3 个单轮窗口：没有续期的话这里早已 health_failed。
+    await sleep(700)
+    const mid = session.snapshot()
+    check(
+      'Kernel 仍 RUNNING 时恢复窗口按跳续期（超过单轮窗口未判死）',
+      mid.state !== 'error' && session.recoveringFromReady === true,
+      `state=${mid.state} renewals=${session.recoveryRenewals}`,
+    )
+    check('续期次数随 Kernel 状态确认累加', session.recoveryRenewals >= 3, `${session.recoveryRenewals}`)
+
+    health.state.mode = 'ok'
+    await waitFor('恢复后回到 ready', () => session.snapshot().state === 'ready', { timeoutMs: 5000 })
+    check('续期窗口内恢复成功回到 ready', session.snapshot().state === 'ready' && session.snapshot().error === null)
+    check(
+      '恢复成功后续期状态清零',
+      session.recoveryRenewals === 0 && session.recoveringFromReady === false,
+      `renewals=${session.recoveryRenewals}`,
+    )
+  } finally {
+    session.dispose()
+    await ntfy.close()
+    await health.close()
+  }
+}
+
+/**
+ * 续期用尽仍未恢复：收敛为 health_failed。
+ * 续期不是无限续命——上限用尽 + 单轮窗口到期后必须放弃，避免长期挂在 connecting。
+ */
+async function scenarioRecoveryRenewalsExhausted() {
+  const ntfy = await startFakeNtfy()
+  const health = await startFakeDaemonHealth()
+  ntfy.state.line = ntfyMessage({ type: 'ready', endpoint: `http://127.0.0.1:${health.port}` })
+  const { deps } = fakeDeps()
+  const session = makeSession({
+    ntfyPort: ntfy.port,
+    deps,
+    options: { recoveryTimeoutMs: 120, kernelPollMs: 20, tickMs: 20, recoveryMaxRenewals: 2 },
+  })
+  try {
+    await session.start(PRESET)
+    await waitFor('会话进入 ready', () => session.snapshot().state === 'ready')
+    health.state.mode = 'down'
+    const began = Date.now()
+    await waitFor('续期用尽后转 error', () => session.snapshot().state === 'error', { timeoutMs: 5000 })
+    const elapsed = Date.now() - began
+    const snapshot = session.snapshot()
+    check('续期用尽后收敛为 health_failed', snapshot.error?.code === 'health_failed', JSON.stringify(snapshot.error))
+    check('续期用尽后不再无限等待', elapsed < 3000, `${elapsed}ms（加速时钟）`)
+    check('续期次数不超过上限', session.recoveryRenewals <= 2, `${session.recoveryRenewals}`)
+    check(
+      '失败文案说明续期用尽与 Kernel 状态',
+      /续期/.test(snapshot.error?.message ?? '') && /RUNNING/.test(snapshot.error?.message ?? ''),
+      snapshot.error?.message,
+    )
+  } finally {
+    session.dispose()
+    await ntfy.close()
+    await health.close()
+  }
+}
+
 async function scenario(title, fn) {
   console.log(`\n── ${title}`)
   try {
@@ -427,6 +524,8 @@ async function main() {
   await scenario('A1 ready 后 Kernel 结束', scenarioKernelEndedAfterReady)
   await scenario('A2 ready 后心跳丢失但 Kernel 仍运行', scenarioHealthLostWhileKernelRunning)
   await scenario('A3 短暂心跳抖动后恢复', scenarioRecoverySucceeds)
+  await scenario('A4 Kernel 仍 RUNNING 时恢复窗口按跳续期', scenarioRecoveryWindowRenewed)
+  await scenario('A5 恢复窗口续期用尽后放弃', scenarioRecoveryRenewalsExhausted)
   await scenario('B 会合点 error 事件', scenarioRendezvousError)
   await scenario('D push 失败清理临时目录', scenarioPushFailureCleansFolder)
   await scenario('E 超时错误码与文案区分', scenarioTimeoutWording)

@@ -21,7 +21,7 @@ export function GuidanceCard(props) {
   const { t, guidance, compute, actions, ui } = props
   const { kind, detail, dismiss } = guidance
   const { resetToSafe, retryFocusedJob } = actions
-  const { startSession, runProbe } = compute
+  const { startSession, runProbe, retryHost } = compute
   const { copyInstallCommand } = ui
   if (!kind) return null
 
@@ -37,6 +37,11 @@ export function GuidanceCard(props) {
     closed: {
       title: t('studio.guidance.closed.title'),
       actions: [{ key: 'wake', label: t('studio.guidance.sleep.action'), run: startSession }],
+    },
+    // 连不上本地服务：宿主轮询会自动重试，这里给一个「重试」让用户能立刻拉一次状态。
+    network: {
+      title: t('studio.guidance.network.title'),
+      actions: [{ key: 'retry', label: t('studio.guidance.network.action'), run: retryHost }],
     },
     auth: {
       title: t('studio.guidance.auth.title'),

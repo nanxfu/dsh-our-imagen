@@ -233,6 +233,7 @@ export function serializeTree(node) {
  *   locale?: string,
  *   now?: number,
  *   responses?: Record<string, unknown>,
+ *   failures?: Record<string, string>,
  *   testBuild?: boolean,
  * }} options
  */
@@ -240,6 +241,8 @@ export async function loadClient(options = {}) {
   const artifact = options.artifact ?? TEST_ARTIFACT
   const locale = options.locale ?? 'zh-CN'
   const responses = options.responses ?? {}
+  // 路径 → 异常消息：模拟网络层失败（浏览器里就是 TypeError: Failed to fetch）。
+  const failures = options.failures ?? {}
   const now = options.now ?? Date.parse('2026-11-09T05:05:00.000Z')
 
   const source = await readFile(artifact, 'utf8')
@@ -269,6 +272,7 @@ export async function loadClient(options = {}) {
     const parsed = new URL(String(url))
     const key = parsed.pathname
     fetches.push(`${parsed.pathname}${parsed.search}`)
+    if (key in failures) throw new TypeError(failures[key])
     if (!(key in responses)) return { ok: false, status: 404, json: async () => null }
     return { ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(responses[key])) }
   }

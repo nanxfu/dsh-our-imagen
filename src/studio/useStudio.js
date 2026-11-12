@@ -14,7 +14,7 @@ import React from 'react'
 import { submitGenerate } from '../api/resources.js'
 import { useHostState } from '../hooks/useHostState.js'
 import { translator } from '../i18n.js'
-import { guidanceDetailOf, guidanceKindOf } from '../logic/guidance.js'
+import { guidanceDetailOf, guidanceKindOf, isConnectionCode } from '../logic/guidance.js'
 import { iteratePatch, rerollOverrides, retryOverrides } from '../logic/generate.js'
 import { useChatThread } from './hooks/useChatThread.js'
 import { useSessionControl } from './hooks/useSessionControl.js'
@@ -73,7 +73,7 @@ export function useStudio(props) {
   }
 
   // 组件层拿到的云端域：宿主派生状态 + 启停动作，startSession 已绑定当前表单预设。
-  const compute = { ...control, presets, defaultPreset, startSession }
+  const compute = { ...control, presets, defaultPreset, startSession, retryHost }
 
   async function generate(overrides, options = {}) {
     if (sending) return
@@ -146,6 +146,12 @@ export function useStudio(props) {
     ui.showToast(t('studio.guidance.oom.reset'))
   }
 
+  /** 降级指引卡上的「重试」：先收起到期提示，再立刻拉一次宿主状态。 */
+  function retryHost() {
+    ui.setError(null)
+    host.refresh()
+  }
+
   function dismissGuidance() {
     ui.dismissGuidance(guidanceKey)
   }
@@ -156,7 +162,11 @@ export function useStudio(props) {
     (control.session && control.session.error && control.session.error.code) ||
     (control.focusedJob && control.focusedJob.status === 'failed' && control.focusedJob.error && control.focusedJob.error.code) ||
     ''
-  const guidanceDetail = guidanceDetailOf({ error: ui.error, session: control.session, job: control.focusedJob })
+  // 网络层错误不展示浏览器原文（"Failed to fetch" 对用户没有信息量），
+  // 换成客户端自己的可读文案；其它错误仍以 Host/远端的原文为准。
+  const guidanceDetail = isConnectionCode(guidanceCode)
+    ? t('error.network')
+    : guidanceDetailOf({ error: ui.error, session: control.session, job: control.focusedJob })
   const guidanceKey = guidanceCode ? `${guidanceCode}|${guidanceDetail}` : ''
   const guidanceKind = guidanceCode && ui.dismissed !== guidanceKey ? guidanceKindOf(guidanceCode) : ''
 

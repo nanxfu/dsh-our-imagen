@@ -9,6 +9,12 @@
  *   node tools/preview.mjs --shot     生成后调用 Edge 无头截图（1440×900）
  *   node tools/preview.mjs --shot --readme  同时把 4 张 README 截图写回 docs/assets
  *   node tools/preview.mjs --shot --mobile  额外截一张 390 宽的窄屏
+ *
+ * **已知限制**：静态 HTML 由测试替身渲染，替身的 `window.innerWidth` 固定为 1280，
+ * 所以凡是「由 JS 按视口宽度决定」的布局都会被烤死在该宽度上——目前是作品画廊的列数
+ * （`src/logic/gallery.js` 按 900 / 1180 / 1400 断点算列）。CSS 媒体查询不受影响，
+ * 仍会跟随真实截图窗口。要核对真实列数时，用 `--mobile` 之外的真机/浏览器窗口查看，
+ * 或临时把替身的 innerWidth 改掉再渲染；`--readme` 写回的 README 截图同样受此限制。
  */
 
 import { access, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'

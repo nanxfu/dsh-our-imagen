@@ -7,6 +7,8 @@
 
 import React from 'react'
 
+import { LIMITS } from '../../../shared/contract.js'
+
 import {
   deleteImages as deleteImagesRequest,
   favoriteImage,
@@ -29,7 +31,8 @@ export function useWorkLibrary({ t, alive, ui, state }) {
   const [favorites, setFavorites] = React.useState([])
 
   const loadHistory = React.useCallback(async () => {
-    const result = await alive(fetchHistory(60))
+    // 一次取契约允许的最大批量，画廊翻历史才不会在 60 张处出现断层。
+    const result = await alive(fetchHistory(LIMITS.history.maxLimit))
     if (!result) return
     if (result.ok && result.data && Array.isArray(result.data.items)) {
       setHistoryItems(result.data.items.filter(Boolean))

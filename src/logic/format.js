@@ -1,4 +1,17 @@
-/** 时长与任务耗时格式化。 */
+/** 时长、任务耗时与计数文案格式化。 */
+
+/**
+ * 文案占位符替换：字典是纯键值对、没有插值机制，需要计数的文案统一用 `{name}` 占位。
+ * 找不到对应值时保留占位符本身，便于测试直接发现字段名拼错。
+ */
+export function formatText(template, values) {
+  const text = typeof template === 'string' ? template : ''
+  if (!text) return ''
+  return text.replace(/\{(\w+)\}/g, (match, name) => {
+    const value = values ? values[name] : undefined
+    return value === undefined || value === null ? match : String(value)
+  })
+}
 
 export function formatDuration(t, ms) {
   const value = Number(ms)

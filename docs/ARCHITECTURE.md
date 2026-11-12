@@ -66,6 +66,7 @@ Kaggle 容器运行在受限沙箱中，无法直接对外暴露端口。常规�
 ### 2.5 本地代理与网络降级 (`lib/net.js`)
 - **现象**：很多国内开发者的系统环境配置了全局或局域网 HTTP 代理。而 DSH 宿主内部的 Node.js `fetch` 默认不遵从 Windows 系统的环境变量代理设置，导致无法解析 `ntfy.sh` 或访问 Cloudflare 临时域名。
 - **解法**：`lib/net.js` 封装了自适应网络请求：优先使用内置 `fetch`，若遇到连接超时或网络受阻，无缝降级为调用系统的原生 `curl` 命令（自动继承系统网络代理）。
+- **与 DSH subprocess 契约对齐**：降级用的 `ctx.subprocess.spawn` 请求是「完全明确」的——`argv` 每一项必须是字符串，`cwd` 必须是字符串（缺省会直接抛 `TypeError`）。调用方（如 `lib/remote.js`）可能把 `new URL(...)` 对象交给 `httpText`，所以 `viaCurl()` 内部会先把 URL 归一成字符串并显式传 `cwd`；回归用例见 `test/net-fallback.mjs`。
 
 ### 2.6 多卡分配与显存优化
 - **现象**：单张 T4 的可用显存仅为 14.56 GiB。SDXL 尚能在单卡内稳定运行（占用 7~10.5 GB），但 4B 及以上参数的模型（如 FLUX.2-klein-4B）单卡直接加载必然 OOM。
@@ -116,6 +117,31 @@ Kaggle 镜像的包版本会随平台更新，插件里写死版本上限反而�
    把「装上了但 import 不了」提前暴露成 `load_failed`；
 5. 不使用 venv：Kaggle 容器一次性、镜像自带 CUDA torch，venv 要么重装整套依赖、
    要么需要 bootstrap 后 re-exec daemon，收益低于复杂度。详见 `docs/TROUBLESHOOTING.md`。
+
+### 2.12 出图轮询容错与幂等续接
+远端异步 job 把长耗时都放进远端队列，但隧道重建期 `GET /job` 会成串失败。旧实现连续 6 次
+失败（约 12~60 秒）就把任务判死，远端其实还在正常算图。现在的策略：
+
+1. 按「连续失败持续时长」容忍（`TIMEOUTS.remoteJobPollFailureGraceMs`，默认 120 秒），
+   失败重试走指数退避（上限 `remoteJobPollBackoffMaxMs`），不打满远端；
+2. 窗口用尽后用**同一个宿主 `job.id`** 作为幂等键重新 `POST /generate` 接回原任务——
+   daemon 的 `submit_job` 命中幂等键会返回原 job，不重复入队；
+3. 重投最多 `TIMEOUTS.remoteJobResumeMaxAttempts`（默认 2）次：daemon 的 job 表保留窗口是
+   `JOB_TTL_SEC=600s` / 最多 8 个已完成 job，超窗重投会**重新入队出图**，必须限次；
+4. `404 unknown_job` 是明确终态，不重试也不重投；所有等待仍受单任务预算约束。
+
+### 2.13 就绪后隧道重建的恢复窗口
+`ready` 之后心跳丢失不能只看心跳：Kernel 还活着就不能杀会话（重新排队代价很高）。
+`handleReadyHealthLoss` 先向 Kaggle 确认 Kernel 状态——已结束则收敛为 `session_ended` /
+`remote_error`；仍 `RUNNING` 则清空地址回会合点重取一次，进入恢复期。
+
+恢复期的单轮窗口是 `recoveryMs`（120 秒）。`checkKernelStatus` 在恢复期每确认一次 Kernel
+仍 `RUNNING` 就给窗口续期一轮（`renewRecoveryWindow`），最多 `recoveryMaxRenewals`（10）轮，
+即总兜底约 7 分钟；续期用尽仍恢复不了才 `health_failed`。续期轮数随 `start` / `stop` /
+`restore` / 健康恢复重置。
+
+注意 `reconnectMaxAttempts` 的语义：它限制的是「每个连续 ready 周期内允许几次重新会合」，
+每次健康检查成功都会清零，不是会话生命周期内的总次数——真正的硬上限是上面的续期窗口。
 
 ---
 

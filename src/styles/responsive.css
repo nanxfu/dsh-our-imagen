@@ -184,6 +184,38 @@
     display: none;
   }
 
+  /* 胶片条整条收起后，用画面预览左上角的迷你胶囊补上「当前任务 + 排队数量」。 */
+  .ofs-queue-pill {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: calc(100% - 20px);
+    padding: 6px 11px;
+    border: 1px solid var(--ofs-window-border);
+    border-radius: var(--ofs-r-pill);
+    background: color-mix(in oklab, var(--ofs-card-solid) 78%, transparent);
+    box-shadow: var(--ofs-shadow-card);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    color: var(--ofs-ink-2);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .ofs-queue-pill-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ofs-queue-pill-count {
+    color: var(--ofs-ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+
   .ofs-logs-panel {
     width: 100%;
     border-left: 0;

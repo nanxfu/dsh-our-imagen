@@ -51,7 +51,7 @@ export const zh = {
   'job.status.failed': '失败',
 
   // ── 错误码 ───────────────────────────────────────────────────
-  'error.network': '本地服务暂无响应，正在自动重试。',
+  'error.network': '本地服务暂无响应，请稍后重试。',
   'error.http': '请求失败',
   'error.code.need_prompt': '先写提示词',
   'error.code.cli_missing': '未安装 kaggle CLI',
@@ -128,7 +128,9 @@ export const zh = {
   // ── 进度提示 ─────────────────────────────────────────────────
   'studio.progress.waitingSession': '等待云端就绪…',
   'studio.progress.queued': '排队等待出图…',
+  'studio.progress.loading': '正在加载模型…',
   'studio.progress.running': '正在生成…',
+  'studio.progress.generatingCount': '正在生成第 {done}/{total} 张',
   'studio.session.elapsed': '已等待',
 
   // ── 提示词 ───────────────────────────────────────────────────
@@ -187,6 +189,8 @@ export const zh = {
   'studio.filmstrip.empty': '生成的每一批作品会显示在这里',
   'studio.filmstrip.offline': '云端尚未启动',
   'studio.filmstrip.offlineClosed': '云端已关闭',
+  // 窄屏队列胶囊：胶片条在窄屏收起后用它显示后续待执行任务数。
+  'studio.queue.waiting': '另有 {count} 张排队',
   'studio.toast.firstImage': '云端就绪，第一张图已生成',
 
   // ── 运行日志 ─────────────────────────────────────────────────
@@ -245,6 +249,8 @@ export const zh = {
   'studio.guidance.generic.title': '生成没有成功',
   'studio.guidance.generic.action': '重试一次',
   'studio.guidance.session.title': '云端会话没有就绪',
+  'studio.guidance.network.title': '连不上本地服务',
+  'studio.guidance.network.action': '重试',
   'studio.guidance.other.title': '操作没有完成',
   'studio.guidance.close': '关闭',
   'studio.guidance.cli.copy': '复制安装命令',
@@ -287,6 +293,7 @@ export const zh = {
   'studio.chat.intent.title': '生成确认',
   'studio.chat.intent.summary': '中文摘要',
   'studio.chat.intent.generate': '按此生成',
+  'studio.chat.intent.lockSeed': '沿用上张构图（锁定种子）',
   'studio.chat.clarify.title': '需要确认一个参数',
   'studio.chat.clarify.ratio': '画面比例用哪个？',
   'studio.chat.clarify.style': '风格用哪个？',

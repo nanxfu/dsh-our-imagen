@@ -251,10 +251,23 @@
   background: var(--ofs-hairline);
 }
 
-/* ── 卡片墙：CSS columns，图片按原始比例撑高 ─────────────────── */
+/* ── 卡片墙：JS 分列，图片按原始比例撑高 ─────────────────────── */
+/*
+ * CSS 多列是列优先填充，最新作品会先占满左列；这里改成「每列一个纵向 flex」，
+ * 由 Gallery.jsx 按行优先分桶（断点见 logic/gallery.js）。图片仍按原始宽高比
+ * 撑高，不裁切、不拉伸。
+ */
 .ofs-gallery-wall {
-  column-count: 5;
-  column-gap: var(--ofs-gap);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ofs-gap);
+}
+
+.ofs-gallery-col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .ofs-gallery-card {
@@ -391,21 +404,57 @@
   box-shadow: var(--ofs-shadow-accent);
 }
 
-/* 收藏星标：右上角玻璃圆点，已收藏用墨黑 */
+/* 收藏星标：右上角玻璃圆点，已收藏常显；未收藏在卡片悬停 / 键盘聚焦时出现。
+   它是图片上方的独立按钮，不嵌在图片按钮里，避免嵌套交互元素。 */
 .ofs-gallery-star {
+  appearance: none;
   position: absolute;
   top: 8px;
   right: 8px;
+  z-index: 2;
   display: grid;
   place-items: center;
   width: 24px;
   height: 24px;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
   background: color-mix(in oklab, var(--ofs-card-solid) 84%, transparent);
-  color: var(--ofs-ink);
+  color: var(--ofs-ink-3);
   box-shadow: 0 1px 4px rgb(24 24 27 / 22%);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 150ms ease,
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.ofs-gallery-star.is-on {
+  opacity: 1;
+  pointer-events: auto;
+  color: var(--ofs-ink);
+}
+
+.ofs-gallery-card:hover .ofs-gallery-star,
+.ofs-gallery-card:focus-within .ofs-gallery-star {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ofs-gallery-star:hover {
+  color: var(--ofs-accent);
+}
+
+/* 触屏没有 hover：星标常显，否则手机上无法收藏。 */
+@media (hover: none) {
+  .ofs-gallery-star {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 /* 卡身：两行提示词 + 标签行；整块可点开大图 */
@@ -494,20 +543,12 @@
 }
 
 /* ── 响应式 ─────────────────────────────────────────────────── */
-@media (max-width: 1400px) {
-  .ofs-gallery-wall {
-    column-count: 4;
-  }
-}
-
+/* 列数由 Gallery.jsx 的 useColumnCount 按 900 / 1180 / 1400 三个断点决定，
+   这里只调工具卡各自在不同宽度下的排布。 */
 @media (max-width: 1180px) {
   .ofs-gallery {
     --ofs-gallery-pad-top: 16px;
     padding: 16px 18px 24px;
-  }
-
-  .ofs-gallery-wall {
-    column-count: 3;
   }
 
   .ofs-gallery-search {
@@ -516,10 +557,6 @@
 }
 
 @media (max-width: 900px) {
-  .ofs-gallery-wall {
-    column-count: 2;
-  }
-
   /* 窄窗里工具卡不再吸顶：它本身会折成两三行，吸顶太占高度 */
   .ofs-gallery-tools {
     position: static;

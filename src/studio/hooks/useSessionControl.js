@@ -39,12 +39,22 @@ export function useSessionControl({ t, host, ui, alive }) {
 
   // 宿主状态轮询失败：当前已有更具体的错误时保留它，否则借现有 error/指引通道提示；
   // 按 code+message 去重，避免每 10 秒把同一失败重复弹一遍。
+  // 轮询恢复后要把这次网络错误撤掉——否则一张「Failed to fetch」卡片会一直挂在界面上。
   const hostErrorKeyRef = React.useRef('')
+  const hostErrorCodeRef = React.useRef('')
   React.useEffect(() => {
-    if (!host.error) return
+    if (!host.error) {
+      if (!hostErrorCodeRef.current) return
+      const code = hostErrorCodeRef.current
+      hostErrorKeyRef.current = ''
+      hostErrorCodeRef.current = ''
+      ui.setError((prev) => (prev && prev.code === code ? null : prev))
+      return
+    }
     const key = `${host.error.code}|${host.error.message ?? ''}`
     if (hostErrorKeyRef.current === key) return
     hostErrorKeyRef.current = key
+    hostErrorCodeRef.current = host.error.code
     ui.setError((prev) => prev || { code: host.error.code, message: host.error.message ?? '' })
   }, [host.error])
 

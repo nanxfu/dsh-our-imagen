@@ -217,6 +217,33 @@
   line-height: 1.5;
 }
 
+/* 意图卡上的「沿用上张构图」开关：可选行为，视觉上弱于主按钮。 */
+.ofs-intent-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  color: var(--ofs-ink-2);
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ofs-intent-lock input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--ofs-accent);
+  cursor: pointer;
+}
+
+/* 上一张图没有可复用种子时置灰，避免开了一个不生效的开关。 */
+.ofs-intent-lock.is-disabled {
+  color: var(--ofs-ink-4);
+  cursor: default;
+}
+
 .ofs-intent-go {
   align-self: flex-start;
   height: 30px;

@@ -80,6 +80,15 @@ export const TIMEOUTS = {
   remoteJobPollMs: 2000,
   // 单个任务整体预算（可在配置里用 generateTimeoutSeconds 覆盖）。
   remoteJobMs: 600000,
+  // 出图轮询容错（P0-A3）：隧道重建期间 GET /job 会成串失败，旧实现在第 6 次
+  // 连续失败（约 12~60 秒）就判任务失败，把仍在远端算图的任务判死。改为按
+  // 「连续失败持续时长」容忍，并在窗口用尽后用同一 jobId 幂等重投接回任务。
+  remoteJobPollFailureGraceMs: 120000,
+  // 失败重试的指数退避上限：隧道重建期不打满远端，恢复后又能快速接上。
+  remoteJobPollBackoffMaxMs: 8000,
+  // 幂等重投次数上限：daemon 保留窗口为 600s / 最多 8 个已完成 job，
+  // 超窗重投会重新入队出图（重复消耗 GPU），所以必须限次。
+  remoteJobResumeMaxAttempts: 2,
   remoteShutdownMs: 3000,
   remoteGenerateMaxBytes: 32 * 1024 * 1024,
   // ntfy 会合轮询单次请求
@@ -91,6 +100,11 @@ export const TIMEOUTS = {
   readyHealthMissesBeforeCheck: 3,
   reconnectMaxAttempts: 1,
   recoveryMs: 120000,
+  // 恢复窗口续期上限：ready 失联后每向 Kaggle 确认一次 Kernel 仍 RUNNING，
+  // 就把 recoveryMs 窗口续期一轮；续期用尽仍恢复不了才判定 health_failed。
+  // 总兜底时长约 recoveryMs + recoveryMaxRenewals × kernelPollMs（约 7 分钟），
+  // 避免隧道重建稍久就杀掉一个仍在 RUNNING 的 Kernel（重新排队代价很高）。
+  recoveryMaxRenewals: 10,
   provisionMs: 45 * 60 * 1000,
   tunnelMs: 15 * 60 * 1000,
   sessionWaitMs: 45 * 60 * 1000,

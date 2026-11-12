@@ -318,7 +318,14 @@
 > 直到 `status=done`（带 `results`）、`failed`（带 `error.code`）或宿主整体预算耗尽。
 > 这样一条 HTTP 连接不会挂住几十秒而无任何响应字节，Cloudflare quick tunnel 与本地代理
 > 不会把「空闲连接」判死；远端失败也仍能通过正常的 HTTP 语义（job 的 `error.code`）表达，
-> 不需要提前写 200 而丢掉 500。轮询期间的单次网络抖动会被容忍（连续失败 5 次才判失败）。
+> 不需要提前写 200 而丢掉 500。
+>
+> **轮询容错与幂等续接**：隧道重建期间单次 `GET /job` 失败不判任务失败——连续失败只要
+> 仍在持续时长窗口内（`TIMEOUTS.remoteJobPollFailureGraceMs`，默认 120 秒）就按指数退避
+> 继续查同一个远端 job。窗口用尽后用**同一个宿主 `job.id`** 作为幂等键重新 `POST /generate`
+> 接回原任务（远端命中幂等键会返回原 job，不重复入队），最多重投
+> `TIMEOUTS.remoteJobResumeMaxAttempts`（默认 2）次；重投次数用尽或整体预算耗尽才判
+> `generate_failed`。`404 unknown_job` 是明确的终态，不重试也不重投。
 
 #### `POST /imagen-api/generate`
 
@@ -348,7 +355,9 @@
 | :--- | :--- |
 | `id` | 任务 id（`j_<hex>`） |
 | `status` | `queued` / `waiting-session` / `running` / `done` / `failed` |
-| `stage` | 给人看的中文阶段文案（如「排队中」「生成中」） |
+| `stage` | 给人看的中文阶段文案（如「排队中」「生成中」）。**只用于中文界面与日志，客户端不得解析它做本地化** |
+| `stageCode` | 结构化阶段标识（稳定英文）：`queued` / `waiting-session` / `loading` / `running` / `done` / `failed`。`loading` 专指会话就绪路径上远端仍在加载模型（`sessionState=warming`）；客户端按它选本地化文案 |
+| `progress` | 仅在 `running` 时非 `null`：`{ done, total }`，`done` 是**已完成的张数**（0 起）。其余状态为 `null`；客户端用 `done + 1` 展示「正在生成第 k/总数 张」 |
 | `presetId` | 实际使用的预设 id |
 | `params` | 归一化后的参数：`{ prompt, negativePrompt, width, height, steps, cfg, seed, count }` |
 | `createdAt` / `startedAt` / `finishedAt` | ISO 时间；未发生为 `null` |
@@ -368,6 +377,8 @@
   "id": "j_9f2c1a4b",
   "status": "queued",
   "stage": "排队中",
+  "stageCode": "queued",
+  "progress": null,
   "presetId": "sdxl-lightning",
   "params": {
     "prompt": "a cinematic portrait of an astronaut",

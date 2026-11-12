@@ -245,6 +245,95 @@ await check('任务进度区分「等云端」与「等前一张图」', () => {
   assert.equal(logic.jobProgressText(te, queued, 'ready'), en['studio.progress.queued'])
 })
 
+await check('分张进度来自宿主结构化字段，不解析中文 stage', () => {
+  const generating = (progress) => ({ status: 'running', stageCode: 'running', progress })
+  assert.equal(logic.jobProgressText(t, generating({ done: 0, total: 4 }), 'ready'), '正在生成第 1/4 张')
+  assert.equal(logic.jobProgressText(t, generating({ done: 2, total: 4 }), 'ready'), '正在生成第 3/4 张')
+  assert.equal(
+    logic.jobProgressText(t, generating({ done: 9, total: 4 }), 'ready'),
+    '正在生成第 4/4 张',
+    '完成数超过总数时夹到最后一格',
+  )
+  assert.equal(
+    logic.jobProgressText(t, generating({ done: 0, total: 1 }), 'ready'),
+    t('studio.progress.running'),
+    '单张任务不显示计数',
+  )
+  assert.equal(
+    logic.jobProgressText(t, generating({ done: 0 }), 'ready'),
+    t('studio.progress.running'),
+    '缺 total 时回落通用文案',
+  )
+  assert.equal(logic.jobProgressText(t, generating(null), 'ready'), t('studio.progress.running'))
+  // 英文界面同样走本地化计数，不能把宿主的硬编码中文 stage 漏出来。
+  assert.equal(
+    logic.jobProgressText(te, generating({ done: 1, total: 3 }), 'ready'),
+    en['studio.progress.generatingCount'].replace('{done}', '2').replace('{total}', '3'),
+  )
+  // 旧宿主只加 progress 不给 stageCode：status 仍是 running，也认分张进度。
+  assert.equal(
+    logic.jobProgressText(t, { status: 'running', progress: { done: 1, total: 2 } }, 'ready'),
+    '正在生成第 2/2 张',
+  )
+  // loading：等云端加载模型时不再笼统说「等待云端就绪」。
+  assert.equal(
+    logic.jobProgressText(t, { status: 'waiting-session', stageCode: 'loading' }, 'warming'),
+    t('studio.progress.loading'),
+  )
+  // stageCode 优先于 status；非法值回落到 status。
+  assert.equal(
+    logic.jobProgressText(t, { status: 'queued', stageCode: 'waiting-session' }, 'provisioning'),
+    t('studio.progress.waitingSession'),
+  )
+  assert.equal(logic.jobProgressText(t, { status: 'queued', stageCode: 'weird' }, 'ready'), t('studio.progress.queued'))
+  assert.equal(logic.jobProgressText(t, { status: 'failed', stageCode: 'failed' }, 'ready'), t('job.status.failed'))
+})
+
+await check('计数文案占位替换', () => {
+  assert.equal(logic.formatText('第 {done}/{total} 张', { done: 2, total: 4 }), '第 2/4 张')
+  assert.equal(logic.formatText('{count} more queued', { count: 2 }), '2 more queued')
+  assert.equal(logic.formatText('{a}-{b}', { a: 1 }), '1-{b}', '缺失的值保留占位符')
+  assert.equal(logic.formatText('', {}), '')
+  assert.equal(logic.formatText(null, {}), '')
+})
+
+await check('画廊列数断点与行优先分列', () => {
+  // 列数断点必须与 gallery.css 的响应式断点一致：>1400→5，≤1400→4，≤1180→3，≤900→2。
+  assert.equal(logic.galleryColumnCount(1600), 5)
+  assert.equal(logic.galleryColumnCount(1401), 5)
+  assert.equal(logic.galleryColumnCount(1400), 4)
+  assert.equal(logic.galleryColumnCount(1181), 4)
+  assert.equal(logic.galleryColumnCount(1180), 3)
+  assert.equal(logic.galleryColumnCount(901), 3)
+  assert.equal(logic.galleryColumnCount(900), 2)
+  assert.equal(logic.galleryColumnCount(520), 2)
+  assert.equal(logic.galleryColumnCount(0), 5, '未知宽度按桌面 5 列')
+  assert.equal(logic.galleryColumnCount('x'), 5)
+
+  // 行优先：第 1、2、3… 条依次落在第 1、2、3… 列，视觉第一行就是最新顺序。
+  assert.deepEqual(logic.galleryColumns([1, 2, 3, 4, 5, 6, 7], 3), [[1, 4, 7], [2, 5], [3, 6]])
+  assert.equal(logic.galleryColumns([1, 2, 3], 4).length, 4, '分桶数固定等于列数')
+  assert.deepEqual(logic.galleryColumns([], 3), [[], [], []])
+  assert.deepEqual(logic.galleryColumns(null, 2), [[], []])
+  assert.equal(logic.galleryColumns([1, 2], 0).length, 1, '列数非法时至少保留一列')
+})
+
+await check('意图确认卡的种子策略：默认随机，显式锁种才沿用', () => {
+  const lastJob = { id: 'job-1', params: { seed: 17 } }
+  assert.equal(logic.lastSeedOf(lastJob), 17)
+  assert.equal(logic.lastSeedOf({ params: { seed: 0 } }), 0)
+  assert.equal(logic.lastSeedOf({ params: {} }), null)
+  assert.equal(logic.lastSeedOf({ params: { seed: -3 } }), null)
+  assert.equal(logic.lastSeedOf(null), null)
+
+  assert.equal(logic.intentSeedOf({}, lastJob, ''), null, '默认不锁种，交给宿主随机')
+  assert.equal(logic.intentSeedOf({ lockSeed: false }, lastJob, ''), null)
+  assert.equal(logic.intentSeedOf({ lockSeed: true }, lastJob, ''), 17, '显式打开开关才沿用上一张构图')
+  assert.equal(logic.intentSeedOf({ lockSeed: true }, lastJob, '42'), null, '表单指定种子时以用户输入为准')
+  assert.equal(logic.intentSeedOf({ lockSeed: true }, lastJob, '   '), 17, '空白种子的表单视为未指定')
+  assert.equal(logic.intentSeedOf({ lockSeed: true }, null, ''), null, '没有上一张图时退回随机')
+})
+
 await check('过渡态已等待时长', () => {
   const session = { state: 'provisioning', startedAt: at(-90) }
   assert.equal(logic.sessionElapsedMs(session, NOW), 90000)
@@ -318,9 +407,14 @@ await check('错误码映射到指引类型', () => {
   for (const code of ['generation_failed', 'load_failed', 'invalid_request', 'empty_result', 'invalid_prompt', 'queue_full']) {
     assert.equal(logic.guidanceKindOf(code), 'generate', `${code} 应能按原参数重试`)
   }
-  for (const code of ['delete_failed', 'network', 'http_500', 'probe_failed', 'unknown_code']) {
+  for (const code of ['delete_failed', 'http_500', 'probe_failed', 'unknown_code']) {
     assert.equal(logic.guidanceKindOf(code), 'generic', `${code} 只应关闭，不应触发重新出图`)
   }
+  // 网络层错误有独立卡片：文案由客户端解释，不给用户看 "Failed to fetch"。
+  assert.equal(logic.guidanceKindOf('network'), 'network')
+  assert.equal(logic.isConnectionCode('network'), true)
+  assert.equal(logic.isConnectionCode('session_error'), false)
+  assert.equal(logic.isConnectionCode(''), false)
 })
 
 await check('指引卡详情优先级', () => {

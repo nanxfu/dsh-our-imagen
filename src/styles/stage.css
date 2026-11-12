@@ -460,6 +460,12 @@
   color: color-mix(in oklab, var(--ofs-ink) 62%, var(--ofs-print-paper));
 }
 
+/* ── 窄屏排队胶囊 ───────────────────────────────────────────── */
+/* 默认不占位：宽屏由胶片条展示队列，≤820px 时 responsive.css 打开这里。 */
+.ofs-queue-pill {
+  display: none;
+}
+
 /* ── 放大层 ─────────────────────────────────────────────────── */
 .ofs-lightbox {
   position: absolute;

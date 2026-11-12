@@ -1,5 +1,36 @@
 # 变更记录
 
+## 未发布
+
+### 改进
+
+- **出图不再被隧道抖动误判失败**：轮询容错从「连续 6 次失败即判死」改为按持续时长容忍（默认 120 秒）并指数退避；窗口用尽后用同一 `job.id` 幂等重投接回远端仍在算图的任务（最多 2 次，避免超出 daemon 保留窗口后重复出图）。`404 unknown_job` 仍是终态。
+- **隧道重建不再提前杀掉仍在运行的 Kernel**：`ready` 后失联的恢复窗口改为「向 Kaggle 确认 Kernel 仍 RUNNING 就续期」，单轮 120 秒、最多续 10 轮（约 7 分钟兜底），不再一次超时就 `health_failed`。
+- **任务进度透出到分张粒度**：`Job` 新增 `stageCode`（稳定英文阶段码）与 `progress: { done, total }`；工作台显示「正在生成第 2/4 张」与「正在加载模型…」，`stage` 的中文文案保留给中文界面与日志，英文界面不再直接展示中文阶段串。
+- **对话出图默认不再沿用上一张的种子**：跨主题对话不会因为隐式锁种而构图僵化；意图确认卡新增「沿用上张构图（锁定种子）」开关（默认关闭，无可用种子时置灰）。
+- **作品画廊**：卡片上可直接点星标收藏 / 取消收藏（批量选择态自动收起星标，避免误触）；列分配改为行优先，最新作品在每行最左，保留 5 列自然高度、不裁切图片；历史一次加载上限从 60 张提到契约允许的 100 张。
+- **窄屏可见排队状态**：`≤820px` 收起底部胶片栏时，画面预览左上角保留排队胶囊，显示当前任务与「另有 n 张排队」。
+
+### 修复
+
+- **代理环境下 curl 兜底必然失败（`value.includes is not a function`）**：`lib/net.js` 的降级路径把 `new URL(...)` 对象直接塞进 DSH subprocess 的 `argv`，并且没有传必需的 `cwd`；`subprocess-local` 会对 `argv` 逐项做字符串校验、把 `cwd` 当字符串校验，于是每次降级都抛 `TypeError`：
+  - URL 对象（`/health`、`/generate`、`/job`、`/shutdown`、`/logs`）→ `TypeError: value.includes is not a function`；
+  - 字符串 URL（ntfy 会合轮询）→ `TypeError: Cannot read properties of undefined (reading 'includes')`。
+  线上后果：需要代理的远端请求在 `fetch` 失败后无法降级，Host 日志刷满 `fetch 与 curl 均失败`，ready 心跳丢失、每 3~4 分钟重取隧道地址，最终 Kernel 空闲退出后会话停在 `session_ended`。修复：`viaCurl()` 先把 URL 归一成字符串再拼参数，显式传 `cwd: process.cwd()`；warn 日志同时记录 fetch 与 curl 两侧的失败原因，不再只有 curl 一侧。
+- **界面把浏览器原文 “Failed to fetch” 当错误详情**：宿主状态轮询失败时，客户端把 `TypeError` 原文直接放进「操作没有完成」兜底卡片，而且轮询恢复后这张卡不会消失。现在：
+  - 网络层错误单独归为 `network` 指引卡（「连不上本地服务」+「重试」），详情用客户端文案（`error.network`），不再展示英文原文；
+  - 宿主状态轮询恢复后自动撤掉这次网络错误提示（去重游标同步重置），不再留下过期的「Failed to fetch」卡片；
+  - 「重试」只立即拉一次 `/state`，不触碰云端会话。
+
+### 工程
+
+- 新增 `test/net-fallback.mjs`（6 项）：按 DSH `subprocess-local` 的真实校验规则伪造 subprocess（`argv` 必须全为字符串、`cwd` 必须是字符串），覆盖 URL 归一、请求头/请求体透传、状态码解析、fetch 成功不降级、双侧失败的错误链路；已接入 `npm test` 与 `npm run test:host`。
+- `test/load-client.mjs` 新增 `failures` 选项（按路径抛 TypeError），`check-client-render` 增加 `network` 场景：断言卡片为「连不上本地服务」+ 本地化详情 +「重试」，且不再出现「操作没有完成 / Failed to fetch」。
+- `docs/ARCHITECTURE.md` §2.5 补充与 DSH subprocess 契约对齐的说明；`client.js` 重新构建。
+- 宿主可靠性改造的离线断言：`test/jobs-wait.mjs` 新增 8 项（容忍窗口、指数退避、`404` 终态、幂等续接、重投上限、整体预算约束、`publicView` 阶段码与进度映射、分张进度接线），`test/session-reliability.mjs` 新增 2 个场景（Kernel 仍 RUNNING 时续期后可恢复 `ready`、续期用尽收敛 `health_failed`）。
+- 客户端新增纯函数：`src/logic/gallery.js`（列数断点 + 行优先分桶）、`src/logic/format.js` 的 `formatText`（字典无插值机制，计数文案用 `{name}` 占位）。`check-client-logic` 39 项、`check-client-render` 30 项、`check-client-locale` zh/en 各 270 键全绿。
+- 契约新增 4 个超时常量（`remoteJobPollFailureGraceMs` / `remoteJobPollBackoffMaxMs` / `remoteJobResumeMaxAttempts` / `recoveryMaxRenewals`）；`docs/SPEC.md` 补充 `Job.stageCode`、`Job.progress` 与轮询续接语义，`docs/ARCHITECTURE.md` 新增 §2.12（轮询容错与幂等续接）与 §2.13（恢复窗口）。
+
 ## 0.7.0 — 2026-11-11
 
 ### 改进

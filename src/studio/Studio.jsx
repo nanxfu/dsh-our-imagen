@@ -19,6 +19,7 @@ import { Filmstrip } from './Filmstrip.jsx'
 import { Gallery } from './Gallery.jsx'
 import { GuidanceCard } from './GuidanceCard.jsx'
 import { LogsDrawer } from './LogsDrawer.jsx'
+import { QueuePill } from './QueuePill.jsx'
 import { Rail } from './Rail.jsx'
 import { SessionBar } from './SessionBar.jsx'
 import { Stage } from './Stage.jsx'
@@ -69,6 +70,7 @@ export function Studio(props) {
                 onExport={library.exportPaths}
                 onRecall={actions.iterate}
                 onVariant={actions.reroll}
+                onToggleFavorite={library.toggleFavorite}
                 onZoom={library.zoomImage}
                 onOpen={(entry) => {
                   library.selectImage(entry)
@@ -76,7 +78,11 @@ export function Studio(props) {
                 }}
               />
             ) : (
-              <Stage t={t} ui={ui} compute={compute} form={form} library={library} actions={actions} />
+              <>
+                {/* 窄屏胶片条收起后，这里补一个只读的排队状态入口；宽屏由 CSS 隐藏。 */}
+                <QueuePill t={t} compute={compute} />
+                <Stage t={t} ui={ui} compute={compute} form={form} library={library} actions={actions} />
+              </>
             )}
           </div>
         </div>

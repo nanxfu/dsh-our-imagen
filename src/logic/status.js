@@ -7,6 +7,7 @@
 
 import { PHASE_STATE, TRANSIENT_SESSION } from '../constants.js'
 import { localized } from '../i18n.js'
+import { formatText } from './format.js'
 
 export function sessionStateText(t, state) {
   const key = state ? `session.state.${state}` : 'session.state.absent'
@@ -133,10 +134,36 @@ export function computeStatusOf(t, input = {}) {
   }
 }
 
+/** 宿主的结构化阶段码；缺字段时按 job.status 回落，兼容旧版本宿主。 */
+const STAGE_CODES = new Set(['queued', 'waiting-session', 'loading', 'running', 'done', 'failed'])
+
+function stageCodeOf(job) {
+  const code = typeof job.stageCode === 'string' ? job.stageCode : ''
+  if (STAGE_CODES.has(code)) return code
+  // 旧宿主没有 stageCode：status 与阶段码同名，可直接回溯。
+  return STAGE_CODES.has(job.status) ? job.status : ''
+}
+
+/**
+ * 分张进度：宿主只给「已完成张数」，这里换算成「正在出第几张」并夹在 1..total。
+ * 单张任务不显示计数（宿主同样只在 total > 1 时给阶段追加计数）。
+ */
+function progressOf(job) {
+  const progress = job && job.progress
+  if (!progress || typeof progress !== 'object') return null
+  const done = Number(progress.done)
+  const total = Number(progress.total)
+  if (!Number.isFinite(done) || !Number.isFinite(total)) return null
+  const count = Math.floor(total)
+  if (count <= 1) return null
+  return { done: Math.min(Math.max(0, Math.floor(done)) + 1, count), total: count }
+}
+
 /**
  * 活动任务的进度文案。
  *
  * 关键区分：「等在云端就绪」和「等前一张图画完」是两件事，不能都说成「正在申请 GPU」。
+ * 阶段只认宿主下发的 stageCode：job.stage 是宿主硬编码的中文，英文界面不能直接展示。
  *
  * @param {(key: string) => string} t
  * @param {object|null} job 进行中的任务
@@ -144,12 +171,23 @@ export function computeStatusOf(t, input = {}) {
  */
 export function jobProgressText(t, job, sessionState) {
   if (!job) return ''
-  if (job.status === 'waiting-session') return localized(t, 'studio.progress.waitingSession') || ''
-  if (job.status === 'queued') {
+  const stage = stageCodeOf(job)
+  if (stage === 'running') {
+    const progress = progressOf(job)
+    if (progress) {
+      const text = formatText(localized(t, 'studio.progress.generatingCount'), progress)
+      if (text) return text
+    }
+    return localized(t, 'studio.progress.running') || ''
+  }
+  if (stage === 'loading') {
+    return localized(t, 'studio.progress.loading') || localized(t, 'studio.progress.waitingSession') || ''
+  }
+  if (stage === 'waiting-session') return localized(t, 'studio.progress.waitingSession') || ''
+  if (stage === 'queued') {
     const key = sessionState === 'ready' ? 'studio.progress.queued' : 'studio.progress.waitingSession'
     return localized(t, key) || ''
   }
-  if (job.status === 'running') return localized(t, 'studio.progress.running') || ''
   return jobStatusText(t, job.status)
 }
 

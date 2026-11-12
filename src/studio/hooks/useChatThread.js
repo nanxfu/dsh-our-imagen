@@ -12,7 +12,7 @@ import { parseIntentRequest } from '../../api/resources.js'
 import { stateJobs } from '../../logic/jobs.js'
 import { formatSeconds } from '../../logic/format.js'
 import { errorText } from '../../logic/error.js'
-import { intentFormPatch, intentPrompt, lastIntentPrompt } from '../../logic/intent.js'
+import { intentFormPatch, intentPrompt, intentSeedOf, lastIntentPrompt, lastSeedOf } from '../../logic/intent.js'
 import { DEFAULT_RATIOS, STYLE_CAPSULES } from '../presets.js'
 
 /**
@@ -138,14 +138,20 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
       overrides.width = ratio.width
       overrides.height = ratio.height
     }
-    // 连续迭代时沿用上一张图的种子，便于对比同一构图下的改动。
-    const previous = (state && state.lastJob && state.lastJob.params) || null
-    if (previous && form.form.seed === '' && Number.isFinite(previous.seed) && previous.seed >= 0) {
-      overrides.seed = previous.seed
-    }
+    // 默认随机种子：跨主题对话沿用上一张的种子会让构图僵化，只有卡上显式打开开关才沿用。
+    const seed = intentSeedOf(message, state && state.lastJob, form.form.seed)
+    if (seed !== null) overrides.seed = seed
     const patch = intentFormPatch(message, DEFAULT_RATIOS)
     if (Object.keys(patch).length > 0) form.patchForm(patch)
     await generate(overrides, { pushUser: false })
+  }
+
+  /** 意图卡上的「沿用上张构图」开关：默认关闭，只改这张卡自己的状态。 */
+  function toggleIntentLockSeed(messageId) {
+    setMessages((prev) => prev.map((message) => {
+      if (!message || message.id !== messageId) return message
+      return { ...message, lockSeed: message.lockSeed !== true }
+    }))
   }
 
   function clearThread() {
@@ -158,6 +164,9 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     interpret,
     resolveClarify,
     generateIntent,
+    toggleIntentLockSeed,
+    // 上一张图没有可复用种子时，确认卡上的锁种开关置灰。
+    canLockSeed: lastSeedOf(state && state.lastJob) !== null,
     clearThread,
     pushMessages,
   }
