@@ -72,5 +72,6 @@ jobs:
           fail_on_unmatched_files: true
 
       - name: Publish to npm (optional)
-        if: env.NODE_AUTH_TOKEN != ''
+        # 未配置 NPM_TOKEN 时该 env 为 null；只写 `!= ''` 会把 null 判成「有值」而误触发发布。
+        if: ${{ env.NODE_AUTH_TOKEN != null && env.NODE_AUTH_TOKEN != '' }}
         run: npm publish --provenance --access public
