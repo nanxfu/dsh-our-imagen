@@ -17,6 +17,7 @@
 - **公开发布元信息**：`package.json` 去掉 `private`，补齐 author / repository / homepage / bugs / engines / keywords，`exports` 增加 `./package.json` 与 `./cordis.patch.yml`；`npm pack --dry-run` 产物只含运行必需文件，不含 `docs/`、`test/`、`tools/`、`bench/`。
 - **CI / Release 配套**：新增 `.github/workflows/ci.yml`（ubuntu + windows、Node 20 + Python 3.11，跑契约/模型/构建/测试/npm pack 校验）与 `release.yml`（`v*` tag 触发：校验 tag 与版本一致、跑测试、打包 zip 并创建 GitHub Release，配置 `NPM_TOKEN` 时可选发布 npm）；新增 Bug 报告模板与 `CONTRIBUTING.md`。
 - **修复离线包打包**：`npm run package` 在 Linux/macOS 下调用 `zip` 时工作目录不对，导致 CI 中 `dist/*.zip` 实际未生成、Release 创建失败；改为在 `dist/` 内压缩，并在 Release workflow 增加 zip 存在性校验。
+- **补齐不依赖 npm 的安装方式**：README 新增 GitHub 直装（`dsh plugin add github:...`）、图形界面安装、Release tarball 直装与本地源码 link；Release workflow 额外产出 `dsh-our-free-imagen-<version>.tgz` 并随 Release 上传，商店/npm 未收录时也能一条命令安装。
 - **版本升到 0.7.0**：契约 / `package.json` / daemon / mock / tunnel-probe / `remote/contract.json` / `client.js` 同步；`docs/SPEC.md` 的版本标识从 0.4.1 补正为 0.7.0。
 - **测试**：新增 `test/host-log.mjs`（11 项：落盘、轮转、脱敏、尾读、无工作区退化、IO 失败静默）与 `test/host-log-events.mjs`（9 项：队列事件、状态跃迁、失败现场、prompt 正文零泄露）；`host-e2e` 增加 `hostLines` 三分支与从临时工作区直读 Host 日志的断言；客户端逻辑/渲染补 hostLines 与离线诊断用例。
 

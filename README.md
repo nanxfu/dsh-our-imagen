@@ -238,16 +238,33 @@
 
 ### 第二步：在 DSH 中加载插件
 
-> 当前版本尚未发布到 npm，1024 插件市场也尚未收录，**请先用方式 B 安装**；上架后方式 A 即可一条命令安装。
+插件尚未发布到 npm / 1024 插件市场，下面几种方式都不需要 npm 账号，按场景任选一种（把 `web` 换成你的 profile 名，DSH Desktop 客户端通常是 `desktop`）：
 
-* **方式 B：Release Bundle 或本地源码加载**（当前推荐）：
-  1. 从 [Releases](https://github.com/nanxfu/dsh-our-imagen/releases) 下载最新的 `dsh-our-free-imagen-<version>.zip` 并解压（或克隆本仓库后执行 `npm install && npm run package`，产物在 `dist/`）；
-  2. 打开 DSH 设置 → **插件管理** → 选择 **本地加载（Load Bundle）** 选中该目录；
-  3. 点击左侧工具栏新增的 **生图工作台** 图标。
-* **方式 A：CLI / 1024 插件市场安装**（npm 发布后可用，推荐长期使用）：
+* **方式 A：命令行一条命令从 GitHub 安装**（推荐，跟随默认分支最新提交）：
   ```bash
-  dsh plugin --profile web add dsh-our-free-imagen
+  dsh plugin --profile web add github:nanxfu/dsh-our-imagen
   ```
+  升级：先 `dsh plugin --profile web remove dsh-our-free-imagen`，再执行上面的安装命令。
+
+* **方式 B：图形界面安装**（不用命令行）：
+  DSH 设置 → **插件管理** → **安装插件**，在输入框粘贴 `github:nanxfu/dsh-our-imagen`（或方式 C 的 tarball 链接）→ 安装完成后重启 DSH。
+
+* **方式 C：固定版本的 Release tarball**（只依赖 HTTPS，适合 GitHub 直连不稳定的网络）：
+  ```bash
+  dsh plugin --profile web add https://github.com/nanxfu/dsh-our-imagen/releases/download/v0.7.0/dsh-our-free-imagen-0.7.0.tgz
+  ```
+
+* **方式 D：离线 zip + 本地加载（Load Bundle）**（完全离线可用）：
+  1. 从 [Releases](https://github.com/nanxfu/dsh-our-imagen/releases) 下载 `dsh-our-free-imagen-<version>.zip` 并解压；
+  2. DSH 设置 → **插件管理** → **本地加载（Load Bundle）**，选中解压后的目录；
+  3. 点击左侧工具栏新增的「生图工作台」图标。
+
+* **方式 E：本地源码 link**（开发调试，改代码即时生效）：
+  ```bash
+  dsh plugin --profile desktop add D:\path\to\our-free-imagen
+  ```
+
+> 以上方式安装后都需要重启 DSH。npm 包与 1024 插件市场收录后，还可以直接 `dsh plugin --profile web add dsh-our-free-imagen` 安装。
 
 ---
 

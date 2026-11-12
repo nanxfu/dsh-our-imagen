@@ -52,16 +52,22 @@ jobs:
       - name: Build offline bundle
         run: npm run package
 
-      - name: Verify offline bundle zip
+      - name: Build npm tarball
+        run: npm pack --pack-destination dist
+
+      - name: Verify release artifacts
         shell: bash
         run: |
           ls -lh dist
           compgen -G "dist/*.zip" > /dev/null || { echo "::error::离线 zip 未生成，无法创建 Release"; exit 1; }
+          compgen -G "dist/*.tgz" > /dev/null || { echo "::error::npm tarball 未生成，无法创建 Release"; exit 1; }
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
+          files: |
+            dist/*.zip
+            dist/*.tgz
           generate_release_notes: true
           fail_on_unmatched_files: true
 
