@@ -348,6 +348,16 @@
 
 ---
 
+## 📱 关注作者
+
+作者抖音账号：**Lumen流明**（抖音号 `42906749348`）——「用 AI 把想法变成画面」。打开抖音「扫一扫」关注：
+
+<div align="center">
+  <img src="docs/assets/social/douyin-lumen.webp" alt="抖音 Lumen流明 账号二维码" width="320" />
+</div>
+
+---
+
 ## 📄 开源许可与致谢
 
 - 本项目基于 [MIT License](LICENSE) 开源。

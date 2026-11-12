@@ -348,6 +348,16 @@ If you want to contribute, modify code, or benchmark models:
 
 ---
 
+## 📱 Follow the Author
+
+Douyin (Chinese TikTok): **Lumen流明** (Douyin ID `42906749348`) — "turn ideas into images with AI". Scan the QR code in the Douyin app:
+
+<div align="center">
+  <img src="docs/assets/social/douyin-lumen.webp" alt="Douyin QR code for Lumen流明" width="320" />
+</div>
+
+---
+
 ## 📄 License & Acknowledgments
 
 - Licensed under [MIT](LICENSE).
