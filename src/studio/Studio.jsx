@@ -22,6 +22,7 @@ import { LogsDrawer } from './LogsDrawer.jsx'
 import { QueuePill } from './QueuePill.jsx'
 import { Rail } from './Rail.jsx'
 import { SessionBar } from './SessionBar.jsx'
+import { SettingsDrawer } from './SettingsDrawer.jsx'
 import { Stage } from './Stage.jsx'
 import { Toast } from './Toast.jsx'
 import { TopBar } from './TopBar.jsx'
@@ -96,6 +97,8 @@ export function Studio(props) {
       </div>
 
       {ui.logsOpen ? <LogsDrawer t={t} ui={ui} compute={compute} logs={logs} onClose={ui.closeLogs} /> : null}
+
+      {ui.settingsOpen ? <SettingsDrawer t={t} ui={ui} onClose={ui.closeSettings} /> : null}
 
       <Toast toast={ui.toast} />
     </div>

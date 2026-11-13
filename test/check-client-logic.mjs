@@ -30,7 +30,7 @@ import { NOTICE_TITLE_PREFIX, completionNotice, isCompletion, stripNoticePrefix 
 import { styles, token } from '../src/theme.js'
 import { ACTIVE_STATUS, TRANSIENT_SESSION, PHASE_STATE, NS } from '../src/constants.js'
 import { DEFAULT_RATIOS, STYLE_CAPSULES } from '../src/studio/presets.js'
-import { RATIO_IDS, STYLE_IDS, LIMITS, LOGS } from '../shared/contract.js'
+import { RATIO_IDS, STYLE_IDS, LIMITS, LOGS, SETTINGS } from '../shared/contract.js'
 
 const t = fallbackTranslate('zh')
 const te = fallbackTranslate('en')
@@ -349,6 +349,253 @@ await check('过渡态已等待时长', () => {
   assert.equal(logic.sessionElapsedMs(null, NOW), null)
 })
 
+await check('空闲关机倒计时只认宿主真实读数', () => {
+  // 两个字段都来自宿主快照：idleSeconds 来自远端 /health，idleTimeoutSec 是生效阈值。
+  assert.deepEqual(logic.idleShutdownOf({ idleSeconds: 600, idleTimeoutSec: 1800 }), {
+    idleSeconds: 600,
+    idleMinutes: 10,
+    totalMinutes: 30,
+  })
+  assert.deepEqual(logic.idleShutdownOf({ idleSeconds: 3599, idleTimeoutSec: 3600 }), {
+    idleSeconds: 3599,
+    idleMinutes: 59,
+    totalMinutes: 60,
+  })
+  // 缺任一字段都不展示：宁可暂时没有这一行，也不显示「已空闲 0 分钟」。
+  assert.equal(logic.idleShutdownOf({ idleSeconds: null, idleTimeoutSec: 1800 }), null)
+  assert.equal(logic.idleShutdownOf({ idleSeconds: 600 }), null)
+  assert.equal(logic.idleShutdownOf({ idleTimeoutSec: 1800 }), null)
+  // 不足一分钟与非法值同样不展示。
+  assert.equal(logic.idleShutdownOf({ idleSeconds: 30, idleTimeoutSec: 1800 }), null)
+  assert.equal(logic.idleShutdownOf({ idleSeconds: -5, idleTimeoutSec: 1800 }), null)
+  assert.equal(logic.idleShutdownOf({ idleSeconds: 'x', idleTimeoutSec: 1800 }), null)
+  assert.equal(logic.idleShutdownOf(null), null)
+})
+
+await check('运行设置：分钟换算、钳制与快捷档位', () => {
+  const minMinutes = Math.ceil(SETTINGS.idleTimeoutSec.min / 60)
+  const maxMinutes = Math.floor(SETTINGS.idleTimeoutSec.max / 60)
+  assert.equal(logic.IDLE_MIN_MINUTES, minMinutes)
+  assert.equal(logic.IDLE_MAX_MINUTES, maxMinutes)
+  // 视图 → 分钟（取整），缺省/非法值回落默认档 30 分钟。
+  assert.equal(logic.idleMinutesOf(1800), 30)
+  assert.equal(logic.idleMinutesOf(1900), 32)
+  assert.equal(logic.idleMinutesOf(undefined), 30)
+  assert.equal(logic.idleMinutesOf('x'), 30)
+  assert.equal(logic.idleMinutesOf(0), 30)
+  // 越界按契约 min/max 钳制。
+  assert.equal(logic.idleMinutesOf(60), minMinutes)
+  assert.equal(logic.idleMinutesOf(999999), maxMinutes)
+  // 分钟 → 秒：非数值返回 null（按未修改处理），越界钳制后换算。
+  assert.equal(logic.idleTimeoutSecOf(30), 1800)
+  assert.equal(logic.idleTimeoutSecOf('45'), 2700)
+  assert.equal(logic.idleTimeoutSecOf(1), minMinutes * 60)
+  assert.equal(logic.idleTimeoutSecOf(9999), maxMinutes * 60)
+  assert.equal(logic.idleTimeoutSecOf(''), null)
+  assert.equal(logic.idleTimeoutSecOf('abc'), null)
+  assert.equal(logic.idleTimeoutSecOf(0), null)
+  // 快捷档位高亮只认整数命中。
+  for (const minutes of SETTINGS.idleTimeoutSec.quickMinutes) {
+    assert.equal(logic.quickIdleMinutes(String(minutes)), minutes)
+    assert.equal(logic.quickIdleMinutes(minutes), minutes)
+  }
+  assert.equal(logic.quickIdleMinutes(45), null)
+  assert.equal(logic.quickIdleMinutes('30.5'), null)
+  assert.equal(logic.quickIdleMinutes(''), null)
+})
+
+await check('运行设置：多行文本与数组互转', () => {
+  assert.deepEqual(logic.parseLineList(' a/b \n\n c/d \r\nc/d\na/b'), ['a/b', 'c/d'], '去空白、去空行、去重')
+  assert.deepEqual(logic.parseLineList(''), [])
+  assert.deepEqual(logic.parseLineList(null), [])
+  assert.deepEqual(logic.formatLineList([' a ', '', 'b', 'a', null]), 'a\nb')
+  assert.equal(logic.formatLineList(null), '')
+  // 契约上限：最多 SETTINGS.maxItems 行；超长行丢弃。
+  const many = Array.from({ length: SETTINGS.maxItems + 5 }, (_, index) => `owner/ds-${index}`)
+  assert.equal(logic.parseLineList(many.join('\n')).length, SETTINGS.maxItems)
+  assert.deepEqual(logic.parseLineList(`${'x'.repeat(SETTINGS.maxItemChars + 1)}\nok/item`), ['ok/item'])
+})
+
+await check('运行设置：本地模型映射行级校验', () => {
+  const valid = logic.parseLocalModels('stabilityai/stable-diffusion-xl-base-1.0=/kaggle/input/sdxl\n\norg/repo = /kaggle/input/repo')
+  assert.deepEqual(valid.value, {
+    'stabilityai/stable-diffusion-xl-base-1.0': '/kaggle/input/sdxl',
+    'org/repo': '/kaggle/input/repo',
+  })
+  assert.deepEqual(valid.errors, [])
+
+  // 每一行都要能独立定位：缺 =、repo 不是 owner/name、路径不以 / 开头。
+  const broken = logic.parseLocalModels([
+    'owner/repo=/kaggle/input/repo',
+    'missing-equals',
+    'no-slash=/kaggle/input/x',
+    'owner/repo2=relative/path',
+    'owner/repo3=/kaggle/input/ok',
+  ].join('\n'))
+  assert.deepEqual(broken.value, {
+    'owner/repo': '/kaggle/input/repo',
+    'owner/repo3': '/kaggle/input/ok',
+  })
+  assert.deepEqual(broken.errors.map((error) => error.line), [2, 3, 4], '错误必须带行号')
+  assert.deepEqual(
+    broken.errors.map((error) => error.message),
+    [
+      'studio.settings.localModels.errorFormat',
+      'studio.settings.localModels.errorRepo',
+      'studio.settings.localModels.errorPath',
+    ],
+  )
+  for (const error of broken.errors) {
+    assert.ok(DICT.zh[error.message], `${error.message} 缺少中文文案`)
+    assert.ok(DICT.en[error.message], `${error.message} 缺少英文文案`)
+  }
+
+  // 重复 repo 后写覆盖前写，不产生行级错误。
+  assert.deepEqual(logic.parseLocalModels('org/repo=/a\norg/repo=/b').value, { 'org/repo': '/b' })
+  // 超长行与超项数也走行级错误。
+  const tooLong = logic.parseLocalModels(`${'a'.repeat(SETTINGS.maxItemChars + 1)}=/x`)
+  assert.equal(tooLong.errors[0].message, 'studio.settings.localModels.errorTooLong')
+  const many = Array.from({ length: SETTINGS.maxItems + 1 }, (_, index) => `org/repo-${index}=/kaggle/input/${index}`)
+  const overflow = logic.parseLocalModels(many.join('\n'))
+  assert.equal(Object.keys(overflow.value).length, SETTINGS.maxItems)
+  assert.equal(overflow.errors.length, 1)
+  assert.equal(overflow.errors[0].message, 'studio.settings.localModels.errorTooMany')
+  assert.equal(overflow.errors[0].params.max, SETTINGS.maxItems)
+
+  assert.equal(logic.formatLocalModels({ 'org/repo': '/kaggle/input/repo' }), 'org/repo=/kaggle/input/repo')
+  assert.equal(logic.formatLocalModels(null), '')
+})
+
+await check('运行设置：脱敏视图 → 表单', () => {
+  const view = {
+    idleTimeoutSec: 1800,
+    accelerator: 'NvidiaTeslaP100',
+    datasetSources: ['owner/dataset'],
+    localModels: { 'org/repo': '/kaggle/input/repo' },
+    pipConstraints: ['diffusers==0.31.0'],
+    hasHfToken: true,
+    hfTokenSource: 'config',
+    effectiveOnNextSession: true,
+  }
+  const form = logic.formFromSettings(view)
+  assert.deepEqual(form, {
+    idleMinutes: '30',
+    accelerator: 'NvidiaTeslaP100',
+    // 视图本来就不回传 hfToken 原文：表单永远从空串开始。
+    hfToken: '',
+    clearHfToken: false,
+    datasetSourcesText: 'owner/dataset',
+    localModelsText: 'org/repo=/kaggle/input/repo',
+    pipConstraintsText: 'diffusers==0.31.0',
+  })
+  // 未知/缺失字段回落到默认值与空表单。
+  const fallback = logic.formFromSettings({})
+  assert.equal(fallback.idleMinutes, '30')
+  assert.equal(fallback.accelerator, SETTINGS.defaultAccelerator)
+  assert.equal(fallback.datasetSourcesText, '')
+  assert.equal(fallback.localModelsText, '')
+  assert.equal(logic.formFromSettings(null).accelerator, SETTINGS.defaultAccelerator)
+  // 响应形状：只认契约的 { ok: true, settings: view }。
+  assert.equal(logic.settingsViewOf({ ok: true, data: { settings: view } }), view)
+  assert.equal(logic.settingsViewOf({ ok: true, data: view }), null, '缺少 settings 包装不猜测')
+  assert.equal(logic.settingsViewOf({ ok: false, data: { settings: view } }), null)
+  assert.equal(logic.settingsViewOf(null), null)
+})
+
+await check('运行设置：表单 → 请求体只含改动字段', () => {
+  const view = {
+    idleTimeoutSec: 1800,
+    accelerator: 'NvidiaTeslaT4',
+    datasetSources: ['owner/dataset'],
+    localModels: { 'org/repo': '/kaggle/input/repo' },
+    pipConstraints: ['diffusers==0.31.0'],
+    hasHfToken: true,
+    hfTokenSource: 'settings',
+    effectiveOnNextSession: false,
+  }
+  const form = logic.formFromSettings(view)
+  assert.deepEqual(logic.buildSettingsPayload(form, view), {}, '没改任何字段时不提交空 body')
+  assert.equal(logic.hasSettingsChanges({}), false)
+  assert.equal(logic.hasSettingsChanges({ accelerator: 'NvidiaTeslaP100' }), true)
+
+  // 只改空闲分钟：换算成秒提交。
+  assert.deepEqual(logic.buildSettingsPayload({ ...form, idleMinutes: '45' }, view), { idleTimeoutSec: 2700 })
+  // 只改加速器。
+  assert.deepEqual(
+    logic.buildSettingsPayload({ ...form, accelerator: 'NvidiaTeslaP100' }, view),
+    { accelerator: 'NvidiaTeslaP100' },
+  )
+  // hfToken 为空不提交；有内容才提交且去掉首尾空白。
+  assert.deepEqual(logic.buildSettingsPayload({ ...form, hfToken: '   ' }, view), {})
+  assert.deepEqual(logic.buildSettingsPayload({ ...form, hfToken: ' hf_secret ' }, view), { hfToken: 'hf_secret' })
+  // 清除 Token 单独提交 clearHfToken，不与 hfToken 同时出现。
+  assert.deepEqual(
+    logic.buildSettingsPayload({ ...form, hfToken: '', clearHfToken: true }, view),
+    { clearHfToken: true },
+  )
+  assert.deepEqual(
+    logic.buildSettingsPayload({ ...form, hfToken: 'hf_new', clearHfToken: true }, view),
+    { clearHfToken: true },
+  )
+  // 三个多行字段：内容变化按数组/对象提交。
+  assert.deepEqual(
+    logic.buildSettingsPayload({ ...form, datasetSourcesText: 'owner/dataset\nsecond/ds' }, view),
+    { datasetSources: ['owner/dataset', 'second/ds'] },
+  )
+  assert.deepEqual(
+    logic.buildSettingsPayload({ ...form, pipConstraintsText: 'diffusers==0.31.0\ntransformers==4.44.2' }, view),
+    { pipConstraints: ['diffusers==0.31.0', 'transformers==4.44.2'] },
+  )
+  assert.deepEqual(
+    logic.buildSettingsPayload({ ...form, localModelsText: 'org/repo=/kaggle/input/repo\norg/repo2=/kaggle/input/repo2' }, view),
+    { localModels: { 'org/repo': '/kaggle/input/repo', 'org/repo2': '/kaggle/input/repo2' } },
+  )
+  // 非法行禁止保存：校验不通过，且请求体不会带 localModels。
+  const invalidForm = { ...form, localModelsText: 'broken-line' }
+  assert.equal(logic.validateSettingsForm(invalidForm).ok, false)
+  assert.equal(logic.validateSettingsForm(invalidForm).errors[0].line, 1)
+  assert.deepEqual(logic.buildSettingsPayload(invalidForm, view), {})
+  assert.equal(logic.validateSettingsForm(form).ok, true)
+
+  // Token 来源文案键覆盖契约里的全部取值域。
+  for (const source of SETTINGS.hfTokenSources) {
+    const key = logic.hfTokenSourceKey(source)
+    assert.ok(DICT.zh[key], `${key} 缺少中文文案`)
+    assert.ok(DICT.en[key], `${key} 缺少英文文案`)
+  }
+  assert.equal(logic.hfTokenSourceKey('unknown'), logic.hfTokenSourceKey('none'))
+})
+
+await check('运行设置：请求错误文案可读', () => {
+  // 浏览器原文（Failed to fetch / HTTP 404）不能直接抛给用户。
+  assert.equal(logic.settingsErrorText(t, { code: 'network', message: 'Failed to fetch' }), t('error.network'))
+  assert.equal(logic.settingsErrorText(t, { code: 'http_404', message: 'HTTP 404' }), t('error.http'))
+  assert.equal(
+    logic.settingsErrorText(t, { code: 'invalid_request', message: 'localModels 必须是对象' }),
+    `${t('error.code.invalid_request')} · localModels 必须是对象`,
+  )
+  assert.equal(logic.settingsErrorText(t, null), '')
+})
+
+await check('运行设置：加速器展示名与错误文案齐全', () => {
+  // 展示名只放字典（contract 只登记取值域），每个白名单 id 都要有中英文。
+  for (const accelerator of SETTINGS.accelerators) {
+    const key = `studio.settings.accelerator.${accelerator}`
+    assert.ok(DICT.zh[key], `${key} 缺少中文展示名`)
+    assert.ok(DICT.en[key], `${key} 缺少英文展示名`)
+    assert.equal(typeof DICT.zh[key], 'string')
+  }
+  assert.match(DICT.zh['studio.settings.accelerator.NvidiaTeslaT4'], /默认推荐/)
+  assert.match(DICT.en['studio.settings.accelerator.NvidiaTeslaT4'], /recommended/i)
+  // 抽屉的新键都在两侧有值（静态引用 + 动态命名空间）。
+  const settingsKeys = Object.keys(DICT.zh).filter((key) => key.startsWith('studio.settings.'))
+  assert.ok(settingsKeys.length >= 40, `运行设置文案过少：${settingsKeys.length}`)
+  for (const key of settingsKeys) {
+    assert.ok(typeof DICT.en[key] === 'string' && DICT.en[key].length > 0, `${key} 缺少英文文案`)
+    assert.ok(typeof DICT.zh[key] === 'string' && DICT.zh[key].length > 0, `${key} 缺少中文文案`)
+  }
+})
+
 await check('状态色与常量表一致', () => {
   assert.equal(logic.toneColor('ok'), token.ok)
   assert.equal(logic.toneColor('warn'), token.warn)
@@ -415,6 +662,12 @@ await check('错误码映射到指引类型', () => {
   assert.equal(logic.isConnectionCode('network'), true)
   assert.equal(logic.isConnectionCode('session_error'), false)
   assert.equal(logic.isConnectionCode(''), false)
+  // 远端没拿到 GPU 单独归到 gpu 卡：不能复用「生成失败重试」，重试只会再耗一次排队。
+  assert.equal(logic.guidanceKindOf('gpu_unavailable'), 'gpu')
+  assert.notEqual(logic.guidanceKindOf('gpu_unavailable'), 'generate')
+  assert.equal(logic.KAGGLE_ACCOUNT_URL, 'https://www.kaggle.com/settings')
+  assert.equal(logic.KAGGLE_SETTINGS_URL, 'https://www.kaggle.com/settings/api')
+  assert.match(logic.KAGGLE_CREDENTIAL_PATH, /^%USERPROFILE%\\\.kaggle\\kaggle\.json$/)
 })
 
 await check('指引卡详情优先级', () => {

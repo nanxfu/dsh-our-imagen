@@ -20,7 +20,13 @@ import { bundle } from '../build.mjs'
 import { loadClient, serializeTree, TEST_ARTIFACT } from './load-client.mjs'
 import { LIMITS } from '../shared/contract.js'
 // 资源层直接 import 源码：渲染测试已经覆盖 UI，这里补「客户端请求形状」的离线断言。
-import { cancelJob as cancelJobRequest, enhancePromptRequest, fetchHistory } from '../src/api/resources.js'
+import {
+  cancelJob as cancelJobRequest,
+  enhancePromptRequest,
+  fetchHistory,
+  fetchSettings as fetchSettingsRequest,
+  saveSettings as saveSettingsRequest,
+} from '../src/api/resources.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const PROD_ARTIFACT = join(ROOT, 'client.js')
@@ -389,7 +395,7 @@ const scenarios = {
     },
     history: { items: [] },
     props: {},
-    expect: ['本地没有检测到 Kaggle 命令行', 'pip install -U kaggle', '复制安装命令', '重新检查环境', '关闭'],
+    expect: ['本地没有检测到 Kaggle 命令行', 'pip install -U kaggle', '复制安装命令', '重新检查环境', '关闭', 'Windows 用户安装后若仍提示找不到命令'],
     reject: ['生成没有成功'],
     structure: {
       required: {
@@ -524,6 +530,73 @@ const scenarios = {
         'ofs-figure--empty': 1,
       },
       forbidden: ['ofs-guidance-command', 'ofs-panel--chat', 'ofs-image', 'ofs-toast'],
+    },
+  },
+  // 远端容器没拿到 GPU：新卡片给「打开 Kaggle 账户设置 + 唤醒」和两条次级动作，
+  // 不能落进「生成没有成功 → 重试一次」那类（重试只会再消耗一次排队）。
+  gpu: {
+    state: {
+      defaultPreset: 'sdxl-lightning',
+      presets: [preset],
+      session: {
+        state: 'error',
+        error: { code: 'gpu_unavailable', message: '未检测到可用 GPU（当前为 CPU 容器）' },
+      },
+      jobs: [],
+      lastJob: null,
+    },
+    history: { items: [] },
+    props: {},
+    expect: [
+      '云端没有拿到 GPU',
+      '打开 Kaggle 账户设置',
+      '唤醒云端',
+      '手机号验证',
+      '未检测到可用 GPU（当前为 CPU 容器）',
+      '查看日志',
+      '复制诊断信息',
+    ],
+    reject: ['生成没有成功', '重试一次'],
+    structure: {
+      required: {
+        'ofs-root': 1,
+        'ofs-guidance': 1,
+        'ofs-guidance-title': 1,
+        'ofs-guidance-detail': 1,
+        'ofs-guidance-note': 1,
+        'ofs-guidance-actions': 1,
+      },
+      forbidden: ['ofs-guidance-command', 'ofs-panel--chat', 'ofs-image'],
+    },
+  },
+  // 凭据缺失：卡片要给 Windows 凭据文件位置，并把「打开 Kaggle 设置」保持为 API Token 页。
+  auth: {
+    state: {
+      defaultPreset: 'sdxl-lightning',
+      presets: [preset],
+      session: {
+        state: 'error',
+        error: { code: 'auth_required', message: '未找到 kaggle 凭据文件' },
+      },
+      jobs: [],
+      lastJob: null,
+    },
+    history: { items: [] },
+    props: {},
+    expect: [
+      'Kaggle 账号缺少手机号绑定或凭据不可用',
+      '凭据文件位于 %USERPROFILE%\\.kaggle\\kaggle.json',
+      '打开 Kaggle 设置',
+      '重新检查环境',
+    ],
+    reject: ['生成没有成功'],
+    structure: {
+      required: {
+        'ofs-guidance': 1,
+        'ofs-guidance-note': 1,
+        'ofs-guidance-actions': 1,
+      },
+      forbidden: ['ofs-guidance-command', 'ofs-image'],
     },
   },
 }
@@ -1212,6 +1285,536 @@ await check('渲染：算力弹层配额回退、隧道通道与日志入口', a
   assert.ok(!idleFlat.includes('账号 · 不可用'), '[compute] 未探测不应显示不可用')
 })
 
+// ── 运行设置抽屉（M2.3） ───────────────────────────────────────
+
+/** 设置接口的脱敏视图：字段形状按宿主约定固定。 */
+const settingsView = {
+  idleTimeoutSec: 1800,
+  accelerator: 'NvidiaTeslaT4',
+  datasetSources: ['owner/dataset'],
+  localModels: { 'org/repo': '/kaggle/input/repo' },
+  pipConstraints: ['diffusers==0.31.0'],
+  hasHfToken: true,
+  hfTokenSource: 'config',
+  effectiveOnNextSession: true,
+}
+
+/**
+ * 挂载设置抽屉并拦截设置接口：记录 GET/POST 的 method 与 body，POST 用 savedView 回应。
+ * 用来断言「UI 改了什么 → 实际提交什么」，不依赖真实网络。
+ */
+async function mountSettingsDrawer(props = {}, options = {}) {
+  const view = options.view ?? settingsView
+  const client = await loadClient({ now: NOW, responses: options.responses ?? {}, testBuild: true })
+  const passthrough = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url, init) => {
+    const method = (init && init.method) || 'GET'
+    const path = new URL(String(url)).pathname
+    const body = init && init.body ? JSON.parse(init.body) : null
+    calls.push({ url: String(url), path, method, body })
+    if (path === '/imagen-api/settings' && method === 'GET' && !options.failGet) {
+      return { ok: true, status: 200, json: async () => ({ ok: true, settings: view }) }
+    }
+    if (path === '/imagen-api/settings' && method === 'POST' && !options.failPost) {
+      const saved = options.savedView ?? view
+      return { ok: true, status: 200, json: async () => ({ ok: true, settings: saved }) }
+    }
+    return passthrough(url, init)
+  }
+  const t = client.internals.i18n.fallbackTranslate(options.locale ?? 'zh')
+  const toasts = []
+  const closed = []
+  let tree = null
+  try {
+    tree = await client.mountRaw(client.components.SettingsDrawer, {
+      t,
+      ui: { showToast: (text) => toasts.push(text) },
+      onClose: () => closed.push(true),
+      ...props,
+    })
+    return { client, tree, calls, toasts, closed, t }
+  } catch (error) {
+    client.unmount()
+    throw error
+  }
+}
+
+const idleShutdownSession = {
+  state: 'ready',
+  modelId: 'sdxl-lightning',
+  device: 'Tesla T4',
+  idleSeconds: 600,
+  idleTimeoutSec: 1800,
+  error: null,
+}
+
+/** 只挂载 TopBar（算力弹层展开），返回渲染树与 openSettings 调用记录。 */
+async function mountTopBarExpanded(session) {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const opened = []
+  const tree = await client.mountRaw(client.components.TopBar, {
+    t: client.internals.i18n.fallbackTranslate('zh'),
+    ui: {
+      view: 'studio',
+      setView: () => {},
+      openLogs: () => {},
+      openSettings: (trigger) => opened.push(trigger),
+    },
+    compute: {
+      sessionState: 'ready',
+      session,
+      quota: null,
+      presets: [preset],
+      busy: '',
+      probing: false,
+      probe: null,
+      probeReport: null,
+      startSession: () => {},
+      stopSession: () => {},
+      runProbe: () => {},
+      openFolder: () => {},
+    },
+    form: {
+      form: { presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0 },
+      patchForm: () => {},
+    },
+    library: { loadHistory: () => {} },
+    defaultOpen: true,
+  })
+  return { client, tree, opened }
+}
+
+await check('渲染：算力弹层运行设置入口与空闲倒计时', async () => {
+  // 两个字段都有真实读数：展示「已空闲 X 分钟 · 满 Y 分钟自动关机」。
+  const first = await mountTopBarExpanded(idleShutdownSession)
+  const firstText = collectText(first.tree).join('')
+  assert.ok(
+    firstText.includes('已空闲 10 分钟 · 满 30 分钟自动关机'),
+    `[idle] 缺少空闲倒计时：${firstText}`,
+  )
+  const settingsRow = findNodes(
+    first.tree,
+    (node) => node.type === 'button'
+      && node.props
+      && node.props.role === 'menuitem'
+      && collectText(node).join('').includes('运行设置'),
+  )[0]
+  assert.ok(settingsRow, '[idle] 缺少运行设置入口')
+  settingsRow.props.onClick()
+  assert.equal(first.opened.length, 1, '[idle] 点击入口应打开运行设置抽屉')
+  first.client.unmount()
+
+  // 缺 idleSeconds（旧宿主 / 没有 /health 的会话态）：不编造倒计时，退回休眠阈值说明。
+  const missing = await mountTopBarExpanded({ state: 'ready', modelId: 'sdxl-lightning', idleTimeoutSec: 1800, error: null })
+  const missingText = collectText(missing.tree).join('')
+  assert.ok(!missingText.includes('已空闲'), '[idle] 缺 idleSeconds 时不应展示倒计时')
+  assert.ok(missingText.includes('闲置休眠阈值 30 分'), `[idle] 缺读数时应保留休眠阈值：${missingText}`)
+  missing.client.unmount()
+
+  // 两个字段都缺：整行不出现。
+  const none = await mountTopBarExpanded({ state: 'ready', modelId: 'sdxl-lightning', error: null })
+  const noneText = collectText(none.tree).join('')
+  assert.ok(!noneText.includes('已空闲'), '[idle] 缺 idleSeconds 时不应展示倒计时')
+  assert.ok(!noneText.includes('闲置休眠阈值'), '[idle] 缺 idleTimeoutSec 时不应展示阈值')
+  none.client.unmount()
+
+  // 不足一分钟同样不显示，避免出现「已空闲 0 分钟」。
+  const fresh = await mountTopBarExpanded({ ...idleShutdownSession, idleSeconds: 30 })
+  assert.ok(
+    !collectText(fresh.tree).join('').includes('已空闲'),
+    '[idle] 空闲不足一分钟不应展示 0 分钟',
+  )
+  fresh.client.unmount()
+})
+
+await check('渲染：设置抽屉分区、生效提示与 Token 状态', async () => {
+  const mounted = await mountSettingsDrawer()
+  try {
+    const text = collectText(mounted.tree).join(' | ')
+    for (const needle of [
+      '运行设置',
+      '当前云端实例已运行，修改将在下次唤醒时生效',
+      '常规运行',
+      '空闲自动关机',
+      '15 分钟',
+      '30 分钟',
+      '60 分钟',
+      '120 分钟',
+      '自定义分钟（5–180）',
+      'GPU 加速器',
+      '2× Tesla T4（默认推荐）',
+      'Tesla P100',
+      '模型下载与限流防护',
+      'HuggingFace Token',
+      '清除 Token',
+      '来源：宿主配置',
+      '高级：预挂载与依赖锁定',
+      '保存设置',
+      '取消',
+    ]) {
+      assert.ok(text.includes(needle), `[settings] 缺少文案：${needle}\n实际：${text}`)
+    }
+    // 关闭按钮只有图标，文案在 aria-label / title 上。
+    const closeButton = findNodes(
+      mounted.tree,
+      (node) => node.type === 'button' && node.props && node.props['aria-label'] === '关闭设置',
+    )[0]
+    assert.ok(closeButton, '[settings] 缺少关闭按钮')
+    assert.equal(closeButton.props.title, '关闭设置')
+    // 默认折叠高级区：三个多行输入都不渲染。
+    assert.equal(findNodes(mounted.tree, (node) => node.type === 'textarea').length, 0, '[settings] 高级区应默认折叠')
+    assertStructure('settings-drawer', mounted.tree, {
+      required: {
+        'ofs-settings': 1,
+        'ofs-settings-panel': 1,
+        'ofs-settings-head': 1,
+        'ofs-settings-title': 1,
+        'ofs-settings-body': 1,
+        'ofs-settings-effective': 1,
+        'ofs-settings-section': 3,
+        'ofs-settings-section-title': 2,
+        'ofs-settings-quick-item': 4,
+        'ofs-settings-option': 2,
+        'ofs-settings-clear': 1,
+        'ofs-settings-save': 1,
+      },
+      forbidden: ['ofs-settings-advanced', 'ofs-settings-textarea', 'ofs-settings-errors'],
+    })
+    const dialog = findNodes(mounted.tree, (node) => node.props && node.props.role === 'dialog')[0]
+    assert.ok(dialog, '[settings] 抽屉应以 role="dialog" 渲染')
+    assert.equal(dialog.props['aria-modal'], 'true')
+    assert.equal(dialog.props['aria-label'], '运行设置')
+
+    // 打开时 GET 一次脱敏视图；没有改动时保存按钮禁用。
+    assert.equal(mounted.calls.length, 1)
+    assert.equal(mounted.calls[0].path, '/imagen-api/settings')
+    assert.equal(mounted.calls[0].method, 'GET')
+    const saveButton = findNodes(
+      mounted.tree,
+      (node) => node.type === 'button' && String(node.props?.className).includes('ofs-settings-save'),
+    )[0]
+    assert.ok(saveButton, '[settings] 缺少保存按钮')
+    assert.equal(saveButton.props.disabled, true, '没有改动时保存按钮应禁用')
+    assert.equal(saveButton.props['aria-busy'], false)
+
+    // hfToken 用 password 输入，视图只回传 hasHfToken，不预填任何原文。
+    const passwordInput = findNodes(
+      mounted.tree,
+      (node) => node.type === 'input' && node.props && node.props.type === 'password',
+    )[0]
+    assert.ok(passwordInput, '[settings] 缺少 Token 输入框')
+    assert.equal(passwordInput.props.value, '')
+    assert.equal(passwordInput.props.placeholder, '已配置，留空保持不变')
+    assert.equal(passwordInput.props.autoComplete, 'off')
+
+    // 当前视图是 1800 秒 → 30 分钟快捷档高亮。
+    const quickItems = findNodes(
+      mounted.tree,
+      (node) => node.type === 'button' && String(node.props?.className).includes('ofs-settings-quick-item'),
+    )
+    assert.deepEqual(quickItems.map((node) => node.props['aria-pressed']), [false, true, false, false])
+    const radios = findNodes(mounted.tree, (node) => node.type === 'input' && node.props && node.props.type === 'radio')
+    assert.deepEqual(radios.map((node) => node.props.value), ['NvidiaTeslaT4', 'NvidiaTeslaP100'])
+    assert.deepEqual(radios.map((node) => node.props.checked), [true, false])
+  } finally {
+    mounted.client.unmount()
+  }
+})
+
+await check('渲染：设置抽屉高级区与行级校验', async () => {
+  // 高级区展开：三个多行输入与示例提示；合法内容不出现错误行。
+  const valid = await mountSettingsDrawer({ defaultAdvancedOpen: true })
+  try {
+    const text = collectText(valid.tree).join(' | ')
+    for (const needle of [
+      '预挂载 Kaggle Dataset',
+      '每行一个 owner/dataset，最多 32 行',
+      '本地模型目录映射',
+      '每行一条 repo=容器路径',
+      'repo 是 HuggingFace 模型 ID',
+      'pip 依赖约束',
+      '每行一条约束，例如 diffusers==0.31.0',
+    ]) {
+      assert.ok(text.includes(needle), `[settings-advanced] 缺少文案：${needle}`)
+    }
+    const textareas = findNodes(valid.tree, (node) => node.type === 'textarea')
+    assert.equal(textareas.length, 3, '[settings-advanced] 高级区应有三个多行输入')
+    assert.deepEqual(textareas.map((node) => node.props.value), [
+      'owner/dataset',
+      'org/repo=/kaggle/input/repo',
+      'diffusers==0.31.0',
+    ])
+    assertStructure('settings-advanced', valid.tree, {
+      required: {
+        'ofs-settings-advanced': 1,
+        'ofs-settings-textarea': 3,
+        'ofs-settings-hint': 3,
+      },
+      forbidden: ['ofs-settings-errors', 'ofs-settings-error-item'],
+    })
+    const saveButton = findNodes(
+      valid.tree,
+      (node) => node.type === 'button' && String(node.props?.className).includes('ofs-settings-save'),
+    )[0]
+    assert.equal(saveButton.props.disabled, true, '高级区合法但没改动时仍禁用保存')
+  } finally {
+    valid.client.unmount()
+  }
+
+  // 非法行：标出第几行、说明原因，并禁止保存。
+  const invalid = await mountSettingsDrawer({
+    defaultAdvancedOpen: true,
+    defaultDraft: { localModelsText: 'owner/repo=/kaggle/input/repo\nbroken-line' },
+  })
+  try {
+    const text = collectText(invalid.tree).join(' | ')
+    assert.ok(text.includes('第 2 行：缺少 =，格式应为 repo=容器路径'), `[settings-advanced] 缺少行级错误：${text}`)
+    assert.ok(text.includes('有 1 行需要修正后才能保存'), '[settings-advanced] 缺少修正提示')
+    assertStructure('settings-advanced-invalid', invalid.tree, {
+      required: { 'ofs-settings-errors': 1, 'ofs-settings-error-item': 1, 'ofs-settings-error': 1 },
+      forbidden: [],
+    })
+    const saveButton = findNodes(
+      invalid.tree,
+      (node) => node.type === 'button' && String(node.props?.className).includes('ofs-settings-save'),
+    )[0]
+    assert.equal(saveButton.props.disabled, true, '存在非法行时必须禁用保存')
+  } finally {
+    invalid.client.unmount()
+  }
+})
+
+await check('渲染：设置抽屉保存流程（只提交改动字段）', async () => {
+  const savedView = {
+    ...settingsView,
+    idleTimeoutSec: 3600,
+    accelerator: 'NvidiaTeslaP100',
+    hasHfToken: false,
+    hfTokenSource: 'none',
+  }
+  const mounted = await mountSettingsDrawer({
+    defaultDraft: { idleMinutes: '60', accelerator: 'NvidiaTeslaP100', clearHfToken: true },
+    savedView,
+  })
+  try {
+    const text = collectText(mounted.tree).join(' | ')
+    assert.ok(text.includes('保存后将清除已配置的 Token'), `[settings-save] 缺少清除提示：${text}`)
+    // 草稿改动立刻反映在档位高亮与单选态上。
+    const quickItems = findNodes(
+      mounted.tree,
+      (node) => node.type === 'button' && String(node.props?.className).includes('ofs-settings-quick-item'),
+    )
+    assert.deepEqual(quickItems.map((node) => node.props['aria-pressed']), [false, false, true, false], '60 分钟档应高亮')
+    const radios = findNodes(mounted.tree, (node) => node.type === 'input' && node.props && node.props.type === 'radio')
+    assert.deepEqual(radios.map((node) => node.props.checked), [false, true], 'P100 应选中')
+
+    const saveButton = findNodes(
+      mounted.tree,
+      (node) => node.type === 'button' && String(node.props?.className).includes('ofs-settings-save'),
+    )[0]
+    assert.equal(saveButton.props.disabled, false, '有改动时保存按钮应可用')
+    saveButton.props.onClick()
+    for (let round = 0; round < 6; round += 1) {
+      await Promise.resolve()
+      await new Promise((resolvePromise) => setImmediate(resolvePromise))
+    }
+
+    assert.deepEqual(mounted.calls.map((call) => call.method), ['GET', 'POST'], '打开时 GET、保存时 POST')
+    const posted = mounted.calls[1]
+    assert.equal(posted.path, '/imagen-api/settings')
+    assert.deepEqual(posted.body, { idleTimeoutSec: 3600, accelerator: 'NvidiaTeslaP100', clearHfToken: true })
+    assert.deepEqual(mounted.toasts, ['运行设置已保存'], '保存成功后应 toast')
+  } finally {
+    mounted.client.unmount()
+  }
+
+  // 另一种改动来源：手输 Token（去首尾空白后提交），不与 clearHfToken 混在一起。
+  const tokenMounted = await mountSettingsDrawer({ defaultDraft: { hfToken: ' hf_secret ' } })
+  try {
+    const saveButton = findNodes(
+      tokenMounted.tree,
+      (node) => node.type === 'button' && String(node.props?.className).includes('ofs-settings-save'),
+    )[0]
+    assert.equal(saveButton.props.disabled, false)
+    saveButton.props.onClick()
+    for (let round = 0; round < 6; round += 1) {
+      await Promise.resolve()
+      await new Promise((resolvePromise) => setImmediate(resolvePromise))
+    }
+    const posted = tokenMounted.calls.find((call) => call.method === 'POST')
+    assert.ok(posted, '[settings-save] 手输 Token 应提交 POST')
+    assert.deepEqual(posted.body, { hfToken: 'hf_secret' })
+    assert.equal(Object.prototype.hasOwnProperty.call(posted.body, 'clearHfToken'), false)
+  } finally {
+    tokenMounted.client.unmount()
+  }
+})
+
+await check('渲染：设置抽屉读取失败可重试', async () => {
+  const client = await loadClient({
+    now: NOW,
+    responses: { '/imagen-api/settings': { ok: false, error: { code: 'internal_error', message: '设置读取失败' } } },
+    testBuild: true,
+  })
+  let tree = null
+  try {
+    tree = await client.mountRaw(client.components.SettingsDrawer, {
+      t: client.internals.i18n.fallbackTranslate('zh'),
+      ui: { showToast: () => {} },
+      onClose: () => {},
+    })
+  } finally {
+    client.unmount()
+  }
+  const text = collectText(tree).join(' | ')
+  assert.ok(text.includes('读取运行设置失败'), `[settings-load] 缺少失败提示：${text}`)
+  assert.ok(text.includes('本地服务内部错误'), '[settings-load] 应给出可读的错误码文案')
+  assert.ok(text.includes('重试'), '[settings-load] 失败态应提供重试按钮')
+  assertStructure('settings-load-error', tree, {
+    required: { 'ofs-settings': 1, 'ofs-settings-panel': 1, 'ofs-settings-error-state': 1, 'ofs-settings-error': 1 },
+    forbidden: ['ofs-settings-form', 'ofs-settings-loading'],
+  })
+})
+
+await check('渲染：设置抽屉英文界面', async () => {
+  const mounted = await mountSettingsDrawer(
+    { defaultAdvancedOpen: true },
+    { locale: 'en-US', view: { ...settingsView, effectiveOnNextSession: false } },
+  )
+  try {
+    const text = collectText(mounted.tree).join(' | ')
+    for (const needle of [
+      'Runtime settings',
+      'Auto-shutdown when idle',
+      '15 min',
+      'Custom minutes (5–180)',
+      '2× Tesla T4 (recommended)',
+      'Tesla P100',
+      'Model downloads and rate limits',
+      'HuggingFace token',
+      'Clear token',
+      'Advanced: preloads and pinned dependencies',
+      'Pre-mounted Kaggle datasets',
+      'One repo=container-path per line',
+      'pip dependency constraints',
+      'Save settings',
+      'Cancel',
+    ]) {
+      assert.ok(text.includes(needle), `[settings-en] 缺少英文文案：${needle}\n实际：${text}`)
+    }
+    assert.ok(!text.includes('运行设置'), '[settings-en] 英文界面不应出现中文标题')
+    assert.ok(!text.includes('保存设置'), '[settings-en] 英文界面不应出现中文按钮')
+    // 已配置 Token 的 placeholder 也走英文字典（placeholder 不进 collectText）。
+    const passwordInput = findNodes(
+      mounted.tree,
+      (node) => node.type === 'input' && node.props && node.props.type === 'password',
+    )[0]
+    assert.equal(passwordInput.props.placeholder, 'Already configured; leave empty to keep it')
+  } finally {
+    mounted.client.unmount()
+  }
+})
+
+await check('渲染：gpu / auth / cli 指引卡动作与提示', async () => {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  try {
+    const t = client.internals.i18n.fallbackTranslate('zh')
+    const started = []
+    const viewedLogs = []
+    const copiedCommands = []
+    const baseProps = {
+      t,
+      actions: { resetToSafe: () => {}, retryFocusedJob: () => {} },
+      compute: {
+        session: null,
+        probe: null,
+        startSession: () => started.push('start'),
+        runProbe: () => started.push('probe'),
+        retryHost: () => {},
+      },
+      ui: {
+        openLogs: () => viewedLogs.push(true),
+        copyText: () => {},
+        copyInstallCommand: () => copiedCommands.push(true),
+      },
+    }
+
+    // gpu 卡：主操作是外链（账户设置首页，不是 API Token 页），次操作是唤醒，另有两个次级动作。
+    const gpuTree = await client.mountRaw(client.components.GuidanceCard, {
+      ...baseProps,
+      guidance: { kind: 'gpu', detail: '未检测到可用 GPU（当前为 CPU 容器）', dismiss: () => {} },
+    })
+    const gpuText = collectText(gpuTree).join(' | ')
+    for (const needle of [
+      '云端没有拿到 GPU',
+      '未检测到可用 GPU（当前为 CPU 容器）',
+      '手机号验证',
+      '打开 Kaggle 账户设置',
+      '唤醒云端',
+      '查看日志',
+      '复制诊断信息',
+    ]) {
+      assert.ok(gpuText.includes(needle), `[gpu-card] 缺少文案：${needle}`)
+    }
+    assert.ok(!gpuText.includes('重试一次'), '[gpu-card] 不应给出「重试一次」')
+    assertStructure('gpu-card', gpuTree, {
+      required: { 'ofs-guidance': 1, 'ofs-guidance-note': 1, 'ofs-guidance-actions': 1 },
+      forbidden: ['ofs-guidance-command'],
+    })
+    const gpuLink = findNodes(gpuTree, (node) => node.type === 'a')[0]
+    assert.ok(gpuLink, '[gpu-card] 缺少 Kaggle 账户设置链接')
+    assert.equal(gpuLink.props.href, 'https://www.kaggle.com/settings')
+    assert.equal(gpuLink.props.target, '_blank')
+    assert.match(String(gpuLink.props.rel), /noreferrer/)
+    const wakeButton = findNodes(
+      gpuTree,
+      (node) => node.type === 'button' && collectText(node).join('').includes('唤醒云端'),
+    )[0]
+    assert.ok(wakeButton, '[gpu-card] 缺少唤醒按钮')
+    wakeButton.props.onClick()
+    assert.deepEqual(started, ['start'], '[gpu-card] 唤醒按钮应重新启动会话')
+    const viewLogsButton = findNodes(
+      gpuTree,
+      (node) => node.type === 'button' && collectText(node).join('').includes('查看日志'),
+    )[0]
+    viewLogsButton.props.onClick()
+    assert.equal(viewedLogs.length, 1, '[gpu-card] 查看日志应交给 openLogs')
+
+    // auth 卡：凭据文件位置 + 保持 API Token 设置页按钮。
+    const authTree = await client.mountRaw(client.components.GuidanceCard, {
+      ...baseProps,
+      guidance: { kind: 'auth', detail: '', dismiss: () => {} },
+    })
+    const authText = collectText(authTree).join(' | ')
+    assert.ok(
+      authText.includes('凭据文件位于 %USERPROFILE%\\.kaggle\\kaggle.json'),
+      `[auth-card] 缺少 Windows 凭据路径：${authText}`,
+    )
+    const authLink = findNodes(authTree, (node) => node.type === 'a')[0]
+    assert.equal(authLink.props.href, 'https://www.kaggle.com/settings/api')
+
+    // cli 卡：安装命令下给 Windows PATH 提示。
+    const cliTree = await client.mountRaw(client.components.GuidanceCard, {
+      ...baseProps,
+      guidance: { kind: 'cli', detail: '', dismiss: () => {} },
+    })
+    const cliText = collectText(cliTree).join(' | ')
+    assert.ok(cliText.includes('pip install -U kaggle'), '[cli-card] 缺少安装命令')
+    assert.ok(cliText.includes('Windows 用户安装后若仍提示找不到命令'), '[cli-card] 缺少 Windows PATH 提示')
+    assert.ok(cliText.includes('已加入系统 PATH'), '[cli-card] PATH 提示应说明加入系统 PATH')
+    const copyClipboard = findNodes(
+      cliTree,
+      (node) => node.type === 'button' && collectText(node).join('').includes('复制安装命令'),
+    )[0]
+    copyClipboard.props.onClick()
+    assert.equal(copiedCommands.length, 1, '[cli-card] 复制安装命令应走 ui.copyInstallCommand')
+  } finally {
+    client.unmount()
+  }
+})
+
+
 await check('渲染：模型选择卡展开态', async () => {
   const client = await loadClient({
     now: NOW,
@@ -1885,6 +2488,8 @@ await check('资源层：取消 / 历史分页 / 英译的请求形状', async (
     await fetchHistory()
     await fetchHistory(LIMITS.history.pageSize, LIMITS.history.pageSize)
     await enhancePromptRequest({ prompt: '雨夜街景', presetId: 'sdxl-lightning', locale: 'zh', mode: 'translate' })
+    await fetchSettingsRequest()
+    await saveSettingsRequest({ idleTimeoutSec: 2700, accelerator: 'NvidiaTeslaP100' })
   } finally {
     globalThis.fetch = savedFetch
     if (savedHasDocument) globalThis.document = savedDocument
@@ -1903,6 +2508,16 @@ await check('资源层：取消 / 历史分页 / 英译的请求形状', async (
   const enhance = JSON.parse(calls[3].body)
   assert.equal(enhance.mode, 'translate', '英译请求必须带 mode=translate')
   assert.equal(enhance.prompt, '雨夜街景')
+  // 运行设置：GET 与 POST 共用契约里的 /settings 路径，POST 只带部分字段。
+  assert.equal(calls[4].url, 'http://localhost/imagen-api/settings', '读取设置必须走契约 ROUTES.settings')
+  assert.equal(calls[4].method, 'GET')
+  assert.equal(calls[5].url, 'http://localhost/imagen-api/settings', '保存设置必须走契约 ROUTES.settingsSave')
+  assert.equal(calls[5].method, 'POST')
+  assert.deepEqual(
+    JSON.parse(calls[5].body),
+    { idleTimeoutSec: 2700, accelerator: 'NvidiaTeslaP100' },
+    '设置请求体是部分字段对象',
+  )
 })
 
 // 工作台集成：运行中的任务点取消 → 请求契约里的取消接口并刷新宿主快照。

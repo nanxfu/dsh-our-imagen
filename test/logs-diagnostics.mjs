@@ -530,7 +530,7 @@ await check('LogsDrawer 双视图与兜底结构', async () => {
   assert.ok(source.includes("logs.status === 'empty'"))
 })
 
-await check('GuidanceCard 五类卡片两个次级动作', async () => {
+await check('GuidanceCard 六类卡片、次级动作与加固提示', async () => {
   const source = await readSource('../src/studio/GuidanceCard.jsx')
   for (const needle of [
     'studio.guidance.viewLogs',
@@ -541,12 +541,19 @@ await check('GuidanceCard 五类卡片两个次级动作', async () => {
     'buildDiagnostics',
     'readLogsPayload',
     "copyText(text, 'studio.logs.copied')",
+    // 新手指引加固：gpu 卡、Windows PATH、凭据文件位置与可执行提示段落。
+    'studio.guidance.gpu.title',
+    'KAGGLE_ACCOUNT_URL',
+    'KAGGLE_CREDENTIAL_PATH',
+    'studio.guidance.cli.pathHint',
+    'studio.guidance.auth.credentialHint',
+    'ofs-guidance-note',
   ]) {
     assert.ok(source.includes(needle), `GuidanceCard 应包含：${needle}`)
   }
   const kindsLine = source.split(/\r?\n/).find((line) => line.includes('SECONDARY_KINDS'))
   assert.ok(kindsLine, '缺少次级动作的卡片类别声明')
-  for (const kind of ['session', 'network', 'generate', 'generic', 'auth']) {
+  for (const kind of ['session', 'network', 'generate', 'generic', 'auth', 'gpu']) {
     assert.ok(kindsLine.includes(`'${kind}'`), `次级动作应覆盖 ${kind} 卡片`)
   }
   const plainChips = source
@@ -554,6 +561,8 @@ await check('GuidanceCard 五类卡片两个次级动作', async () => {
     .filter((line) => line.includes('className="ofs-chip"'))
   assert.ok(plainChips.length >= 2, '两个次级按钮必须是普通 ofs-chip（不带 is-on）')
   assert.match(source, /index === 0 \? ' is-on' : ''/, '每张卡只有一个实心主操作')
+  // 提示段落一律来自字典并允许按需插值（凭据路径由常量提供，不把反斜杠写进字典）。
+  assert.match(source, /\{card\.note \?/, '卡片提示段落应由 card.note 渲染')
 })
 
 await check('useStudioLogs 返回 env 且内容不变不重渲染', async () => {

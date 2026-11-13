@@ -4,7 +4,8 @@
  * 1. src/dict 下 zh / en 两个键集合必须完全一致；
  * 2. src 里所有静态调用的 t('…') 都要在字典里存在；
  * 3. 动态键（`xxx.${…}`）的命名空间必须已定义；
- * 4. 发布产物 client.js 必须与源码同步，且包含全部中文文案。
+ * 4. 契约取值域里的动态键（加速器展示名、Token 来源）两侧都必须存在；
+ * 5. 发布产物 client.js 必须与源码同步，且包含全部中文文案。
  *
  * 运行：node test/check-client-locale.mjs
  */
@@ -12,6 +13,8 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { SETTINGS } from '../shared/contract.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const SRC = join(ROOT, 'src')
@@ -62,6 +65,16 @@ for (const file of files) {
 
 for (const key of used) {
   if (!zh.has(key)) problems.push(`代码引用了不存在的键：${key}`)
+}
+
+// 动态键：命名空间扫描只能证明前缀存在，这里再按契约取值域逐条校验（运行设置抽屉用）。
+const dynamicKeys = [
+  ...SETTINGS.accelerators.map((id) => `studio.settings.accelerator.${id}`),
+  ...SETTINGS.hfTokenSources.map((source) => `studio.settings.hfToken.sourceValue.${source}`),
+]
+for (const key of dynamicKeys) {
+  if (!zh.has(key)) problems.push(`zh 缺少契约取值域动态键：${key}`)
+  if (!en.has(key)) problems.push(`en 缺少契约取值域动态键：${key}`)
 }
 
 // 发布产物必须包含全部中文文案（防"改了源码忘了构建"）

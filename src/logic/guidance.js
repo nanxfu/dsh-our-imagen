@@ -7,8 +7,16 @@
 
 /** Kaggle 设置页：直接落到 API token 区域，而不是泛设置首页。 */
 export const KAGGLE_SETTINGS_URL = 'https://www.kaggle.com/settings/api'
+/** Kaggle 账户设置首页：GPU 加速器与手机号验证都在这一页。 */
+export const KAGGLE_ACCOUNT_URL = 'https://www.kaggle.com/settings'
 /** 本地未安装 kaggle CLI 时给出的安装命令（与 README / probes notes 一致）。 */
 export const KAGGLE_INSTALL_COMMAND = 'pip install -U kaggle'
+/**
+ * Windows 下的 Kaggle 凭据文件位置。
+ * 单独放在常量里而不是字典里：反斜杠在字典源码里会形成转义字面量，
+ * 文案改用 {path} 占位符引用，翻译文本里就不必出现反斜杠。
+ */
+export const KAGGLE_CREDENTIAL_PATH = '%USERPROFILE%\\.kaggle\\kaggle.json'
 
 /** 会话级错误：可以「重新唤醒」。 */
 const SESSION_CODES = new Set([
@@ -62,6 +70,9 @@ export function guidanceKindOf(code) {
   if (code === 'stopped') return 'closed'
   if (code === 'cli_missing') return 'cli'
   if (code === 'auth_required') return 'auth'
+  // 远端容器没拿到 GPU 与「生成失败重试」是两件事：重试只会再消耗一次排队，
+  // 正确动作是去 Kaggle 账户设置开启 GPU / 完成手机号验证后再唤醒。
+  if (code === 'gpu_unavailable') return 'gpu'
   if (CONNECTION_CODES.has(code)) return 'network'
   if (SESSION_CODES.has(code)) return 'session'
   if (GENERATION_CODES.has(code)) return 'generate'

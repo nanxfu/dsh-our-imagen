@@ -780,6 +780,15 @@
   overflow: hidden;
 }
 
+/* 指引卡的可执行提示（Windows PATH、凭据文件位置、GPU 开启步骤）：不截断，允许换行。 */
+.ofs-guidance-note {
+  margin: 0;
+  color: var(--ofs-ink-3);
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
 .ofs-guidance-command {
   display: inline-block;
   max-width: 100%;
@@ -939,4 +948,312 @@
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+/* ── 运行设置抽屉 ─────────────────────────────────────────────
+ * 与日志抽屉同一套抽屉骨架（右侧滑入、遮罩、焦点陷阱），
+ * 内容区更窄（440px）：设置项是短表单，不需要日志那样的整屏宽度。
+ */
+.ofs-settings {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: flex-end;
+  background: rgb(16 16 18 / 38%);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: ofs-fade-in 160ms ease;
+}
+
+.ofs-settings-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 100%);
+  height: 100%;
+  border-left: 1px solid var(--ofs-window-border);
+  background: var(--ofs-card-solid);
+  box-shadow: var(--ofs-shadow-window);
+  animation: ofs-slide-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ofs-settings-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ofs-hairline);
+}
+
+.ofs-settings-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--ofs-ink);
+  white-space: nowrap;
+}
+
+.ofs-settings-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ofs-ink-4) transparent;
+}
+
+.ofs-settings-note {
+  margin: 0;
+  padding: 18px 16px;
+  color: var(--ofs-ink-3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* 读取失败：不白屏，给原因 + 重试。 */
+.ofs-settings-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 18px 16px;
+}
+
+.ofs-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 16px 16px;
+}
+
+/* 生效提示：温和的暖色窄条，说明改动要等下次唤醒。 */
+.ofs-settings-effective {
+  margin: 10px 0 2px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);
+  border-radius: 10px;
+  background: var(--ofs-warn-soft);
+  color: var(--ofs-warn);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.ofs-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--ofs-hairline);
+}
+
+.ofs-settings-section:last-of-type {
+  border-bottom: 0;
+}
+
+.ofs-settings-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ofs-ink-2);
+}
+
+.ofs-settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ofs-settings-label {
+  font-size: 11.5px;
+  color: var(--ofs-ink-2);
+}
+
+.ofs-settings-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ofs-settings-quick-item {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ofs-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ofs-settings-input,
+.ofs-settings-textarea {
+  width: 100%;
+  padding: 0 10px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: 10px;
+  background: var(--ofs-sunken);
+  color: var(--ofs-ink);
+  font-size: 12px;
+}
+
+.ofs-settings-input {
+  height: 32px;
+}
+
+.ofs-settings-textarea {
+  min-height: 66px;
+  padding: 8px 10px;
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.ofs-settings-input:focus-visible,
+.ofs-settings-textarea:focus-visible {
+  outline: none;
+  border-color: var(--ofs-accent-soft-border);
+  box-shadow: var(--ofs-focus-ring);
+}
+
+.ofs-settings-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 加速器单选：原生 radio 收进 label 里，视觉仍是轻量卡片。 */
+.ofs-settings-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: 10px;
+  background: var(--ofs-card);
+  color: var(--ofs-ink-2);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.ofs-settings-option:hover {
+  border-color: var(--ofs-accent-soft-border);
+  color: var(--ofs-ink);
+}
+
+.ofs-settings-option input {
+  margin: 0;
+  accent-color: var(--ofs-accent);
+}
+
+.ofs-settings-option.is-on {
+  border-color: var(--ofs-accent);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+  box-shadow: 0 0 0 1px var(--ofs-accent);
+}
+
+.ofs-settings-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ofs-settings-muted {
+  font-size: 11px;
+  color: var(--ofs-ink-3);
+}
+
+.ofs-settings-clear {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+/* 高级折叠头：一行标题 + 箭头，默认收起，不占表单纵向空间。 */
+.ofs-settings-advanced-toggle {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ofs-ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ofs-settings-advanced-toggle:hover {
+  color: var(--ofs-ink);
+}
+
+.ofs-settings-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 9px;
+}
+
+.ofs-settings-hint {
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--ofs-ink-3);
+}
+
+.ofs-settings-errors {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ofs-settings-error-item {
+  color: var(--ofs-error);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.ofs-settings-error {
+  margin: 0;
+  color: var(--ofs-error);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* 底部操作条：滚动时贴住抽屉底部，保存按钮始终可点。 */
+.ofs-settings-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--ofs-hairline);
+  background: var(--ofs-card-solid);
+}
+
+.ofs-settings-save {
+  height: 32px;
+  padding: 0 16px;
+  font-size: 12.5px;
 }

@@ -27,6 +27,9 @@ export function useStudioUi({ t, initialView, initialPanelMode }) {
   const [logsOpen, setLogsOpen] = React.useState(false)
   // 打开日志抽屉前的焦点位置：关闭后还回去（通常是顶栏算力按钮）。
   const logsReturnRef = React.useRef(null)
+  // 运行设置抽屉与日志抽屉同一套焦点归还约定，两者独立开关。
+  const [settingsOpen, setSettingsOpen] = React.useState(false)
+  const settingsReturnRef = React.useRef(null)
 
   function showToast(text) {
     setToast({ text, id: Date.now() })
@@ -88,6 +91,19 @@ export function useStudioUi({ t, initialView, initialPanelMode }) {
     if (target && typeof target.focus === 'function' && target.isConnected !== false) target.focus()
   }
 
+  /** 打开运行设置抽屉：记下触发元素，关闭后把焦点还回去。 */
+  function openSettings(trigger) {
+    settingsReturnRef.current = trigger || (document.activeElement || null)
+    setSettingsOpen(true)
+  }
+
+  function closeSettings() {
+    setSettingsOpen(false)
+    const target = settingsReturnRef.current
+    settingsReturnRef.current = null
+    if (target && typeof target.focus === 'function' && target.isConnected !== false) target.focus()
+  }
+
   return {
     view,
     setView,
@@ -112,6 +128,9 @@ export function useStudioUi({ t, initialView, initialPanelMode }) {
     logsOpen,
     openLogs,
     closeLogs,
+    settingsOpen,
+    openSettings,
+    closeSettings,
   }
 }
 

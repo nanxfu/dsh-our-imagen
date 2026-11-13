@@ -19,13 +19,16 @@ import { VERSION } from '../../shared/contract.js'
 import { Icon } from './icons.jsx'
 import { fetchLogs, fetchState } from '../api/resources.js'
 import {
+  KAGGLE_ACCOUNT_URL,
+  KAGGLE_CREDENTIAL_PATH,
   KAGGLE_INSTALL_COMMAND,
   KAGGLE_SETTINGS_URL,
 } from '../logic/guidance.js'
+import { formatText } from '../logic/format.js'
 import { buildDiagnostics, readLogsPayload } from '../logic/logs.js'
 
 /** 带「查看日志 / 复制诊断信息」次级动作的报错类别。 */
-const SECONDARY_KINDS = new Set(['session', 'network', 'generate', 'generic', 'auth'])
+const SECONDARY_KINDS = new Set(['session', 'network', 'generate', 'generic', 'auth', 'gpu'])
 
 /** 请求包装：网络层抛错时返回 null，调用方用空快照继续拼诊断文本。 */
 async function safeCall(request) {
@@ -69,6 +72,7 @@ export function GuidanceCard(props) {
     },
     auth: {
       title: t('studio.guidance.auth.title'),
+      note: formatText(t('studio.guidance.auth.credentialHint'), { path: KAGGLE_CREDENTIAL_PATH }),
       actions: [
         { key: 'settings', label: t('studio.guidance.auth.action'), href: KAGGLE_SETTINGS_URL },
         { key: 'recheck', label: t('studio.guidance.cli.action'), run: runProbe },
@@ -77,9 +81,19 @@ export function GuidanceCard(props) {
     cli: {
       title: t('studio.guidance.cli.title'),
       command: KAGGLE_INSTALL_COMMAND,
+      note: t('studio.guidance.cli.pathHint'),
       actions: [
         { key: 'copy', label: t('studio.guidance.cli.copy'), run: copyInstallCommand },
         { key: 'recheck', label: t('studio.guidance.cli.action'), run: runProbe },
+      ],
+    },
+    // 远端容器没拿到 GPU：重试或唤醒都救不了，先让用户去 Kaggle 账户设置开启 GPU。
+    gpu: {
+      title: t('studio.guidance.gpu.title'),
+      note: t('studio.guidance.gpu.hint'),
+      actions: [
+        { key: 'settings', label: t('studio.guidance.gpu.action'), href: KAGGLE_ACCOUNT_URL },
+        { key: 'wake', label: t('studio.guidance.sleep.action'), run: startSession },
       ],
     },
     session: {
@@ -143,6 +157,7 @@ export function GuidanceCard(props) {
         <p className="ofs-guidance-title">{card.title}</p>
         {card.command ? <code className="ofs-guidance-command">{card.command}</code> : null}
         {detail ? <p className="ofs-guidance-detail" title={detail}>{detail}</p> : null}
+        {card.note ? <p className="ofs-guidance-note">{card.note}</p> : null}
         <div className="ofs-guidance-actions">
           {actionList.map((action, index) => (action.href ? (
             <a

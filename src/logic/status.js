@@ -135,6 +135,31 @@ export function computeStatusOf(t, input = {}) {
 }
 
 /**
+ * 空闲关机倒计时：只从宿主快照里已经存在的两个字段派生。
+ *
+ * `session.idleSeconds` 来自远端 /health（仅在有 /health 的会话态才有值），
+ * `session.idleTimeoutSec` 是当前生效的自动关机阈值。任一缺失、或空闲不足
+ * 一分钟时不展示——宁可暂时不显示，也不给「已空闲 0 分钟」这种假读数。
+ *
+ * @param {object|null} session 宿主快照里的会话
+ * @returns {{ idleSeconds: number, idleMinutes: number, totalMinutes: number } | null}
+ */
+export function idleShutdownOf(session) {
+  if (!session || typeof session !== 'object') return null
+  const idleSeconds = Number(session.idleSeconds)
+  const timeoutSeconds = Number(session.idleTimeoutSec)
+  if (!Number.isFinite(idleSeconds) || !Number.isFinite(timeoutSeconds)) return null
+  if (idleSeconds <= 0 || timeoutSeconds <= 0) return null
+  const idleMinutes = Math.floor(idleSeconds / 60)
+  if (idleMinutes < 1) return null
+  return {
+    idleSeconds: Math.floor(idleSeconds),
+    idleMinutes,
+    totalMinutes: Math.max(1, Math.round(timeoutSeconds / 60)),
+  }
+}
+
+/**
  * 宿主的结构化阶段码；缺字段时按 job.status 回落，兼容旧版本宿主。
  *
  * `cancelled` 是终态而非「正在做的事」：它只用于把任务收敛成「已取消」文案，

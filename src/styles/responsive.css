@@ -221,6 +221,11 @@
     border-left: 0;
   }
 
+  .ofs-settings-panel {
+    width: 100%;
+    border-left: 0;
+  }
+
   .ofs-panel-head {
     padding: 12px 13px 9px;
   }

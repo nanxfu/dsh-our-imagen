@@ -126,3 +126,19 @@ export function deleteImages(paths) {
     body: JSON.stringify({ paths }),
   })
 }
+
+/**
+ * 运行设置：GET 返回脱敏视图 `{ ok, settings }`（永不回传 hfToken 原文）。
+ * 路径与方法和其它资源函数一样只从契约取，这里不写路径字面量。
+ */
+export function fetchSettings() {
+  return request(routePath('settings'), { method: 'GET' })
+}
+
+/** 保存运行设置：payload 只含改动字段，响应与 GET 同为 `{ ok, settings }`。 */
+export function saveSettings(payload) {
+  return request(routePath('settingsSave'), {
+    method: 'POST',
+    body: JSON.stringify(payload && typeof payload === 'object' ? payload : {}),
+  })
+}

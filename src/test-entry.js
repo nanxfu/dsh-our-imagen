@@ -19,11 +19,13 @@ import { Studio } from './studio/Studio.jsx'
 import { StudioIcon } from './studio/StudioIcon.jsx'
 import { Gallery } from './studio/Gallery.jsx'
 import { Filmstrip } from './studio/Filmstrip.jsx'
+import { GuidanceCard } from './studio/GuidanceCard.jsx'
 import { Rail } from './studio/Rail.jsx'
 import { ChatPanel } from './studio/ChatPanel.jsx'
 import { Stage } from './studio/Stage.jsx'
 import { TopBar } from './studio/TopBar.jsx'
 import { LogsDrawer } from './studio/LogsDrawer.jsx'
+import { SettingsDrawer } from './studio/SettingsDrawer.jsx'
 import { ModelCardPicker } from './studio/ModelCardPicker.jsx'
 
 export const __test = {
@@ -40,11 +42,13 @@ export const __test = {
     StudioIcon,
     Gallery,
     Filmstrip,
+    GuidanceCard,
     Rail,
     ChatPanel,
     Stage,
     TopBar,
     LogsDrawer,
+    SettingsDrawer,
     ModelCardPicker,
   },
 }

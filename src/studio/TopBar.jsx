@@ -4,23 +4,21 @@ import React from 'react'
 
 import { Tooltip } from '../components/Tooltip.jsx'
 import { useNow } from '../hooks/useNow.js'
-import { formatDuration, formatSeconds } from '../logic/format.js'
+import { formatDuration, formatSeconds, formatText } from '../logic/format.js'
 import { elapsedMsSince, formatClockTime, quotaText } from '../logic/logs.js'
-import { computeStatusOf } from '../logic/status.js'
+import { computeStatusOf, idleShutdownOf } from '../logic/status.js'
 import { Icon } from './icons.jsx'
 import { ModelCardPicker } from './ModelCardPicker.jsx'
 import { StudioIcon } from './StudioIcon.jsx'
 import { accountStatusOf, probeStatusOf } from '../logic/probe.js'
+import { KAGGLE_ACCOUNT_URL } from '../logic/guidance.js'
 import { useHostSnapshot } from './hooks/useStudioLogs.js'
-
-/** Kaggle 账户设置页：配额读不到时给用户一个直达入口。 */
-const KAGGLE_ACCOUNT_URL = 'https://www.kaggle.com/settings'
 
 /** 接收 { t, ui, compute, form, library }；ui/compute/form/library 是领域对象。 */
 export function TopBar(props) {
   const { t, isEn, ui, compute, library } = props
   const { form: fields, patchForm, selectPreset } = props.form
-  const { view, setView, openLogs } = ui
+  const { view, setView, openLogs, openSettings } = ui
   const {
     sessionState,
     session,
@@ -66,6 +64,8 @@ export function TopBar(props) {
   }, [open])
 
   const idleMinutes = session && session.idleTimeoutSec ? Math.round(session.idleTimeoutSec / 60) : 0
+  // 空闲倒计时只认宿主快照里的真实读数：idleSeconds 缺失时退回「休眠阈值」一行，不编造余量。
+  const idleShutdown = idleShutdownOf(session)
   const quotaUsed = quota && Number.isFinite(quota.usedHours) ? quota.usedHours : null
   const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null
   // 速度只讲实测值，且优先讲云端已加载的模型；没有测量数据的预设不编时间。
@@ -186,7 +186,16 @@ export function TopBar(props) {
               {status.ready && steadySeconds !== null ? (
                 <span className="ofs-muted">{t('studio.compute.speedLine')} {formatSeconds(t, steadySeconds)}</span>
               ) : null}
-              {idleMinutes > 0 ? <span className="ofs-muted">{t('studio.compute.idleFor')} {idleMinutes} {t('unit.min')}</span> : null}
+              {idleShutdown ? (
+                <span className="ofs-muted">
+                  {formatText(t('studio.compute.idleCountdown'), {
+                    idle: idleShutdown.idleMinutes,
+                    total: idleShutdown.totalMinutes,
+                  })}
+                </span>
+              ) : idleMinutes > 0 ? (
+                <span className="ofs-muted">{t('studio.compute.idleFor')} {idleMinutes} {t('unit.min')}</span>
+              ) : null}
               {session && session.device ? <span className="ofs-muted">{session.device}</span> : null}
               {tunnelLabel ? <span className="ofs-muted">{t('studio.compute.tunnel')} · {tunnelLabel}</span> : null}
             </div>
@@ -267,12 +276,25 @@ export function TopBar(props) {
               className="ofs-popover-row"
               onClick={() => {
                 setOpen(false)
-                // 菜单收起后这一行会卸载，焦点交还给常驻的算力按钮。
+                // 菜单收起后这一行会卸载，焦点交还给常驻的算力按钮（与日志入口同一约定）。
                 if (openLogs) openLogs(pillRef.current)
               }}
             >
               <Icon name="message" size={15} />
               {t('studio.logs.open')}
+            </button>
+            {/* 运行设置：在弹层底部、紧挨日志入口，避免为它单独占一个顶栏图标位。 */}
+            <button
+              type="button"
+              role="menuitem"
+              className="ofs-popover-row"
+              onClick={() => {
+                setOpen(false)
+                if (openSettings) openSettings(pillRef.current)
+              }}
+            >
+              <Icon name="sliders" size={15} />
+              {t('studio.settings.open')}
             </button>
           </div>
         ) : null}
