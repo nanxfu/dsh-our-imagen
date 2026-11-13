@@ -19,6 +19,7 @@ import {
   presetNeedsEnglish,
   presetSelectPatch,
   presetSizeOptions,
+  ratioIdOf,
   referencePresetOf,
   supportsImg2Img,
 } from '../../logic/preset.js'
@@ -55,14 +56,9 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const [enhancing, setEnhancing] = React.useState(false)
   const [translating, setTranslating] = React.useState(false)
 
-  // 比例由当前尺寸反推：切换预设改变宽高时，比例按钮不会停在旧值上。
-  const ratioId = (() => {
-    const match = DEFAULT_RATIOS.find((ratio) => {
-      const size = ratioToSize(ratio)
-      return size.width === form.width && size.height === form.height
-    })
-    return match ? match.id : ''
-  })()
+  // 比例由当前尺寸反推（按约分后的长宽比，而不是像素精确相等）：
+  // 768×768 与 1024×1024 都算 1:1，800×600 算 4:3；切换预设改变宽高时也不会停在旧值上。
+  const ratioId = ratioIdOf(form.width, form.height)
 
   const styleSuffix = (() => {
     const capsule = STYLE_CAPSULES.find((item) => item.id === form.styleId)

@@ -376,7 +376,7 @@ export const zh = {
   'studio.rail.modeChat': '创作助手',
   'studio.rail.frame': '画面设置',
   'studio.rail.advanced': '高级设置',
-  'studio.rail.params': '步数 / 引导强度 / 种子',
+  'studio.rail.params': '步数 / 引导强度 / 种子 / 张数',
 
   // ── 参考图与垫图重绘 ─────────────────────────────────────────
   'studio.reference.title': '参考图',
@@ -429,9 +429,12 @@ export const zh = {
   'studio.translate.thinking': '正在翻译…',
   'studio.translate.done': '提示词已转为英文',
   'studio.translate.local': '模型不可用，未能翻译；请手动改写为英文',
-  'studio.rail.size': '方形尺寸',
-  'studio.rail.sizeHint': '预设推荐的等宽高尺寸；其它画幅用上方比例或自定义宽高。',
+  'studio.rail.ratio': '画幅比例',
+  'studio.rail.size': '1:1 推荐尺寸',
+  'studio.rail.sizeAria': '1:1 推荐尺寸档位',
+  'studio.rail.sizeHint': '点比例或方形档会同时改写宽高；上面的宽 / 高只改一边（{min}–{max}、{step} 的整数倍），宽高互不联动。',
   'studio.rail.customSize': '自定义宽高',
+  'studio.rail.custom': '自定义',
   'studio.rail.width': '宽',
   'studio.rail.height': '高',
   'studio.gallery.loadMore': '加载更多',

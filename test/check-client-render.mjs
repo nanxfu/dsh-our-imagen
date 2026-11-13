@@ -2973,83 +2973,82 @@ await check('渲染：画廊加载更多推进 offset 且不重复请求首页',
   assert.ok(client.fetches.includes(next), `加载更多应按已加载 2 条推进 offset，实际请求：${client.fetches.join(', ')}`)
 })
 
-// 提示词区：「转为英文」按钮与「润色」并列；画面设置区单独一行方形尺寸档位。
-await check('渲染：转为英文按钮与方形尺寸档位', async () => {
-  const mountRail = async (formExtra = {}) => {
-    const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
-    const calls = { translate: 0, size: [], patched: [] }
-    const form = {
-      form: {
-        prompt: '雨夜街景',
-        negative: 'blurry, my own',
-        negativeLayers: { model: 'blurry', style: '', user: 'my own' },
-        presetId: 'sdxl-lightning',
-        width: 1024,
-        height: 1024,
-        steps: 4,
-        cfg: 0,
-        seed: '',
-        count: 1,
-        styleId: '',
-      },
-      patchForm: (partial) => calls.patched.push(partial),
-      selectPreset: () => {},
+// 画面设置三段同构（比例 / 1:1 推荐尺寸 / 自定义宽高）+ 宽高编辑草稿 + 空值恢复。
+// 三处控件共用同一份 width/height：快捷档改成多少、手动改单边会不会联动，都在这一个视野里。
+await check('渲染：画面设置三段、宽高草稿与空值恢复', async () => {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const calls = { translate: 0, size: [], ratio: [], patch: [], custom: [] }
+  const formProps = {
+    form: {
+      prompt: '雨夜街景',
+      negative: 'blurry, my own',
+      negativeLayers: { model: 'blurry', style: '', user: 'my own' },
+      presetId: 'sdxl-lightning',
+      width: 1024,
+      height: 1024,
+      steps: 4,
+      cfg: 0,
+      seed: '',
+      count: 1,
       styleId: '',
-      applyStyle: () => {},
-      ratioId: '1:1',
-      applyRatio: () => {},
-      sizeOptions: [768, 1024, 1152],
-      selectedSize: 1024,
-      applySize: (size) => calls.size.push(size),
-      applyCustomSize: (partial) => calls.patched.push(client.PURE.customSizePatch(partial)),
-      refineGroups: [],
-      refineSource: '',
-      enhancing: false,
-      enhance: () => {},
-      translating: false,
-      translate: () => { calls.translate += 1 },
-      toggleRefine: () => {},
-      useInspiration: () => {},
-      englishPromptHint: false,
-      ...formExtra,
-    }
-    const tree = await client.mountRaw(client.components.Rail, {
-      t: client.internals.i18n.fallbackTranslate('zh'),
-      ui: {
-        advancedOpen: true,
-        setAdvancedOpen: () => {},
-        negativeOpen: false,
-        setNegativeOpen: () => {},
-        panelMode: 'form',
-        setPanelMode: () => {},
-      },
-      form,
-      actions: { sending: false, generate: () => {} },
-    })
-    client.unmount()
-    return { tree, calls, client }
+    },
+    patchForm: (partial) => calls.patch.push(partial),
+    selectPreset: () => {},
+    styleId: '',
+    applyStyle: () => {},
+    ratioId: '1:1',
+    applyRatio: (id) => calls.ratio.push(id),
+    sizeOptions: [768, 1024, 1152],
+    selectedSize: 1024,
+    applySize: (size) => calls.size.push(size),
+    applyCustomSize: (partial) => calls.custom.push(partial),
+    refineGroups: [],
+    refineSource: '',
+    enhancing: false,
+    enhance: () => {},
+    translating: false,
+    translate: () => { calls.translate += 1 },
+    toggleRefine: () => {},
+    useInspiration: () => {},
+    englishPromptHint: false,
   }
+  const ui = {
+    advancedOpen: true,
+    setAdvancedOpen: () => {},
+    negativeOpen: false,
+    setNegativeOpen: () => {},
+    panelMode: 'form',
+    setPanelMode: () => {},
+  }
+  const railProps = (props = {}) => ({
+    t,
+    ui,
+    form: formProps,
+    actions: { sending: false, generate: () => {} },
+    ...props,
+  })
+  const textOf = (tree) => collectText(tree).join(' | ')
+  const widthInputOf = (tree) => findNodes(tree, (node) => node.type === 'input' && node.props?.['aria-label'] === '宽')[0]
+  const heightInputOf = (tree) => findNodes(tree, (node) => node.type === 'input' && node.props?.['aria-label'] === '高')[0]
 
-  const { tree, calls, client } = await mountRail()
-  const text = collectText(tree).join(' | ')
+  let tree = await client.mountRaw(client.components.Rail, railProps())
+  let text = textOf(tree)
   assert.ok(text.includes('转为英文'), '提示词区应有「转为英文」按钮')
   assert.ok(text.includes('润色'), '润色按钮仍在，二者并列')
-  assert.ok(text.includes('方形尺寸'), '画面设置区应有独立的方形尺寸行')
-  assert.ok(text.includes('预设推荐的等宽高尺寸'), '方形尺寸行应附说明，与画幅比例区分')
-  // 方形档位：三个数字按钮，当前 1024×1024 精确匹配时选中。
-  const sizeButtons = findNodes(
-    tree,
-    (node) => node.type === 'button'
-      && typeof node.props?.className === 'string'
-      && node.props.className.split(' ').includes('ofs-size'),
-  )
-  assert.equal(sizeButtons.length, 3, `方形尺寸档位应消费 sizeOptions，实际：${collectText(tree).join(' | ')}`)
-  assert.deepEqual(sizeButtons.map((node) => collectText(node).join('')), ['768', '1024', '1152'])
-  assert.equal(sizeButtons[1].props['aria-pressed'], true, '宽高等于 1024 时 1024 档位选中')
-  sizeButtons[0].props.onClick()
-  assert.deepEqual(calls.size, [768], '点击档位应设置宽高为该值')
 
-  // 转英文按钮：点击交给 translate 动作；翻译中显示 loading 文案并禁用。
+  // 三段同构：比例 / 1:1 推荐尺寸 / 自定义宽高 都在「画面设置」里。
+  assert.ok(text.includes('画幅比例'), '画面设置应有画幅比例标签')
+  assert.ok(text.includes('1:1 推荐尺寸'), '方形档位应明确标注为 1:1 推荐尺寸')
+  assert.ok(text.includes('自定义宽高'), '画面设置应有自定义宽高行')
+  assert.ok(text.includes('1024 × 1024 · 1:1'), '标题栏读数应与当前尺寸 / 比例一致')
+  assert.ok(
+    text.includes(`${LIMITS.width.min}–${LIMITS.width.max}、${LIMITS.width.step} 的整数倍`),
+    '宽高说明应写明合法范围与步长（注入自 LIMITS）',
+  )
+  assert.ok(text.includes('宽高互不联动'), '宽高说明应写明互不联动')
+
+  // 转英文按钮：点击交给 translate 动作。
   const translateButton = findNodes(
     tree,
     (node) => node.type === 'button'
@@ -3061,30 +3060,122 @@ await check('渲染：转为英文按钮与方形尺寸档位', async () => {
   translateButton.props.onClick()
   assert.equal(calls.translate, 1, '点击应调用 translate()')
 
-  // 自定义宽高输入：min/max/step 取自契约，失焦时按 clampSize 钳制。
-  const widthInput = findNodes(tree, (node) => node.type === 'input' && node.props?.['aria-label'] === '宽')[0]
-  const heightInput = findNodes(tree, (node) => node.type === 'input' && node.props?.['aria-label'] === '高')[0]
-  assert.ok(widthInput && heightInput, '高级设置应提供自定义宽/高输入')
-  assert.equal(widthInput.props.min, LIMITS.width.min)
-  assert.equal(widthInput.props.max, LIMITS.width.max)
-  assert.equal(widthInput.props.step, LIMITS.width.step)
-  assert.equal(heightInput.props.max, LIMITS.height.max)
-  assert.equal(widthInput.props.type, 'number')
-  widthInput.props.onChange({ target: { value: '1152' } })
-  assert.deepEqual(calls.patched.at(-1), { width: '1152' }, '输入过程先原样进表单')
-  widthInput.props.onBlur({ target: { value: '99999' } })
-  assert.deepEqual(calls.patched.at(-1), { width: LIMITS.width.max }, '失焦时按契约上限钳制')
+  // 画幅比例：5 个按钮，当前 1:1 高亮；点击交给 applyRatio。
+  const ratioButtons = findNodes(
+    tree,
+    (node) => node.type === 'button'
+      && typeof node.props?.className === 'string'
+      && node.props.className.split(' ').includes('ofs-ratio'),
+  )
+  assert.equal(ratioButtons.length, 5)
+  assert.equal(ratioButtons[0].props['aria-pressed'], true, '宽高 1024×1024 时 1:1 高亮')
+  ratioButtons[1].props.onClick()
+  assert.deepEqual(calls.ratio, ['16:9'], '点击比例应交给 applyRatio')
 
-  const translating = await mountRail({ translating: true })
-  const translatingText = collectText(translating.tree).join(' | ')
-  assert.ok(translatingText.includes('正在翻译…'), '翻译中按钮显示进行中文案')
+  // 方形档位：三个数字按钮，当前 1024 精确匹配时选中。
+  const sizeButtons = findNodes(
+    tree,
+    (node) => node.type === 'button'
+      && typeof node.props?.className === 'string'
+      && node.props.className.split(' ').includes('ofs-size'),
+  )
+  assert.equal(sizeButtons.length, 3, `方形档位应消费 sizeOptions，实际：${textOf(tree)}`)
+  assert.deepEqual(sizeButtons.map((node) => collectText(node).join('')), ['768', '1024', '1152'])
+  assert.equal(sizeButtons[1].props['aria-pressed'], true, '宽高等于 1024 时 1024 档位选中')
+  sizeButtons[0].props.onClick()
+  assert.deepEqual(calls.size, [768], '点击档位应设置宽高为该值')
+
+  // 外部改动（点比例 / 方形档 / 切模型 / 带回参数）→ 标题栏读数与宽高输入框同步。
+  formProps.form.width = 768
+  formProps.form.height = 768
+  tree = await client.rerenderRaw()
+  text = textOf(tree)
+  assert.ok(text.includes('768 × 768 · 1:1'), '方形档 768 也是 1:1，读数不应变成无比例')
+  assert.equal(widthInputOf(tree).props.value, '768', '输入框草稿跟随外部尺寸变化')
+  assert.equal(heightInputOf(tree).props.value, '768')
+
+  // 比例匹配不上任何预设时，读数明确写「自定义」。
+  formProps.form.width = 800
+  formProps.form.height = 600
+  formProps.ratioId = ''
+  tree = await client.rerenderRaw()
+  assert.ok(textOf(tree).includes('800 × 600 · 自定义'), '无匹配比例时读数显示自定义')
+
+  // 输入过程只落在本地草稿，不写表单；失焦才归一化提交。
+  assert.equal(widthInputOf(tree).props.type, 'number')
+  assert.equal(widthInputOf(tree).props.min, LIMITS.width.min)
+  assert.equal(widthInputOf(tree).props.max, LIMITS.width.max)
+  assert.equal(widthInputOf(tree).props.step, LIMITS.width.step)
+  assert.equal(heightInputOf(tree).props.max, LIMITS.height.max)
+  widthInputOf(tree).props.onChange({ target: { value: '720' } })
+  assert.equal(calls.patch.length, 0, '输入过程不应把原始文本写进表单')
+  tree = await client.rerenderRaw()
+  assert.equal(widthInputOf(tree).props.value, '720', '草稿即时反映输入')
+  widthInputOf(tree).props.onBlur()
+  assert.deepEqual(calls.custom, [{ width: 720 }], '修改宽只提交宽，高不联动')
+  assert.equal(calls.patch.length, 0)
+
+  // 清空后失焦：恢复修改前的合法值（800），既不提交也不跳成 256。
+  tree = await client.rerenderRaw()
+  widthInputOf(tree).props.onChange({ target: { value: '' } })
+  tree = await client.rerenderRaw()
+  assert.equal(widthInputOf(tree).props.value, '', '清空后输入框为空')
+  widthInputOf(tree).props.onBlur()
+  assert.equal(calls.custom.length, 1, '空值失焦不应提交表单')
+  tree = await client.rerenderRaw()
+  assert.equal(widthInputOf(tree).props.value, '800', '恢复到修改前的合法值')
+  assert.notEqual(widthInputOf(tree).props.value, '256', '不能因 Number(\'\') 钳成下限 256')
+
+  // 改高不联动宽；超界按契约上限钳制，非 8 倍数按 step 对齐。
+  heightInputOf(tree).props.onChange({ target: { value: '99999' } })
+  tree = await client.rerenderRaw()
+  heightInputOf(tree).props.onBlur()
+  assert.deepEqual(calls.custom.at(-1), { height: LIMITS.height.max }, '超界按契约上限钳制')
+  assert.equal(widthInputOf(tree).props.value, '800', '改高后宽仍保持 800')
+  tree = await client.rerenderRaw()
+  assert.equal(heightInputOf(tree).props.value, String(LIMITS.height.max))
+  heightInputOf(tree).props.onChange({ target: { value: '253' } })
+  tree = await client.rerenderRaw()
+  heightInputOf(tree).props.onBlur()
+  assert.deepEqual(calls.custom.at(-1), { height: LIMITS.height.min }, '非 8 倍数按 step 对齐')
+
+  // 回车等价失焦，方便「改完直接按 Enter」。
+  const heightForEnter = heightInputOf(tree)
+  let blurred = 0
+  heightForEnter.props.onKeyDown({ key: 'Enter', currentTarget: { blur: () => { blurred += 1 } } })
+  assert.equal(blurred, 1, '回车应提交（等价失焦）')
+
+  // 自定义宽高常驻「画面设置」：高级设置折叠时仍在，采样参数不渲染。
+  const collapsed = await client.mountRaw(client.components.Rail, railProps({ ui: { ...ui, advancedOpen: false } }))
+  assert.ok(widthInputOf(collapsed), '高级设置折叠时自定义宽高仍可用')
+  assert.equal(
+    findNodes(collapsed, (node) => node.type === 'input' && node.props?.['aria-label'] === '采样步数').length,
+    0,
+    '高级设置折叠时不应渲染步数输入',
+  )
+
+  // 翻译中显示进行中文案并禁用按钮。
+  const translatingClient = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const translatingTree = await translatingClient.mountRaw(
+    translatingClient.components.Rail,
+    {
+      t: translatingClient.internals.i18n.fallbackTranslate('zh'),
+      ui,
+      form: { ...formProps, translating: true },
+      actions: { sending: false, generate: () => {} },
+    },
+  )
+  assert.ok(textOf(translatingTree).includes('正在翻译…'), '翻译中按钮显示进行中文案')
   const translatingButton = findNodes(
-    translating.tree,
+    translatingTree,
     (node) => node.type === 'button'
       && typeof node.props?.className === 'string'
       && node.props.className.split(' ').includes('ofs-translate-action'),
   )[0]
   assert.equal(translatingButton.props.disabled, true, '翻译中按钮禁用')
+  translatingClient.unmount()
+  client.unmount()
+
   assert.equal(client.PURE.mergeNegativeLayers({ model: 'blurry', style: '', user: 'my own' }), 'blurry, my own')
 })
 

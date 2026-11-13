@@ -9,6 +9,8 @@ import React from 'react'
 import { LIMITS } from '../../shared/contract.js'
 
 import { Tooltip } from '../components/Tooltip.jsx'
+import { clampSize } from '../logic/clamp.js'
+import { formatText } from '../logic/format.js'
 import { referenceFileName } from '../logic/generate.js'
 import { Icon } from './icons.jsx'
 import { DEFAULT_RATIOS, STYLE_CAPSULES } from './presets.js'
@@ -163,6 +165,17 @@ export function StylePlate(props) {
 const PROMPT_MAX = LIMITS.prompt.maxChars
 const INSPIRE_KEYS = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
 
+/**
+ * 表单尺寸 → 宽/高输入框的展示文本。
+ *
+ * 表单里只存合法数字，这里再归一一次，保证「输入框看到的」与「将提交的」是同一个值；
+ * 旧快照 / 测试夹具里出现空串时也不会渲染出空白或 `undefined`。
+ */
+function sizeDraftOf(fields) {
+  const source = fields && typeof fields === 'object' ? fields : {}
+  return { width: String(clampSize(source.width)), height: String(clampSize(source.height)) }
+}
+
 function Fieldset(props) {
   return (
     <section className="ofs-fieldset">
@@ -219,6 +232,39 @@ export function Rail(props) {
   } = form
   const { sending, generate } = actions
 
+  // 宽/高输入框的编辑草稿：表单里只存合法数字，输入过程中的原始文本（含空串）先落在本地，
+  // 失焦 / 回车时再归一化提交。外部改动（比例、方形档、切换模型、带回参数）通过下面这个
+  // effect 同步回草稿，保证输入框、标题栏读数与将提交的宽高永远是同一个值。
+  const [sizeDraft, setSizeDraft] = React.useState(() => sizeDraftOf(fields))
+  const syncedSize = React.useRef(undefined)
+  React.useEffect(() => {
+    const previous = syncedSize.current
+    syncedSize.current = { width: fields.width, height: fields.height }
+    // 首次挂载的草稿已经由 useState 初始化，不需要再写一次状态。
+    if (!previous) return
+    if (previous.width === fields.width && previous.height === fields.height) return
+    setSizeDraft(sizeDraftOf(fields))
+  }, [fields.width, fields.height])
+
+  const onCustomSize = typeof applyCustomSize === 'function' ? applyCustomSize : () => {}
+
+  /** 改写草稿：输入过程不碰表单，避免半截数字进入提交值。 */
+  function updateSizeDraft(key, value) {
+    setSizeDraft((prev) => ({ ...prev, [key]: value }))
+  }
+
+  /** 提交草稿：空值 / 纯空白恢复修改前的合法值（不写表单）；否则钳制后写回表单。 */
+  function commitSizeDraft(key) {
+    const raw = String(sizeDraft[key] ?? '').trim()
+    if (!raw) {
+      setSizeDraft((prev) => ({ ...prev, [key]: String(clampSize(fields[key])) }))
+      return
+    }
+    const value = clampSize(raw)
+    setSizeDraft((prev) => ({ ...prev, [key]: String(value) }))
+    if (value !== clampSize(fields[key])) onCustomSize({ [key]: value })
+  }
+
   const promptLength = fields.prompt.length
   const hasPrompt = fields.prompt.trim().length > 0
   // 防御式取档位：预览/测试可能只给部分表单字段，缺失时该行整体不渲染。
@@ -229,6 +275,16 @@ export function Rail(props) {
   const strengthValue = Number.isFinite(Number(strength)) ? Number(strength) : LIMITS.strength.default
   const onRemoveReference = typeof removeReference === 'function' ? removeReference : () => {}
   const onStrengthChange = typeof applyStrength === 'function' ? applyStrength : () => {}
+
+  // 标题栏读数：当前生效尺寸 + 比例匹配状态；匹配不上预设比例时明确写「自定义」，
+  // 让「手动改过宽高」是一个被解释的状态，而不是高亮消失看起来像坏了。
+  const frameReadout = `${clampSize(fields.width)} × ${clampSize(fields.height)} · ${ratioId || t('studio.rail.custom')}`
+  // 边界与步长注入自 shared/contract.js，文案不写死数字。
+  const sizeHint = formatText(t('studio.rail.sizeHint'), {
+    min: LIMITS.width.min,
+    max: LIMITS.width.max,
+    step: LIMITS.width.step,
+  })
 
   return (
     <aside className="ofs-panel ofs-panel--form">
@@ -416,45 +472,92 @@ export function Rail(props) {
           </div>
         </Fieldset>
 
-        <Fieldset title={t('studio.rail.frame')}>
-          <div className="ofs-ratio-row">
-            {DEFAULT_RATIOS.map((ratio) => (
-              <button
-                type="button"
-                key={ratio.id}
-                className={ratioId === ratio.id ? 'ofs-ratio is-on' : 'ofs-ratio'}
-                onClick={() => applyRatio(ratio.id)}
-                aria-pressed={ratioId === ratio.id}
-              >
-                <span className={`ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(':', '-')}`} aria-hidden="true" />
-                <span className="ofs-ratio-label">{ratio.id}</span>
-              </button>
-            ))}
+        {/* 画面设置：画幅比例 / 1:1 推荐尺寸 / 自定义宽高 三段同构，三者共用同一份宽高状态，
+            同一视野内就能看到「点了快捷档之后宽高变成了多少」。 */}
+        <Fieldset
+          title={t('studio.rail.frame')}
+          action={<span className="ofs-frame-readout">{frameReadout}</span>}
+        >
+          <div className="ofs-frame-group">
+            <span className="ofs-frame-label">{t('studio.rail.ratio')}</span>
+            <div className="ofs-ratio-row" role="group" aria-label={t('studio.rail.ratio')}>
+              {DEFAULT_RATIOS.map((ratio) => (
+                <button
+                  type="button"
+                  key={ratio.id}
+                  className={ratioId === ratio.id ? 'ofs-ratio is-on' : 'ofs-ratio'}
+                  onClick={() => applyRatio(ratio.id)}
+                  aria-pressed={ratioId === ratio.id}
+                >
+                  <span className={`ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(':', '-')}`} aria-hidden="true" />
+                  <span className="ofs-ratio-label">{ratio.id}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* 方形尺寸与画幅比例是两行不同概念：这里只给预设推荐的等宽高档位。 */}
+          {/* 方形档位只来自当前预设的 sizeOptions（等宽高）；点选会同时改写宽高。 */}
           {sizes.length > 0 ? (
-            <>
-              <div className="ofs-size-row" role="group" aria-label={t('studio.rail.size')}>
-                <span className="ofs-size-label">{t('studio.rail.size')}</span>
-                <div className="ofs-size-options">
-                  {sizes.map((size) => (
-                    <button
-                      type="button"
-                      key={size}
-                      className={selectedSize === size ? 'ofs-size is-on' : 'ofs-size'}
-                      onClick={() => applySize(size)}
-                      aria-pressed={selectedSize === size}
-                      title={`${size} × ${size}`}
-                    >
-                      {size}
-                    </button>
-                  ))}
-                </div>
+            <div className="ofs-frame-group">
+              <span className="ofs-frame-label">{t('studio.rail.size')}</span>
+              <div className="ofs-size-options" role="group" aria-label={t('studio.rail.sizeAria')}>
+                {sizes.map((size) => (
+                  <button
+                    type="button"
+                    key={size}
+                    className={selectedSize === size ? 'ofs-size is-on' : 'ofs-size'}
+                    onClick={() => applySize(size)}
+                    aria-pressed={selectedSize === size}
+                    title={`${size} × ${size}`}
+                  >
+                    {size}
+                  </button>
+                ))}
               </div>
-              <p className="ofs-hint ofs-size-hint">{t('studio.rail.sizeHint')}</p>
-            </>
+            </div>
           ) : null}
+
+          {/* 自定义宽高：只改对应的那一边，另一边不联动；编辑过程走本地草稿，失焦才提交。 */}
+          <div className="ofs-frame-group">
+            <span className="ofs-frame-label">{t('studio.rail.customSize')}</span>
+            <div className="ofs-size-custom">
+              <label className="ofs-size-custom-field">
+                <span>{t('studio.rail.width')}</span>
+                <input
+                  type="number"
+                  min={LIMITS.width.min}
+                  max={LIMITS.width.max}
+                  step={LIMITS.width.step}
+                  value={sizeDraft.width}
+                  aria-label={t('studio.rail.width')}
+                  onChange={(event) => updateSizeDraft('width', event.target.value)}
+                  onBlur={() => commitSizeDraft('width')}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') event.currentTarget.blur()
+                  }}
+                />
+              </label>
+              <span className="ofs-size-custom-times" aria-hidden="true">×</span>
+              <label className="ofs-size-custom-field">
+                <span>{t('studio.rail.height')}</span>
+                <input
+                  type="number"
+                  min={LIMITS.height.min}
+                  max={LIMITS.height.max}
+                  step={LIMITS.height.step}
+                  value={sizeDraft.height}
+                  aria-label={t('studio.rail.height')}
+                  onChange={(event) => updateSizeDraft('height', event.target.value)}
+                  onBlur={() => commitSizeDraft('height')}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') event.currentTarget.blur()
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+
+          <p className="ofs-hint ofs-size-hint">{sizeHint}</p>
         </Fieldset>
 
         <Fieldset title={t('studio.rail.advanced')}>
@@ -555,35 +658,6 @@ export function Rail(props) {
                         </option>
                       ))}
                     </select>
-                  </div>
-
-                  {/* 自定义宽高：与方形档位、画幅比例共用同一份 width/height 状态。 */}
-                  <div className="ofs-grid-head">{t('studio.rail.customSize')}</div>
-                  <div className="ofs-field">
-                    <span>{t('studio.rail.width')}</span>
-                    <input
-                      type="number"
-                      min={LIMITS.width.min}
-                      max={LIMITS.width.max}
-                      step={LIMITS.width.step}
-                      value={fields.width}
-                      aria-label={t('studio.rail.width')}
-                      onChange={(event) => patchForm({ width: event.target.value })}
-                      onBlur={(event) => applyCustomSize({ width: event.target.value })}
-                    />
-                  </div>
-                  <div className="ofs-field">
-                    <span>{t('studio.rail.height')}</span>
-                    <input
-                      type="number"
-                      min={LIMITS.height.min}
-                      max={LIMITS.height.max}
-                      step={LIMITS.height.step}
-                      value={fields.height}
-                      aria-label={t('studio.rail.height')}
-                      onChange={(event) => patchForm({ height: event.target.value })}
-                      onBlur={(event) => applyCustomSize({ height: event.target.value })}
-                    />
                   </div>
                 </div>
               ) : null}

@@ -14,7 +14,16 @@ export function clampNumber(value, min, max, fallback) {
   return Math.min(max, Math.max(min, number))
 }
 
+/**
+ * 画面尺寸：合法输入按契约边界钳制，并对齐到 `LIMITS.width.step`。
+ *
+ * 缺失值（`''` / 纯空白 / null / undefined / 布尔）是「没有填写」，回退默认尺寸 1024，
+ * 不能走 `Number('') === 0` 再钳到下限——否则清空输入框失焦会静默跳成 256。
+ * 这里与 `clampStrength` 的缺失值约定保持一致；`clampSize('x') -> 1024` 的旧契约不变。
+ */
 export function clampSize(value) {
+  if (value === null || value === undefined || typeof value === 'boolean') return 1024
+  if (typeof value === 'string' && value.trim() === '') return 1024
   const number = Number(value)
   if (!Number.isFinite(number)) return 1024
   const { min, max, step } = LIMITS.width

@@ -55,6 +55,13 @@ await check('参数钳制符合 SPEC 第 2 节硬性约束', () => {
   assert.equal(logic.clampSize(1000), 1000)
   assert.equal(logic.clampSize(253), 256, '应向上取到 8 的整数倍')
   assert.equal(logic.clampSize('x'), 1024, '非法值回落 1024')
+  // 缺失值不是 0：空串 / 纯空白 / null / undefined 回退默认尺寸 1024（与 clampStrength 同约定），
+  // 否则清空宽高输入框失焦会被 Number('') 当成 0，再静默钳到下限 256。
+  assert.equal(logic.clampSize(''), 1024, '空串回退默认尺寸')
+  assert.equal(logic.clampSize('   '), 1024, '纯空白回退默认尺寸')
+  assert.equal(logic.clampSize(null), 1024)
+  assert.equal(logic.clampSize(undefined), 1024)
+  assert.equal(logic.clampSize(0), 256, '显式数字 0 仍按契约下限钳制')
   assert.equal(logic.clampInt(999, 1, 60, 4), 60)
   assert.equal(logic.clampInt(0, 1, 60, 4), 1)
   assert.equal(logic.clampInt('x', 1, 60, 4), 4)
@@ -1333,8 +1340,8 @@ await check('一键英译：只有模型真的翻译了才算成功', () => {
   assert.equal(logic.translateOutcomeOf(undefined).ok, false)
 })
 
-await check('方形尺寸档位与自定义宽高', () => {
-  // sizeOptions 是「等宽高的方形尺寸」数组，与画幅比例是两行不同概念。
+await check('1:1 推荐尺寸档位与自定义宽高', () => {
+  // sizeOptions 是「等宽高的方形尺寸」数组，在「画面设置」里以「1:1 推荐尺寸」展示，与画幅比例是不同概念。
   assert.deepEqual(logic.presetSizeOptions({ sizeOptions: [768, 1024, 1152], size: 1024 }), [768, 1024, 1152])
   assert.deepEqual(
     logic.presetSizeOptions({ sizeOptions: [1024, 768, 1024, 'x', -8], size: 1024 }),
@@ -1349,7 +1356,24 @@ await check('方形尺寸档位与自定义宽高', () => {
   assert.deepEqual(logic.customSizePatch({ height: 1 }), { height: LIMITS.height.min })
   assert.deepEqual(logic.customSizePatch({ width: '1000', height: 253 }), { width: 1000, height: 256 }, '按 8 的倍数对齐')
   assert.deepEqual(logic.customSizePatch({ width: 'x' }), { width: 1024 }, '非法值回落默认尺寸')
+  assert.deepEqual(logic.customSizePatch({ width: '' }), { width: 1024 }, '空串按缺失值回退默认尺寸')
   assert.deepEqual(logic.customSizePatch({}), {})
+})
+
+await check('比例高亮按长宽比匹配，而不是像素精确相等', () => {
+  // 方形档 768 / 1152 也都是 1:1；任意 4:3 像素都算 4:3。否则点方形档后上方比例高亮会消失。
+  assert.equal(logic.ratioIdOf(1024, 1024), '1:1')
+  assert.equal(logic.ratioIdOf(768, 768), '1:1', '方形档 768 应属于 1:1')
+  assert.equal(logic.ratioIdOf('1152', '1152'), '1:1', '字符串输入同样按数字比较')
+  assert.equal(logic.ratioIdOf(1152, 648), '16:9')
+  assert.equal(logic.ratioIdOf(648, 1152), '9:16')
+  assert.equal(logic.ratioIdOf(800, 600), '4:3', '非预设像素但长宽比匹配')
+  assert.equal(logic.ratioIdOf(768, 1024), '3:4')
+  assert.equal(logic.ratioIdOf(1000, 800), '', '5:4 不在契约比例里')
+  assert.equal(logic.ratioIdOf(1023, 1023), '1:1', '非 8 倍数的像素同样按约分后的长宽比匹配')
+  assert.equal(logic.ratioIdOf('', ''), '', '缺失值不匹配任何比例')
+  assert.equal(logic.ratioIdOf(null, 1024), '')
+  assert.equal(logic.ratioIdOf(1024, 0), '')
 })
 
 await check('中文提示词检测与英文软提示判定', () => {

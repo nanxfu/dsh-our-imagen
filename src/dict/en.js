@@ -376,7 +376,7 @@ export const en = {
   'studio.rail.modeChat': 'Assistant',
   'studio.rail.frame': 'Frame',
   'studio.rail.advanced': 'Advanced',
-  'studio.rail.params': 'Steps / guidance / seed',
+  'studio.rail.params': 'Steps / guidance / seed / count',
 
   // ── Reference image and image-to-image ────────────────────────
   'studio.reference.title': 'Reference image',
@@ -429,9 +429,12 @@ export const en = {
   'studio.translate.thinking': 'Translating…',
   'studio.translate.done': 'Prompt translated to English',
   'studio.translate.local': 'Model unavailable, not translated. Please rewrite it in English manually.',
-  'studio.rail.size': 'Square size',
-  'studio.rail.sizeHint': 'Recommended square sizes; use the ratio row or custom width/height for other formats.',
+  'studio.rail.ratio': 'Aspect ratio',
+  'studio.rail.size': '1:1 recommended sizes',
+  'studio.rail.sizeAria': '1:1 recommended size presets',
+  'studio.rail.sizeHint': 'Clicking a ratio or square preset sets both width and height; the width / height fields above change one side only ({min}–{max}, multiples of {step}).',
   'studio.rail.customSize': 'Custom size',
+  'studio.rail.custom': 'Custom',
   'studio.rail.width': 'Width',
   'studio.rail.height': 'Height',
   'studio.gallery.loadMore': 'Load more',

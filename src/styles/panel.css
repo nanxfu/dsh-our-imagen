@@ -458,7 +458,8 @@
 }
 
 .ofs-field input,
-.ofs-field select {
+.ofs-field select,
+.ofs-size-custom-field input {
   width: 100%;
   height: 30px;
   padding: 0 8px;
@@ -470,7 +471,8 @@
 }
 
 .ofs-field input:focus-visible,
-.ofs-field select:focus-visible {
+.ofs-field select:focus-visible,
+.ofs-size-custom-field input:focus-visible {
   outline: none;
   border-color: var(--ofs-accent-soft-border);
   box-shadow: var(--ofs-focus-ring);
@@ -555,20 +557,61 @@
   color: var(--ofs-accent);
 }
 
-/* ── 方形尺寸档位（与上方画幅比例是两行不同概念） ─────────────── */
-.ofs-size-row {
+/* ── 画面设置：画幅比例 / 1:1 推荐尺寸 / 自定义宽高 三段同构 ───── */
+.ofs-frame-group {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.ofs-size-label {
+.ofs-frame-label {
+  font-size: 10.5px;
+  color: var(--ofs-ink-3);
+}
+
+/* 标题栏右侧的实时尺寸读数：等宽数字，尺寸位数变化时不左右跳动 */
+.ofs-frame-readout {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ofs-ink-3);
+  white-space: nowrap;
+}
+
+/* 紧凑一行两列：宽 [1024] × 高 [1024]（不复用带卡片内边距的 .ofs-grid2） */
+.ofs-size-custom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ofs-size-custom-field {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ofs-size-custom-field > span {
   flex: 0 0 auto;
   font-size: 10.5px;
   color: var(--ofs-ink-3);
 }
 
+.ofs-size-custom-field input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.ofs-size-custom-times {
+  flex: 0 0 auto;
+  color: var(--ofs-ink-4);
+  font-size: 11px;
+}
+
+/* ── 方形尺寸档位（1:1 推荐尺寸，点选同时改写宽高） ────────────── */
 .ofs-size-options {
   display: flex;
   flex-wrap: wrap;
@@ -607,16 +650,8 @@
 }
 
 .ofs-size-hint {
-  margin-top: 6px;
+  margin-top: 0;
   text-align: left;
-}
-
-/* 高级设置里的分组小标题：占满两列，把自定义宽高和上面的参数分开 */
-.ofs-grid-head {
-  grid-column: 1 / -1;
-  padding-top: 2px;
-  font-size: 10.5px;
-  color: var(--ofs-ink-3);
 }
 
 .ofs-link {

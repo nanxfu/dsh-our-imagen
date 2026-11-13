@@ -6,7 +6,7 @@
  * 这些规则不碰 React 与网络，便于离线断言。
  */
 
-import { DEFAULT_PRESET, LIMITS } from '../../shared/contract.js'
+import { DEFAULT_PRESET, LIMITS, RATIO_IDS } from '../../shared/contract.js'
 
 import { clampInt, clampNumber, clampSize } from './clamp.js'
 import { negativeLayersPatch, resolveNegativeLayers } from './prompt.js'
@@ -14,6 +14,34 @@ import { negativeLayersPatch, resolveNegativeLayers } from './prompt.js'
 /** 提示词是否含中日韩字符。 */
 export function detectCjk(text) {
   return /[\u3400-\u9fff]/.test(String(text ?? ''))
+}
+
+/** 最大公约数：用于把像素宽高约分成最简长宽比。 */
+function gcd(left, right) {
+  let a = Math.abs(left)
+  let b = Math.abs(right)
+  while (b) {
+    const next = a % b
+    a = b
+    b = next
+  }
+  return a || 1
+}
+
+/**
+ * 画面尺寸 → 画幅比例 id（契约 `RATIO_IDS` 之一，匹配不上返回空串）。
+ *
+ * 高亮反馈必须按「画幅」而不是按像素精确相等：`768 × 768` 和 `1024 × 1024` 都是 1:1，
+ * 点方形档 `768` 之后上方「1:1」应当保持高亮；`800 × 600` 同样是 4:3。
+ * 用最大公约数约分成最简比再比对，避免浮点容差带来「相近就算匹配」的歧义。
+ */
+export function ratioIdOf(width, height) {
+  const w = Math.round(Number(width))
+  const h = Math.round(Number(height))
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return ''
+  const divisor = gcd(w, h)
+  const id = `${w / divisor}:${h / divisor}`
+  return RATIO_IDS.includes(id) ? id : ''
 }
 
 /**
@@ -57,6 +85,9 @@ export function presetSizeOptions(preset) {
 /**
  * 自定义宽高补丁：只处理传入的字段（宽或高单独改），按契约边界与步长钳制。
  * 传给 `patchForm()` 后分别更新宽/高，比例行与方形档位的选中态由尺寸反推。
+ *
+ * 空串 / null 交给 `clampSize` 的缺失值约定（回退 1024）；「清空后失焦恢复原值」
+ * 属于输入框编辑态，由 Rail 的局部草稿层处理，不在这里兜。
  */
 export function customSizePatch(partial) {
   const input = partial && typeof partial === 'object' ? partial : {}
