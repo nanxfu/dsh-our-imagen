@@ -10,7 +10,7 @@ import { computeStatusOf, idleShutdownOf } from '../logic/status.js'
 import { Icon } from './icons.jsx'
 import { ModelCardPicker } from './ModelCardPicker.jsx'
 import { StudioIcon } from './StudioIcon.jsx'
-import { accountStatusOf, probeStatusOf } from '../logic/probe.js'
+import { accountStatusOf, accessMethodKey, accessStatusKey, accessStatusOf, probeStatusOf } from '../logic/probe.js'
 import { KAGGLE_ACCOUNT_URL } from '../logic/guidance.js'
 import { useHostSnapshot } from './hooks/useStudioLogs.js'
 
@@ -75,6 +75,8 @@ export function TopBar(props) {
     ? loadedPreset.steadySeconds
     : loadedPreset && loadedPreset.measured ? loadedPreset.measured.steadySeconds : null
   const steadySeconds = Number.isFinite(steadyRaw) ? steadyRaw : null
+  // 访问方式只影响展示：直连模式把「命令行」改为「直连」，状态改为「直连正常 / 直连未登录」。
+  const kaggleTransport = compute.kaggleTransport === 'direct' ? 'direct' : 'cli'
   // 状态弹层优先用宿主轮询到的 probe；刚做过检查时用本次结果兜底。
   const probePayload = probe || (snapshot && snapshot.probe) || (probeReport && probeReport.probe) || null
   const probeInfo = probeStatusOf(probePayload)
@@ -207,7 +209,9 @@ export function TopBar(props) {
               {probing ? <span>{t('action.probing')}</span> : null}
               {probeInfo ? (
                 <>
-                  <span>{t('studio.probe.cli')} · {statusText(probeInfo.cli)}</span>
+                  <span>
+                    {t(accessMethodKey(kaggleTransport))} · {t(accessStatusKey(kaggleTransport, accessStatusOf(probeInfo, kaggleTransport)))}
+                  </span>
                   <span>{t('studio.probe.quota')} · {statusText(probeInfo.quota)}</span>
                 </>
               ) : null}

@@ -30,7 +30,7 @@ import { NOTICE_TITLE_PREFIX, completionNotice, isCompletion, stripNoticePrefix 
 import { styles, token } from '../src/theme.js'
 import { ACTIVE_STATUS, TRANSIENT_SESSION, PHASE_STATE, NS } from '../src/constants.js'
 import { DEFAULT_RATIOS, STYLE_CAPSULES } from '../src/studio/presets.js'
-import { RATIO_IDS, STYLE_IDS, LIMITS, LOGS, SETTINGS, UI_STATE } from '../shared/contract.js'
+import { RATIO_IDS, STYLE_IDS, LIMITS, LOGS, KAGGLE_LOGIN, SETTINGS, UI_STATE } from '../shared/contract.js'
 
 const t = fallbackTranslate('zh')
 const te = fallbackTranslate('en')
@@ -531,6 +531,8 @@ await check('运行设置：脱敏视图 → 表单', () => {
   assert.deepEqual(form, {
     idleMinutes: '30',
     accelerator: 'NvidiaTeslaP100',
+    // 视图缺 kaggleTransport（旧宿主）：按契约默认的 cli 处理，不默认打开直连。
+    kaggleTransport: 'cli',
     // 视图本来就不回传 hfToken 原文：表单永远从空串开始。
     hfToken: '',
     clearHfToken: false,
@@ -677,6 +679,229 @@ await check('工作台界面态：归一化、响应解析与保存补丁', () =
   assert.deepEqual(logic.buildUiStatePatch(null), {})
   assert.deepEqual(logic.buildUiStatePatch([]), {})
   assert.equal(UI_STATE.defaults.advancedOpen, false, '高级设置默认收起')
+})
+
+await check('运行设置：Kaggle 访问方式白名单与保存补丁', () => {
+  // 取值域只来自契约；默认仍是 cli（直连是试验特性，不能因字段缺失默认打开）。
+  assert.deepEqual(SETTINGS.kaggleTransports, ['cli', 'direct'])
+  assert.equal(SETTINGS.defaultKaggleTransport, 'cli')
+  for (const transport of SETTINGS.kaggleTransports) {
+    assert.equal(logic.normalizeKaggleTransport(transport), transport)
+  }
+  for (const invalid of [undefined, null, '', 'bogus', 'DIRECT', 1, true, {}]) {
+    assert.equal(logic.normalizeKaggleTransport(invalid), SETTINGS.defaultKaggleTransport, `非法值应按 cli：${invalid}`)
+  }
+  // 展示名键按契约取值域派发，中英文案两侧都要有。
+  for (const transport of SETTINGS.kaggleTransports) {
+    const key = logic.kaggleTransportLabelKey(transport)
+    assert.equal(key, `studio.settings.kaggleTransport.option.${transport}`)
+    assert.ok(DICT.zh[key], `${key} 缺少中文文案`)
+    assert.ok(DICT.en[key], `${key} 缺少英文文案`)
+  }
+  assert.equal(logic.kaggleTransportLabelKey('bogus'), 'studio.settings.kaggleTransport.option.cli')
+
+  // 表单：视图里的直连值原样带出，非法值回落 cli。
+  assert.equal(logic.formFromSettings({ kaggleTransport: 'direct' }).kaggleTransport, 'direct')
+  assert.equal(logic.formFromSettings({ kaggleTransport: 'auto' }).kaggleTransport, 'cli')
+  // 请求体：只有真正切换时才补丁；旧视图缺字段按 cli 比较。
+  const legacyView = { idleTimeoutSec: 1800, accelerator: 'NvidiaTeslaT4' }
+  const legacyForm = logic.formFromSettings(legacyView)
+  assert.deepEqual(logic.buildSettingsPayload(legacyForm, legacyView), {}, '旧视图 + 未改动不产生补丁')
+  assert.deepEqual(
+    logic.buildSettingsPayload({ ...legacyForm, kaggleTransport: 'direct' }, legacyView),
+    { kaggleTransport: 'direct' },
+    '切到直连提交 kaggleTransport',
+  )
+  assert.deepEqual(
+    logic.buildSettingsPayload(legacyForm, { ...legacyView, kaggleTransport: 'direct' }),
+    { kaggleTransport: 'cli' },
+    '从直连切回 CLI 也要提交',
+  )
+  // 直连说明文案要带凭据路径占位符。
+  assert.match(DICT.zh['studio.settings.kaggleTransport.directHint'], /\{path\}/)
+  assert.match(DICT.en['studio.settings.kaggleTransport.directHint'], /\{path\}/)
+})
+
+await check('Kaggle 直连登录：响应归一与状态判断', () => {
+  // 契约口径：状态、模式、轮询间隔与总时限都从 KAGGLE_LOGIN 取。
+  assert.deepEqual(logic.LOGIN_STATES, KAGGLE_LOGIN.states)
+  assert.deepEqual(logic.LOGIN_MODES, KAGGLE_LOGIN.modes)
+  assert.equal(logic.LOGIN_POLL_MS, KAGGLE_LOGIN.pollMs)
+  assert.equal(logic.LOGIN_TIMEOUT_MS, KAGGLE_LOGIN.timeoutMs)
+
+  // 空视图与旧宿主缺字段：可渲染的 idle 视图，不抛异常。
+  assert.deepEqual(logic.normalizeLoginView(null), logic.emptyLoginView())
+  assert.deepEqual(logic.normalizeLoginView('x'), logic.emptyLoginView())
+  assert.deepEqual(logic.normalizeLoginView([]), logic.emptyLoginView())
+  const pending = {
+    state: 'pending',
+    mode: 'manual',
+    url: 'https://www.kaggle.com/oauth/authorize?code_challenge=abc',
+    message: 'waiting',
+    username: null,
+    startedAt: at(0),
+    finishedAt: null,
+  }
+  assert.deepEqual(logic.normalizeLoginView(pending), pending)
+  // 未知状态按 idle、未知模式按 browser、非 http(s) 链接置空、空白字符串置空。
+  const dirty = logic.normalizeLoginView({
+    state: 'working',
+    mode: 'qr',
+    url: 'javascript:alert(1)',
+    message: '  ',
+    username: '  ',
+    startedAt: '',
+    finishedAt: 42,
+  })
+  assert.deepEqual(dirty, {
+    state: 'idle',
+    mode: 'browser',
+    url: null,
+    message: null,
+    username: null,
+    startedAt: null,
+    finishedAt: null,
+  })
+
+  // 响应形状：只认 `{ ok: true, data: { ok: true, login } }`。
+  assert.deepEqual(logic.loginViewOf({ ok: true, data: { ok: true, login: pending } }), pending)
+  assert.equal(logic.loginViewOf({ ok: false, code: 'network' }), null)
+  assert.equal(logic.loginViewOf({ ok: true, data: { ok: false, error: { code: 'invalid_request' } } }), null)
+  assert.equal(logic.loginViewOf({ ok: true, data: { ok: true } }), null, '缺 login 不猜测登录结果')
+  assert.equal(logic.loginViewOf(null), null)
+
+  // 状态判断：只有 pending 需要轮询、不能重复发起。
+  assert.equal(logic.isLoginPending({ state: 'pending' }), true)
+  assert.equal(logic.isLoginPending({ state: 'done' }), false)
+  assert.equal(logic.isLoginPending(null), false)
+  assert.equal(logic.loginCanStart({ state: 'pending' }), false)
+  assert.equal(logic.loginCanStart({ state: 'done' }), false)
+  for (const state of ['idle', 'failed', 'cancelled']) {
+    assert.equal(logic.loginCanStart({ state }), true, `${state} 应可以重新发起`)
+  }
+  assert.equal(logic.loginCanStart(null), true)
+  assert.equal(logic.loginIsTerminal({ state: 'done' }), true)
+  assert.equal(logic.loginIsTerminal({ state: 'pending' }), false)
+
+  // 超时兜底：达到契约 timeoutMs 即超时，起点非法按未超时处理。
+  assert.equal(logic.loginTimedOut(1000, 1000 + KAGGLE_LOGIN.timeoutMs - 1), false)
+  assert.equal(logic.loginTimedOut(1000, 1000 + KAGGLE_LOGIN.timeoutMs), true)
+  assert.equal(logic.loginTimedOut(undefined, 1), false)
+  assert.equal(logic.shouldPollLogin({ state: 'pending' }, 0, KAGGLE_LOGIN.timeoutMs - 1), true)
+  assert.equal(logic.shouldPollLogin({ state: 'pending' }, 0, KAGGLE_LOGIN.timeoutMs), false)
+  assert.equal(logic.shouldPollLogin({ state: 'done' }, 0, 0), false)
+})
+
+await check('Kaggle 直连登录：manual 授权码清洗与校验', () => {
+  // 清洗：去首尾与内部空白、去 `code=` 前缀、去包裹的引号 / 尖括号。
+  assert.equal(logic.cleanLoginCode('  abcdefgh  '), 'abcdefgh')
+  assert.equal(logic.cleanLoginCode('abc\ndef\tgh'), 'abcdefgh')
+  assert.equal(logic.cleanLoginCode('code=abcdefgh'), 'abcdefgh')
+  assert.equal(logic.cleanLoginCode('CODE = "abcdefgh"'), 'abcdefgh')
+  assert.equal(logic.cleanLoginCode('<abcdefgh>'), 'abcdefgh')
+  assert.equal(logic.cleanLoginCode(null), '')
+  assert.equal(logic.cleanLoginCode(42), '')
+
+  // 校验：空 / 过短 / 过长 / 非法字符都给出字典键，合法值只回清洗后的码。
+  assert.deepEqual(logic.validateLoginCode(''), {
+    ok: false,
+    code: '',
+    message: 'studio.guidance.auth.codeEmpty',
+  })
+  assert.equal(logic.validateLoginCode('abc').message, 'studio.guidance.auth.codeTooShort')
+  assert.equal(logic.validateLoginCode('a'.repeat(logic.LOGIN_CODE_MAX_CHARS + 1)).message, 'studio.guidance.auth.codeTooLong')
+  assert.equal(logic.validateLoginCode('abcd$efgh').message, 'studio.guidance.auth.codeFormat')
+  const valid = logic.validateLoginCode('  code=ab_cd-EF.123~45/6=  ')
+  assert.equal(valid.ok, true)
+  assert.equal(valid.code, 'ab_cd-EF.123~45/6=')
+  assert.equal(valid.message, '')
+  assert.equal(logic.loginCodeCanSubmit('abc'), false)
+  assert.equal(logic.loginCodeCanSubmit(valid.code), true)
+  for (const key of [
+    'studio.guidance.auth.codeEmpty',
+    'studio.guidance.auth.codeTooShort',
+    'studio.guidance.auth.codeTooLong',
+    'studio.guidance.auth.codeFormat',
+  ]) {
+    assert.ok(DICT.zh[key], `${key} 缺少中文文案`)
+    assert.ok(DICT.en[key], `${key} 缺少英文文案`)
+  }
+
+  // 请求体：动作名来自契约白名单；submit-code 只接受清洗后的授权码。
+  assert.deepEqual(logic.loginActionBody('start'), { action: 'start' })
+  assert.deepEqual(logic.loginActionBody('cancel'), { action: 'cancel' })
+  assert.deepEqual(logic.loginActionBody('submit-code', ' abcd efgh '), { action: 'submit-code', code: 'abcdefgh' })
+  assert.deepEqual(logic.loginActionBody('submit-code', '   '), { action: 'submit-code' })
+  assert.equal(logic.loginActionBody('delete', 'x'), null, '白名单外的动作不发请求')
+})
+
+await check('Kaggle 直连登录：失败原因与宿主 message 归类', () => {
+  const reasonKeys = [
+    'studio.guidance.auth.reason.timeout',
+    'studio.guidance.auth.reason.state',
+    'studio.guidance.auth.reason.browser',
+    'studio.guidance.auth.reason.exchange',
+    'studio.guidance.auth.reason.network',
+    'studio.guidance.auth.reason.unavailable',
+    'studio.guidance.auth.reason.request',
+    'studio.guidance.auth.reason.unknown',
+  ]
+  for (const key of reasonKeys) {
+    assert.ok(DICT.zh[key], `${key} 缺少中文文案`)
+    assert.ok(DICT.en[key], `${key} 缺少英文文案`)
+  }
+  assert.equal(logic.loginFailureKey({ state: 'failed', message: 'timed out waiting for callback' }), 'studio.guidance.auth.reason.timeout')
+  assert.equal(logic.loginFailureKey({ state: 'failed', message: 'state mismatch' }), 'studio.guidance.auth.reason.state')
+  assert.equal(logic.loginFailureKey({ state: 'failed', message: 'could not open browser' }), 'studio.guidance.auth.reason.browser')
+  assert.equal(logic.loginFailureKey({ state: 'failed', message: 'token exchange failed' }), 'studio.guidance.auth.reason.exchange')
+  assert.equal(logic.loginFailureKey({ state: 'failed', message: 'network unreachable' }), 'studio.guidance.auth.reason.network')
+  assert.equal(logic.loginFailureKey({ state: 'failed', message: '未知原因' }), 'studio.guidance.auth.reason.unknown')
+  assert.equal(logic.loginFailureKey({ state: 'failed', message: null }), 'studio.guidance.auth.reason.unknown')
+  // 非失败态不展示失败原因。
+  assert.equal(logic.loginFailureKey({ state: 'pending' }), '')
+  assert.equal(logic.loginFailureKey(null), '')
+})
+
+await check('直连模式：探测失败归类与访问方式展示键', () => {
+  // CLI 正常 / 缺失的归类保持不变（旧宿主行为）。
+  const cliMissing = { cli: { present: false }, auth: { ok: false } }
+  assert.equal(logic.probeFailureCode(cliMissing), 'cli_missing')
+  assert.equal(logic.probeFailureCode(cliMissing, { transport: 'cli' }), 'cli_missing')
+  // 直连模式：cli 探测失败只说明没登录，不能弹「安装 CLI」卡。
+  assert.equal(logic.probeFailureCode(cliMissing, { transport: 'direct' }), 'auth_required')
+  assert.equal(
+    logic.probeFailureCode({ cli: { present: true, direct: true }, auth: { ok: false } }, { transport: 'direct' }),
+    'auth_required',
+  )
+  // probeOutcomeOf 的 options 透传：同样的响应在两种模式下失败码不同。
+  const payload = { ok: false, probe: cliMissing }
+  assert.equal(logic.probeOutcomeOf(payload).code, 'cli_missing')
+  assert.equal(logic.probeOutcomeOf(payload, { transport: 'direct' }).code, 'auth_required')
+  assert.equal(logic.probeOutcomeOf({ ok: true, probe: { cli: { present: true } } }, { transport: 'direct' }).ok, true)
+
+  // 展示键：CLI 模式「命令行」，直连模式「直连」+「直连正常 / 直连未登录」。
+  assert.equal(logic.accessMethodKey('cli'), 'studio.probe.cli')
+  assert.equal(logic.accessMethodKey('direct'), 'studio.probe.direct')
+  assert.equal(logic.accessMethodKey(undefined), 'studio.probe.cli')
+  assert.equal(logic.accessStatusKey('cli', 'ok'), 'value.ok')
+  assert.equal(logic.accessStatusKey('cli', 'failed'), 'value.failed')
+  assert.equal(logic.accessStatusKey('cli', 'unknown'), 'value.unknown')
+  assert.equal(logic.accessStatusKey('direct', 'ok'), 'studio.probe.directOk')
+  assert.equal(logic.accessStatusKey('direct', 'failed'), 'studio.probe.directLoginRequired')
+  assert.equal(logic.accessStatusKey('direct', 'unknown'), 'value.unknown')
+  // 状态来源：CLI 模式看 cli 探测，直连模式以账号（auth）为准。
+  const probeOkStatus = { cli: 'ok', auth: 'ok', quota: 'ok', notes: [] }
+  const probeAuthFailed = { cli: 'ok', auth: 'failed', quota: 'ok', notes: [] }
+  const probeCliFailed = { cli: 'failed', auth: 'unknown', quota: 'unknown', notes: [] }
+  assert.equal(logic.accessStatusOf(probeOkStatus, 'cli'), 'ok')
+  assert.equal(logic.accessStatusOf(probeAuthFailed, 'cli'), 'ok', 'CLI 模式 cli 可用即正常')
+  assert.equal(logic.accessStatusOf(probeAuthFailed, 'direct'), 'failed', '直连模式未登录按失败展示')
+  assert.equal(logic.accessStatusOf(probeCliFailed, 'direct'), 'unknown', '直连模式缺 auth 信息时不编造登录态')
+  assert.equal(logic.accessStatusOf(null, 'direct'), 'unknown')
+  for (const key of ['studio.probe.direct', 'studio.probe.directOk', 'studio.probe.directLoginRequired']) {
+    assert.ok(DICT.zh[key], `${key} 缺少中文文案`)
+    assert.ok(DICT.en[key], `${key} 缺少英文文案`)
+  }
 })
 
 await check('状态色与常量表一致', () => {

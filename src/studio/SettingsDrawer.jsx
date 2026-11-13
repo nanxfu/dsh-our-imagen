@@ -17,6 +17,7 @@ import { SETTINGS } from '../../shared/contract.js'
 import { Icon } from './icons.jsx'
 import { fetchSettings, saveSettings } from '../api/resources.js'
 import { formatText } from '../logic/format.js'
+import { KAGGLE_CREDENTIAL_PATH } from '../logic/guidance.js'
 import {
   IDLE_MAX_MINUTES,
   IDLE_MIN_MINUTES,
@@ -24,6 +25,7 @@ import {
   formFromSettings,
   hasSettingsChanges,
   hfTokenSourceKey,
+  kaggleTransportLabelKey,
   quickIdleMinutes,
   settingsErrorText,
   settingsViewOf,
@@ -265,6 +267,40 @@ export function SettingsDrawer(props) {
 
           {advancedOpen ? (
             <div className="ofs-settings-advanced">
+              {/* Kaggle 访问方式：cli（默认，调用本机 CLI）/ direct（Node 直连，试验特性）。
+                  切换在下次唤醒或下次环境检查时生效，与「下次会话生效」提示同一口径。 */}
+              <div className="ofs-settings-row">
+                <span className="ofs-settings-label">{t('studio.settings.kaggleTransport.label')}</span>
+                <div
+                  className="ofs-settings-options"
+                  role="radiogroup"
+                  aria-label={t('studio.settings.kaggleTransport.label')}
+                >
+                  {SETTINGS.kaggleTransports.map((transport) => (
+                    <label
+                      key={transport}
+                      className={`ofs-settings-option${form.kaggleTransport === transport ? ' is-on' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="ofs-kaggle-transport"
+                        value={transport}
+                        checked={form.kaggleTransport === transport}
+                        onChange={() => patchForm({ kaggleTransport: transport })}
+                      />
+                      <span>{t(kaggleTransportLabelKey(transport))}</span>
+                    </label>
+                  ))}
+                </div>
+                {form.kaggleTransport === 'direct' ? (
+                  <small className="ofs-settings-hint">
+                    {formatText(t('studio.settings.kaggleTransport.directHint'), {
+                      path: KAGGLE_CREDENTIAL_PATH,
+                    })}
+                  </small>
+                ) : null}
+              </div>
+
               <label className="ofs-settings-field">
                 <span className="ofs-settings-label">{t('studio.settings.dataset.label')}</span>
                 <textarea

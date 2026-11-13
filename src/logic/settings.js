@@ -40,11 +40,25 @@ export function idleTimeoutSecOf(minutes) {
   return clampInt(value, IDLE_MIN_MINUTES, IDLE_MAX_MINUTES, fallback) * 60
 }
 
-/** 当前输入值命中的快捷档位（分钟），不命中返回 null。 */
+/** 查当前输入值命中的快捷档位（分钟），不命中返回 null。 */
 export function quickIdleMinutes(value) {
   const minutes = Number(value)
   if (!Number.isInteger(minutes)) return null
   return IDLE.quickMinutes.includes(minutes) ? minutes : null
+}
+
+/**
+ * Kaggle 访问方式归一化：白名单来自契约 SETTINGS.kaggleTransports。
+ * 未知值、旧宿主缺失字段一律回落 SETTINGS.defaultKaggleTransport（cli）——
+ * 直连是试验特性，不能因为字段缺失就把用户切到直连。
+ */
+export function normalizeKaggleTransport(value) {
+  return SETTINGS.kaggleTransports.includes(value) ? value : SETTINGS.defaultKaggleTransport
+}
+
+/** Kaggle 访问方式的展示名文案键（中英文案由字典提供）。 */
+export function kaggleTransportLabelKey(transport) {
+  return `studio.settings.kaggleTransport.option.${normalizeKaggleTransport(transport)}`
 }
 
 /**
@@ -150,6 +164,8 @@ export function formFromSettings(view) {
   return {
     idleMinutes: String(idleMinutesOf(source.idleTimeoutSec)),
     accelerator,
+    // 旧宿主缺 kaggleTransport 时按 cli 处理：直连是试验特性，不能默认打开。
+    kaggleTransport: normalizeKaggleTransport(source.kaggleTransport),
     hfToken: '',
     clearHfToken: false,
     datasetSourcesText: formatLineList(source.datasetSources),
@@ -198,6 +214,10 @@ export function buildSettingsPayload(form, view) {
     ? base.accelerator
     : SETTINGS.defaultAccelerator
   if (accelerator !== baseAccelerator) payload.accelerator = accelerator
+
+  // Kaggle 访问方式：只有真正切换时才补丁，旧视图缺字段按 cli 比较。
+  const transport = normalizeKaggleTransport(source.kaggleTransport)
+  if (transport !== normalizeKaggleTransport(base.kaggleTransport)) payload.kaggleTransport = transport
 
   const token = typeof source.hfToken === 'string' ? source.hfToken.trim() : ''
   if (source.clearHfToken === true) payload.clearHfToken = true

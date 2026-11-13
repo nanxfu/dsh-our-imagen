@@ -24,6 +24,8 @@
  *   - useMemo 的依赖按 Object.is 浅比较；deps 为 undefined 时每次渲染重算。
  *   - 测试在 mount 之后点击按钮 / 直接调用动作改变了 state 时，用 rerender() 把新状态刷到树上；
  *     挂起的异步流程用 settle() 等待落地。fake fetch 的完整请求（method + body）记在 requests 里。
+ *   - setTimeout / setInterval 只入队不自动到期；需要驱动轮询时用 advanceTimers(ms) 推进假时钟，
+ *     Date.now() 随之走向推进后的时刻（未推进时固定为 now 选项的值）。
  */
 
 import { readFile } from 'node:fs/promises'
@@ -282,9 +284,13 @@ export async function loadClient(options = {}) {
 
   const timers = new Map()
   let timerId = 0
+  // 假时钟：默认固定在 now（保证既有断言里的时间读数不变）；
+  // advanceTimers() 会把时钟推进到目标时刻并逐个执行到期回调。
+  let clock = now
   const fakeSetTimeout = (fn, ms) => {
     timerId += 1
-    timers.set(timerId, { fn, ms })
+    const delay = Number.isFinite(Number(ms)) ? Math.max(0, Number(ms)) : 0
+    timers.set(timerId, { fn, ms: delay, dueAt: clock + delay })
     return timerId
   }
   const fakeClear = (id) => timers.delete(id)
@@ -329,6 +335,8 @@ export async function loadClient(options = {}) {
 
   const renderer = createRenderer(now)
   let installed = false
+  // document 事件监听（visibilitychange）：setHidden() 用它模拟页面隐藏/恢复。
+  const documentListeners = new Map()
   const install = () => {
     if (installed) return
     installed = true
@@ -336,8 +344,14 @@ export async function loadClient(options = {}) {
       documentElement: { lang: locale },
       baseURI: 'http://localhost/',
       hidden: false,
-      addEventListener() {},
-      removeEventListener() {},
+      addEventListener(type, handler) {
+        if (!documentListeners.has(type)) documentListeners.set(type, new Set())
+        documentListeners.get(type).add(handler)
+      },
+      removeEventListener(type, handler) {
+        const handlers = documentListeners.get(type)
+        if (handlers) handlers.delete(handler)
+      },
     }
     globalThis.fetch = fakeFetch
     globalThis.window = fakeWindow
@@ -345,7 +359,7 @@ export async function loadClient(options = {}) {
     globalThis.setInterval = (fn, ms) => fakeSetTimeout(fn, ms)
     globalThis.clearTimeout = fakeClear
     globalThis.clearInterval = fakeClear
-    Date.now = () => now
+    Date.now = () => clock
   }
   const restore = () => {
     if (!installed) return
@@ -358,6 +372,43 @@ export async function loadClient(options = {}) {
     globalThis.clearTimeout = saved.clearTimeout
     globalThis.clearInterval = saved.clearInterval
     Date.now = saved.dateNow
+  }
+
+  /**
+   * 推进假时钟到 `ms` 毫秒后，按到期顺序执行一遍到期的定时器。
+   *
+   * 真实浏览器里 setTimeout 会自动触发，测试替身不会；轮询类逻辑（登录、日志、状态）
+   * 需要它才能走完「发起 → 轮询 → 终态」。每执行一个回调就等待一轮微任务，
+   * 让 async 回调里 `await fetch` 之后的续体有机会继续排下一步定时器。
+   * 返回实际执行的回调数，便于断言「停止轮询后不再有定时任务」。
+   */
+  async function advanceTimers(ms = 0) {
+    const target = clock + (Number.isFinite(Number(ms)) ? Math.max(0, Number(ms)) : 0)
+    let ran = 0
+    for (let guard = 0; guard < 5000; guard += 1) {
+      let dueId = null
+      let dueAt = Infinity
+      for (const [id, timer] of timers) {
+        if (timer.dueAt <= target && timer.dueAt < dueAt) {
+          dueId = id
+          dueAt = timer.dueAt
+        }
+      }
+      if (dueId === null) break
+      const timer = timers.get(dueId)
+      timers.delete(dueId)
+      clock = timer.dueAt
+      ran += 1
+      try {
+        timer.fn()
+      } catch {
+        // 定时器回调异常交给断言侧发现（真实环境里会冒泡到浏览器控制台），
+        // 这里不中断时钟推进，否则测试会卡在「定时器没到期」这种次要现象上。
+      }
+      await renderer.settle()
+    }
+    clock = Math.max(clock, target)
+    return ran
   }
 
   install()
@@ -421,6 +472,22 @@ export async function loadClient(options = {}) {
         install()
         await renderer.settle(rounds)
       },
+      /** 推进假时钟并执行到期定时器（轮询类逻辑用），返回执行的回调数。 */
+      advanceTimers: async (ms = 0) => {
+        install()
+        return advanceTimers(ms)
+      },
+      /**
+       * 模拟页面可见性切换：设置 document.hidden 并触发全部 visibilitychange 监听器。
+       * 用于断言「隐藏时停止轮询、恢复时继续」。
+       */
+      setHidden: (hidden) => {
+        install()
+        globalThis.document.hidden = Boolean(hidden)
+        for (const handler of [...(documentListeners.get('visibilitychange') ?? [])]) handler()
+      },
+      /** 当前假时钟读数（毫秒时间戳）。 */
+      now: () => clock,
       unmount: () => {
         renderer.unmount()
         restore()

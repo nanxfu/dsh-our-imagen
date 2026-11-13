@@ -28,6 +28,7 @@ import { LogsDrawer } from './studio/LogsDrawer.jsx'
 import { SettingsDrawer } from './studio/SettingsDrawer.jsx'
 import { ModelCardPicker } from './studio/ModelCardPicker.jsx'
 import { useChatThread } from './studio/hooks/useChatThread.js'
+import { useKaggleLogin } from './studio/hooks/useKaggleLogin.js'
 import { useStudioUi } from './studio/hooks/useStudioUi.js'
 
 export const __test = {
@@ -41,6 +42,7 @@ export const __test = {
   // 域 hook 直接暴露给渲染测试：用最小 Harness 组件挂载，断言真实状态流转。
   hooks: {
     useChatThread,
+    useKaggleLogin,
     useStudioUi,
   },
   components: {

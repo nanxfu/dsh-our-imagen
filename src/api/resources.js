@@ -11,6 +11,7 @@
 import { LIMITS } from '../../shared/contract.js'
 
 import { request, routePath } from '../api.js'
+import { loginActionBody } from '../logic/kaggleLogin.js'
 
 /** Host 状态快照（轮询用）。 */
 export function fetchState() {
@@ -157,4 +158,43 @@ export function saveUiState(patch) {
     method: 'POST',
     body: JSON.stringify(patch && typeof patch === 'object' ? patch : {}),
   })
+}
+
+/**
+ * Kaggle 直连登录态：GET 返回 `{ ok, login }`（LoginView，字段见契约 KAGGLE_LOGIN）。
+ * 旧宿主没有该路由时回 404，由调用方按「接口不可用」处理，不抛异常。
+ */
+export function fetchKaggleLogin() {
+  return request(routePath('kaggleLogin'), { method: 'GET' })
+}
+
+/**
+ * 发送一次登录动作；请求体严格按契约 `KAGGLE_LOGIN.actions` 的形状：
+ * `{ action: 'start' }` / `{ action: 'cancel' }` / `{ action: 'submit-code', code }`。
+ * 非法 action 直接返回 rejected 语义的失败结果（不发请求），避免把脏 body 发给宿主。
+ */
+export function kaggleLoginAction(action, code) {
+  const body = loginActionBody(action, code)
+  if (!body) {
+    return Promise.resolve({ ok: false, status: 0, code: 'invalid_request', message: `未知的登录动作：${action}` })
+  }
+  return request(routePath('kaggleLoginAction'), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** 发起浏览器授权（本地回环回调收码）。 */
+export function startKaggleLogin() {
+  return kaggleLoginAction('start')
+}
+
+/** 取消正在等待的登录。 */
+export function cancelKaggleLogin() {
+  return kaggleLoginAction('cancel')
+}
+
+/** manual 模式提交粘贴的授权码。 */
+export function submitKaggleLoginCode(code) {
+  return kaggleLoginAction('submit-code', code)
 }

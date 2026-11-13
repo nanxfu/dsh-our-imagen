@@ -65,24 +65,63 @@ export function accountStatusOf(probe, sessionState) {
 }
 
 /** 根据 probe 结果给出应弹哪类指引卡：cli_missing / auth_required / ''。 */
-export function probeFailureCode(probe) {
+export function probeFailureCode(probe, options = {}) {
   const status = probeStatusOf(probe)
   if (!status) return ''
-  if (status.cli === 'failed') return 'cli_missing'
+  const transport = options && options.transport === 'direct' ? 'direct' : 'cli'
+  // 直连模式不依赖本机 kaggle CLI：cli 探测失败只说明还没登录，
+  // 不能弹「安装 CLI」卡（那张卡的动作在直连模式下没有意义）。
+  if (status.cli === 'failed') return transport === 'direct' ? 'auth_required' : 'cli_missing'
   if (status.auth === 'failed') return 'auth_required'
   return ''
+}
+
+/**
+ * 访问方式的展示文案键：CLI 模式叫「命令行」，直连模式叫「直连」。
+ * 只影响展示，不改判定结构（判定仍看 probe.cli / probe.auth）。
+ */
+export function accessMethodKey(transport) {
+  return transport === 'direct' ? 'studio.probe.direct' : 'studio.probe.cli'
+}
+
+/**
+ * 访问方式状态的展示文案键：直连模式下 ok/failed 分别表示「直连正常 / 直连未登录」，
+ * CLI 模式沿用通用的正常/异常文案。
+ */
+export function accessStatusKey(transport, status) {
+  if (transport !== 'direct') {
+    if (status === 'ok') return 'value.ok'
+    if (status === 'failed') return 'value.failed'
+    return 'value.unknown'
+  }
+  if (status === 'ok') return 'studio.probe.directOk'
+  if (status === 'failed') return 'studio.probe.directLoginRequired'
+  return 'value.unknown'
+}
+
+/**
+ * 访问方式状态的展示值：CLI 模式看 cli 探测；直连模式不依赖本机 CLI，
+ * 以账号（auth）探测为准——登录成功才算「直连正常」，401/403 算「直连未登录」。
+ */
+export function accessStatusOf(status, transport) {
+  if (!status || typeof status !== 'object') return 'unknown'
+  if (transport !== 'direct') return status.cli || 'unknown'
+  if (status.auth === 'ok') return 'ok'
+  if (status.auth === 'failed') return 'failed'
+  return 'unknown'
 }
 
 /**
  * 把 /probe 的响应体归一化成一次检查结果。
  * Host 固定回 HTTP 200，成败只看 payload.ok 与 payload.probe.auth.ok；
  * 响应体缺字段时按失败处理，绝不会被当成成功。
+ * options.transport 决定直连模式下 cli 失败归类（见 probeFailureCode）。
  */
-export function probeOutcomeOf(payload) {
+export function probeOutcomeOf(payload, options = {}) {
   const data = payload && typeof payload === 'object' ? payload : {}
   const probe = data.probe && typeof data.probe === 'object' ? data.probe : null
   if (data.ok === true) return { ok: true, probe, code: '', detail: '' }
-  const code = probeFailureCode(probe) || 'probe_failed'
+  const code = probeFailureCode(probe, options) || 'probe_failed'
   return { ok: false, probe, code, detail: probeFailureDetail(probe) }
 }
 

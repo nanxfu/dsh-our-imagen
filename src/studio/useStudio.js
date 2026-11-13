@@ -16,7 +16,9 @@ import { useHostState } from '../hooks/useHostState.js'
 import { translator } from '../i18n.js'
 import { guidanceDetailOf, guidanceKindOf, isConnectionCode } from '../logic/guidance.js'
 import { iteratePatch, rerollOverrides, retryOverrides } from '../logic/generate.js'
+import { accountStatusOf } from '../logic/probe.js'
 import { useChatThread } from './hooks/useChatThread.js'
+import { useKaggleLogin } from './hooks/useKaggleLogin.js'
 import { useSessionControl } from './hooks/useSessionControl.js'
 import { useStudioForm } from './hooks/useStudioForm.js'
 import { useStudioUi } from './hooks/useStudioUi.js'
@@ -62,6 +64,9 @@ export function useStudio(props) {
 
   const ui = useStudioUi({ t, initialView, initialPanelMode })
   const control = useSessionControl({ t, host, ui, alive })
+  // 直连登录会话：成功（done）后重跑一次 probe，把账号与配额状态刷成最新。
+  // CLI 模式下 hook 不会发起任何请求（指引卡使用原有「复制登录命令」动作）。
+  const kaggleLogin = useKaggleLogin({ t, ui, onDone: () => control.runProbe() })
   const form = useStudioForm({ t, isEn, alive, ui, preset: { presets, defaultPreset }, initialPrompt })
   // generate 是函数声明（提升），chat 在事件回调里调用时已完成初始化。
   const chat = useChatThread({ t, isEn, alive, state, form, generate })
@@ -73,7 +78,7 @@ export function useStudio(props) {
   }
 
   // 组件层拿到的云端域：宿主派生状态 + 启停动作，startSession 已绑定当前表单预设。
-  const compute = { ...control, presets, defaultPreset, startSession, retryHost }
+  const compute = { ...control, presets, defaultPreset, startSession, retryHost, kaggleLogin }
 
   async function generate(overrides, options = {}) {
     if (sending) return
@@ -158,11 +163,16 @@ export function useStudio(props) {
   }
 
   // 异常指引：操作失败优先，其次是会话错误，最后是当前任务的错误。
-  const guidanceCode =
+  const rawGuidanceCode =
     (ui.error && ui.error.code) ||
     (control.session && control.session.error && control.session.error.code) ||
     (control.focusedJob && control.focusedJob.status === 'failed' && control.focusedJob.error && control.focusedJob.error.code) ||
     ''
+  // 账号已被证明确实可用（探测通过或会话能跑）时，不再因旧快照里的 auth_required / cli_missing
+  // 弹登录卡——直连模式下刚登录成功、旧会话错误还没被覆盖时最容易出现这种自相矛盾的提示。
+  const authProven = accountStatusOf(control.probe, control.sessionState) === 'ok'
+  const suppressAuth = authProven && (rawGuidanceCode === 'auth_required' || rawGuidanceCode === 'cli_missing')
+  const guidanceCode = suppressAuth ? '' : rawGuidanceCode
   // 网络层错误不展示浏览器原文（"Failed to fetch" 对用户没有信息量），
   // 换成客户端自己的可读文案；其它错误仍以 Host/远端的原文为准。
   const guidanceDetail = isConnectionCode(guidanceCode)
