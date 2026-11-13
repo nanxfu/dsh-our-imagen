@@ -21,6 +21,7 @@ import { createLogRoutes } from './lib/routes/logs.js'
 import { createPromptRoutes } from './lib/routes/prompts.js'
 import { createSessionRoutes } from './lib/routes/session.js'
 import { createSettingsRoutes } from './lib/routes/settings.js'
+import { createUiStateRoutes } from './lib/routes/ui-state.js'
 import { SessionManager } from './lib/session.js'
 import { createSettingsStore } from './lib/settings.js'
 import { registerTools } from './lib/tools.js'
@@ -156,14 +157,28 @@ export function apply(ctx, config = {}) {
     ...createPromptRoutes({ ctx, log }),
     // 运行设置：GET 读脱敏视图 / POST 保存覆盖项（hfToken 只回布尔与来源）。
     ...createSettingsRoutes({ settings, session, log }),
+    // 工作台界面状态：GET 读归一化视图 / POST 合并白名单字段（同一 path、method 分发）。
+    ...createUiStateRoutes({ ctx, log }),
   ])
 
   registerTools(ctx, { queue, session, defaultPreset })
 
-  // DSH 重启或插件热重载后，远端 Kernel 可能仍在消耗 Kaggle 配额：从工作区
-  // <workspace>/.imagen/session.json 尝试恢复连接；无法恢复时由 restore 自行清理记录，
-  // 内部吞掉全部异常，不阻塞插件加载。
-  void session.restore()
+  // DSH 重启或插件热重载后：
+  //  1. 先补发上次卸载失败的关机（释放 Kernel 占用的每周 GPU 配额）；
+  //  2. 再尝试从 <workspace>/.imagen/session.json 恢复仍在运行的会话（restore 自行清理记录）。
+  // 两步顺序执行、各自吞掉异常，都不阻塞插件加载。
+  void (async () => {
+    try {
+      await session.cleanupPendingSession()
+    } catch (error) {
+      log.warn('启动补清理待关机会话异常（已忽略）', error?.message ?? error)
+    }
+    try {
+      await session.restore()
+    } catch (error) {
+      log.warn('启动恢复会话异常（已忽略）', error?.message ?? error)
+    }
+  })()
 
   ctx.effect(
     () => () => {

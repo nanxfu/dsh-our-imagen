@@ -7,7 +7,8 @@
  *   B. 健康恢复：endpoint 探活成功 → ready（含 tunnelProvider），warming 阶段按 tick 轮询；
  *   C. 地址死亡但 Kernel 仍 RUNNING：用保存的 topic 回 ntfy 重新会合，接管新 endpoint；
  *   D. Kernel 已结束 / 没有 endpoint+topic：尽力 shutdown 远端并清理记录，restore 返回 null；
- *   E. 生命周期：stop() 删除记录；dispose() 关机成功才删、失败保留；fail() 保留记录；
+ *   E. 生命周期：stop() 删除记录；dispose() 关机失败 → 同步写待清理记录并删会话记录；
+ *      fail() 保留记录；
  *   F. restore 与 stop / start 竞态：过期恢复不写回状态、不挂僵尸定时器；
  *   G. token 只落盘：快照与日志里都不出现。
  *
@@ -17,12 +18,18 @@
  * 运行：node test/session-restore.mjs
  */
 
+import { existsSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { SessionManager } from '../lib/session.js'
+import {
+  clearPendingCleanup,
+  pendingCleanupPath,
+  readPendingCleanup,
+} from '../lib/session/pending-cleanup.js'
 import {
   SESSION_RECORD_VERSION,
   buildSessionRecord,
@@ -549,13 +556,14 @@ async function scenarioStopDeletesRecord() {
 }
 
 async function scenarioDisposeBranches() {
-  console.log('\n── E2 dispose()：关机成功才删记录，失败保留')
+  console.log('\n── E2 dispose()：关机失败 → 同步写待清理记录并删会话记录')
   await withWorkspace(async (workspace) => {
     const ctx = makeCtx(workspace)
     const health = await startFakeHealth({ phase: 'ready' })
     const path = sessionRecordPath(ctx)
+    const pendingPath = pendingCleanupPath(ctx)
 
-    // 成功：requestShutdown 返回 true → 删掉记录。
+    // 成功：requestShutdown 返回 true → 清掉待清理记录与会话记录。
     const ok = fakeDeps()
     const okSession = makeSession({ workspace, deps: ok.deps })
     try {
@@ -563,7 +571,8 @@ async function scenarioDisposeBranches() {
       await okSession.restore()
       okSession.dispose()
       await okSession.disposeCleanup
-      check('关机成功 → 记录被删除', !(await exists(path)))
+      check('关机成功 → 会话记录被删除', !(await exists(path)))
+      check('关机成功 → 不残留待清理记录', !(await exists(pendingPath)))
       check(
         '关机成功 → 通知带 endpoint/token',
         ok.calls.shutdown.length === 1 && ok.calls.shutdown[0].token === TOKEN,
@@ -571,24 +580,41 @@ async function scenarioDisposeBranches() {
       )
     } finally {
       okSession.dispose()
+      await clearPendingCleanup(ctx)
     }
 
-    // 失败：requestShutdown 返回 false → 保留记录，下次启动继续清理。
+    // 失败：requestShutdown 返回 false → 同步写待清理记录、删会话记录（下次启动补发关机）。
     const failed = fakeDeps({ shutdown: false })
     const failedSession = makeSession({ workspace, deps: failed.deps })
     try {
       await writeSessionRecord(ctx, recordOf({ endpointUrl: health.endpoint }))
       await failedSession.restore()
       failedSession.dispose()
+      // dispose 路径必须同步落盘：不 await 收尾承诺就能看到记录。
+      check('关机失败 → dispose() 返回时待清理记录已落盘', existsSync(pendingPath))
       await failedSession.disposeCleanup
-      check('关机失败 → 记录保留', await exists(path))
-      check('保留的记录仍可读取', (await readSessionRecord(ctx))?.token === TOKEN)
+      const pending = await readPendingCleanup(ctx)
+      check(
+        '待清理记录内容可用于补发关机',
+        pending?.version === 1 &&
+          pending?.endpointUrl === health.endpoint &&
+          pending?.token === TOKEN &&
+          pending?.kernelId === KERNEL_ID &&
+          pending?.topic === TOPIC &&
+          pending?.presetId === PRESET &&
+          pending?.attempts === 0 &&
+          typeof pending?.savedAt === 'string',
+        JSON.stringify({ ...pending, token: pending?.token ? '<token>' : null }),
+      )
+      check('关机失败 → 会话记录被删除（交由下次启动补清理，不被 restore 接手）', !(await exists(path)))
+      check('关机失败 → 待清理记录保留', await exists(pendingPath))
     } finally {
       failedSession.dispose()
+      await clearPendingCleanup(ctx)
       await clearSessionRecord(ctx)
     }
 
-    // 异常：requestShutdown 抛错同样按失败处理（保留记录）。
+    // 异常：requestShutdown 抛错同样按失败处理（保留待清理记录）。
     const threw = fakeDeps({
       shutdown: () => {
         throw new Error('网络已断开')
@@ -599,10 +625,13 @@ async function scenarioDisposeBranches() {
       await writeSessionRecord(ctx, recordOf({ endpointUrl: health.endpoint }))
       await threwSession.restore()
       threwSession.dispose()
+      check('关机通知抛错 → 待清理记录已落盘', existsSync(pendingPath))
       await threwSession.disposeCleanup
-      check('关机通知抛错 → 记录保留', await exists(path))
+      check('关机通知抛错 → 待清理记录保留', await exists(pendingPath))
+      check('关机通知抛错 → 会话记录被删除', !(await exists(path)))
     } finally {
       threwSession.dispose()
+      await clearPendingCleanup(ctx)
       await clearSessionRecord(ctx)
       await health.close()
     }
@@ -716,7 +745,7 @@ async function main() {
   await scenario('D1 Kernel 已结束清理', scenarioKernelEndedCleanup)
   await scenario('D2 无地址线索清理', scenarioNoRendezvousCleanup)
   await scenario('E1 stop 删除记录', scenarioStopDeletesRecord)
-  await scenario('E2 dispose 成功/失败分支', scenarioDisposeBranches)
+  await scenario('E2 dispose 待清理记录分支', scenarioDisposeBranches)
   await scenario('E3 fail 保留记录', scenarioFailKeepsRecord)
   await scenario('F1 restore 与 stop 竞态', scenarioRestoreStopRace)
   await scenario('F2 restore 与 start 竞态', scenarioRestoreStartRace)
