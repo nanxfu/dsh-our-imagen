@@ -5,17 +5,19 @@
  * 组件只负责画，`test/check-client-logic.mjs` 可以脱离浏览器覆盖这些规则。
  */
 
+import { DIAGNOSTICS, LOGS } from '../../shared/contract.js'
+
 import { shortText } from './guidance.js'
 import { probeStatusOf } from './probe.js'
 
-/** 客户端保留的最大日志行数（与远端 daemon 的日志环一致）。 */
-export const LOG_LINE_LIMIT = 400
-/** Host 本地日志路由固定返回的尾部行数（与 lib/routes/logs.js 对齐）。 */
-export const HOST_LOG_LINE_LIMIT = 120
+/** 客户端保留的最大日志行数（与远端 daemon 的日志环一致，口径见契约 LOGS）。 */
+export const LOG_LINE_LIMIT = LOGS.remoteLineLimit
+/** Host 本地日志路由固定返回的尾部行数（与 lib/routes/logs.js 同口径）。 */
+export const HOST_LOG_LINE_LIMIT = LOGS.hostLineLimit
 /** 诊断信息里附带的最近远端日志行数。 */
-export const DIAG_LOG_TAIL = 60
+export const DIAG_LOG_TAIL = LOGS.diagRemoteTail
 /** 诊断信息里附带的最近 Host 本地日志行数（比远端更短，控制粘贴长度）。 */
-export const DIAG_HOST_LOG_TAIL = 40
+export const DIAG_HOST_LOG_TAIL = LOGS.diagHostTail
 
 /** 会话快照里不应出现在诊断文本中的字段（token 只留在 Host 内存里）。 */
 const SENSITIVE_KEY = /token|secret|password|authorization|cookie/i
@@ -42,12 +44,47 @@ function reasonOf(code, message) {
   }
 }
 
+/** 环境指纹允许的标量类型：字符串（版本号等）、有限数字、布尔开关。 */
+function isEnvScalar(value) {
+  if (typeof value === 'string' || typeof value === 'boolean') return true
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+/**
+ * 归一响应里的诊断环境指纹 `data.env`（契约见 shared/contract.js 的 DIAGNOSTICS）。
+ *
+ * 只按 `envFields` 白名单取 string / number / boolean，按 `timingFields` 白名单取
+ * 有限数字；未知键、对象 / 数组 / null / NaN 一律丢弃，也不做字符串化，
+ * 保证诊断文本里不会出现任意对象或配置原文。入参不是对象时返回空对象。
+ *
+ * @param {unknown} value
+ * @returns {{ [field: string]: string | number | boolean, timings?: object }}
+ */
+export function readDiagnosticEnv(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const env = {}
+  for (const field of DIAGNOSTICS.envFields) {
+    if (isEnvScalar(value[field])) env[field] = value[field]
+  }
+  const timings = value.timings
+  if (timings && typeof timings === 'object' && !Array.isArray(timings)) {
+    const summary = {}
+    for (const field of DIAGNOSTICS.timingFields) {
+      const item = timings[field]
+      if (typeof item === 'number' && Number.isFinite(item)) summary[field] = item
+    }
+    if (Object.keys(summary).length > 0) env.timings = summary
+  }
+  return env
+}
+
 /**
  * 归一端点响应：HTTP 层失败 / 业务不可用（ok:false）/ 成功三种情况。
  * Host 的日志路由始终回 HTTP 200，因此不能只看 request() 的 ok。
  *
- * `hostLines` 是 Host 本地滚动日志的尾部（已脱敏，固定最多 120 行），与远端
- * `lines` 分开返回、不混排；老路由没有该字段时按空数组处理，保持向后兼容。
+ * `hostLines` 是 Host 本地滚动日志的尾部（已脱敏，固定最多 LOGS.hostLineLimit 行），
+ * 与远端 `lines` 分开返回、不混排；老路由没有该字段时按空数组处理，保持向后兼容。
+ * `env` 是诊断环境指纹（白名单过滤后），缺失时为空对象，老路由同样兼容。
  */
 export function readLogsPayload(result) {
   if (!result || result.ok !== true) {
@@ -56,6 +93,7 @@ export function readLogsPayload(result) {
       lines: [],
       hostLines: [],
       next: null,
+      env: {},
       reason: reasonOf(result && result.code, result && result.message),
     }
   }
@@ -65,8 +103,9 @@ export function readLogsPayload(result) {
     ? data.hostLines.filter(isLogLine).slice(-HOST_LOG_LINE_LIMIT)
     : []
   const next = Number.isFinite(data.next) && data.next >= 0 ? Math.floor(data.next) : null
-  if (data.ok === true) return { ok: true, lines, hostLines, next, reason: null }
-  return { ok: false, lines, hostLines, next, reason: reasonOf(data.code, data.message) }
+  const env = readDiagnosticEnv(data.env)
+  if (data.ok === true) return { ok: true, lines, hostLines, next, env, reason: null }
+  return { ok: false, lines, hostLines, next, env, reason: reasonOf(data.code, data.message) }
 }
 
 /** 时间值（ISO 字符串 / 毫秒数 / Date）→ 本地 HH:mm；无法解析时返回空串。 */
@@ -170,12 +209,53 @@ function lastJobBlock(job) {
 }
 
 /**
+ * 环境指纹 / 阶段耗时在诊断文本里的键名。
+ * 有意使用英文键名且不进字典：这些行会被直接贴进 Issue，保持与代码、日志同形。
+ */
+const ENV_LABELS = {
+  platform: 'env.platform',
+  nodeVersion: 'env.node',
+  hasProxyEnv: 'env.proxy',
+  hasFallbackTunnel: 'env.fallbackTunnel',
+  hasCustomDatasets: 'env.customDatasets',
+  hasPipConstraints: 'env.pipConstraints',
+  hasHfToken: 'env.hfToken',
+}
+
+const TIMING_LABELS = {
+  sessionStartMs: 'timings.sessionStartMs',
+  sessionUptimeMs: 'timings.sessionUptimeMs',
+  readyUptimeMs: 'timings.readyUptimeMs',
+}
+
+/** 标量 → 诊断文本值；缺失 / 空串统一写 —。 */
+function diagnosticValue(value) {
+  if (value === null || value === undefined || value === '') return '—'
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  return String(value)
+}
+
+/** 环境指纹段：只从白名单取标量，绝不拼接任意对象（入参再过滤一次，防御上游误传）。 */
+function envBlock(value) {
+  const env = readDiagnosticEnv(value)
+  const rows = Object.entries(ENV_LABELS).map(
+    ([field, label]) => `${label}: ${diagnosticValue(env[field])}`,
+  )
+  const timings = env.timings && typeof env.timings === 'object' ? env.timings : {}
+  for (const field of DIAGNOSTICS.timingFields) {
+    rows.push(`${TIMING_LABELS[field]}: ${diagnosticValue(timings[field])}`)
+  }
+  return rows
+}
+
+/**
  * 拼装可一键复制的诊断信息（纯文本）。
  *
  * @param {(key: string) => string} t 翻译函数，只用于首行标题
  * @param {{ version?: string, session?: object, probe?: object, probeLastGood?: object,
  *           probeLastGoodAt?: string, queue?: object, lastJob?: object, lines?: string[],
- *           hostLogs?: string[], now?: number }} input
+ *           hostLogs?: string[], env?: object, now?: number }} input
+ *   env 为 GET /logs 返回的诊断环境指纹（白名单过滤后）；缺失时各字段写 —。
  */
 export function buildDiagnostics(t, input = {}) {
   const source = input || {}
@@ -191,6 +271,7 @@ export function buildDiagnostics(t, input = {}) {
   const rows = [
     `${t('studio.logs.diag.title')} · ${new Date(now).toISOString()}`,
     `version: ${source.version || '—'}`,
+    ...envBlock(source.env),
     ...sessionBlock(session),
     ...probeBlock(probe),
     `probeLastGoodAt: ${source.probeLastGoodAt || '—'}`,

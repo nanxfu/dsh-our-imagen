@@ -4,6 +4,7 @@ import React from 'react'
 
 import { Icon } from './icons.jsx'
 import { formatDuration, jobElapsed } from '../logic/format.js'
+import { isJobCancellable, isJobCancelling, jobCardClass } from '../logic/jobs.js'
 import { jobProgressText } from '../logic/status.js'
 
 /**
@@ -12,11 +13,15 @@ import { jobProgressText } from '../logic/status.js'
  * 队列串行执行，但待执行的任务可能不止一个：每个任务各占一张卡，按真实执行顺序
  * 从左到右排列。第一张是正在跑的（带显影扫描光与已用时间），其余是排队中的
  * （虚线取景框里写位次，附已排队时长）——只展示真实阶段，不画假进度。
+ *
+ * 每张卡带取消按钮：queued / waiting-session 立即出队，running 合作式停止
+ * （当前这张画完后不再提交剩余张数）。取消请求发出后按钮显示「正在停止…」并禁用，
+ * 避免重复提交。
  */
 export function Filmstrip(props) {
   const { t, ui, compute, library, now } = props
   const { setView } = ui
-  const { pendingJobs, sessionState, startSession, status } = compute
+  const { pendingJobs, sessionState, startSession, status, cancelJob, cancellingIds } = compute
   const stopped = Boolean(status && status.stopped)
   const { batches, selected, selectImage } = library
 
@@ -27,12 +32,14 @@ export function Filmstrip(props) {
       <div className="ofs-roll">
         {pendingJobs.map((job, index) => {
           const queued = job.status === 'queued'
+          const cancelling = isJobCancelling(job, cancellingIds)
+          const cancelLabel = t(cancelling ? 'studio.job.cancelling' : 'studio.job.cancel')
           // 时间缺失（老快照没有 createdAt）时宁可不写，也不要显示成「0.0秒」或「—」。
           const elapsedMs = jobElapsed(job, now)
           const elapsed = Number.isFinite(elapsedMs) ? formatDuration(t, elapsedMs) : ''
           return (
             <div
-              className={queued ? 'ofs-ghost is-queued' : 'ofs-ghost'}
+              className={jobCardClass(job, cancellingIds)}
               key={job.id}
               title={job.params && typeof job.params.prompt === 'string' ? job.params.prompt : undefined}
             >
@@ -45,6 +52,18 @@ export function Filmstrip(props) {
                 <span className="ofs-ghost-label">{jobProgressText(t, job, sessionState)}</span>
                 {elapsed ? <span className="ofs-ghost-time">{elapsed}</span> : null}
               </span>
+              {isJobCancellable(job) && typeof cancelJob === 'function' ? (
+                <button
+                  type="button"
+                  className="ofs-ghost-cancel"
+                  aria-label={cancelLabel}
+                  title={cancelling ? cancelLabel : t('studio.job.cancelHint')}
+                  disabled={cancelling}
+                  onClick={() => cancelJob(job.id)}
+                >
+                  {cancelLabel}
+                </button>
+              ) : null}
             </div>
           )
         })}

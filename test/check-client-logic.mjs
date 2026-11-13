@@ -30,7 +30,7 @@ import { NOTICE_TITLE_PREFIX, completionNotice, isCompletion, stripNoticePrefix 
 import { styles, token } from '../src/theme.js'
 import { ACTIVE_STATUS, TRANSIENT_SESSION, PHASE_STATE, NS } from '../src/constants.js'
 import { DEFAULT_RATIOS, STYLE_CAPSULES } from '../src/studio/presets.js'
-import { RATIO_IDS, STYLE_IDS, LIMITS } from '../shared/contract.js'
+import { RATIO_IDS, STYLE_IDS, LIMITS, LOGS } from '../shared/contract.js'
 
 const t = fallbackTranslate('zh')
 const te = fallbackTranslate('en')
@@ -474,19 +474,47 @@ await check('最终请求体带风格后缀', () => {
   assert.equal(empty.prompt, '', '没有原文时不产生只有后缀的提示词')
 })
 
-await check('风格切换同步负向提示词', () => {
+await check('负向分层：切换/取消风格只增删风格层，不清模型负向词', () => {
   const capsule = { id: 'film', negative: 'blurry, low quality' }
-  const on = logic.toggleStyle({ styleId: '', negative: '' }, capsule)
-  assert.equal(on.styleId, 'film')
-  assert.equal(on.negative, 'blurry, low quality')
-  const off = logic.toggleStyle(on, capsule)
+  // 旧 bug：取消风格时把「恰好等于风格负向词」的整段文本清空，模型推荐词跟着丢。
+  const selected = {
+    styleId: 'film',
+    negative: 'extra limbs, blurry, low quality, my own',
+    negativeLayers: { model: 'extra limbs', style: 'blurry, low quality', user: 'my own' },
+  }
+  const off = logic.toggleStyle(selected, capsule)
   assert.equal(off.styleId, '')
-  assert.equal(off.negative, '', '取消风格时收回它写入的负向')
-  const edited = logic.toggleStyle({ styleId: 'film', negative: 'my own' }, capsule)
-  assert.equal(edited.styleId, '')
-  assert.equal(edited.negative, 'my own', '用户改过的负向保留')
-  const keep = logic.toggleStyle({ styleId: '', negative: 'my own' }, capsule)
-  assert.equal(keep.negative, 'my own')
+  assert.equal(off.negativeLayers.style, '', '取消风格只清风格层')
+  assert.equal(off.negativeLayers.model, 'extra limbs', '取消风格不得清除模型负向词')
+  assert.equal(off.negativeLayers.user, 'my own')
+  assert.equal(off.negative, 'extra limbs, my own')
+
+  // 选中风格：追加风格层，模型层与用户层保留。
+  const base = {
+    styleId: '',
+    negative: 'extra limbs, my own',
+    negativeLayers: { model: 'extra limbs', style: '', user: 'my own' },
+  }
+  const on = logic.toggleStyle(base, capsule)
+  assert.equal(on.styleId, 'film')
+  assert.equal(on.negativeLayers.model, 'extra limbs')
+  assert.equal(on.negativeLayers.style, 'blurry, low quality')
+  assert.equal(on.negativeLayers.user, 'my own')
+  assert.equal(on.negative, 'extra limbs, blurry, low quality, my own')
+
+  // 三层合并按 model → style → user 顺序、不区分大小写去重。
+  assert.equal(
+    logic.mergeNegativeLayers({ model: 'Blurry, low quality', style: 'blurry, watermark', user: 'watermark, my own' }),
+    'Blurry, low quality, watermark, my own',
+  )
+  assert.equal(logic.mergeNegativeLayers(null), '')
+  assert.equal(logic.mergeNegativeLayers({ model: ' a ， b ', style: 'b', user: '' }), 'a, b', '全角逗号与空格也归一')
+  assert.deepEqual(
+    logic.normalizeNegativeLayers({ model: '  a ', style: 3, user: null }),
+    { model: 'a', style: '', user: '' },
+    '非法层值按空串处理',
+  )
+  assert.deepEqual(logic.normalizeNegativeLayers(null), { model: '', style: '', user: '' })
 })
 
 await check('画面比例与风格 id 由契约唯一登记', () => {
@@ -499,36 +527,65 @@ await check('画面比例与风格 id 由契约唯一登记', () => {
   }
 })
 
-await check('切换预设回填 negativeHint', () => {
+await check('切换预设按层替换模型负向词', () => {
   const presets = [
     { id: 'sdxl-lightning', size: 1024, steps: 4, cfg: 0, negativeHint: 'blurry, low quality, deformed, extra limbs' },
     { id: 'sdxl-base', size: 1024, steps: 25, cfg: 7, negativeHint: 'blurry, low quality, deformed, extra limbs' },
     { id: 'animagine-xl-3.1', size: 1024, steps: 28, cfg: 7, negativeHint: 'nsfw, lowres, watermark' },
   ]
-  const form = { presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0, negative: '' }
-
-  const filled = logic.presetSelectPatch(presets[2], form, presets)
-  assert.equal(filled.presetId, 'animagine-xl-3.1')
-  assert.equal(filled.steps, 28, '套用新预设推荐步数')
-  assert.equal(filled.cfg, 7, '套用新预设推荐引导强度')
-  assert.equal(filled.negative, 'nsfw, lowres, watermark', '负向为空时回填新预设的 negativeHint')
-
-  // 负向仍等于上一个预设的推荐值：属于系统写入，跟随切换。
-  const inherited = logic.presetSelectPatch(
-    presets[2],
-    { ...form, negative: 'blurry, low quality, deformed, extra limbs' },
-    presets,
-  )
-  assert.equal(inherited.negative, 'nsfw, lowres, watermark')
-
-  // 用户自己写过的负向提示词不覆盖。
-  const custom = logic.presetSelectPatch(presets[2], { ...form, negative: 'my own words' }, presets)
-  assert.equal(Object.prototype.hasOwnProperty.call(custom, 'negative'), false)
-
-  // 新预设没有推荐负向时不要写入空值把用户的草稿清掉。
   const flux = { id: 'flux2-klein-4b', size: 1024, steps: 4, cfg: 1, negativeHint: '' }
-  const noHint = logic.presetSelectPatch(flux, { ...form, negative: 'keep me' }, [...presets, flux])
-  assert.equal(Object.prototype.hasOwnProperty.call(noHint, 'negative'), false)
+  const all = [...presets, flux]
+  const form = {
+    presetId: 'sdxl-lightning',
+    width: 1024,
+    height: 1024,
+    steps: 4,
+    cfg: 0,
+    styleId: '',
+    negative: 'blurry, low quality, deformed, extra limbs, my own',
+    negativeLayers: { model: 'blurry, low quality, deformed, extra limbs', style: '', user: 'my own' },
+  }
+
+  // 切换到没有 negativeHint 的预设：模型层清空，用户层保留（旧 bug：残留上一个预设的旧词）。
+  const cleared = logic.presetSelectPatch(flux, form, all)
+  assert.equal(cleared.presetId, 'flux2-klein-4b')
+  assert.equal(cleared.negativeLayers.model, '', '新预设无 negativeHint 时模型层必须清空')
+  assert.equal(cleared.negativeLayers.user, 'my own', '用户层原样保留')
+  assert.equal(cleared.negative, 'my own', '展示文本不得残留旧预设的负向词')
+
+  // 切换到有 negativeHint 的预设：模型层整层替换，用户层保留。
+  const swapped = logic.presetSelectPatch(presets[2], form, all)
+  assert.equal(swapped.negativeLayers.model, 'nsfw, lowres, watermark')
+  assert.equal(swapped.negativeLayers.user, 'my own')
+  assert.equal(swapped.negative, 'nsfw, lowres, watermark, my own')
+  // 推荐尺寸 / 步数 / 引导强度照旧套用。
+  assert.equal(swapped.steps, 28, '套用新预设推荐步数')
+  assert.equal(swapped.cfg, 7, '套用新预设推荐引导强度')
+  assert.equal(swapped.width, 1024)
+  assert.equal(swapped.height, 1024)
+
+  // 风格仍选中时保留风格层；风格已取消时不保留残留风格词。
+  const styled = logic.presetSelectPatch(presets[2], {
+    ...form,
+    styleId: 'film',
+    negative: 'blurry, grain, text, my own',
+    negativeLayers: { model: 'blurry', style: 'grain, text', user: 'my own' },
+  }, all)
+  assert.equal(styled.negativeLayers.style, 'grain, text', '风格仍选中时保留风格层')
+  assert.equal(styled.negative, 'nsfw, lowres, watermark, grain, text, my own')
+
+  // 旧状态只有 negative、没有层数据：等于上一个预设推荐值时按模型层识别。
+  const legacy = logic.presetSelectPatch(presets[2], {
+    ...form,
+    negativeLayers: undefined,
+    negative: 'blurry, low quality, deformed, extra limbs',
+  }, all)
+  assert.equal(legacy.negativeLayers.model, 'nsfw, lowres, watermark')
+  assert.equal(legacy.negativeLayers.user, '', '旧状态里的模型推荐值不应被误当用户词')
+  // 旧状态里用户自己写的内容按 user 层保留。
+  const legacyUser = logic.presetSelectPatch(flux, { ...form, negativeLayers: undefined, negative: 'my own' }, all)
+  assert.equal(legacyUser.negativeLayers.model, '')
+  assert.equal(legacyUser.negativeLayers.user, 'my own')
 
   // 越界推荐值按契约钳制；非法入参不产生补丁。
   const oversized = logic.presetSelectPatch(
@@ -541,6 +598,68 @@ await check('切换预设回填 negativeHint', () => {
   assert.equal(oversized.steps, LIMITS.steps.max)
   assert.equal(oversized.cfg, LIMITS.cfg.max)
   assert.deepEqual(logic.presetSelectPatch(null, form, presets), {})
+})
+
+await check('负向层数据与展示文本同步（用户编辑 / 历史回填）', () => {
+  const form = {
+    prompt: '雨夜街景',
+    negative: '',
+    negativeLayers: { model: '', style: '', user: '' },
+  }
+  // 用户编辑输入框：整段写入 user 层，展示文本与之一致。
+  const typed = logic.applyNegativePatch(form, { negative: 'my own, blurry' })
+  assert.equal(typed.negative, 'my own, blurry')
+  assert.deepEqual(typed.negativeLayers, { model: '', style: '', user: 'my own, blurry' }, '用户编辑整段写入 user 层')
+  assert.equal(typed.prompt, '雨夜街景', '不相关字段保持')
+  // 三层数据变更：展示文本同步成去重合并结果。
+  const layered = logic.applyNegativePatch(form, {
+    negativeLayers: { model: 'blurry', style: 'text', user: 'blurry, my own' },
+  })
+  assert.equal(layered.negativeLayers.model, 'blurry')
+  assert.equal(layered.negative, 'blurry, text, my own', '展示文本与层数据保持同步')
+  // 普通补丁不动负向。
+  assert.equal(logic.applyNegativePatch(form, { prompt: 'x' }).negative, '')
+  // 提交值以层数据合并结果为准。
+  assert.equal(
+    logic.negativePromptOf({ negativeLayers: { model: 'blurry, low quality', style: 'blurry', user: 'my own' } }),
+    'blurry, low quality, my own',
+  )
+  assert.equal(logic.negativePromptOf({ negative: '  legacy  ' }), 'legacy', '没有层数据时退回旧字段')
+  assert.equal(logic.negativePromptOf(null), '')
+})
+
+await check('一键英译：只有模型真的翻译了才算成功', () => {
+  // 模型可用：返回 trim 后的英文提示词。
+  assert.deepEqual(
+    logic.translateOutcomeOf({ ok: true, mode: 'translate', source: 'model', prompt: '  rainy night street  ' }),
+    { ok: true, prompt: 'rainy night street' },
+  )
+  // source='local' 表示模型不可用、prompt 还是原文：必须判为未翻译，不能写回表单。
+  assert.equal(logic.translateOutcomeOf({ ok: true, mode: 'translate', source: 'local', prompt: '雨夜街景' }).ok, false)
+  assert.equal(logic.translateOutcomeOf({ source: 'model', prompt: '   ' }).ok, false, '空译文本不算成功')
+  // 旧宿主忽略 mode 时返回 refine 结构（没有 prompt），同样不能假装成功。
+  assert.equal(logic.translateOutcomeOf({ ok: true, source: 'model', groups: [] }).ok, false)
+  assert.equal(logic.translateOutcomeOf(null).ok, false)
+  assert.equal(logic.translateOutcomeOf(undefined).ok, false)
+})
+
+await check('方形尺寸档位与自定义宽高', () => {
+  // sizeOptions 是「等宽高的方形尺寸」数组，与画幅比例是两行不同概念。
+  assert.deepEqual(logic.presetSizeOptions({ sizeOptions: [768, 1024, 1152], size: 1024 }), [768, 1024, 1152])
+  assert.deepEqual(
+    logic.presetSizeOptions({ sizeOptions: [1024, 768, 1024, 'x', -8], size: 1024 }),
+    [768, 1024],
+    '去重、丢弃非法值并排序',
+  )
+  assert.deepEqual(logic.presetSizeOptions({ size: 1024 }), [1024], '缺 sizeOptions 时回退预设 size')
+  assert.deepEqual(logic.presetSizeOptions({ sizeOptions: [], size: 99999 }), [LIMITS.width.max], '回退值同样按契约钳制')
+  assert.deepEqual(logic.presetSizeOptions(null), [], '没有预设时没有档位')
+  // 自定义宽高：只改传入的一边，按契约边界与 8 的步长钳制。
+  assert.deepEqual(logic.customSizePatch({ width: 99999 }), { width: LIMITS.width.max })
+  assert.deepEqual(logic.customSizePatch({ height: 1 }), { height: LIMITS.height.min })
+  assert.deepEqual(logic.customSizePatch({ width: '1000', height: 253 }), { width: 1000, height: 256 }, '按 8 的倍数对齐')
+  assert.deepEqual(logic.customSizePatch({ width: 'x' }), { width: 1024 }, '非法值回落默认尺寸')
+  assert.deepEqual(logic.customSizePatch({}), {})
 })
 
 await check('中文提示词检测与英文软提示判定', () => {
@@ -653,6 +772,73 @@ await check('重试参数构造', () => {
   assert.equal(logic.retryOverrides(body).prompt, '上一次提交', '没有任务时可用上一次提交的 body')
   assert.equal(logic.retryOverrides({ params: { prompt: '   ' } }), null)
   assert.equal(logic.retryOverrides(null), null)
+})
+
+await check('任务取消：可取消判定、取消中文案与终态收敛', () => {
+  // 三种活动态可取消，终态不再显示取消入口。
+  assert.equal(logic.isJobCancellable({ id: 'a', status: 'queued' }), true)
+  assert.equal(logic.isJobCancellable({ id: 'a', status: 'waiting-session' }), true)
+  assert.equal(logic.isJobCancellable({ id: 'a', status: 'running' }), true)
+  for (const status of ['done', 'failed', 'cancelled']) {
+    assert.equal(logic.isJobCancellable({ id: 'a', status }), false, `${status} 是终态，不应可取消`)
+  }
+  assert.equal(logic.isJobCancellable(null), false)
+  // 取消中 = 宿主已标记 cancelRequested，或本地请求已发出。
+  assert.equal(logic.isJobCancelling({ id: 'a', status: 'running', cancelRequested: true }, []), true)
+  assert.equal(logic.isJobCancelling({ id: 'a', status: 'running' }, ['a']), true)
+  assert.equal(logic.isJobCancelling({ id: 'a', status: 'running' }, ['b']), false)
+  assert.equal(logic.isJobCancelling(null, ['a']), false)
+
+  // 取消中的 running 给「正在停止…」，不提前说「已取消」。
+  const stopping = { id: 'a', status: 'running', stageCode: 'running', cancelRequested: true, progress: { done: 1, total: 4 } }
+  assert.equal(logic.jobProgressText(t, stopping, 'ready'), t('studio.job.cancelling'))
+  assert.equal(logic.jobProgressText(te, stopping, 'ready'), en['studio.job.cancelling'])
+  // 收敛为终态后显示「已取消」；旧宿主没有 stageCode 也能收敛。
+  assert.equal(logic.jobProgressText(t, { status: 'cancelled', stageCode: 'cancelled' }, 'ready'), t('job.status.cancelled'))
+  assert.equal(logic.jobProgressText(t, { status: 'cancelled' }, 'ready'), '已取消')
+  assert.equal(logic.jobStatusText(t, 'cancelled'), '已取消')
+  assert.equal(logic.jobStatusText(te, 'cancelled'), 'Cancelled')
+  // 取消中的卡片另加 is-cancelling 结构类名。
+  assert.equal(logic.jobCardClass({ id: 'a', status: 'running' }, ['a']), 'ofs-ghost is-cancelling')
+  assert.equal(logic.jobCardClass({ id: 'a', status: 'queued' }, []), 'ofs-ghost is-queued')
+
+  // cancelled 不再出现在待执行队列；三个活动态保持原样。
+  const state = {
+    jobs: [
+      { id: 'job-cancelled', status: 'cancelled' },
+      { id: 'job-run', status: 'running', createdAt: at(-30) },
+      { id: 'job-queued', status: 'queued', createdAt: at(-10) },
+    ],
+  }
+  assert.deepEqual(logic.pendingJobsOf(state).map((job) => job.id), ['job-run', 'job-queued'])
+  assert.equal(ACTIVE_STATUS.cancelled, undefined, 'ACTIVE_STATUS 只保留三种活动态')
+})
+
+await check('历史分页：追加去重、offset 递增与 hasMore', () => {
+  const page1 = [{ jobId: 'j1', prompt: '一' }, { jobId: 'j2', prompt: '二' }, { dir: 'dir-3', prompt: '三' }]
+  // 第二页可能因为目录写入时序重复返回上一页的条目，合并必须去重且保持顺序。
+  const page2 = [{ dir: 'dir-3', prompt: '三' }, { jobId: 'j4', prompt: '四' }, { jobId: 'j1', prompt: '一' }]
+  const merged = logic.mergeHistoryPages(page1, page2)
+  assert.deepEqual(merged.map((item) => item.jobId || item.dir), ['j1', 'j2', 'dir-3', 'j4'])
+  assert.equal(logic.mergeHistoryPages(page1, []), page1, '空页返回原数组引用')
+  assert.equal(logic.mergeHistoryPages(null, page2).length, 3)
+  assert.deepEqual(logic.mergeHistoryPages([], null), [])
+  // 去重键优先级：jobId → dir → 时间 + 提示词。
+  assert.equal(logic.historyKeyOf({ jobId: 'j1', dir: 'd1' }), 'job:j1')
+  assert.equal(logic.historyKeyOf({ dir: 'd1' }), 'dir:d1')
+  assert.equal(logic.historyKeyOf({ prompt: 'p', finishedAt: 't' }), 'raw:t|p')
+  assert.equal(logic.historyKeyOf(null), '')
+  // offset 用「本次实际返回条数」推进，不能用去重后的合并长度。
+  assert.equal(logic.nextHistoryOffset(0, LIMITS.history.pageSize), LIMITS.history.pageSize)
+  assert.equal(logic.nextHistoryOffset(LIMITS.history.pageSize, 40), LIMITS.history.pageSize + 40)
+  assert.equal(logic.nextHistoryOffset(undefined, 30), 30)
+  assert.equal(logic.nextHistoryOffset(100, 0), 100)
+  // hasMore：新宿主给字段，旧宿主按「本页是否取满」推断。
+  assert.equal(logic.historyHasMore({ items: [{}], hasMore: true }, 100), true)
+  assert.equal(logic.historyHasMore({ items: [{}], hasMore: false }, 100), false)
+  assert.equal(logic.historyHasMore({ items: new Array(100).fill({}) }, 100), true)
+  assert.equal(logic.historyHasMore({ items: [{}] }, 100), false)
+  assert.equal(logic.historyHasMore(null, 100), false)
 })
 
 await check('探测结果归一化', () => {
@@ -901,7 +1087,8 @@ await check('诊断信息拼装（不含 token）', () => {
     endpointUrl: 'https://tunnel.example.com',
     error: { code: 'remote_error', message: 'boom' },
   }
-  const lines = Array.from({ length: 80 }, (_, index) => `log-${index}`)
+  // 条数与契约 LOGS.diagRemoteTail 同口径：改契约时这里不用再手改数字。
+  const lines = Array.from({ length: LOGS.diagRemoteTail + 40 }, (_, index) => `log-${index}`)
   const hostLogs = Array.from({ length: DIAG_HOST_LOG_TAIL + 20 }, (_, index) => `host-${index}`)
   const text = buildDiagnostics(t, {
     version: '0.4.1',
@@ -927,7 +1114,7 @@ await check('诊断信息拼装（不含 token）', () => {
     'probeLastGood.quota: 3 / 30 h',
     'queue: running=job-1 pending=2',
     'lastJob: job-0 done 6.2s',
-    'logs (last 60/80)',
+    `logs (last ${LOGS.diagRemoteTail}/${lines.length})`,
   ]) {
     assert.ok(text.includes(needle), `诊断文本应包含：${needle}`)
   }
@@ -935,9 +1122,9 @@ await check('诊断信息拼装（不含 token）', () => {
   assert.ok(!text.includes('token:'), '会话里的 token 字段应被剔除')
 
   const tail = text.split('\n').filter((line) => /^log-\d+$/.test(line))
-  assert.equal(tail.length, 60, '只附带最近 60 行日志')
-  assert.ok(tail.includes('log-79'))
-  assert.ok(!tail.includes('log-19'), '更早的日志被截断')
+  assert.equal(tail.length, LOGS.diagRemoteTail, '只附带契约约定的最近日志行数')
+  assert.ok(tail.includes(`log-${lines.length - 1}`))
+  assert.ok(!tail.includes('log-0'), '更早的日志被截断')
 
   // Host 本地日志单独成段，跟在远端日志之后，不混排。
   assert.ok(text.includes(`host logs (last ${DIAG_HOST_LOG_TAIL}/${hostLogs.length}):`), '诊断文本应包含 host logs 段落')

@@ -30,6 +30,8 @@
      worker 执行成功与失败、/health.queue_depth
   18. anima 运行时单份源码（remote/anima_runtime.py，daemon 只留 @@INLINE 标记）与
       run_task 回传实际出图尺寸（PIL image.size，而不是请求宽高）
+  19. 缓存探针：[cache] 日志含 HF 缓存目录/挂载点/剩余空间，token 值不落日志（含路径
+      里夹带 token 时的脱敏），读盘失败降级为 unknown，进程内只打一次
 
 运行：python test/daemon-unit.py
 """
@@ -1261,6 +1263,117 @@ class DiskPrecheckTest(DaemonUnitTest):
     def test_usage_root_falls_back_to_cwd(self) -> None:
         with mock.patch.object(d.os.path, "isdir", return_value=False):
             self.assertEqual(d.disk_usage_root(), os.getcwd())
+
+
+class CacheProbeTest(DaemonUnitTest):
+    """远端 HF 缓存探针：目录/挂载点/剩余空间摘要、token 脱敏、异常降级、只打一次。"""
+
+    def setUp(self) -> None:
+        super().setUp()
+        d._CACHE_PROBE_DONE = False
+
+    def tearDown(self) -> None:
+        d._CACHE_PROBE_DONE = False
+        super().tearDown()
+
+    def test_cache_dir_env_priority(self) -> None:
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+            env = {"HF_HUB_CACHE": first, "HUGGINGFACE_HUB_CACHE": second}
+            with mock.patch.dict(os.environ, env, clear=False):
+                self.assertEqual(d.hf_hub_cache_dir(), os.path.abspath(first))
+                os.environ.pop("HF_HUB_CACHE")
+                self.assertEqual(d.hf_hub_cache_dir(), os.path.abspath(second))
+
+    def test_cache_dir_falls_back_to_default(self) -> None:
+        empty = {name: "" for name in (*d.HF_CACHE_ENV_NAMES, "HF_HOME")}
+        with mock.patch.dict(sys.modules, {"huggingface_hub.constants": None, "huggingface_hub": None}):
+            with mock.patch.dict(os.environ, empty, clear=False):
+                path = d.hf_hub_cache_dir()
+        self.assertTrue(path.endswith(os.path.join(".cache", "huggingface", "hub")), path)
+
+    def test_line_contains_cache_dir_mount_and_free(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            expected = os.path.abspath(directory)
+            with mock.patch.dict(os.environ, {"HF_HUB_CACHE": directory}, clear=False):
+                lines = d.cache_probe_lines()
+        self.assertEqual(len(lines), 1)
+        line = lines[0]
+        self.assertTrue(line.startswith("[cache] "), line)
+        self.assertIn(f"HF_HUB_CACHE={expected}", line)
+        self.assertIn("mount=", line)
+        self.assertIn("free=", line)
+        self.assertIn("GiB", line)
+
+    def test_working_dir_section_reports_mount_and_free(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.dict(os.environ, {"HF_HUB_CACHE": directory}, clear=False):
+                with mock.patch.object(d.os.path, "isdir", return_value=True):
+                    with mock.patch.object(d, "mount_point_of", return_value="/kaggle/working"):
+                        with mock.patch.object(d, "probe_free_gib", return_value="12.3"):
+                            line = d.cache_probe_lines()[0]
+        self.assertIn("/kaggle/working mount=/kaggle/working free=12.3GiB", line)
+
+    def test_mount_point_uses_longest_prefix(self) -> None:
+        points = ["/", "/kaggle", "/kaggle/working"]
+        self.assertEqual(d.longest_mount_prefix("/kaggle/working/hf/hub", points), "/kaggle/working")
+        self.assertEqual(d.longest_mount_prefix("/kaggle/other", points), "/kaggle")
+        self.assertEqual(d.longest_mount_prefix("/tmp/x", points), "/")
+        self.assertEqual(d.longest_mount_prefix("/elsewhere", ["/kaggle"]), "")
+
+    def test_read_mount_points_parses_and_decodes(self) -> None:
+        # /proc/mounts 的路径字段会把空格转义成 \040，需要还原后才能做前缀匹配。
+        table = (
+            "/dev/sda1 / ext4 rw,relatime 0 0\n"
+            "tmpfs /kaggle/\\040working tmpfs rw 0 0\n"
+            "proc /proc proc rw 0 0\n"
+            "garbage-line\n"
+        )
+        with mock.patch("builtins.open", mock.mock_open(read_data=table)):
+            points = d.read_mount_points()
+        self.assertEqual(points, ["/", "/kaggle/ working", "/proc"])
+
+    def test_token_values_never_logged(self) -> None:
+        secret = "hf_TOKEN_VALUE_never_logged"
+        env = {"HF_TOKEN": secret, "HUGGING_FACE_HUB_TOKEN": secret}
+        with tempfile.TemporaryDirectory() as directory:
+            env["HF_HUB_CACHE"] = directory
+            with mock.patch.dict(os.environ, env, clear=False):
+                d._log_cache_probe()
+        logs = self.logs()
+        self.assertIn("[cache]", logs)
+        self.assertIn("HF_HUB_CACHE=", logs)
+        self.assertNotIn(secret, logs)
+
+    def test_token_inside_cache_path_is_redacted(self) -> None:
+        secret = "hf_SECRET_TOKEN_in_path"
+        with tempfile.TemporaryDirectory() as directory:
+            cache_dir = os.path.join(directory, secret, "hub")
+            env = {"HF_HUB_CACHE": cache_dir, "HF_TOKEN": secret}
+            with mock.patch.dict(os.environ, env, clear=False):
+                line = d.cache_probe_lines()[0]
+        self.assertNotIn(secret, line)
+        self.assertIn("***", line)
+
+    def test_probe_degrades_on_usage_error(self) -> None:
+        with mock.patch.object(d.shutil, "disk_usage", side_effect=OSError("denied")):
+            with mock.patch.object(d, "read_mount_points", return_value=None):
+                with mock.patch.object(d.os, "stat", side_effect=OSError("denied")):
+                    lines = d.cache_probe_lines()
+        self.assertEqual(len(lines), 1)
+        self.assertIn("mount=unknown", lines[0])
+        self.assertIn("free=unknown", lines[0])
+
+    def test_mount_point_never_raises(self) -> None:
+        with mock.patch.object(d, "read_mount_points", return_value=None):
+            with mock.patch.object(d.os, "stat", side_effect=OSError("denied")):
+                self.assertEqual(d.mount_point_of("no/such/dir"), "unknown")
+
+    def test_first_load_logs_probe_only_once(self) -> None:
+        with mock.patch.object(d, "build_pipeline", return_value=(object(), "sdxl:org/base")):
+            d.ensure_pipeline({"loader": "sdxl", "base": "org/base"})
+            d.ensure_pipeline({"loader": "sdxl", "base": "org/other"})
+        cache_lines = [line for line in self.logs().splitlines() if "[cache]" in line]
+        self.assertEqual(len(cache_lines), 1, self.logs())
 
 
 class LocalModelTest(DaemonUnitTest):

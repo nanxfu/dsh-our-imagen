@@ -3,7 +3,9 @@
  *
  * 做法：起一个 Node mock daemon 模仿远端协议，再用假的 cordis Context 加载 index.js，
  * 把插件路由挂到本地 HTTP 服务上，然后按 docs/SPEC.md 的真实请求形状跑完整链路：
- *   session/start → generate → 落盘 → history → file → Agent 工具
+ *   session/start → generate（逐张提交）→ 落盘 → history（分页）→ file
+ *   → 任务取消（dequeued / cooperative / already-finished）→ enhance（refine / translate）
+ *   → Agent 工具
  *
  * 运行：node test/host-e2e.mjs
  */
@@ -16,7 +18,7 @@ import { join } from 'node:path'
 
 import { apply as applyPlugin } from '../index.js'
 import { createLogRoutes } from '../lib/routes/logs.js'
-import { VERSION } from '../shared/contract.js'
+import { LIMITS, VERSION } from '../shared/contract.js'
 
 // 1×1 透明 PNG，用于伪造远端返回
 const PNG_B64 =
@@ -41,9 +43,17 @@ function createFakeLlm(reply) {
 
 function startMockDaemon() {
   // 异步 job 协议（v0.5.0）：POST /generate 只入队并返回 202 + job_id，
-  // GET /job?id= 返回状态与结果。这里任务立即完成，Host 第一次轮询就能拿到结果，
-  // 端到端测试不会为了轮询间隔变慢。
-  const state = { generateCalls: 0, healthCalls: 0, lastBody: null, jobs: new Map() }
+  // GET /job?id= 返回状态与结果。任务默认立即完成，端到端测试不会为了轮询间隔变慢。
+  // `hold=true` 时任务停在 running，直到测试改回 false（用于取消用例构造「生成中」状态）。
+  const state = {
+    generateCalls: 0,
+    healthCalls: 0,
+    lastBody: null,
+    generateBodies: [],
+    jobs: new Map(),
+    held: new Map(),
+    hold: false,
+  }
   const server = createServer((req, res) => {
     const send = (code, value) => {
       const body = Buffer.from(JSON.stringify(value))
@@ -75,7 +85,9 @@ function startMockDaemon() {
         state.generateCalls += 1
         const body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
         state.lastBody = body
+        state.generateBodies.push(body)
         const jobId = String(body.jobId || `mock-job-${state.generateCalls}`)
+        // Host 改为逐张提交：正常情况下每个远端 job 的 tasks 只有 1 项。
         const results = body.tasks.map((task) => ({
           name: task.name,
           seed: task.seed,
@@ -87,7 +99,7 @@ function startMockDaemon() {
           png_bytes: 70,
           image_b64: PNG_B64,
         }))
-        state.jobs.set(jobId, {
+        const job = {
           status: 'done',
           job_id: jobId,
           model_id: body.modelId,
@@ -95,7 +107,15 @@ function startMockDaemon() {
           load_seconds: 0.1,
           results,
           error: null,
-        })
+        }
+        if (state.hold) {
+          // 挂起模式：/job 先返回 running，release 后下一次轮询才拿到结果。
+          job.status = 'running'
+          job.progress = { done: 0, total: results.length }
+          job.results = null
+          state.held.set(jobId, results)
+        }
+        state.jobs.set(jobId, job)
         send(202, { status: 'accepted', job_id: jobId, model_id: body.modelId })
       })
       return
@@ -105,6 +125,13 @@ function startMockDaemon() {
       const id = decodeURIComponent(req.url.slice('/job?id='.length))
       const job = state.jobs.get(id)
       if (!job) return send(404, { error: { code: 'unknown_job', message: '任务不存在或已过期' } })
+      const pending = state.held.get(id)
+      if (pending && !state.hold) {
+        state.held.delete(id)
+        job.status = 'done'
+        job.results = pending
+        job.progress = { done: pending.length, total: pending.length }
+      }
       return send(200, job)
     }
 
@@ -219,6 +246,45 @@ async function json(base, path, options) {
   return { status: res.status, body }
 }
 
+/** 轮询 Host 的 GET /job，直到 predicate 成立；超时抛出最后快照便于定位。 */
+async function waitUntilJob(origin, id, predicate, { timeoutMs = 8000, intervalMs = 20 } = {}) {
+  const deadline = Date.now() + timeoutMs
+  let last = null
+  while (Date.now() < deadline) {
+    const res = await json(origin, `/imagen-api/job?id=${encodeURIComponent(id)}`)
+    if (res.status === 200) {
+      last = res.body
+      if (predicate(last)) return last
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+  throw new Error(`等待任务超时：${id}，最后一次快照 ${JSON.stringify(last)}`)
+}
+
+/**
+ * 往工作区播种一条历史产物（模拟历史 GIF 之外的旧记录）：
+ * 写入 01.png + meta.json，目录名以时间戳开头（字典序即时间序）。
+ */
+async function seedHistoryEntry(workspace, dirName, jobId, prompt) {
+  const dir = join(workspace, 'imagen-output', `${dirName}-${jobId}`)
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(dir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+  await writeFile(
+    join(dir, 'meta.json'),
+    JSON.stringify({
+      version: 1,
+      jobId,
+      presetId: 'sdxl-turbo',
+      modelId: 'mock-model',
+      createdAt: '2099-01-01T00:00:00.000Z',
+      finishedAt: '2099-01-01T00:00:01.000Z',
+      params: { prompt, negativePrompt: '', width: 512, height: 512, steps: 3, cfg: 1.5, seed: 1, count: 1 },
+      images: [{ file: '01.png', seed: 1, seconds: 0.1, width: 512, height: 512, prompt }],
+    }),
+    'utf8',
+  )
+}
+
 const results = []
 async function check(name, fn) {
   try {
@@ -250,6 +316,7 @@ async function main() {
       '/imagen-api/session/stop',
       '/imagen-api/generate',
       '/imagen-api/job',
+      '/imagen-api/job/cancel',
       '/imagen-api/jobs',
       '/imagen-api/history',
       '/imagen-api/file',
@@ -342,13 +409,22 @@ async function main() {
     assert.equal(body.params.steps, 3)
     firstJob = body
 
-    assert.equal(mock.state.lastBody.pipeline.loader, 'sdxl')
-    assert.equal(mock.state.lastBody.tasks.length, 2)
+    // 逐张提交（合作式取消的前提）：每张一个远端 job，tasks 只有 1 项，
+    // 幂等键是 `<宿主 jobId>-<两位序号>`，同批 seed 仍按序号递增。
+    const jobBodies = mock.state.generateBodies.filter((entry) => entry.jobId?.startsWith(`${body.id}-`))
+    assert.equal(jobBodies.length, 2, 'count=2 应逐张提交两次')
+    for (const entry of jobBodies) assert.equal(entry.tasks.length, 1, '每个远端 job 只含 1 个 task')
     assert.deepEqual(
-      mock.state.lastBody.tasks.map((task) => task.seed),
+      jobBodies.map((entry) => entry.jobId),
+      [`${body.id}-01`, `${body.id}-02`],
+      '幂等键应带两位序号',
+    )
+    assert.deepEqual(
+      jobBodies.map((entry) => entry.tasks[0].seed),
       [7, 8],
       '同批多张的 seed 应递增',
     )
+    assert.equal(jobBodies[0].pipeline.loader, 'sdxl')
 
     for (const image of body.output.images) {
       const absolute = join(workspace, ...image.path.split('/'))
@@ -400,6 +476,118 @@ async function main() {
     assert.equal(missing.status, 404)
   })
 
+  await check('任务取消：未知 id → 404 not_found；坏 JSON → 400 invalid_body', async () => {
+    const headers = { 'content-type': 'application/json' }
+    const missing = await json(host.origin, '/imagen-api/job/cancel', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ id: 'j_not_exist' }),
+    })
+    assert.equal(missing.status, 404)
+    assert.equal(missing.body.error.code, 'not_found')
+
+    const bad = await json(host.origin, '/imagen-api/job/cancel', {
+      method: 'POST',
+      headers,
+      body: '{"id":',
+    })
+    assert.equal(bad.status, 400)
+    assert.equal(bad.body.error.code, 'invalid_body')
+  })
+
+  await check('任务取消：queued 立即出队（dequeued）、running 合作式收敛（cooperative）、终态 already-finished', async () => {
+    const headers = { 'content-type': 'application/json' }
+    const beforeCalls = mock.state.generateCalls
+    // hold 模式：远端任务停在 running，用来构造「生成中」与「排队中」两个真实状态。
+    mock.state.hold = true
+    let slow = null
+    let queued = null
+    try {
+      const submittedSlow = await json(host.origin, '/imagen-api/generate', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ prompt: '取消测试的慢任务', count: 2, seed: 21 }),
+      })
+      assert.equal(submittedSlow.status, 200, JSON.stringify(submittedSlow.body))
+      slow = submittedSlow.body
+      await waitUntilJob(host.origin, slow.id, (job) => job.status === 'running')
+
+      const submittedQueued = await json(host.origin, '/imagen-api/generate', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ prompt: '取消测试的排队任务', count: 1, seed: 22 }),
+      })
+      queued = submittedQueued.body
+      assert.equal(queued.status, 'queued', `串行队列里应处于 queued，实际 ${queued.status}`)
+
+      // queued：立即出队失效，不占 pending 位置。
+      const dequeued = await json(host.origin, '/imagen-api/job/cancel', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ id: queued.id }),
+      })
+      assert.equal(dequeued.status, 200)
+      assert.equal(dequeued.body.ok, true)
+      assert.equal(dequeued.body.disposition, 'dequeued')
+      assert.equal(dequeued.body.job.status, 'cancelled')
+      assert.equal(dequeued.body.job.stage, '已取消')
+      assert.equal(dequeued.body.job.cancelRequested, false, '终态不再透出未收敛的取消请求')
+      const persisted = await json(host.origin, `/imagen-api/job?id=${queued.id}`)
+      assert.equal(persisted.body.status, 'cancelled', '取消是持久状态，不是一次性响应')
+      const list = await json(host.origin, '/imagen-api/jobs?limit=10')
+      assert.equal(list.body.queue.pending, 0, '取消的排队任务应立即释放 pending 位置')
+
+      // 已取消的任务再取消：already-finished，状态不变。
+      const again = await json(host.origin, '/imagen-api/job/cancel', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ id: queued.id }),
+      })
+      assert.equal(again.body.disposition, 'already-finished')
+      assert.equal(again.body.job.status, 'cancelled')
+
+      // running：合作式停止，不立即改状态，只置 cancelRequested。
+      const cooperative = await json(host.origin, '/imagen-api/job/cancel', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ id: slow.id }),
+      })
+      assert.equal(cooperative.status, 200)
+      assert.equal(cooperative.body.disposition, 'cooperative')
+      assert.equal(cooperative.body.job.status, 'running', 'running 只置标记，不立即改状态')
+      assert.equal(cooperative.body.job.cancelRequested, true)
+
+      // 放行远端：当前这张出完后不再提交第 2 张，任务最终收敛为 cancelled 且保留已出图片。
+      mock.state.hold = false
+      const final = await waitUntilJob(host.origin, slow.id, (job) =>
+        ['cancelled', 'done', 'failed'].includes(job.status),
+      )
+      assert.equal(final.status, 'cancelled', JSON.stringify(final.error))
+      assert.equal(final.stage, '已取消')
+      assert.equal(final.error, null)
+      assert.equal(final.cancelRequested, false, '终态不再透出取消请求标记')
+      assert.equal(final.output?.images.length, 1, '取消前已完成的图片应保留')
+      const absolute = join(workspace, ...final.output.images[0].path.split('/'))
+      assert.ok((await stat(absolute)).size > 0, '取消前已完成的图片应真实落盘')
+
+      const slowBodies = mock.state.generateBodies.filter((entry) => entry.jobId?.startsWith(`${slow.id}-`))
+      assert.equal(slowBodies.length, 1, '取消后不得再提交剩余张数')
+      assert.equal(slowBodies[0].jobId, `${slow.id}-01`)
+      assert.equal(mock.state.generateCalls - beforeCalls, 1, '取消后不应产生额外的远端提交')
+
+      // 终态再取消：already-finished。
+      const finished = await json(host.origin, '/imagen-api/job/cancel', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ id: slow.id }),
+      })
+      assert.equal(finished.body.disposition, 'already-finished')
+      assert.equal(finished.body.job.status, 'cancelled')
+    } finally {
+      mock.state.hold = false
+    }
+  })
+
   await check('历史扫描', async () => {
     const { status, body } = await json(host.origin, '/imagen-api/history?limit=10')
     assert.equal(status, 200)
@@ -419,6 +607,79 @@ async function main() {
     assert.ok(item.finishedAt, '历史条目应带 finishedAt')
     // 产物文件名由本地序号生成，不拼接远端返回的 name。
     for (const image of item.images) assert.match(image.file, /^\d{2}\.png$/)
+  })
+
+  await check('历史分页：limit/offset 与 hasMore（offset 只统计有效记录）', async () => {
+    // 追加 3 条有效历史 + 2 个无效目录：无 meta 的目录、meta 里图片已被删的目录。
+    // 无效目录用最新时间戳排序在最前，验证它们不会被当作有效记录挤掉真实记录的 offset。
+    await seedHistoryEntry(workspace, '20990102-000000', 'j_hist_2', '历史记录二')
+    await seedHistoryEntry(workspace, '20990101-000000', 'j_hist_1', '历史记录一')
+    await seedHistoryEntry(workspace, '20990100-000000', 'j_hist_0', '历史记录零')
+    await mkdir(join(workspace, 'imagen-output', '20991231-000000-j_invalid_meta'), { recursive: true })
+    const missingImageDir = join(workspace, 'imagen-output', '20991230-000000-j_invalid_image')
+    await mkdir(missingImageDir, { recursive: true })
+    await writeFile(
+      join(missingImageDir, 'meta.json'),
+      JSON.stringify({
+        version: 1,
+        jobId: 'j_invalid_image',
+        createdAt: '2099-12-30T00:00:00.000Z',
+        finishedAt: '2099-12-30T00:00:01.000Z',
+        params: { prompt: '无效记录' },
+        images: [{ file: '01.png', seed: 1 }],
+      }),
+      'utf8',
+    )
+
+    const all = await json(host.origin, `/imagen-api/history?limit=${LIMITS.history.maxLimit}&offset=0`)
+    assert.equal(all.status, 200)
+    assert.ok(Array.isArray(all.body.items), 'items 必须是数组（旧客户端只读该字段）')
+    assert.equal(all.body.limit, LIMITS.history.maxLimit)
+    assert.equal(all.body.offset, 0)
+    assert.equal(typeof all.body.hasMore, 'boolean')
+    const total = all.body.items.length
+    assert.ok(total >= 4, `应有至少 4 条有效记录，实际 ${total}`)
+    assert.equal(all.body.hasMore, false, 'limit 取满上限后不应再有更多记录')
+    // 无效目录被跳过；播种的 3 条有效记录时间最新，按倒序排在真实任务前面。
+    assert.ok(!all.body.items.some((item) => String(item.jobId).startsWith('j_invalid')))
+    assert.deepEqual(
+      all.body.items.slice(0, 3).map((item) => item.jobId),
+      ['j_hist_2', 'j_hist_1', 'j_hist_0'],
+      '无效目录不得占用 offset 名额',
+    )
+
+    const page1 = await json(host.origin, '/imagen-api/history?limit=2&offset=0')
+    assert.equal(page1.body.items.length, 2)
+    assert.equal(page1.body.limit, 2)
+    assert.equal(page1.body.offset, 0)
+    assert.equal(page1.body.hasMore, true, '还有更早的记录时 hasMore=true')
+
+    const page2 = await json(host.origin, '/imagen-api/history?limit=2&offset=2')
+    assert.equal(page2.body.items.length, Math.min(2, Math.max(0, total - 2)))
+    assert.equal(page2.body.hasMore, total > 4)
+    assert.notDeepEqual(
+      page2.body.items.map((item) => item.jobId),
+      page1.body.items.map((item) => item.jobId),
+      '第二页不应重复第一页的记录',
+    )
+
+    const tail = await json(host.origin, `/imagen-api/history?limit=2&offset=${total - 1}`)
+    assert.equal(tail.body.items.length, 1)
+    assert.equal(tail.body.hasMore, false, '最后一条之后没有更多记录')
+
+    const beyond = await json(host.origin, `/imagen-api/history?limit=2&offset=${total}`)
+    assert.equal(beyond.body.items.length, 0)
+    assert.equal(beyond.body.hasMore, false)
+
+    // offset 非法按 0；limit 越界被钳制到契约上限。
+    const invalidOffset = await json(host.origin, '/imagen-api/history?limit=2&offset=abc')
+    assert.equal(invalidOffset.body.offset, 0)
+    assert.equal(invalidOffset.body.items.length, 2)
+    const negativeOffset = await json(host.origin, '/imagen-api/history?limit=2&offset=-5')
+    assert.equal(negativeOffset.body.offset, 0)
+    const clampedLimit = await json(host.origin, '/imagen-api/history?limit=9999')
+    assert.equal(clampedLimit.body.limit, LIMITS.history.maxLimit)
+    assert.equal(clampedLimit.body.offset, 0)
   })
 
   await check('文件路由返回 PNG', async () => {
@@ -604,6 +865,68 @@ async function main() {
       assert.deepEqual([lighting.options[1].text, lighting.options[1].label], ['neon glow', 'neon glow'])
       assert.ok(llm.calls[0].system.includes('英文短语'), 'system prompt 应要求英文短语')
       assert.ok(llm.calls[0].system.includes('label'), 'system prompt 应要求 UI 语言标签')
+    } finally {
+      fake.setLlm(null)
+    }
+  })
+
+  await check('英译模式（无模型）：明确降级为 local，不假装翻译成功', async () => {
+    const result = await json(host.origin, '/imagen-api/enhance', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: '雨夜街景，湿滑路面反射霓虹', mode: 'translate' }),
+    })
+    assert.equal(result.status, 200)
+    assert.equal(result.body.ok, true)
+    assert.equal(result.body.mode, 'translate')
+    assert.equal(result.body.source, 'local', '测试环境没有宿主模型，必须明确降级')
+    assert.equal(result.body.prompt, '雨夜街景，湿滑路面反射霓虹', '降级时返回原文，绝不假装已翻译')
+    assert.equal(result.body.note, 'llm_unavailable')
+    assert.equal(result.body.groups, undefined, 'translate 响应不返回 refine 的 groups')
+
+    const blank = await json(host.origin, '/imagen-api/enhance', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: '   ', mode: 'translate' }),
+    })
+    assert.equal(blank.body.mode, 'translate')
+    assert.equal(blank.body.source, 'local')
+    assert.equal(blank.body.prompt, '')
+    assert.equal(blank.body.note, 'empty')
+  })
+
+  await check('英译模式（有模型）：复用同一模型通道转成英文提示词', async () => {
+    const llm = createFakeLlm('rainy night street, wet pavement reflecting neon signs')
+    fake.setLlm(llm)
+    try {
+      const result = await json(host.origin, '/imagen-api/enhance', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: '雨夜街景，湿滑路面反射霓虹', mode: 'translate' }),
+      })
+      assert.equal(result.status, 200)
+      assert.equal(result.body.ok, true)
+      assert.equal(result.body.mode, 'translate')
+      assert.equal(result.body.source, 'model')
+      assert.equal(result.body.prompt, 'rainy night street, wet pavement reflecting neon signs')
+      assert.equal(result.body.note, undefined)
+
+      const call = llm.calls[0]
+      assert.ok(call.system.includes('只输出英文提示词'), 'system prompt 应要求只输出英文提示词')
+      assert.ok(call.system.includes('不解释'), 'system prompt 应禁止解释')
+      assert.ok(call.system.includes('不要加戏'), 'system prompt 应禁止添加原文没有的内容')
+      assert.equal(call.messages[0].content[0].text, '雨夜街景，湿滑路面反射霓虹', '用户原话应原样发给模型')
+
+      // 非法 mode 按 refine 处理，旧客户端不传 mode 的行为保持不变。
+      const invalidMode = await json(host.origin, '/imagen-api/enhance', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: '一只赛博猫', mode: 'bogus' }),
+      })
+      assert.equal(invalidMode.body.ok, true)
+      assert.equal(invalidMode.body.mode, undefined, 'refine 响应不回显 mode（保持旧字段形状）')
+      assert.ok(Array.isArray(invalidMode.body.groups), '非法 mode 应按 refine 返回 groups')
+      assert.equal(invalidMode.body.groups.length, 4)
     } finally {
       fake.setLlm(null)
     }

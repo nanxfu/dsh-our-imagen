@@ -66,6 +66,9 @@ export function Studio(props) {
                 now={Date.now()}
                 presets={compute.presets}
                 favorites={library.favorites}
+                hasMore={library.hasMore}
+                loadingMore={library.loadingMore}
+                onLoadMore={library.loadMore}
                 onDelete={library.deleteImages}
                 onExport={library.exportPaths}
                 onRecall={actions.iterate}

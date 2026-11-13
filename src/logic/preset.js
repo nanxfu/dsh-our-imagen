@@ -1,13 +1,15 @@
 /**
  * 预设切换与提示词语言的纯逻辑。
  *
- * 切换预设要同时处理三件事：套用推荐尺寸 / 步数 / 引导强度、跟随新预设的负向提示词、
- * 以及判断当前提示词是否需要英文提醒。这些规则不碰 React 与网络，便于离线断言。
+ * 切换预设要同时处理四件事：套用推荐尺寸 / 步数 / 引导强度、替换模型负向词层、
+ * 从预设的 sizeOptions 得到方形尺寸档位、以及判断当前提示词是否需要英文提醒。
+ * 这些规则不碰 React 与网络，便于离线断言。
  */
 
 import { LIMITS } from '../../shared/contract.js'
 
 import { clampInt, clampNumber, clampSize } from './clamp.js'
+import { negativeLayersPatch, resolveNegativeLayers } from './prompt.js'
 
 /** 提示词是否含中日韩字符。 */
 export function detectCjk(text) {
@@ -30,10 +32,48 @@ function hintOf(preset) {
 }
 
 /**
+ * 预设的方形尺寸档位：`sizeOptions` 是「等宽高的方形尺寸数组」，与画幅比例是两行不同概念。
+ *
+ * 读到非法值（非数字 / 非正数）直接丢弃，统一按契约边界钳制并去重、升序排列；
+ * 旧预设没有 `sizeOptions` 时回退到预设自身的 `size`，保证总有一档可选。
+ */
+export function presetSizeOptions(preset) {
+  const source = preset && typeof preset === 'object' ? preset : {}
+  const raw = Array.isArray(source.sizeOptions) ? source.sizeOptions : []
+  const options = []
+  for (const value of raw) {
+    const number = Number(value)
+    if (!Number.isFinite(number) || number <= 0) continue
+    const size = clampSize(number)
+    if (!options.includes(size)) options.push(size)
+  }
+  if (options.length === 0) {
+    const fallback = Number(source.size)
+    if (Number.isFinite(fallback) && fallback > 0) options.push(clampSize(fallback))
+  }
+  return options.sort((left, right) => left - right)
+}
+
+/**
+ * 自定义宽高补丁：只处理传入的字段（宽或高单独改），按契约边界与步长钳制。
+ * 传给 `patchForm()` 后分别更新宽/高，比例行与方形档位的选中态由尺寸反推。
+ */
+export function customSizePatch(partial) {
+  const input = partial && typeof partial === 'object' ? partial : {}
+  const patch = {}
+  if (Object.prototype.hasOwnProperty.call(input, 'width')) patch.width = clampSize(input.width)
+  if (Object.prototype.hasOwnProperty.call(input, 'height')) patch.height = clampSize(input.height)
+  return patch
+}
+
+/**
  * 切换预设 → 表单补丁。
  *
- * 负向提示词的跟随规则：只有用户没写过（空）或仍然等于上一个预设的推荐值时才换成
- * 新预设的 negativeHint；用户自己写过的负向提示词不动。
+ * 负向提示词的跟随规则（按层）：
+ *  - model 层整层替换为新预设的 negativeHint；新预设没有推荐值时清空，
+ *    不再残留上一个预设的旧词；
+ *  - style 层只在风格仍选中时保留（取消风格由 toggleStyle 处理）；
+ *  - user 层原样保留。
  */
 export function presetSelectPatch(next, current, presets) {
   const target = next && typeof next === 'object' && next.id ? next : null
@@ -49,10 +89,15 @@ export function presetSelectPatch(next, current, presets) {
   const cfg = clampNumber(target.cfg, LIMITS.cfg.min, LIMITS.cfg.max, null)
   if (cfg !== null) patch.cfg = cfg
 
-  const hint = hintOf(target)
   const list = Array.isArray(presets) ? presets : []
-  const previous = list.find((item) => item && item.id === form.presetId)
-  const negative = typeof form.negative === 'string' ? form.negative.trim() : ''
-  if (hint && (!negative || negative === hintOf(previous))) patch.negative = hint
+  const layers = resolveNegativeLayers(form, list)
+  const nextLayers = {
+    ...layers,
+    model: hintOf(target),
+    // 没有选中风格时 style 层不应存在；切换预设不负责清除仍选中风格的词。
+    style: form.styleId ? layers.style : '',
+  }
+  // 三层数据与合并后的展示文本一起进补丁，表单状态不会出现半同步。
+  Object.assign(patch, negativeLayersPatch(nextLayers))
   return patch
 }

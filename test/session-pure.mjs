@@ -69,7 +69,7 @@ function closeServer(server) {
 
 /** 本机 mock 远端：异步 job 协议（POST /generate 入队 + GET /job 轮询），验证端口拼包与结果映射。 */
 async function startMockDaemon() {
-  const state = { calls: 0, jobCalls: 0, lastBody: null, jobs: new Map() }
+  const state = { calls: 0, jobCalls: 0, lastBody: null, bodies: [], jobs: new Map() }
   const server = createServer((req, res) => {
     const send = (code, value) => {
       const payload = Buffer.from(JSON.stringify(value))
@@ -82,6 +82,7 @@ async function startMockDaemon() {
       req.on('end', () => {
         state.calls += 1
         state.lastBody = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+        state.bodies.push(state.lastBody)
         const jobId = state.lastBody.jobId || `job-${state.calls}`
         state.jobs.set(jobId, {
           status: 'done',
@@ -485,32 +486,44 @@ async function scenarioRemotePort() {
     }
     const queue = makeGenerationQueue(() => ({ endpoint: mock.endpoint, token: 'test-token' }))
 
-    await check('成功路径：tasks 递增 seed / 字段名转换 / 返回 modelId', async () => {
+    await check('成功路径：逐张提交、seed 递增、字段名转换、返回 modelId', async () => {
       const { results, modelId } = await queue.generate({ id: 'job-1', presetId: 'sdxl-turbo', params })
-      assert.equal(mock.state.calls, 1)
-      assert.equal(mock.state.lastBody.pipeline.loader, 'sdxl')
-      assert.equal(mock.state.lastBody.modelId, 'stabilityai/sdxl-turbo')
+      // 逐张提交（合作式取消的前提）：count=2 对应 2 个远端 job，每个 tasks 只含 1 项。
+      assert.equal(mock.state.calls, 2)
+      const bodies = mock.state.bodies
+      assert.equal(bodies.length, 2)
+      for (const body of bodies) {
+        assert.equal(body.pipeline.loader, 'sdxl')
+        assert.equal(body.modelId, 'stabilityai/sdxl-turbo')
+        assert.equal(body.tasks.length, 1, '每个远端 job 只含 1 个 task')
+      }
       assert.deepEqual(
-        mock.state.lastBody.tasks.map((task) => task.name),
+        bodies.map((body) => body.tasks[0].name),
         ['01', '02'],
       )
       assert.deepEqual(
-        mock.state.lastBody.tasks.map((task) => task.seed),
+        bodies.map((body) => body.tasks[0].seed),
         [7, 8],
       )
-      assert.equal(mock.state.lastBody.tasks[0].negative_prompt, 'blurry')
       assert.deepEqual(
-        { width: mock.state.lastBody.tasks[0].width, height: mock.state.lastBody.tasks[0].height },
+        bodies.map((body) => body.jobId),
+        ['job-1-01', 'job-1-02'],
+        '幂等键为宿主 jobId + 两位序号',
+      )
+      assert.equal(bodies[0].tasks[0].negative_prompt, 'blurry')
+      assert.deepEqual(
+        { width: bodies[0].tasks[0].width, height: bodies[0].tasks[0].height },
         { width: 512, height: 1024 },
       )
-      assert.equal(results.length, 1)
+      assert.equal(results.length, 2, '逐张结果按序合并')
       assert.equal(modelId, 'test/model')
     })
 
     await check('seed 接近上界时环形回绕：全部落在契约范围内且按序递增', async () => {
+      const offset = mock.state.bodies.length
       const wrapped = { ...params, seed: LIMITS.seed.max - 1, count: 4 }
       await queue.generate({ id: 'job-2', presetId: 'sdxl-turbo', params: wrapped })
-      const seeds = mock.state.lastBody.tasks.map((task) => task.seed)
+      const seeds = mock.state.bodies.slice(offset).map((body) => body.tasks[0].seed)
       assert.deepEqual(seeds, [LIMITS.seed.max - 1, 0, 1, 2], `回绕结果：${seeds}`)
       assert.ok(
         seeds.every((seed) => seed >= 0 && seed <= LIMITS.seed.max),

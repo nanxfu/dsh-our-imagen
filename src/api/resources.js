@@ -8,6 +8,8 @@
  *  - 路径唯一来源是 routePath(name)（shared/contract.js 的 ROUTES），这里不写路径字面量。
  */
 
+import { LIMITS } from '../../shared/contract.js'
+
 import { request, routePath } from '../api.js'
 
 /** Host 状态快照（轮询用）。 */
@@ -24,9 +26,16 @@ export function fetchLogs(since = 0) {
   return request(`${routePath('logs')}?since=${cursor}`, { method: 'GET' })
 }
 
-/** 最近生成历史；limit 默认 60，与收敛前的调用点一致。 */
-export function fetchHistory(limit = 60) {
-  return request(`${routePath('history')}?limit=${limit}`, { method: 'GET' })
+/**
+ * 历史分页：limit 每次取契约页长，offset 是已跳过的有效记录数（从 0 开始）。
+ * 响应 `{ items, limit, offset, hasMore }` 由 useWorkLibrary 消费。
+ */
+export function fetchHistory(limit = LIMITS.history.pageSize, offset = 0) {
+  const size = Number.isFinite(Number(limit)) && Number(limit) > 0
+    ? Math.min(LIMITS.history.maxLimit, Math.floor(Number(limit)))
+    : LIMITS.history.pageSize
+  const start = Number.isFinite(Number(offset)) && Number(offset) > 0 ? Math.floor(Number(offset)) : 0
+  return request(`${routePath('history')}?limit=${size}&offset=${start}`, { method: 'GET' })
 }
 
 /** 收藏库列表。 */
@@ -56,6 +65,17 @@ export function submitGenerate(body) {
 }
 
 /**
+ * 取消任务；响应 `{ ok, job, disposition }`，disposition ∈ dequeued | cooperative | already-finished。
+ * 路径只能走契约的 ROUTES.jobCancel，这里不写路径字面量。
+ */
+export function cancelJob(id) {
+  return request(routePath('jobCancel'), {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  })
+}
+
+/**
  * 环境探测；signal 由调用方提供（45 秒超时与 AbortController 留在 useStudio）。
  */
 export function runProbe(signal) {
@@ -65,11 +85,16 @@ export function runProbe(signal) {
   })
 }
 
-/** 提示词润色。 */
-export function enhancePromptRequest({ prompt, presetId, locale }) {
+/**
+ * 提示词增强：`mode='refine'`（缺省）返回四维英文短语建议；
+ * `mode='translate'` 返回 `{ ok, mode, source, prompt }`，source='local' 表示没有真正翻译。
+ */
+export function enhancePromptRequest({ prompt, presetId, locale, mode } = {}) {
+  const body = { prompt, presetId, locale }
+  if (typeof mode === 'string' && mode) body.mode = mode
   return request(routePath('enhance'), {
     method: 'POST',
-    body: JSON.stringify({ prompt, presetId, locale }),
+    body: JSON.stringify(body),
   })
 }
 

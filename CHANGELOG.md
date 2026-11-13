@@ -10,6 +10,11 @@
 - **对话出图默认不再沿用上一张的种子**：跨主题对话不会因为隐式锁种而构图僵化；意图确认卡新增「沿用上张构图（锁定种子）」开关（默认关闭，无可用种子时置灰）。
 - **作品画廊**：卡片上可直接点星标收藏 / 取消收藏（批量选择态自动收起星标，避免误触）；列分配改为行优先，最新作品在每行最左，保留 5 列自然高度、不裁切图片；历史一次加载上限从 60 张提到契约允许的 100 张。
 - **窄屏可见排队状态**：`≤820px` 收起底部胶片栏时，画面预览左上角保留排队胶囊，显示当前任务与「另有 n 张排队」。
+- **任务可以取消**：新增 `POST /imagen-api/job/cancel`。`queued` / `waiting-session` 立即出队失效——等待会话的任务不再把后面的任务阻塞到 45 分钟会话等待窗口超时；`running` 为合作式停止——当前这张出完后不再提交批内剩余张数，不强杀线程、不改远端采样回调，取消前已完成的图片仍保留在 `output`，任务收敛为 `cancelled`。底部胶片条的暗房卡提供「取消」按钮，取消中显示「正在停止…」并禁用重复点击。
+- **历史作品分页**：`GET /imagen-api/history` 支持 `limit` / `offset` 并返回 `hasMore`；画廊底部新增「加载更多」（按契约页长 100 逐页追加，去重合并，失败不清空已加载内容），加载完显示「已加载全部作品」。
+- **提示词一键转英文**：`POST /imagen-api/enhance` 新增 `mode: "translate"`，复用宿主已配置的模型把提示词转成英文；模型不可用时明确返回 `source: "local"` 与原文，界面提示「模型不可用，未能翻译」，不把原文假装成译后结果。
+- **日志抽屉双视图与可粘贴诊断**：运行日志抽屉可在「远端日志 / Host 日志」间手动切换，远端为空时仍自动兜底展示 Host 日志并保留来源说明（Esc、焦点陷阱、滚底行为不变）；`GET /imagen-api/logs` 新增脱敏环境指纹 `env`（平台、Node 版本、代理/备用隧道/自定义数据集/pip 约束/HF Token 是否配置、阶段耗时摘要）与更长的诊断尾部（远端 120 行 / Host 80 行）；会话、网络、生成、通用、授权五类指引卡新增「查看日志 / 复制诊断信息」次级按钮，离线也能一键导出状态、日志与指纹。
+- **方形尺寸档位**：模型预设的 `sizeOptions` 不再被忽略，「画面设置」新增独立「方形尺寸」行（与画幅比例行区分）；「高级设置」允许在契约边界与 8 的步长内自定义宽高，失焦与提交各钳制一次。
 
 ### 修复
 
@@ -21,6 +26,8 @@
   - 网络层错误单独归为 `network` 指引卡（「连不上本地服务」+「重试」），详情用客户端文案（`error.network`），不再展示英文原文；
   - 宿主状态轮询恢复后自动撤掉这次网络错误提示（去重游标同步重置），不再留下过期的「Failed to fetch」卡片；
   - 「重试」只立即拉一次 `/state`，不触碰云端会话。
+- **切换到无负向提示词的预设会残留旧词**：负向提示词改为按来源分层记录（模型 `negativeHint` / 风格词 / 用户手写），切换预设只整层替换模型层——新预设没有 `negativeHint` 时模型层被清空，不再把上一个模型的排除词继续发给远端。
+- **取消风格会误清模型负向词**：取消风格现在只移除该风格写入的负向层，模型 `negativeHint` 与用户手写内容保持不变；用户手动编辑与历史回填则落入用户层，提交时三层去重合并。
 
 ### 工程
 
@@ -30,6 +37,12 @@
 - 宿主可靠性改造的离线断言：`test/jobs-wait.mjs` 新增 8 项（容忍窗口、指数退避、`404` 终态、幂等续接、重投上限、整体预算约束、`publicView` 阶段码与进度映射、分张进度接线），`test/session-reliability.mjs` 新增 2 个场景（Kernel 仍 RUNNING 时续期后可恢复 `ready`、续期用尽收敛 `health_failed`）。
 - 客户端新增纯函数：`src/logic/gallery.js`（列数断点 + 行优先分桶）、`src/logic/format.js` 的 `formatText`（字典无插值机制，计数文案用 `{name}` 占位）。`check-client-logic` 39 项、`check-client-render` 30 项、`check-client-locale` zh/en 各 270 键全绿。
 - 契约新增 4 个超时常量（`remoteJobPollFailureGraceMs` / `remoteJobPollBackoffMaxMs` / `remoteJobResumeMaxAttempts` / `recoveryMaxRenewals`）；`docs/SPEC.md` 补充 `Job.stageCode`、`Job.progress` 与轮询续接语义，`docs/ARCHITECTURE.md` 新增 §2.12（轮询容错与幂等续接）与 §2.13（恢复窗口）。
+- 契约新增取消/分页/英译/日志口径：`ROUTES.jobCancel`、`JOB_STATUS`（含终态 `cancelled`）、`JOB_CANCEL`、`ENHANCE_MODES`、`LIMITS.history.pageSize`、`LOGS`、`DIAGNOSTICS`；`docs/SPEC.md` 同步取消语义、历史分页、英译降级、`Job.cancelRequested` 与 `/logs` 的 `env` 字段，路由总览更新为 17 条。
+- 宿主取消实现为「逐张提交远端 job」：`count>1` 时每张一个远端 job（`tasks` 只含 1 项，幂等键 `<job.id>-NN`），一张完成后才提交下一张，取消时不再提交剩余；轮询容错、指数退避与同键重投全部复用原 `waitForJob`，`generateTimeoutMs` 仍是整个宿主任务的预算（不按张数放大）。会话等待改为可按拍取消的轮询（1 秒），替代不可中断的 `session.ensureReady()`。
+- 删除/取消相关的返回形状变更：`scanHistory()` 返回 `{ items, hasMore }`（旧签名 `scanHistory(ctx, limit)` 仍兼容），`lib/tools.js` 的 `imagen_history` 与取消任务的描述文案同步适配。
+- 测试覆盖：新增 `test/logs-diagnostics.mjs`（15 项：`env` 白名单与非法字段剔除、旧响应向后兼容、诊断敏感串零泄露、三分支 `env`、双视图与次级动作结构），已接入 `npm test` 与 `npm run test:client`；扩展 `test/jobs-wait.mjs`（21 项，含取消三态与逐张提交）、`test/host-e2e.mjs`（31 项，含取消路由、历史分页与英译有/无模型）、`test/check-client-logic.mjs`（44 项）、`test/check-client-render.mjs`（36 项）、`test/daemon-unit.py`（138 项）；`check-client-locale` zh/en 各 293 键全绿。
+- 远端缓存探针：`remote/daemon.py` 在模型加载前打印一次 `[cache]` 诊断行（HF 缓存目录、缓存目录与 `/kaggle/working` 的挂载点及剩余空间，token 值脱敏，异常降级 `unknown`），为后续真机确认缓存清理策略提供数据；**本轮不写缓存删除 / LRU 清理逻辑**。
+- `client.js` 重新构建。
 
 ## 0.7.0 — 2026-11-11
 

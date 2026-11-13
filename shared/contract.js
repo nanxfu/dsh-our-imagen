@@ -28,7 +28,10 @@ export const ROUTES = {
   sessionStop: { method: 'POST', path: '/imagen-api/session/stop' },
   generate: { method: 'POST', path: '/imagen-api/generate' },
   job: { method: 'GET', path: '/imagen-api/job' },
+  // 取消任务：queued / waiting-session 立即出队失效；running 合作式停止（见 JOB_CANCEL）。
+  jobCancel: { method: 'POST', path: '/imagen-api/job/cancel' },
   jobs: { method: 'GET', path: '/imagen-api/jobs' },
+  // 历史分页：limit / offset 查询参数，响应补 hasMore（向后兼容只读 items 的旧客户端）。
   history: { method: 'GET', path: '/imagen-api/history' },
   file: { method: 'GET', path: '/imagen-api/file' },
   library: { method: 'GET', path: '/imagen-api/library' },
@@ -61,7 +64,9 @@ export const LIMITS = {
   seed: { max: 2147483647 },
   waitSeconds: { min: 0, max: 600, default: 90 },
   queue: { maxPending: 20, maxKept: 60 },
-  history: { defaultLimit: 30, maxLimit: 100 },
+  // pageSize 是前端「加载更多」每次请求的固定步长，取契约上限 100：
+  // Host 的 limit 仍按 maxLimit 钳制，旧客户端只传 limit 时行为不变。
+  history: { defaultLimit: 30, maxLimit: 100, pageSize: 100 },
   jobs: { defaultLimit: 20, maxLimit: 100 },
   historyTool: { defaultLimit: 5, maxLimit: 30 },
   libraryDelete: { maxPaths: 200 },
@@ -196,6 +201,66 @@ export function hostErrorCodes() {
   return Object.entries(ERROR_CODES)
     .filter(([, value]) => value.layer === 'host' || value.layer === 'remote')
     .map(([code]) => code)
+}
+
+/**
+ * 任务状态（`Job.status`）的完整取值域。
+ *
+ * `cancelled` 是终态：queued / waiting-session 立即出队失效；running 在当张出完后
+ * 中止批内剩余张数，已完成的图片仍保留在 `output` 里。
+ */
+export const JOB_STATUS = ['queued', 'waiting-session', 'running', 'done', 'failed', 'cancelled']
+
+/**
+ * 取消语义（`POST /imagen-api/job/cancel`，请求体 `{ id }`）。
+ *
+ * 响应始终带 `job` 与 `disposition`：
+ *  - `dequeued`：queued / waiting-session 立即出队失效，不再占用队列位置，
+ *    后续任务不必等到 45 分钟会话等待窗口超时才继续；
+ *  - `cooperative`：running 只置 `cancelRequested` 标记，当前这张图画完后不再提交
+ *    批内剩余张数（不强杀线程、不改远端采样回调），之后收敛为 cancelled；
+ *  - `already-finished`：任务已是终态，取消请求不改变任何状态。
+ */
+export const JOB_CANCEL = {
+  dispositions: ['dequeued', 'cooperative', 'already-finished'],
+}
+
+/**
+ * 提示词增强通道的两种模式（`POST /imagen-api/enhance` 的 `mode`，缺省 `refine`）。
+ *
+ *  - `refine`：四维英文短语建议，响应保持 `{ ok, source, groups }`（向后兼容）；
+ *  - `translate`：把提示词转成英文，响应 `{ ok, mode, source, prompt }`；
+ *    `source: 'local'` 表示宿主模型不可用、没有真正翻译，前端必须明确提示
+ *    「未翻译 / 模型不可用」，不得把原文本当作译后结果展示。
+ * 两种模式都只复用宿主已配置的模型，不接第三方重模型。
+ */
+export const ENHANCE_MODES = ['refine', 'translate']
+
+/**
+ * 日志与诊断的共享口径（Host `lib/routes/logs.js` 与 Client `src/logic/logs.js` 共用）。
+ */
+export const LOGS = {
+  // 远端 daemon 日志环与客户端保留行数上限。
+  remoteLineLimit: 400,
+  // GET /logs 下发的 Host 本地日志尾部行数上限（Host 路由与客户端归一都按它）。
+  hostLineLimit: 120,
+  // 诊断文本附带的行数：远端可多给一些，Host 更短以控制粘贴长度。
+  diagRemoteTail: 120,
+  diagHostTail: 80,
+}
+
+/**
+ * 诊断环境指纹（`GET /logs` 响应体的 `env` 字段，仅供前端诊断报告使用）。
+ *
+ * 只允许非敏感信息：布尔开关、版本号与毫秒耗时摘要；严禁出现代理 URL、Token、
+ * 工作区绝对路径与 prompt 正文。`timings` 字段由 Host 按会话快照计算：
+ *  - sessionStartMs：startedAt → readyAt 的就绪耗时（未就绪为 null）；
+ *  - sessionUptimeMs：startedAt → now；
+ *  - readyUptimeMs：readyAt → now。
+ */
+export const DIAGNOSTICS = {
+  envFields: ['platform', 'nodeVersion', 'hasProxyEnv', 'hasFallbackTunnel', 'hasCustomDatasets', 'hasPipConstraints', 'hasHfToken'],
+  timingFields: ['sessionStartMs', 'sessionUptimeMs', 'readyUptimeMs'],
 }
 
 /**

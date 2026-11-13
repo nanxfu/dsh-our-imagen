@@ -1,8 +1,14 @@
 /**
- * 作品库域：生成历史 / 画廊 / 选中图 / 收藏 / 删除 / 导出。
+ * 作品库域：生成历史 / 画廊分页 / 选中图 / 收藏 / 删除 / 导出。
  *
  * 负责两处加载 effect、首图提示与任务完成后的历史刷新。
  * 依赖入参：{ t, alive, ui, state }；ui 提供 toast/错误通道与视图切换。
+ *
+ * 分页约定（见 docs/SPEC.md 2.2 的 history 接口）：
+ *  - 首屏请求 limit=LIMITS.history.pageSize、offset=0；
+ *  - 「加载更多」按下一页 offset 追加并去重，失败保留已有列表；
+ *  - 任务完成后的刷新总是重新从第 0 页开始，而不是只换第一页；
+ *    轮询本身不会触发展开刷新，已加载的分页不会被反复重置。
  */
 
 import React from 'react'
@@ -15,6 +21,13 @@ import {
   fetchHistory,
   fetchLibrary,
 } from '../../api/resources.js'
+import {
+  historyHasMore,
+  mergeHistoryPages,
+  nextHistoryOffset,
+} from '../../logic/jobs.js'
+
+const PAGE_SIZE = LIMITS.history.pageSize
 
 function flattenHistory(items) {
   const images = []
@@ -28,17 +41,57 @@ function flattenHistory(items) {
 export function useWorkLibrary({ t, alive, ui, state }) {
   const [selectedPath, setSelectedPath] = React.useState('')
   const [historyItems, setHistoryItems] = React.useState([])
+  const [historyHasMoreState, setHistoryHasMoreState] = React.useState(false)
+  const [historyLoadingMore, setHistoryLoadingMore] = React.useState(false)
   const [favorites, setFavorites] = React.useState([])
 
+  // 分页推进用 ref：loadMore 在异步回调里读最新位置，不依赖 state 的提交时序。
+  const offsetRef = React.useRef(0)
+  const hasMoreRef = React.useRef(false)
+  const loadingMoreRef = React.useRef(false)
+
+  /** 从第 0 页重新加载（首屏 / 任务完成 / 删除后的刷新都走这里）。 */
   const loadHistory = React.useCallback(async () => {
-    // 一次取契约允许的最大批量，画廊翻历史才不会在 60 张处出现断层。
-    const result = await alive(fetchHistory(LIMITS.history.maxLimit))
+    const result = await alive(fetchHistory(PAGE_SIZE, 0))
     if (!result) return
     if (result.ok && result.data && Array.isArray(result.data.items)) {
-      setHistoryItems(result.data.items.filter(Boolean))
-    } else if (!result.ok) {
+      const items = result.data.items.filter(Boolean)
+      setHistoryItems(items)
+      offsetRef.current = nextHistoryOffset(Number(result.data.offset) || 0, items.length)
+      const more = historyHasMore(result.data, PAGE_SIZE)
+      hasMoreRef.current = more
+      setHistoryHasMoreState(more)
+      return
+    }
+    if (!result.ok) {
       // 加载失败走错误/指引通道，且不清空已有列表。
       ui.fail(result.code, result.message)
+    }
+  }, [alive])
+
+  /** 追加下一页；失败只提示不清空已有分页。 */
+  const loadMoreHistory = React.useCallback(async () => {
+    if (loadingMoreRef.current || !hasMoreRef.current) return
+    loadingMoreRef.current = true
+    setHistoryLoadingMore(true)
+    const offset = offsetRef.current
+    try {
+      const result = await alive(fetchHistory(PAGE_SIZE, offset))
+      if (!result) return
+      if (result.ok && result.data && Array.isArray(result.data.items)) {
+        const page = result.data.items.filter(Boolean)
+        setHistoryItems((prev) => mergeHistoryPages(prev, page))
+        offsetRef.current = nextHistoryOffset(offset, page.length)
+        // 空页说明已经到底（offset 已越过最后一条），即便宿主误报 hasMore 也不再请求。
+        const more = page.length > 0 && historyHasMore(result.data, PAGE_SIZE)
+        hasMoreRef.current = more
+        setHistoryHasMoreState(more)
+        return
+      }
+      if (!result.ok) ui.fail(result.code, result.message)
+    } finally {
+      loadingMoreRef.current = false
+      setHistoryLoadingMore(false)
     }
   }, [alive])
 
@@ -85,7 +138,8 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     ui.showToast(t('studio.toast.firstImage'))
   }, [lastJobKey, sessionState])
 
-  // 任务完成后刷新历史，让新图自动出现在最近生成最前面
+  // 任务完成后刷新历史：重新从第 0 页加载（新图可能连带改变后续分页边界），
+  // 同一个任务只触发一次；宿主轮询本身不会重置已加载的分页。
   const lastJobId = state && state.lastJob ? `${state.lastJob.id}:${state.lastJob.finishedAt ?? ''}` : ''
   const lastSeenRef = React.useRef('')
   React.useEffect(() => {
@@ -151,6 +205,7 @@ export function useWorkLibrary({ t, alive, ui, state }) {
       ui.fail('delete_failed', t('studio.error.deleteFailed'))
     }
     setSelectedPath('')
+    // 删除会改变记录可达性：重新从第 0 页加载，避免 offset 错位。
     await Promise.all([loadHistory(), loadLibrary()])
     return { removed, failed: Array.isArray(result.data.failed) ? result.data.failed : [] }
   }
@@ -198,5 +253,10 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     exportPaths,
     zoomImage,
     loadHistory,
+    // 画廊分页：hasMore 决定底部显示「加载更多」还是「已加载全部作品」。
+    offset: offsetRef.current,
+    hasMore: historyHasMoreState,
+    loadingMore: historyLoadingMore,
+    loadMore: loadMoreHistory,
   }
 }

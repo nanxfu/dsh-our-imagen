@@ -13,14 +13,18 @@
  *  - 幂等续接：窗口用尽后用同一 jobId 重投接回原任务；重投次数有上限；
  *  - 整体预算：轮询失败不会突破 timeoutMs；
  *  - publicView 结构化进度：stageCode / progress（done 是已完成张数，stage 原样保留）；
- *  - JobQueue.generate 接线：隧道重建后幂等重投复用同一 jobId，并下发分张进度。
+ *  - JobQueue.generate 接线：逐张提交（每张一个远端 job、tasks 只含 1 项、幂等键带两位序号），
+ *    隧道重建后按同一张的幂等键重投，并下发分张进度；
+ *  - 任务取消：未知 id / queued / waiting-session（立即出队、唤醒等待者、不队头阻塞）/
+ *    running 合作式（当张完成后不再提交剩余、已完成图片落盘、status=cancelled、cancelRequested 透出）/
+ *    终态 already-finished。
  *
  * 运行：node test/jobs-wait.mjs
  */
 
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -79,6 +83,26 @@ function makeSession({ connection = () => ({ endpoint: 'http://127.0.0.1:1', tok
     snapshot: () => ({ state: 'ready', error: null }),
     start: async () => ({ state: 'ready', error: null }),
     ensureReady: async () => ({ state: 'ready', error: null }),
+  }
+}
+
+/**
+ * 可控会话：状态由用例显式推进，用于 waiting-session 的取消用例。
+ * isReady 必须跟随 snapshot 变化（JobQueue 会先读 isReady 再进等待循环）。
+ */
+function makeControllableSession(initialState = 'provisioning') {
+  const state = { current: initialState, error: null }
+  return {
+    stoppedByUser: false,
+    get isReady() {
+      return state.current === 'ready'
+    },
+    connection: () => ({ endpoint: 'http://127.0.0.1:1', token: 'test-token' }),
+    snapshot: () => ({ state: state.current, error: state.error }),
+    start: async () => ({ state: state.current, error: state.error }),
+    setState(next) {
+      state.current = next
+    },
   }
 }
 
@@ -544,24 +568,222 @@ async function main() {
       assert.equal(done.stageCode, 'done')
       assert.equal(done.progress, null, '非 running 状态 progress 必须为 null')
       assert.equal(view({ status: 'failed', stage: '失败' }).stageCode, 'failed')
+
+      // cancelled 是终态：stageCode 稳定为 cancelled、progress 为 null、cancelRequested 恒为 false。
+      const cancelled = view({ status: 'cancelled', stage: '已取消', cancelRequested: true })
+      assert.equal(cancelled.stageCode, 'cancelled')
+      assert.equal(cancelled.progress, null)
+      assert.equal(cancelled.cancelRequested, false, '终态不再透出未收敛的取消请求')
+      assert.equal(view({}).cancelRequested, false, '未取消的任务 cancelRequested 恒为 false')
+      // running 合作式停止期间：status 不变、cancelRequested=true（客户端据此显示「正在停止…」）。
+      const stopping = view({ status: 'running', progress: { done: 1, total: 4 }, cancelRequested: true })
+      assert.equal(stopping.stageCode, 'running')
+      assert.deepEqual(stopping.progress, { done: 1, total: 4 })
+      assert.equal(stopping.cancelRequested, true)
     } finally {
       queue.dispose()
     }
   })
 
-  await check('JobQueue.generate 接线：隧道重建后幂等重投并下发分张进度', async () => {
+  // ---- 任务取消 ----------------------------------------------------------
+
+  await check('cancel：未知 id 返回 not_found', () => {
+    const queue = makeQueue()
+    try {
+      assert.deepEqual(queue.cancel('j_missing'), { ok: false, code: 'not_found' })
+      assert.deepEqual(queue.cancel(''), { ok: false, code: 'not_found' })
+    } finally {
+      queue.dispose()
+    }
+  })
+
+  await check('cancel queued：出队、终态 cancelled、立即唤醒等待者，不占队列位置', async () => {
+    const queue = pendingQueue()
+    try {
+      const first = queue.submit({ prompt: '占用串行槽位' })
+      await waitUntil('首个任务进入 running', () => queue.get(first.job.id)?.status === 'running')
+      const second = queue.submit({ prompt: '排队中的任务' })
+      assert.equal(second.job.status, 'queued')
+      assert.equal(queue.queueStats().pending, 1)
+
+      const waiter = queue.waitFor(second.job.id, 60)
+      const result = queue.cancel(second.job.id)
+      assert.equal(result.ok, true)
+      assert.equal(result.disposition, 'dequeued')
+      assert.equal(result.job.status, 'cancelled')
+      assert.equal(result.job.stage, '已取消')
+      assert.equal(result.job.cancelRequested, false, '已是终态：不再透出未收敛的取消请求')
+      assert.equal(result.job.error, null)
+      assert.ok(result.job.finishedAt, '取消应写 finishedAt')
+      assert.equal(queue.queueStats().pending, 0, '取消后队列里不应还有该任务')
+
+      const waited = await waiter
+      assert.equal(waited.status, 'cancelled', 'waitFor 等待者应被立即唤醒')
+      assert.equal(queue.waiters.size, 0)
+
+      const again = queue.cancel(second.job.id)
+      assert.equal(again.disposition, 'already-finished')
+      assert.equal(again.job.status, 'cancelled')
+      assert.equal(again.job.finishedAt, result.job.finishedAt, '终态取消不得改变状态')
+    } finally {
+      queue.dispose()
+    }
+  })
+
+  await check('cancel waiting-session：立即出队并释放槽位，后续任务不必等会话等待超时', async () => {
+    const session = makeControllableSession('provisioning')
+    const queue = new JobQueue({
+      ctx: makeCtx(),
+      session,
+      defaultPreset: PRESET,
+      options: { generateTimeoutMs: 1000, sessionPollMs: 10 },
+    })
+    let generateCalls = 0
+    queue.generate = async () => {
+      generateCalls += 1
+      return { results: doneResults(1), modelId: 'test/model' }
+    }
+    try {
+      const first = queue.submit({ prompt: '等待会话的任务' })
+      await waitUntil('首个任务进入 waiting-session', () => queue.get(first.job.id)?.status === 'waiting-session')
+      const waiter = queue.waitFor(first.job.id, 60)
+      const second = queue.submit({ prompt: '后续任务' })
+      assert.equal(queue.get(second.job.id)?.status, 'queued', '串行槽位被等待会话的任务占用')
+
+      const result = queue.cancel(first.job.id)
+      assert.equal(result.disposition, 'dequeued')
+      assert.equal(result.job.status, 'cancelled')
+      assert.equal(result.job.stage, '已取消')
+      assert.equal(result.job.output, null, '一张都没完成时 output 必须为 null')
+      assert.equal((await waiter).status, 'cancelled', '等待者应立即拿到 cancelled')
+
+      // 关键：cancel 立刻让出串行槽位，第二个任务马上开始，不用等 sessionWaitMs（45 分钟）。
+      await waitUntil('后续任务立刻开始', () => queue.get(second.job.id)?.status === 'waiting-session')
+      assert.equal(generateCalls, 0, '会话未就绪时不得进入远端出图')
+
+      // 被取消任务的等待循环退出后，不得把终态覆盖成 failed。
+      await sleep(80)
+      assert.equal(queue.get(first.job.id)?.status, 'cancelled')
+
+      assert.equal(queue.cancel(second.job.id).disposition, 'dequeued')
+    } finally {
+      queue.dispose()
+    }
+  })
+
+  await check('cancel running：合作式停止——当张完成后不再提交剩余、已完成图片落盘、收敛 cancelled', async () => {
     const remote = await startFlakyRemote()
-    // 隧道一直断到第二次投递（幂等重投）为止；随后按 running 0/2 → 1/2 → done 的顺序返回。
+    const queue = new JobQueue({
+      ctx: makeCtx(),
+      session: makeSession({ connection: () => ({ endpoint: remote.endpoint, token: 'test-token' }) }),
+      defaultPreset: PRESET,
+      options: {
+        generateTimeoutMs: 5000,
+        pollMs: 10,
+        pollFailureGraceMs: 80,
+        pollBackoffMaxMs: 20,
+        resumeMaxAttempts: 1,
+      },
+    })
+    try {
+      const submitted = queue.submit({ prompt: '合作式取消', count: 3, seed: 10 })
+      const jobId = submitted.job.id
+      await waitUntil('首张已提交远端', () => remote.state.generateCalls.length === 1)
+
+      const running = queue.get(jobId)
+      assert.equal(running.status, 'running')
+      assert.equal(running.cancelRequested, false)
+      // 逐张提交：每个远端 job 的 tasks 只有 1 项，幂等键带两位序号。
+      const firstCall = remote.state.generateCalls[0]
+      assert.equal(firstCall.tasks.length, 1, '每张单独提交远端 job')
+      assert.equal(firstCall.jobId, `${jobId}-01`)
+      assert.equal(firstCall.tasks[0].seed, 10)
+
+      const cancelled = queue.cancel(jobId)
+      assert.equal(cancelled.disposition, 'cooperative')
+      assert.equal(cancelled.job.status, 'running', 'running 只置标记，不立即改状态')
+      assert.equal(cancelled.job.cancelRequested, true)
+
+      // 让当前这张完成：之后不再提交第 2、3 张。
+      const firstRemoteId = remote.state.generateCalls[0].jobId
+      remote.state.jobs.set(firstRemoteId, doneJob(firstRemoteId, 1))
+
+      // 取消后队列不得阻塞：排一个后续任务，等它开始。
+      queue.generate = () => new Promise(() => {})
+      const later = queue.submit({ prompt: '取消之后的后续任务' })
+      assert.equal(queue.get(later.job.id)?.status, 'queued')
+
+      await waitUntil('任务收敛为终态', () => ['cancelled', 'failed', 'done'].includes(queue.get(jobId)?.status))
+      const final = queue.get(jobId)
+      assert.equal(final.status, 'cancelled', JSON.stringify(final.error))
+      assert.equal(final.stage, '已取消')
+      assert.equal(final.error, null)
+      assert.equal(final.cancelRequested, false, '终态不再透出取消请求标记')
+      assert.equal(final.progress, null)
+      assert.equal(final.stageCode, 'cancelled')
+      assert.ok(final.finishedAt, '取消应收尾 finishedAt')
+
+      const remainingSubmits = remote.state.generateCalls.filter((call) => call.jobId.startsWith(`${jobId}-`))
+      assert.equal(remainingSubmits.length, 1, `取消后不得再提交剩余张数，实际 ${remainingSubmits.length} 次`)
+      assert.equal(remainingSubmits[0].jobId, `${jobId}-01`)
+
+      // 取消前已完成的图片照常落盘，output 保留但状态不是 done。
+      assert.equal(final.output?.images.length, 1, '已完成的那张应保留在 output')
+      const absolute = join(workspace, ...final.output.images[0].path.split('/'))
+      assert.ok((await stat(absolute)).size > 0, '已完成图片应真实落盘')
+
+      await waitUntil('取消后队列继续推进', () => queue.get(later.job.id)?.status === 'running')
+      assert.equal(queue.cancel(jobId).disposition, 'already-finished')
+    } finally {
+      queue.dispose()
+      await remote.close()
+    }
+  })
+
+  await check('cancel 终态：done / failed 的任务只返回 already-finished，状态不变', async () => {
+    const failedQueue = makeQueue(makeSession({ connection: () => ({ endpoint: null, token: null }) }))
+    try {
+      const submitted = failedQueue.submit({ prompt: '失败任务取消' })
+      const failed = await failedQueue.waitFor(submitted.job.id, 10)
+      assert.equal(failed.status, 'failed')
+      const result = failedQueue.cancel(submitted.job.id)
+      assert.equal(result.disposition, 'already-finished')
+      assert.equal(result.job.status, 'failed')
+      assert.equal(result.job.error?.code, 'session_absent')
+    } finally {
+      failedQueue.dispose()
+    }
+
+    const doneQueue = completeQueue()
+    try {
+      const submitted = doneQueue.submit({ prompt: '完成任务取消' })
+      const done = await doneQueue.waitFor(submitted.job.id, 10)
+      assert.equal(done.status, 'done')
+      const result = doneQueue.cancel(submitted.job.id)
+      assert.equal(result.disposition, 'already-finished')
+      assert.equal(result.job.status, 'done')
+      assert.equal(result.job.output?.images.length, 1)
+    } finally {
+      doneQueue.dispose()
+    }
+  })
+
+  await check('JobQueue.generate 逐张提交：每张一个远端 job、同键重投、分张进度', async () => {
+    const remote = await startFlakyRemote()
+    // 第一张：提交后隧道断开，幂等重投接回同一张；随后 running 0/1 → 1/1 → done。
     remote.state.pollFailures = -1
     remote.state.nextPolls = [
-      { status: 'running', job_id: 'x', progress: { done: 0, total: 2 }, results: null, error: null },
-      { status: 'running', job_id: 'x', progress: { done: 0, total: 2 }, results: null, error: null },
-      { status: 'running', job_id: 'x', progress: { done: 1, total: 2 }, results: null, error: null },
-      { status: 'running', job_id: 'x', progress: { done: 1, total: 2 }, results: null, error: null },
-      doneJob('x', 2),
+      { status: 'running', job_id: 'x', progress: { done: 0, total: 1 }, results: null, error: null },
+      { status: 'running', job_id: 'x', progress: { done: 1, total: 1 }, results: null, error: null },
+      doneJob('x', 1),
     ]
     remote.state.onGenerate = (state, count) => {
-      if (count >= 2) state.pollFailures = 0
+      if (count === 2) state.pollFailures = 0
+      // 第二张提交后直接标记完成，避免测试额外等待。
+      if (count >= 3) {
+        const body = state.generateCalls[count - 1]
+        state.jobs.set(body.jobId, doneJob(body.jobId, 1))
+      }
     }
     const queue = new JobQueue({
       ctx: makeCtx(),
@@ -576,22 +798,36 @@ async function main() {
       },
     })
     try {
-      const submitted = queue.submit({ prompt: '隧道重建续接', count: 2 })
+      const submitted = queue.submit({ prompt: '隧道重建续接', count: 2, seed: 100 })
       const jobId = submitted.job.id
       const seen = []
       const deadline = Date.now() + 4000
       while (Date.now() < deadline) {
         const view = queue.get(jobId)
         if (view) seen.push(view)
-        if (view && ['done', 'failed'].includes(view.status)) break
+        if (view && ['done', 'failed', 'cancelled'].includes(view.status)) break
         await sleep(5)
       }
       const final = queue.get(jobId)
       assert.equal(final.status, 'done', JSON.stringify(final.error))
       assert.equal(final.output?.images.length, 2)
-      assert.equal(remote.state.generateCalls.length, 2, '首次提交 + 一次幂等重投')
-      assert.equal(remote.state.generateCalls[1].jobId, remote.state.generateCalls[0].jobId, '重投必须复用同一 jobId')
-      assert.equal(remote.state.generateCalls[1].jobId, jobId)
+
+      const calls = remote.state.generateCalls
+      assert.equal(calls.length, 3, '第一张首次提交 + 同键重投 + 第二张')
+      assert.equal(calls[0].jobId, `${jobId}-01`)
+      assert.equal(calls[1].jobId, `${jobId}-01`, '重投必须复用同一张的幂等键')
+      assert.equal(calls[2].jobId, `${jobId}-02`)
+      for (const call of calls) {
+        assert.equal(call.tasks.length, 1, '逐张提交：每个远端 job 只有 1 个 task')
+        assert.ok(call.jobId.length <= 64, '幂等键长度不得超过 daemon 上限')
+        assert.match(call.jobId, /^[A-Za-z0-9._-]+$/, '幂等键只能含字母/数字/点/下划线/短横线')
+      }
+      assert.deepEqual(
+        calls.filter((call) => call.jobId.endsWith('-01')).map((call) => call.tasks[0].seed),
+        [100, 100],
+        '同一张重投时 seed 必须不变',
+      )
+      assert.equal(calls[2].tasks[0].seed, 101, '第二张 seed 递增')
 
       const runningViews = seen.filter((item) => item.status === 'running')
       assert.ok(runningViews.length > 0, '应记录到 running 快照')
@@ -600,17 +836,18 @@ async function main() {
         `running 快照的 stageCode 应恒为 running：${runningViews.map((item) => item.stageCode)}`,
       )
       const doneCounts = new Set(runningViews.map((item) => item.progress?.done))
-      assert.ok(doneCounts.has(0) && doneCounts.has(1), `running 进度应包含已完成 0 与 1，实际 ${[...doneCounts]}`)
+      assert.ok(doneCounts.has(0), `running 进度应包含已完成 0 张，实际 ${[...doneCounts]}`)
       assert.ok(
         runningViews.every((item) => item.progress?.total === 2),
         `running 进度 total 应恒为 2：${runningViews.map((item) => item.progress?.total)}`,
       )
       const stages = new Set(runningViews.map((item) => item.stage))
-      assert.ok(stages.has('生成中 1/2') && stages.has('生成中 2/2'), `stage 文本应保留 done+1 语义：${[...stages]}`)
+      assert.ok(stages.has('生成中 1/2'), `stage 文本应保留 done+1 语义：${[...stages]}`)
 
       assert.equal(final.stageCode, 'done')
       assert.equal(final.progress, null)
       assert.equal(final.stage, '完成')
+      assert.equal(final.cancelRequested, false)
     } finally {
       queue.dispose()
       await remote.close()

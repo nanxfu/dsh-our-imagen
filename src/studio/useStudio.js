@@ -95,7 +95,8 @@ export function useStudio(props) {
         entries.push({ role: 'assistant', kind: 'job', jobId, stage: 'pending', text: t('studio.chat.pending') })
         chat.pushMessages(entries)
         host.refresh()
-        library.loadHistory()
+        // 历史只在任务完成后刷新（见 useWorkLibrary 的 lastJob effect）：
+        // 刚提交的任务还没有产物，这里再拉一次会把已加载的分页重置回第一页。
         ui.showToast(t('studio.toast.submitted'))
         return
       }

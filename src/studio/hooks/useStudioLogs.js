@@ -20,10 +20,32 @@ function sameLines(previous, next) {
 }
 
 /**
+ * 两段诊断环境指纹是否相同：逐字段比较（含 timings 子对象），内容没变不触发重渲染。
+ * 服务端按固定白名单顺序生成键，这里用集合兜底未知键，避免多余的一次渲染。
+ */
+function sameEnv(previous, next) {
+  const left = previous && typeof previous === 'object' ? previous : {}
+  const right = next && typeof next === 'object' ? next : {}
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)])
+  for (const key of keys) {
+    if (key === 'timings') continue
+    if (left[key] !== right[key]) return false
+  }
+  const leftTimings = left.timings && typeof left.timings === 'object' ? left.timings : {}
+  const rightTimings = right.timings && typeof right.timings === 'object' ? right.timings : {}
+  const timingKeys = new Set([...Object.keys(leftTimings), ...Object.keys(rightTimings)])
+  for (const key of timingKeys) {
+    if (leftTimings[key] !== rightTimings[key]) return false
+  }
+  return true
+}
+
+/**
  * @param {boolean} open 抽屉是否打开；关闭时清理定时器并停止请求
  * @returns {{ status: 'idle'|'loading'|'ready'|'empty'|'unavailable',
  *             lines: string[], hostLines: string[],
- *             reason: { code: string, message: string } | null }}
+ *             reason: { code: string, message: string } | null, env: object }}
+ *   env 是 /logs 响应里的诊断环境指纹（白名单过滤后），供日志抽屉拼诊断文本。
  */
 export function useStudioLogs(open) {
   const [status, setStatus] = React.useState('idle')
@@ -31,9 +53,12 @@ export function useStudioLogs(open) {
   // Host 本地日志尾部：每次轮询整段替换（不按游标累加，也不与远端 lines 混排）。
   const [hostLines, setHostLines] = React.useState([])
   const [reason, setReason] = React.useState(null)
-  // 轮询回调不依赖渲染闭包：行缓冲与游标都放在 ref 里。
+  // 诊断环境指纹：内容不变时保留上一个对象，不触发重渲染。
+  const [env, setEnv] = React.useState({})
+  // 轮询回调不依赖渲染闭包：行缓冲、游标与环境指纹都放在 ref 里。
   const linesRef = React.useRef([])
   const hostLinesRef = React.useRef([])
+  const envRef = React.useRef({})
   const sinceRef = React.useRef(0)
 
   React.useEffect(() => {
@@ -43,10 +68,12 @@ export function useStudioLogs(open) {
 
     linesRef.current = []
     hostLinesRef.current = []
+    envRef.current = {}
     sinceRef.current = 0
     setLines([])
     setHostLines([])
     setReason(null)
+    setEnv({})
     setStatus('loading')
 
     const tick = async () => {
@@ -64,6 +91,11 @@ export function useStudioLogs(open) {
       if (!sameLines(hostLinesRef.current, payload.hostLines)) {
         hostLinesRef.current = payload.hostLines
         setHostLines(payload.hostLines)
+      }
+      // 环境指纹同理：只有内容（含阶段耗时）变化才更新状态。
+      if (!sameEnv(envRef.current, payload.env)) {
+        envRef.current = payload.env
+        setEnv(payload.env)
       }
       if (payload.ok) {
         setStatus(merged.length === 0 ? 'empty' : 'ready')
@@ -83,7 +115,7 @@ export function useStudioLogs(open) {
     }
   }, [open])
 
-  return { status, lines, hostLines, reason }
+  return { status, lines, hostLines, reason, env }
 }
 
 /**

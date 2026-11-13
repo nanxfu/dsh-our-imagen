@@ -19,6 +19,8 @@ import { fileURLToPath } from 'node:url'
 import { bundle } from '../build.mjs'
 import { loadClient, serializeTree, TEST_ARTIFACT } from './load-client.mjs'
 import { LIMITS } from '../shared/contract.js'
+// 资源层直接 import 源码：渲染测试已经覆盖 UI，这里补「客户端请求形状」的离线断言。
+import { cancelJob as cancelJobRequest, enhancePromptRequest, fetchHistory } from '../src/api/resources.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const PROD_ARTIFACT = join(ROOT, 'client.js')
@@ -171,7 +173,7 @@ const scenarios = {
     history: { items: [historyItem] },
     props: {},
     view: 'gallery',
-    expect: ['作品画廊', '全部模型', '测试用的荷花池塘', '今天'],
+    expect: ['作品画廊', '全部模型', '测试用的荷花池塘', '今天', '已加载全部作品'],
     reject: [],
     structure: {
       required: {
@@ -182,9 +184,12 @@ const scenarios = {
         // 画廊列由 JS 分桶（行优先）：1280px 视口下 4 列，卡片直接收藏的星标每张一个。
         'ofs-gallery-col': 4,
         'ofs-gallery-star': 1,
+        // 分页脚：没有更多记录时给「已加载全部作品」一行提示。
+        'ofs-gallery-foot': 1,
+        'ofs-gallery-all-loaded': 1,
       },
       // 画廊是独立视图：不应带整页外壳、舞台、单轨面板或胶片条。
-      forbidden: ['ofs-root', 'ofs-topbar', 'ofs-stage', 'ofs-panel', 'ofs-filmstrip', 'ofs-guidance', 'ofs-toast'],
+      forbidden: ['ofs-root', 'ofs-topbar', 'ofs-stage', 'ofs-panel', 'ofs-filmstrip', 'ofs-guidance', 'ofs-toast', 'ofs-gallery-more'],
     },
   },
   guidance: {
@@ -706,6 +711,9 @@ for (const [name, scenario] of Object.entries(scenarios)) {
           now: NOW,
           presets: [preset],
           favorites: [],
+          hasMore: false,
+          loadingMore: false,
+          onLoadMore: () => {},
           onDelete: () => {},
           onExport: () => {},
           onOpen: () => {},
@@ -873,13 +881,13 @@ await check('渲染：画廊卡片星标切换收藏，不影响打开大图', a
   assert.deepEqual(favoriteCalls, [entries[1].image.path], '批量选择时不应触发收藏')
 })
 
-// 历史一次取契约允许的最大批量：画廊不能停在旧的 60 张上限。
-await check('渲染：历史加载取契约上限', async () => {
+// 历史首屏按契约页长请求，offset 从 0 开始（分页由「加载更多」推进）。
+await check('渲染：历史首屏按契约页长与 offset 请求', async () => {
   const client = await loadClient({
     now: NOW,
     responses: {
       '/imagen-api/state': readyState,
-      '/imagen-api/history': { items: [historyItem] },
+      '/imagen-api/history': { items: [historyItem], limit: LIMITS.history.pageSize, offset: 0, hasMore: false },
       '/imagen-api/library': { favorites: [], deleted: [] },
     },
     testBuild: true,
@@ -887,8 +895,8 @@ await check('渲染：历史加载取契约上限', async () => {
   await client.mountRaw(client.components.Studio, {})
   client.unmount()
   assert.ok(
-    client.fetches.includes(`/imagen-api/history?limit=${LIMITS.history.maxLimit}`),
-    `历史请求应取契约上限，实际请求：${client.fetches.join(', ')}`,
+    client.fetches.includes(`/imagen-api/history?limit=${LIMITS.history.pageSize}&offset=0`),
+    `历史首屏应取契约页长且 offset=0，实际请求：${client.fetches.join(', ')}`,
   )
   assert.ok(!client.fetches.includes('/imagen-api/history?limit=60'), '不应再写死旧的 60 张上限')
 })
@@ -1531,6 +1539,10 @@ await check('渲染：润色标签显示中文 label、点击插入英文 text',
       applyStyle: () => {},
       ratioId: '1:1',
       applyRatio: () => {},
+      sizeOptions: [],
+      selectedSize: null,
+      applySize: () => {},
+      applyCustomSize: () => {},
       refineGroups: [
         {
           dimension: 'lighting',
@@ -1540,6 +1552,8 @@ await check('渲染：润色标签显示中文 label、点击插入英文 text',
       refineSource: 'local',
       enhancing: false,
       enhance: () => {},
+      translating: false,
+      translate: () => {},
       toggleRefine: (term) => inserted.push(term),
       useInspiration: () => {},
       englishPromptHint: false,
@@ -1559,6 +1573,389 @@ await check('渲染：润色标签显示中文 label、点击插入英文 text',
   assert.ok(chip, '[refine] 缺少润色标签按钮')
   chip.props.onClick()
   assert.deepEqual(inserted, ['soft diffused light'], '点击应把英文本交给 toggleRefine')
+})
+
+// 暗房卡取消：三种活动任务都显示取消按钮；收到取消请求后显示「正在停止…」并禁用。
+await check('渲染：胶片条取消按钮与取消中状态', async () => {
+  const t = (client) => client.internals.i18n.fallbackTranslate('zh')
+  const activeJobs = [
+    {
+      id: 'job-run',
+      status: 'running',
+      stageCode: 'running',
+      progress: { done: 1, total: 4 },
+      createdAt: at(-10),
+      startedAt: at(-8),
+      params: { prompt: '正在生成的第一张' },
+    },
+    { id: 'job-queued', status: 'queued', createdAt: at(-2), params: { prompt: '排队中的第二张' } },
+    {
+      id: 'job-stop',
+      status: 'running',
+      stageCode: 'running',
+      cancelRequested: true,
+      createdAt: at(-20),
+      startedAt: at(-18),
+      params: { prompt: '取消中的第三张' },
+    },
+  ]
+  const mountFilmstrip = async (computeExtra) => {
+    const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+    const cancelled = []
+    const tree = await client.mountRaw(client.components.Filmstrip, {
+      t: t(client),
+      ui: { setView: () => {} },
+      compute: {
+        pendingJobs: activeJobs,
+        sessionState: 'ready',
+        startSession: () => {},
+        status: { stopped: false },
+        cancelJob: (id) => cancelled.push(id),
+        cancellingIds: [],
+        ...computeExtra,
+      },
+      library: { batches: [], selected: null, selectImage: () => {} },
+      now: NOW,
+    })
+    client.unmount()
+    return { tree, cancelled }
+  }
+
+  const ready = await mountFilmstrip({})
+  const buttons = findNodes(
+    ready.tree,
+    (node) => node.type === 'button' && node.props?.className === 'ofs-ghost-cancel',
+  )
+  assert.equal(buttons.length, 3, 'queued / waiting-session / running 三种活动任务都应显示取消按钮')
+  assert.equal(buttons[0].props['aria-label'], '取消')
+  assert.notEqual(buttons[0].props.disabled, true, '未取消的任务按钮可点击')
+  buttons[0].props.onClick()
+  assert.deepEqual(ready.cancelled, ['job-run'], '点击取消应把任务 id 交给 cancelJob')
+  // 宿主已标记 cancelRequested：文案换成「正在停止…」并禁用，避免重复提交。
+  assert.equal(buttons[2].props['aria-label'], '正在停止…')
+  assert.equal(buttons[2].props.disabled, true)
+  const text = collectText(ready.tree).join(' | ')
+  assert.ok(text.includes('正在停止…'), '取消中的卡片应显示停止中文案')
+
+  // 本地请求已发出、宿主快照还没更新：也要立刻进入「取消中」。
+  const pending = await mountFilmstrip({ cancellingIds: ['job-queued'] })
+  const pendingButtons = findNodes(
+    pending.tree,
+    (node) => node.type === 'button' && node.props?.className === 'ofs-ghost-cancel',
+  )
+  assert.equal(pendingButtons[1].props['aria-label'], '正在停止…')
+  assert.equal(pendingButtons[1].props.disabled, true, '取消请求发出后按钮应禁用')
+  assertStructure('filmstrip-cancelling', pending.tree, {
+    // 两个取消中的卡：job-stop 由宿主 cancelRequested 标记，job-queued 由本地请求标记。
+    required: { 'ofs-ghost': 3, 'ofs-ghost-cancel': 3, 'is-cancelling': 2 },
+    forbidden: [],
+  })
+})
+
+// 画廊分页脚：有更早记录时给「加载更多」，取完后给「已加载全部作品」。
+await check('渲染：画廊分页底部（加载更多 / 已加载全部）', async () => {
+  const mountGallery = async (extra = {}) => {
+    const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+    const calls = []
+    const tree = await client.mountRaw(client.components.Gallery, {
+      t: client.internals.i18n.fallbackTranslate('zh'),
+      gallery: [{ image: historyItem.images[0], item: historyItem }],
+      now: NOW,
+      presets: [preset],
+      favorites: [],
+      hasMore: true,
+      loadingMore: false,
+      onLoadMore: () => calls.push('more'),
+      onDelete: () => {},
+      onExport: () => {},
+      onOpen: () => {},
+      onRecall: () => {},
+      onVariant: () => {},
+      onZoom: () => {},
+      ...extra,
+    })
+    client.unmount()
+    return { tree, calls }
+  }
+
+  const more = await mountGallery()
+  const moreButton = findNodes(
+    more.tree,
+    (node) => node.type === 'button' && node.props?.className === 'ofs-chip ofs-gallery-more',
+  )
+  assert.equal(moreButton.length, 1, 'hasMore=true 时应显示「加载更多」')
+  assert.ok(collectText(moreButton[0]).join('').includes('加载更多'))
+  moreButton[0].props.onClick()
+  assert.deepEqual(more.calls, ['more'], '点击加载更多应交给 useWorkLibrary 的 loadMore')
+
+  const busy = await mountGallery({ loadingMore: true })
+  const busyButton = findNodes(
+    busy.tree,
+    (node) => node.type === 'button' && node.props?.className === 'ofs-chip ofs-gallery-more',
+  )[0]
+  assert.equal(busyButton.props.disabled, true, '加载中按钮禁用')
+  assert.equal(busyButton.props['aria-busy'], 'true')
+
+  const done = await mountGallery({ hasMore: false })
+  assert.ok(collectText(done.tree).join(' | ').includes('已加载全部作品'), '没有更多记录时显示全部已加载')
+  assert.equal(
+    findNodes(done.tree, (node) => node.props?.className === 'ofs-chip ofs-gallery-more').length,
+    0,
+    '取完后不再显示加载更多按钮',
+  )
+  assertStructure('gallery-foot-done', done.tree, {
+    required: { 'ofs-gallery-foot': 1, 'ofs-gallery-all-loaded': 1 },
+    forbidden: ['ofs-gallery-more'],
+  })
+})
+
+// 工作台画廊视图：首屏 offset=0，点「加载更多」后按已加载条数推进 offset。
+await check('渲染：画廊加载更多推进 offset 且不重复请求首页', async () => {
+  const secondItem = {
+    ...historyItem,
+    jobId: 'job-2',
+    dir: 'imagen-output/20261109-110000-job-2',
+    prompt: '第二张作品',
+    images: [image(9)],
+  }
+  const client = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/state': readyState,
+      '/imagen-api/history': {
+        items: [historyItem, secondItem],
+        limit: LIMITS.history.pageSize,
+        offset: 0,
+        hasMore: true,
+      },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+    },
+    testBuild: true,
+  })
+  const tree = await client.mountRaw(client.components.Studio, { view: 'gallery' })
+  const moreButton = findNodes(
+    tree,
+    (node) => node.type === 'button' && node.props?.className === 'ofs-chip ofs-gallery-more',
+  )[0]
+  assert.ok(moreButton, 'hasMore=true 时画廊底部应显示加载更多')
+  moreButton.props.onClick()
+  // loadMore 是异步请求：给微任务与 setImmediate 几轮时间落地。
+  for (let round = 0; round < 4; round += 1) {
+    await Promise.resolve()
+    await new Promise((resolvePromise) => setImmediate(resolvePromise))
+  }
+  client.unmount()
+
+  const first = `/imagen-api/history?limit=${LIMITS.history.pageSize}&offset=0`
+  const next = `/imagen-api/history?limit=${LIMITS.history.pageSize}&offset=2`
+  assert.equal(client.fetches.filter((item) => item === first).length, 1, '首屏只请求一次 offset=0')
+  assert.ok(client.fetches.includes(next), `加载更多应按已加载 2 条推进 offset，实际请求：${client.fetches.join(', ')}`)
+})
+
+// 提示词区：「转为英文」按钮与「润色」并列；画面设置区单独一行方形尺寸档位。
+await check('渲染：转为英文按钮与方形尺寸档位', async () => {
+  const mountRail = async (formExtra = {}) => {
+    const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+    const calls = { translate: 0, size: [], patched: [] }
+    const form = {
+      form: {
+        prompt: '雨夜街景',
+        negative: 'blurry, my own',
+        negativeLayers: { model: 'blurry', style: '', user: 'my own' },
+        presetId: 'sdxl-lightning',
+        width: 1024,
+        height: 1024,
+        steps: 4,
+        cfg: 0,
+        seed: '',
+        count: 1,
+        styleId: '',
+      },
+      patchForm: (partial) => calls.patched.push(partial),
+      selectPreset: () => {},
+      styleId: '',
+      applyStyle: () => {},
+      ratioId: '1:1',
+      applyRatio: () => {},
+      sizeOptions: [768, 1024, 1152],
+      selectedSize: 1024,
+      applySize: (size) => calls.size.push(size),
+      applyCustomSize: (partial) => calls.patched.push(client.PURE.customSizePatch(partial)),
+      refineGroups: [],
+      refineSource: '',
+      enhancing: false,
+      enhance: () => {},
+      translating: false,
+      translate: () => { calls.translate += 1 },
+      toggleRefine: () => {},
+      useInspiration: () => {},
+      englishPromptHint: false,
+      ...formExtra,
+    }
+    const tree = await client.mountRaw(client.components.Rail, {
+      t: client.internals.i18n.fallbackTranslate('zh'),
+      ui: {
+        advancedOpen: true,
+        setAdvancedOpen: () => {},
+        negativeOpen: false,
+        setNegativeOpen: () => {},
+        panelMode: 'form',
+        setPanelMode: () => {},
+      },
+      form,
+      actions: { sending: false, generate: () => {} },
+    })
+    client.unmount()
+    return { tree, calls, client }
+  }
+
+  const { tree, calls, client } = await mountRail()
+  const text = collectText(tree).join(' | ')
+  assert.ok(text.includes('转为英文'), '提示词区应有「转为英文」按钮')
+  assert.ok(text.includes('润色'), '润色按钮仍在，二者并列')
+  assert.ok(text.includes('方形尺寸'), '画面设置区应有独立的方形尺寸行')
+  assert.ok(text.includes('预设推荐的等宽高尺寸'), '方形尺寸行应附说明，与画幅比例区分')
+  // 方形档位：三个数字按钮，当前 1024×1024 精确匹配时选中。
+  const sizeButtons = findNodes(
+    tree,
+    (node) => node.type === 'button'
+      && typeof node.props?.className === 'string'
+      && node.props.className.split(' ').includes('ofs-size'),
+  )
+  assert.equal(sizeButtons.length, 3, `方形尺寸档位应消费 sizeOptions，实际：${collectText(tree).join(' | ')}`)
+  assert.deepEqual(sizeButtons.map((node) => collectText(node).join('')), ['768', '1024', '1152'])
+  assert.equal(sizeButtons[1].props['aria-pressed'], true, '宽高等于 1024 时 1024 档位选中')
+  sizeButtons[0].props.onClick()
+  assert.deepEqual(calls.size, [768], '点击档位应设置宽高为该值')
+
+  // 转英文按钮：点击交给 translate 动作；翻译中显示 loading 文案并禁用。
+  const translateButton = findNodes(
+    tree,
+    (node) => node.type === 'button'
+      && typeof node.props?.className === 'string'
+      && node.props.className.split(' ').includes('ofs-translate-action'),
+  )[0]
+  assert.ok(translateButton, '缺少「转为英文」按钮')
+  assert.notEqual(translateButton.props.disabled, true)
+  translateButton.props.onClick()
+  assert.equal(calls.translate, 1, '点击应调用 translate()')
+
+  // 自定义宽高输入：min/max/step 取自契约，失焦时按 clampSize 钳制。
+  const widthInput = findNodes(tree, (node) => node.type === 'input' && node.props?.['aria-label'] === '宽')[0]
+  const heightInput = findNodes(tree, (node) => node.type === 'input' && node.props?.['aria-label'] === '高')[0]
+  assert.ok(widthInput && heightInput, '高级设置应提供自定义宽/高输入')
+  assert.equal(widthInput.props.min, LIMITS.width.min)
+  assert.equal(widthInput.props.max, LIMITS.width.max)
+  assert.equal(widthInput.props.step, LIMITS.width.step)
+  assert.equal(heightInput.props.max, LIMITS.height.max)
+  assert.equal(widthInput.props.type, 'number')
+  widthInput.props.onChange({ target: { value: '1152' } })
+  assert.deepEqual(calls.patched.at(-1), { width: '1152' }, '输入过程先原样进表单')
+  widthInput.props.onBlur({ target: { value: '99999' } })
+  assert.deepEqual(calls.patched.at(-1), { width: LIMITS.width.max }, '失焦时按契约上限钳制')
+
+  const translating = await mountRail({ translating: true })
+  const translatingText = collectText(translating.tree).join(' | ')
+  assert.ok(translatingText.includes('正在翻译…'), '翻译中按钮显示进行中文案')
+  const translatingButton = findNodes(
+    translating.tree,
+    (node) => node.type === 'button'
+      && typeof node.props?.className === 'string'
+      && node.props.className.split(' ').includes('ofs-translate-action'),
+  )[0]
+  assert.equal(translatingButton.props.disabled, true, '翻译中按钮禁用')
+  assert.equal(client.PURE.mergeNegativeLayers({ model: 'blurry', style: '', user: 'my own' }), 'blurry, my own')
+})
+
+// 资源层请求形状：取消走契约路由 + JSON body；历史拼 limit/offset；英译带 mode。
+await check('资源层：取消 / 历史分页 / 英译的请求形状', async () => {
+  const savedFetch = globalThis.fetch
+  const savedDocument = Object.prototype.hasOwnProperty.call(globalThis, 'document')
+    ? globalThis.document
+    : undefined
+  const savedHasDocument = Object.prototype.hasOwnProperty.call(globalThis, 'document')
+  const calls = []
+  globalThis.document = { baseURI: 'http://localhost/' }
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), method: init?.method ?? 'GET', body: init?.body ?? null })
+    return { ok: true, status: 200, json: async () => ({ ok: true }) }
+  }
+  try {
+    await cancelJobRequest('j_123')
+    await fetchHistory()
+    await fetchHistory(LIMITS.history.pageSize, LIMITS.history.pageSize)
+    await enhancePromptRequest({ prompt: '雨夜街景', presetId: 'sdxl-lightning', locale: 'zh', mode: 'translate' })
+  } finally {
+    globalThis.fetch = savedFetch
+    if (savedHasDocument) globalThis.document = savedDocument
+    else delete globalThis.document
+  }
+
+  assert.equal(calls[0].url, 'http://localhost/imagen-api/job/cancel', '取消必须走契约 ROUTES.jobCancel')
+  assert.equal(calls[0].method, 'POST')
+  assert.deepEqual(JSON.parse(calls[0].body), { id: 'j_123' }, '取消请求体是 { id }')
+  assert.equal(calls[1].url, `http://localhost/imagen-api/history?limit=${LIMITS.history.pageSize}&offset=0`)
+  assert.equal(
+    calls[2].url,
+    `http://localhost/imagen-api/history?limit=${LIMITS.history.pageSize}&offset=${LIMITS.history.pageSize}`,
+    '加载更多按 offset 逐页请求',
+  )
+  const enhance = JSON.parse(calls[3].body)
+  assert.equal(enhance.mode, 'translate', '英译请求必须带 mode=translate')
+  assert.equal(enhance.prompt, '雨夜街景')
+})
+
+// 工作台集成：运行中的任务点取消 → 请求契约里的取消接口并刷新宿主快照。
+await check('渲染：工作台点取消按钮请求取消接口', async () => {
+  const runningState = {
+    ...readyState,
+    jobs: [
+      {
+        id: 'job-cancel',
+        status: 'running',
+        stageCode: 'running',
+        progress: { done: 0, total: 2 },
+        createdAt: at(-8),
+        startedAt: at(-6),
+        params: { prompt: '取消这一张' },
+      },
+    ],
+  }
+  const client = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/state': runningState,
+      '/imagen-api/history': { items: [], limit: LIMITS.history.pageSize, offset: 0, hasMore: false },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+      '/imagen-api/job/cancel': {
+        ok: true,
+        job: { id: 'job-cancel', status: 'cancelled', cancelRequested: true, progress: null, params: { prompt: '取消这一张' } },
+        disposition: 'dequeued',
+      },
+    },
+    testBuild: true,
+  })
+  const tree = await client.mountRaw(client.components.Studio, {})
+  const button = findNodes(
+    tree,
+    (node) => node.type === 'button' && node.props?.className === 'ofs-ghost-cancel',
+  )[0]
+  assert.ok(button, '运行中任务应显示取消按钮')
+  button.props.onClick()
+  for (let round = 0; round < 4; round += 1) {
+    await Promise.resolve()
+    await new Promise((resolvePromise) => setImmediate(resolvePromise))
+  }
+  client.unmount()
+  assert.ok(
+    client.fetches.includes('/imagen-api/job/cancel'),
+    `点击取消应请求取消接口，实际请求：${client.fetches.join(', ')}`,
+  )
+  assert.equal(
+    client.fetches.filter((item) => item === '/imagen-api/state').length >= 2,
+    true,
+    '取消成功后应刷新宿主快照',
+  )
 })
 
 // 测试内探针：校验假 React 替身自身的 hook 语义。替身坏了，上面所有渲染断言都会静默失真，

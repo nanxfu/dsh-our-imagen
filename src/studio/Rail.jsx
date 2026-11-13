@@ -191,10 +191,16 @@ export function Rail(props) {
     applyStyle,
     ratioId,
     applyRatio,
+    sizeOptions,
+    selectedSize,
+    applySize,
+    applyCustomSize,
     refineGroups,
     refineSource,
     enhancing,
     enhance,
+    translating,
+    translate,
     toggleRefine,
     useInspiration,
     englishPromptHint,
@@ -203,6 +209,8 @@ export function Rail(props) {
 
   const promptLength = fields.prompt.length
   const hasPrompt = fields.prompt.trim().length > 0
+  // 防御式取档位：预览/测试可能只给部分表单字段，缺失时该行整体不渲染。
+  const sizes = Array.isArray(sizeOptions) ? sizeOptions : []
 
   return (
     <aside className="ofs-panel ofs-panel--form">
@@ -251,10 +259,21 @@ export function Rail(props) {
               <span className="ofs-counter">
                 {promptLength} / {PROMPT_MAX}
               </span>
-              <button type="button" className="ofs-text-action" onClick={enhance} disabled={enhancing}>
-                <Icon name="expandText" size={13} />
-                {enhancing ? t('studio.enhance.thinking') : t('studio.enhance.button')}
-              </button>
+              <span className="ofs-composer-actions">
+                {/* 英译只是把当前提示词换成英文，不改写内容；模型不可用时明确提示，不假装成功。 */}
+                <button
+                  type="button"
+                  className="ofs-text-action ofs-translate-action"
+                  onClick={translate}
+                  disabled={translating || enhancing}
+                >
+                  {translating ? t('studio.translate.thinking') : t('studio.translate.button')}
+                </button>
+                <button type="button" className="ofs-text-action" onClick={enhance} disabled={enhancing || translating}>
+                  <Icon name="expandText" size={13} />
+                  {enhancing ? t('studio.enhance.thinking') : t('studio.enhance.button')}
+                </button>
+              </span>
             </div>
           </div>
 
@@ -344,6 +363,30 @@ export function Rail(props) {
               </button>
             ))}
           </div>
+
+          {/* 方形尺寸与画幅比例是两行不同概念：这里只给预设推荐的等宽高档位。 */}
+          {sizes.length > 0 ? (
+            <>
+              <div className="ofs-size-row" role="group" aria-label={t('studio.rail.size')}>
+                <span className="ofs-size-label">{t('studio.rail.size')}</span>
+                <div className="ofs-size-options">
+                  {sizes.map((size) => (
+                    <button
+                      type="button"
+                      key={size}
+                      className={selectedSize === size ? 'ofs-size is-on' : 'ofs-size'}
+                      onClick={() => applySize(size)}
+                      aria-pressed={selectedSize === size}
+                      title={`${size} × ${size}`}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="ofs-hint ofs-size-hint">{t('studio.rail.sizeHint')}</p>
+            </>
+          ) : null}
         </Fieldset>
 
         <Fieldset title={t('studio.rail.advanced')}>
@@ -444,6 +487,35 @@ export function Rail(props) {
                         </option>
                       ))}
                     </select>
+                  </div>
+
+                  {/* 自定义宽高：与方形档位、画幅比例共用同一份 width/height 状态。 */}
+                  <div className="ofs-grid-head">{t('studio.rail.customSize')}</div>
+                  <div className="ofs-field">
+                    <span>{t('studio.rail.width')}</span>
+                    <input
+                      type="number"
+                      min={LIMITS.width.min}
+                      max={LIMITS.width.max}
+                      step={LIMITS.width.step}
+                      value={fields.width}
+                      aria-label={t('studio.rail.width')}
+                      onChange={(event) => patchForm({ width: event.target.value })}
+                      onBlur={(event) => applyCustomSize({ width: event.target.value })}
+                    />
+                  </div>
+                  <div className="ofs-field">
+                    <span>{t('studio.rail.height')}</span>
+                    <input
+                      type="number"
+                      min={LIMITS.height.min}
+                      max={LIMITS.height.max}
+                      step={LIMITS.height.step}
+                      value={fields.height}
+                      aria-label={t('studio.rail.height')}
+                      onChange={(event) => patchForm({ height: event.target.value })}
+                      onBlur={(event) => applyCustomSize({ height: event.target.value })}
+                    />
                   </div>
                 </div>
               ) : null}

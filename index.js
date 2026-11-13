@@ -11,7 +11,7 @@
 import { TIMEOUTS, VERSION } from './shared/contract.js'
 import { JobQueue } from './lib/jobs.js'
 import { probeKaggle } from './lib/kaggle.js'
-import { createLogger, installFileLog } from './lib/log.js'
+import { buildDiagnosticEnv, createLogger, installFileLog } from './lib/log.js'
 import { DEFAULT_PRESET, presetById, publicPresets } from './lib/presets.js'
 import { registerRoutes, toInt } from './lib/route-kit.js'
 import { createFileRoutes } from './lib/routes/files.js'
@@ -134,7 +134,8 @@ export function apply(ctx, config = {}) {
 
   registerRoutes(ctx, [
     ...createSessionRoutes({ session, probes, statePayload, defaultPreset, log }),
-    ...createLogRoutes({ session, log, ctx }),
+    // 诊断环境指纹只在 /logs 响应里下发：只含布尔开关、版本号与毫秒耗时，不含配置原文。
+    ...createLogRoutes({ session, log, ctx, env: () => buildDiagnosticEnv({ config, session }) }),
     ...createJobRoutes({ ctx, queue, log }),
     ...createFileRoutes({ ctx, log }),
     ...createLibraryRoutes({ ctx, log }),

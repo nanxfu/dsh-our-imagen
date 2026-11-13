@@ -73,6 +73,9 @@ export function Gallery(props) {
     onRecall,
     onVariant,
     onToggleFavorite,
+    hasMore,
+    loadingMore,
+    onLoadMore,
     defaultSelecting,
   } = props
   const [presetFilter, setPresetFilter] = React.useState('')
@@ -106,6 +109,32 @@ export function Gallery(props) {
 
   const usedPresets = [...new Set(items.map((entry) => entry.item.presetId).filter(Boolean))]
   const visibleCount = BUCKETS.reduce((total, bucket) => total + groups[bucket].length, 0)
+  const canLoadMore = hasMore === true && typeof onLoadMore === 'function'
+
+  /**
+   * 底部分页脚：还有更早的记录时给「加载更多」，加载中禁用；全部取完给一行提示。
+   * 分页脚只跟着有内容的画廊出现，空画廊与筛选无结果的空态不显示。
+   */
+  function renderFooter() {
+    if (items.length === 0) return null
+    return (
+      <div className="ofs-gallery-foot">
+        {canLoadMore ? (
+          <button
+            type="button"
+            className="ofs-chip ofs-gallery-more"
+            onClick={onLoadMore}
+            disabled={loadingMore === true}
+            aria-busy={loadingMore === true ? 'true' : undefined}
+          >
+            {t('studio.gallery.loadMore')}
+          </button>
+        ) : (
+          <p className="ofs-gallery-all-loaded">{t('studio.gallery.allLoaded')}</p>
+        )}
+      </div>
+    )
+  }
 
   function togglePick(key) {
     setPicked((prev) => (prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]))
@@ -330,23 +359,26 @@ export function Gallery(props) {
           )}
         </div>
       ) : (
-        BUCKETS.map((bucket) => {
-          const entries = groups[bucket]
-          if (entries.length === 0) return null
-          return (
-            <section className="ofs-gallery-group" key={bucket}>
-              <h4 className="ofs-gallery-group-title">{t(`studio.gallery.${bucket}`)}</h4>
-              {/* 每个时间分组各自按行优先分列，最新作品排在第一行最左侧。 */}
-              <div className="ofs-gallery-wall">
-                {galleryColumns(entries, columns).map((column, index) => (
-                  <div className="ofs-gallery-col" key={index}>
-                    {column.map((entry) => renderCard(entry))}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )
-        })
+        <>
+          {BUCKETS.map((bucket) => {
+            const entries = groups[bucket]
+            if (entries.length === 0) return null
+            return (
+              <section className="ofs-gallery-group" key={bucket}>
+                <h4 className="ofs-gallery-group-title">{t(`studio.gallery.${bucket}`)}</h4>
+                {/* 每个时间分组各自按行优先分列，最新作品排在第一行最左侧。 */}
+                <div className="ofs-gallery-wall">
+                  {galleryColumns(entries, columns).map((column, index) => (
+                    <div className="ofs-gallery-col" key={index}>
+                      {column.map((entry) => renderCard(entry))}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )
+          })}
+          {renderFooter()}
+        </>
       )}
     </section>
   )

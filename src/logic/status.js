@@ -134,10 +134,17 @@ export function computeStatusOf(t, input = {}) {
   }
 }
 
-/** 宿主的结构化阶段码；缺字段时按 job.status 回落，兼容旧版本宿主。 */
-const STAGE_CODES = new Set(['queued', 'waiting-session', 'loading', 'running', 'done', 'failed'])
+/**
+ * 宿主的结构化阶段码；缺字段时按 job.status 回落，兼容旧版本宿主。
+ *
+ * `cancelled` 是终态而非「正在做的事」：它只用于把任务收敛成「已取消」文案，
+ * 取消中的 running 任务靠 `cancelRequested` 单独提示「正在停止…」。
+ */
+const STAGE_CODES = new Set(['queued', 'waiting-session', 'loading', 'running', 'done', 'failed', 'cancelled'])
 
 function stageCodeOf(job) {
+  // 任务一旦收敛为 cancelled，即便旧宿主残留 stageCode=running 也按终态展示。
+  if (job.status === 'cancelled') return 'cancelled'
   const code = typeof job.stageCode === 'string' ? job.stageCode : ''
   if (STAGE_CODES.has(code)) return code
   // 旧宿主没有 stageCode：status 与阶段码同名，可直接回溯。
@@ -165,6 +172,9 @@ function progressOf(job) {
  * 关键区分：「等在云端就绪」和「等前一张图画完」是两件事，不能都说成「正在申请 GPU」。
  * 阶段只认宿主下发的 stageCode：job.stage 是宿主硬编码的中文，英文界面不能直接展示。
  *
+ * 取消语义：running 任务收到取消请求后不会再提交剩余张数，但当前这张仍要画完，
+ * 因此先给「正在停止…」而不是直接说「已取消」；真正进入终态后才显示「已取消」。
+ *
  * @param {(key: string) => string} t
  * @param {object|null} job 进行中的任务
  * @param {string} sessionState 当前会话状态
@@ -172,6 +182,8 @@ function progressOf(job) {
 export function jobProgressText(t, job, sessionState) {
   if (!job) return ''
   const stage = stageCodeOf(job)
+  if (stage === 'cancelled') return jobStatusText(t, 'cancelled')
+  if (job.cancelRequested === true) return localized(t, 'studio.job.cancelling') || ''
   if (stage === 'running') {
     const progress = progressOf(job)
     if (progress) {

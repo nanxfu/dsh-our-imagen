@@ -1072,6 +1072,155 @@ def disk_usage_root() -> str:
     return "/kaggle/working" if os.path.isdir("/kaggle/working") else os.getcwd()
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# HF 缓存探针（只读诊断，不参与清理与调度）
+#
+# 目的：真机上确认 HF 缓存目录与 /kaggle/working 各自落在哪个挂载点、还剩多少空间，
+# 为「要不要做缓存清理、清理哪个盘」提供实测依据。本探针只写日志，不删任何文件。
+#
+# 安全约束：
+#   1. 只打印路径 / 挂载点 / 剩余空间，绝不打印环境变量值本身（token 值额外脱敏）；
+#   2. 所有异常在探针内部吞掉——读不到就写 unknown，不能影响模型加载；
+#   3. 不为了探针 import huggingface_hub 重库：只在它已加载时读常量。
+# ─────────────────────────────────────────────────────────────────────────────
+
+HF_CACHE_ENV_NAMES = ("HF_HUB_CACHE", "HUGGINGFACE_HUB_CACHE")
+HF_TOKEN_ENV_NAMES = ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN")
+CACHE_PROBE_WORK_DIR = "/kaggle/working"
+# 短于该长度的环境变量值不参与脱敏替换，避免误抹普通路径片段（真实 token 远长于此）。
+_SECRET_MIN_CHARS = 4
+_CACHE_PROBE_DONE = False
+
+
+def hf_hub_cache_dir() -> str:
+    """HF 实际缓存目录。
+
+    顺序与 huggingface_hub 一致：HF_HUB_CACHE → HUGGINGFACE_HUB_CACHE → 已加载模块的
+    constants.HF_HUB_CACHE → $HF_HOME/hub → ~/.cache/huggingface/hub。
+    """
+    for name in HF_CACHE_ENV_NAMES:
+        value = (os.environ.get(name) or "").strip()
+        if value:
+            return os.path.abspath(os.path.expanduser(value))
+    for module_name in ("huggingface_hub.constants", "huggingface_hub"):
+        module = sys.modules.get(module_name)
+        value = getattr(module, "HF_HUB_CACHE", "") if module is not None else ""
+        if isinstance(value, str) and value.strip():
+            return os.path.abspath(os.path.expanduser(value.strip()))
+    hf_home = (os.environ.get("HF_HOME") or "").strip()
+    if hf_home:
+        return os.path.abspath(os.path.expanduser(os.path.join(hf_home, "hub")))
+    return os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub")
+
+
+def _decode_mount_path(raw: str) -> str:
+    """还原 /proc/mounts 路径字段里的八进制转义（\\040 空格等）。"""
+    return re.sub(r"\\([0-7]{3})", lambda match: chr(int(match.group(1), 8)), raw)
+
+
+def read_mount_points() -> list[str] | None:
+    """读 /proc/mounts 得到挂载点列表（供最长前缀匹配）；没有该文件时返回 None。"""
+    points: list[str] = []
+    try:
+        with open("/proc/mounts", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                fields = line.split()
+                if len(fields) < 2:
+                    continue
+                mount = _decode_mount_path(fields[1])
+                if mount.startswith("/"):
+                    points.append(mount)
+    except Exception:
+        return None
+    return points or None
+
+
+def longest_mount_prefix(real_path: str, points: list[str]) -> str:
+    """从挂载点列表里取 real_path 的最长前缀挂载点；没有匹配返回空串。"""
+    best = ""
+    for point in points:
+        if real_path == point or real_path.startswith(point.rstrip("/") + "/"):
+            if len(point) > len(best):
+                best = point
+    return best
+
+
+def _existing_ancestor(path: str) -> str:
+    """disk_usage / os.stat 只接受已存在的路径：向上找最近的存在祖先。"""
+    current = os.path.abspath(os.path.expanduser(path))
+    while not os.path.exists(current):
+        parent = os.path.dirname(current)
+        if parent == current:
+            raise FileNotFoundError(path)
+        current = parent
+    return current
+
+
+def mount_point_of(path: str) -> str:
+    """path 所在挂载点：优先 /proc/mounts 最长前缀匹配，无该文件时降级到 st_dev。"""
+    real = os.path.realpath(os.path.abspath(os.path.expanduser(path)))
+    points = read_mount_points()
+    if points:
+        best = longest_mount_prefix(real, points)
+        if best:
+            return best
+    try:
+        return f"dev={os.stat(_existing_ancestor(path)).st_dev}"
+    except Exception:
+        return "unknown"
+
+
+def probe_free_gib(path: str) -> str:
+    """剩余空间（GiB，一位小数）；目录尚不存在时按最近存在祖先的磁盘统计。"""
+    try:
+        return f"{shutil.disk_usage(_existing_ancestor(path)).free / 2**30:.1f}"
+    except Exception:
+        return "unknown"
+
+
+def _redact_secrets(text: str) -> str:
+    """把 token 环境变量的值从输出里替换掉（只做替换，不读取打印）。"""
+    for name in HF_TOKEN_ENV_NAMES:
+        value = (os.environ.get(name) or "").strip()
+        if len(value) >= _SECRET_MIN_CHARS and value in text:
+            text = text.replace(value, "***")
+    return text
+
+
+def cache_probe_lines() -> list[str]:
+    """缓存 / 挂载点 / 剩余空间诊断行；任何失败都降级为 unknown，绝不抛异常。"""
+    try:
+        cache_dir = hf_hub_cache_dir()
+        parts = [
+            f"HF_HUB_CACHE={cache_dir}",
+            f"mount={mount_point_of(cache_dir)}",
+            f"free={probe_free_gib(cache_dir)}GiB",
+        ]
+        if os.path.isdir(CACHE_PROBE_WORK_DIR):
+            work_mount = mount_point_of(CACHE_PROBE_WORK_DIR)
+            work_free = probe_free_gib(CACHE_PROBE_WORK_DIR)
+            parts.append(f"{CACHE_PROBE_WORK_DIR} mount={work_mount} free={work_free}GiB")
+        else:
+            parts.append(f"{CACHE_PROBE_WORK_DIR} 不存在")
+        return [_redact_secrets("[cache] " + " | ".join(parts))]
+    except Exception as exc:
+        # 探针只提供排障线索：失败也要安全返回，不能影响加载。
+        return [f"[cache] 缓存探针失败：{type(exc).__name__}"]
+
+
+def _log_cache_probe() -> None:
+    """模型加载前打印一次缓存探针（进程内只打一次，避免刷屏）。"""
+    global _CACHE_PROBE_DONE
+    if _CACHE_PROBE_DONE:
+        return
+    _CACHE_PROBE_DONE = True
+    try:
+        for line in cache_probe_lines():
+            log(line)
+    except Exception:
+        pass
+
+
 def disk_precheck(pipeline_spec: dict, root: str | None = None, usage=None) -> dict | None:  # noqa: ANN001
     """磁盘预检：返回 ``{required_gb, free_gb, path, enough}``；没有体积信息时返回 None。"""
     required = required_download_gb(pipeline_spec)
@@ -1302,6 +1451,8 @@ def ensure_pipeline(pipeline_spec: dict) -> tuple[object, float]:
 
     previous_phase = "ready" if STATE.phase == "ready" else STATE.phase
     set_phase("loading", f"加载 {pipeline_spec.get('base')}")
+    # 只读诊断：首次加载前记下 HF 缓存与 /kaggle/working 的挂载点/剩余空间（进程内只打一次）。
+    _log_cache_probe()
     started = time.time()
     try:
         pipe, identity = build_pipeline(pipeline_spec)

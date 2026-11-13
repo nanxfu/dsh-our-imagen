@@ -542,6 +542,29 @@
   margin-top: 14px;
 }
 
+/* ── 历史分页脚 ─────────────────────────────────────────────── */
+.ofs-gallery-foot {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+
+.ofs-gallery-more {
+  height: 32px;
+  padding: 0 18px;
+}
+
+.ofs-gallery-more[aria-busy='true'] {
+  opacity: 0.6;
+}
+
+.ofs-gallery-all-loaded {
+  font-size: 11px;
+  color: var(--ofs-ink-3);
+  text-align: center;
+}
+
 /* ── 响应式 ─────────────────────────────────────────────────── */
 /* 列数由 Gallery.jsx 的 useColumnCount 按 900 / 1180 / 1400 三个断点决定，
    这里只调工具卡各自在不同宽度下的排布。 */

@@ -184,6 +184,51 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 取消：排队卡立即出队，运行中的卡当前这张画完后停止 */
+.ofs-ghost-cancel {
+  appearance: none;
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-pill);
+  background: transparent;
+  color: var(--ofs-ink-3);
+  font-size: 10.5px;
+  font-weight: 550;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.ofs-ghost-cancel:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--ofs-error) 34%, transparent);
+  background: var(--ofs-error-soft);
+  color: var(--ofs-error);
+}
+
+.ofs-ghost-cancel:disabled {
+  color: var(--ofs-ink-4);
+  cursor: default;
+}
+
+/* 取消中的卡：显影光停下，只保留阶段文案说明「正在停止…」 */
+.ofs-ghost.is-cancelling {
+  border-color: color-mix(in oklab, var(--ofs-warn) 26%, transparent);
+}
+
+.ofs-ghost.is-cancelling .ofs-ghost-bar {
+  animation: none;
+  opacity: 0.45;
+}
+
+.ofs-ghost.is-cancelling .ofs-ghost-label {
+  color: var(--ofs-ink-3);
+}
+
 /* 空态 */
 .ofs-filmstrip-empty {
   display: flex;

@@ -1,5 +1,5 @@
 /**
- * 会话控制域：宿主状态派生、会话启停、环境探测与配额、打开产物目录。
+ * 会话控制域：宿主状态派生、会话启停、任务取消、环境探测与配额、打开产物目录。
  *
  * 依赖入参：{ t, host, ui, alive }。host 是宿主状态桥（state / error / refresh），
  * ui 提供 error 与 toast 通道，alive 是统一的卸载边界。
@@ -11,19 +11,30 @@ import React from 'react'
 import { TIMEOUTS } from '../../../shared/contract.js'
 
 import {
+  cancelJob as cancelJobRequest,
   revealOutput,
   runProbe as runProbeRequest,
   startSession as startSessionRequest,
   stopSession as stopSessionRequest,
 } from '../../api/resources.js'
+import { formatText } from '../../logic/format.js'
 import { pendingJobsOf, stateJobs } from '../../logic/jobs.js'
 import { probeOutcomeOf } from '../../logic/probe.js'
 import { computeStatusOf } from '../../logic/status.js'
+
+/** 已发出取消请求、还没在宿主快照里收敛的任务 id；同一个 id 只保留一次。 */
+function rememberCancelling(previous, id) {
+  if (!Array.isArray(previous)) return [id]
+  return previous.includes(id) ? previous : [...previous, id]
+}
 
 export function useSessionControl({ t, host, ui, alive }) {
   const [busy, setBusy] = React.useState('')
   const [probing, setProbing] = React.useState(false)
   const [probeReport, setProbeReport] = React.useState(null)
+  const [cancellingIds, setCancellingIds] = React.useState([])
+  // 与 cancellingIds 同步的集合：双击/重入时用它做同步判重，不依赖尚未提交的 state。
+  const cancellingRef = React.useRef(new Set())
 
   const state = host.state
   const session = (state && state.session) || null
@@ -36,6 +47,20 @@ export function useSessionControl({ t, host, ui, alive }) {
   const focusedJob = activeJob || (state && state.lastJob) || stateJobs(state)[0] || null
   // 云端展示状态（胶囊 / 状态条 / 弹层 / 对话页徽章共用）。
   const status = computeStatusOf(t, { session })
+
+  // 任务离开活动队列（已取消/已完成）后撤掉本地「取消中」标记；
+  // 只要 pendingJobs 没变化就不更新状态，避免每次宿主轮询都触发一次重渲染。
+  const pendingSignature = pendingJobs.map((job) => job.id).join(',')
+  React.useEffect(() => {
+    const activeIds = new Set(pendingJobs.map((job) => job.id))
+    for (const id of [...cancellingRef.current]) {
+      if (!activeIds.has(id)) cancellingRef.current.delete(id)
+    }
+    setCancellingIds((prev) => {
+      const next = prev.filter((id) => activeIds.has(id))
+      return next.length === prev.length ? prev : next
+    })
+  }, [pendingSignature])
 
   // 宿主状态轮询失败：当前已有更具体的错误时保留它，否则借现有 error/指引通道提示；
   // 按 code+message 去重，避免每 10 秒把同一失败重复弹一遍。
@@ -75,6 +100,39 @@ export function useSessionControl({ t, host, ui, alive }) {
     if (!result) return
     setBusy('')
     if (!result.ok) ui.fail(result.code, result.message)
+    host.refresh()
+  }
+
+  /**
+   * 取消任务：queued / waiting-session 立即出队；running 合作式停止（当前这张画完后停）。
+   * 失败走错误/指引通道并撤掉本地「取消中」标记，成功立刻刷新宿主快照。
+   */
+  async function cancelJob(id) {
+    const target = typeof id === 'string' ? id.trim() : ''
+    if (!target || cancellingRef.current.has(target)) return
+    cancellingRef.current.add(target)
+    setCancellingIds((prev) => rememberCancelling(prev, target))
+    const result = await alive(cancelJobRequest(target))
+    if (!result) return
+    if (!result.ok) {
+      cancellingRef.current.delete(target)
+      setCancellingIds((prev) => prev.filter((item) => item !== target))
+      ui.fail(result.code, result.message)
+      return
+    }
+    const job = result.data && result.data.job ? result.data.job : null
+    const disposition = result.data && result.data.disposition
+    // 任务在点击前已经收敛：不谎报「已取消」，刷新快照让卡片自然消失。
+    if (disposition === 'already-finished') {
+      host.refresh()
+      return
+    }
+    const images = Array.isArray(job && job.output && job.output.images) ? job.output.images.length : 0
+    const progressDone = Number(job && job.progress && job.progress.done)
+    // 已经出完的图会保留：合作式停止时 output 还没落盘，已完成的张数在 progress.done 里。
+    const kept = images > 0 ? images : Number.isFinite(progressDone) && progressDone > 0 ? Math.floor(progressDone) : 0
+    if (kept > 0) ui.showToast(formatText(t('studio.toast.cancelPartial'), { done: kept }))
+    else ui.showToast(t('studio.toast.cancelled'))
     host.refresh()
   }
 
@@ -132,6 +190,8 @@ export function useSessionControl({ t, host, ui, alive }) {
     probeReport,
     startSession,
     stopSession,
+    cancelJob,
+    cancellingIds,
     runProbe,
     openFolder,
   }

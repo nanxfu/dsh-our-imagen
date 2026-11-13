@@ -258,6 +258,12 @@
   .ofs-composer-input {
     min-height: 76px;
   }
+
+  /* 窄窗里方形尺寸档位折行，标签不再和按钮挤在一行 */
+  .ofs-size-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
 }
 
 @media (max-width: 520px) {
@@ -329,6 +335,8 @@
   .ofs-example,
   .ofs-suggestion,
   .ofs-text-action,
+  .ofs-size,
+  .ofs-ghost-cancel,
   .ofs-gallery-action {
     height: auto;
     min-height: 44px;

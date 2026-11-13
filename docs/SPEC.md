@@ -46,6 +46,7 @@
 | `running` | 远端生成中 |
 | `done` | 完成，`output` 内有图片 |
 | `failed` | 失败，`error` 内是错误码与原因 |
+| `cancelled` | 已取消（终态）；取消前已完成的图片仍保留在 `output`，未开始/未完成的部分不再提交 |
 
 ### 1.3 错误码字典 (`error.code`)
 
@@ -112,24 +113,25 @@
 
 > **例外**：`GET /imagen-api/file` 返回图片二进制流（`image/png` 等），不是 JSON。
 
-路由总览（16 条，以 `shared/contract.js` 的 `ROUTES` 为准）：
+路由总览（17 条，以 `shared/contract.js` 的 `ROUTES` 为准）：
 
 | 方法 | 路径 | 用途 |
 | :--- | :--- | :--- |
 | GET | `/imagen-api/state` | 插件运行状态全貌（前端轮询数据源） |
 | POST | `/imagen-api/probe` | 主动触发本地 Kaggle 环境检测 |
-| GET | `/imagen-api/logs?since=` | 拉取远端 daemon 的增量运行日志 + Host 本地日志尾部（`hostLines`） |
+| GET | `/imagen-api/logs?since=` | 拉取远端 daemon 的增量运行日志 + Host 本地日志尾部（`hostLines`）与诊断环境指纹（`env`） |
 | POST | `/imagen-api/session/start` | 启动远端 GPU 会话（幂等） |
 | POST | `/imagen-api/session/stop` | 关机 |
 | POST | `/imagen-api/generate` | 提交生图任务 |
 | GET | `/imagen-api/job?id=` | 查询单个任务 |
+| POST | `/imagen-api/job/cancel` | 取消任务（排队/等待会话立即失效；运行中合作式停止） |
 | GET | `/imagen-api/jobs?limit=` | 查询任务列表与队列概况 |
-| GET | `/imagen-api/history?limit=` | 查询历史产物 |
+| GET | `/imagen-api/history?limit=&offset=` | 查询历史产物（分页，带 `hasMore`） |
 | GET | `/imagen-api/file?path=` | 读取产物图片（二进制） |
 | GET | `/imagen-api/library` | 读取收藏 / 删除记录 |
 | POST | `/imagen-api/library/favorite` | 收藏 / 取消收藏 |
 | POST | `/imagen-api/library/delete` | 删除产物 |
-| POST | `/imagen-api/enhance` | 提示词润色 |
+| POST | `/imagen-api/enhance` | 提示词润色 / 英译 |
 | POST | `/imagen-api/intent` | 对话意图解析 |
 | POST | `/imagen-api/reveal` | 在文件管理器中打开产物目录 |
 
@@ -293,6 +295,11 @@
 - `hostLines`：Host 本地日志文件 `<workspace>/.imagen/logs/host.log` 的最近 120 行（已脱敏，旧的在前），
   与 `lines` **分开返回、不混排**；无文件或读取失败时为 `[]`。该字段在所有响应分支（成功 /
   `session_absent` / `logs_unavailable`）都会出现，老客户端忽略即可。
+- `env`：诊断环境指纹，仅供前端「复制诊断信息」使用，**只含非敏感信息**：
+  `{ platform, nodeVersion, hasProxyEnv, hasFallbackTunnel, hasCustomDatasets, hasPipConstraints, hasHfToken,
+  timings: { sessionStartMs, sessionUptimeMs, readyUptimeMs } }`。布尔开关表示「是否配置」而不是配置值；
+  `timings` 是毫秒耗时摘要（缺失为 `null`）。**不允许**出现代理 URL、Token、工作区绝对路径或 prompt 正文。
+  该字段在所有响应分支都会出现，老客户端忽略即可。
 - **响应**（始终 HTTP 200，用 `ok` 表达可用性，避免客户端把「暂时拿不到日志」当成网络故障）：
 
 ```json
@@ -301,12 +308,22 @@
   "since": 0,
   "next": 128,
   "lines": ["[boot] 运行时就绪…", "[tunnel] 隧道就绪：https://…"],
-  "hostLines": ["[2026-11-11T23:10:00.123Z] [info] [index] 插件已加载", "[2026-11-11T23:10:03.456Z] [warn] [session] transition absent->starting"]
+  "hostLines": ["[2026-11-11T23:10:00.123Z] [info] [index] 插件已加载", "[2026-11-11T23:10:03.456Z] [warn] [session] transition absent->starting"],
+  "env": {
+    "platform": "win32",
+    "nodeVersion": "22.14.0",
+    "hasProxyEnv": true,
+    "hasFallbackTunnel": false,
+    "hasCustomDatasets": false,
+    "hasPipConstraints": false,
+    "hasHfToken": true,
+    "timings": { "sessionStartMs": 268000, "sessionUptimeMs": 540000, "readyUptimeMs": 272000 }
+  }
 }
 ```
 
-- 会话未启动 / 没有远端连接：`{ "ok": false, "code": "session_absent", "message": "…", "since": 0, "next": 0, "lines": [], "hostLines": [...] }`
-- 远端不可达或协议漂移：`{ "ok": false, "code": "logs_unavailable", "message": "…", "since": n, "next": n, "lines": [], "hostLines": [...] }`
+- 会话未启动 / 没有远端连接：`{ "ok": false, "code": "session_absent", "message": "…", "since": 0, "next": 0, "lines": [], "hostLines": [...], "env": {…} }`
+- 远端不可达或协议漂移：`{ "ok": false, "code": "logs_unavailable", "message": "…", "since": n, "next": n, "lines": [], "hostLines": [...], "env": {…} }`
 
 ### 2.2 出图任务
 
@@ -320,9 +337,14 @@
 > 不会把「空闲连接」判死；远端失败也仍能通过正常的 HTTP 语义（job 的 `error.code`）表达，
 > 不需要提前写 200 而丢掉 500。
 >
+> **逐张提交**：为了实现运行中的合作式取消，Host 对 `count>1` 的任务**每张单独提交**一个远端 job
+> （`tasks` 只含 1 项，幂等键为 `<宿主 job.id>-<两位序号>`），一张完成后才提交下一张；宿主侧
+> 汇总 `job.progress = { done, total }`。取消 running 任务时，当前这张照常出完，剩余张数不再提交。
+> 提交只是拆成多段，`generateTimeoutMs` 仍是**整个宿主任务**的预算，不会按张数放大。
+>
 > **轮询容错与幂等续接**：隧道重建期间单次 `GET /job` 失败不判任务失败——连续失败只要
 > 仍在持续时长窗口内（`TIMEOUTS.remoteJobPollFailureGraceMs`，默认 120 秒）就按指数退避
-> 继续查同一个远端 job。窗口用尽后用**同一个宿主 `job.id`** 作为幂等键重新 `POST /generate`
+> 继续查同一个远端 job。窗口用尽后用**同一个幂等键**重新 `POST /generate`
 > 接回原任务（远端命中幂等键会返回原 job，不重复入队），最多重投
 > `TIMEOUTS.remoteJobResumeMaxAttempts`（默认 2）次；重投次数用尽或整体预算耗尽才判
 > `generate_failed`。`404 unknown_job` 是明确的终态，不重试也不重投。
@@ -354,10 +376,11 @@
 | 字段 | 说明 |
 | :--- | :--- |
 | `id` | 任务 id（`j_<hex>`） |
-| `status` | `queued` / `waiting-session` / `running` / `done` / `failed` |
-| `stage` | 给人看的中文阶段文案（如「排队中」「生成中」）。**只用于中文界面与日志，客户端不得解析它做本地化** |
-| `stageCode` | 结构化阶段标识（稳定英文）：`queued` / `waiting-session` / `loading` / `running` / `done` / `failed`。`loading` 专指会话就绪路径上远端仍在加载模型（`sessionState=warming`）；客户端按它选本地化文案 |
+| `status` | `queued` / `waiting-session` / `running` / `done` / `failed` / `cancelled` |
+| `stage` | 给人看的中文阶段文案（如「排队中」「生成中」「已取消」）。**只用于中文界面与日志，客户端不得解析它做本地化** |
+| `stageCode` | 结构化阶段标识（稳定英文）：`queued` / `waiting-session` / `loading` / `running` / `done` / `failed` / `cancelled`。`loading` 专指会话就绪路径上远端仍在加载模型（`sessionState=warming`）；客户端按它选本地化文案 |
 | `progress` | 仅在 `running` 时非 `null`：`{ done, total }`，`done` 是**已完成的张数**（0 起）。其余状态为 `null`；客户端用 `done + 1` 展示「正在生成第 k/总数 张」 |
+| `cancelRequested` | 是否已收到取消请求（running 合作式停止中为 `true`）；终态/未取消为 `false` |
 | `presetId` | 实际使用的预设 id |
 | `params` | 归一化后的参数：`{ prompt, negativePrompt, width, height, steps, cfg, seed, count }` |
 | `createdAt` / `startedAt` / `finishedAt` | ISO 时间；未发生为 `null` |
@@ -410,6 +433,21 @@
 - **响应**：`Job` 对象（结构同上）。
 - **错误**：`404 not_found`（任务不存在或已被裁剪）。
 
+#### `POST /imagen-api/job/cancel`
+
+取消任务。语义按任务当前状态区分：
+
+- `queued` / `waiting-session`：**立即出队失效**，不占用队列位置；等待会话的任务会立刻中止会话等待，
+  后续任务不必等到会话等待窗口超时才继续（解除队头阻塞）。
+- `running`：**合作式停止**——只置取消标记，当前正在画的这一张出完后不再提交批内剩余张数，
+  不强杀线程、不改远端采样回调；取消前已完成的图片仍会落盘，任务最终收敛为 `cancelled`。
+- `done` / `failed` / `cancelled`：终态，不做任何改变。
+
+- **请求体**：`{ "id": "j_9f2c1a4b" }`
+- **响应**：`{ "ok": true, "job": Job, "disposition": "dequeued" | "cooperative" | "already-finished" }`
+  （`disposition` 取值与语义见 `shared/contract.js` 的 `JOB_CANCEL`）。
+- **错误**：`404 not_found`（任务不存在）、`400 invalid_body`（请求体不是合法 JSON）。
+
 #### `GET /imagen-api/jobs?limit=<n>`
 
 查询最近任务列表与队列概况。
@@ -417,12 +455,15 @@
 - `limit`：1~100，默认 20。
 - **响应**：`{ "jobs": Job[], "queue": { "running": "j_... | null", "pending": 0 } }`
 
-#### `GET /imagen-api/history?limit=<n>`
+#### `GET /imagen-api/history?limit=<n>&offset=<n>`
 
 获取工作区 `imagen-output/` 下的历史生成记录，按时间倒序。
 
 - `limit`：1~100，默认 30。
-- **响应**：`{ "items": HistoryItem[] }`。
+- `offset`：跳过最近 `offset` 条有效记录（有 meta 且至少 1 张现存图片），非负整数，默认 0。
+- **响应**：`{ "items": HistoryItem[], "limit": number, "offset": number, "hasMore": boolean }`。
+  `items` 保持数组类型（旧客户端只读该字段即可向后兼容）；`hasMore=true` 表示还有更早的记录，
+  客户端可在底部继续「加载更多」（前端每次取契约上限 `LIMITS.history.pageSize` = 100 条）。
 
 `HistoryItem`：`{ jobId, dir, createdAt, finishedAt, presetId, params, prompt, images[] }`；
 `params` 是完整的生成参数（用于「带回参数」），`images[]` 每项：
@@ -460,9 +501,15 @@
 
 #### `POST /imagen-api/enhance`
 
-提示词润色：按光影 / 材质 / 构图 / 氛围四个维度返回可直接追加进提示词的英文短语。
+提示词润色与英译。按 `mode` 区分两种用途（`ENHANCE_MODES`）：
 
-- **请求体**：`{ "prompt": "雨夜街景", "presetId": "sdxl-lightning", "locale": "zh" }`（`presetId` / `locale` 可选，locale 仅 `zh` / `en`）
+- `mode="refine"`（默认）：按光影 / 材质 / 构图 / 氛围四个维度返回可直接追加进提示词的英文短语。
+- `mode="translate"`：把提示词转成英文提示词（只复用宿主已配置的模型，不接第三方重模型）。
+
+**refine 模式**
+
+- **请求体**：`{ "prompt": "雨夜街景", "presetId": "sdxl-lightning", "locale": "zh", "mode": "refine" }`
+  （`presetId` / `locale` / `mode` 可选，locale 仅 `zh` / `en`）
 - **响应**：
 
 ```json
@@ -482,6 +529,14 @@
 - 每条建议固定拆成两段：`text` 是要追加进 prompt 的英文短语（九个预设都按英文提示词训练，发给模型的只能是英文），
   `label` 是给用户看的 UI 语言短标签（`locale=en` 时与 `text` 相同）。
 - `source`：`model`（宿主模型）/ `local`（同结构本地兜底）；空提示词返回空 `groups`、`source: "local"`。
+
+**translate 模式**
+
+- **请求体**：`{ "prompt": "雨夜街景", "presetId": "sdxl-lightning", "mode": "translate" }`
+- **响应**：`{ "ok": true, "mode": "translate", "source": "model" | "local", "prompt": "..." }`
+- `source`：`model` 表示模型返回了英文提示词；`local` 表示模型不可用（`note: "llm_unavailable"`）
+  或输入为空（`note: "empty"`），此时 `prompt` 是原文、**没有翻译**。界面必须按「未翻译」明确提示，
+  不得把原文当作译后结果展示。
 
 #### `POST /imagen-api/intent`
 
@@ -634,3 +689,11 @@
 
 1. **灵感示例预设**：在提示词输入框为空或点击灵感时，提供预置启发式场景卡（科幻赛博、人像摄影、东方意境、3D 萌系、微距自然），点击直接填入。
 2. **结构化维度润色**：当调用智能润色时，由大模型解析提取 4 个可点选追加的维度标签（光影材质、构图视角、画面氛围、色彩基调），用户按需点击追加到提示词末尾，禁止强制一次性替换原文本。追加进提示词的是英文短语（模型可读），界面上显示的是对应语言的短标签（人可读）。
+
+### 5.5 第二批交互补充（取消 / 分页 / 英译 / 尺寸 / 日志诊断）
+
+1. **任务取消**：最近生成栏的每张暗房卡（`queued` / `waiting-session` / `running`）带「取消」按钮；取消请求发出后按钮显示「正在停止…」并禁用，避免重复提交。`running` 任务为合作式停止，文案不得写成「已取消」直到任务真正进入 `cancelled` 终态。
+2. **历史分页**：画廊底部在 `hasMore=true` 时显示「加载更多」（一次性追加下一页并去重），加载完显示「已加载全部作品」；加载失败保留已加载内容，不清空列表。
+3. **一键转英文**：提示词输入框下方提供「转为英文」次级动作（与「润色」并列，不抢占底部生成按钮的实心样式）。只有服务端 `source="model"` 且返回非空译文时才替换表单内容；`source="local"` 必须提示「模型不可用，未能翻译」，不得把原文当作译文。
+4. **方形尺寸**：「画面设置」中画幅比例行与方形尺寸行是两个概念：方形尺寸按钮只来自当前预设的 `sizeOptions`（等宽高），自定义宽高在「高级设置」中按契约边界与 8 的步长钳制。
+5. **日志与诊断**：运行日志抽屉缺省展示远端日志，可手动切换到 Host 日志；远端日志为空且 Host 有内容时自动兜底并给出「已切换到 Host 本地日志」的来源说明。会话 / 网络 / 生成 / 通用 / 授权五类指引卡提供「查看日志」与「复制诊断信息」两个次级动作（普通 `ofs-chip`，不占用主操作的实心样式），复制的诊断文本包含脱敏环境指纹与阶段耗时，不含 token、代理 URL、绝对路径与提示词正文。

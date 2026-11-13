@@ -539,6 +539,86 @@
   text-align: center;
 }
 
+/* ── 提示词动作（英译 / 润色并列，实心操作仍只有底部生成） ─────── */
+.ofs-composer-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 英译是次级动作：默认用静色，悬停才提到强调色，不和润色抢注意力。 */
+.ofs-translate-action {
+  color: var(--ofs-ink-2);
+}
+
+.ofs-translate-action:hover:not(:disabled) {
+  color: var(--ofs-accent);
+}
+
+/* ── 方形尺寸档位（与上方画幅比例是两行不同概念） ─────────────── */
+.ofs-size-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.ofs-size-label {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: var(--ofs-ink-3);
+}
+
+.ofs-size-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ofs-size {
+  appearance: none;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-pill);
+  background: var(--ofs-card);
+  color: var(--ofs-ink-2);
+  font-size: 11px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.ofs-size:hover {
+  border-color: var(--ofs-accent-soft-border);
+  color: var(--ofs-ink);
+}
+
+.ofs-size.is-on {
+  border-color: var(--ofs-accent);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+  box-shadow: 0 0 0 1px var(--ofs-accent);
+}
+
+.ofs-size-hint {
+  margin-top: 6px;
+  text-align: left;
+}
+
+/* 高级设置里的分组小标题：占满两列，把自定义宽高和上面的参数分开 */
+.ofs-grid-head {
+  grid-column: 1 / -1;
+  padding-top: 2px;
+  font-size: 10.5px;
+  color: var(--ofs-ink-3);
+}
+
 .ofs-link {
   appearance: none;
   margin-left: 6px;
