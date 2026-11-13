@@ -11,6 +11,7 @@
  *   node tools/kaggle-login.mjs --manual        # 无头环境：打印授权链接，粘贴授权码
  *   node tools/kaggle-login.mjs --manual --code <授权码>
  *   node tools/kaggle-login.mjs --force         # 已有 credentials.json 也重新登录（默认就会备份旧文件）
+ *   node tools/kaggle-login.mjs --timeout-minutes 15   # 放宽等待授权的窗口（默认按契约 5 分钟，最多 30）
  *
  * 安全：不打印 token / refresh_token / 授权码；旧凭据会先备份为 `credentials.json.bak-<时间戳>`。
  * 退出码：0 成功；1 登录或探测失败；2 需要人工提供授权码（无 TTY 且未给 --code）。
@@ -35,6 +36,11 @@ const argValue = (name) => {
 const manual = hasFlag('--manual')
 const codeFromArgs = argValue('--code')
 const interactive = Boolean(process.stdin.isTTY)
+// 验收窗口默认用契约的 5 分钟；人在旁边、只是找授权页时可以用 --timeout-minutes 放宽（上限 30）。
+const rawTimeoutMinutes = Number(argValue('--timeout-minutes'))
+const timeoutMs = Number.isFinite(rawTimeoutMinutes) && rawTimeoutMinutes > 0
+  ? Math.min(30, Math.max(1, rawTimeoutMinutes)) * 60 * 1000
+  : KAGGLE_LOGIN.timeoutMs
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -80,8 +86,8 @@ async function askAuthorizationCode() {
   }
 }
 
-async function waitForTerminalState(login) {
-  const deadline = Date.now() + KAGGLE_LOGIN.timeoutMs + 15000
+async function waitForTerminalState(login, waitMs) {
+  const deadline = Date.now() + waitMs + 15000
   let last = null
   while (Date.now() < deadline) {
     last = login.view()
@@ -104,6 +110,7 @@ async function main() {
     homeDir: homedir(),
     env: process.env,
     platform: process.platform,
+    timeoutMs,
   })
 
   let started
@@ -137,7 +144,7 @@ async function main() {
     console.log(`提交授权码：${submitted.state}`)
   }
 
-  const final = await waitForTerminalState(login)
+  const final = await waitForTerminalState(login, timeoutMs)
   if (!final || final.state !== 'done') {
     console.log(`\n[失败] 登录未完成：state=${final?.state ?? 'unknown'} ${final?.message ?? ''}`)
     await login.dispose()
