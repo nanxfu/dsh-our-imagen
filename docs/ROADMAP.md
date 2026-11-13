@@ -132,7 +132,7 @@
 - **指引卡联动**：开启试验开关时，`cli_missing` / `auth_required` 指引卡主操作直接切为「在浏览器中登录 Kaggle」（支持进行中状态、取消与超时保护），完成后自动重跑 `probe` 刷新状态。
   - **实现**：直连模式下两张卡合并为登录卡：pending 显示「正在等待浏览器完成授权…」+ 取消；manual 模式显示可复制授权链接 + 授权码输入 + 提交；done 自动重跑 probe 并轻提示；失败/取消可重试；超时由宿主收敛为 `failed`。CLI 模式与旧宿主行为不变（客户端测试 57 项、逻辑测试 59 项覆盖）。
 - **验收**：离线 mock HTTP 覆盖全部直连分支与边界；真机使用真实 Kaggle 账号验证无 CLI 环境下「一键登录 → 唤醒 → 出图」全链路。
-  - **验收结果**：离线全绿；真机 OAuth 授权 + 直连配额探测结果见 [CHANGELOG 0.8.2](../CHANGELOG.md) 的「真机验收」小节（本行在验收完成后回填）。
+  - **验收结果**：离线全绿（`kaggle-direct` 14 项、`kaggle-oauth` 14 项、Host/客户端相关用例见 CHANGELOG）；直连传输真机复核通过（`probe` / `pushKernel` / `kernelStatus` / `kernelLogs` 在真实 Kaggle 上跑通）；**内置 OAuth 真机闭环验收通过（2026-11-13）**：浏览器真实授权 → 写入 `~/.kaggle/credentials.json` → 新凭据直连探测鉴权正常、配额 7.13h / 22.87h / 30h，并顺带修复了 Windows 上 `cmd start` 截断授权链接导致的 `400 Must specify State`（详见 CHANGELOG 0.9.0「真机验收」）。
 
 ### 3. M3：图生图（Img2Img / 参考图垫图重绘）
 
