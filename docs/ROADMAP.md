@@ -96,3 +96,35 @@
 - 补齐 MIT `LICENSE` 与 `package.json` 的 `license` 字段；
 - `package.json` 版本与 `docs/SPEC.md`、`CHANGELOG.md` 对齐到 0.4.0；
 - 新增 `npm run package`：构建后按 `files` 清单产出 `dist/<name>-<version>/` 可加载目录，并尽力生成 zip。
+
+---
+
+## 五、 v0.9 开发计划（规划中）
+
+> **基线**：`0.8.0`（2026-11-13，已完整落地 `WORKBENCH_AUDIT_AND_RELIABILITY_PLAN.md` 三批可靠性与交互改造并完成 M4.2 真机验证；`0.5.0 ~ 0.8.0` 变更详见 [CHANGELOG](../CHANGELOG.md)）。
+> **v0.9 主题**：新手零门槛（试验特性） + 图生图闭环 + 遗留体验与可靠性收口。
+
+### 1. M1：体验修复与可靠性收口（纯离线可测）
+- **意图确认卡行内微调**：`ChatPanel.jsx` 确认卡里的英文 `prompt` / `negative` 支持行内直接编辑后再点「按此生成」，无需为微调几个词重新发起对话重猜。
+- **卸载未关机补清理**：保持 `SessionManager.dispose()` 不阻塞卸载的取舍；若 `/shutdown` 未能发出或失败，在 `<workspace>/.imagen/` 记录轻量待清理会话，下次插件启动时优先补发一次关机释放每周 GPU 额度。
+- **固定 `cloudflared` 版本与校验和**：`remote/daemon.py` 下载 `cloudflared` 从滚动 `latest` 改为固定版本并做 SHA256 校验，消除上游发版或半截文件导致的冷启动随机失败。
+- **顺手体验与文案修正**：
+  - 记住表单「高级设置」折叠区的上次展开状态（默认仍保持收起）；
+  - 校准 `auth_required` 指引文案：明确 `kaggle auth login` 写入 `~/.kaggle/credentials.json`（OAuth 凭据，靠 `refresh_token` 自动续期），同时兼容网页端手动生成的 `~/.kaggle/access_token` 与旧版 `kaggle.json`；
+  - 视体量评估是否一并补齐工作区对话历史持久化（走宿主接口写工作区，不引入 `localStorage`）。
+
+### 2. M2：新手零门槛 — Node.js 直连 Kaggle 与内置 OAuth 授权（试验特性）
+- **定位与隔离**：作为 **试验特性（Feature Flag）** 接入，默认保持现有 `kaggle` CLI 路径不变，零回归风险；在设置抽屉高级区提供开关（`experimentalDirectKaggle` / `kaggleTransport`）。
+- **直连客户端（`lib/kaggle-direct.js`）**：实现与 `lib/kaggle.js` 相同的调用契约（`probeKaggle`、`kaggleUsername`、`pushKernel`、`kernelStatus`、`kernelLogs`），由 `SessionManager` 通过 `deps` 注入切换；全部请求走 `lib/net.js` 复用系统代理 `curl` 兜底，消除每次 CLI 调用 9~15 秒的 Python 冷启耗时与 Windows `Scripts` PATH 困扰。
+- **内置 OAuth PKCE 登录**：由宿主发起标准 OAuth 2.0 + PKCE（`S256`、`client_id="kagglesdk"`）并拉起系统浏览器授权；回调收码换取 Token 后写入 `~/.kaggle/credentials.json`（权限 `0600`，不写工作区 `.imagen/`、不进日志与诊断），并兼容读取已有 `access_token` / `kaggle.json`。无法打开本地回调的远端无头环境保留复制 URL + 粘贴授权码兜底。
+- **指引卡联动**：开启试验开关时，`cli_missing` / `auth_required` 指引卡主操作直接切为「在浏览器中登录 Kaggle」（支持进行中状态、取消与超时保护），完成后自动重跑 `probe` 刷新状态。
+- **验收**：离线 mock HTTP 覆盖全部直连分支与边界；真机使用真实 Kaggle 账号验证无 CLI 环境下「一键登录 → 唤醒 → 出图」全链路。
+
+### 3. M3：图生图（Img2Img / 参考图垫图重绘）
+- **模型能力边界先行**：并非所有运行时都支持 `from_pipe` 零显存派生。`models/*.json` 新增能力标记（如 `supportsImg2Img`），**首期优先对 SDXL 家族（`sdxl` / `sdxl-lora`）开放**，前端对不支持的预设（如 `flux2` / `anima`）置灰并明确提示。
+- **契约与远端推理**：
+  - `shared/contract.js` 补充 `strength` 边界与参考图尺寸/体积上限（受 `remoteGenerateMaxBytes` 约束）；
+  - Host 支持引用画廊已有 `imagen-output/` 作品（严格校验工作区越界）或接收前端上传/缩放后的参考图；
+  - `remote/daemon.py` 的 `run_task` 在收到参考图时通过 `AutoPipelineForImage2Image.from_pipe(pipe)` 复用已加载底座执行重绘（不额外占显存），产物 `meta.json` 记录 `sourceImage` 与 `strength`。
+- **工作台交互**：画廊卡片与大图预览新增「以此图重绘」一键带入；创作面板新增精简参考图槽位与重绘强度滑块（未放参考图时文生图界面保持不变）。
+- **验收**：契约与客户端单测覆盖边界与降级；真机 `2×Tesla T4` 验证单一会话内「文生图 → 垫图重绘」显存无额外增长。
