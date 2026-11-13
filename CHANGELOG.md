@@ -1,9 +1,13 @@
 # 变更记录
 
-## 未发布
+## 0.8.0 — 2026-11-13
 
 ### 改进
 
+- **Agent 能取消任务、并把图片直接交付到工作区**：新增第 4 个 Agent 工具 `imagen_cancel`（四种可读结果：未找到 / 已从队列移除 / 合作式停止 / 已是终态）。`imagen_generate` 新增 `saveTo` 参数：原始归档照常写 `imagen-output/`，同时把图片原子复制到工作区相对路径；未写扩展名自动补 `.png`，`count > 1` 按 `-01`、`-02` 追加序号。交付路径记入 `job.output.deliveredPaths`，工具返回的产物段逐条列出「已交付至：<path>」，模型可以直接把路径写进回复、代码或文档。路径只接受工作区相对路径：绝对路径、Windows 盘符、`..`、`imagen-output/`、`.imagen/` 与软链接逃逸一律拒绝，非法路径在入队前就返回 `invalid_path`。
+- **工作台内可改运行设置，下次唤醒即生效**：新增 `GET/POST /imagen-api/settings` 与「运行设置」抽屉（顶栏 GPU 状态弹层底部、日志入口旁进入，右侧抽屉带焦点陷阱 / Esc / 关闭归还焦点）。可设置空闲自动关机（15/30/60/120 分钟快捷档位 + 自定义）、GPU 加速器、HuggingFace Token（已配置时只显示状态，可留空保持不变或一键清除），高级折叠区可维护预挂载 Kaggle Dataset、本地模型目录映射（行级校验）与 pip 依赖约束。覆盖项持久化到 `<workspace>/.imagen/settings.json`（目录 0700 / 文件 0600、原子写），宿主每次启动会话前读取合并后的最新值，不必重载插件；实例运行中提示「修改将在下次唤醒时生效」。对外视图只返回 `hasHfToken` 与 `hfTokenSource`，绝不回传 Token 原文。
+- **无卡新手四个卡点加固**：① `cli_missing` 卡明确提示 Windows 用户检查 Python Scripts 是否加入 PATH 并重启 DSH Desktop；② `auth_required` 卡写明凭据文件位置 `%USERPROFILE%\.kaggle\kaggle.json`，并提供打开 Kaggle 设置获取 Token 的按钮；③ 远端没拿到 GPU 时新增远端错误码 `gpu_unavailable`——`torch.cuda.is_available()` 为 `False` 立刻报错（文案含手机号验证与 GPU 加速器两步检查），经 `/health.last_error_code` 与 ntfy 透传，前端用独立的「云端没有拿到 GPU」指引卡，不再拿 CPU 硬跑到超时；④ 顶栏算力弹层展示「已空闲 X 分钟 · 满 Y 分钟自动关机」，让空闲关机可预期。
+- **切模型不再爆 20GB 磁盘**：远端加载新模型前先 `release_pipeline()` + `gc.collect()` + `torch.cuda.empty_cache()`，按目标 pipeline 的全量依赖构建 keep_set（`local_models` 预挂载仓库与只读挂载目录永不触碰），磁盘余量按 HF 缓存目录所在盘测量；不足时把 `models--*` 按最近修改时间从旧到新逐出，逐条记 `[cache] evicted <repo> freed=<X>GiB`，每次删除后重测、够用即停，清完仍不足才抛「磁盘空间不足：需 X GiB / 可用 Y GiB」。`/health` 新增 `versions` 依赖版本快照，`npm run test:gpu` 支持 `--presets a,b,c` 在单一会话内连续切模型验证。
 - **出图不再被隧道抖动误判失败**：轮询容错从「连续 6 次失败即判死」改为按持续时长容忍（默认 120 秒）并指数退避；窗口用尽后用同一 `job.id` 幂等重投接回远端仍在算图的任务（最多 2 次，避免超出 daemon 保留窗口后重复出图）。`404 unknown_job` 仍是终态。
 - **隧道重建不再提前杀掉仍在运行的 Kernel**：`ready` 后失联的恢复窗口改为「向 Kaggle 确认 Kernel 仍 RUNNING 就续期」，单轮 120 秒、最多续 10 轮（约 7 分钟兜底），不再一次超时就 `health_failed`。
 - **任务进度透出到分张粒度**：`Job` 新增 `stageCode`（稳定英文阶段码）与 `progress: { done, total }`；工作台显示「正在生成第 2/4 张」与「正在加载模型…」，`stage` 的中文文案保留给中文界面与日志，英文界面不再直接展示中文阶段串。
@@ -31,6 +35,13 @@
 
 ### 工程
 
+- 契约新增：`ROUTES.settings` / `ROUTES.settingsSave`（同一 path 的 GET/POST，宿主按单条路由的 `method` 数组分发，避免 DSH 宿主的 exact 路由表拒绝重复 path）、`SETTINGS`（空闲关机边界与快捷档位、加速器白名单、高级项上限、`hfTokenSources`）、`ERROR_CODES.gpu_unavailable`；`docs/SPEC.md` 同步路由总览（19 条）、§1.4 远端 `/health` 附加字段、§2.4 运行设置接口、§3.4 `imagen_cancel` 与 `saveTo` 交付规则、§4 切模型缓存清理、§5.6 第三批交互补充。
+- 新增 `test/settings-host.mjs`（26 项）：设置纯函数（归一/钳制/去重、覆盖项合并、脱敏视图三态来源）、`settings.json` 原子写与重建读回、hfToken 明文零回传、`clearHfToken`、非法值 400 `invalid_request` / 非法 body 400 `invalid_body`、`effectiveOnNextSession`、SessionManager 启动读取最新设置、`idle_seconds` → `idleSeconds`、`last_error_code` 透传与回退、`index.js` 真实装配（路由 + `/logs` 诊断指纹）；已接入 `npm test` 与 `npm run test:host`。
+- `test/daemon-unit.py` 从 138 项增至 164 项：pipeline 依赖仓库收集、LRU 逐出顺序 / keep_set 保护 / `local_models` 不触碰 / 空间不足 `LoadError`、`ensure_pipeline` 先清理后加载、无 GPU 的 `gpu_unavailable` 码与文案、`/health.versions` 纯版本号与脱敏；版本期望改为从 `remote/contract.json` 读取，后续升版本不必再改测试常量。
+- `test/host-e2e.mjs` 从 31 项增至 38 项：`imagen_cancel` 四种返回分支与真实队列终态、`saveTo` 单张/多张/越界与保留目录拒绝、归一化纯函数边界、HTTP 提交的 `deliveredPaths` 与 400 `invalid_path`。`test/session-pure.mjs` 28→29；`check-client-logic` 44→52、`check-client-render` 36→45、`logs-diagnostics` 覆盖六类指引卡；`check-client-locale` zh/en 各 293→344 键。
+- 版本升到 0.8.0：契约 / `package.json` / `remote/daemon.py` / `test/mock-daemon.py` / `test/tunnel-probe.py` / `remote/contract.json` / `client.js` 同步；`docs/SPEC.md` 版本标识与示例同步。
+- **M4.2 真机验证待回填**：本机当前没有 Kaggle 凭据，`npm run test:gpu -- --presets sdxl-lightning,flux2-klein-4b,anima-light-lavender` 未执行，`docs/TROUBLESHOOTING.md` 的「已知良好版本参考（LKGR）」表为占位；真机跑通后按该章节说明回填版本组合与 `[cache] evicted` 记录。
+- `client.js` 重新构建。
 - 新增 `test/net-fallback.mjs`（6 项）：按 DSH `subprocess-local` 的真实校验规则伪造 subprocess（`argv` 必须全为字符串、`cwd` 必须是字符串），覆盖 URL 归一、请求头/请求体透传、状态码解析、fetch 成功不降级、双侧失败的错误链路；已接入 `npm test` 与 `npm run test:host`。
 - `test/load-client.mjs` 新增 `failures` 选项（按路径抛 TypeError），`check-client-render` 增加 `network` 场景：断言卡片为「连不上本地服务」+ 本地化详情 +「重试」，且不再出现「操作没有完成 / Failed to fetch」。
 - `docs/ARCHITECTURE.md` §2.5 补充与 DSH subprocess 契约对齐的说明；`client.js` 重新构建。

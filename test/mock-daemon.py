@@ -68,7 +68,7 @@ except Exception:  # pragma: no cover - 只在极简环境触发
     ImageDraw = None  # type: ignore[assignment]
     _HAS_PILLOW = False
 
-VERSION = "0.7.0-mock"
+VERSION = "0.8.0-mock"
 LOG_MAX_LINES = 400
 SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2", "anima")
 FAIL_CHOICES = ("none", "oom", "load_failed", "invalid_request", "generation_failed")

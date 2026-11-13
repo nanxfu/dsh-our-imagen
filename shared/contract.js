@@ -12,7 +12,7 @@
  *    随注入配置下发（见 `remote/daemon.py` 的 config 解析）。
  */
 
-export const VERSION = '0.7.0'
+export const VERSION = '0.8.0'
 
 /**
  * Host HTTP 路由表（index.js 注册时必须逐一对应）。
@@ -40,6 +40,9 @@ export const ROUTES = {
   enhance: { method: 'POST', path: '/imagen-api/enhance' },
   intent: { method: 'POST', path: '/imagen-api/intent' },
   reveal: { method: 'POST', path: '/imagen-api/reveal' },
+  // 运行设置抽屉：GET 读脱敏视图（hfToken 只回布尔与来源），POST 保存用户覆盖项。
+  settings: { method: 'GET', path: '/imagen-api/settings' },
+  settingsSave: { method: 'POST', path: '/imagen-api/settings' },
 }
 
 /** 客户端请求用的相对路径（与改造前 `request('imagen-api/state')` 完全同形）。 */
@@ -132,6 +135,25 @@ export const TIMEOUTS = {
 }
 
 /**
+ * 运行设置（工作台设置抽屉 ↔ Host 设置存储 `lib/settings.js` 共用的唯一来源）。
+ *
+ * 设置项只在宿主侧注入远端；本文件只登记「字段边界与取值域」，不存任何界面文案
+ * （accelerator 的展示名由客户端字典 `studio.settings.accelerator.<id>` 维护）。
+ */
+export const SETTINGS = {
+  // 空闲自动关机：秒。quickMinutes 是客户端快捷档位（分钟），自定义输入按 min/max 钳制。
+  idleTimeoutSec: { min: 300, max: 10800, quickMinutes: [15, 30, 60, 120] },
+  // GPU 加速器白名单：值必须是 `kaggle kernels push` 接受的 accelerator 名称。
+  accelerators: ['NvidiaTeslaT4', 'NvidiaTeslaP100'],
+  defaultAccelerator: 'NvidiaTeslaT4',
+  // 高级项上限：数组/映射最多 32 项，单条最长 256 字符。
+  maxItems: 32,
+  maxItemChars: 256,
+  // `publicSettingsView()` 的脱敏字段取值域：settings=用户在抽屉里设置的，config=宿主插件配置。
+  hfTokenSources: ['settings', 'config', 'none'],
+}
+
+/**
  * 画面比例与风格 id 的唯一来源。
  *
  * 前端 `src/studio/ratios.js` / `capsules.js` 只保留「id → 尺寸 / 词表」的数据，
@@ -187,6 +209,9 @@ export const ERROR_CODES = {
   load_failed: { layer: 'remote' },
   generation_failed: { layer: 'remote' },
   oom: { layer: 'remote' },
+  // 远端容器没拿到 GPU（torch.cuda.is_available() 为 False）：Kaggle 会静默降级成 CPU，
+  // 必须先明确报错，不能继续用 CPU 硬跑导致超时或模糊的 CUDA 报错。
+  gpu_unavailable: { layer: 'remote' },
   // ---- Client ----
   warming: { layer: 'client' },
   timeout: { layer: 'client' },

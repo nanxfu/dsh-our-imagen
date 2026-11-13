@@ -38,6 +38,9 @@ import { loadModels, renderGenerated, readGenerated } from '../tools/build-asset
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const ROUTE_LIST = Object.values(ROUTES).map((route) => route.path)
+// 同一 path 可以有多条 entry（如 settings 的 GET 读 / POST 存）：注册端按 path 去重比较，
+// 因此「期望集合」也要先去重，否则永远差 1 条。
+const ROUTE_PATH_LIST = [...new Set(ROUTE_LIST)]
 const ROUTE_SET = new Set(ROUTE_LIST)
 // hostErrorCodes() 已同时包含 host 与 remote 两层（远端码由 Host 透传）。
 const HOST_CODES = hostErrorCodes()
@@ -223,10 +226,11 @@ async function checkHostRoutes() {
 
   const details = []
   const unique = [...new Set(paths.map((item) => item.path))]
-  if (unique.length !== ROUTE_LIST.length) {
-    details.push(`注册路由数 ${unique.length}，契约 ${ROUTE_LIST.length}`)
+  // 契约里同一 path 可能对应多条位（GET/POST），注册端只能按 path 表达，故按唯一路径比较。
+  if (unique.length !== ROUTE_PATH_LIST.length) {
+    details.push(`注册路由数 ${unique.length}，契约唯一路径 ${ROUTE_PATH_LIST.length}（共 ${ROUTE_LIST.length} 条 entry）`)
   }
-  const missing = ROUTE_LIST.filter((route) => !unique.includes(route))
+  const missing = ROUTE_PATH_LIST.filter((route) => !unique.includes(route))
   const extra = unique.filter((route) => !ROUTE_SET.has(route))
   if (missing.length) details.push(`缺：${missing.join(', ')}`)
   if (extra.length) details.push(`多：${extra.join(', ')}`)
@@ -269,7 +273,11 @@ async function checkHostRoutes() {
 
   if (details.length) return fail('b', '路由注册（index.js + lib/**）与契约不一致', details)
   const filesWithRoutes = [...new Set(paths.map((item) => item.file))]
-  pass('b', `路由注册与契约一致（去重 ${unique.length} 条）`, `扫描 ${files.length} 个文件，命中 ${filesWithRoutes.length} 个`)
+  pass(
+    'b',
+    `路由注册与契约一致（去重 ${unique.length} 条路径）`,
+    `契约 ${ROUTE_LIST.length} 条 entry、扫描 ${files.length} 个文件，命中 ${filesWithRoutes.length} 个`,
+  )
 }
 
 // ── c. lib 层路由字面量 ────────────────────────────────────────────────────

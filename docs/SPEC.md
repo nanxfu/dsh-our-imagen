@@ -4,7 +4,7 @@
 > 本文档只描述语义、请求/响应形状与使用约束，不重复维护数值。`node test/check-contract.mjs` 会校验
 > 宿主注册的路由、宿主错误码、客户端文案与本文档是否跟随契约。
 >
-> **版本**：0.7.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
+> **版本**：0.8.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
 
 ---
 
@@ -26,9 +26,13 @@
 
 会话快照（`/state` 的 `session` 字段）包含：`state`、`phase`、`detail`、`presetId`、`kernelId`、`kernelUrl`、
 `kernelStatus`、`endpointUrl`、`device`、`deviceCount`、`modelId`、`tunnelProvider`、`startedAt`、`readyAt`、`lastProbeAt`、
-`idleTimeoutSec`、`stoppedByUser`、`error`（`null` 或 `{ code, message }`）。鉴权 token 不进入任何对外快照
+`idleTimeoutSec`、`idleSeconds`、`stoppedByUser`、`error`（`null` 或 `{ code, message }`）。鉴权 token 不进入任何对外快照
 （只在 Host 内部用于请求远端；`endpointUrl` 会下发，供前端展示隧道是否建立）。
 `tunnelProvider` 为 `cloudflare` / `custom` / `null`，对应 ready 事件与 `/health.tunnel_provider`。
+
+**空闲自动关机（透明化）**：`idleTimeoutSec` 是当前生效的自动关机阈值（来自运行设置，默认 1800 秒），
+`idleSeconds` 是远端 `/health` 上报的已空闲秒数（纯只读数值；会话未就绪或远端未上报时为 `null`）。
+客户端据此展示「已空闲 X 分钟 / 满 Y 分钟自动关机」，不再让用户猜测实例为什么突然被回收。
 
 **会话本地持久化**：Host 在启动流程的关键节点把 `kernelId`、`token`、`topic`、`endpointUrl` 等写入
 `<workspace>/.imagen/session.json`（原子写，目录 0700 / 文件 0600，Windows 忽略 mode 差异）。
@@ -52,7 +56,7 @@
 
 错误响应统一为 `{ "error": { "code": "...", "message": "..." } }`。错误码词表见
 `shared/contract.js` 的 `ERROR_CODES`；下表的 `HTTP` 列是宿主直接返回该码时的状态码。
-远端 daemon 的 `{ error: { code, message } }` 由宿主原样透传（`remote` 层 4 个码在宿主字典中也有文案）。
+远端 daemon 的 `{ error: { code, message } }` 由宿主原样透传（`remote` 层 5 个码在宿主字典中也有文案）。
 
 **Host 层（28 个）**
 
@@ -87,7 +91,7 @@
 | `session_ended` | — | Kernel 非预期结束（被平台回收等） |
 | `unknown` | — | 探测/检查失败但无法归因 |
 
-**Remote 层（4 个，远端产生、宿主透传）**
+**Remote 层（5 个，远端产生、宿主透传）**
 
 | 错误码 | 触发场景 |
 | :--- | :--- |
@@ -95,6 +99,7 @@
 | `load_failed` | 依赖安装 / 模型加载失败 |
 | `generation_failed` | 推理过程异常 |
 | `oom` | CUDA 显存不足（远端会先 `torch.cuda.empty_cache()` 再回错） |
+| `gpu_unavailable` | 远端容器没有拿到 GPU（`torch.cuda.is_available()` 为 `False`）。Kaggle 账号未完成手机号验证时会静默降级 CPU，远端在启动阶段就明确报错并把该码写入 `/health.last_error_code` 与 ntfy `error` 事件，宿主透传到前端会话指引卡，不再用 CPU 硬跑出模糊的 CUDA 错误 |
 
 > 远端也会复用 Host 层的 `invalid_request`（参数不合法，400）与 `not_found`（未知路径，404）。
 
@@ -103,6 +108,19 @@
 `warming`（收到 503 但没有明确错误码，按可重试处理）、`timeout`（请求被 AbortController 取消）、
 `network`（fetch 失败）、`need_prompt`（本地表单校验）、`delete_failed`（删除动作失败）、
 `probe_failed`（环境检查失败）。
+
+### 1.4 远端 `/health` 附加字段
+
+远端 daemon 的 `GET /health` 除了 `phase` / `device` / `loaded` 等基础字段，还向宿主提供以下只读信息
+（都由 Host 转换为会话快照或诊断数据，不直接暴露给客户端原始响应）：
+
+| 字段 | 类型 | 宿主用途 |
+| :--- | :--- | :--- |
+| `idle_seconds` | number | → 会话快照 `idleSeconds`；工作台展示「已空闲 X 分钟 / 满 Y 分钟自动关机」 |
+| `idle_timeout_sec` | integer | → 会话快照 `idleTimeoutSec`（远端实际生效的自动关机阈值） |
+| `last_error_code` | string | 远端错误码；命中契约 `ERROR_CODES` 时宿主原样透传（如 `gpu_unavailable`、`oom`），否则回退 `remote_error` |
+| `tunnel_provider` / `tunnel_state` / `tunnel_restarts` | string / string / integer | 会话快照的隧道提供方与重连状态展示 |
+| `versions` | object | 依赖版本快照（python / torch / diffusers / transformers / accelerate / peft / huggingface_hub / safetensors / pillow）；纯版本号、无 token 与路径，供 `npm run test:gpu` 的 report 记录「已知良好版本参考（LKGR）」 |
 
 ---
 
@@ -113,7 +131,7 @@
 
 > **例外**：`GET /imagen-api/file` 返回图片二进制流（`image/png` 等），不是 JSON。
 
-路由总览（17 条，以 `shared/contract.js` 的 `ROUTES` 为准）：
+路由总览（19 条，以 `shared/contract.js` 的 `ROUTES` 为准）：
 
 | 方法 | 路径 | 用途 |
 | :--- | :--- | :--- |
@@ -134,6 +152,8 @@
 | POST | `/imagen-api/enhance` | 提示词润色 / 英译 |
 | POST | `/imagen-api/intent` | 对话意图解析 |
 | POST | `/imagen-api/reveal` | 在文件管理器中打开产物目录 |
+| GET | `/imagen-api/settings` | 读取运行设置的脱敏视图（`hfToken` 只回布尔与来源） |
+| POST | `/imagen-api/settings` | 保存运行设置（空闲关机 / 加速器 / HF Token / 预挂载 / 依赖约束） |
 
 ### 2.1 会话与状态
 
@@ -162,7 +182,7 @@
 
 ```json
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "defaultPreset": "sdxl-lightning",
   "presets": [
     {
@@ -573,16 +593,66 @@
 - **响应**：`{ "ok": true, "dir": "…/imagen-output" }`（dryRun 时多一个 `"dryRun": true`）。
 - **错误**：`404 output_missing`（目录不存在）、`500 reveal_failed`（调起失败）。
 
+### 2.4 运行设置（settings）
+
+工作台「运行设置」抽屉的数据接口。静态默认值来自宿主插件配置（`config`），用户在抽屉里改过的项以覆盖项形式
+持久化到 `<workspace>/.imagen/settings.json`（目录 0700 / 文件 0600，同目录临时文件 + `rename` 原子写）。
+字段边界与取值域见契约 `SETTINGS`。
+
+#### `GET /imagen-api/settings`
+
+- **响应**：`{ "ok": true, "settings": SettingsView }`
+
+#### `POST /imagen-api/settings`
+
+- **请求体**（都是可选字段，只提交用户改动过的项）：
+
+| 字段 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `idleTimeoutSec` | integer | 空闲自动关机秒数，按契约 `SETTINGS.idleTimeoutSec` 钳制 |
+| `accelerator` | string | GPU 加速器，取值域 `SETTINGS.accelerators` |
+| `hfToken` | string | HuggingFace Token；空字符串表示「保持不变」 |
+| `clearHfToken` | boolean | `true` 时清除本地保存的 Token |
+| `datasetSources` | string[] | 预挂载 Kaggle Dataset（`owner/dataset`），去空去重、最多 32 项 |
+| `pipConstraints` | string[] | pip 依赖约束（如 `diffusers==0.31.0`），去空去重、最多 32 项 |
+| `localModels` | object | 本地权重映射 `repo → 容器内目录`（值必须以 `/` 开头），最多 32 项 |
+
+- **响应**：`{ "ok": true, "settings": SettingsView }`（与保存后的生效值一致）。
+- **错误**：`400 invalid_body`（请求体不是合法 JSON 或不是对象）、`400 invalid_request`（字段值不合法）。
+
+`SettingsView`（脱敏视图，**永不包含 `hfToken` 原文**）：
+
+| 字段 | 说明 |
+| :--- | :--- |
+| `idleTimeoutSec` | 当前生效的空闲自动关机秒数 |
+| `accelerator` | 当前生效的 GPU 加速器 |
+| `datasetSources` / `pipConstraints` | 当前生效的字符串数组 |
+| `localModels` | 当前生效的本地权重映射 |
+| `hasHfToken` | 是否已配置 HuggingFace Token（布尔） |
+| `hfTokenSource` | `settings`（抽屉里设置的）/ `config`（宿主插件配置）/ `none` |
+| `effectiveOnNextSession` | 当前远端实例正在运行、改动要到下次唤醒才生效时为 `true` |
+
+> 设置改动对**下一次** `session.start()` 生效：宿主要在构造下发配置前读取合并后的最新设置，
+> 而不是只在插件加载时读一次静态 `config`。诊断环境指纹（`/logs` 的 `env`）同样使用合并后的设置，
+> 且只输出布尔开关。
+>
+> **实现约束（同 path 的 GET/POST）**：DSH 宿主的 exact 路由表以 path 为键，同一 path 不允许注册两次。
+> 因此 `/imagen-api/settings` 只注册一条路由，用 `method: [GET, POST]` 在 handler 内按方法分发；
+> 方法不匹配时仍返回 `405` 且 `Allow: GET, POST`。契约里的 `settings` / `settingsSave` 是两条语义
+> 条目、共用一个 path，新增同 path 方法时沿用这个做法。
+
 ---
 
 ## 3. DSH 会话 Agent 工具规范
 
-插件向 DSH 会话模型注入 3 个标准 Tool，支持对话中直接出图：
+插件向 DSH 会话模型注入 4 个标准 Tool，支持对话中直接出图：
 
 ### 3.1 `imagen_generate`
 
 - **描述**：在免费的 Kaggle GPU 上运行开源文生图模型并出图，图片保存到工作区 `imagen-output/` 目录。
   首次调用若远端会话未启动，会自动拉起 Kernel（可能需要排队 10 分钟以上）。
+  等待超时不影响任务继续执行：返回里的 `jobId`（形如 `j_1a2b3c4d`）可配合 `imagen_cancel` 取消，或用
+  `imagen_history` 轮询结果；传 `saveTo` 可把图片直接交付到工作区路径。
 - **输入参数**（`additionalProperties: false`）：
 
 | 参数 | 类型 | 必填 | 说明 |
@@ -597,9 +667,23 @@
 | `seed` | integer | 否 | 随机种子，省略则随机 |
 | `count` | integer | 否 | 张数 1–4，默认 1 |
 | `waitSeconds` | integer | 否 | 最多等待累计秒数 0–600，默认 90；超时后任务仍在后台继续 |
+| `saveTo` | string | 否 | 工作区内的相对交付路径，见下方「saveTo 交付规则」 |
+
+**saveTo 交付规则**：
+
+1. 原始归档照常生成：`imagen-output/<YYYYMMDD-HHmmss>-<jobId>/` + `meta.json` 不受影响；
+   `saveTo` 在其之上做一次**原子复制交付**（同目录临时文件 + `rename`），交付成功的相对路径记入
+   `job.output.deliveredPaths`，`describeJob()` 的产物段会逐条列出 `已交付至：<path>`。
+2. 只接受非空相对路径；拒绝绝对路径、Windows 盘符前缀、`\0`、任何 `..` 段、以及落在
+   `imagen-output/` / `.imagen/` 内的目标。目标路径的最近已存在祖先会做 `realpath` 校验，
+   工作区内指向工作区外的软链接同样拒绝。
+3. 未写扩展名时自动补 `.png`；`count === 1` 直接落盘为目标文件名，`count > 1` 按 `-01`、`-02`
+   追加序号（`docs/assets/hero.png` → `docs/assets/hero-01.png`、`hero-02.png`）。
+4. 非法路径在入队前就返回 `invalid_path`（不占用队列、不触发远端生成）。
+5. 父目录按需创建；写盘不残留 `.tmp-*` 临时文件。
 
 - **返回**：文本（`{ "text": string }`），内容为任务状态 / 参数摘要 / 产物路径（完成时提示可用
-  `![描述](URL)` 展示图片）。
+  `![描述](URL)` 展示图片；交付过的副本单独列出）。
 
 ### 3.2 `imagen_session`
 
@@ -612,6 +696,25 @@
 - **描述**：获取当前工作区最近生成的图片文件列表与参数信息。
 - **输入参数**：`limit`（可选，1–30，默认 5）。
 - **返回**：最近生成的条目文本（时间、预设、提示词摘要、图片路径）。
+
+### 3.4 `imagen_cancel`
+
+- **描述**：取消一个已提交的生图任务（排队任务立即出队失效；生成中任务合作式停止，当前这张出完后不再提交
+  批内剩余张数，已出的图片仍保留）。
+- **输入参数**（`additionalProperties: false`，必填 `jobId`）：
+
+| 参数 | 类型 | 必填 | 说明 |
+| :--- | :--- | :---: | :--- |
+| `jobId` | string | 是 | 要取消的任务 ID（来自 `imagen_generate` 返回结果） |
+
+- **返回**（按取消结果折叠成模型可读文本，与 `/imagen-api/job/cancel` 的 `disposition` 一一对应）：
+
+| 场景 | 返回文本 |
+| :--- | :--- |
+| 任务不存在 | `未找到任务 <jobId>` |
+| `dequeued` | `已取消任务 <jobId>（已从队列移除）` |
+| `cooperative` | `已向任务 <jobId> 发送合作式取消请求：当前正在生成的单张完成后将停止，不再继续后续张数，已出图像仍保留` |
+| `already-finished` | `任务 <jobId> 已处于终态（<status>），无需取消` |
 
 ---
 
@@ -642,6 +745,19 @@
 >
 > **首张生成延迟说明**：远端服务支持在 Kernel 启动时预载模型（`preload`）；但首次推理仍需建立 CUDA Context
 > 与内存池，耗时高于 `steadySeconds`，从第二张开始进入稳定速度。
+
+**切模型缓存清理（20GB 磁盘）**：Kaggle 免费容器磁盘约 20 GiB，权重通过 HuggingFace 缓存目录落盘，不会随切模型
+自动释放。远端在加载新模型前按以下顺序处理，避免连续切换大模型时爆盘：
+
+1. `release_pipeline()` 释放旧 pipeline，并 `gc.collect()` + `torch.cuda.empty_cache()`；
+2. 按目标 pipeline 的全部依赖仓库（`base` / `vae` / `text_encoder` / `tokenizer` / `lora` / `refiner` 等）
+   加 `local_models` 预挂载仓库构建不可删除的 keep_set；
+3. 磁盘余量按 `hf_hub_cache_dir()` 所在盘测量（不是只看 `/kaggle/working`）；
+4. 不足时把缓存目录下 `models--*` 按最近修改时间从旧到新逐出（跳过 keep_set 与预挂载目录），
+   每次删除后重新测量，空间足够即停；日志逐条记录 `[cache] evicted <repo> freed=<X>GiB`；
+5. 清完仍不足则抛 `load_failed`，文案写明「磁盘空间不足：需 X GiB / 可用 Y GiB」。
+
+排障与真机验证方法见 [`docs/TROUBLESHOOTING.md`](TROUBLESHOOTING.md) 的「已知良好版本参考（LKGR）」章节。
 
 ---
 
@@ -697,3 +813,13 @@
 3. **一键转英文**：提示词输入框下方提供「转为英文」次级动作（与「润色」并列，不抢占底部生成按钮的实心样式）。只有服务端 `source="model"` 且返回非空译文时才替换表单内容；`source="local"` 必须提示「模型不可用，未能翻译」，不得把原文当作译文。
 4. **方形尺寸**：「画面设置」中画幅比例行与方形尺寸行是两个概念：方形尺寸按钮只来自当前预设的 `sizeOptions`（等宽高），自定义宽高在「高级设置」中按契约边界与 8 的步长钳制。
 5. **日志与诊断**：运行日志抽屉缺省展示远端日志，可手动切换到 Host 日志；远端日志为空且 Host 有内容时自动兜底并给出「已切换到 Host 本地日志」的来源说明。会话 / 网络 / 生成 / 通用 / 授权五类指引卡提供「查看日志」与「复制诊断信息」两个次级动作（普通 `ofs-chip`，不占用主操作的实心样式），复制的诊断文本包含脱敏环境指纹与阶段耗时，不含 token、代理 URL、绝对路径与提示词正文。
+
+### 5.6 第三批交互补充（运行设置 / 新手卡点 / 空闲倒计时）
+
+1. **运行设置入口**：顶栏「GPU 状态」弹层底部与日志入口旁各有一个「运行设置」按钮，打开右侧抽屉（与运行日志抽屉同一套焦点陷阱 / `Esc` 关闭 / 关闭归还焦点行为）。抽屉分三段：常规运行（空闲自动关机快捷档位 15/30/60/120 分钟 + 自定义、GPU 加速器）、模型下载与限流防护（HuggingFace Token，已配置时提示「留空保持不变」并提供「清除 Token」）、高级（默认折叠：预挂载 Kaggle Dataset、本地模型目录映射、pip 依赖约束）。高级项支持多行编辑与行级错误提示，非法行禁止保存并标出行号。
+2. **设置生效提示**：当前云端实例运行中时，抽屉顶部展示温和提示「当前云端实例已运行，修改将在下次唤醒时生效」，不阻断编辑与保存。
+3. **空闲倒计时**：顶栏 GPU 状态弹层在会话就绪时展示「已空闲 X 分钟 / 满 Y 分钟自动关机」，数据来自会话快照的 `idleSeconds` 与 `idleTimeoutSec`；远端未上报时不显示该行（不展示 0 或猜测值）。
+4. **新手卡点加固**：
+   - `cli_missing` 卡除「复制安装命令」外，明确提示 Windows 用户：安装后若仍提示找不到命令，请确认 Python Scripts 目录已加入系统 PATH 并重启 DSH Desktop。
+   - `auth_required` 卡写明凭据文件位置 `%USERPROFILE%\.kaggle\kaggle.json`，并提供打开 Kaggle 账户设置获取 API Token 的按钮。
+   - `gpu_unavailable` 使用独立卡片（不复用「生成失败，重试一次」），主操作是打开 Kaggle 账户设置完成手机号验证，次级可重新唤醒云端。
