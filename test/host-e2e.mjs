@@ -12,12 +12,14 @@
 
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { apply as applyPlugin } from '../index.js'
 import { createLogRoutes } from '../lib/routes/logs.js'
+import { normalizeSaveTo, resolveWorkspaceWritePath } from '../lib/paths.js'
+import { registerTools } from '../lib/tools.js'
 import { LIMITS, VERSION } from '../shared/contract.js'
 
 // 1×1 透明 PNG，用于伪造远端返回
@@ -331,11 +333,15 @@ async function main() {
 
   await check('工具已注册', () => {
     const names = fake.tools.map((tool) => tool.name)
-    assert.deepEqual(names.sort(), ['imagen_generate', 'imagen_history', 'imagen_session'])
+    assert.deepEqual(names.sort(), ['imagen_cancel', 'imagen_generate', 'imagen_history', 'imagen_session'])
     for (const tool of fake.tools) {
       assert.ok(tool.output?.render, `${tool.name} 缺少 output.render`)
       assert.ok(tool.parameters?.type === 'object', `${tool.name} 参数根必须是 object`)
     }
+    const cancel = fake.tools.find((tool) => tool.name === 'imagen_cancel')
+    assert.deepEqual(cancel.parameters.required, ['jobId'], 'imagen_cancel 必须要求 jobId')
+    assert.equal(cancel.parameters.properties.jobId.type, 'string')
+    assert.equal(cancel.parameters.additionalProperties, false)
   })
 
   await check('初始状态为 absent', async () => {
@@ -718,6 +724,146 @@ async function main() {
     const tool = fake.tools.find((item) => item.name === 'imagen_session')
     const value = await tool.execute({ action: 'status' }, {})
     assert.match(value.text, /会话状态：ready/)
+  })
+
+  await check('Agent 工具 imagen_cancel 四种返回分支', async () => {
+    // 队列替身：按 jobId 回放 cancel() 的四种返回值，逐条断言给模型看的文案。
+    const canned = {
+      dequeued: { ok: true, disposition: 'dequeued', job: { status: 'cancelled' } },
+      cooperative: { ok: true, disposition: 'cooperative', job: { status: 'running' } },
+      finished: { ok: true, disposition: 'already-finished', job: { status: 'cancelled' } },
+      failed: { ok: true, disposition: 'already-finished', job: { status: 'failed' } },
+    }
+    const registered = []
+    const stubCtx = { tools: { register: (tool) => registered.push(tool) } }
+    const stubQueue = {
+      cancel(id) {
+        return canned[id] ?? { ok: false, code: 'not_found' }
+      },
+    }
+    registerTools(stubCtx, {
+      queue: stubQueue,
+      session: { snapshot: () => ({ state: 'ready' }) },
+      defaultPreset: 'sdxl-lightning',
+    })
+    const tool = registered.find((item) => item.name === 'imagen_cancel')
+    assert.ok(tool, 'imagen_cancel 必须注册')
+
+    assert.equal((await tool.execute({ jobId: 'missing' })).text, '未找到任务 missing')
+    assert.match((await tool.execute({ jobId: 'dequeued' })).text, /已取消任务 dequeued（已从队列移除）/)
+    assert.match(
+      (await tool.execute({ jobId: 'cooperative' })).text,
+      /已向任务 cooperative 发送合作式取消请求：当前正在生成的单张完成后将停止.*已出图像仍保留/,
+    )
+    assert.match((await tool.execute({ jobId: 'finished' })).text, /已处于终态（cancelled），无需取消/)
+    assert.match((await tool.execute({ jobId: 'failed' })).text, /已处于终态（failed），无需取消/)
+    // jobId 前后空白会被裁掉；空 jobId 归到 not_found 分支。
+    assert.equal((await tool.execute({ jobId: '  missing  ' })).text, '未找到任务 missing')
+    assert.equal((await tool.execute({})).text, '未找到任务 ')
+  })
+
+  await check('Agent 工具 imagen_cancel 走真实队列（终态任务）', async () => {
+    const tool = fake.tools.find((item) => item.name === 'imagen_cancel')
+    const value = await tool.execute({ jobId: firstJob.id }, {})
+    assert.match(value.text, /已处于终态（done），无需取消/)
+  })
+
+  await check('Agent 工具 imagen_generate saveTo：单张补扩展名并交付', async () => {
+    const tool = fake.tools.find((item) => item.name === 'imagen_generate')
+    const value = await tool.execute(
+      { prompt: 'saveTo 单张交付', count: 1, waitSeconds: 30, saveTo: 'docs/assets/hero' },
+      {},
+    )
+    assert.match(value.text, /imagen-output\//, '原始归档必须照常生成')
+    assert.match(value.text, /已交付至：docs\/assets\/hero\.png/)
+    const delivered = join(workspace, 'docs', 'assets', 'hero.png')
+    const info = await stat(delivered)
+    assert.ok(info.size > 0, '交付文件不能为空')
+    const bytes = await readFile(delivered)
+    assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', '交付文件应是 PNG')
+    // 原子写：交付目录里不允许残留 .tmp-* 临时文件。
+    const names = await readdir(join(workspace, 'docs', 'assets'))
+    assert.deepEqual(names.filter((name) => name.includes('.tmp-')), [])
+  })
+
+  await check('Agent 工具 imagen_generate saveTo：多张追加序号', async () => {
+    const tool = fake.tools.find((item) => item.name === 'imagen_generate')
+    const value = await tool.execute(
+      { prompt: 'saveTo 多张交付', count: 2, waitSeconds: 30, saveTo: 'docs/assets/logo.png' },
+      {},
+    )
+    assert.match(value.text, /已交付至：docs\/assets\/logo-01\.png/)
+    assert.match(value.text, /已交付至：docs\/assets\/logo-02\.png/)
+    for (const name of ['logo-01.png', 'logo-02.png']) {
+      const info = await stat(join(workspace, 'docs', 'assets', name))
+      assert.ok(info.size > 0, `${name} 不能为空`)
+    }
+    const direct = await stat(join(workspace, 'docs', 'assets', 'logo.png')).then(
+      () => true,
+      () => false,
+    )
+    assert.equal(direct, false, '多张时不应直接落盘为目标文件名')
+  })
+
+  await check('Agent 工具 imagen_generate saveTo：越界与保留目录拒绝', async () => {
+    const tool = fake.tools.find((item) => item.name === 'imagen_generate')
+    const attempts = [
+      '../outside.png',
+      'docs/../../escape.png',
+      '/etc/passwd',
+      'C:/Windows/hero.png',
+      'D:\\data\\hero.png',
+      'imagen-output/hero.png',
+      '.imagen/hero.png',
+      'docs/a\0.png',
+    ]
+    const before = mock.state.generateCalls
+    for (const saveTo of attempts) {
+      const value = await tool.execute({ prompt: 'saveTo 拒绝测试', count: 1, waitSeconds: 1, saveTo }, {})
+      assert.match(value.text, /^提交失败：/, `${JSON.stringify(saveTo)} 应被拒绝`)
+    }
+    assert.equal(mock.state.generateCalls, before, '非法 saveTo 不得触发远端生成')
+  })
+
+  await check('saveTo 纯函数：归一化与工作区边界', async () => {
+    assert.deepEqual(normalizeSaveTo('docs/assets/hero'), { ok: true, relative: 'docs/assets/hero.png' })
+    assert.deepEqual(normalizeSaveTo('docs\\assets\\hero.webp'), { ok: true, relative: 'docs/assets/hero.webp' })
+    assert.deepEqual(normalizeSaveTo('./docs//hero.png'), { ok: true, relative: 'docs/hero.png' })
+    for (const bad of ['', '   ', '../x.png', '/abs.png', 'C:/x.png', 'imagen-output/x.png', '.imagen/x', 42, null]) {
+      const result = normalizeSaveTo(bad)
+      assert.equal(result.ok, false, `${JSON.stringify(bad)} 应被拒绝`)
+      assert.equal(result.code, 'invalid_path')
+    }
+
+    const fakeCtx = { get: (name) => (name === 'workingDirectory' ? { defaultDirectory: workspace } : undefined) }
+    const good = await resolveWorkspaceWritePath(fakeCtx, 'reports/cover')
+    assert.equal(good.ok, true)
+    assert.equal(good.relative, 'reports/cover.png')
+    assert.equal(good.absolute, join(workspace, 'reports', 'cover.png'))
+    const escape = await resolveWorkspaceWritePath(fakeCtx, '../escape.png')
+    assert.equal(escape.ok, false)
+    assert.equal(escape.code, 'invalid_path')
+  })
+
+  await check('HTTP 提交 saveTo：响应带 deliveredPaths，非法路径 400 invalid_path', async () => {
+    const headers = { 'content-type': 'application/json' }
+    const ok = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ prompt: 'HTTP saveTo 交付', count: 1, seed: 11, waitSeconds: 30, saveTo: 'exports/cover' }),
+    })
+    assert.equal(ok.status, 200, JSON.stringify(ok.body))
+    assert.equal(ok.body.status, 'done')
+    assert.deepEqual(ok.body.output.deliveredPaths, ['exports/cover.png'])
+    assert.ok((await stat(join(workspace, 'exports', 'cover.png'))).size > 0)
+
+    const bad = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ prompt: 'HTTP saveTo 越界', saveTo: '../escape.png' }),
+    })
+    assert.equal(bad.status, 400)
+    assert.equal(bad.body.error.code, 'invalid_path')
   })
 
   await check('收藏与本地库', async () => {
