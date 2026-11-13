@@ -41,12 +41,17 @@
    启动阶段检测到没 GPU 就立刻 ``fail_boot('gpu_unavailable', …)``，文案直接给出
    「手机号验证 + 启用 GPU 加速器」的下一步；``/health.last_error_code`` 与 ntfy
    ``error`` 事件都带该码，Host 据此出专用指引卡，不再用 CPU 硬跑。
+13. **0.8.1 固定 cloudflared 版本**：下载地址从滚动的 ``/releases/latest/download/``
+   改为固定 tag，并对 ``cloudflared-linux-amd64`` 做 SHA256 校验（``CLOUDFLARED_SHA256``）。
+   上游发版或网络只传半截文件时不再留下坏二进制：校验不匹配会删掉重下一次，
+   两次都失败就带着「期望 / 实际」校验和报错，Host 侧能看到明确原因并回退备用通道。
 """
 
 from __future__ import annotations
 
 import base64
 import gc
+import hashlib
 import hmac
 import importlib.metadata
 import inspect
@@ -81,7 +86,7 @@ os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 # ─────────────────────────────────────────────────────────────────────────────
 EMBEDDED_CONFIG_B64 = ""
 
-VERSION = "0.8.0"
+VERSION = "0.8.1"
 
 # 日志环容量：Host 侧按 docs/SPEC.md 实现，最多 400 行。
 LOG_MAX_LINES = 400
@@ -89,9 +94,23 @@ LOG_LINE_MAX_CHARS = 2000
 
 DEFAULT_PORT = 7860
 CLOUDFLARED_PATH = "/tmp/cloudflared"
+# 0.8.1（v0.9 M1）起固定 cloudflared 版本并校验 SHA256。此前用 /releases/latest/download/
+# 滚动地址：上游一发版、或网络只传了半截文件，冷启动就会随机失败，而且从
+# BOOT.tunnel_error 里看不出是哪一环。固定 tag 后同一份二进制可复现，校验不匹配
+# 能明确报出「期望/实际」并重试一次。
+CLOUDFLARED_VERSION = "2026.11.0"
 CLOUDFLARED_DOWNLOAD_URL = (
-    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+    "https://github.com/cloudflare/cloudflared/releases/download/2026.11.0/cloudflared-linux-amd64"
 )
+# 校验和来源：cloudflared 2026.11.0 官方 Release 说明里的 SHA256 Checksums
+# （GitHub Releases 页面 / releases.atom），并已用本机实际下载的
+# cloudflared-linux-amd64（40,283,099 字节）复算 SHA256，与官方值逐位一致。
+CLOUDFLARED_SHA256 = "51f7c68b57ed7269164075d7e789efce5b59355982f06392deeb037d982a51fd"
+# 下载大小上限：官方 linux-amd64 约 38.4 MiB；120 MB 足以容纳异常响应，又不会把
+# Kaggle 容器磁盘写满。单次下载超时 120s，下载异常或校验不匹配时共尝试 2 次。
+CLOUDFLARED_MAX_DOWNLOAD_BYTES = 120 * 2**20
+CLOUDFLARED_DOWNLOAD_TIMEOUT_SEC = 120
+CLOUDFLARED_DOWNLOAD_ATTEMPTS = 2
 CLOUDFLARED_URL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
 # 备用通道（自建 FRP / bore 等）默认从进程输出里抓 https 地址；Host 可用
 # fallback_tunnel_url_regex 覆盖（例如自签名域名或带路径的地址）。
@@ -2348,25 +2367,87 @@ def start_http_server(port: int) -> ThreadingHTTPServer:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+class _CloudflaredDownloadTooLarge(RuntimeError):
+    """响应体超过大小上限：不是瞬时故障，重试没有意义，直接中止。"""
+
+
+def _remove_file_quietly(path: str) -> None:
+    """删除临时文件，失败只忽略（清理动作不能掩盖真正要抛的错误）。"""
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def _download_cloudflared_once(partial: str) -> tuple[int, str]:
+    """流式下载一次 cloudflared 到 ``partial``，边写边算 SHA256。
+
+    返回 ``(字节数, sha256 十六进制小写)``。任何异常（网络、写盘、超大小上限）都先
+    删掉半截文件再向上抛，保证重试时不会读到上一次的残留。
+    """
+    total = 0
+    digest = hashlib.sha256()
+    try:
+        with urllib.request.urlopen(
+            CLOUDFLARED_DOWNLOAD_URL, timeout=CLOUDFLARED_DOWNLOAD_TIMEOUT_SEC
+        ) as response, open(partial, "wb") as handle:
+            while True:
+                chunk = response.read(1 << 16)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > CLOUDFLARED_MAX_DOWNLOAD_BYTES:
+                    raise _CloudflaredDownloadTooLarge(
+                        f"响应超过大小上限 {CLOUDFLARED_MAX_DOWNLOAD_BYTES} 字节，已中止"
+                    )
+                handle.write(chunk)
+                digest.update(chunk)
+    except BaseException:
+        _remove_file_quietly(partial)
+        raise
+    return total, digest.hexdigest()
+
+
 def ensure_cloudflared() -> str:
+    """确保 ``CLOUDFLARED_PATH`` 可用：已就绪则复用，否则按固定版本下载并校验 SHA256。
+
+    0.8.1（v0.9 M1）起下载地址固定到 ``CLOUDFLARED_VERSION``：滚动 latest 时上游发版或传输
+    半截文件都会让冷启动随机失败。下载异常与校验不匹配各重试一次，仍失败才抛错；
+    ``start_tunnel`` 会把它收敛进 ``BOOT.tunnel_error`` 并回退备用通道。日志只打
+    版本、大小与校验和（公开信息），绝不打印配置里的 token。
+    """
     if os.path.exists(CLOUDFLARED_PATH) and os.access(CLOUDFLARED_PATH, os.X_OK):
         log("[tunnel] 复用已存在的 /tmp/cloudflared")
         return CLOUDFLARED_PATH
 
-    log("[tunnel] 下载 cloudflared 到 /tmp …")
     partial = CLOUDFLARED_PATH + ".part"
-    total = 0
-    with urllib.request.urlopen(CLOUDFLARED_DOWNLOAD_URL, timeout=120) as response, open(partial, "wb") as handle:
-        while True:
-            chunk = response.read(1 << 16)
-            if not chunk:
-                break
-            handle.write(chunk)
-            total += len(chunk)
-    os.replace(partial, CLOUDFLARED_PATH)
-    os.chmod(CLOUDFLARED_PATH, 0o755)
-    log(f"[tunnel] cloudflared 就绪（{round(total / 2**20, 1)} MB）")
-    return CLOUDFLARED_PATH
+    expected = CLOUDFLARED_SHA256.strip().lower()
+    last_reason = "未知原因"
+    for attempt in range(1, CLOUDFLARED_DOWNLOAD_ATTEMPTS + 1):
+        log(f"[tunnel] 下载 cloudflared {CLOUDFLARED_VERSION}（第 {attempt}/{CLOUDFLARED_DOWNLOAD_ATTEMPTS} 次）…")
+        try:
+            total, actual = _download_cloudflared_once(partial)
+        except _CloudflaredDownloadTooLarge as exc:
+            raise RuntimeError(f"cloudflared {CLOUDFLARED_VERSION} 下载失败：{exc}") from exc
+        except Exception as exc:
+            last_reason = f"下载异常：{short(exc)}"
+            log(f"[tunnel] WARN cloudflared {last_reason}（第 {attempt}/{CLOUDFLARED_DOWNLOAD_ATTEMPTS} 次）")
+            continue
+        if actual == expected:
+            os.replace(partial, CLOUDFLARED_PATH)
+            os.chmod(CLOUDFLARED_PATH, 0o755)
+            log(
+                f"[tunnel] cloudflared {CLOUDFLARED_VERSION} 就绪"
+                f"（{round(total / 2**20, 1)} MB，SHA256 {actual[:12]}… 校验通过）"
+            )
+            return CLOUDFLARED_PATH
+        _remove_file_quietly(partial)
+        last_reason = f"SHA256 校验失败：期望 {expected[:16]}…，实际 {actual[:16]}…"
+        log(f"[tunnel] WARN cloudflared {last_reason}（第 {attempt}/{CLOUDFLARED_DOWNLOAD_ATTEMPTS} 次）")
+    raise RuntimeError(
+        f"cloudflared {CLOUDFLARED_VERSION} 下载失败"
+        f"（{CLOUDFLARED_DOWNLOAD_ATTEMPTS} 次尝试均未成功）：{last_reason}"
+    )
 
 
 def normalize_tunnel_command(command, port: int) -> list[str]:  # noqa: ANN001

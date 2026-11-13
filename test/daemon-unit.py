@@ -38,6 +38,9 @@
  21. M3.3 无 GPU：phase=error / last_error_code='gpu_unavailable'、文案含手机号验证与
       GPU 加速器、ntfy error 事件带码；torch 导入失败仍归 load_failed
  22. M4.2 /health.versions：依赖版本快照只含纯版本号，取不到省略，不含 token / 路径
+ 23. cloudflared 固定版本下载（v0.9 M1）：tag/URL/SHA256 常量一致、流式下载校验、
+     下载异常与校验不匹配各重试一次、超大小上限中止、已存在可执行文件复用
+     （假 urlopen / 假响应流，不联网）
 
 运行：python test/daemon-unit.py
 """
@@ -45,6 +48,8 @@
 from __future__ import annotations
 
 import base64
+import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -188,6 +193,46 @@ class FakeProc:
 
     def kill(self) -> None:
         self.killed = True
+
+
+class FakeResponse:
+    """urllib.request.urlopen 返回值的最小替身：read(n) 逐块返回，支持 with 语句。"""
+
+    def __init__(self, chunks):
+        self._chunks = list(chunks)
+        self._index = 0
+
+    def read(self, size=-1):  # noqa: ANN001, ANN201
+        if self._index >= len(self._chunks):
+            return b""
+        chunk = self._chunks[self._index]
+        self._index += 1
+        return chunk
+
+    def __enter__(self):  # noqa: ANN204
+        return self
+
+    def __exit__(self, *exc_info):  # noqa: ANN002, ANN204
+        return False
+
+
+def make_urlopen(responses, calls):  # noqa: ANN001, ANN201
+    """urlopen 替身：按调用次序返回假响应；responses 项是 bytes 块列表、异常或假响应对象。"""
+
+    queue = list(responses)
+
+    def fake_urlopen(url, timeout=None):  # noqa: ANN001, ANN202
+        calls.append(url)
+        if not queue:
+            raise AssertionError("urlopen 调用次数超出用例预期")
+        item = queue.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        if hasattr(item, "read"):
+            return item
+        return FakeResponse(item)
+
+    return fake_urlopen
 
 
 def fake_usage(free_gb: float):  # noqa: ANN201
@@ -1884,6 +1929,138 @@ class TunnelHelperTest(DaemonUnitTest):
         d.STATE.shutting_down = False
         d.BOOT.stop_event.set()
         self.assertTrue(d.tunnel_should_stop())
+
+
+class CloudflaredDownloadTest(DaemonUnitTest):
+    """v0.9 M1：cloudflared 固定版本下载 + SHA256 校验（假 urlopen / 假响应流，不联网）。"""
+
+    PAYLOAD = b"fake-cloudflared-binary-for-unit-test"
+    URL_SENTINEL = "https://example.invalid/cloudflared-linux-amd64"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.target = os.path.join(self._tmp.name, "cloudflared")
+        self.partial = self.target + ".part"
+        self.payload_sha = hashlib.sha256(self.PAYLOAD).hexdigest()
+        self.calls: list[str] = []
+
+    def download(self, responses, expected_sha=None, max_bytes=None):  # noqa: ANN001, ANN202
+        """在隔离的临时路径 / 校验和 / urlopen 下调用 ensure_cloudflared。"""
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(mock.patch.object(d, "CLOUDFLARED_PATH", self.target))
+            stack.enter_context(mock.patch.object(d, "CLOUDFLARED_DOWNLOAD_URL", self.URL_SENTINEL))
+            stack.enter_context(
+                mock.patch.object(
+                    d, "CLOUDFLARED_SHA256", self.payload_sha if expected_sha is None else expected_sha
+                )
+            )
+            if max_bytes is not None:
+                stack.enter_context(mock.patch.object(d, "CLOUDFLARED_MAX_DOWNLOAD_BYTES", max_bytes))
+            stack.enter_context(mock.patch.object(d.urllib.request, "urlopen", make_urlopen(responses, self.calls)))
+            return d.ensure_cloudflared()
+
+    def test_pinned_version_url_and_checksum_are_consistent(self) -> None:
+        self.assertRegex(d.CLOUDFLARED_VERSION, r"^\d{4}\.\d{1,2}\.\d+$")
+        self.assertIn(f"/releases/download/{d.CLOUDFLARED_VERSION}/", d.CLOUDFLARED_DOWNLOAD_URL)
+        self.assertNotIn("/latest/", d.CLOUDFLARED_DOWNLOAD_URL, "不应再使用滚动 latest 地址")
+        self.assertTrue(d.CLOUDFLARED_DOWNLOAD_URL.endswith("/cloudflared-linux-amd64"))
+        self.assertRegex(d.CLOUDFLARED_SHA256, r"^[0-9a-f]{64}$")
+        self.assertEqual(d.CLOUDFLARED_SHA256, d.CLOUDFLARED_SHA256.strip().lower())
+
+    def test_download_success_verifies_and_installs(self) -> None:
+        chmod_calls: list[tuple[str, int]] = []
+        real_chmod = os.chmod
+
+        def record_chmod(path, mode):  # noqa: ANN001
+            chmod_calls.append((path, mode))
+            real_chmod(path, mode)
+
+        with mock.patch.object(d.os, "chmod", record_chmod):
+            result = self.download([[self.PAYLOAD[:7], self.PAYLOAD[7:]]])
+        self.assertEqual(result, self.target)
+        self.assertEqual(Path(self.target).read_bytes(), self.PAYLOAD)
+        self.assertFalse(os.path.exists(self.partial), "落位后不应残留 .part")
+        self.assertEqual(chmod_calls, [(self.target, 0o755)])
+        self.assertEqual(self.calls, [self.URL_SENTINEL])
+        self.assertLogContains(f"cloudflared {d.CLOUDFLARED_VERSION} 就绪")
+        self.assertLogContains("校验通过")
+
+    def test_reuse_existing_executable_skips_download(self) -> None:
+        Path(self.target).write_bytes(b"already-installed")
+        os.chmod(self.target, 0o755)
+        result = self.download([])
+        self.assertEqual(result, self.target)
+        self.assertEqual(self.calls, [], "已存在的可执行文件不应再下载")
+        self.assertLogContains("复用已存在的 /tmp/cloudflared")
+
+    def test_checksum_mismatch_retries_once_then_raises(self) -> None:
+        tampered = b"tampered-download"
+        with self.assertRaises(RuntimeError) as ctx:
+            self.download([[tampered], [tampered]])
+        message = str(ctx.exception)
+        self.assertIn("下载失败", message)
+        self.assertIn("SHA256 校验失败", message)
+        self.assertIn(self.payload_sha[:16], message, "异常应带期望校验和前缀")
+        self.assertIn(hashlib.sha256(tampered).hexdigest()[:16], message, "异常应带实际校验和前缀")
+        self.assertEqual(len(self.calls), 2, "校验不匹配应只重试一次")
+        self.assertFalse(os.path.exists(self.partial))
+        self.assertFalse(os.path.exists(self.target))
+        self.assertLogContains("WARN cloudflared SHA256 校验失败")
+
+    def test_download_error_retries_once_then_raises(self) -> None:
+        with self.assertRaises(RuntimeError) as ctx:
+            self.download([OSError("network down"), OSError("network down")])
+        message = str(ctx.exception)
+        self.assertIn("下载失败", message)
+        self.assertIn("下载异常", message)
+        self.assertIn("network down", message)
+        self.assertEqual(len(self.calls), 2)
+        self.assertFalse(os.path.exists(self.partial))
+        self.assertFalse(os.path.exists(self.target))
+        self.assertLogContains("WARN cloudflared 下载异常")
+
+    def test_retry_recovers_after_first_download_error(self) -> None:
+        result = self.download([OSError("flaky network"), [self.PAYLOAD]])
+        self.assertEqual(result, self.target)
+        self.assertEqual(Path(self.target).read_bytes(), self.PAYLOAD)
+        self.assertEqual(len(self.calls), 2)
+        self.assertLogContains("（第 2/2 次）")
+
+    def test_stream_break_cleans_partial_file(self) -> None:
+        class BrokenResponse(FakeResponse):
+            """读到第二块时抛连接中断，模拟传输半截。"""
+
+            def read(self, size=-1):  # noqa: ANN001, ANN201
+                if self._index >= 1:
+                    raise ConnectionResetError("connection reset by peer")
+                return super().read(size)
+
+        with self.assertRaises(RuntimeError) as ctx:
+            self.download([BrokenResponse([b"first-chunk"]), BrokenResponse([b"second-chunk"])])
+        self.assertIn("connection reset by peer", str(ctx.exception))
+        self.assertEqual(len(self.calls), 2)
+        self.assertFalse(os.path.exists(self.partial), "传输中断后不应留下半截文件")
+        self.assertFalse(os.path.exists(self.target))
+
+    def test_size_cap_aborts_without_retry(self) -> None:
+        with self.assertRaises(RuntimeError) as ctx:
+            self.download([[b"x" * 2048]], max_bytes=1024)
+        message = str(ctx.exception)
+        self.assertIn("下载失败", message)
+        self.assertIn("大小上限", message)
+        self.assertEqual(len(self.calls), 1, "超大小上限不是瞬时故障，不应重试")
+        self.assertFalse(os.path.exists(self.partial))
+        self.assertFalse(os.path.exists(self.target))
+
+    def test_start_tunnel_surfaces_download_error(self) -> None:
+        error = "cloudflared 2026.11.0 下载失败（2 次尝试均未成功）：下载异常：boom"
+        with mock.patch.object(d, "ensure_cloudflared", side_effect=RuntimeError(error)):
+            result = d.start_tunnel(7860)
+        self.assertIsNone(result)
+        self.assertIn("cloudflared 下载失败：", d.BOOT.tunnel_error or "")
+        self.assertIn("boom", d.BOOT.tunnel_error or "")
 
 
 class TunnelDrainTest(DaemonUnitTest):
