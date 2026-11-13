@@ -21,7 +21,7 @@ import { LIMITS, PROTOCOL, VERSION } from '../shared/contract.js'
 import { JobQueue } from '../lib/jobs.js'
 import { isTrustedEndpoint } from '../lib/remote.js'
 import { SessionManager } from '../lib/session.js'
-import { describeHealthPhase, decideReadyHealthLoss, isKernelEnded } from '../lib/session/health.js'
+import { describeHealthPhase, decideReadyHealthLoss, isKernelEnded, remoteErrorCodeOf } from '../lib/session/health.js'
 import { buildKernelConfig } from '../lib/session/provisioner.js'
 import {
   describeProvisionTimeout,
@@ -119,7 +119,8 @@ async function scenarioState() {
     assert.equal(value.phase, null)
     assert.equal(value.idleTimeoutSec, 1800)
     assert.equal(value.tunnelProvider, null)
-    assert.equal(Object.keys(value).length, 17)
+    // 新增 idleSeconds（远端空闲秒数，M3.4）后字段数由 17 变为 18。
+    assert.equal(Object.keys(value).length, 18)
   })
 
   await check('normalizeTunnelProvider 只放行契约取值域内的通道', () => {
@@ -429,6 +430,16 @@ async function scenarioHealth() {
     assert.equal(decideReadyHealthLoss('COMPLETE', 99, 1), 'ended')
     assert.equal(decideReadyHealthLoss('RUNNING', 0, 1), 'reconnect')
     assert.equal(decideReadyHealthLoss('RUNNING', 1, 1), 'giveUp')
+  })
+
+  await check('remoteErrorCodeOf：只放行契约已登记的错误码，其余回退 remote_error', () => {
+    // gpu_unavailable 是远端错误码（M3.3），Host 透传后客户端有对应文案。
+    assert.equal(remoteErrorCodeOf('gpu_unavailable'), 'gpu_unavailable')
+    assert.equal(remoteErrorCodeOf('load_failed'), 'load_failed')
+    assert.equal(remoteErrorCodeOf('auth_required'), 'auth_required')
+    for (const value of ['unknown_remote_code', '', ' remote_error', null, undefined, 42, {}, []]) {
+      assert.equal(remoteErrorCodeOf(value), 'remote_error', `非法值应回退 remote_error：${String(value)}`)
+    }
   })
 }
 

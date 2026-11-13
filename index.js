@@ -20,7 +20,9 @@ import { createLibraryRoutes } from './lib/routes/library.js'
 import { createLogRoutes } from './lib/routes/logs.js'
 import { createPromptRoutes } from './lib/routes/prompts.js'
 import { createSessionRoutes } from './lib/routes/session.js'
+import { createSettingsRoutes } from './lib/routes/settings.js'
 import { SessionManager } from './lib/session.js'
+import { createSettingsStore } from './lib/settings.js'
 import { registerTools } from './lib/tools.js'
 
 export const name = 'our-free-imagen'
@@ -39,6 +41,11 @@ export function apply(ctx, config = {}) {
 
   // probe：当前探测状态；lastGood：最近一次成功结果（配额不可用时客户端回退展示）。
   const cache = { probe: null, probeAt: 0, probing: null, lastGood: null, lastGoodAt: null }
+
+  // 运行设置：磁盘覆盖项（工作台设置抽屉保存）与静态 config 合并后的生效值。
+  // 构造时立即异步加载 `.imagen/settings.json`；读取失败静默降级为仅静态 config。
+  const settings = createSettingsStore({ ctx, config })
+  void settings.whenReady()
 
   const session = new SessionManager({
     ctx,
@@ -71,6 +78,8 @@ export function apply(ctx, config = {}) {
         ? config.trustedTunnelDomains.filter((item) => typeof item === 'string')
         : [],
     },
+    // 每次启动会话前读取最新合并设置（工作台修改后无需重启插件即可在下次唤醒生效）。
+    deps: { getSettings: () => settings.current() },
   })
 
   const queue = new JobQueue({
@@ -135,11 +144,18 @@ export function apply(ctx, config = {}) {
   registerRoutes(ctx, [
     ...createSessionRoutes({ session, probes, statePayload, defaultPreset, log }),
     // 诊断环境指纹只在 /logs 响应里下发：只含布尔开关、版本号与毫秒耗时，不含配置原文。
-    ...createLogRoutes({ session, log, ctx, env: () => buildDiagnosticEnv({ config, session }) }),
+    ...createLogRoutes({
+      session,
+      log,
+      ctx,
+      env: () => buildDiagnosticEnv({ config, session, settings: settings.current() }),
+    }),
     ...createJobRoutes({ ctx, queue, log }),
     ...createFileRoutes({ ctx, log }),
     ...createLibraryRoutes({ ctx, log }),
     ...createPromptRoutes({ ctx, log }),
+    // 运行设置：GET 读脱敏视图 / POST 保存覆盖项（hfToken 只回布尔与来源）。
+    ...createSettingsRoutes({ settings, session, log }),
   ])
 
   registerTools(ctx, { queue, session, defaultPreset })
