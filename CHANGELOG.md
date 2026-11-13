@@ -30,7 +30,8 @@
 ### 真机验收
 
 - **M3 图生图（2026-11-13，Kaggle 2×Tesla T4，`node test/gpu-live.mjs --preset sdxl-lightning --img2img`）**：同一会话内先文生图（加载 0s / 出图 15.63s / 1024×1024）再用生成的图垫图重绘（强度 0.6，参考图 1024×1024 → 实际出图 1024×1024，加载 **0s** / 出图 7.0s），证明 `from_pipe` 复用了已加载底座、没有重新加载权重。重绘前后 `/health.gpu_memory`：`allocated_mb` 7000 → 7000、`max_allocated_mb` 10233 → 10233、`reserved_mb` 10776 → 10778（+2 MiB 为噪声），**显存无额外增长**；`reusedBasePipeline=true`、`reservedDeltaMb=2`。产物：`bench-results/gpu-live/2026-11-13T14-43-22/`（`01.png` / `01-img2img.png` / `report.json`）。同次版本快照 python 3.13.16 / torch 2.11.0+cu130 / diffusers 0.43.0 / transformers 5.23.0 / accelerate 1.15.0 / peft 0.21.3 / huggingface-hub 1.33.0 / safetensors 0.8.0 / pillow 13.0.0，已回填 TROUBLESHOOTING 的 LKGR 表。
-- **M2 OAuth**：待用户在本机浏览器完成一次真实 Kaggle 授权后回填（`node tools/kaggle-login.mjs`）。
+- **M2 直连传输（2026-11-13 真机复核）**：`probeKaggle` 直接打通真实 Kaggle API（不经过 CLI）：鉴权正常、用户名 `mogudd`、配额 `7.13h / 22.87h / 30h`（重置 2026-11-14T00:00:00Z）。并用直连链路真实推送了一个 CPU 探针 Kernel（`mogudd/imagen-direct-live-f3b313`）：`pushKernel` 返回 URL、`kernelStatus` 轮询到 `COMPLETE`、`kernelLogs` 拉到脚本输出里的校验标记，**直连的推送 / 状态 / 日志三接口全部通过**（CPU 探针不消耗 GPU 配额）。
+- **M2 内置 OAuth 登录**：仍需用户在本机浏览器完成一次真实授权（`node tools/kaggle-login.mjs`，授权窗口 5 分钟；超时后重跑即可回填本节）。
 
 ## 0.8.2 — 2026-11-13
 
