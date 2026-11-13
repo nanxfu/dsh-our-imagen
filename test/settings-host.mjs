@@ -143,6 +143,7 @@ function assertViewShape(view) {
     'hasHfToken',
     'hfTokenSource',
     'idleTimeoutSec',
+    'kaggleTransport',
     'localModels',
     'pipConstraints',
   ])
@@ -160,6 +161,7 @@ async function scenarioPureFunctions() {
     const result = normalizeSettingsPatch({
       idleTimeoutSec: 1234.6,
       accelerator: ' NvidiaTeslaP100 ',
+      kaggleTransport: ' direct ',
       hfToken: '  hf_abc  ',
       datasetSources: ['owner/a', ' owner/a ', '', '   ', 'owner/b'],
       pipConstraints: ['diffusers==0.31.0'],
@@ -169,6 +171,7 @@ async function scenarioPureFunctions() {
     assert.equal(result.ok, true)
     assert.equal(result.value.idleTimeoutSec, 1235)
     assert.equal(result.value.accelerator, 'NvidiaTeslaP100')
+    assert.equal(result.value.kaggleTransport, 'direct')
     assert.equal(result.value.hfToken, 'hf_abc')
     assert.deepEqual(result.value.datasetSources, ['owner/a', 'owner/b'])
     assert.deepEqual(result.value.pipConstraints, ['diffusers==0.31.0'])
@@ -191,6 +194,8 @@ async function scenarioPureFunctions() {
       { idleTimeoutSec: Number.NaN },
       { accelerator: 'NvidiaTeslaV100' },
       { accelerator: '' },
+      { kaggleTransport: 'bogus' },
+      { kaggleTransport: 1 },
       { datasetSources: 'owner/a' },
       { datasetSources: ['owner/a', 7] },
       { pipConstraints: 3 },
@@ -226,6 +231,7 @@ async function scenarioPureFunctions() {
       {
         idleTimeoutSec: 1500,
         accelerator: 'NvidiaTeslaP100',
+        kaggleTransport: 'direct',
         hfToken: 'hf_config',
         datasetSources: ['owner/cfg'],
         pipConstraints: ['numpy==1.26'],
@@ -233,6 +239,7 @@ async function scenarioPureFunctions() {
       {
         idleTimeoutSec: 900,
         accelerator: 'NvidiaTeslaT4',
+        kaggleTransport: 'cli',
         hfToken: 'hf_settings',
         datasetSources: ['owner/set', 'owner/set'],
         pipConstraints: ['diffusers==0.31.0'],
@@ -241,6 +248,7 @@ async function scenarioPureFunctions() {
     )
     assert.equal(effective.idleTimeoutSec, 900)
     assert.equal(effective.accelerator, 'NvidiaTeslaT4')
+    assert.equal(effective.kaggleTransport, 'cli', '用户覆盖项应覆盖静态 config')
     assert.equal(effective.hfToken, 'hf_settings')
     assert.deepEqual(effective.datasetSources, ['owner/set'])
     assert.deepEqual(effective.pipConstraints, ['diffusers==0.31.0'])
@@ -250,23 +258,33 @@ async function scenarioPureFunctions() {
     const defaults = mergeSettings(undefined, undefined)
     assert.equal(defaults.idleTimeoutSec, TIMEOUTS.idleShutdownSec)
     assert.equal(defaults.accelerator, SETTINGS.defaultAccelerator)
+    assert.equal(defaults.kaggleTransport, SETTINGS.defaultKaggleTransport)
     assert.equal(defaults.hfToken, null)
     assert.deepEqual(defaults.datasetSources, [])
     assert.deepEqual(defaults.localModels, {})
     assert.deepEqual(defaults.pipConstraints, [])
 
     // 静态 config 的非法值同样被防御：accelerator 白名单外回退默认，idle 越界被钳制。
-    const hostile = mergeSettings({ accelerator: 'bogus', idleTimeoutSec: 1 }, {})
+    const hostile = mergeSettings({ accelerator: 'bogus', idleTimeoutSec: 1, kaggleTransport: 'bogus' }, {})
     assert.equal(hostile.accelerator, SETTINGS.defaultAccelerator)
     assert.equal(hostile.idleTimeoutSec, SETTINGS.idleTimeoutSec.min)
+    assert.equal(hostile.kaggleTransport, SETTINGS.defaultKaggleTransport)
   })
 
   await check('publicSettingsView：固定字段 + hfToken 三态来源 + 生效提示', () => {
-    const base = { idleTimeoutSec: 900, accelerator: 'NvidiaTeslaT4', datasetSources: [], localModels: {}, pipConstraints: [] }
+    const base = {
+      idleTimeoutSec: 900,
+      accelerator: 'NvidiaTeslaT4',
+      kaggleTransport: 'direct',
+      datasetSources: [],
+      localModels: {},
+      pipConstraints: [],
+    }
     const none = publicSettingsView({ ...base, hfToken: null }, { hasConfigHfToken: false })
     assertViewShape(none)
     assert.equal(none.hasHfToken, false)
     assert.equal(none.hfTokenSource, 'none')
+    assert.equal(none.kaggleTransport, 'direct')
     assert.equal(none.effectiveOnNextSession, false)
 
     const fromConfig = publicSettingsView({ ...base, hfToken: 'hf_config_secret' }, { hasConfigHfToken: true })
@@ -306,6 +324,7 @@ async function scenarioStoreAndRoutes(workspace) {
       assertViewShape(view)
       assert.equal(view.idleTimeoutSec, 1500, '未保存覆盖项时 idleTimeoutSec 应来自静态 config')
       assert.equal(view.accelerator, SETTINGS.defaultAccelerator)
+      assert.equal(view.kaggleTransport, SETTINGS.defaultKaggleTransport, '未保存时访问方式回退契约默认 cli')
       assert.deepEqual(view.datasetSources, [])
       assert.deepEqual(view.localModels, {})
       assert.deepEqual(view.pipConstraints, [])
@@ -319,6 +338,7 @@ async function scenarioStoreAndRoutes(workspace) {
       const saved = {
         idleTimeoutSec: 900,
         accelerator: 'NvidiaTeslaP100',
+        kaggleTransport: 'direct',
         datasetSources: ['owner/ds-a', ' owner/ds-b ', 'owner/ds-a', ''],
         pipConstraints: ['diffusers==0.31.0'],
         localModels: { 'stabilityai/stable-diffusion-xl-base-1.0': '/kaggle/input/sdxl' },
@@ -329,12 +349,14 @@ async function scenarioStoreAndRoutes(workspace) {
       assertViewShape(body.settings)
       assert.equal(body.settings.idleTimeoutSec, 900)
       assert.equal(body.settings.accelerator, 'NvidiaTeslaP100')
+      assert.equal(body.settings.kaggleTransport, 'direct')
 
       const disk = JSON.parse(await readFile(filePath, 'utf8'))
       // settings.json 只保存用户显式修改过的覆盖项，不做全量快照。
       assert.deepEqual(disk, {
         idleTimeoutSec: 900,
         accelerator: 'NvidiaTeslaP100',
+        kaggleTransport: 'direct',
         datasetSources: ['owner/ds-a', 'owner/ds-b'],
         pipConstraints: ['diffusers==0.31.0'],
         localModels: { 'stabilityai/stable-diffusion-xl-base-1.0': '/kaggle/input/sdxl' },
@@ -354,6 +376,7 @@ async function scenarioStoreAndRoutes(workspace) {
       const view = reloaded.publicView({ sessionActive: false })
       assert.equal(view.idleTimeoutSec, 900)
       assert.equal(view.accelerator, 'NvidiaTeslaP100')
+      assert.equal(view.kaggleTransport, 'direct')
       assert.deepEqual(view.datasetSources, ['owner/ds-a', 'owner/ds-b'])
       assert.deepEqual(view.pipConstraints, ['diffusers==0.31.0'])
       assert.deepEqual(view.localModels, { 'stabilityai/stable-diffusion-xl-base-1.0': '/kaggle/input/sdxl' })
@@ -405,6 +428,7 @@ async function scenarioStoreAndRoutes(workspace) {
         { localModels: [] },
         { localModels: { 'not-a-repo': '/kaggle/input/x' } },
         { accelerator: 'NvidiaTeslaV100' },
+        { kaggleTransport: 'bogus' },
         { datasetSources: 'owner/ds' },
         { idleTimeoutSec: '900' },
       ]

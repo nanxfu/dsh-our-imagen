@@ -1188,6 +1188,81 @@ async function main() {
     }
   })
 
+  await check('Kaggle 访问方式：/state 暴露当前传输，运行设置可切换并即时生效', async () => {
+    const before = await json(host.origin, '/imagen-api/state')
+    assert.equal(before.status, 200)
+    assert.equal(before.body.kaggleTransport, 'cli', '默认必须是稳定的 CLI 传输')
+
+    const settings = await json(host.origin, '/imagen-api/settings')
+    assert.equal(settings.status, 200)
+    assert.equal(settings.body.settings.kaggleTransport, 'cli')
+
+    const saved = await json(host.origin, '/imagen-api/settings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kaggleTransport: 'direct' }),
+    })
+    assert.equal(saved.status, 200)
+    assert.equal(saved.body.settings.kaggleTransport, 'direct')
+
+    // 传输层每次调用都读最新设置：不需要重载插件，下一次 /state 就应该是 direct。
+    const after = await json(host.origin, '/imagen-api/state')
+    assert.equal(after.body.kaggleTransport, 'direct')
+
+    const invalid = await json(host.origin, '/imagen-api/settings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kaggleTransport: 'bogus' }),
+    })
+    assert.equal(invalid.status, 400)
+    assert.equal(invalid.body.error.code, 'invalid_request')
+
+    // 还原成默认，避免影响后续场景。
+    await json(host.origin, '/imagen-api/settings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kaggleTransport: 'cli' }),
+    })
+  })
+
+  await check('Kaggle 直连登录路由：GET 登录态 / 非法动作 400 / 空闲取消幂等 / 405', async () => {
+    const initial = await json(host.origin, '/imagen-api/kaggle/login')
+    assert.equal(initial.status, 200)
+    assert.equal(initial.body.ok, true)
+    assert.equal(initial.body.login.state, 'idle')
+    for (const key of ['state', 'mode', 'url', 'message', 'username', 'startedAt', 'finishedAt']) {
+      assert.ok(Object.prototype.hasOwnProperty.call(initial.body.login, key), `LoginView 缺字段 ${key}`)
+    }
+
+    const badAction = await json(host.origin, '/imagen-api/kaggle/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'bogus' }),
+    })
+    assert.equal(badAction.status, 400)
+    assert.equal(badAction.body.error.code, 'invalid_request')
+
+    const missingCode = await json(host.origin, '/imagen-api/kaggle/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'submit-code' }),
+    })
+    assert.equal(missingCode.status, 400)
+    assert.equal(missingCode.body.error.code, 'invalid_request')
+
+    // 非 pending 状态下 cancel 是幂等的：返回当前视图，不打开浏览器、不占端口。
+    const cancelled = await json(host.origin, '/imagen-api/kaggle/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'cancel' }),
+    })
+    assert.equal(cancelled.status, 200)
+    assert.equal(cancelled.body.login.state, 'idle')
+
+    const notAllowed = await json(host.origin, '/imagen-api/kaggle/login', { method: 'PUT' })
+    assert.equal(notAllowed.status, 405)
+  })
+
   await check('会话停止', async () => {
     const { body } = await json(host.origin, '/imagen-api/session/stop', { method: 'POST' })
     assert.equal(body.ok, true)

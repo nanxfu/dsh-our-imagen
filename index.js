@@ -10,12 +10,14 @@
 
 import { TIMEOUTS, VERSION } from './shared/contract.js'
 import { JobQueue } from './lib/jobs.js'
-import { probeKaggle } from './lib/kaggle.js'
+import { createKaggleLogin } from './lib/kaggle-oauth.js'
+import { createKaggleTransport } from './lib/kaggle-transport.js'
 import { buildDiagnosticEnv, createLogger, installFileLog } from './lib/log.js'
 import { DEFAULT_PRESET, presetById, publicPresets } from './lib/presets.js'
 import { registerRoutes, toInt } from './lib/route-kit.js'
 import { createFileRoutes } from './lib/routes/files.js'
 import { createJobRoutes } from './lib/routes/jobs.js'
+import { createKaggleRoutes } from './lib/routes/kaggle.js'
 import { createLibraryRoutes } from './lib/routes/library.js'
 import { createLogRoutes } from './lib/routes/logs.js'
 import { createPromptRoutes } from './lib/routes/prompts.js'
@@ -47,6 +49,14 @@ export function apply(ctx, config = {}) {
   // 构造时立即异步加载 `.imagen/settings.json`；读取失败静默降级为仅静态 config。
   const settings = createSettingsStore({ ctx, config })
   void settings.whenReady()
+
+  // Kaggle 访问方式（v0.9 M2 试验特性）：cli = 本机 CLI（默认）；direct = Node 直连 Kaggle API。
+  // 传输层每次调用都读最新设置，因此在工作台里切换后，下一次探测 / 唤醒 / 状态轮询即生效。
+  const kaggleTransport = createKaggleTransport({ ctx, getSettings: () => settings.current(), log })
+
+  // 内置 OAuth 登录（直连模式用）：单实例，成功凭据写入 ~/.kaggle/credentials.json（与 CLI 同格式）。
+  // 与传输方式解耦：CLI 模式下也能调用（两者写同一份凭据文件）。
+  const kaggleLogin = createKaggleLogin({ ctx, log })
 
   const session = new SessionManager({
     ctx,
@@ -80,7 +90,14 @@ export function apply(ctx, config = {}) {
         : [],
     },
     // 每次启动会话前读取最新合并设置（工作台修改后无需重启插件即可在下次唤醒生效）。
-    deps: { getSettings: () => settings.current() },
+    // Kaggle 相关调用统一经传输层分发：cli / direct 同形状，SessionManager 状态机不感知差异。
+    deps: {
+      getSettings: () => settings.current(),
+      kaggleUsername: (context) => kaggleTransport.kaggleUsername(context),
+      pushKernel: (context, folder, options) => kaggleTransport.pushKernel(context, folder, options),
+      kernelStatus: (context, kernelId) => kaggleTransport.kernelStatus(context, kernelId),
+      kernelLogs: (context, kernelId) => kaggleTransport.kernelLogs(context, kernelId),
+    },
   })
 
   const queue = new JobQueue({
@@ -106,6 +123,8 @@ export function apply(ctx, config = {}) {
     lastJob: queue.lastFinished,
     queue: queue.queueStats(),
     devMode: Boolean(devEndpoint),
+    // 当前生效的 Kaggle 访问方式（客户端据此把「CLI」字样切为「直连」、决定指引卡主操作）。
+    kaggleTransport: kaggleTransport.id(),
   })
 
   const probes = {
@@ -113,7 +132,7 @@ export function apply(ctx, config = {}) {
       if (cache.probing) return cache.probing
       cache.probing = (async () => {
         try {
-          const probe = await probeKaggle(ctx)
+          const probe = await kaggleTransport.probeKaggle(ctx)
           cache.probe = probe
           cache.probeAt = Date.now()
           // 配额接口偶发不可用：保留最近一次成功结果，客户端可回退展示配额与检查时间。
@@ -159,6 +178,8 @@ export function apply(ctx, config = {}) {
     ...createSettingsRoutes({ settings, session, log }),
     // 工作台界面状态：GET 读归一化视图 / POST 合并白名单字段（同一 path、method 分发）。
     ...createUiStateRoutes({ ctx, log }),
+    // Kaggle 直连登录（试验特性）：GET 读登录态 / POST 发起、取消或提交授权码（同一 path、method 分发）。
+    ...createKaggleRoutes({ login: kaggleLogin, log }),
   ])
 
   registerTools(ctx, { queue, session, defaultPreset })
@@ -184,6 +205,8 @@ export function apply(ctx, config = {}) {
     () => () => {
       session.dispose()
       queue.dispose()
+      // 登录管理器可能正在等待浏览器回调：卸载时取消并释放回环端口（不阻塞卸载）。
+      void kaggleLogin.dispose()
       // 卸载尽力 flush 后关闭文件日志；不阻塞插件卸载，异常在 dispose 内部吞掉。
       void fileLog.dispose()
     },

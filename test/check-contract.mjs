@@ -336,6 +336,9 @@ async function checkErrorCodes() {
     for (const pattern of HOST_CODE_PATTERNS) {
       for (const match of code.matchAll(pattern)) {
         const name = match[1]
+        // 只接受 snake_case 错误码：`code:` / `errorCode:` 也可能出现在普通报文与文案里，
+        // 带空格、换行或括号的捕获一定是误报（错误码词表全是 snake_case）。
+        if (!/^[a-z][a-z0-9_]*$/.test(name)) continue
         if (!emitted.has(name)) emitted.set(name, new Set())
         emitted.get(name).add(file)
       }
