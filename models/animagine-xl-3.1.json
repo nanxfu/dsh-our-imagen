@@ -26,6 +26,7 @@
     1024
   ],
   "runtime": "default",
+  "supportsImg2Img": true,
   "pipeline": {
     "loader": "sdxl",
     "base": "cagliostrolab/animagine-xl-3.1",

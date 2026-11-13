@@ -147,6 +147,11 @@ export async function loadModels(modelsDir = MODELS_DIR) {
     if (typeof model.qualityPrefix !== 'string') {
       fail(`${where} 的 qualityPrefix 必须是字符串（没有质量词前缀时写空串）`)
     }
+    // 图生图（垫图重绘）能力：可以缺省（缺省按 false 归一），显式给出时必须是布尔值。
+    // 只有整套 diffusers 管线能用 AutoPipelineForImage2Image.from_pipe 复用的模型才能标 true。
+    if ('supportsImg2Img' in model && typeof model.supportsImg2Img !== 'boolean') {
+      fail(`${where} 的 supportsImg2Img 必须是布尔值（缺省按 false 处理）`)
+    }
 
     models.push(model)
   }
@@ -158,6 +163,8 @@ export async function loadModels(modelsDir = MODELS_DIR) {
 function projectModels(models) {
   return models.map((model) => ({
     ...model,
+    // 能力字段落盘前归一成布尔值：旧资产没写该字段时按 false（不支持图生图）。
+    supportsImg2Img: model.supportsImg2Img === true,
     measured: Object.fromEntries(MEASURED_FIELDS.map((field) => [field, model.measured[field] ?? null])),
   }))
 }
@@ -187,6 +194,8 @@ function projectPresets(models) {
     negativeHint: model.negativeHint,
     promptStyle: model.promptStyle,
     qualityPrefix: model.qualityPrefix,
+    // 图生图（垫图重绘）能力：客户端据此决定是否允许放参考图；daemon 侧还会按 loader 兜底。
+    supportsImg2Img: model.supportsImg2Img === true,
     sizeOptions: model.sizeOptions,
     pipeline: model.pipeline,
   }))

@@ -26,6 +26,7 @@
     1024
   ],
   "runtime": "default",
+  "supportsImg2Img": true,
   "pipeline": {
     "loader": "sdxl",
     "base": "playgroundai/playground-v2.5-1024px-aesthetic",

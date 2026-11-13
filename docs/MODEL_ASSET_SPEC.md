@@ -40,6 +40,7 @@
   "qualityPrefix": "",
   "sizeOptions": [768, 1024, 1152],
   "runtime": "default",
+  "supportsImg2Img": true,
   "pipeline": {
     "loader": "sdxl-lora",
     "base": "stabilityai/stable-diffusion-xl-base-1.0",
@@ -79,6 +80,7 @@
 | `size` / `steps` / `cfg` / `sizeOptions` / `negativeHint` | 推荐默认参数 |
 | `promptStyle` / `qualityPrefix` | 提示词配方：提示词的书写口径与质量词前缀，见 §2.1 |
 | `runtime` | 运行时底座。当前只允许 `"default"`（统一验证过的环境） |
+| `supportsImg2Img` | 图生图（垫图重绘）能力。可缺省，缺省按 `false`；只有能用 `AutoPipelineForImage2Image.from_pipe` 复用整管的模型才能标 `true`，见 §2.2 |
 | `pipeline` | 下发给远端 Daemon 的加载描述；`downloadGb` 用于下载前磁盘预检 |
 | `measured` | 靶场实测指标：峰值显存、加载耗时、稳态耗时、实际下载量。未实测的字段填 `null` |
 
@@ -107,6 +109,27 @@
 消费方：`lib/intent.js` 的对话意图解析按当前预设的这两个字段动态约束宿主模型，要求 `prompt` 永远是英文；`qualityPrefix` 会作为固定质量词要求写进提示词开头。中文只出现在确认卡的 `summary`（UI 语言摘要）里，不进入发给模型的提示词。
 
 校验：`tools/build-assets.mjs` 要求两个字段必须存在，且 `promptStyle` 必须在上表枚举内；`npm run models:check` 会一并校验。
+
+### 2.2 图生图能力（supportsImg2Img）
+
+| 取值 | 含义 |
+| :--- | :--- |
+| `true` | 支持垫图重绘：客户端可以放参考图，远端用 `AutoPipelineForImage2Image.from_pipe()` 复用已加载的文生图底座，不额外占显存 |
+| `false`（缺省） | 不支持：客户端参考图槽位不可用（自动切到支持的预设）；远端对带 `reference` 的请求返回 `invalid_request`，文案为「该模型不支持垫图重绘」 |
+
+判定标准：
+
+- 模型必须是可被 diffusers 整管复用的模型（当前 `pipeline.loader` 为 `sdxl` / `sdxl-lora`），其组件能被 `AutoPipelineForImage2Image.from_pipe()` 直接复用；
+- M3 首期只开放 SDXL 家族（含 SDXL + LoRA 组合）；`flux2` / `anima` 等特殊 loader 暂不支持，标 `false`；
+- 标 `true` 前必须在真机用一张参考图跑通一次重绘，并按 §3 的验证流程记录结果。
+
+消费方：
+
+- 客户端：`shared/contract.js` 的 `publicPresets()` 只剔除 `pipeline`，`supportsImg2Img` 随预设公开视图下发；参考图槽位与画廊「以此图重绘」按该字段决定是否可用，不支持时自动切到支持预设。
+- Host：提交 `/generate` 前校验参考图的来源、格式、体积与 `strength` 边界；参考图二进制不进任务公开视图，只把 `sourcePath` / `strength` 记进产物 meta。
+- daemon：`SUPPORTED_IMG2IMG_LOADERS`（`sdxl` / `sdxl-lora`）是最后一道兜底，其它 loader 一律按 `invalid_request` 拒绝（文案「该模型不支持垫图重绘」）。
+
+校验：`tools/build-assets.mjs` 要求该字段若存在必须是布尔值；缺省按 `false` 归一后写入 `shared/models.generated.js`（`npm run models:check` 会一并校验生成物同步）。
 
 ## 3. 录入与验证流程
 

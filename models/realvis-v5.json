@@ -26,6 +26,7 @@
     1024
   ],
   "runtime": "default",
+  "supportsImg2Img": true,
   "pipeline": {
     "loader": "sdxl",
     "base": "SG161222/RealVisXL_V5.0",

@@ -26,6 +26,7 @@
     1024
   ],
   "runtime": "default",
+  "supportsImg2Img": true,
   "pipeline": {
     "loader": "sdxl-lora",
     "base": "stabilityai/stable-diffusion-xl-base-1.0",

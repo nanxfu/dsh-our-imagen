@@ -45,11 +45,19 @@
    改为固定 tag，并对 ``cloudflared-linux-amd64`` 做 SHA256 校验（``CLOUDFLARED_SHA256``）。
    上游发版或网络只传半截文件时不再留下坏二进制：校验不匹配会删掉重下一次，
    两次都失败就带着「期望 / 实际」校验和报错，Host 侧能看到明确原因并回退备用通道。
+14. **图生图（垫图重绘）**：job spec 可选 ``reference: {image_b64, strength}``，一张参考图
+    跑整批 count。提交期（``parse_reference_spec``）只读图片头做校验：loader 白名单
+    （仅 SDXL 家族）、base64 与原始字节上限、PNG/JPEG、最小长边、strength 归一，
+    不合法直接 400；执行期（``decode_reference_image``）完整解码恰好一次，长边超过
+    ``contract.limits.reference.maxEdge`` 时等比 LANCZOS 缩小、转 RGB。图生图管线用
+    ``AutoPipelineForImage2Image.from_pipe`` 复用已加载的 txt2img 底座，不重复加载、
+    不额外占显存，随 ``STATE.pipeline_key`` 切换与 ``release_pipeline()`` 一起清理。
 """
 
 from __future__ import annotations
 
 import base64
+import binascii
 import gc
 import hashlib
 import hmac
@@ -57,6 +65,7 @@ import importlib.metadata
 import inspect
 import io
 import json
+import math
 import os
 import platform
 import random
@@ -86,7 +95,7 @@ os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 # ─────────────────────────────────────────────────────────────────────────────
 EMBEDDED_CONFIG_B64 = ""
 
-VERSION = "0.8.2"
+VERSION = "0.9.0"
 
 # 日志环容量：Host 侧按 docs/SPEC.md 实现，最多 400 行。
 LOG_MAX_LINES = 400
@@ -141,6 +150,11 @@ IMPORT_CHECK_MODULES = ("torch", "diffusers", "transformers", "accelerate", "pef
 DISK_HEADROOM = 1.15
 
 SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2", "anima")
+# 图生图（垫图重绘）首期只开放能整管复用 AutoPipelineForImage2Image 的 SDXL 家族。
+# 这是提交期的最后一道兜底：模型资产里的 supportsImg2Img 由 Host/客户端使用，daemon 不信它。
+SUPPORTED_IMG2IMG_LOADERS = ("sdxl", "sdxl-lora")
+# 参考图允许的容器格式（PIL ``img.format``）：只接受无损 PNG 与常见照片 JPEG。
+REFERENCE_IMAGE_FORMATS = ("PNG", "JPEG")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 异步 job 协议（0.5.0）
@@ -341,6 +355,10 @@ class RuntimeState:
     pipe: object | None = None
     pipeline_key: str | None = None
     sig_params: set = field(default_factory=set)
+    # 图生图管线：首次用到时用 AutoPipelineForImage2Image.from_pipe(STATE.pipe) 惰性创建，
+    # 与 txt2img 共用组件（不额外加载权重、不额外占显存）；切换/释放底座时一并清空。
+    img2img_pipe: object | None = None
+    img2img_sig_params: set = field(default_factory=set)
     waiting: int = 0
     shutting_down: bool = False
 
@@ -353,6 +371,9 @@ class Job:
     model_id: str
     pipeline: dict
     tasks: list
+    # job 级参考图（M3 图生图）：提交期校验后归一成
+    # ``{image_bytes, strength, width, height}``；None 表示文生图，路径与行为完全不变。
+    reference: dict | None = None
     status: str = JOB_STATUS_QUEUED
     results: list = field(default_factory=list)
     error: dict | None = None
@@ -469,10 +490,17 @@ def prune_jobs(now: float | None = None) -> None:
         JOB_TABLE.pop(job_id, None)
 
 
-def submit_job(pipeline_spec: dict, model_id: str, tasks: list[dict], job_id: str | None = None):
+def submit_job(
+    pipeline_spec: dict,
+    model_id: str,
+    tasks: list[dict],
+    job_id: str | None = None,
+    reference: dict | None = None,
+):
     """入队；``job_id`` 命中已有 job 时原样返回（幂等，不重复入队）。
 
-    返回 ``(job, created)``：created=False 表示命中了幂等键。
+    ``reference`` 是提交期校验并归一过的参考图（见 ``parse_reference_spec``），
+    文生图请求传 None。返回 ``(job, created)``：created=False 表示命中了幂等键。
     """
     with JOB_LOCK:
         prune_jobs()
@@ -485,12 +513,16 @@ def submit_job(pipeline_spec: dict, model_id: str, tasks: list[dict], job_id: st
             model_id=str(model_id),
             pipeline=dict(pipeline_spec),
             tasks=list(tasks),
+            reference=dict(reference) if reference is not None else None,
         )
         JOB_TABLE[job.job_id] = job
         JOB_QUEUE.append(job)
         queue_len = len(JOB_QUEUE)
         JOB_WAKE.set()
-        log(f"[job] 入队 {job.job_id}（tasks={job.total}，排队 {queue_len}）")
+        log(
+            f"[job] 入队 {job.job_id}（tasks={job.total}，排队 {queue_len}"
+            f"{'，带参考图' if job.reference is not None else ''}）"
+        )
         return job, True
 
 
@@ -1715,6 +1747,10 @@ def release_pipeline() -> None:
     STATE.pipe = None
     STATE.pipeline_key = None
     STATE.loaded = []
+    # 图生图管线与 txt2img 共用组件，这里只清引用；下面释放 pipe 后由 GC 一次性回收，
+    # 不会重复卸载权重，也不会留下指向旧模型的悬空句柄。
+    STATE.img2img_pipe = None
+    STATE.img2img_sig_params = set()
     if pipe is not None:
         # anima 运行时持有文本 embedding 缓存，卸载前先显式清掉。
         release = getattr(pipe, "release", None)
@@ -1778,6 +1814,37 @@ def ensure_pipeline(pipeline_spec: dict) -> tuple[object, float]:
     return pipe, elapsed
 
 
+def ensure_img2img_pipeline():
+    """惰性创建图生图管线：复用 STATE.pipe 的组件，不重复加载、不额外占显存。
+
+    首次用到参考图时通过 ``AutoPipelineForImage2Image.from_pipe`` 生成，缓存到
+    ``STATE.img2img_pipe``；``release_pipeline()`` 与切换底座时会清空（见该函数）。
+    img2img 管线的 ``__call__`` 签名与 txt2img 不同，因此单独缓存 ``img2img_sig_params``。
+    """
+    pipe = STATE.img2img_pipe
+    if pipe is not None:
+        return pipe
+    base_pipe = STATE.pipe
+    if base_pipe is None:
+        raise RequestError("图生图需要先加载模型底座")
+    from diffusers import AutoPipelineForImage2Image
+
+    log("[load] 首次图生图：从已加载底座复用组件创建 img2img 管线（不额外占显存）")
+    try:
+        pipe = AutoPipelineForImage2Image.from_pipe(base_pipe)
+    except Exception as exc:
+        if _is_oom(exc):
+            raise
+        raise LoadError(f"图生图管线创建失败：{short(exc)}") from exc
+    STATE.img2img_pipe = pipe
+    try:
+        STATE.img2img_sig_params = set(inspect.signature(pipe.__call__).parameters.keys())
+    except Exception:
+        STATE.img2img_sig_params = set()
+    log("[load] 图生图管线就绪")
+    return pipe
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 请求校验与生成
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1794,6 +1861,8 @@ def _int_param(value, field: str, low: int, high: int) -> int:  # noqa: ANN001
 
 
 # 契约缺失时的兜底边界（兼容旧 Host / 本地调试）：保持 0.3.0 之前的 daemon 行为。
+# 图生图（reference / strength）是新增能力：旧 Host 不会下发这两组边界，这里与当前契约
+# 同值兜底，仅供契约缺项的本地调试；正常运行一律以注入契约的 limits 为准。
 _FALLBACK_LIMITS: dict[str, dict] = {
     "width": {"min": 64, "max": 2048, "step": 8},
     "height": {"min": 64, "max": 2048, "step": 8},
@@ -1802,8 +1871,12 @@ _FALLBACK_LIMITS: dict[str, dict] = {
     "count": {"min": 1, "max": 8},
     "seed": {"max": 2**31 - 1},
     "prompt": {"maxChars": 2000},
+    "reference": {"maxBytes": 8 * 1024 * 1024, "maxEdge": 1536, "minEdge": 128},
+    "strength": {"min": 0.2, "max": 0.9, "step": 0.05, "default": 0.6},
 }
 _MAX_TASKS_FALLBACK = 8
+# 契约 limits 里可能出现的数值型键：合并兜底值时只认数字（bool 不算数字）。
+_LIMIT_NUMERIC_KEYS = ("min", "max", "step", "maxChars", "default", "maxBytes", "maxEdge", "minEdge")
 
 
 def _limit_spec(name: str) -> dict:
@@ -1816,7 +1889,7 @@ def _limit_spec(name: str) -> dict:
     if not isinstance(item, dict):
         return fallback
     merged = dict(fallback)
-    for key in ("min", "max", "step", "maxChars"):
+    for key in _LIMIT_NUMERIC_KEYS:
         value = item.get(key)
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             merged[key] = value
@@ -1830,6 +1903,169 @@ def _max_tasks() -> int:
     except (TypeError, ValueError):
         return _MAX_TASKS_FALLBACK
     return value if value > 0 else _MAX_TASKS_FALLBACK
+
+
+def _request_body_limit() -> int:
+    """请求体字节上限：默认 8MB；契约下发参考图边界后按 base64 膨胀放宽。
+
+    8MiB 原图 base64 后约 10.7MB，不下发 reference 的旧 Host 仍按 8MB 处理，
+    保证文生图路径的请求体上限与改造前完全一致。
+    """
+    base = 8 * 1024 * 1024
+    limits = CONFIG.contract.get("limits") if isinstance(CONFIG.contract, dict) else None
+    reference = limits.get("reference") if isinstance(limits, dict) else None
+    if not isinstance(reference, dict):
+        return base
+    max_bytes = reference.get("maxBytes")
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, (int, float)) or max_bytes <= 0:
+        return base
+    # base64 每 3 字节膨胀成 4 字符；再留 1MB 给 tasks / prompt / jobId 等 JSON 字段。
+    return max(base, 4 * ((int(max_bytes) + 2) // 3) + 1024 * 1024)
+
+
+def _coerce_strength(value) -> float:  # noqa: ANN001
+    """重绘强度归一到 ``contract.limits.strength``：非法/缺失回退默认值，越界钳制。"""
+    limits = _limit_spec("strength")
+    low = float(limits.get("min", 0.0))
+    high = float(limits.get("max", 1.0))
+    default = float(limits.get("default", 0.6))
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(number):
+        return default
+    # 契约 step 目前是 0.05：保留 4 位小数，避免 0.6000000000000001 这类浮点噪声。
+    return round(min(max(number, low), high), 4)
+
+
+def _open_reference_image(image_bytes: bytes):  # noqa: ANN202
+    """只读参考图头部：校验 PNG/JPEG 与最小长边，返回未 load 的 PIL Image。
+
+    调用方负责 ``close()``。这里不解码像素，因此提交期就能把「看头部即可发现」的问题
+    全部收敛成 400；真正的完整解码只在 execute_job 的 ``decode_reference_image`` 做一次。
+    """
+    from PIL import Image, UnidentifiedImageError
+
+    min_edge = int(_limit_spec("reference").get("minEdge") or 0)
+    bomb_error = getattr(Image, "DecompressionBombError", None)
+    try:
+        image = Image.open(io.BytesIO(image_bytes))
+    except UnidentifiedImageError:
+        raise RequestError("参考图必须是 PNG 或 JPEG 图片") from None
+    except Exception as exc:  # noqa: BLE001 - 任意解码库异常都收敛为请求非法
+        if bomb_error is not None and isinstance(exc, bomb_error):
+            raise RequestError("参考图分辨率过大，无法处理") from None
+        raise RequestError(f"参考图无法解析：{type(exc).__name__}") from None
+    image_format = str(getattr(image, "format", "") or "").upper()
+    if image_format not in REFERENCE_IMAGE_FORMATS:
+        image.close()
+        raise RequestError(f"参考图必须是 PNG 或 JPEG（收到 {image_format or '未知格式'}）")
+    width, height = image.size
+    if min_edge > 0 and max(width, height) < min_edge:
+        image.close()
+        raise RequestError(f"参考图长边至少 {min_edge}px（收到 {width}x{height}）")
+    return image
+
+
+def parse_reference_spec(raw, pipeline_spec: dict) -> dict | None:  # noqa: ANN001
+    """提交期校验 job 级参考图，归一成 ``{image_bytes, strength, width, height}``。
+
+    只做「不需要完整解码」的检查：loader 白名单、base64 合法性、原始字节上限、
+    PNG/JPEG、最小长边与 strength 钳制。返回 None 表示文生图请求（行为与改造前一致）。
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise RequestError("reference 必须是对象")
+    loader = str(pipeline_spec.get("loader") or "").strip()
+    if loader not in SUPPORTED_IMG2IMG_LOADERS:
+        raise RequestError(
+            f"该模型不支持垫图重绘（首期仅开放 SDXL 家族，当前 loader={loader or '未知'}）"
+        )
+    encoded = raw.get("image_b64")
+    if not isinstance(encoded, str) or not encoded.strip():
+        raise RequestError("reference.image_b64 必须是非空字符串")
+    max_bytes = int(_limit_spec("reference").get("maxBytes") or 0)
+    try:
+        data = base64.b64decode(encoded.strip(), validate=True)
+    except (binascii.Error, ValueError):
+        raise RequestError("reference.image_b64 不是合法 base64") from None
+    if not data:
+        raise RequestError("reference.image_b64 解码后为空")
+    if max_bytes > 0 and len(data) > max_bytes:
+        raise RequestError(f"参考图体积 {len(data)} 字节，超过上限 {max_bytes} 字节")
+    image = _open_reference_image(data)
+    try:
+        width, height = image.size
+    finally:
+        try:
+            image.close()
+        except Exception:  # pragma: no cover - close 失败不影响请求结果
+            pass
+    return {
+        "image_bytes": data,
+        "strength": _coerce_strength(raw.get("strength")),
+        "width": int(width),
+        "height": int(height),
+    }
+
+
+def decode_reference_image(reference: dict) -> object:
+    """执行期完整解码参考图一次：转 RGB，长边超过 ``maxEdge`` 时等比 LANCZOS 缩小。
+
+    返回可直接喂给图生图管线的 PIL Image；解码失败抛 ``RequestError``（job 收敛为
+    invalid_request）。原始尺寸挂在 ``_imagen_source_size`` 上，供 run_task 打日志。
+    """
+    if not isinstance(reference, dict):
+        raise RequestError("reference 必须是对象")
+    data = reference.get("image_bytes")
+    if not isinstance(data, (bytes, bytearray)) or not data:
+        raise RequestError("参考图数据缺失，无法解码")
+    max_edge = int(_limit_spec("reference").get("maxEdge") or 0)
+    image = _open_reference_image(bytes(data))
+    source_size = image.size
+    try:
+        image.load()
+    except Exception as exc:  # noqa: BLE001 - 截断/损坏图片按请求非法收敛
+        try:
+            image.close()
+        except Exception:  # pragma: no cover
+            pass
+        raise RequestError(f"参考图无法解码：{type(exc).__name__}") from None
+    if image.mode != "RGB":
+        converted = image.convert("RGB")
+        try:
+            image.close()
+        except Exception:  # pragma: no cover
+            pass
+        image = converted
+    width, height = image.size
+    long_edge = max(width, height)
+    if max_edge > 0 and long_edge > max_edge:
+        from PIL import Image
+
+        scale = max_edge / float(long_edge)
+        target = (max(1, round(width * scale)), max(1, round(height * scale)))
+        resampling = getattr(Image, "Resampling", None)
+        resample = getattr(resampling, "LANCZOS", None)
+        if resample is None:  # pragma: no cover - Pillow < 9.1 的旧常量
+            resample = getattr(Image, "LANCZOS")
+        resized = image.resize(target, resample)
+        try:
+            image.close()
+        except Exception:  # pragma: no cover
+            pass
+        image = resized
+    # 「参考图 WxH → 缩放后 WxH」的日志放在 run_task：原尺寸挂在图像对象上，
+    # 这样 run_tasks / run_task 只需要多收一个 reference_image，不必再加元参数。
+    try:
+        image._imagen_source_size = source_size
+    except Exception:  # pragma: no cover - PIL Image 允许挂属性，仅作防御
+        pass
+    return image
 
 
 def validate_generate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
@@ -1926,46 +2162,79 @@ def _sync_cuda() -> None:
         pass
 
 
-def run_task(pipe, task: dict) -> dict:  # noqa: ANN001
+def run_task(pipe, task: dict, reference_image=None, reference_strength=None) -> dict:  # noqa: ANN001
     """执行单个出图任务，返回与旧 ``/generate`` 完全一致的 results 项。
 
     ``width`` / ``height`` 一律回传 **实际出图尺寸**（PIL ``image.size``），不是请求值：
     anima 运行时会把宽高向下取整到 16 的倍数（如 648 → 640），其它 loader 也可能在内部
     做对齐；Host 的 meta.json 与图片尺寸必须一致。
+
+    ``reference_image`` 非空时走图生图分支（M3）：用惰性复用的 img2img 管线与它自己的
+    ``__call__`` 签名过滤参数，不再传 width / height（出图尺寸跟随参考图）。
     """
     import torch
 
-    sig = STATE.sig_params
     generator_device = "cuda" if torch.cuda.is_available() else "cpu"
     generator = torch.Generator(device=generator_device).manual_seed(task["seed"])
-    call_kwargs = {
-        "prompt": task["prompt"],
-        "num_inference_steps": task["steps"],
-        "guidance_scale": task["cfg"],
-        "width": task["width"],
-        "height": task["height"],
-        "generator": generator,
-    }
+    use_reference = reference_image is not None
+    if use_reference:
+        target_pipe = ensure_img2img_pipeline()
+        sig = STATE.img2img_sig_params
+        strength = _coerce_strength(reference_strength)
+        call_kwargs = {
+            "prompt": task["prompt"],
+            "image": reference_image,
+            "strength": strength,
+            "num_inference_steps": task["steps"],
+            "guidance_scale": task["cfg"],
+            "generator": generator,
+        }
+    else:
+        target_pipe = pipe
+        sig = STATE.sig_params
+        call_kwargs = {
+            "prompt": task["prompt"],
+            "num_inference_steps": task["steps"],
+            "guidance_scale": task["cfg"],
+            "width": task["width"],
+            "height": task["height"],
+            "generator": generator,
+        }
     # 只有底座支持 negative_prompt 且 CFG > 0 时才有意义（Lightning 的 cfg=0 会被忽略）。
     if task["negative_prompt"] and "negative_prompt" in sig and task["cfg"] > 0.0:
         call_kwargs["negative_prompt"] = task["negative_prompt"]
     if sig:
         call_kwargs = {k: v for k, v in call_kwargs.items() if k in sig}
 
-    log(
-        f"[gen] {task['name']} seed={task['seed']} {task['width']}x{task['height']} "
-        f"steps={task['steps']} cfg={task['cfg']}"
-    )
+    if use_reference:
+        source = getattr(reference_image, "_imagen_source_size", reference_image.size)
+        log(
+            f"[gen] img2img {task['name']} strength={strength} seed={task['seed']} "
+            f"steps={task['steps']} cfg={task['cfg']}"
+        )
+        log(
+            f"[gen] img2img 参考图 {source[0]}x{source[1]} → "
+            f"{reference_image.size[0]}x{reference_image.size[1]}"
+        )
+    else:
+        log(
+            f"[gen] {task['name']} seed={task['seed']} {task['width']}x{task['height']} "
+            f"steps={task['steps']} cfg={task['cfg']}"
+        )
     started = time.time()
-    image = pipe(**call_kwargs).images[0]
+    image = target_pipe(**call_kwargs).images[0]
     _sync_cuda()
     seconds = round(time.time() - started, 2)
     png = _encode_png(image)
     width, height = image.size
-    if (width, height) != (task["width"], task["height"]):
+    if use_reference:
+        expected = (reference_image.size[0], reference_image.size[1])
+        if (width, height) != expected:
+            log(f"[gen] {task['name']} 实际出图 {width}x{height}（参考图 {expected[0]}x{expected[1]}）")
+    elif (width, height) != (task["width"], task["height"]):
         log(f"[gen] {task['name']} 实际出图 {width}x{height}（请求 {task['width']}x{task['height']}）")
     log(f"[gen] {task['name']} 完成，{seconds}s，{len(png)} 字节")
-    return {
+    result = {
         "name": task["name"],
         "seed": task["seed"],
         "seconds": seconds,
@@ -1976,14 +2245,40 @@ def run_task(pipe, task: dict) -> dict:  # noqa: ANN001
         "png_bytes": len(png),
         "image_b64": base64.b64encode(png).decode("ascii"),
     }
+    if use_reference:
+        # 图生图额外字段：strength 与缩放后实际送入模型的参考图尺寸（Host 可记录/透传；
+        # 文生图 results 结构与改造前完全一致，不含这些键）。
+        result["strength"] = strength
+        result["referenceWidth"] = int(reference_image.size[0])
+        result["referenceHeight"] = int(reference_image.size[1])
+    return result
 
 
-def run_tasks(pipe, tasks: list[dict], on_progress=None) -> list[dict]:  # noqa: ANN001
-    """串行跑完一批任务；``on_progress`` 拿到「已完成的结果列表」副本，用于刷新 job 进度。"""
+def run_tasks(
+    pipe,
+    tasks: list[dict],
+    on_progress=None,  # noqa: ANN001
+    reference_image=None,  # noqa: ANN001
+    reference_strength=None,  # noqa: ANN001
+) -> list[dict]:
+    """串行跑完一批任务；``on_progress`` 拿到「已完成的结果列表」副本，用于刷新 job 进度。
+
+    ``reference_image`` 非空时整批任务共用同一张参考图（job 级，execute_job 只解码一次）。
+    """
     results: list[dict] = []
     for task in tasks:
         STATE.last_active = time.time()
-        results.append(run_task(pipe, task))
+        if reference_image is None:
+            results.append(run_task(pipe, task))
+        else:
+            results.append(
+                run_task(
+                    pipe,
+                    task,
+                    reference_image=reference_image,
+                    reference_strength=reference_strength,
+                )
+            )
         if on_progress is not None:
             try:
                 on_progress(results)
@@ -2037,16 +2332,35 @@ def execute_job(job: Job) -> None:
     GEN_LOCK.acquire()
     try:
         started = time.time()
+        reference_image = None
+        reference_strength = None
+        if job.reference is not None:
+            # 图生图：参考图完整解码只做一次（整批 count 共用），且放在加载模型之前——
+            # 图片本身损坏/截断时不必先下载、加载几十 GB 权重。
+            reference_image = decode_reference_image(job.reference)
+            reference_strength = _coerce_strength(job.reference.get("strength"))
+            with JOB_LOCK:
+                # 解码完成后释放队列里保留的原始字节（job 公开视图不含参考图）。
+                job.reference = None
         pipe, load_seconds = ensure_pipeline(job.pipeline)
         with JOB_LOCK:
             job.load_seconds = load_seconds
             job.updated_at = time.time()
         STATE.last_active = time.time()
-        results = run_tasks(
-            pipe,
-            job.tasks,
-            on_progress=lambda partial: _update_job_progress(job, partial),
-        )
+        if reference_image is None:
+            results = run_tasks(
+                pipe,
+                job.tasks,
+                on_progress=lambda partial: _update_job_progress(job, partial),
+            )
+        else:
+            results = run_tasks(
+                pipe,
+                job.tasks,
+                on_progress=lambda partial: _update_job_progress(job, partial),
+                reference_image=reference_image,
+                reference_strength=reference_strength,
+            )
         with JOB_LOCK:
             job.results = list(results)
         STATE.jobs_done += len(results)
@@ -2152,6 +2466,29 @@ def dependency_versions() -> dict:
     return versions
 
 
+def gpu_memory_payload() -> dict | None:
+    """只读显存快照（MiB 取整）；用于 M3 真机验收对比 txt2img → img2img 是否额外占显存。
+
+    只读已加载的 torch 模块（``sys.modules``），不在 /health 里触发重库 import：
+    torch 尚未加载、CUDA 不可用或读取异常时一律返回 None，且不影响 status / phase 判定。
+    """
+    torch = sys.modules.get("torch")
+    if torch is None:
+        return None
+    try:
+        cuda = torch.cuda
+        if not cuda.is_available():
+            return None
+        mib = 1024 * 1024
+        return {
+            "allocated_mb": int(cuda.memory_allocated() // mib),
+            "reserved_mb": int(cuda.memory_reserved() // mib),
+            "max_allocated_mb": int(cuda.max_memory_allocated() // mib),
+        }
+    except Exception:
+        return None
+
+
 def health_payload() -> dict:
     return {
         "status": "error" if STATE.phase == "error" else "ok",
@@ -2176,6 +2513,8 @@ def health_payload() -> dict:
         "tunnel_provider": BOOT.tunnel_provider,
         "tunnel_state": BOOT.tunnel_state,
         "tunnel_restarts": BOOT.tunnel_restarts,
+        # M3 图生图验收：显存只读诊断（torch 未加载 / CUDA 不可用时为 null）。
+        "gpu_memory": gpu_memory_payload(),
     }
 
 
@@ -2236,8 +2575,9 @@ class DaemonHandler(BaseHTTPRequestHandler):
             length = 0
         if length <= 0:
             return {}
-        if length > 8 * 1024 * 1024:
-            raise RequestError("请求体超过 8MB")
+        limit = _request_body_limit()
+        if length > limit:
+            raise RequestError(f"请求体超过上限（{round(limit / 1024 / 1024, 1)}MB）")
         raw = self.rfile.read(length)
         try:
             return json.loads(raw.decode("utf-8"))
@@ -2317,6 +2657,9 @@ class DaemonHandler(BaseHTTPRequestHandler):
         try:
             spec = self._read_json()
             pipeline_spec, model_id, tasks = validate_generate_spec(spec)
+            # 图生图（M3）：参考图提交期只读图片头做校验，失败直接 400；
+            # 没有 reference 时返回 None，文生图路径逐字不变。
+            reference = parse_reference_spec(spec.get("reference"), pipeline_spec)
             job_id = normalize_job_id(spec.get("jobId"))
         except RequestError as exc:
             log(f"[gen] 请求非法：{exc}")
@@ -2324,7 +2667,7 @@ class DaemonHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            job, created = submit_job(pipeline_spec, model_id, tasks, job_id)
+            job, created = submit_job(pipeline_spec, model_id, tasks, job_id, reference)
         except Exception as exc:  # pragma: no cover - 入队本身不涉及 IO
             log(f"[gen] 入队失败：{short(exc)}")
             self._send_error(500, "generation_failed", short(exc))

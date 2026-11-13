@@ -32,6 +32,7 @@ export const MODELS = [
       1152
     ],
     "runtime": "default",
+    "supportsImg2Img": true,
     "pipeline": {
       "loader": "sdxl-lora",
       "base": "stabilityai/stable-diffusion-xl-base-1.0",
@@ -89,6 +90,7 @@ export const MODELS = [
       1024
     ],
     "runtime": "default",
+    "supportsImg2Img": true,
     "pipeline": {
       "loader": "sdxl-lora",
       "base": "stabilityai/stable-diffusion-xl-base-1.0",
@@ -147,6 +149,7 @@ export const MODELS = [
       1024
     ],
     "runtime": "default",
+    "supportsImg2Img": true,
     "pipeline": {
       "loader": "sdxl",
       "base": "stabilityai/sdxl-turbo",
@@ -198,6 +201,7 @@ export const MODELS = [
       1024
     ],
     "runtime": "default",
+    "supportsImg2Img": true,
     "pipeline": {
       "loader": "sdxl",
       "base": "playgroundai/playground-v2.5-1024px-aesthetic",
@@ -253,6 +257,7 @@ export const MODELS = [
       1152
     ],
     "runtime": "default",
+    "supportsImg2Img": true,
     "pipeline": {
       "loader": "sdxl",
       "base": "stabilityai/stable-diffusion-xl-base-1.0",
@@ -304,6 +309,7 @@ export const MODELS = [
       1024
     ],
     "runtime": "default",
+    "supportsImg2Img": true,
     "pipeline": {
       "loader": "sdxl",
       "base": "SG161222/RealVisXL_V5.0",
@@ -358,6 +364,7 @@ export const MODELS = [
       1024
     ],
     "runtime": "default",
+    "supportsImg2Img": false,
     "pipeline": {
       "loader": "flux2",
       "base": "black-forest-labs/FLUX.2-klein-4B",
@@ -403,6 +410,7 @@ export const MODELS = [
       1024
     ],
     "runtime": "default",
+    "supportsImg2Img": true,
     "pipeline": {
       "loader": "sdxl",
       "base": "cagliostrolab/animagine-xl-3.1",
@@ -458,6 +466,7 @@ export const MODELS = [
       1152
     ],
     "runtime": "default",
+    "supportsImg2Img": false,
     "pipeline": {
       "loader": "anima",
       "base": "Johnny-Z/Anima-Light-Lavender",
@@ -519,6 +528,7 @@ export const PRESETS = [
     "negativeHint": "blurry, low quality, deformed, extra limbs",
     "promptStyle": "concise",
     "qualityPrefix": "",
+    "supportsImg2Img": true,
     "sizeOptions": [
       768,
       1024,
@@ -573,6 +583,7 @@ export const PRESETS = [
     "negativeHint": "blurry, low quality, deformed",
     "promptStyle": "concise",
     "qualityPrefix": "",
+    "supportsImg2Img": true,
     "sizeOptions": [
       768,
       1024
@@ -626,6 +637,7 @@ export const PRESETS = [
     "negativeHint": "blurry, low quality",
     "promptStyle": "concise",
     "qualityPrefix": "",
+    "supportsImg2Img": true,
     "sizeOptions": [
       512,
       768,
@@ -674,6 +686,7 @@ export const PRESETS = [
     "negativeHint": "ugly, deformed, noisy, blurry, distorted",
     "promptStyle": "natural",
     "qualityPrefix": "",
+    "supportsImg2Img": true,
     "sizeOptions": [
       768,
       1024
@@ -724,6 +737,7 @@ export const PRESETS = [
     "negativeHint": "blurry, low quality, deformed, extra limbs",
     "promptStyle": "natural",
     "qualityPrefix": "",
+    "supportsImg2Img": true,
     "sizeOptions": [
       768,
       1024,
@@ -772,6 +786,7 @@ export const PRESETS = [
     "negativeHint": "blurry, low quality, deformed, extra limbs, ugly, bad anatomy",
     "promptStyle": "natural",
     "qualityPrefix": "",
+    "supportsImg2Img": true,
     "sizeOptions": [
       768,
       1024
@@ -822,6 +837,7 @@ export const PRESETS = [
     "negativeHint": "",
     "promptStyle": "natural",
     "qualityPrefix": "",
+    "supportsImg2Img": false,
     "sizeOptions": [
       768,
       1024
@@ -863,6 +879,7 @@ export const PRESETS = [
     "negativeHint": "nsfw, lowres, (bad), text, error, fewer, extra, missing, worst quality, jpeg artifacts, low quality, watermark, unfinished, displeasing, oldest, early, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract]",
     "promptStyle": "danbooru",
     "qualityPrefix": "masterpiece, best quality, highres",
+    "supportsImg2Img": true,
     "sizeOptions": [
       768,
       1024
@@ -913,6 +930,7 @@ export const PRESETS = [
     "negativeHint": "",
     "promptStyle": "natural",
     "qualityPrefix": "",
+    "supportsImg2Img": false,
     "sizeOptions": [
       768,
       1024,

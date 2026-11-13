@@ -41,6 +41,13 @@
  23. cloudflared 固定版本下载（v0.9 M1）：tag/URL/SHA256 常量一致、流式下载校验、
      下载异常与校验不匹配各重试一次、超大小上限中止、已存在可执行文件复用
      （假 urlopen / 假响应流，不联网）
+ 24. 图生图（v0.9 M3）：参考图提交期校验（loader 白名单 / base64 / 原始字节上限 /
+     PNG-JPEG / 最小长边 / strength 钳制，边界取自注入契约）、执行期完整解码一次与
+     等比 LANCZOS 缩放、from_pipe 惰性复用（只调用一次）与 release_pipeline 清理、
+     run_task 的 img2img kwargs / 日志 / 结果字段、txt2img 分支不回归、
+     请求体上限按契约参考图体积推导（假 PIL / 假 diffusers，不依赖 Pillow）
+ 25. /health.gpu_memory：只读显存快照（MiB 取整），torch 未加载 / CUDA 不可用 /
+     读取异常时为 null，且不影响 status / phase 判定
 
 运行：python test/daemon-unit.py
 """
@@ -63,13 +70,22 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+try:  # 真实 Pillow 只用于可选集成用例；逻辑用例一律用下面的假 PIL 替身（CI 不装 Pillow 也能跑）。
+    from PIL import Image as _RealPILImage
+
+    HAS_PILLOW = True
+except Exception:  # pragma: no cover - 极简环境
+    _RealPILImage = None
+    HAS_PILLOW = False
+
 ROOT = Path(__file__).resolve().parent.parent
 DAEMON_PATH = ROOT / "remote" / "daemon.py"
 ANIMA_RUNTIME_PATH = ROOT / "remote" / "anima_runtime.py"
 
 # 版本号只在 shared/contract.js 维护：测试期望值从生成物 remote/contract.json 读取，
 # 升版本时不必改这里的常量（npm run test:contract 会先校验生成物与契约一致）。
-CONTRACT_VERSION = json.loads((ROOT / "remote" / "contract.json").read_text(encoding="utf-8"))["version"]
+CONTRACT_DOC = json.loads((ROOT / "remote" / "contract.json").read_text(encoding="utf-8"))
+CONTRACT_VERSION = CONTRACT_DOC["version"]
 
 
 def _load_daemon():
@@ -109,6 +125,9 @@ CONTRACT = {
         "count": {"min": 1, "max": 4},
         "seed": {"max": 2147483647},
         "prompt": {"maxChars": 2000},
+        # 图生图边界同样从生成物读取：用例一律以契约值为准，不写死数值。
+        "reference": CONTRACT_DOC["limits"]["reference"],
+        "strength": CONTRACT_DOC["limits"]["strength"],
     },
 }
 
@@ -242,6 +261,117 @@ def fake_usage(free_gb: float):  # noqa: ANN201
         return types.SimpleNamespace(free=int(free_gb * 2**30), total=int(20 * 2**30))
 
     return usage
+
+
+# ── 假 PIL：图生图参考图相关用例的替身 ────────────────────────────────────────
+# daemon 里 PIL 是惰性 import（真实运行环境由 diffusers 依赖 Pillow 保证）；
+# 单测注入假模块，既能覆盖分支，又不需要 CI 预装 Pillow。
+
+
+class FakePILImage:
+    """PIL Image 的最小替身：记录 load/resize/convert 调用，size/format/mode 可控。"""
+
+    def __init__(self, size, fmt: str = "PNG", mode: str = "RGB"):
+        self.size = (int(size[0]), int(size[1]))
+        self.format = fmt
+        self.mode = mode
+        self.loaded = False
+        self.closed = False
+        self.resized = None
+        self.converted = None
+        self.load_error: Exception | None = None
+
+    def load(self):  # noqa: ANN201
+        if self.load_error is not None:
+            raise self.load_error
+        self.loaded = True
+        return self
+
+    def resize(self, size, resample=None):  # noqa: ANN001, ANN201
+        self.resized = ((int(size[0]), int(size[1])), resample)
+        clone = FakePILImage(size, self.format, self.mode)
+        clone.resized = self.resized
+        return clone
+
+    def convert(self, mode):  # noqa: ANN001, ANN201
+        self.converted = mode
+        clone = FakePILImage(self.size, self.format, mode)
+        clone.converted = mode
+        return clone
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class FakeUnidentifiedImageError(OSError):
+    """对应 PIL.UnidentifiedImageError（Pillow 里是 OSError 的子类）。"""
+
+
+class FakeDecompressionBombError(Exception):
+    """对应 PIL.Image.DecompressionBombError。"""
+
+
+def fake_pil_modules(open_impl):  # noqa: ANN001, ANN201
+    """构造可注入 sys.modules 的假 PIL 包（PIL / PIL.Image）。"""
+    image_module = types.ModuleType("PIL.Image")
+    image_module.LANCZOS = "LANCZOS"
+    image_module.Resampling = types.SimpleNamespace(LANCZOS="LANCZOS")
+    image_module.UnidentifiedImageError = FakeUnidentifiedImageError
+    image_module.DecompressionBombError = FakeDecompressionBombError
+    image_module.open = open_impl
+    package = types.ModuleType("PIL")
+    package.Image = image_module
+    package.UnidentifiedImageError = FakeUnidentifiedImageError
+    return {"PIL": package, "PIL.Image": image_module}
+
+
+def fake_pil_for(image):  # noqa: ANN001, ANN201
+    """固定返回同一个假图的 PIL 替身。"""
+
+    def fake_open(_stream):  # noqa: ANN001, ANN202
+        return image
+
+    return fake_pil_modules(fake_open)
+
+
+def fake_pil_raising(exc: Exception):  # noqa: ANN001, ANN201
+    def fake_open(_stream):  # noqa: ANN001, ANN202
+        raise exc
+
+    return fake_pil_modules(fake_open)
+
+
+def make_reference_b64(payload: bytes = b"fake-image-bytes") -> str:
+    """参考图请求里的 image_b64：假 PIL 不真正解析内容，只关心 base64 是否合法。"""
+    return base64.b64encode(payload).decode("ascii")
+
+
+def make_reference(image_b64: str | None = None, strength=None) -> dict:  # noqa: ANN001
+    """构造 job 级 reference 请求体；strength 缺省时不写该键（走契约默认值）。"""
+    payload = {"image_b64": make_reference_b64() if image_b64 is None else image_b64}
+    if strength is not None:
+        payload["strength"] = strength
+    return payload
+
+
+class FakeTorchGenerator:
+    """torch.Generator 的替身：记录 device 与 manual_seed 的取值。"""
+
+    def __init__(self, device):
+        self.device = device
+        self.seed = None
+
+    def manual_seed(self, seed):  # noqa: ANN001, ANN202
+        self.seed = seed
+        return self
+
+
+def fake_torch_module():  # noqa: ANN201
+    """run_task 只用 torch.Generator 与 torch.cuda；返回可注入的假模块。"""
+    torch_module = types.ModuleType("torch")
+    torch_module.cuda = types.SimpleNamespace(is_available=lambda: False, synchronize=lambda: None)
+    torch_module.Generator = FakeTorchGenerator
+    return torch_module
 
 
 class DaemonUnitTest(unittest.TestCase):
@@ -842,6 +972,7 @@ class HealthPayloadTest(DaemonUnitTest):
         "tunnel_provider",
         "tunnel_state",
         "tunnel_restarts",
+        "gpu_memory",
     }
 
     def test_fields_are_complete(self) -> None:
@@ -855,6 +986,51 @@ class HealthPayloadTest(DaemonUnitTest):
         self.assertGreaterEqual(payload["uptime_seconds"], 0)
         self.assertIsInstance(payload["versions"], dict)
         self.assertIsInstance(payload["versions"].get("python"), str)
+        # 单测环境没有加载 torch：显存快照必须是 null，不能因此影响 status/phase。
+        with mock.patch.dict(sys.modules, {"torch": None}):
+            payload = d.health_payload()
+        self.assertIsNone(payload["gpu_memory"])
+        self.assertEqual(payload["status"], "ok")
+
+    def test_gpu_memory_reports_mib_snapshot(self) -> None:
+        """torch 已加载且 CUDA 可用：显存三项按 MiB 取整上报，不影响 status/phase。"""
+        mib = 1024 * 1024
+        fake_torch = types.ModuleType("torch")
+        fake_torch.cuda = types.SimpleNamespace(
+            is_available=lambda: True,
+            memory_allocated=lambda: 10347 * mib + 123456,
+            memory_reserved=lambda: 12000 * mib,
+            max_memory_allocated=lambda: 13000 * mib + 999,
+        )
+        with mock.patch.dict(sys.modules, {"torch": fake_torch}):
+            payload = d.health_payload()
+        self.assertEqual(
+            payload["gpu_memory"],
+            {"allocated_mb": 10347, "reserved_mb": 12000, "max_allocated_mb": 13000},
+        )
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["phase"], "booting")
+
+    def test_gpu_memory_is_null_without_loaded_torch(self) -> None:
+        with mock.patch.dict(sys.modules, {"torch": None}):
+            self.assertIsNone(d.health_payload()["gpu_memory"])
+
+    def test_gpu_memory_is_null_when_cuda_unavailable(self) -> None:
+        fake_torch = types.ModuleType("torch")
+        fake_torch.cuda = types.SimpleNamespace(is_available=lambda: False)
+        with mock.patch.dict(sys.modules, {"torch": fake_torch}):
+            self.assertIsNone(d.health_payload()["gpu_memory"])
+
+    def test_gpu_memory_is_null_on_cuda_error(self) -> None:
+        def boom():  # noqa: ANN202
+            raise RuntimeError("CUDA driver 异常")
+
+        fake_torch = types.ModuleType("torch")
+        fake_torch.cuda = types.SimpleNamespace(is_available=boom)
+        with mock.patch.dict(sys.modules, {"torch": fake_torch}):
+            payload = d.health_payload()
+        self.assertIsNone(payload["gpu_memory"])
+        self.assertEqual(payload["status"], "ok")
 
     def test_error_phase_flips_status(self) -> None:
         d.record_error("load_failed", "pip 失败")
@@ -2298,6 +2474,715 @@ class TunnelMonitorTest(DaemonUnitTest):
         self.assertEqual(len(published), 2, "每次隧道就绪都应重播 ready")
         self.assertEqual(d.BOOT.tunnel_restarts, 1)
         self.assertLogContains("进程退出（退出码 9）")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v0.9 M3：图生图（垫图重绘）
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class ReferenceLimitsTest(DaemonUnitTest):
+    """参考图/重绘强度边界一律来自注入契约，不写死数值。"""
+
+    def limits(self) -> dict:
+        return CONTRACT["limits"]
+
+    def test_reference_limits_come_from_contract(self) -> None:
+        self.contract_config()
+        spec = d._limit_spec("reference")
+        reference = self.limits()["reference"]
+        for key in ("maxBytes", "maxEdge", "minEdge"):
+            self.assertEqual(spec[key], reference[key])
+
+    def test_strength_limits_include_default_from_contract(self) -> None:
+        self.contract_config()
+        spec = d._limit_spec("strength")
+        strength = self.limits()["strength"]
+        for key in ("min", "max", "step", "default"):
+            self.assertEqual(spec[key], strength[key])
+
+    def test_strength_normalization_is_contract_driven(self) -> None:
+        self.contract_config()
+        strength = self.limits()["strength"]
+        default = strength["default"]
+        cases = [
+            (None, default),
+            (True, default),
+            ("bad", default),
+            (float("nan"), default),
+            (float("inf"), default),
+            (-5, strength["min"]),
+            (99, strength["max"]),
+            (0.55, 0.55),
+            ("0.5", 0.5),
+        ]
+        for value, expected in cases:
+            self.assertEqual(d._coerce_strength(value), expected, f"strength={value!r}")
+
+    def test_custom_contract_values_are_honoured(self) -> None:
+        d.CONFIG.contract = {
+            "version": CONTRACT_VERSION,
+            "limits": {
+                **self.limits(),
+                "reference": {"maxBytes": 4096, "maxEdge": 512, "minEdge": 64},
+                "strength": {"min": 0.1, "max": 0.8, "step": 0.05, "default": 0.5},
+            },
+        }
+        reference = d._limit_spec("reference")
+        self.assertEqual(
+            (reference["maxBytes"], reference["maxEdge"], reference["minEdge"]), (4096, 512, 64)
+        )
+        self.assertEqual(d._coerce_strength(-1), 0.1)
+        self.assertEqual(d._coerce_strength(9), 0.8)
+        self.assertEqual(d._coerce_strength("bad"), 0.5)
+
+    def test_fallback_limits_without_contract(self) -> None:
+        # 契约缺失（旧 Host / 本地调试）时仍能用内置兜底，数值与当前契约同量级。
+        reference = d._limit_spec("reference")
+        self.assertGreater(reference["maxBytes"], 0)
+        self.assertGreater(reference["maxEdge"], reference["minEdge"])
+        self.assertGreater(d._limit_spec("strength")["max"], d._limit_spec("strength")["min"])
+
+    def test_request_body_limit_follows_contract_base64_size(self) -> None:
+        self.contract_config()
+        max_bytes = self.limits()["reference"]["maxBytes"]
+        base64_size = 4 * ((max_bytes + 2) // 3)
+        limit = d._request_body_limit()
+        # 8MiB 原图 base64 后约 10.7MB：必须能通过，否则请求会先被体积上限拒掉。
+        self.assertGreater(limit, base64_size)
+        self.assertEqual(limit, max(8 * 1024 * 1024, base64_size + 1024 * 1024))
+
+    def test_request_body_limit_keeps_8mb_without_reference_contract(self) -> None:
+        d.CONFIG.contract = {"version": CONTRACT_VERSION, "limits": {"prompt": {"maxChars": 2000}}}
+        self.assertEqual(d._request_body_limit(), 8 * 1024 * 1024)
+
+    def test_read_json_rejects_body_over_limit(self) -> None:
+        self.contract_config()
+        handler = object.__new__(d.DaemonHandler)
+        handler.headers = {"Content-Length": str(d._request_body_limit() + 1)}
+        handler.rfile = io.BytesIO(b"")
+        with self.assertRaises(d.RequestError) as ctx:
+            handler._read_json()
+        self.assertIn("请求体超过", str(ctx.exception))
+
+    def test_read_json_parses_small_body(self) -> None:
+        handler = object.__new__(d.DaemonHandler)
+        handler.headers = {"Content-Length": "2"}
+        handler.rfile = io.BytesIO(b"{}")
+        self.assertEqual(handler._read_json(), {})
+
+
+class ReferenceValidationTest(DaemonUnitTest):
+    """提交期参考图校验：不需要完整解码，失败一律 RequestError（HTTP 400）。"""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.contract_config()
+        self.pipeline = make_pipeline()
+
+    def parse(self, raw, pipeline=None):  # noqa: ANN001, ANN202
+        return d.parse_reference_spec(raw, pipeline or self.pipeline)
+
+    def test_missing_reference_means_text2img(self) -> None:
+        self.assertIsNone(self.parse(None))
+
+    def test_rejects_non_object(self) -> None:
+        for raw in ("base64", [], 123):
+            with self.assertRaises(d.RequestError):
+                self.parse(raw)
+
+    def test_rejects_unsupported_loader(self) -> None:
+        with mock.patch.dict(sys.modules, fake_pil_for(FakePILImage((512, 512)))):
+            for loader in ("flux2", "anima"):
+                with self.assertRaises(d.RequestError) as ctx:
+                    self.parse(make_reference(), make_pipeline(loader))
+                self.assertIn("该模型不支持垫图重绘", str(ctx.exception))
+
+    def test_accepts_sdxl_and_sdxl_lora(self) -> None:
+        for loader in ("sdxl", "sdxl-lora"):
+            with mock.patch.dict(sys.modules, fake_pil_for(FakePILImage((1024, 768)))):
+                spec = self.parse(make_reference(), make_pipeline(loader))
+            self.assertEqual((spec["width"], spec["height"]), (1024, 768))
+
+    def test_rejects_missing_or_empty_image_b64(self) -> None:
+        for raw in ({}, {"image_b64": ""}, {"image_b64": "   "}, {"image_b64": 123}):
+            with self.assertRaises(d.RequestError):
+                self.parse(raw)
+
+    def test_rejects_invalid_base64(self) -> None:
+        for encoded in ("not base64!!", "abc", "@@@", "a"):
+            with self.assertRaises(d.RequestError) as ctx:
+                self.parse({"image_b64": encoded})
+            self.assertIn("合法 base64", str(ctx.exception))
+
+    def test_rejects_oversize_payload_using_contract_limit(self) -> None:
+        # 用较小契约上限验证体积口径，同时证明边界来自契约而不是本文件常量。
+        d.CONFIG.contract = {
+            "limits": {
+                **CONTRACT["limits"],
+                "reference": {"maxBytes": 32, "maxEdge": 1024, "minEdge": 64},
+            }
+        }
+        with self.assertRaises(d.RequestError) as ctx:
+            self.parse({"image_b64": make_reference_b64(b"x" * 33)})
+        self.assertIn("超过上限", str(ctx.exception))
+        with mock.patch.dict(sys.modules, fake_pil_for(FakePILImage((512, 512)))):
+            spec = self.parse({"image_b64": make_reference_b64(b"x" * 32)})
+        self.assertEqual(spec["width"], 512)
+
+    def test_rejects_non_png_jpeg(self) -> None:
+        for fmt in ("WEBP", "GIF", "BMP", ""):
+            with mock.patch.dict(sys.modules, fake_pil_for(FakePILImage((512, 512), fmt=fmt))):
+                with self.assertRaises(d.RequestError) as ctx:
+                    self.parse(make_reference())
+                self.assertIn("PNG 或 JPEG", str(ctx.exception))
+
+    def test_rejects_unidentified_and_bomb_images(self) -> None:
+        with mock.patch.dict(sys.modules, fake_pil_raising(FakeUnidentifiedImageError("x"))):
+            with self.assertRaises(d.RequestError) as ctx:
+                self.parse(make_reference())
+            self.assertIn("PNG 或 JPEG", str(ctx.exception))
+        with mock.patch.dict(sys.modules, fake_pil_raising(FakeDecompressionBombError("x"))):
+            with self.assertRaises(d.RequestError) as ctx:
+                self.parse(make_reference())
+            self.assertIn("分辨率过大", str(ctx.exception))
+
+    def test_rejects_too_small_image(self) -> None:
+        min_edge = CONTRACT["limits"]["reference"]["minEdge"]
+        with mock.patch.dict(
+            sys.modules, fake_pil_for(FakePILImage((min_edge - 1, min_edge // 2)))
+        ):
+            with self.assertRaises(d.RequestError) as ctx:
+                self.parse(make_reference())
+            self.assertIn("长边至少", str(ctx.exception))
+
+    def test_accepts_image_at_min_edge(self) -> None:
+        min_edge = CONTRACT["limits"]["reference"]["minEdge"]
+        with mock.patch.dict(sys.modules, fake_pil_for(FakePILImage((min_edge // 2, min_edge)))):
+            spec = self.parse(make_reference())
+        self.assertEqual((spec["width"], spec["height"]), (min_edge // 2, min_edge))
+
+    def test_large_image_is_accepted_for_later_resize(self) -> None:
+        # 提交期只校验最小边；超过 maxEdge 不拒绝，留给执行期等比缩小。
+        max_edge = CONTRACT["limits"]["reference"]["maxEdge"]
+        with mock.patch.dict(
+            sys.modules, fake_pil_for(FakePILImage((max_edge * 2, max_edge)))
+        ):
+            spec = self.parse(make_reference())
+        self.assertEqual((spec["width"], spec["height"]), (max_edge * 2, max_edge))
+
+    def test_strength_is_clamped_to_contract(self) -> None:
+        limits = CONTRACT["limits"]["strength"]
+        cases = [
+            (None, limits["default"]),  # 缺省
+            ("bad", limits["default"]),
+            (True, limits["default"]),
+            (-5, limits["min"]),
+            (99, limits["max"]),
+            (0.55, 0.55),
+        ]
+        with mock.patch.dict(sys.modules, fake_pil_for(FakePILImage((512, 512)))):
+            for raw_strength, expected in cases:
+                raw = make_reference()
+                if raw_strength is not None:
+                    raw["strength"] = raw_strength
+                spec = self.parse(raw)
+                self.assertEqual(spec["strength"], expected, f"strength={raw_strength!r}")
+
+    def test_returns_normalized_spec(self) -> None:
+        with mock.patch.dict(sys.modules, fake_pil_for(FakePILImage((800, 600)))):
+            spec = self.parse(make_reference(strength=0.35))
+        self.assertEqual(
+            set(spec), {"image_bytes", "strength", "width", "height"}
+        )
+        self.assertIsInstance(spec["image_bytes"], bytes)
+        self.assertEqual((spec["width"], spec["height"]), (800, 600))
+        self.assertEqual(spec["strength"], 0.35)
+
+
+class ReferenceDecodeTest(DaemonUnitTest):
+    """执行期完整解码一次：等比 LANCZOS 缩小、转 RGB、损坏图片按请求非法收敛。"""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.contract_config()
+
+    def reference(self) -> dict:
+        return {"image_bytes": b"fake-image-bytes", "strength": 0.6, "width": 1, "height": 1}
+
+    def decode(self, image):  # noqa: ANN001, ANN202
+        with mock.patch.dict(sys.modules, fake_pil_for(image)):
+            return d.decode_reference_image(self.reference())
+
+    def test_downscales_long_edge_with_lanczos(self) -> None:
+        source = FakePILImage((2048, 1024))
+        image = self.decode(source)
+        max_edge = CONTRACT["limits"]["reference"]["maxEdge"]
+        self.assertEqual(image.size, (max_edge, max_edge // 2))
+        self.assertEqual(source.resized[1], "LANCZOS")
+        self.assertTrue(source.loaded)
+        self.assertEqual(image._imagen_source_size, (2048, 1024))
+
+    def test_does_not_upscale_small_image(self) -> None:
+        source = FakePILImage((1024, 512))
+        image = self.decode(source)
+        self.assertEqual(image.size, (1024, 512))
+        self.assertIsNone(source.resized)
+        self.assertEqual(image._imagen_source_size, (1024, 512))
+
+    def test_uses_contract_max_edge(self) -> None:
+        d.CONFIG.contract = {
+            "limits": {
+                **CONTRACT["limits"],
+                "reference": {"maxBytes": 1024, "maxEdge": 256, "minEdge": 64},
+            }
+        }
+        source = FakePILImage((1024, 512))
+        image = self.decode(source)
+        self.assertEqual(image.size, (256, 128))
+
+    def test_keeps_aspect_ratio_on_odd_sizes(self) -> None:
+        source = FakePILImage((1537, 1001))
+        image = self.decode(source)
+        max_edge = CONTRACT["limits"]["reference"]["maxEdge"]
+        self.assertEqual(image.size[0], max_edge)
+        self.assertEqual(image.size[1], round(1001 * max_edge / 1537))
+
+    def test_converts_to_rgb(self) -> None:
+        source = FakePILImage((800, 600), fmt="JPEG", mode="RGBA")
+        image = self.decode(source)
+        self.assertEqual(source.converted, "RGB")
+        self.assertEqual(image.mode, "RGB")
+
+    def test_truncated_image_is_request_error(self) -> None:
+        source = FakePILImage((512, 512))
+        source.load_error = OSError("truncated")
+        with mock.patch.dict(sys.modules, fake_pil_for(source)):
+            with self.assertRaises(d.RequestError) as ctx:
+                d.decode_reference_image(self.reference())
+        self.assertIn("无法解码", str(ctx.exception))
+
+    def test_missing_bytes_is_request_error(self) -> None:
+        for reference in (None, {}, {"image_bytes": b""}, {"image_bytes": "str"}):
+            with self.assertRaises(d.RequestError):
+                d.decode_reference_image(reference)
+
+
+@unittest.skipUnless(HAS_PILLOW, "需要 Pillow 做真实 PNG/JPEG 解码的集成用例")
+class ReferencePillowIntegrationTest(DaemonUnitTest):
+    """真实 Pillow 集成用例（CI 不装 Pillow 时跳过；本地与 Kaggle 环境会执行）。"""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.contract_config()
+
+    @staticmethod
+    def encode(image_bytes_io, fmt: str) -> str:  # noqa: ANN001
+        return base64.b64encode(image_bytes_io.getvalue()).decode("ascii")
+
+    def png_b64(self, size, color=(200, 60, 40)) -> str:  # noqa: ANN001
+        buffer = io.BytesIO()
+        _RealPILImage.new("RGB", size, color).save(buffer, format="PNG")
+        return self.encode(buffer, "PNG")
+
+    def test_parse_real_png_and_clamp_strength(self) -> None:
+        max_strength = CONTRACT["limits"]["strength"]["max"]
+        spec = d.parse_reference_spec(
+            {"image_b64": self.png_b64((300, 200)), "strength": 9}, make_pipeline()
+        )
+        self.assertEqual((spec["width"], spec["height"]), (300, 200))
+        self.assertEqual(spec["strength"], max_strength)
+
+    def test_decode_real_png_downscales_to_contract_max_edge(self) -> None:
+        spec = d.parse_reference_spec({"image_b64": self.png_b64((1600, 800))}, make_pipeline())
+        image = d.decode_reference_image(spec)
+        max_edge = CONTRACT["limits"]["reference"]["maxEdge"]
+        self.assertEqual(image.size, (max_edge, max_edge // 2))
+        self.assertEqual(image.mode, "RGB")
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        self.assertGreater(len(buffer.getvalue()), 8)
+
+    def test_accepts_real_jpeg(self) -> None:
+        buffer = io.BytesIO()
+        _RealPILImage.new("RGB", (256, 256), (10, 10, 10)).save(buffer, format="JPEG")
+        spec = d.parse_reference_spec(
+            {"image_b64": base64.b64encode(buffer.getvalue()).decode("ascii")}, make_pipeline()
+        )
+        self.assertEqual((spec["width"], spec["height"]), (256, 256))
+
+    def test_rejects_real_bmp(self) -> None:
+        buffer = io.BytesIO()
+        _RealPILImage.new("RGB", (256, 256), (10, 10, 10)).save(buffer, format="BMP")
+        with self.assertRaises(d.RequestError):
+            d.parse_reference_spec(
+                {"image_b64": base64.b64encode(buffer.getvalue()).decode("ascii")},
+                make_pipeline(),
+            )
+
+
+class Img2ImgPipelineTest(DaemonUnitTest):
+    """图生图管线：惰性 from_pipe 复用、只创建一次、随 release_pipeline 清空。"""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.contract_config()
+
+    def make_fake_diffusers(self, fail=None):  # noqa: ANN001, ANN201
+        calls = []
+
+        class FakeImg2ImgPipe:
+            def __call__(
+                self,
+                prompt=None,  # noqa: ANN001
+                negative_prompt=None,  # noqa: ANN001
+                image=None,  # noqa: ANN001
+                strength=None,  # noqa: ANN001
+                num_inference_steps=None,  # noqa: ANN001
+                guidance_scale=None,  # noqa: ANN001
+                generator=None,  # noqa: ANN001
+            ):
+                return types.SimpleNamespace(images=[])
+
+        class FakeAutoPipelineForImage2Image:
+            @staticmethod
+            def from_pipe(pipe):  # noqa: ANN001, ANN205
+                calls.append(pipe)
+                if fail is not None:
+                    raise fail
+                return FakeImg2ImgPipe()
+
+        module = types.ModuleType("diffusers")
+        module.AutoPipelineForImage2Image = FakeAutoPipelineForImage2Image
+        return module, calls
+
+    def test_lazy_creation_is_cached(self) -> None:
+        module, calls = self.make_fake_diffusers()
+        d.STATE.pipe = object()
+        with mock.patch.dict(sys.modules, {"diffusers": module}):
+            first = d.ensure_img2img_pipeline()
+            second = d.ensure_img2img_pipeline()
+        self.assertIs(first, second)
+        self.assertEqual(len(calls), 1, "from_pipe 只应在首次创建时调用一次")
+        self.assertIs(d.STATE.img2img_pipe, first)
+        self.assertIn("image", d.STATE.img2img_sig_params)
+        self.assertIn("strength", d.STATE.img2img_sig_params)
+        self.assertIn("首次图生图", self.logs())
+        self.assertIn("图生图管线就绪", self.logs())
+
+    def test_requires_loaded_base_pipeline(self) -> None:
+        with self.assertRaises(d.RequestError):
+            d.ensure_img2img_pipeline()
+
+    def test_from_pipe_failure_is_load_error(self) -> None:
+        module, _calls = self.make_fake_diffusers(fail=RuntimeError("组件不兼容"))
+        d.STATE.pipe = object()
+        with mock.patch.dict(sys.modules, {"diffusers": module}):
+            with self.assertRaises(d.LoadError) as ctx:
+                d.ensure_img2img_pipeline()
+        self.assertIn("图生图管线创建失败", str(ctx.exception))
+        self.assertIsNone(d.STATE.img2img_pipe)
+
+    def test_oom_is_not_wrapped_as_load_error(self) -> None:
+        module, _calls = self.make_fake_diffusers(fail=RuntimeError("CUDA out of memory"))
+        d.STATE.pipe = object()
+        with mock.patch.dict(sys.modules, {"diffusers": module}):
+            with self.assertRaises(RuntimeError) as ctx:
+                d.ensure_img2img_pipeline()
+        self.assertNotIsInstance(ctx.exception, d.LoadError)
+
+    def test_release_pipeline_clears_img2img_cache(self) -> None:
+        module, _calls = self.make_fake_diffusers()
+        d.STATE.pipe = object()
+        d.STATE.pipeline_key = "pipeline-key"
+        with mock.patch.dict(sys.modules, {"diffusers": module}):
+            d.ensure_img2img_pipeline()
+        self.assertIsNotNone(d.STATE.img2img_pipe)
+        fake_torch = types.ModuleType("torch")
+        fake_torch.cuda = types.SimpleNamespace(is_available=lambda: False)
+        with mock.patch.dict(sys.modules, {"torch": fake_torch}):
+            d.release_pipeline()
+        self.assertIsNone(d.STATE.img2img_pipe)
+        self.assertEqual(d.STATE.img2img_sig_params, set())
+        self.assertIsNone(d.STATE.pipe)
+        # 换底座后重新按需创建：缓存确实失效，会再次 from_pipe。
+        module2, calls2 = self.make_fake_diffusers()
+        d.STATE.pipe = object()
+        with mock.patch.dict(sys.modules, {"diffusers": module2}):
+            d.ensure_img2img_pipeline()
+        self.assertEqual(len(calls2), 1)
+
+
+class RunTaskImg2ImgTest(DaemonUnitTest):
+    """run_task 的图生图分支：kwargs / 日志 / 结果字段正确，txt2img 分支不回归。"""
+
+    IMG2IMG_SIG = {
+        "prompt",
+        "negative_prompt",
+        "image",
+        "strength",
+        "num_inference_steps",
+        "guidance_scale",
+        "generator",
+    }
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.contract_config()
+
+    def make_img2img_pipe(self, image_size=(1536, 768)):  # noqa: ANN001, ANN202
+        class FakeImage:
+            def __init__(self, size):  # noqa: ANN001
+                self.size = size
+
+            def save(self, buffer, format=None):  # noqa: A002, ANN001
+                buffer.write(b"fake-img2img-png")
+
+        class FakeImg2ImgPipe:
+            def __init__(self):
+                self.calls = []
+
+            def __call__(self, **kwargs):
+                self.calls.append(kwargs)
+                return types.SimpleNamespace(images=[FakeImage(image_size)])
+
+        return FakeImg2ImgPipe()
+
+    def make_reference(self, size=(1536, 768), source=(2048, 1024)):  # noqa: ANN001, ANN202
+        image = FakePILImage(size)
+        image._imagen_source_size = source
+        return image
+
+    def run_img2img(  # noqa: ANN001, ANN202
+        self,
+        task=None,
+        strength=0.55,
+        sig=None,
+        image_size=(1536, 768),
+    ):
+        task = dict(TASKS[0] if task is None else task)
+        pipe = self.make_img2img_pipe(image_size)
+        d.STATE.pipe = object()
+        d.STATE.img2img_pipe = pipe
+        d.STATE.img2img_sig_params = set(self.IMG2IMG_SIG if sig is None else sig)
+        reference = self.make_reference()
+        with mock.patch.dict(sys.modules, {"torch": fake_torch_module()}):
+            result = d.run_task(
+                object(), task, reference_image=reference, reference_strength=strength
+            )
+        return pipe, result, reference
+
+    def test_call_kwargs_use_img2img_contract(self) -> None:
+        pipe, _result, reference = self.run_img2img(strength=0.55)
+        self.assertEqual(len(pipe.calls), 1)
+        kwargs = pipe.calls[0]
+        self.assertEqual(kwargs["prompt"], TASKS[0]["prompt"])
+        self.assertIs(kwargs["image"], reference)
+        self.assertEqual(kwargs["strength"], 0.55)
+        self.assertEqual(kwargs["num_inference_steps"], TASKS[0]["steps"])
+        self.assertEqual(kwargs["guidance_scale"], TASKS[0]["cfg"])
+        # img2img 不传 width / height：输出尺寸跟随参考图。
+        self.assertNotIn("width", kwargs)
+        self.assertNotIn("height", kwargs)
+        # cfg=0 时 negative_prompt 无意义，不传。
+        self.assertNotIn("negative_prompt", kwargs)
+        self.assertEqual(kwargs["generator"].seed, TASKS[0]["seed"])
+
+    def test_negative_prompt_is_kept_when_cfg_positive(self) -> None:
+        task = dict(TASKS[0], cfg=5.0, negative_prompt="blurry")
+        pipe, _result, _reference = self.run_img2img(task=task)
+        self.assertEqual(pipe.calls[0]["negative_prompt"], "blurry")
+
+    def test_signature_filtering_drops_unknown_kwargs(self) -> None:
+        pipe, _result, _reference = self.run_img2img(sig={"prompt", "image", "generator"})
+        self.assertEqual(set(pipe.calls[0]), {"prompt", "image", "generator"})
+
+    def test_default_strength_comes_from_contract(self) -> None:
+        _pipe, result, _reference = self.run_img2img(strength=None)
+        self.assertEqual(result["strength"], CONTRACT["limits"]["strength"]["default"])
+
+    def test_logs_strength_and_resize(self) -> None:
+        self.run_img2img(strength=0.55)
+        self.assertIn("[gen] img2img 01 strength=0.55", self.logs())
+        self.assertIn("参考图 2048x1024 → 1536x768", self.logs())
+
+    def test_result_fields(self) -> None:
+        _pipe, result, _reference = self.run_img2img(strength=0.55)
+        self.assertEqual(
+            set(result), RunTaskTest.RESULT_KEYS | {"strength", "referenceWidth", "referenceHeight"}
+        )
+        self.assertEqual(result["strength"], 0.55)
+        self.assertEqual((result["referenceWidth"], result["referenceHeight"]), (1536, 768))
+        self.assertEqual((result["width"], result["height"]), (1536, 768))
+        self.assertEqual(base64.b64decode(result["image_b64"]), b"fake-img2img-png")
+
+    def test_reports_actual_size_when_it_differs_from_reference(self) -> None:
+        self.run_img2img(image_size=(1536, 760))
+        self.assertIn("实际出图 1536x760（参考图 1536x768）", self.logs())
+
+    def test_txt2img_path_is_unaffected(self) -> None:
+        class FakeImage:
+            def __init__(self, size):  # noqa: ANN001
+                self.size = size
+
+            def save(self, buffer, format=None):  # noqa: A002, ANN001
+                buffer.write(b"fake-txt2img-png")
+
+        class FakeTxt2ImgPipe:
+            def __init__(self):
+                self.calls = []
+
+            def __call__(self, **kwargs):
+                self.calls.append(kwargs)
+                return types.SimpleNamespace(images=[FakeImage((256, 256))])
+
+        pipe = FakeTxt2ImgPipe()
+        d.STATE.sig_params = {
+            "prompt",
+            "negative_prompt",
+            "num_inference_steps",
+            "guidance_scale",
+            "width",
+            "height",
+            "generator",
+        }
+        with mock.patch.dict(sys.modules, {"torch": fake_torch_module()}):
+            result = d.run_task(pipe, dict(TASKS[0]))
+        self.assertEqual(set(result), RunTaskTest.RESULT_KEYS)
+        # negative_prompt 在 cfg=0 / 空提示时按既有逻辑不传，其余签名内的参数都应下传。
+        expected_kwargs = set(d.STATE.sig_params) - {"negative_prompt"}
+        self.assertEqual(set(pipe.calls[0]), expected_kwargs)
+        self.assertEqual((pipe.calls[0]["width"], pipe.calls[0]["height"]), (256, 256))
+        self.assertIn("[gen] 01 seed=42 256x256 steps=4 cfg=0.0", self.logs())
+
+
+class ExecuteJobReferenceTest(DaemonUnitTest):
+    """execute_job：参考图整批只解码一次，并透传给 run_tasks；失败不白加载模型。"""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.contract_config()
+
+    def submit_job_with(self, reference=None, task_count=1):  # noqa: ANN001, ANN202
+        tasks = [dict(TASKS[0], name=f"{index + 1:02d}") for index in range(task_count)]
+        return d.submit_job(
+            make_pipeline(), "org/base-model", tasks, None, reference=reference
+        )
+
+    def test_decodes_reference_once_and_passes_to_run_tasks(self) -> None:
+        reference = {"image_bytes": b"data", "strength": 0.55, "width": 10, "height": 10}
+        job, _created = self.submit_job_with(reference, task_count=2)
+        decoded = FakePILImage((1536, 768))
+        captured: dict = {}
+
+        def fake_run_tasks(  # noqa: ANN001, ANN202
+            pipe, tasks, on_progress=None, reference_image=None, reference_strength=None
+        ):
+            captured.update(
+                reference_image=reference_image,
+                reference_strength=reference_strength,
+                task_count=len(tasks),
+            )
+            return []
+
+        with mock.patch.object(d, "decode_reference_image", return_value=decoded) as decode, mock.patch.object(
+            d, "ensure_pipeline", return_value=("pipe", 0.0)
+        ), mock.patch.object(d, "run_tasks", side_effect=fake_run_tasks):
+            d.execute_job(job)
+        self.assertEqual(decode.call_count, 1, "一张参考图跑整批，只应解码一次")
+        self.assertIs(captured["reference_image"], decoded)
+        self.assertEqual(captured["reference_strength"], 0.55)
+        self.assertEqual(captured["task_count"], 2)
+        self.assertEqual(job.status, d.JOB_STATUS_DONE)
+        self.assertIsNone(job.reference, "解码后应释放队列里保留的原始字节")
+
+    def test_text2img_still_calls_run_tasks_without_reference_kwargs(self) -> None:
+        job, _created = self.submit_job_with(None)
+        captured: dict = {}
+
+        def fake_run_tasks(pipe, tasks, on_progress=None):  # noqa: ANN001, ANN202
+            captured["pipe"] = pipe
+            return []
+
+        with mock.patch.object(d, "ensure_pipeline", return_value=("pipe", 0.0)), mock.patch.object(
+            d, "run_tasks", side_effect=fake_run_tasks
+        ):
+            d.execute_job(job)
+        self.assertEqual(captured["pipe"], "pipe")
+        self.assertEqual(job.status, d.JOB_STATUS_DONE)
+
+    def test_decode_failure_fails_job_without_loading_model(self) -> None:
+        job, _created = self.submit_job_with(
+            {"image_bytes": b"bad", "strength": 0.6, "width": 1, "height": 1}
+        )
+        with mock.patch.object(
+            d, "decode_reference_image", side_effect=d.RequestError("参考图无法解码")
+        ), mock.patch.object(d, "ensure_pipeline", side_effect=AssertionError("不应加载模型")):
+            d.execute_job(job)
+        self.assertEqual(job.status, d.JOB_STATUS_FAILED)
+        self.assertEqual(job.error["code"], "invalid_request")
+        self.assertIn("参考图无法解码", job.error["message"])
+
+    def test_submit_job_keeps_reference_copy(self) -> None:
+        reference = {"image_bytes": b"data", "strength": 0.6, "width": 10, "height": 10}
+        job, _created = self.submit_job_with(reference)
+        self.assertIsNotNone(job.reference)
+        self.assertEqual(job.reference["strength"], 0.6)
+        self.assertIsNot(job.reference, reference)
+
+
+class GenerateWithReferenceTest(DaemonUnitTest):
+    """POST /generate 的参考图路径：提交期 400 与入队后的规范化结果。"""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.contract_config()
+        d.STATE.phase = "ready"
+
+    def generate(self, spec):  # noqa: ANN001, ANN202
+        handler, sent = make_generate_handler(spec)
+        d.DaemonHandler._handle_generate(handler)
+        return sent
+
+    def spec_with(self, reference=None, pipeline=None, loader=None):  # noqa: ANN001, ANN202
+        pipeline = pipeline or make_pipeline(loader or "sdxl")
+        spec = {"pipeline": pipeline, "tasks": [{"prompt": "p"}]}
+        if reference is not None:
+            spec["reference"] = reference
+        return spec
+
+    def test_unsupported_loader_returns_400(self) -> None:
+        for loader in ("flux2", "anima"):
+            sent = self.generate(self.spec_with(make_reference(), loader=loader))
+            self.assertEqual(sent[0][0], 400)
+            self.assertEqual(sent[0][1]["error"]["code"], "invalid_request")
+            self.assertIn("该模型不支持垫图重绘", sent[0][1]["error"]["message"])
+        self.assertEqual(d.queue_depth(), 0)
+
+    def test_invalid_base64_returns_400(self) -> None:
+        sent = self.generate(self.spec_with({"image_b64": "not base64!!"}))
+        self.assertEqual(sent[0][0], 400)
+        self.assertEqual(sent[0][1]["error"]["code"], "invalid_request")
+        self.assertIn("合法 base64", sent[0][1]["error"]["message"])
+        self.assertEqual(d.queue_depth(), 0)
+
+    def test_valid_reference_is_enqueued_with_normalized_strength(self) -> None:
+        with mock.patch.dict(sys.modules, fake_pil_for(FakePILImage((1024, 768)))):
+            sent = self.generate(self.spec_with(make_reference(strength=9)))
+        self.assertEqual(sent[0][0], 202)
+        job = d.get_job(sent[0][1]["job_id"])
+        self.assertIsNotNone(job.reference)
+        self.assertEqual(job.reference["strength"], CONTRACT["limits"]["strength"]["max"])
+        self.assertEqual((job.reference["width"], job.reference["height"]), (1024, 768))
+        self.assertEqual(d.queue_depth(), 1)
+        self.assertLogContains("带参考图")
+
+    def test_text2img_spec_has_no_reference(self) -> None:
+        sent = self.generate(self.spec_with(None))
+        self.assertEqual(sent[0][0], 202)
+        job = d.get_job(sent[0][1]["job_id"])
+        self.assertIsNone(job.reference)
+        self.assertNotIn("带参考图", self.logs())
 
 
 if __name__ == "__main__":
