@@ -12,7 +12,10 @@
  *   - 单预设（默认）：出图一张，report.json 保留原有字段，向后兼容；
  *   - `--presets a,b,c`：在同一个 Kaggle 会话内按顺序连续切换模型出图，用于验证
  *     M4.1 的切换模型 LRU 缓存清理（旧权重不删会撑爆 20GB 磁盘）。report.json
- *     额外记录每个模型的加载/出图耗时、/health 依赖版本快照与远端 [cache] 日志摘要。
+ *     额外记录每个模型的加载/出图耗时、/health 依赖版本快照与远端 [cache] 日志摘要；
+ *   - `--img2img`：M3 图生图验收。先文生图一张，再用这张图做垫图重绘，report.json
+ *     记录重绘的加载/出图耗时、参考图尺寸与重绘前后 /health.gpu_memory（验证 from_pipe
+ *     复用底座不额外占显存）。只能配单个 SDXL 家族预设使用。
  *
  * 前置条件：本机已安装并登录 Kaggle CLI、账号已启用 GPU 加速器且当天配额充足。
  * 默认不跑真机：只有显式执行本脚本（且不带 --help）才会推送 Kernel。
@@ -26,6 +29,7 @@ import { dirname, join } from 'node:path'
 
 import { SessionManager } from '../lib/session.js'
 import { PRESETS, presetById } from '../lib/presets.js'
+import { LIMITS } from '../shared/contract.js'
 import { fetchHealth, requestGenerate, requestLogs } from '../lib/remote.js'
 
 const PLUGIN_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -49,11 +53,14 @@ function printHelp() {
 用法：
   node test/gpu-live.mjs [--preset <id>] [--prompt <text>] [--keep]
   node test/gpu-live.mjs --presets <id1,id2,...> [--prompt <text>] [--keep]
+  node test/gpu-live.mjs --preset sdxl-lightning --img2img [--strength 0.6]
 
 选项：
   --preset <id>     单预设模式（默认 sdxl-lightning），出图一张
   --presets a,b,c   单会话内按顺序连续切换模型出图，验证切换模型时的 LRU 缓存清理
   --prompt <text>   提示词（两种模式共用）
+  --img2img         M3 图生图验收：文生图后用该图垫图重绘，记录显存对比（仅单预设）
+  --strength <n>    垫图重绘强度（0.2~0.9，默认 0.6）
   --keep            结束后不关机，保留 Kernel 便于手动观察
   --help, -h        显示本帮助；不会推送 Kernel，也不会消耗配额
 
@@ -85,7 +92,12 @@ function parseOptions() {
     presets.push(id)
   }
   if (!presets.length) throw new Error('至少需要一个预设（--preset 或 --presets）')
-  return { presets, prompt: String(argOf('prompt', DEFAULT_PROMPT)) }
+  const img2img = process.argv.includes('--img2img')
+  if (img2img && presets.length !== 1) throw new Error('--img2img 只能配合单个预设使用')
+  const rawStrength = Number(argOf('strength', String(LIMITS.strength.default)))
+  const { min, max } = LIMITS.strength
+  const strength = Number.isFinite(rawStrength) ? Math.min(max, Math.max(min, rawStrength)) : LIMITS.strength.default
+  return { presets, prompt: String(argOf('prompt', DEFAULT_PROMPT)), img2img, strength }
 }
 
 function createSubprocess() {
@@ -217,6 +229,74 @@ function artifactName(index, presetId, total) {
   return total === 1 ? '01.png' : `${String(index + 1).padStart(2, '0')}-${presetId}.png`
 }
 
+/** 读取远端只读显存诊断（/health.gpu_memory）；不可用时返回 null，不影响验证结论。 */
+async function readGpuMemory(endpoint, token) {
+  try {
+    const health = await fetchHealth(endpoint, token, 8000)
+    return health?.gpu_memory ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * M3 真机验收：在同一会话里用刚生成的图片做一次垫图重绘。
+ *
+ * 关键观察点：`load_seconds` 应为 0（`AutoPipelineForImage2Image.from_pipe` 复用已加载底座，
+ * 不重新加载权重），且 `gpu_memory.reserved_mb` / `max_allocated_mb` 相比文生图结束时应基本持平。
+ * 直接按远端 job 协议提交（与 Host lib/jobs.js 的下发形状一致：job 级 `reference`）。
+ */
+async function runImg2Img({ endpoint, token, presetId, sourcePng, prompt, strength }) {
+  const preset = presetById(presetId)
+  console.log(`  · [img2img] ${presetId} 以刚生成的图做垫图重绘（strength=${strength}）…`)
+  const begin = Date.now()
+  const response = await requestGenerate(
+    endpoint,
+    token,
+    {
+      pipeline: preset.pipeline,
+      modelId: preset.repo,
+      reference: { image_b64: sourcePng.toString('base64'), strength },
+      tasks: [
+        {
+          name: '01',
+          prompt,
+          negative_prompt: preset.negativeHint ?? '',
+          seed: 43,
+          width: preset.size,
+          height: preset.size,
+          steps: preset.steps,
+          cfg: preset.cfg,
+        },
+      ],
+    },
+    { timeoutMs: 600000 },
+  )
+  const wallSeconds = Number(((Date.now() - begin) / 1000).toFixed(1))
+  const result = response.results?.[0]
+  if (!result?.image_b64) throw new Error('img2img：远端没有返回图片')
+  const png = Buffer.from(result.image_b64, 'base64')
+  const isPng = png.subarray(0, 8).toString('hex') === '89504e470d0a1a0a'
+  if (!isPng) throw new Error('img2img：返回内容不是合法 PNG')
+  return {
+    png,
+    entry: {
+      preset: presetId,
+      strength,
+      referenceBytes: sourcePng.length,
+      loadSeconds: response.load_seconds ?? null,
+      imageSeconds: result.seconds ?? null,
+      width: result.width ?? null,
+      height: result.height ?? null,
+      referenceWidth: result.referenceWidth ?? null,
+      referenceHeight: result.referenceHeight ?? null,
+      wallSeconds,
+      pngBytes: png.length,
+      isPng,
+    },
+  }
+}
+
 async function main() {
   const options = parseOptions()
   const single = options.presets.length === 1
@@ -270,6 +350,7 @@ async function main() {
         device: health.device,
         count: health.device_count,
         loaded: health.loaded,
+        gpuMemory: health.gpu_memory ?? null,
         versions: health.versions ?? null,
       }),
     )
@@ -281,20 +362,83 @@ async function main() {
     )
     const models = []
     const images = []
-    for (const [index, presetId] of options.presets.entries()) {
-      const { png, entry } = await generateOne({
+    let img2imgReport = null
+    if (options.img2img) {
+      // M3 真机验收：先文生图，再用刚生成的图做垫图重绘；对比 /health.gpu_memory。
+      if (!single) throw new Error('--img2img 只能配合单个 --preset 使用')
+      const presetId = options.presets[0]
+      const preset = presetById(presetId)
+      if (preset?.supportsImg2Img !== true) {
+        throw new Error(`预设 ${presetId} 不支持图生图（supportsImg2Img=false），请换 SDXL 家族预设`)
+      }
+      const txt2img = await generateOne({
         endpoint,
         token,
         presetId,
         prompt: options.prompt,
-        index,
-        total: options.presets.length,
+        index: 0,
+        total: 1,
       })
-      models.push(entry)
-      images.push({ index, presetId, png })
+      models.push(txt2img.entry)
+      images.push({ index: 0, presetId, png: txt2img.png })
       console.log(
-        `  · ${presetId} 完成：加载 ${entry.loadSeconds ?? '-'}s / 出图 ${entry.imageSeconds ?? '-'}s / ${entry.pngBytes} 字节`,
+        `  · ${presetId} 文生图完成：加载 ${txt2img.entry.loadSeconds ?? '-'}s / 出图 ${txt2img.entry.imageSeconds ?? '-'}s`,
       )
+      const before = await readGpuMemory(endpoint, token)
+      const redraw = await runImg2Img({
+        endpoint,
+        token,
+        presetId,
+        sourcePng: txt2img.png,
+        prompt: options.prompt,
+        strength: options.strength,
+      })
+      const after = await readGpuMemory(endpoint, token)
+      images.push({ index: 'img2img', presetId: `${presetId}-img2img`, png: redraw.png })
+      console.log(
+        `  · 垫图重绘完成：加载 ${redraw.entry.loadSeconds ?? '-'}s / 出图 ${redraw.entry.imageSeconds ?? '-'}s` +
+          `（参考图 ${redraw.entry.referenceWidth ?? '?'}x${redraw.entry.referenceHeight ?? '?'}）`,
+      )
+      console.log(
+        `  · 显存对比（MiB）：文生图后 ${fmt(before)} → 重绘后 ${fmt(after)}`,
+      )
+      const reservedDeltaMb =
+        Number.isFinite(before?.reserved_mb) && Number.isFinite(after?.reserved_mb)
+          ? after.reserved_mb - before.reserved_mb
+          : null
+      img2imgReport = {
+        preset: presetId,
+        strength: redraw.entry.strength,
+        referenceBytes: redraw.entry.referenceBytes,
+        loadSeconds: redraw.entry.loadSeconds,
+        imageSeconds: redraw.entry.imageSeconds,
+        width: redraw.entry.width,
+        height: redraw.entry.height,
+        referenceWidth: redraw.entry.referenceWidth,
+        referenceHeight: redraw.entry.referenceHeight,
+        pngBytes: redraw.entry.pngBytes,
+        gpuMemoryBefore: before,
+        gpuMemoryAfter: after,
+        reservedDeltaMb,
+        // from_pipe 复用底座不应重新加载权重：load_seconds 期望为 0 或接近 0。
+        reusedBasePipeline: (redraw.entry.loadSeconds ?? 0) === 0,
+      }
+    } else {
+      for (const [index, presetId] of options.presets.entries()) {
+        const { png, entry } = await generateOne({
+          endpoint,
+          token,
+          presetId,
+          prompt: options.prompt,
+          index,
+          total: options.presets.length,
+        })
+        models.push(entry)
+        images.push({ index, presetId, png })
+        console.log(
+          `  · ${presetId} 完成：加载 ${entry.loadSeconds ?? '-'}s / 出图 ${entry.imageSeconds ?? '-'}s / ${entry.pngBytes} 字节`,
+        )
+      }
     }
 
     console.log('[5/5] 汇总 [cache] 日志并写报告 …')
@@ -304,7 +448,11 @@ async function main() {
     const dir = join(OUT_DIR, stamp)
     await mkdir(dir, { recursive: true })
     for (const image of images) {
-      await writeFile(join(dir, artifactName(image.index, image.presetId, options.presets.length)), image.png)
+      const name =
+        image.index === 'img2img'
+          ? '01-img2img.png'
+          : artifactName(image.index, image.presetId, options.presets.length)
+      await writeFile(join(dir, name), image.png)
     }
     const first = models[0]
     const report = {
@@ -322,6 +470,8 @@ async function main() {
       isPng: first.isPng,
       // M4.2：逐模型耗时与依赖版本快照，用于固化 LKGR 与核对缓存清理是否生效。
       models,
+      // M3：--img2img 模式下的垫图重绘结果与显存对比（非该模式为 null）。
+      img2img: img2imgReport,
       versions: health.versions ?? null,
       finalVersions: finalHealth.versions ?? null,
       cacheLogs,

@@ -24,7 +24,7 @@
 
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { mkdtemp, rm, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -848,6 +848,106 @@ async function main() {
       assert.equal(final.progress, null)
       assert.equal(final.stage, '完成')
       assert.equal(final.cancelRequested, false)
+    } finally {
+      queue.dispose()
+      await remote.close()
+    }
+  })
+
+  // ── 图生图（M3）：参考图入队校验 / 远端载荷 / meta 记录 ────────────────
+  await check('图生图：参考图入队校验、远端载荷与 meta.json 记录（publicView 不含二进制）', async () => {
+    const remote = await startFlakyRemote()
+    remote.state.onGenerate = (state, count) => {
+      const body = state.generateCalls[count - 1]
+      state.jobs.set(body.jobId, doneJob(body.jobId, 1))
+    }
+    const seedDir = join(workspace, 'imagen-output', '20260101-000000-seed')
+    await mkdir(seedDir, { recursive: true })
+    const seedPath = 'imagen-output/20260101-000000-seed/01.png'
+    await writeFile(join(seedDir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+    const queue = new JobQueue({
+      ctx: makeCtx(),
+      session: makeSession({ connection: () => ({ endpoint: remote.endpoint, token: 'test-token' }) }),
+      defaultPreset: PRESET,
+      options: { generateTimeoutMs: 5000, pollMs: 20 },
+    })
+    try {
+      // 非法参考图在入队前被拒绝（不触发任何远端提交）。
+      const invalid = [
+        { path: '../escape.png' },
+        { path: 'docs/outside.png' },
+        { path: '/abs/path.png' },
+        { image: 'not-base64!!' },
+        { image: Buffer.from('hello').toString('base64') },
+        { path: seedPath, image: PNG_B64 },
+        {},
+      ]
+      for (const reference of invalid) {
+        const result = queue.submit({ prompt: '非法参考图', reference })
+        assert.equal(result.ok, false, JSON.stringify(reference))
+        assert.ok(
+          result.code === 'invalid_path' || result.code === 'invalid_request',
+          `${JSON.stringify(reference)} → ${result.code}`,
+        )
+      }
+      assert.equal(remote.state.generateCalls.length, 0, '非法参考图不得触发远端提交')
+
+      // 合法：路径来源 + strength 按契约对齐（0.777 → 0.8）。
+      const submitted = queue.submit({ prompt: '垫图重绘', reference: { path: seedPath, strength: 0.777 } })
+      assert.equal(submitted.ok, true, JSON.stringify(submitted))
+      assert.deepEqual(submitted.job.params.reference, { sourcePath: seedPath, strength: 0.8 })
+      assert.ok(!JSON.stringify(submitted.job).includes(PNG_B64), 'publicView 不得包含参考图 base64')
+
+      const done = await queue.waitFor(submitted.job.id, 10)
+      assert.equal(done.status, 'done', JSON.stringify(done.error))
+      const call = remote.state.generateCalls.at(-1)
+      assert.deepEqual(call.reference, { image_b64: PNG_B64, strength: 0.8 })
+      assert.equal(call.tasks.length, 1)
+
+      const meta = JSON.parse(await readFile(join(workspace, done.output.dir, 'meta.json'), 'utf8'))
+      assert.equal(meta.sourceImage, seedPath)
+      assert.equal(meta.strength, 0.8)
+      assert.equal(meta.params.reference.sourcePath, seedPath)
+    } finally {
+      queue.dispose()
+      await remote.close()
+    }
+  })
+
+  await check('图生图：参考图不存在 → 任务以 invalid_path 失败；base64 来源与强度越界钳制', async () => {
+    const remote = await startFlakyRemote()
+    remote.state.onGenerate = (state, count) => {
+      const body = state.generateCalls[count - 1]
+      state.jobs.set(body.jobId, doneJob(body.jobId, 1))
+    }
+    const queue = new JobQueue({
+      ctx: makeCtx(),
+      session: makeSession({ connection: () => ({ endpoint: remote.endpoint, token: 'test-token' }) }),
+      defaultPreset: PRESET,
+      options: { generateTimeoutMs: 5000, pollMs: 20 },
+    })
+    try {
+      // 路径形状合法但文件不存在：任务在生成阶段失败，错误码是 invalid_path。
+      const missing = queue.submit({
+        prompt: '参考图丢了',
+        reference: { path: 'imagen-output/20260101-000000-missing/01.png' },
+      })
+      const failed = await queue.waitFor(missing.job.id, 10)
+      assert.equal(failed.status, 'failed')
+      assert.equal(failed.error?.code, 'invalid_path')
+      assert.equal(remote.state.generateCalls.length, 0)
+
+      // base64 来源（前端上传）：直接下发 image_b64；strength 5 → 钳到 0.9。
+      const uploaded = queue.submit({ prompt: '上传参考图', reference: { image: PNG_B64, strength: 5 } })
+      assert.equal(uploaded.ok, true)
+      assert.equal(uploaded.job.params.reference.strength, 0.9)
+      const done = await queue.waitFor(uploaded.job.id, 10)
+      assert.equal(done.status, 'done', JSON.stringify(done.error))
+      const call = remote.state.generateCalls.at(-1)
+      assert.deepEqual(call.reference, { image_b64: PNG_B64, strength: 0.9 })
+      const meta = JSON.parse(await readFile(join(workspace, done.output.dir, 'meta.json'), 'utf8'))
+      assert.equal(meta.sourceImage, null, '上传来源没有工作区路径')
+      assert.equal(meta.strength, 0.9)
     } finally {
       queue.dispose()
       await remote.close()

@@ -1149,6 +1149,37 @@ async function main() {
     }
   })
 
+  await check('图生图：作品参考图走 /generate 全链路，任务视图只回出处与强度', async () => {
+    const dir = join(workspace, 'imagen-output', '20260101-000000-img2img')
+    await mkdir(dir, { recursive: true })
+    const sourcePath = 'imagen-output/20260101-000000-img2img/01.png'
+    await writeFile(join(dir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+
+    const submitted = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        prompt: '在雨夜里重绘这张风景',
+        presetId: 'sdxl-lightning',
+        reference: { path: sourcePath, strength: 0.65 },
+        waitSeconds: 15,
+      }),
+    })
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body))
+    const job = submitted.body
+    assert.equal(job.status, 'done')
+    assert.deepEqual(job.params.reference, { sourcePath, strength: 0.65 })
+    assert.ok(!JSON.stringify(job).includes(PNG_B64), '任务视图不得回传参考图二进制')
+
+    const invalid = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: '越界参考图', reference: { path: '../escape.png' } }),
+    })
+    assert.equal(invalid.status, 400, '越界参考图必须在入队前被拒绝')
+    assert.equal(invalid.body.error.code, 'invalid_path')
+  })
+
   await check('打开产物目录（dryRun 只解析路径）', async () => {
     const result = await json(host.origin, '/imagen-api/reveal', {
       method: 'POST',
