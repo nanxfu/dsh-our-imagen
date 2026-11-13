@@ -33,6 +33,8 @@ user-invocable: true
 - `order` 取现有最大值 + 10；
 - `measured` 四个字段先填 `null`，等真机验证回填；
 - `runtime` 只能是 `"default"`；
+- `supportsImg2Img` 默认 `false`。只有 loader 属于 `sdxl` / `sdxl-lora`（首期仅 SDXL 家族）、且真机验证过
+  `AutoPipelineForImage2Image.from_pipe` 复用底座可出图时才标 `true`；不确定就保持 false，宁缺毋滥；
 - 字段格式见本 skill 末尾模板，完整定义见 `docs/MODEL_ASSET_SPEC.md`。
 
 写完后先自检一遍 JSON 合法性，再进入下一步。
@@ -123,6 +125,7 @@ npm test
   "negativeHint": "",
   "sizeOptions": [768, 1024],
   "runtime": "default",
+  "supportsImg2Img": false,
   "pipeline": {
     "loader": "sdxl",
     "base": "<owner/name>",

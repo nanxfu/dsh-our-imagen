@@ -47,6 +47,9 @@ export function buildDaemonContractJson() {
       seed: sortByKey(contract.limits.seed),
       prompt: sortByKey(contract.limits.prompt),
       negativePrompt: sortByKey(contract.limits.negativePrompt),
+      // 图生图（M3）：参考图体积/尺寸边界与重绘强度，daemon 依此校验请求。
+      reference: sortByKey(contract.limits.reference),
+      strength: sortByKey(contract.limits.strength),
       historyTool: sortByKey(contract.limits.historyTool),
     },
   }

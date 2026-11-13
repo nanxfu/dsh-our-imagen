@@ -12,7 +12,7 @@
  *    随注入配置下发（见 `remote/daemon.py` 的 config 解析）。
  */
 
-export const VERSION = '0.8.2'
+export const VERSION = '0.9.0'
 
 /**
  * Host HTTP 路由表（index.js 注册时必须逐一对应）。
@@ -68,6 +68,12 @@ export const LIMITS = {
   steps: { min: 1, max: 60 },
   cfg: { min: 0, max: 20 },
   count: { min: 1, max: 4 },
+  // 图生图（M3）参考图：maxBytes 是原始图片字节上限（Host 与 daemon 双重校验，
+  // 受 `remoteGenerateMaxBytes`（base64 后体积）约束）；解码后长边超过 maxEdge 由远端
+  // 按比例缩小（不超过 minEdge 的图直接拒绝），避免小图放大出噪点、大图占显存。
+  reference: { maxBytes: 8 * 1024 * 1024, maxEdge: 1536, minEdge: 128 },
+  // 重绘强度：越小越贴近原图，越大越放飞；首期只对 SDXL 家族（supportsImg2Img）开放。
+  strength: { min: 0.2, max: 0.9, step: 0.05, default: 0.6 },
   // Kaggle / torch 侧接受 32 位有符号正整数；两端必须用同一个上界，否则用户输入的
   // seed 会被宿主静默取模改写，导致「带回参数」复现不出同一张图。
   seed: { max: 2147483647 },
@@ -407,6 +413,9 @@ export function daemonContract() {
       seed: LIMITS.seed,
       prompt: LIMITS.prompt,
       negativePrompt: LIMITS.negativePrompt,
+      // 图生图的参考图边界与重绘强度：daemon 依此校验请求（来源与 Host 同一份契约）。
+      reference: LIMITS.reference,
+      strength: LIMITS.strength,
       historyTool: LIMITS.historyTool,
     },
   }

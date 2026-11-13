@@ -101,7 +101,7 @@
 
 ## 五、 v0.9 开发计划（进行中）
 
-> **基线**：`0.8.2`（2026-11-13，v0.9 M1 / M2 已落地；`0.5.0 ~ 0.8.2` 变更详见 [CHANGELOG](../CHANGELOG.md)）。
+> **基线**：`0.9.0`（2026-11-13，v0.9 三个里程碑全部落地；`0.5.0 ~ 0.9.0` 变更详见 [CHANGELOG](../CHANGELOG.md)）。
 > **v0.9 主题**：新手零门槛（试验特性） + 图生图闭环 + 遗留体验与可靠性收口。
 
 ### 1. M1：体验修复与可靠性收口（纯离线可测）
@@ -136,12 +136,17 @@
 
 ### 3. M3：图生图（Img2Img / 参考图垫图重绘）
 
-> **状态：⏳ 下一轮**（M1/M2 已完成；需要真机 2×Tesla T4 验证显存无额外增长）。
+> **状态：✅ 已在 0.9.0 完成（离线全绿；真机显存验收见 [CHANGELOG 0.9.0](../CHANGELOG.md)）**。实现说明见各项末尾。
 
 - **模型能力边界先行**：并非所有运行时都支持 `from_pipe` 零显存派生。`models/*.json` 新增能力标记（如 `supportsImg2Img`），**首期优先对 SDXL 家族（`sdxl` / `sdxl-lora`）开放**，前端对不支持的预设（如 `flux2` / `anima`）置灰并明确提示。
+  - **实现**：9 份模型资产新增 `supportsImg2Img`（7 个 SDXL 家族 true，`flux2-klein-4b` / `anima-light-lavender` false），`tools/build-assets.mjs` 校验并生成到 `shared/models.generated.js`，`publicPresets()` 自动下发客户端；daemon 不信任该标记，按 loader 白名单独立兜底。字段规则写入 `docs/MODEL_ASSET_SPEC.md` §2.2 与 model-asset-intake skill 模板。
 - **契约与远端推理**：
   - `shared/contract.js` 补充 `strength` 边界与参考图尺寸/体积上限（受 `remoteGenerateMaxBytes` 约束）；
   - Host 支持引用画廊已有 `imagen-output/` 作品（严格校验工作区越界）或接收前端上传/缩放后的参考图；
   - `remote/daemon.py` 的 `run_task` 在收到参考图时通过 `AutoPipelineForImage2Image.from_pipe(pipe)` 复用已加载底座执行重绘（不额外占显存），产物 `meta.json` 记录 `sourceImage` 与 `strength`。
+  - **实现**：契约 `LIMITS.reference = { maxBytes: 8 MiB, maxEdge: 1536, minEdge: 128 }` 与 `LIMITS.strength = { min: 0.2, max: 0.9, step: 0.05, default: 0.6 }`，并入 `daemonContract().limits` 与 `remote/contract.json`。Host 在 `JobQueue.submit` 做参考图词法/base64/魔数/体积校验与强度归一，执行期用 `resolveOutputPath` 读取画廊文件（只允许输出目录、拒绝软链接逃逸）后以 job 级 `reference` 下发；`meta.json` 记录 `sourceImage` / `strength`。daemon 提交期只读图片头（loader 白名单、base64、体积、PNG/JPEG、最小长边、强度）→ 400，执行期在加载模型前完整解码一次并等比缩小，再惰性 `from_pipe` 复用底座（`STATE.img2img_pipe`，随切换/释放清空）；`/health` 新增只读 `gpu_memory` 用于真机显存对比；请求体上限按契约参考图上限推导。
 - **工作台交互**：画廊卡片与大图预览新增「以此图重绘」一键带入；创作面板新增精简参考图槽位与重绘强度滑块（未放参考图时文生图界面保持不变）。
+  - **实现**：参考图槽位只在有图时出现（缩略图 + 文件名 + 移除 + 强度滑块），文生图界面零变化；不支持垫图的预设置灰并在生成时拦下（不发请求、不静默丢图）；从画廊带入时若当前预设不支持，自动切到 `sdxl-lightning` 并轻提示。文案中英文各 +13 键。
 - **验收**：契约与客户端单测覆盖边界与降级；真机 `2×Tesla T4` 验证单一会话内「文生图 → 垫图重绘」显存无额外增长。
+  - **离线**：daemon 单测 232 项（+59，含真实 Pillow 可选集成用例）、`host-e2e` 41 项（含参考图全链路与越界拒绝）、`jobs-wait` 23 项（参考图校验/载荷/meta）、客户端逻辑 63 项 / 渲染 64 项 / 文案 396 键全绿。
+  - **真机**：`node test/gpu-live.mjs --preset sdxl-lightning --img2img` 已在 2×Tesla T4 跑通：文生图 15.63s → 垫图重绘 7.0s（`loadSeconds=0`，from_pipe 复用底座），重绘前后 `/health.gpu_memory` 的 `allocated_mb` 7000→7000、`max_allocated_mb` 10233→10233、`reserved_mb` +2 MiB（噪声），**显存无额外增长**；产物与版本快照见 CHANGELOG「真机验收」小节。

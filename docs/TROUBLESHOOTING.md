@@ -192,11 +192,15 @@ LKGR（Last Known Good Revision）是一组**在真实 Kaggle GPU 上跑通过�
 | diffusers | transformers | accelerate | peft | huggingface-hub | 验证模型与设备 | 验证日期 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | 0.43.0 | 5.22.2 | 1.15.0 | 0.21.2 | 1.33.0 | sdxl-lightning（SDXL-LoRA）+ flux2-klein-4b（FLUX.2）+ anima-light-lavender（Anima）/ Kaggle 2×Tesla T4 | 2026-11-13 |
+| 0.43.0 | 5.23.0 | 1.15.0 | 0.21.3 | 1.33.0 | sdxl-lightning 文生图 + 垫图重绘（M3 图生图，同会话 from_pipe 复用底座）/ Kaggle 2×Tesla T4 | 2026-11-13 |
 
 > 同次实测的完整版本快照：python 3.13.16、torch 2.11.0+cu130、safetensors 0.8.0、pillow 13.0.0
 > （`report.json` 的 `versions` 字段）。三个模型在**同一会话**内连续切换均出图成功，
 > 加载耗时分别为 0s / 125.9s / 89.6s，出图 16.2s / 10.1s / 76.3s。
 > 复现命令：`npm run test:gpu -- --presets sdxl-lightning,flux2-klein-4b,anima-light-lavender`。
+> M3 图生图复跑（2026-11-13，同镜像）：`node test/gpu-live.mjs --preset sdxl-lightning --img2img`，
+> 文生图 15.6s → 垫图重绘 7.0s（`loadSeconds=0`，from_pipe 复用底座）；重绘前后 `/health.gpu_memory`
+> `allocated_mb` 7000→7000、`max_allocated_mb` 10233→10233、`reserved_mb` +2（噪声），显存无额外增长。
 
 填写说明：
 
@@ -239,3 +243,18 @@ CLI 与直连两种模式都能读到同一份凭据。
 
 安全提示：`credentials.json` 等价于账号凭据，只落在本机用户目录（目录 0700 / 文件 0600）；不要提交到仓库、
 不要粘贴到 Issue 或聊天里。共享机器上用完可在 Kaggle 账户设置里撤销该 OAuth 会话。
+
+---
+
+## 10. 图生图 / 垫图重绘（M3）
+
+用法：作品画廊卡片或大图预览点「以此图重绘」→ 回到创作面板调整「重绘强度」→ 生成；也可在创作面板手动移除以回到纯文生图。
+
+| 现象 | 排查 |
+| :--- | :--- |
+| 参考图槽位是灰的 / 点生成被拦下 | 当前预设不支持垫图。首期只有 SDXL 家族（`sdxl-lightning`、`hyper-sdxl-8step`、`sdxl-turbo`、`playground-v2.5`、`sdxl-base`、`realvis-v5`、`animagine-xl-3.1`）支持；切到其中一个或移除参考图即可。`flux2-klein-4b` / `anima-light-lavender` 暂不支持 |
+| `invalid_path`（参考图不存在或越界） | 参考图必须存在于工作区 `imagen-output/` 内（画廊作品天然满足）；手动改过工作区、删除了原图或从别处拷来路径时会失败，重新从画廊选图即可 |
+| `invalid_request`（参考图不合法） | 只接受 PNG / JPEG，原始体积 ≤ 8 MiB，长边 ≥ 128；过大的图请先在本地缩小。上传来源（base64）与作品路径二选一 |
+| 重绘结果几乎等于原图 / 变化太大 | 调「重绘强度」：越小越贴近原图，越大越放飞（0.2~0.9）。SDXL Lightning 这类 4 步蒸馏模型在低强度下可改动的步数很少，建议 0.5~0.7 |
+| 重绘 OOM | 与文生图共用底座和显存；若文生图能出图，重绘一般不会额外 OOM。仍失败时降低重绘强度或换更小的方形尺寸 |
+| 想确认没有额外占显存 | 远端 `/health.gpu_memory`（`allocated_mb` / `reserved_mb` / `max_allocated_mb`）可看当前占用；真机脚本 `node test/gpu-live.mjs --preset sdxl-lightning --img2img` 会记录文生图与重绘前后的对比 |

@@ -4,7 +4,7 @@
 > 本文档只描述语义、请求/响应形状与使用约束，不重复维护数值。`node test/check-contract.mjs` 会校验
 > 宿主注册的路由、宿主错误码、客户端文案与本文档是否跟随契约。
 >
-> **版本**：0.8.2（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
+> **版本**：0.9.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
 
 ---
 
@@ -133,6 +133,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | `last_error_code` | string | 远端错误码；命中契约 `ERROR_CODES` 时宿主原样透传（如 `gpu_unavailable`、`oom`），否则回退 `remote_error` |
 | `tunnel_provider` / `tunnel_state` / `tunnel_restarts` | string / string / integer | 会话快照的隧道提供方与重连状态展示 |
 | `versions` | object | 依赖版本快照（python / torch / diffusers / transformers / accelerate / peft / huggingface_hub / safetensors / pillow）；纯版本号、无 token 与路径，供 `npm run test:gpu` 的 report 记录「已知良好版本参考（LKGR）」 |
+| `gpu_memory` | object \| null | 只读显存诊断（M3）：`{ allocated_mb, reserved_mb, max_allocated_mb }`（MiB 取整）；torch 未加载 / CUDA 不可用 / 读取异常时为 `null`。用于真机验证图生图 `from_pipe` 复用底座时显存无额外增长，不参与会话状态判定 |
 
 ---
 
@@ -199,7 +200,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 
 ```json
 {
-  "version": "0.8.2",
+  "version": "0.9.0",
   "defaultPreset": "sdxl-lightning",
   "presets": [
     {
@@ -404,6 +405,23 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | `count` | integer | 1~4，默认 1 |
 | `waitSeconds` | integer | 0~600：>0 时该请求最多等待任务结束 N 秒再返回（默认 0，立即返回） |
 | `autoStart` | boolean | 默认 `true`；`false` 时不自动唤醒会话 |
+| `reference` | object | 可选。图生图参考图（M3）：`{ path?, image?, strength? }`，`path` 与 `image` 二选一；详见下方「图生图参考图」 |
+
+**图生图参考图（M3）**：
+
+- `reference.path`：`imagen-output/` 内作品的工作区相对路径（与 `/imagen-api/file?path=` 同一口径，
+  严格限定在输出目录内、拒绝绝对路径与 `..`）；`reference.image`：前端上传/缩放后的 base64
+  （可带 `data:image/png;base64,` 前缀），两者只能二选一。
+- 体积上限 `LIMITS.reference.maxBytes`（8 MiB 原始字节），只接受 PNG / JPEG；长边上限
+  `LIMITS.reference.maxEdge`（1536）由远端解码后等比缩小，小于 `LIMITS.reference.minEdge` 的图直接拒绝。
+- `reference.strength`：重绘强度，按契约 `LIMITS.strength`（0.2~0.9，步长 0.05）钳制并对齐，默认 `0.6`。
+- 首期只对 `supportsImg2Img = true` 的模型（SDXL 家族）开放；远端对不支持的 loader 返回
+  `400 invalid_request`。参考图是 job 级参数：一张参考图跑整批 `count`（每张 seed 递增）。
+- 校验失败：路径/文件问题 → `400 invalid_path`；格式、体积、强度或模型能力问题 →
+  `400 invalid_request`（执行阶段发现的问题让任务以 `invalid_path` / `invalid_request` 失败，
+  不占用 GPU 加载模型）。
+- 远端任务结果项在原有字段外带 `strength` / `referenceWidth` / `referenceHeight`（送入模型的参考图
+  实际尺寸）；Host 只透传不消费，产物 `meta.json` 用 Host 自己的 `sourceImage` / `strength` 记录出处。
 
 - **响应**：**裸 `Job` 对象**（不是 `{ ok, job }` 包装）。`waitSeconds > 0` 时返回的是等待结束后的快照，
   任务可能仍在 `queued` / `running`。
@@ -419,7 +437,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | `progress` | 仅在 `running` 时非 `null`：`{ done, total }`，`done` 是**已完成的张数**（0 起）。其余状态为 `null`；客户端用 `done + 1` 展示「正在生成第 k/总数 张」 |
 | `cancelRequested` | 是否已收到取消请求（running 合作式停止中为 `true`）；终态/未取消为 `false` |
 | `presetId` | 实际使用的预设 id |
-| `params` | 归一化后的参数：`{ prompt, negativePrompt, width, height, steps, cfg, seed, count }` |
+| `params` | 归一化后的参数：`{ prompt, negativePrompt, width, height, steps, cfg, seed, count }`；图生图任务额外带 `reference: { sourcePath, strength }`（不包含参考图二进制） |
 | `createdAt` / `startedAt` / `finishedAt` | ISO 时间；未发生为 `null` |
 | `seconds` | 生成耗时（秒，1 位小数）或 `null` |
 | `sessionState` | 任务执行时最近的会话状态 |
@@ -461,7 +479,11 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 }
 ```
 
-- **错误**：`400 invalid_prompt`（prompt 为空/超长）、`400 queue_full`（待执行队列已满）、`400 invalid_body`（请求体不是合法 JSON）。
+- **错误**：`400 invalid_prompt`（prompt 为空/超长）、`400 queue_full`（待执行队列已满）、
+  `400 invalid_body`（请求体不是合法 JSON）、`400 invalid_path` / `400 invalid_request`（图生图参考图不合法）。
+
+> **图生图产物**：`meta.json` 在原有字段外记录 `sourceImage`（参考图工作区相对路径；上传来源为 `null`）
+> 与 `strength`（重绘强度），历史条目通过 `params.reference` 读取同一信息。
 
 #### `GET /imagen-api/job?id=<jobId>`
 
@@ -948,3 +970,16 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
    `cli_missing`（提示安装 CLI）的指引卡，登录问题统一走 `auth_required` + 登录主操作。
 4. **兼容与降级**：旧宿主没有 `kaggleTransport` / 登录接口时按 CLI 模式渲染，不弹错误；直连请求失败
    （401 / 网络）按鉴权失败与网络错误分别归类，token 不出现在界面错误详情与诊断文本里。
+
+### 5.9 第六批交互补充（图生图 / 垫图重绘）
+
+1. **参考图槽位**：创作面板仅在已有参考图时出现精简槽位（缩略图 + 文件名 + 「移除」），文生图界面与改造前
+   完全一致；槽位下方是「重绘强度」滑块（契约 `LIMITS.strength`，0.2~0.9、步长 0.05，默认 0.6）。
+2. **能力边界**：首期只有 SDXL 家族（模型资产 `supportsImg2Img = true`）支持垫图；当前预设不支持时，
+   参考图槽位与强度滑块整块置灰并提示「当前模型不支持垫图重绘」，点生成会被**拦下**（提示先切换模型或
+   移除参考图，不发请求、也不静默丢弃参考图）。`flux2` / `anima` 预设保持仅文生图。
+3. **画廊一键带入**：作品画廊卡片与大图预览新增「以此图重绘」：把该作品设为参考图、切回「创作」视图；
+   若当前预设不支持垫图，自动切到支持的预设（优先 `sdxl-lightning`）并轻提示预设名。「带回参数 /
+   生成变体」行为不变。
+4. **连续迭代**：提交成功后参考图保留在表单里，便于对同一张图连续重绘；用户点「移除」才回到纯文生图。
+   参考图与强度随任务参数记录进产物 `meta.json`（`sourceImage` / `strength`），历史回看可知道出处。

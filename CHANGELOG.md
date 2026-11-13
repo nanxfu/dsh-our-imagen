@@ -1,5 +1,37 @@
 # 变更记录
 
+## 0.9.0 — 2026-11-13
+
+> v0.9 第三个里程碑（M3：图生图 / 垫图重绘）的发布版本，也是 v0.9 三个里程碑全部落地的收口版本。
+
+### 改进
+
+- **图生图（垫图重绘）**：工作台现在可以把一张已有作品当参考图重绘（Img2Img）。作品画廊卡片与大图预览新增「以此图重绘」：点击后把该作品设为参考图、切回创作视图（当前预设不支持垫图时自动切到 SDXL Lightning 并轻提示）。创作面板在已有参考图时出现精简槽位（缩略图 + 文件名 + 移除）与「重绘强度」滑块（0.2~0.9、步长 0.05、默认 0.6）；未放参考图时文生图界面与之前完全一致。首期只对 SDXL 家族开放：`flux2` / `anima` 预设置灰，参考图存在时切到不支持垫图的预设会拦下生成并提示，不会静默丢弃参考图。
+- **远端零额外显存复用**：daemon 首次需要垫图时用 `AutoPipelineForImage2Image.from_pipe(STATEx.pipe)` 从已加载的 txt2img 底座复用组件创建 img2img 管线（不重新加载权重、不额外占显存），随切模型 / 释放一起清理；img2img 的 `__call__` 签名单独缓存，生成 kwargs 按它过滤。提交期只读图片头（loader 白名单、base64、原始字节 ≤ 8 MiB、PNG/JPEG、长边 ≥ 128、强度归一）就把错误收敛成 `400 invalid_request`；执行期在加载模型**之前**完整解码一次，长边超过 1536 时等比 LANCZOS 缩小（只缩不放），损坏图按 `invalid_request` 失败且不白占 GPU。`GET /health` 新增只读 `gpu_memory`（`allocated_mb` / `reserved_mb` / `max_allocated_mb`，不可用时 null）用于真机显存对比。
+- **参考图的两条来源**：Host 既支持引用 `imagen-output/` 内作品（`reference.path`，经 `resolveOutputPath` 严格校验，只允许输出目录、拒绝绝对路径与软链接逃逸），也支持前端上传的 base64（`reference.image`，校验体积与 PNG/JPEG 魔数）。出图路由请求体上限按参考图上限单独放宽（其余路由仍是 256 KiB），daemon 的请求体上限也按注入契约推导（旧 Host 无参考图时仍是 8 MB）。
+- **产物可回看垫图出处**：`meta.json` 记录 `sourceImage`（参考图工作区相对路径，上传来源为 null）与 `strength`；任务公开视图 `params.reference = { sourcePath, strength }`，参考图二进制绝不进入 `/state` 轮询。
+- **模型能力标记**：9 份模型资产新增 `supportsImg2Img`（SDXL 家族 true，`flux2-klein-4b` / `anima-light-lavender` false），生成资产与 `publicPresets()` 自动下发；daemon 不信任该标记，按 loader 白名单独立兜底。字段规则写入 `docs/MODEL_ASSET_SPEC.md` §2.2 与 model-asset-intake skill 模板。
+
+### 工程
+
+- 契约：`LIMITS` 新增 `reference = { maxBytes: 8 MiB, maxEdge: 1536, minEdge: 128 }` 与 `strength = { min: 0.2, max: 0.9, step: 0.05, default: 0.6 }`，并入 `daemonContract().limits`（`remote/contract.json` 由生成脚本产出，含新边界）。
+- 测试：`test/daemon-unit.py` 173→232（参考图提交期/执行期校验、等比缩放、from_pipe 惰性缓存与释放、img2img run_task 分支、`/health.gpu_memory`、契约边界不硬编码）；`test/host-e2e.mjs` 40→41（作品参考图走 `/generate` 全链路 + 越界参考图 400）；`test/jobs-wait.mjs` 21→23（参考图入队校验、远端载荷、meta 记录、publicView 不含二进制、无效路径失败码）；`check-client-logic` 59→63、`check-client-render` 57→64（参考图槽位/滑块/移除、画廊与大图带入、请求体 `reference:{path,strength}`、不支持预设拦下、旧宿主不回归）、`check-client-locale` zh/en 各 385→396 键。`npm test` 全绿。
+- 真机验证脚本：`node test/gpu-live.mjs --preset sdxl-lightning --img2img [--strength 0.6]` 先文生图再用该图垫图重绘，报告记录 `loadSeconds`（from_pipe 复用应为 0）、参考图实际尺寸与重绘前后 `/health.gpu_memory`。
+- 版本升到 0.9.0：契约 / `package.json` / `remote/daemon.py` / `test/mock-daemon.py` / `test/tunnel-probe.py` / `remote/contract.json` / `client.js` 同步。
+
+### 文档
+
+- `docs/SPEC.md`：`POST /generate` 新增 `reference` 参数与校验/失败语义、Job `params.reference`、产物 meta 的 `sourceImage` / `strength`、§1.4 `/health.gpu_memory`、新增 §5.9 第六批交互补充（参考图槽位 / 能力边界 / 画廊带入 / 连续迭代）。
+- `docs/ARCHITECTURE.md`：新增 §2.18「图生图（垫图重绘，M3）」——Host 入队校验 → 执行期落盘读取 → 远端头部校验/解码/from_pipe 复用的三段链路与显存要点。
+- `docs/MODEL_ASSET_SPEC.md`：新增 §2.2 图生图能力字段（可标 true 的条件、三方消费与校验口径）。
+- `docs/ROADMAP.md`：v0.9 M3 标记完成并补实现说明，基线更新到 0.9.0。
+- `skills/model-asset-intake/SKILL.md`：字段模板与约束补 `supportsImg2Img`。
+
+### 真机验收
+
+- **M3 图生图（2026-11-13，Kaggle 2×Tesla T4，`node test/gpu-live.mjs --preset sdxl-lightning --img2img`）**：同一会话内先文生图（加载 0s / 出图 15.63s / 1024×1024）再用生成的图垫图重绘（强度 0.6，参考图 1024×1024 → 实际出图 1024×1024，加载 **0s** / 出图 7.0s），证明 `from_pipe` 复用了已加载底座、没有重新加载权重。重绘前后 `/health.gpu_memory`：`allocated_mb` 7000 → 7000、`max_allocated_mb` 10233 → 10233、`reserved_mb` 10776 → 10778（+2 MiB 为噪声），**显存无额外增长**；`reusedBasePipeline=true`、`reservedDeltaMb=2`。产物：`bench-results/gpu-live/2026-11-13T14-43-22/`（`01.png` / `01-img2img.png` / `report.json`）。同次版本快照 python 3.13.16 / torch 2.11.0+cu130 / diffusers 0.43.0 / transformers 5.23.0 / accelerate 1.15.0 / peft 0.21.3 / huggingface-hub 1.33.0 / safetensors 0.8.0 / pillow 13.0.0，已回填 TROUBLESHOOTING 的 LKGR 表。
+- **M2 OAuth**：待用户在本机浏览器完成一次真实 Kaggle 授权后回填（`node tools/kaggle-login.mjs`）。
+
 ## 0.8.2 — 2026-11-13
 
 > v0.9 第二个里程碑（M2：新手零门槛，试验特性）的发布版本。默认仍是稳定的 `kaggle` CLI 路径；直连模式在运行设置里手动开启，可随时切回。

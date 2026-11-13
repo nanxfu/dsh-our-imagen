@@ -217,6 +217,30 @@ Windows 上不再依赖 Python `Scripts` 目录进 PATH。
 `KAGGLE_LOGIN.timeoutMs` 超时；任何阶段的 token / 授权码都不写日志。`GET/POST /imagen-api/kaggle/login`
 只暴露状态与（manual 模式下的）授权链接。
 
+### 2.18 图生图（垫图重绘，M3）
+链路分三段，参考图只在 Host 与远端内存里短暂存在，不进 `/state` 轮询：
+
+1. **Host 入队校验**（`lib/jobs.js`）：`reference` 支持 `path`（`imagen-output/` 内作品）或 `image`
+   （base64，可带 data URL 前缀）二选一；入队前做词法校验（相对路径、拒绝 `..`/绝对路径）、
+   base64/体积/PNG-JPEG 魔数校验与 `strength` 归一（按契约钳制并对齐 step）。非法值立即 400，
+   不占队列位置。`params.reference = { sourcePath, strength }` 进入公开视图，二进制只留在任务内部。
+2. **Host 执行期**：`resolveReferencePayload()` 用 `resolveOutputPath` 校验并读取画廊文件（只允许
+   `imagen-output/` 内、拒绝软链接逃逸），再校验体积与格式，base64 后作为 job 级
+   `reference: { image_b64, strength }` 随每一次远端提交下发（逐张提交，一张参考图跑整批）。
+   产物 `meta.json` 记录 `sourceImage` 与 `strength`。
+3. **远端**（`remote/daemon.py`）：提交期 `parse_reference_spec()` 只读图片头部就收敛
+   「loader 白名单（仅 `sdxl` / `sdxl-lora`）、base64、原始字节上限、PNG/JPEG、最小长边、strength」
+   这些错误（400，不占 GPU）；执行期 `decode_reference_image()` 完整解码恰好一次，
+   长边超过 `contract.limits.reference.maxEdge` 时等比 LANCZOS 缩小并转 RGB。
+   真正的重绘管线用 `AutoPipelineForImage2Image.from_pipe(STATE.pipe)` 从**已加载的底座复用组件**
+   惰性创建（`STATE.img2img_pipe`，切换模型或 `release_pipeline()` 时清空），因此不重复加载权重、
+   不额外占显存；img2img 的 `__call__` 签名单独缓存。
+
+模型能力由 `models/*.json` 的 `supportsImg2Img` 标记（首期仅 SDXL 家族为 true），经生成资产下发到
+客户端用于置灰与提示；daemon 不信任该标记，按 loader 白名单独立兜底。请求体上限方面：daemon 按
+`contract.limits.reference.maxBytes` 推导（base64 膨胀后约 12 MB），Host 的出图路由也单独放宽到同一量级，
+其余路由仍是 256 KiB。
+
 ---
 
 ## 3. 本地脱机调试技巧（不烧 Kaggle 额度）
