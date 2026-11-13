@@ -179,6 +179,44 @@ Kaggle 镜像的包版本会随平台更新，插件里写死版本上限反而�
 
 相关离线断言见 `test/ui-state-host.mjs`（21 项）与客户端 `check-client-*` 的界面态用例。
 
+### 2.16 Kaggle 访问方式：CLI 与 Node 直连（试验特性）
+默认走本机 `kaggle` CLI（`lib/kaggle.js`）。「运行设置 → 高级 → Kaggle 访问方式」可切到试验性的
+Node 直连（`lib/kaggle-direct.js`）：直接调用 Kaggle 的 JSON API（`POST https://api.kaggle.com/v1/<service>.<Service>/<Method>`，
+camelCase 报文，与 `kaggle` CLI 2.x 依赖的 `kagglesdk` 同协议），所有请求经 `lib/net.js` 的 `httpText`
+（内置 fetch 失败自动降级系统 `curl`，继承系统代理）。收益：去掉每次 CLI 调用 9~15 秒的 Python 冷启动，
+Windows 上不再依赖 Python `Scripts` 目录进 PATH。
+
+传输选择由 `lib/kaggle-transport.js` 在**每次调用**时按最新设置解析——工作台切换后，下一次操作或唤醒
+即生效，不需要重载插件。它对 `SessionManager` 暴露的五个出口（`probeKaggle` / `kaggleUsername` /
+`pushKernel` / `kernelStatus` / `kernelLogs`）与 CLI 实现返回同形状，会话状态机完全不知道底层是哪种传输。
+
+直连的凭据解析顺序与 kagglesdk 一致：`KAGGLE_API_TOKEN` 环境变量 → `~/.kaggle/access_token` →
+`~/.kaggle/credentials.json`（OAuth，`access_token` 到期用 `refresh_token` 调
+`users.AccountApiService/GenerateAccessToken` 续期并原子回写 0600）→ `~/.kaggle/kaggle.json`（Basic Auth）。
+401/403 统一归为鉴权失败（`auth_required`），网络错误归 `unknown`；token 只出现在请求头，
+不进入日志、错误详情与对外快照。默认 `cli`，试验特性关闭时行为与改造前完全一致。
+
+### 2.17 内置 OAuth PKCE 登录
+直连模式不要求安装 CLI，登录在宿主侧完成（`lib/kaggle-oauth.js`），协议与 `kaggle auth login` 对齐
+（`kagglesdk` 0.1.38）：
+
+1. 生成 PKCE 的 `code_verifier`（`token_urlsafe(64)` 等价物）与 `code_challenge`
+   （`base64url(sha256(verifier))`，与 kagglesdk 一致保留 `=` 补位）以及随机 `state`；
+2. 打开系统浏览器访问 `https://www.kaggle.com/api/v1/oauth2/authorize`（`client_id=kagglesdk`、
+   `scope=resources.admin:*`、`response_type=code`、`code_challenge_method=S256`），
+   同时在 `127.0.0.1` 的 8000~9000 随机端口监听回环回调；
+3. 回调校验 `state` 后把 `code` 换 token（`security.OAuthService/ExchangeOAuthToken`），再用
+   `security.OAuthService/IntrospectToken` 确认 `active` 并取用户名；
+4. 写入 `~/.kaggle/credentials.json`（`refresh_token` / `access_token` / `access_token_expiration` /
+   `username` / `scopes`，目录 0700、文件 0600、原子写），与 CLI 完全同格式——因此登录一次后，
+   CLI 与直连两种传输都能读到同一份凭据；
+5. 无法打开浏览器（无头 / 远程）时降级为 manual：把授权链接给用户复制到任意浏览器打开，再粘贴
+   授权码完成兑换。
+
+登录管理器是单实例状态机（`idle` / `pending` / `done` / `failed` / `cancelled`），支持取消与
+`KAGGLE_LOGIN.timeoutMs` 超时；任何阶段的 token / 授权码都不写日志。`GET/POST /imagen-api/kaggle/login`
+只暴露状态与（manual 模式下的）授权链接。
+
 ---
 
 ## 3. 本地脱机调试技巧（不烧 Kaggle 额度）

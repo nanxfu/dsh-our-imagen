@@ -1,5 +1,37 @@
 # 变更记录
 
+## 0.8.2 — 2026-11-13
+
+> v0.9 第二个里程碑（M2：新手零门槛，试验特性）的发布版本。默认仍是稳定的 `kaggle` CLI 路径；直连模式在运行设置里手动开启，可随时切回。
+
+### 改进
+
+- **不装 kaggle CLI 也能出图（试验特性）**：运行设置 →「高级」→「Kaggle 访问方式」新增 `cli` / `direct` 开关。直连模式由宿主 Node 进程直接调用 Kaggle JSON API（`POST https://api.kaggle.com/v1/<service>.<Service>/<Method>`），报文逐项对照本机 `kaggle` CLI 2.2.5 / `kagglesdk` 0.1.38 源码实现；所有请求走 `lib/net.js` 复用系统代理 `curl` 兜底，去掉每次 CLI 调用 9~15 秒的 Python 冷启动，Windows 上也不再依赖 Python `Scripts` 目录进 PATH。切换在下次探测 / 唤醒时生效，不需要重载插件。
+- **直连客户端与 CLI 实现同形状**：新增 `lib/kaggle-direct.js` 实现 `probeKaggle` / `kaggleUsername` / `pushKernel` / `kernelStatus` / `kernelLogs`，由 `lib/kaggle-transport.js` 按当前设置注入 `SessionManager`，会话状态机与 `isKernelEnded` 判断零改动。凭据解析顺序为 `KAGGLE_API_TOKEN` → `~/.kaggle/access_token` → `~/.kaggle/credentials.json`（`access_token` 过期用 `refresh_token` 调 `GenerateAccessToken` 续期并原子回写 0600）→ `~/.kaggle/kaggle.json`（Basic Auth）；401/403 归 `auth_required`、网络错误归 `unknown`；token 只进请求头，不进日志、错误详情与对外快照。
+- **内置 OAuth PKCE 登录**：直连模式不需要 CLI，由宿主发起标准 OAuth 2.0 + PKCE（`S256`、`client_id=kagglesdk`、`scope=resources.admin:*`）并拉起系统浏览器，本地 `127.0.0.1:8000~9000` 回环回调校验 `state` 后收码换 token，写入 `~/.kaggle/credentials.json`（OAuth 凭据，含 `refresh_token`，目录 0700 / 文件 0600、原子写），与 `kaggle auth login` 完全同格式——登录一次，CLI 与直连两种模式都能读到同一份凭据。浏览器打不开时自动降级为「复制授权链接 + 粘贴授权码」；支持取消与 5 分钟超时兜底。
+- **登录指引卡与直连展示**：直连模式下 `cli_missing` / `auth_required` 合并为一张「登录 Kaggle」卡：点击「在浏览器中登录 Kaggle」后显示等待授权与「取消」；manual 模式展示可复制链接与授权码输入框；成功后轻提示并自动重跑环境探测，失败可重试。顶栏与探测行的「CLI」字样按当前传输方式显示「直连」，直连模式不再提示安装 CLI。CLI 模式与无新接口的旧宿主保持原有行为。
+- **新增真机验收脚本**：`node tools/kaggle-login.mjs` 复用同一套 OAuth 代码路径完成真实授权（自动备份旧 `credentials.json`），成功后用直连客户端查一次真实配额，不消耗 GPU；`--manual --code <授权码>` 支持无头环境。
+
+### 工程
+
+- 契约新增 `ROUTES.kaggleLogin`（GET）/ `ROUTES.kaggleLoginAction`（POST，共用 `/imagen-api/kaggle/login`）、`KAGGLE_LOGIN`（动作/状态/模式/轮询与超时）与 `SETTINGS.kaggleTransports` / `defaultKaggleTransport`；`/state` 新增 `kaggleTransport`，运行设置视图新增 `kaggleTransport` 字段。路由总览 23 条方法 / 20 个唯一路径，`node test/check-contract.mjs` 11/11 通过。
+- 新增 `lib/kaggle-direct.js`、`lib/kaggle-oauth.js`、`lib/kaggle-transport.js`、`lib/routes/kaggle.js`、`tools/kaggle-login.mjs`；`index.js` 装配传输层与登录路由（卸载时取消进行中的登录并释放回环端口）。
+- 测试：新增 `test/kaggle-direct.mjs`（14 项：请求 URL/Bearer/camelCase 报文、凭据优先级与 refresh 续期、401/网络错误映射、SaveKernel/Status/Logs/quota 映射、token 不泄露）与 `test/kaggle-oauth.mjs`（14 项：PKCE 与 Python 参考向量一致、授权 URL 逐字一致、manual/browser 两种模式、state 校验、取消、超时、降级、失败收敛、token 不进视图与日志）；`test/host-e2e.mjs` 31→40（登录路由 GET/400/405、`/state.kaggleTransport`、设置切换即时生效）；`test/settings-host.mjs` 增加 `kaggleTransport` 默认值 / 保存 / 非法值 / 视图断言；`check-client-locale` zh/en 各 350→385 键、`check-client-logic` 54→59、`check-client-render` 48→57（直连开关保存、登录卡各分支、done 后重跑 probe、CLI 模式不回归）。`npm test` 全绿。
+- 版本升到 0.8.2：契约 / `package.json` / `remote/daemon.py` / `test/mock-daemon.py` / `test/tunnel-probe.py` / `remote/contract.json` / `client.js` 同步；`client.js` 重新构建。
+
+### 文档
+
+- `docs/SPEC.md`：路由总览与 `/state` / 设置视图新增 `kaggleTransport`，新增 §2.6 Kaggle 直连登录接口（`LoginView` 字段、动作与错误语义）与 §5.8 第五批交互补充（直连开关 / 内置 OAuth 登录 / 直连展示 / 兼容降级）。
+- `docs/ARCHITECTURE.md`：新增 §2.16「Kaggle 访问方式：CLI 与 Node 直连（试验特性）」与 §2.17「内置 OAuth PKCE 登录」，写明协议对照来源与安全约束。
+- `docs/TROUBLESHOOTING.md`：新增第 9 节「直连模式与内置 OAuth 登录」排错表（浏览器没弹出 / 授权后仍提示未登录 / 401、端口占用、切回 CLI、安全提示）。
+- `README.md` / `README.en.md`：三步上手第一步补充「试验特性：不装 CLI 也能用」的开启方式与凭据位置。
+- `docs/ROADMAP.md`：v0.9 M2 标记为已完成并逐项补实现说明；M3（图生图）为下一轮。
+
+### 真机验收
+
+- 离线部分：`npm test` 全绿；直连报文与本机 CLI 抓包逐项核对（例如 `GetAcceleratorQuotaStatistics` 返回 `{quotaRefreshTime, gpuQuota:{timeUsed:"25480.101s", totalTimeAllowed:"108000s"}}`）。
+- 真实 OAuth：待用户在本机浏览器完成一次真实 Kaggle 授权后回填（`node tools/kaggle-login.mjs`）。
+
 ## 0.8.1 — 2026-11-13
 
 > v0.9 第一个里程碑（M1：体验修复与可靠性收口）的发布版本；v0.9 主题里的 M2（Node 直连 Kaggle + 内置 OAuth，试验特性）与 M3（图生图）仍按 [ROADMAP](docs/ROADMAP.md) 规划推进。

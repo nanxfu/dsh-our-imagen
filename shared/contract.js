@@ -12,7 +12,7 @@
  *    随注入配置下发（见 `remote/daemon.py` 的 config 解析）。
  */
 
-export const VERSION = '0.8.1'
+export const VERSION = '0.8.2'
 
 /**
  * Host HTTP 路由表（index.js 注册时必须逐一对应）。
@@ -46,6 +46,9 @@ export const ROUTES = {
   // 工作台界面状态（高级设置折叠等）：GET 读归一化视图，POST 合并保存白名单字段。
   uiState: { method: 'GET', path: '/imagen-api/ui-state' },
   uiStateSave: { method: 'POST', path: '/imagen-api/ui-state' },
+  // Kaggle 直连登录（试验特性）：GET 读登录态，POST 按 action 发起 / 取消 / 提交授权码。
+  kaggleLogin: { method: 'GET', path: '/imagen-api/kaggle/login' },
+  kaggleLoginAction: { method: 'POST', path: '/imagen-api/kaggle/login' },
 }
 
 /** 客户端请求用的相对路径（与改造前 `request('imagen-api/state')` 完全同形）。 */
@@ -154,6 +157,29 @@ export const SETTINGS = {
   maxItemChars: 256,
   // `publicSettingsView()` 的脱敏字段取值域：settings=用户在抽屉里设置的，config=宿主插件配置。
   hfTokenSources: ['settings', 'config', 'none'],
+  // Kaggle 访问方式：cli = 调用本机 `kaggle` CLI（默认、稳定）；direct = Node 直连 Kaggle
+  // JSON API（试验特性，设置抽屉高级区开关）。切换在下次操作/唤醒时生效，不需要重载插件。
+  kaggleTransports: ['cli', 'direct'],
+  defaultKaggleTransport: 'cli',
+}
+
+/**
+ * Kaggle 直连登录（试验特性）的共享口径：`GET/POST /imagen-api/kaggle/login`。
+ *
+ * POST 用 `action` 区分动作：`start` 发起浏览器授权（本地回环回调收码），`cancel` 取消等待，
+ * `submit-code` 在浏览器打不开 / 无头环境时用粘贴授权码兜底；GET 恒为当前登录态。
+ * 登录成功后凭据写入 `~/.kaggle/credentials.json`（OAuth，含 refresh_token），
+ * 与 CLI 2.x 的 `kaggle auth login` 完全同格式。
+ */
+export const KAGGLE_LOGIN = {
+  actions: ['start', 'cancel', 'submit-code'],
+  // idle 未开始 / pending 等待浏览器授权 / done 成功 / failed 失败 / cancelled 用户取消
+  states: ['idle', 'pending', 'done', 'failed', 'cancelled'],
+  // browser = 拉起本机浏览器 + 本地回环回调；manual = 复制授权链接 + 粘贴授权码。
+  modes: ['browser', 'manual'],
+  // 客户端轮询登录态的间隔；host 等待授权的总时限（超时转 failed，可重新发起）。
+  pollMs: 1500,
+  timeoutMs: 5 * 60 * 1000,
 }
 
 /**

@@ -101,7 +101,7 @@
 
 ## 五、 v0.9 开发计划（进行中）
 
-> **基线**：`0.8.1`（2026-11-13，v0.9 M1 已落地；`0.5.0 ~ 0.8.1` 变更详见 [CHANGELOG](../CHANGELOG.md)）。
+> **基线**：`0.8.2`（2026-11-13，v0.9 M1 / M2 已落地；`0.5.0 ~ 0.8.2` 变更详见 [CHANGELOG](../CHANGELOG.md)）。
 > **v0.9 主题**：新手零门槛（试验特性） + 图生图闭环 + 遗留体验与可靠性收口。
 
 ### 1. M1：体验修复与可靠性收口（纯离线可测）
@@ -119,19 +119,24 @@
   - 校准 `auth_required` 指引文案：明确 `kaggle auth login` 写入 `~/.kaggle/credentials.json`（OAuth 凭据，靠 `refresh_token` 自动续期），同时兼容网页端手动生成的 `~/.kaggle/access_token` 与旧版 `kaggle.json`——**实现**：客户端拆出三个路径常量，`GuidanceCard`、zh/en 字典与 `lib/kaggle.js` 的探测说明统一口径。
   - 视体量评估是否一并补齐工作区对话历史持久化——**评估结论：本轮不做**。`useChatThread` 的消息里混有任务状态气泡与图片 URL，直接落盘需要额外的消息序列化版本、恢复时的中断态归一（`pending` / `running` 气泡在重启后必须收敛为可读状态）与图片失效处理；本轮已把通用的界面态持久化通道建好，对话历史作为独立批次排在 M1 之后再评估，避免把「界面偏好」与「业务数据」混进同一个文件。
 
-### 2. M2：新手零门槛 — Node.js 直连 Kaggle 与内置 OAuth 授权（试验特性，规划中）
+### 2. M2：新手零门槛 — Node.js 直连 Kaggle 与内置 OAuth 授权（试验特性）
 
-> **状态：⏳ 下一轮**（M1 已为这一步打好凭据口径与指引卡基础）。
+> **状态：✅ 已在 0.8.2 完成（离线全绿；真机 OAuth 验收见下方结论）**。实现说明见各项末尾。
 
 - **定位与隔离**：作为 **试验特性（Feature Flag）** 接入，默认保持现有 `kaggle` CLI 路径不变，零回归风险；在设置抽屉高级区提供开关（`experimentalDirectKaggle` / `kaggleTransport`）。
+  - **实现**：契约新增 `SETTINGS.kaggleTransports = ['cli','direct']` 与 `defaultKaggleTransport: 'cli'`；运行设置抽屉「高级」区新增「Kaggle 访问方式」开关（保存字段 `kaggleTransport`），`/state` 暴露当前生效值。`lib/kaggle-transport.js` 在**每次调用**时读最新设置选择实现，切换后下一次探测 / 唤醒即生效，会话状态机零改动；默认 `cli` 行为与改造前完全一致。
 - **直连客户端（`lib/kaggle-direct.js`）**：实现与 `lib/kaggle.js` 相同的调用契约（`probeKaggle`、`kaggleUsername`、`pushKernel`、`kernelStatus`、`kernelLogs`），由 `SessionManager` 通过 `deps` 注入切换；全部请求走 `lib/net.js` 复用系统代理 `curl` 兜底，消除每次 CLI 调用 9~15 秒的 Python 冷启耗时与 Windows `Scripts` PATH 困扰。
+  - **实现**：逐项对照本机 `kaggle` CLI 2.2.5 / `kagglesdk` 0.1.38 源码实现 JSON API 协议（`POST https://api.kaggle.com/v1/<service>.<Service>/<Method>`、camelCase 报文、`timedelta` 的 `<seconds>s` 序列化、enum name 序列化）；凭据顺序为 `KAGGLE_API_TOKEN` → `access_token` → `credentials.json`（过期用 `refresh_token` 调 `GenerateAccessToken` 续期并原子回写 0600）→ `kaggle.json` Basic；401/403 → `auth_required`，网络错误 → `unknown`；`probeKaggle` 的 `cli` 返回 `{ present: true, direct: true }`，客户端不再误出 `cli_missing`。离线断言 14 项见 `test/kaggle-direct.mjs`（含真实抓包核对的 URL/报文形状）。
 - **内置 OAuth PKCE 登录**：由宿主发起标准 OAuth 2.0 + PKCE（`S256`、`client_id="kagglesdk"`）并拉起系统浏览器授权；回调收码换取 Token 后写入 `~/.kaggle/credentials.json`（权限 `0600`，不写工作区 `.imagen/`、不进日志与诊断），并兼容读取已有 `access_token` / `kaggle.json`。无法打开本地回调的远端无头环境保留复制 URL + 粘贴授权码兜底。
+  - **实现**：`lib/kaggle-oauth.js` 单实例登录状态机（`KAGGLE_LOGIN` 契约：`idle/pending/done/failed/cancelled`、`start/cancel/submit-code`、`browser/manual`、`pollMs` / `timeoutMs`），PKCE 与授权 URL 编码逐字对齐 `kaggle_oauth.py`（challenge 保留 `=` 补位）；`127.0.0.1:8000~9000` 回环回调校验 `state`，浏览器打不开自动降级 manual；`GET/POST /imagen-api/kaggle/login` 只暴露状态与授权链接。离线断言 14 项见 `test/kaggle-oauth.mjs`；真机验收脚本 `node tools/kaggle-login.mjs` 复用同一代码路径（备份旧凭据 → 真实授权 → 直连查配额）。
 - **指引卡联动**：开启试验开关时，`cli_missing` / `auth_required` 指引卡主操作直接切为「在浏览器中登录 Kaggle」（支持进行中状态、取消与超时保护），完成后自动重跑 `probe` 刷新状态。
+  - **实现**：直连模式下两张卡合并为登录卡：pending 显示「正在等待浏览器完成授权…」+ 取消；manual 模式显示可复制授权链接 + 授权码输入 + 提交；done 自动重跑 probe 并轻提示；失败/取消可重试；超时由宿主收敛为 `failed`。CLI 模式与旧宿主行为不变（客户端测试 57 项、逻辑测试 59 项覆盖）。
 - **验收**：离线 mock HTTP 覆盖全部直连分支与边界；真机使用真实 Kaggle 账号验证无 CLI 环境下「一键登录 → 唤醒 → 出图」全链路。
+  - **验收结果**：离线全绿；真机 OAuth 授权 + 直连配额探测结果见 [CHANGELOG 0.8.2](../CHANGELOG.md) 的「真机验收」小节（本行在验收完成后回填）。
 
 ### 3. M3：图生图（Img2Img / 参考图垫图重绘）
 
-> **状态：⏳ 规划中**（排在 M2 之后；需要真机 2×Tesla T4 验证显存无额外增长）。
+> **状态：⏳ 下一轮**（M1/M2 已完成；需要真机 2×Tesla T4 验证显存无额外增长）。
 
 - **模型能力边界先行**：并非所有运行时都支持 `from_pipe` 零显存派生。`models/*.json` 新增能力标记（如 `supportsImg2Img`），**首期优先对 SDXL 家族（`sdxl` / `sdxl-lora`）开放**，前端对不支持的预设（如 `flux2` / `anima`）置灰并明确提示。
 - **契约与远端推理**：

@@ -4,7 +4,7 @@
 > 本文档只描述语义、请求/响应形状与使用约束，不重复维护数值。`node test/check-contract.mjs` 会校验
 > 宿主注册的路由、宿主错误码、客户端文案与本文档是否跟随契约。
 >
-> **版本**：0.8.1（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
+> **版本**：0.8.2（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
 
 ---
 
@@ -143,7 +143,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 
 > **例外**：`GET /imagen-api/file` 返回图片二进制流（`image/png` 等），不是 JSON。
 
-路由总览（21 条方法 / 19 个唯一路径，以 `shared/contract.js` 的 `ROUTES` 为准；同一 path 的 GET/POST 各占一行）：
+路由总览（23 条方法 / 20 个唯一路径，以 `shared/contract.js` 的 `ROUTES` 为准；同一 path 的 GET/POST 各占一行）：
 
 | 方法 | 路径 | 用途 |
 | :--- | :--- | :--- |
@@ -168,6 +168,8 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | POST | `/imagen-api/settings` | 保存运行设置（空闲关机 / 加速器 / HF Token / 预挂载 / 依赖约束） |
 | GET | `/imagen-api/ui-state` | 读取工作台界面状态（高级设置折叠等白名单字段） |
 | POST | `/imagen-api/ui-state` | 保存工作台界面状态（合并白名单字段） |
+| GET | `/imagen-api/kaggle/login` | 读取 Kaggle 直连登录态（试验特性） |
+| POST | `/imagen-api/kaggle/login` | 发起 / 取消登录，或提交粘贴的授权码（试验特性） |
 
 ### 2.1 会话与状态
 
@@ -191,12 +193,13 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | `lastJob` | 最近一条完成/失败的任务，或 `null` |
 | `queue` | `{ running: id \| null, pending: number }` |
 | `devMode` | 是否通过 `devEndpoint` 走本地联调 |
+| `kaggleTransport` | 当前生效的 Kaggle 访问方式：`cli`（本机 `kaggle` CLI，默认）或 `direct`（Node 直连 Kaggle API，试验特性） |
 
 - **响应示例**：
 
 ```json
 {
-  "version": "0.8.1",
+  "version": "0.8.2",
   "defaultPreset": "sdxl-lightning",
   "presets": [
     {
@@ -630,6 +633,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | `datasetSources` | string[] | 预挂载 Kaggle Dataset（`owner/dataset`），去空去重、最多 32 项 |
 | `pipConstraints` | string[] | pip 依赖约束（如 `diffusers==0.31.0`），去空去重、最多 32 项 |
 | `localModels` | object | 本地权重映射 `repo → 容器内目录`（值必须以 `/` 开头），最多 32 项 |
+| `kaggleTransport` | string | Kaggle 访问方式：`cli`（默认）或 `direct`（试验特性），取值域 `SETTINGS.kaggleTransports`；下次唤醒/探测生效 |
 
 - **响应**：`{ "ok": true, "settings": SettingsView }`（与保存后的生效值一致）。
 - **错误**：`400 invalid_body`（请求体不是合法 JSON 或不是对象）、`400 invalid_request`（字段值不合法）。
@@ -644,6 +648,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | `localModels` | 当前生效的本地权重映射 |
 | `hasHfToken` | 是否已配置 HuggingFace Token（布尔） |
 | `hfTokenSource` | `settings`（抽屉里设置的）/ `config`（宿主插件配置）/ `none` |
+| `kaggleTransport` | 当前生效的 Kaggle 访问方式（`cli` / `direct`） |
 | `effectiveOnNextSession` | 当前远端实例正在运行、改动要到下次唤醒才生效时为 `true` |
 
 > 设置改动对**下一次** `session.start()` 生效：宿主要在构造下发配置前读取合并后的最新设置，
@@ -685,6 +690,47 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 > **实现约束（同 path 的 GET/POST）**：与 `/imagen-api/settings` 相同，DSH 宿主的 exact 路由表
 > 以 path 为键、同一 path 不允许注册两次，因此只注册一条路由、用 `method: [GET, POST]` 在 handler
 > 内按方法分发；方法不匹配时返回 `405` 且 `Allow: GET, POST`。
+
+### 2.6 Kaggle 直连登录（试验特性，kaggle/login）
+
+直连模式（`kaggleTransport = direct`）下不需要本机安装 `kaggle` CLI：宿主用标准 OAuth 2.0 + PKCE
+（`client_id=kagglesdk`、`S256`、`scope=resources.admin:*`）完成授权。浏览器模式由宿主拉起系统浏览器，
+并在本机回环端口监听回调；无法打开浏览器（无头环境等）时降级为「复制授权链接 + 粘贴授权码」。
+成功后凭据写入 `%USERPROFILE%\.kaggle\credentials.json`（OAuth 凭据，含 `refresh_token`；目录 0700 /
+文件 0600、同目录临时文件 + `rename` 原子写），与 `kaggle auth login` 完全同格式；`access_token` 过期时
+宿主自动用 `refresh_token` 续期。token 不进入任何日志与对外快照。
+
+#### `GET /imagen-api/kaggle/login`
+
+- **响应**：`{ "ok": true, "login": LoginView }`
+
+#### `POST /imagen-api/kaggle/login`
+
+- **请求体**：
+
+| `action` | 说明 |
+| :--- | :--- |
+| `start` | 发起登录（已有进行中的登录时直接返回当前态） |
+| `cancel` | 取消等待中的登录 |
+| `submit-code` | `manual` 模式下提交浏览器里拿到的授权码（必须带 `code`） |
+
+- **响应**：`{ "ok": true, "login": LoginView }`
+- **错误**：`400 invalid_request`（`action` 不在契约 `KAGGLE_LOGIN.actions` 内，或 `submit-code` 缺少 `code`）。
+
+`LoginView`：
+
+| 字段 | 说明 |
+| :--- | :--- |
+| `state` | `idle` / `pending` / `done` / `failed` / `cancelled`（取值域契约 `KAGGLE_LOGIN.states`） |
+| `mode` | `browser` / `manual`（契约 `KAGGLE_LOGIN.modes`） |
+| `url` | 需要用户手动打开的授权链接；`manual` 模式必填，其它情况为 `null` |
+| `message` | 失败原因（可读、已脱敏）；非失败态为 `null` |
+| `username` | 成功后回填的 Kaggle 用户名 |
+| `startedAt` / `finishedAt` | ISO 时间（未开始 / 未结束为 `null`） |
+
+客户端按契约 `KAGGLE_LOGIN.pollMs` 轮询 GET 直到进入终态；超过 `KAGGLE_LOGIN.timeoutMs` 由宿主收敛为
+`failed`。登录接口与传输方式解耦：CLI 模式下也能调用（`kaggle auth login` 与直连写同一份凭据文件），
+界面只在直连模式下把 `cli_missing` / `auth_required` 指引卡的主操作切为「在浏览器中登录 Kaggle」。
 
 ---
 
@@ -888,3 +934,17 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 3. **凭据指引三口径**：`auth_required` 卡与 `/probe` 的说明使用同一口径——`kaggle auth login` 写入
    OAuth 凭据（`credentials.json`，含 `refresh_token` 自动续期）；网页端生成的 API Token 可保存为
    `access_token`；旧版 CLI 的 `kaggle.json` 仍兼容。三个路径都由客户端常量提供，文案里不写死反斜杠。
+
+### 5.8 第五批交互补充（直连开关 / 内置 OAuth 登录）
+
+1. **Kaggle 访问方式开关**：运行设置抽屉「高级」区新增「Kaggle 访问方式」：`cli`（调用本机 kaggle CLI，
+   默认、稳定）与 `direct`（直连 Kaggle，试验特性）。切到直连时提示无需安装 kaggle CLI、登录凭据写入
+   `%USERPROFILE%\.kaggle\credentials.json`；改动在下次唤醒 / 探测时生效，可随时切回 CLI。
+2. **内置 OAuth 登录**：直连模式下 `cli_missing` / `auth_required` 指引卡主操作改为「在浏览器中登录 Kaggle」：
+   点击后显示「正在等待浏览器完成授权…」与「取消」；无法打开浏览器时切换为 manual 模式，展示可复制的
+   授权链接与授权码输入框。成功后轻提示并自动重跑环境探测；失败给出可读原因可重试；整段流程受
+   `KAGGLE_LOGIN.timeoutMs` 约束。
+3. **直连模式展示**：顶栏/探测行的「CLI」字样改按当前传输方式显示「直连」；直连模式下不再出现
+   `cli_missing`（提示安装 CLI）的指引卡，登录问题统一走 `auth_required` + 登录主操作。
+4. **兼容与降级**：旧宿主没有 `kaggleTransport` / 登录接口时按 CLI 模式渲染，不弹错误；直连请求失败
+   （401 / 网络）按鉴权失败与网络错误分别归类，token 不出现在界面错误详情与诊断文本里。

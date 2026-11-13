@@ -159,6 +159,9 @@ var zh = {
   "studio.compute.speedLine": "云端模型实测：单张约",
   "studio.compute.authTooltip": "Kaggle 账号必须完成手机号绑定，未绑定的账号无法使用 GPU。",
   "studio.probe.cli": "命令行",
+  "studio.probe.direct": "直连",
+  "studio.probe.directOk": "直连正常",
+  "studio.probe.directLoginRequired": "直连未登录",
   "studio.probe.account": "账号",
   "studio.probe.quota": "配额",
   "studio.probe.ok": "环境检查通过",
@@ -265,6 +268,10 @@ var zh = {
   "studio.settings.accelerator.label": "GPU 加速器",
   "studio.settings.accelerator.NvidiaTeslaT4": "2× Tesla T4（默认推荐）",
   "studio.settings.accelerator.NvidiaTeslaP100": "Tesla P100",
+  "studio.settings.kaggleTransport.label": "Kaggle 访问方式",
+  "studio.settings.kaggleTransport.option.cli": "本机 kaggle CLI（默认）",
+  "studio.settings.kaggleTransport.option.direct": "直连 Kaggle（试验特性）",
+  "studio.settings.kaggleTransport.directHint": "直连模式不需要安装 kaggle CLI；登录凭据写入 {path}。切换在下次唤醒或下次环境检查时生效。",
   "studio.settings.section.download": "模型下载与限流防护",
   "studio.settings.hfToken.label": "HuggingFace Token",
   "studio.settings.hfToken.placeholder": "粘贴 Token 可避免匿名限流",
@@ -331,6 +338,34 @@ var zh = {
   "studio.guidance.auth.credentialHint": "kaggle auth login 会把 OAuth 凭据写入 {path}（含 refresh_token，过期可自动续期）；也可使用 Kaggle 网页生成的 API Token 保存为 {token}；旧版 CLI 仍兼容 {legacy}。",
   "studio.guidance.auth.copyLogin": "复制登录命令",
   "studio.guidance.auth.copied": "已复制登录命令",
+  "studio.guidance.auth.directTitle": "Kaggle 账号未登录或凭据不可用",
+  "studio.guidance.auth.directHint": "直接访问 Kaggle 不需要安装 kaggle CLI；登录成功后凭据写入 {path}，可随时重新发起。",
+  "studio.guidance.auth.loginAction": "在浏览器中登录 Kaggle",
+  "studio.guidance.auth.retry": "重新发起登录",
+  "studio.guidance.auth.waiting": "正在等待浏览器完成授权…",
+  "studio.guidance.auth.waitingManual": "浏览器没有自动打开？复制下面的授权链接，在浏览器中完成授权后把授权码粘贴到下面。",
+  "studio.guidance.auth.cancel": "取消登录",
+  "studio.guidance.auth.cancelled": "已取消登录，可重新发起。",
+  "studio.guidance.auth.loginDone": "Kaggle 登录成功",
+  "studio.guidance.auth.loginDoneWithUser": "Kaggle 登录成功：{username}",
+  "studio.guidance.auth.failed": "登录失败：{reason}",
+  "studio.guidance.auth.copyUrl": "复制授权链接",
+  "studio.guidance.auth.urlCopied": "已复制授权链接",
+  "studio.guidance.auth.codeLabel": "授权码",
+  "studio.guidance.auth.codePlaceholder": "粘贴浏览器中显示的授权码",
+  "studio.guidance.auth.codeSubmit": "提交授权码",
+  "studio.guidance.auth.codeEmpty": "授权码不能为空",
+  "studio.guidance.auth.codeTooShort": "授权码长度不足，请确认粘贴完整",
+  "studio.guidance.auth.codeTooLong": "授权码过长，请只粘贴授权码本身",
+  "studio.guidance.auth.codeFormat": "授权码包含无法识别的字符",
+  "studio.guidance.auth.reason.timeout": "等待浏览器授权超时，可重新发起。",
+  "studio.guidance.auth.reason.state": "授权回调校验失败，请重新发起登录。",
+  "studio.guidance.auth.reason.browser": "无法自动打开浏览器，请改用粘贴授权码。",
+  "studio.guidance.auth.reason.exchange": "授权码换取凭据失败，请重新发起登录。",
+  "studio.guidance.auth.reason.network": "网络连接失败，登录没有完成。",
+  "studio.guidance.auth.reason.unavailable": "当前宿主不支持直连登录（接口不可用）。",
+  "studio.guidance.auth.reason.request": "登录请求失败，请稍后重试。",
+  "studio.guidance.auth.reason.unknown": "登录没有完成。",
   "studio.guidance.gpu.title": "云端没有拿到 GPU",
   "studio.guidance.gpu.action": "打开 Kaggle 账户设置",
   "studio.guidance.gpu.hint": "请确认 Kaggle 账号已完成手机号验证，并在账户设置中启用 GPU 加速器，然后重新唤醒云端。",
@@ -536,6 +571,9 @@ var en = {
   "studio.compute.speedLine": "Measured on the loaded model: about",
   "studio.compute.authTooltip": "The Kaggle account needs a linked phone number; unverified accounts cannot use the GPU.",
   "studio.probe.cli": "CLI",
+  "studio.probe.direct": "Direct",
+  "studio.probe.directOk": "Direct OK",
+  "studio.probe.directLoginRequired": "Direct, not signed in",
   "studio.probe.account": "Account",
   "studio.probe.quota": "Quota",
   "studio.probe.ok": "Environment check passed",
@@ -642,6 +680,10 @@ var en = {
   "studio.settings.accelerator.label": "GPU accelerator",
   "studio.settings.accelerator.NvidiaTeslaT4": "2× Tesla T4 (recommended)",
   "studio.settings.accelerator.NvidiaTeslaP100": "Tesla P100",
+  "studio.settings.kaggleTransport.label": "Kaggle access method",
+  "studio.settings.kaggleTransport.option.cli": "Local kaggle CLI (default)",
+  "studio.settings.kaggleTransport.option.direct": "Direct Kaggle (experimental)",
+  "studio.settings.kaggleTransport.directHint": "Direct mode does not require the kaggle CLI; sign-in credentials are written to {path}. The change takes effect at the next wake-up or environment check.",
   "studio.settings.section.download": "Model downloads and rate limits",
   "studio.settings.hfToken.label": "HuggingFace token",
   "studio.settings.hfToken.placeholder": "Paste a token to avoid anonymous rate limits",
@@ -708,6 +750,34 @@ var en = {
   "studio.guidance.auth.credentialHint": "kaggle auth login writes OAuth credentials to {path} (with a refresh_token, so it renews automatically). You can also save an API token generated on the Kaggle website as {token}; older CLIs still accept {legacy}.",
   "studio.guidance.auth.copyLogin": "Copy login command",
   "studio.guidance.auth.copied": "Login command copied",
+  "studio.guidance.auth.directTitle": "The Kaggle account is not signed in or its credentials are unusable",
+  "studio.guidance.auth.directHint": "Direct Kaggle access does not require the kaggle CLI. After sign-in the credentials are written to {path}; you can start again at any time.",
+  "studio.guidance.auth.loginAction": "Sign in to Kaggle in the browser",
+  "studio.guidance.auth.retry": "Start sign-in again",
+  "studio.guidance.auth.waiting": "Waiting for the browser to finish authorization…",
+  "studio.guidance.auth.waitingManual": "Browser did not open automatically? Copy the authorization link below, finish authorization in the browser, then paste the code here.",
+  "studio.guidance.auth.cancel": "Cancel sign-in",
+  "studio.guidance.auth.cancelled": "Sign-in cancelled. You can start again.",
+  "studio.guidance.auth.loginDone": "Kaggle sign-in succeeded",
+  "studio.guidance.auth.loginDoneWithUser": "Kaggle sign-in succeeded: {username}",
+  "studio.guidance.auth.failed": "Sign-in failed: {reason}",
+  "studio.guidance.auth.copyUrl": "Copy authorization link",
+  "studio.guidance.auth.urlCopied": "Authorization link copied",
+  "studio.guidance.auth.codeLabel": "Authorization code",
+  "studio.guidance.auth.codePlaceholder": "Paste the code shown in the browser",
+  "studio.guidance.auth.codeSubmit": "Submit code",
+  "studio.guidance.auth.codeEmpty": "The authorization code is required",
+  "studio.guidance.auth.codeTooShort": "The authorization code is too short; make sure it is complete",
+  "studio.guidance.auth.codeTooLong": "The authorization code is too long; paste only the code itself",
+  "studio.guidance.auth.codeFormat": "The authorization code contains unsupported characters",
+  "studio.guidance.auth.reason.timeout": "Timed out waiting for browser authorization. You can start again.",
+  "studio.guidance.auth.reason.state": "The authorization callback failed validation. Start the sign-in again.",
+  "studio.guidance.auth.reason.browser": "Could not open the browser automatically; paste the authorization code instead.",
+  "studio.guidance.auth.reason.exchange": "Could not exchange the authorization code for credentials. Start again.",
+  "studio.guidance.auth.reason.network": "The network request failed; sign-in did not complete.",
+  "studio.guidance.auth.reason.unavailable": "This host does not support direct sign-in (endpoint unavailable).",
+  "studio.guidance.auth.reason.request": "The sign-in request failed. Try again later.",
+  "studio.guidance.auth.reason.unknown": "Sign-in did not complete.",
   "studio.guidance.gpu.title": "The cloud instance did not get a GPU",
   "studio.guidance.gpu.action": "Open Kaggle account settings",
   "studio.guidance.gpu.hint": "Make sure your Kaggle account has a verified phone number and that the GPU accelerator is enabled in account settings, then wake the cloud again.",
@@ -1072,7 +1142,7 @@ function jobColor(status) {
 }
 
 // shared/contract.js
-var VERSION = "0.8.1";
+var VERSION = "0.8.2";
 var ROUTES = {
   state: { method: "GET", path: "/imagen-api/state" },
   probe: { method: "POST", path: "/imagen-api/probe" },
@@ -1099,7 +1169,10 @@ var ROUTES = {
   settingsSave: { method: "POST", path: "/imagen-api/settings" },
   // 工作台界面状态（高级设置折叠等）：GET 读归一化视图，POST 合并保存白名单字段。
   uiState: { method: "GET", path: "/imagen-api/ui-state" },
-  uiStateSave: { method: "POST", path: "/imagen-api/ui-state" }
+  uiStateSave: { method: "POST", path: "/imagen-api/ui-state" },
+  // Kaggle 直连登录（试验特性）：GET 读登录态，POST 按 action 发起 / 取消 / 提交授权码。
+  kaggleLogin: { method: "GET", path: "/imagen-api/kaggle/login" },
+  kaggleLoginAction: { method: "POST", path: "/imagen-api/kaggle/login" }
 };
 function clientPath(route) {
   return route.path.replace(/^\//, "");
@@ -1191,7 +1264,21 @@ var SETTINGS = {
   maxItems: 32,
   maxItemChars: 256,
   // `publicSettingsView()` 的脱敏字段取值域：settings=用户在抽屉里设置的，config=宿主插件配置。
-  hfTokenSources: ["settings", "config", "none"]
+  hfTokenSources: ["settings", "config", "none"],
+  // Kaggle 访问方式：cli = 调用本机 `kaggle` CLI（默认、稳定）；direct = Node 直连 Kaggle
+  // JSON API（试验特性，设置抽屉高级区开关）。切换在下次操作/唤醒时生效，不需要重载插件。
+  kaggleTransports: ["cli", "direct"],
+  defaultKaggleTransport: "cli"
+};
+var KAGGLE_LOGIN = {
+  actions: ["start", "cancel", "submit-code"],
+  // idle 未开始 / pending 等待浏览器授权 / done 成功 / failed 失败 / cancelled 用户取消
+  states: ["idle", "pending", "done", "failed", "cancelled"],
+  // browser = 拉起本机浏览器 + 本地回环回调；manual = 复制授权链接 + 粘贴授权码。
+  modes: ["browser", "manual"],
+  // 客户端轮询登录态的间隔；host 等待授权的总时限（超时转 failed，可重新发起）。
+  pollMs: 1500,
+  timeoutMs: 5 * 60 * 1e3
 };
 var UI_STATE = {
   version: 1,
@@ -1347,6 +1434,116 @@ async function request(relative, init) {
   }
 }
 
+// src/logic/kaggleLogin.js
+var LOGIN_ACTIONS = KAGGLE_LOGIN.actions;
+var LOGIN_STATES = KAGGLE_LOGIN.states;
+var LOGIN_MODES = KAGGLE_LOGIN.modes;
+var LOGIN_POLL_MS = KAGGLE_LOGIN.pollMs;
+var LOGIN_TIMEOUT_MS = KAGGLE_LOGIN.timeoutMs;
+var LOGIN_CODE_MIN_CHARS = 8;
+var LOGIN_CODE_MAX_CHARS = 4096;
+var LOGIN_CODE_PATTERN = /^[A-Za-z0-9._~+/=-]+$/;
+function trimmedOrNull(value) {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text ? text : null;
+}
+function emptyLoginView() {
+  return {
+    state: "idle",
+    mode: "browser",
+    url: null,
+    message: null,
+    username: null,
+    startedAt: null,
+    finishedAt: null
+  };
+}
+function normalizeLoginView(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const state = LOGIN_STATES.includes(source.state) ? source.state : "idle";
+  const mode = LOGIN_MODES.includes(source.mode) ? source.mode : "browser";
+  const rawUrl = trimmedOrNull(source.url);
+  const url = rawUrl && /^https?:\/\//i.test(rawUrl) ? rawUrl : null;
+  return {
+    state,
+    mode,
+    url,
+    message: trimmedOrNull(source.message),
+    username: trimmedOrNull(source.username),
+    startedAt: trimmedOrNull(source.startedAt),
+    finishedAt: trimmedOrNull(source.finishedAt)
+  };
+}
+function loginViewOf(result) {
+  if (!result || result.ok !== true) return null;
+  const data = result.data && typeof result.data === "object" ? result.data : null;
+  if (!data || data.ok !== true) return null;
+  const view = data.login;
+  if (!view || typeof view !== "object" || Array.isArray(view)) return null;
+  return normalizeLoginView(view);
+}
+function isLoginPending(view) {
+  return Boolean(view) && view.state === "pending";
+}
+function loginTimedOut(startedAtMs, nowMs) {
+  const start = Number(startedAtMs);
+  const now = Number(nowMs);
+  if (!Number.isFinite(start) || !Number.isFinite(now)) return false;
+  return now - start >= LOGIN_TIMEOUT_MS;
+}
+function loginUsernameOf(view) {
+  return view && typeof view.username === "string" && view.username.trim() ? view.username.trim() : "";
+}
+function cleanLoginCode(raw) {
+  let text = typeof raw === "string" ? raw.trim() : "";
+  if (!text) return "";
+  text = text.replace(/^code\s*=\s*/i, "").trim();
+  const quoted = text.match(/^["'`<]([\s\S]+)[>"'`]$/);
+  if (quoted) text = quoted[1];
+  return text.replace(/\s+/g, "");
+}
+function validateLoginCode(raw) {
+  const code = cleanLoginCode(raw);
+  if (!code) return { ok: false, code: "", message: "studio.guidance.auth.codeEmpty" };
+  if (code.length < LOGIN_CODE_MIN_CHARS) {
+    return { ok: false, code, message: "studio.guidance.auth.codeTooShort" };
+  }
+  if (code.length > LOGIN_CODE_MAX_CHARS) {
+    return { ok: false, code, message: "studio.guidance.auth.codeTooLong" };
+  }
+  if (!LOGIN_CODE_PATTERN.test(code)) {
+    return { ok: false, code, message: "studio.guidance.auth.codeFormat" };
+  }
+  return { ok: true, code, message: "" };
+}
+function loginCodeCanSubmit(raw) {
+  return validateLoginCode(raw).ok;
+}
+var FAILURE_RULES = [
+  { pattern: /timeout|timed?\s*out|超时/i, key: "studio.guidance.auth.reason.timeout" },
+  { pattern: /\bstate\b|csrf|校验/i, key: "studio.guidance.auth.reason.state" },
+  { pattern: /browser|launch|open|浏览器/i, key: "studio.guidance.auth.reason.browser" },
+  { pattern: /exchange|token|credential|凭据/i, key: "studio.guidance.auth.reason.exchange" },
+  { pattern: /network|fetch|connect|ECONN|socket|网络|连接/i, key: "studio.guidance.auth.reason.network" }
+];
+function loginFailureKey(view) {
+  if (!view || view.state !== "failed") return "";
+  const message = typeof view.message === "string" ? view.message : "";
+  for (const rule of FAILURE_RULES) {
+    if (rule.pattern.test(message)) return rule.key;
+  }
+  return "studio.guidance.auth.reason.unknown";
+}
+function loginActionBody(action, code) {
+  if (!LOGIN_ACTIONS.includes(action)) return null;
+  if (action === "submit-code") {
+    const cleaned = cleanLoginCode(code);
+    return cleaned ? { action, code: cleaned } : { action };
+  }
+  return { action };
+}
+
 // src/api/resources.js
 function fetchState() {
   return request(routePath("state"), { method: "GET" });
@@ -1437,6 +1634,28 @@ function saveUiState(patch) {
     body: JSON.stringify(patch && typeof patch === "object" ? patch : {})
   });
 }
+function fetchKaggleLogin() {
+  return request(routePath("kaggleLogin"), { method: "GET" });
+}
+function kaggleLoginAction(action, code) {
+  const body = loginActionBody(action, code);
+  if (!body) {
+    return Promise.resolve({ ok: false, status: 0, code: "invalid_request", message: `未知的登录动作：${action}` });
+  }
+  return request(routePath("kaggleLoginAction"), {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+function startKaggleLogin() {
+  return kaggleLoginAction("start");
+}
+function cancelKaggleLogin() {
+  return kaggleLoginAction("cancel");
+}
+function submitKaggleLoginCode(code) {
+  return kaggleLoginAction("submit-code", code);
+}
 
 // src/hooks/useHostState.js
 function useHostState() {
@@ -1521,7 +1740,7 @@ function StatusChip(props) {
 }
 
 // src/studio/Studio.jsx
-var import_react22 = __toESM(require("react"), 1);
+var import_react23 = __toESM(require("react"), 1);
 
 // src/styles/tokens.css
 var tokens_default = '/*\n * 设计变量：黑白灰工作室。\n *\n * 视觉立场：一间明度分层的工作室，而不是一块彩色 AI 画布。\n *  1. 地面是中性灰的柔光渐变，上面浮近白的实心卡片；不用彩色光晕，不用玻璃彩虹。\n *  2. 只有明度关系：墨黑做主操作与选中，灰阶做层级，语义色（成功/警告/错误）\n *     只以小圆点或窄条出现，不参与大面积装饰。\n *  3. 深色是同一套明度关系反相：深灰底、浅灰字、浅色主操作。\n *\n * 预览工具（tools/preview.mjs）用同一组值注入深色，改这里要同步那边。\n */\n\n.ofs-root {\n  /* 地面：三层中性柔光 + 一层底色 */\n  --ofs-ground-1: #e7e8ea;\n  --ofs-ground-2: #f1f1f2;\n  --ofs-ground-3: #e3e4e6;\n  --ofs-ground-base: #f5f5f6;\n\n  /* 表面 */\n  --ofs-window: rgb(255 255 255 / 86%);\n  --ofs-window-border: rgb(18 18 22 / 8%);\n  --ofs-card: #ffffff;\n  --ofs-card-solid: #ffffff;\n  --ofs-card-border: rgb(18 18 22 / 9%);\n  --ofs-hairline: rgb(18 18 22 / 7%);\n  --ofs-sunken: #f4f4f6;\n  --ofs-sunken-border: rgb(18 18 22 / 8%);\n\n  /* 文字 */\n  --ofs-ink: #141416;\n  --ofs-ink-2: #52525a;\n  --ofs-ink-3: #6b6b73;\n  --ofs-ink-4: #a8a8b0;\n\n  /* 主操作：墨黑 */\n  --ofs-accent: #141416;\n  --ofs-accent-2: #3f3f46;\n  --ofs-accent-ink: #ffffff;\n  --ofs-accent-soft: #f0f0f2;\n  --ofs-accent-soft-border: #dedee3;\n  --ofs-accent-grad: linear-gradient(180deg, #2b2b30 0%, #141416 100%);\n\n  /* 状态：只做小面积语义色 */\n  --ofs-ok: #2f8a5c;\n  --ofs-ok-soft: #eaf5ef;\n  --ofs-warn: #a96a18;\n  --ofs-warn-soft: #f7f0e4;\n  --ofs-error: #c04444;\n  --ofs-error-soft: #f9ecec;\n  --ofs-idle: #a0a0a8;\n  --ofs-idle-soft: #f1f1f3;\n\n  /* 光桌与相纸：舞台是一张下凹的光桌，出图是一张落在桌上的相纸。\n     这是界面里唯一带实物感的表面，其余控件都保持扁平卡片。 */\n  --ofs-mat: #f0f0f2;\n  --ofs-mat-lit: rgb(255 255 255 / 92%);\n  --ofs-mat-inner: inset 0 1px 3px rgb(16 16 20 / 6%);\n  --ofs-print-paper: #ffffff;\n  --ofs-print-edge: rgb(18 18 22 / 10%);\n  --ofs-print-shadow: 0 20px 40px -24px rgb(16 16 20 / 42%), 0 4px 10px -6px rgb(16 16 20 / 18%);\n  --ofs-print-shadow-hover: 0 26px 50px -24px rgb(16 16 20 / 46%), 0 6px 14px -6px rgb(16 16 20 / 20%);\n  --ofs-mark: rgb(18 18 22 / 26%);\n\n  /* 几何 */\n  --ofs-r-xl: 24px;\n  --ofs-r-lg: 18px;\n  --ofs-r-md: 14px;\n  --ofs-r-sm: 10px;\n  --ofs-r-pill: 999px;\n  --ofs-blur: 18px;\n\n  /* 投影：始终带偏移与柔和扩散，不用零偏移光晕 */\n  --ofs-shadow-card: 0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%);\n  --ofs-shadow-lift: 0 2px 6px rgb(16 16 20 / 6%), 0 18px 40px -20px rgb(16 16 20 / 26%);\n  --ofs-shadow-window: 0 1px 3px rgb(16 16 20 / 5%), 0 36px 80px -48px rgb(16 16 20 / 32%);\n  --ofs-shadow-accent: 0 8px 18px -10px rgb(16 16 20 / 48%);\n  --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(20 20 22 / 45%);\n\n  --ofs-font: -apple-system, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;\n\n  /* 留白节奏 */\n  --ofs-pad: 18px;\n  --ofs-gap: 14px;\n\n  display: flex;\n  flex-direction: column;\n  height: 100%;\n  min-height: 0;\n  padding: 18px;\n  color: var(--ofs-ink);\n  font-family: var(--ofs-font);\n  font-size: 13px;\n  line-height: 1.55;\n  -webkit-font-smoothing: antialiased;\n  background:\n    radial-gradient(1100px 620px at 12% -8%, var(--ofs-ground-1) 0%, transparent 62%),\n    radial-gradient(900px 520px at 88% 4%, var(--ofs-ground-2) 0%, transparent 58%),\n    radial-gradient(780px 540px at 62% 108%, var(--ofs-ground-3) 0%, transparent 62%),\n    linear-gradient(160deg, var(--ofs-ground-base) 0%, var(--ofs-ground-base) 100%);\n}\n\n@media (prefers-color-scheme: dark) {\n  .ofs-root {\n    --ofs-ground-1: #232326;\n    --ofs-ground-2: #17171a;\n    --ofs-ground-3: #26262a;\n    --ofs-ground-base: #101012;\n\n    --ofs-window: rgb(24 24 27 / 88%);\n    --ofs-window-border: rgb(255 255 255 / 9%);\n    --ofs-card: #18181b;\n    --ofs-card-solid: #1c1c20;\n    --ofs-card-border: rgb(255 255 255 / 9%);\n    --ofs-hairline: rgb(255 255 255 / 8%);\n    --ofs-sunken: rgb(255 255 255 / 5%);\n    --ofs-sunken-border: rgb(255 255 255 / 9%);\n\n    --ofs-ink: #f2f2f4;\n    --ofs-ink-2: #a4a4ac;\n    --ofs-ink-3: #8d8d95;\n    --ofs-ink-4: #5c5c63;\n\n    --ofs-accent: #f2f2f4;\n    --ofs-accent-2: #c8c8cf;\n    --ofs-accent-ink: #161618;\n    --ofs-accent-soft: rgb(255 255 255 / 8%);\n    --ofs-accent-soft-border: rgb(255 255 255 / 14%);\n    --ofs-accent-grad: linear-gradient(180deg, #fafafa 0%, #dcdce1 100%);\n\n    --ofs-ok: #58c08a;\n    --ofs-ok-soft: rgb(88 192 138 / 14%);\n    --ofs-warn: #d8a55c;\n    --ofs-warn-soft: rgb(216 165 92 / 14%);\n    --ofs-error: #e07a7a;\n    --ofs-error-soft: rgb(224 122 122 / 14%);\n    --ofs-idle: #8a8a92;\n    --ofs-idle-soft: rgb(255 255 255 / 6%);\n\n    /* 深色里相纸仍然是整间暗房里最亮的表面：光桌 > 相纸 > 卡片 > 地面 */\n    --ofs-mat: #1e1e22;\n    --ofs-mat-lit: rgb(255 255 255 / 7%);\n    --ofs-mat-inner: inset 0 1px 3px rgb(0 0 0 / 36%);\n    --ofs-print-paper: #2b2b31;\n    --ofs-print-edge: rgb(255 255 255 / 13%);\n    --ofs-print-shadow: 0 22px 44px -24px rgb(0 0 0 / 78%), 0 4px 12px -6px rgb(0 0 0 / 50%);\n    --ofs-print-shadow-hover: 0 28px 54px -24px rgb(0 0 0 / 82%), 0 6px 16px -6px rgb(0 0 0 / 54%);\n    --ofs-mark: rgb(255 255 255 / 28%);\n\n    --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 28px -18px rgb(0 0 0 / 70%);\n    --ofs-shadow-lift: 0 2px 6px rgb(0 0 0 / 44%), 0 20px 44px -22px rgb(0 0 0 / 76%);\n    --ofs-shadow-window: 0 1px 3px rgb(0 0 0 / 40%), 0 40px 88px -48px rgb(0 0 0 / 88%);\n    --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);\n    --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(255 255 255 / 40%);\n  }\n}';
@@ -1530,7 +1749,7 @@ var tokens_default = '/*\n * 设计变量：黑白灰工作室。\n *\n * 视觉
 var base_default = "/*\n * 基础件：浏览器表面、通用原语（按钮 / 胶囊 / 图标钮 / 输入 / 分段控件）。\n *\n * 所有组件只从这里取原语，不在各自文件里重造按钮。类名都以 .ofs- 开头，\n * 避免污染宿主页面。\n */\n\n.ofs-root *,\n.ofs-root *::before,\n.ofs-root *::after {\n  box-sizing: border-box;\n}\n\n.ofs-root ::selection {\n  background: color-mix(in oklab, var(--ofs-ink) 16%, transparent);\n  color: var(--ofs-ink);\n}\n\n.ofs-root :focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-root :focus:not(:focus-visible) {\n  outline: none;\n}\n\n.ofs-root input,\n.ofs-root textarea,\n.ofs-root select {\n  font: inherit;\n  color: inherit;\n  caret-color: var(--ofs-accent);\n}\n\n.ofs-root button {\n  font: inherit;\n}\n\n.ofs-root img {\n  display: block;\n}\n\n.ofs-root h2,\n.ofs-root h3,\n.ofs-root h4,\n.ofs-root p {\n  margin: 0;\n}\n\n.ofs-root a {\n  color: var(--ofs-accent);\n  text-decoration-thickness: 1px;\n  text-underline-offset: 3px;\n}\n\n.ofs-icon {\n  display: block;\n  flex: 0 0 auto;\n}\n\n.ofs-grow {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ofs-muted {\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n}\n\n/* 滚动条：属于同一个世界，不做默认灰条 */\n.ofs-panel-scroll,\n.ofs-thread,\n.ofs-gallery,\n.ofs-roll {\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-panel-scroll::-webkit-scrollbar,\n.ofs-thread::-webkit-scrollbar,\n.ofs-gallery::-webkit-scrollbar,\n.ofs-roll::-webkit-scrollbar {\n  width: 8px;\n  height: 8px;\n}\n\n.ofs-panel-scroll::-webkit-scrollbar-thumb,\n.ofs-thread::-webkit-scrollbar-thumb,\n.ofs-gallery::-webkit-scrollbar-thumb,\n.ofs-roll::-webkit-scrollbar-thumb {\n  border: 2px solid transparent;\n  border-radius: 8px;\n  background: var(--ofs-ink-4);\n  background-clip: content-box;\n}\n\n.ofs-panel-scroll::-webkit-scrollbar-thumb:hover,\n.ofs-thread::-webkit-scrollbar-thumb:hover,\n.ofs-gallery::-webkit-scrollbar-thumb:hover,\n.ofs-roll::-webkit-scrollbar-thumb:hover {\n  background: var(--ofs-ink-3);\n  background-clip: content-box;\n}\n\n/* ── 按钮 ───────────────────────────────────────────────────── */\n.ofs-btn {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  height: 38px;\n  padding: 0 18px;\n  border: 1px solid transparent;\n  border-radius: 12px;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  font-weight: 600;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 160ms ease,\n    background-color 160ms ease,\n    border-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-btn:disabled {\n  cursor: default;\n}\n\n.ofs-btn.is-primary {\n  color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n.ofs-btn.is-primary:hover:not(:disabled) {\n  transform: translateY(-1px);\n  box-shadow: 0 14px 28px -12px rgb(16 16 20 / 50%);\n}\n\n.ofs-btn.is-primary:active:not(:disabled) {\n  transform: translateY(0) scale(0.99);\n}\n\n.ofs-btn.is-primary:disabled {\n  background: var(--ofs-accent-grad);\n  border-color: transparent;\n  /* 文字色必须跟主题的主操作文字色（--ofs-accent-ink）：深色主题的主操作是浅色渐变\n     配墨黑字，写死白色会变成白字浅底，禁用时整行字看不见。 */\n  color: color-mix(in oklab, var(--ofs-accent-ink) 82%, transparent);\n  box-shadow: none;\n  opacity: 0.36;\n  filter: saturate(0.6);\n}\n\n.ofs-btn.is-quiet {\n  background: var(--ofs-card);\n  border-color: var(--ofs-card-border);\n  color: var(--ofs-ink);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n.ofs-btn.is-quiet:hover:not(:disabled) {\n  background: var(--ofs-card-solid);\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-accent);\n}\n\n.ofs-btn.is-quiet:disabled {\n  color: var(--ofs-ink-4);\n  box-shadow: none;\n}\n\n.ofs-btn.is-ghost {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-btn.is-ghost:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-ink);\n}\n\n/* ── 图标按钮 ───────────────────────────────────────────────── */\n.ofs-icon-btn {\n  appearance: none;\n  display: inline-grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid transparent;\n  border-radius: 10px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    color 150ms ease,\n    border-color 150ms ease,\n    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-icon-btn:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-icon-btn:active:not(:disabled) {\n  transform: scale(0.96);\n}\n\n.ofs-icon-btn:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n.ofs-icon-btn.is-on {\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-accent);\n}\n\n/* ── 胶囊 / 标签 ────────────────────────────────────────────── */\n.ofs-chip {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 28px;\n  padding: 0 12px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-chip:hover:not(:disabled) {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-chip.is-on {\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-accent);\n}\n\n.ofs-chip.is-danger {\n  color: var(--ofs-error);\n  border-color: transparent;\n  background: var(--ofs-error-soft);\n}\n\n.ofs-chip.is-danger:hover:not(:disabled) {\n  color: var(--ofs-error);\n  border-color: var(--ofs-error);\n}\n\n.ofs-chip:disabled {\n  color: var(--ofs-ink-4);\n  background: transparent;\n  border-color: var(--ofs-sunken-border);\n  cursor: default;\n}\n\n/* ── 分段控件 ───────────────────────────────────────────────── */\n.ofs-seg {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  border: 1px solid var(--ofs-sunken-border);\n}\n\n.ofs-seg button {\n  appearance: none;\n  height: 26px;\n  padding: 0 12px;\n  border: 0;\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 500;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-seg button:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-seg button.is-on {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n  font-weight: 600;\n  box-shadow: 0 1px 2px rgb(16 16 20 / 8%);\n}\n\n/* ── 状态点 ─────────────────────────────────────────────────── */\n.ofs-dot {\n  display: inline-block;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--ofs-idle);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-idle) 22%, transparent);\n}\n\n.ofs-dot.is-ok { background: var(--ofs-ok); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-ok) 20%, transparent); }\n.ofs-dot.is-warn { background: var(--ofs-warn); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-warn) 22%, transparent); }\n.ofs-dot.is-error { background: var(--ofs-error); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-error) 20%, transparent); }\n.ofs-dot.is-idle { background: var(--ofs-idle); }\n.ofs-dot.is-live { animation: ofs-pulse 2.4s ease-out infinite; }\n\n/* 排队 / 预热用琥珀点：呼吸圈也换成警告色。 */\n.ofs-dot.is-warn.is-live {\n  animation: ofs-warn-pulse 2.2s ease-out infinite;\n}\n\n@keyframes ofs-warn-pulse {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 34%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n}\n\n/* ── 动效 ───────────────────────────────────────────────────── */\n@keyframes ofs-pulse {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok) 34%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-ok) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok) 0%, transparent); }\n}\n\n@keyframes ofs-shimmer {\n  0% { background-position: -220% 0; }\n  100% { background-position: 220% 0; }\n}\n\n@keyframes ofs-fade-in {\n  from { opacity: 0; transform: translateY(4px); }\n  to { opacity: 1; transform: translateY(0); }\n}\n\n@keyframes ofs-pop-in {\n  from { opacity: 0; transform: translateY(6px) scale(0.985); }\n  to { opacity: 1; transform: translateY(0) scale(1); }\n}\n\n/* ── 悬浮提示 ─────────────────────────────────────────────── */\n.ofs-tip {\n  position: relative;\n  display: inline-flex;\n  align-items: center;\n  margin-left: 5px;\n  vertical-align: middle;\n}\n\n.ofs-tip-trigger {\n  appearance: none;\n  display: inline-grid;\n  place-items: center;\n  width: 15px;\n  height: 15px;\n  padding: 0;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-3);\n  font-size: 9.5px;\n  font-weight: 700;\n  line-height: 1;\n  cursor: help;\n}\n\n.ofs-tip-trigger:hover,\n.ofs-tip-trigger:focus-visible {\n  color: var(--ofs-ink);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-tip-trigger:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-tip--warn .ofs-tip-trigger {\n  color: var(--ofs-warn);\n  border-color: color-mix(in oklab, var(--ofs-warn) 45%, transparent);\n  background: var(--ofs-warn-soft);\n}\n\n/* 固定在视口坐标上，不被侧栏的滚动容器裁剪；位置由组件按触发点计算。 */\n.ofs-tip-pop {\n  position: fixed;\n  z-index: 90;\n  width: max-content;\n  max-width: 248px;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: 10px;\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink-2);\n  box-shadow: var(--ofs-shadow-lift);\n  font-size: 11.5px;\n  line-height: 1.55;\n  text-align: left;\n  white-space: normal;\n  transform: translateY(-100%);\n  pointer-events: none;\n}\n\n.ofs-tip-pop.is-below {\n  transform: none;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-root *,\n  .ofs-root *::before,\n  .ofs-root *::after {\n    animation-duration: 1ms !important;\n    animation-iteration-count: 1 !important;\n    transition-duration: 1ms !important;\n  }\n}";
 
 // src/styles/shell.css
-var shell_default = '/*\n * 外壳：整页容器、顶栏、布局骨架、异常指引与 Toast。\n *\n * 页面是一张浮在柔光地面上的雾面玻璃大卡：\n *   .ofs-root = 柔光底，.ofs-app = 玻璃大卡，内部再分顶栏 / 主体 / 最近生成栏。\n */\n\n.ofs-app {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-xl);\n  background: var(--ofs-window);\n  box-shadow: var(--ofs-shadow-window);\n  backdrop-filter: blur(24px) saturate(140%);\n  -webkit-backdrop-filter: blur(24px) saturate(140%);\n  overflow: hidden;\n}\n\n/* ── 顶栏 ───────────────────────────────────────────────────── */\n.ofs-topbar {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 14px;\n  height: 58px;\n  padding: 0 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-brand {\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  min-width: 0;\n}\n\n.ofs-brand-mark {\n  display: grid;\n  place-items: center;\n  width: 30px;\n  height: 30px;\n  border-radius: 9px;\n  color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n.ofs-brand-name {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-brand-sub {\n  padding-left: 2px;\n  font-size: 10px;\n  font-weight: 550;\n  letter-spacing: 0.14em;\n  text-transform: uppercase;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-tabs {\n  display: flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  margin-left: 4px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n}\n\n.ofs-tab {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 28px;\n  padding: 0 12px;\n  border: 0;\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-tab:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-tab.is-on {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n  font-weight: 600;\n  box-shadow: 0 1px 2px rgb(16 16 20 / 8%);\n}\n\n/* 云端GPU 状态 */\n.ofs-pill-wrap {\n  position: relative;\n  flex: 0 0 auto;\n}\n\n.ofs-compute {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    color 160ms ease,\n    background-color 160ms ease;\n}\n\n.ofs-compute:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-compute em {\n  font-style: normal;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-pill-caret {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-popover {\n  position: absolute;\n  top: calc(100% + 8px);\n  right: 0;\n  z-index: 40;\n  width: 248px;\n  padding: 6px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  animation: ofs-pop-in 160ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-popover-head {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  padding: 8px 10px 10px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-popover-head > span {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-popover-head > span b {\n  font-size: 12.5px;\n  font-weight: 650;\n  color: var(--ofs-ink);\n}\n\n/* 检查结果 / 失败说明：弹层里的一行到三行小字，避免长 notes 撑开菜单。 */\n.ofs-popover-note {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 8px 10px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.ofs-popover-note span {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n/* 弹层里的一句话状态说明：允许换行，不截断。 */\n.ofs-popover-hint {\n  margin: 0;\n  padding: 8px 10px 9px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.55;\n}\n\n/* 配额回退：接口不可读时给出的本地统计，与检查结果行区分开。 */\n.ofs-popover-fallback {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  padding: 8px 10px 9px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.ofs-popover-fallback-title {\n  color: var(--ofs-ink-2);\n  font-weight: 600;\n}\n\n.ofs-popover-link {\n  align-self: flex-start;\n  margin-top: 2px;\n  border-radius: 4px;\n  color: var(--ofs-accent);\n  font-size: 11px;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}\n\n.ofs-popover-link:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-popover-row {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  width: 100%;\n  height: 32px;\n  padding: 0 10px;\n  border: 0;\n  border-radius: 9px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-popover-row:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-popover-row:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* 模型选择卡（ModelCardPicker） */\n.ofs-model-wrap {\n  position: relative;\n  flex: 0 0 auto;\n}\n\n.ofs-model {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 10px 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    color 160ms ease,\n    background-color 160ms ease;\n}\n\n.ofs-model:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-model:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-model[aria-expanded="true"] {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-model > svg {\n  flex: 0 0 auto;\n}\n\n.ofs-model.is-empty {\n  cursor: default;\n}\n\n.ofs-model-family {\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 4px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  color: var(--ofs-ink-2);\n  font-size: 10px;\n  font-weight: 650;\n  line-height: 1;\n  letter-spacing: .05em;\n}\n\n.ofs-model-now {\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  font-weight: 600;\n  line-height: 1;\n  letter-spacing: .01em;\n}\n\n.ofs-model-div {\n  width: 1px;\n  height: 12px;\n  background: var(--ofs-hairline);\n}\n\n.ofs-model-eta {\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 550;\n  line-height: 1;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-model-caret {\n  color: var(--ofs-ink-3);\n  transition: transform 180ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model[aria-expanded="true"] .ofs-model-caret {\n  transform: rotate(180deg);\n}\n\n/* 弹层：与云端状态弹层同构；列表自身滚动，头尾固定。 */\n.ofs-model-menu {\n  position: absolute;\n  top: calc(100% + 8px);\n  right: 0;\n  z-index: 40;\n  display: flex;\n  flex-direction: column;\n  width: min(380px, calc(100vw - 32px));\n  max-height: 420px;\n  padding: 8px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  animation: ofs-pop-in 160ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding: 4px 10px 9px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: .03em;\n}\n\n.ofs-model-head span:last-child {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 500;\n  letter-spacing: .02em;\n}\n\n.ofs-model-list {\n  flex: 1 1 auto;\n  min-height: 0;\n  max-height: 304px; /* 4 行 × 76px：避免截出半行，剩余模型用滚动查看 */\n  overflow-y: auto;\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 6px 0 0;\n  overscroll-behavior: contain;\n  scrollbar-gutter: stable;\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-model-list::-webkit-scrollbar {\n  width: 6px;\n}\n\n.ofs-model-list::-webkit-scrollbar-thumb {\n  border-radius: 3px;\n  background: var(--ofs-ink-4);\n}\n\n.ofs-model-option {\n  appearance: none;\n  display: grid;\n  grid-template-columns: 56px minmax(0, 1fr) auto;\n  align-items: center;\n  gap: 12px;\n  width: 100%;\n  padding: 9px 10px;\n  border: 1px solid transparent;\n  border-radius: 12px;\n  background: color-mix(in oklab, var(--ofs-sunken) 55%, transparent);\n  color: var(--ofs-ink);\n  text-align: left;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease;\n}\n\n.ofs-model-option:hover {\n  border-color: var(--ofs-hairline);\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-model-option.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-model-option:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-model-poster {\n  display: block;\n  width: 56px;\n  height: 56px;\n  overflow: hidden;\n  border: 1px solid var(--ofs-print-edge);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n}\n\n.ofs-model-poster img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n  filter: saturate(.96) brightness(.98);\n  transition:\n    filter 170ms ease,\n    transform 220ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model-option:hover .ofs-model-poster img {\n  filter: saturate(1.03) brightness(1.05);\n  transform: scale(1.03);\n}\n\n.ofs-model-poster-fallback {\n  display: grid;\n  place-items: center;\n  width: 100%;\n  height: 100%;\n  color: var(--ofs-ink-3);\n  font-size: 18px;\n  font-weight: 650;\n}\n\n.ofs-model-copy {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  min-width: 0;\n}\n\n.ofs-model-line {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-model-fam {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 4px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  color: var(--ofs-ink-3);\n  font-size: 9.5px;\n  font-weight: 650;\n  line-height: 1;\n  letter-spacing: .05em;\n}\n\n.ofs-model-option.is-on .ofs-model-fam {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-model-name {\n  overflow: hidden;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  font-weight: 600;\n  line-height: 1.3;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n.ofs-model-default {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 5px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink-2);\n  font-size: 10px;\n  font-weight: 600;\n  line-height: 1;\n}\n\n.ofs-model-desc {\n  overflow: hidden;\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  line-height: 1.45;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n.ofs-model-spec {\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 500;\n  line-height: 1.4;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-model-side {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 4px;\n  min-width: 46px;\n}\n\n.ofs-model-option-eta {\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 550;\n  line-height: 1.2;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: .01em;\n  white-space: nowrap;\n}\n\n.ofs-model-option.is-on .ofs-model-option-eta {\n  color: var(--ofs-ink);\n  font-weight: 600;\n}\n\n.ofs-model-check {\n  display: grid;\n  place-items: center;\n  width: 16px;\n  height: 16px;\n  color: var(--ofs-accent);\n  opacity: 0;\n  transition: opacity 140ms ease;\n}\n\n.ofs-model-option.is-on .ofs-model-check {\n  opacity: 1;\n}\n\n.ofs-model-foot {\n  flex: 0 0 auto;\n  margin-top: 4px;\n  padding: 9px 10px 3px;\n  border-top: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11.5px;\n  font-weight: 500;\n  line-height: 1.5;\n  letter-spacing: .01em;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-model-menu {\n    animation: none;\n  }\n\n  .ofs-model,\n  .ofs-model-caret,\n  .ofs-model-option,\n  .ofs-model-poster img,\n  .ofs-model-check {\n    transition: none;\n  }\n}\n/* ── 云端过渡态状态条 ───────────────────────────────────────── */\n/* 只在申请 GPU / 连接 / 准备模型 / 关闭时出现：讲清在等什么、已经等了多久。 */\n.ofs-sessionbar {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  min-height: 34px;\n  margin: 12px 16px 0;\n  padding: 7px 12px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  line-height: 1.4;\n  animation: ofs-fade-in 220ms ease;\n}\n\n.ofs-sessionbar-label {\n  flex: 0 0 auto;\n  font-weight: 600;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n.ofs-sessionbar-hint {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-sessionbar-time {\n  flex: 0 0 auto;\n  padding-left: 10px;\n  border-left: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n/* ── 骨架 ───────────────────────────────────────────────────── */\n.ofs-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: grid;\n  /* 单轨创作面板 + 自适应预览区；视图切换与状态全部收在顶栏。 */\n  grid-template-columns: 320px minmax(0, 1fr);\n  grid-template-rows: minmax(0, 1fr);\n}\n\n.ofs-body.is-gallery {\n  grid-template-columns: minmax(0, 1fr);\n}\n\n.ofs-main {\n  position: relative;\n  min-width: 0;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  margin: 14px;\n}\n\n/* ── 异常指引 ───────────────────────────────────────────────── */\n.ofs-guidance {\n  display: flex;\n  align-items: flex-start;\n  gap: 10px;\n  margin: 12px 16px 0;\n  padding: 10px 12px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n  border-radius: 14px;\n  background: var(--ofs-warn-soft);\n  animation: ofs-fade-in 220ms ease;\n}\n\n.ofs-guidance-icon {\n  display: grid;\n  place-items: center;\n  flex: 0 0 auto;\n  width: 28px;\n  height: 28px;\n  border-radius: 9px;\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  color: var(--ofs-warn);\n}\n\n.ofs-guidance-body {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  min-width: 0;\n}\n\n.ofs-guidance-title {\n  font-size: 12.5px;\n  color: var(--ofs-ink);\n}\n\n.ofs-guidance-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-guidance-actions .ofs-chip.is-on {\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);\n  color: var(--ofs-warn);\n  text-decoration: none;\n}\n\n.ofs-guidance-detail {\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  overflow-wrap: anywhere;\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n  line-clamp: 2;\n  overflow: hidden;\n}\n\n/* 指引卡的可执行提示（Windows PATH、凭据文件位置、GPU 开启步骤）：不截断，允许换行。 */\n.ofs-guidance-note {\n  margin: 0;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.55;\n  overflow-wrap: anywhere;\n}\n\n.ofs-guidance-command {\n  display: inline-block;\n  max-width: 100%;\n  padding: 3px 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 8px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 70%, transparent);\n  color: var(--ofs-ink);\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  overflow-wrap: anywhere;\n}\n\n/* ── Toast ──────────────────────────────────────────────────── */\n.ofs-toast {\n  position: absolute;\n  left: 50%;\n  bottom: 132px;\n  z-index: 60;\n  transform: translateX(-50%);\n  max-width: 78%;\n  padding: 9px 16px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 88%, transparent);\n  box-shadow: var(--ofs-shadow-lift);\n  backdrop-filter: blur(14px);\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  animation: ofs-pop-in 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n/* ── 运行日志抽屉 ───────────────────────────────────────────── */\n.ofs-logs {\n  position: fixed;\n  inset: 0;\n  z-index: 100;\n  display: flex;\n  justify-content: flex-end;\n  background: rgb(16 16 18 / 38%);\n  backdrop-filter: blur(2px);\n  -webkit-backdrop-filter: blur(2px);\n  animation: ofs-fade-in 160ms ease;\n}\n\n.ofs-logs-panel {\n  display: flex;\n  flex-direction: column;\n  width: min(560px, 100%);\n  height: 100%;\n  border-left: 1px solid var(--ofs-window-border);\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-window);\n  animation: ofs-slide-in 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-logs-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n  padding: 12px 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-logs-title {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n/* 远端 / Host 双视图切换：紧凑胶囊，与 header 里的复制按钮同一视觉语言。 */\n.ofs-logs-tabs {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n}\n\n.ofs-logs-tab {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11.5px;\n}\n\n.ofs-logs-copy {\n  height: 30px;\n}\n\n.ofs-logs-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  background: var(--ofs-sunken);\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-logs-body::-webkit-scrollbar {\n  width: 8px;\n}\n\n.ofs-logs-body::-webkit-scrollbar-thumb {\n  border: 2px solid transparent;\n  border-radius: 8px;\n  background: var(--ofs-ink-4);\n  background-clip: content-box;\n}\n\n.ofs-logs-lines {\n  margin: 0;\n  padding: 14px 16px 22px;\n  color: var(--ofs-ink-2);\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  line-height: 1.65;\n  font-variant-numeric: tabular-nums;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.ofs-logs-note {\n  margin: 0;\n  padding: 18px 16px;\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n  line-height: 1.6;\n}\n\n.ofs-logs-note.is-warn {\n  color: var(--ofs-warn);\n}\n\n/* 自动兜底提示：远端没有日志、已切到 Host 本地日志时说明来源。 */\n.ofs-logs-fallback {\n  margin: 0;\n  padding: 9px 16px;\n  border-bottom: 1px solid color-mix(in oklab, var(--ofs-accent) 22%, transparent);\n  background: color-mix(in oklab, var(--ofs-accent) 10%, transparent);\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n@keyframes ofs-slide-in {\n  from {\n    opacity: 0;\n    transform: translateX(18px);\n  }\n  to {\n    opacity: 1;\n    transform: translateX(0);\n  }\n}\n\n/* ── 运行设置抽屉 ─────────────────────────────────────────────\n * 与日志抽屉同一套抽屉骨架（右侧滑入、遮罩、焦点陷阱），\n * 内容区更窄（440px）：设置项是短表单，不需要日志那样的整屏宽度。\n */\n.ofs-settings {\n  position: fixed;\n  inset: 0;\n  z-index: 100;\n  display: flex;\n  justify-content: flex-end;\n  background: rgb(16 16 18 / 38%);\n  backdrop-filter: blur(2px);\n  -webkit-backdrop-filter: blur(2px);\n  animation: ofs-fade-in 160ms ease;\n}\n\n.ofs-settings-panel {\n  display: flex;\n  flex-direction: column;\n  width: min(440px, 100%);\n  height: 100%;\n  border-left: 1px solid var(--ofs-window-border);\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-window);\n  animation: ofs-slide-in 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-settings-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  padding: 12px 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-settings-title {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n.ofs-settings-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-settings-note {\n  margin: 0;\n  padding: 18px 16px;\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n  line-height: 1.6;\n}\n\n/* 读取失败：不白屏，给原因 + 重试。 */\n.ofs-settings-error-state {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 10px;\n  padding: 18px 16px;\n}\n\n.ofs-settings-form {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 4px 16px 16px;\n}\n\n/* 生效提示：温和的暖色窄条，说明改动要等下次唤醒。 */\n.ofs-settings-effective {\n  margin: 10px 0 2px;\n  padding: 8px 10px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n  border-radius: 10px;\n  background: var(--ofs-warn-soft);\n  color: var(--ofs-warn);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n.ofs-settings-section {\n  display: flex;\n  flex-direction: column;\n  gap: 9px;\n  padding: 13px 0;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-settings-section:last-of-type {\n  border-bottom: 0;\n}\n\n.ofs-settings-section-title {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-settings-row {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ofs-settings-label {\n  font-size: 11.5px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-settings-quick {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-settings-quick-item {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11.5px;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-settings-field {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.ofs-settings-input,\n.ofs-settings-textarea {\n  width: 100%;\n  padding: 0 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-settings-input {\n  height: 32px;\n}\n\n.ofs-settings-textarea {\n  min-height: 66px;\n  padding: 8px 10px;\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-settings-input:focus-visible,\n.ofs-settings-textarea:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-settings-options {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n/* 加速器单选：原生 radio 收进 label 里，视觉仍是轻量卡片。 */\n.ofs-settings-option {\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 32px;\n  padding: 0 12px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-settings-option:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-settings-option input {\n  margin: 0;\n  accent-color: var(--ofs-accent);\n}\n\n.ofs-settings-option.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-settings-inline {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ofs-settings-muted {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-settings-clear {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11px;\n}\n\n/* 高级折叠头：一行标题 + 箭头，默认收起，不占表单纵向空间。 */\n.ofs-settings-advanced-toggle {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-settings-advanced-toggle:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-settings-advanced {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  padding-top: 9px;\n}\n\n.ofs-settings-hint {\n  font-size: 10.5px;\n  line-height: 1.5;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-settings-errors {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.ofs-settings-error-item {\n  color: var(--ofs-error);\n  font-size: 11px;\n  line-height: 1.5;\n  overflow-wrap: anywhere;\n}\n\n.ofs-settings-error {\n  margin: 0;\n  color: var(--ofs-error);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n/* 底部操作条：滚动时贴住抽屉底部，保存按钮始终可点。 */\n.ofs-settings-foot {\n  position: sticky;\n  bottom: 0;\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n  margin-top: 4px;\n  padding: 12px 0 4px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-settings-save {\n  height: 32px;\n  padding: 0 16px;\n  font-size: 12.5px;\n}\n';
+var shell_default = '/*\n * 外壳：整页容器、顶栏、布局骨架、异常指引与 Toast。\n *\n * 页面是一张浮在柔光地面上的雾面玻璃大卡：\n *   .ofs-root = 柔光底，.ofs-app = 玻璃大卡，内部再分顶栏 / 主体 / 最近生成栏。\n */\n\n.ofs-app {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-xl);\n  background: var(--ofs-window);\n  box-shadow: var(--ofs-shadow-window);\n  backdrop-filter: blur(24px) saturate(140%);\n  -webkit-backdrop-filter: blur(24px) saturate(140%);\n  overflow: hidden;\n}\n\n/* ── 顶栏 ───────────────────────────────────────────────────── */\n.ofs-topbar {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 14px;\n  height: 58px;\n  padding: 0 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-brand {\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  min-width: 0;\n}\n\n.ofs-brand-mark {\n  display: grid;\n  place-items: center;\n  width: 30px;\n  height: 30px;\n  border-radius: 9px;\n  color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n.ofs-brand-name {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-brand-sub {\n  padding-left: 2px;\n  font-size: 10px;\n  font-weight: 550;\n  letter-spacing: 0.14em;\n  text-transform: uppercase;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-tabs {\n  display: flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  margin-left: 4px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n}\n\n.ofs-tab {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 28px;\n  padding: 0 12px;\n  border: 0;\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-tab:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-tab.is-on {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n  font-weight: 600;\n  box-shadow: 0 1px 2px rgb(16 16 20 / 8%);\n}\n\n/* 云端GPU 状态 */\n.ofs-pill-wrap {\n  position: relative;\n  flex: 0 0 auto;\n}\n\n.ofs-compute {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    color 160ms ease,\n    background-color 160ms ease;\n}\n\n.ofs-compute:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-compute em {\n  font-style: normal;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-pill-caret {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-popover {\n  position: absolute;\n  top: calc(100% + 8px);\n  right: 0;\n  z-index: 40;\n  width: 248px;\n  padding: 6px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  animation: ofs-pop-in 160ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-popover-head {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  padding: 8px 10px 10px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-popover-head > span {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-popover-head > span b {\n  font-size: 12.5px;\n  font-weight: 650;\n  color: var(--ofs-ink);\n}\n\n/* 检查结果 / 失败说明：弹层里的一行到三行小字，避免长 notes 撑开菜单。 */\n.ofs-popover-note {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 8px 10px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.ofs-popover-note span {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n/* 弹层里的一句话状态说明：允许换行，不截断。 */\n.ofs-popover-hint {\n  margin: 0;\n  padding: 8px 10px 9px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.55;\n}\n\n/* 配额回退：接口不可读时给出的本地统计，与检查结果行区分开。 */\n.ofs-popover-fallback {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  padding: 8px 10px 9px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.ofs-popover-fallback-title {\n  color: var(--ofs-ink-2);\n  font-weight: 600;\n}\n\n.ofs-popover-link {\n  align-self: flex-start;\n  margin-top: 2px;\n  border-radius: 4px;\n  color: var(--ofs-accent);\n  font-size: 11px;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}\n\n.ofs-popover-link:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-popover-row {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  width: 100%;\n  height: 32px;\n  padding: 0 10px;\n  border: 0;\n  border-radius: 9px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-popover-row:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-popover-row:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* 模型选择卡（ModelCardPicker） */\n.ofs-model-wrap {\n  position: relative;\n  flex: 0 0 auto;\n}\n\n.ofs-model {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 10px 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    color 160ms ease,\n    background-color 160ms ease;\n}\n\n.ofs-model:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-model:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-model[aria-expanded="true"] {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-model > svg {\n  flex: 0 0 auto;\n}\n\n.ofs-model.is-empty {\n  cursor: default;\n}\n\n.ofs-model-family {\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 4px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  color: var(--ofs-ink-2);\n  font-size: 10px;\n  font-weight: 650;\n  line-height: 1;\n  letter-spacing: .05em;\n}\n\n.ofs-model-now {\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  font-weight: 600;\n  line-height: 1;\n  letter-spacing: .01em;\n}\n\n.ofs-model-div {\n  width: 1px;\n  height: 12px;\n  background: var(--ofs-hairline);\n}\n\n.ofs-model-eta {\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 550;\n  line-height: 1;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-model-caret {\n  color: var(--ofs-ink-3);\n  transition: transform 180ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model[aria-expanded="true"] .ofs-model-caret {\n  transform: rotate(180deg);\n}\n\n/* 弹层：与云端状态弹层同构；列表自身滚动，头尾固定。 */\n.ofs-model-menu {\n  position: absolute;\n  top: calc(100% + 8px);\n  right: 0;\n  z-index: 40;\n  display: flex;\n  flex-direction: column;\n  width: min(380px, calc(100vw - 32px));\n  max-height: 420px;\n  padding: 8px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  animation: ofs-pop-in 160ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding: 4px 10px 9px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: .03em;\n}\n\n.ofs-model-head span:last-child {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 500;\n  letter-spacing: .02em;\n}\n\n.ofs-model-list {\n  flex: 1 1 auto;\n  min-height: 0;\n  max-height: 304px; /* 4 行 × 76px：避免截出半行，剩余模型用滚动查看 */\n  overflow-y: auto;\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 6px 0 0;\n  overscroll-behavior: contain;\n  scrollbar-gutter: stable;\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-model-list::-webkit-scrollbar {\n  width: 6px;\n}\n\n.ofs-model-list::-webkit-scrollbar-thumb {\n  border-radius: 3px;\n  background: var(--ofs-ink-4);\n}\n\n.ofs-model-option {\n  appearance: none;\n  display: grid;\n  grid-template-columns: 56px minmax(0, 1fr) auto;\n  align-items: center;\n  gap: 12px;\n  width: 100%;\n  padding: 9px 10px;\n  border: 1px solid transparent;\n  border-radius: 12px;\n  background: color-mix(in oklab, var(--ofs-sunken) 55%, transparent);\n  color: var(--ofs-ink);\n  text-align: left;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease;\n}\n\n.ofs-model-option:hover {\n  border-color: var(--ofs-hairline);\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-model-option.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-model-option:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-model-poster {\n  display: block;\n  width: 56px;\n  height: 56px;\n  overflow: hidden;\n  border: 1px solid var(--ofs-print-edge);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n}\n\n.ofs-model-poster img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n  filter: saturate(.96) brightness(.98);\n  transition:\n    filter 170ms ease,\n    transform 220ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model-option:hover .ofs-model-poster img {\n  filter: saturate(1.03) brightness(1.05);\n  transform: scale(1.03);\n}\n\n.ofs-model-poster-fallback {\n  display: grid;\n  place-items: center;\n  width: 100%;\n  height: 100%;\n  color: var(--ofs-ink-3);\n  font-size: 18px;\n  font-weight: 650;\n}\n\n.ofs-model-copy {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  min-width: 0;\n}\n\n.ofs-model-line {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-model-fam {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 4px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  color: var(--ofs-ink-3);\n  font-size: 9.5px;\n  font-weight: 650;\n  line-height: 1;\n  letter-spacing: .05em;\n}\n\n.ofs-model-option.is-on .ofs-model-fam {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-model-name {\n  overflow: hidden;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  font-weight: 600;\n  line-height: 1.3;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n.ofs-model-default {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 5px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink-2);\n  font-size: 10px;\n  font-weight: 600;\n  line-height: 1;\n}\n\n.ofs-model-desc {\n  overflow: hidden;\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  line-height: 1.45;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n.ofs-model-spec {\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 500;\n  line-height: 1.4;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-model-side {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 4px;\n  min-width: 46px;\n}\n\n.ofs-model-option-eta {\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 550;\n  line-height: 1.2;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: .01em;\n  white-space: nowrap;\n}\n\n.ofs-model-option.is-on .ofs-model-option-eta {\n  color: var(--ofs-ink);\n  font-weight: 600;\n}\n\n.ofs-model-check {\n  display: grid;\n  place-items: center;\n  width: 16px;\n  height: 16px;\n  color: var(--ofs-accent);\n  opacity: 0;\n  transition: opacity 140ms ease;\n}\n\n.ofs-model-option.is-on .ofs-model-check {\n  opacity: 1;\n}\n\n.ofs-model-foot {\n  flex: 0 0 auto;\n  margin-top: 4px;\n  padding: 9px 10px 3px;\n  border-top: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11.5px;\n  font-weight: 500;\n  line-height: 1.5;\n  letter-spacing: .01em;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-model-menu {\n    animation: none;\n  }\n\n  .ofs-model,\n  .ofs-model-caret,\n  .ofs-model-option,\n  .ofs-model-poster img,\n  .ofs-model-check {\n    transition: none;\n  }\n}\n/* ── 云端过渡态状态条 ───────────────────────────────────────── */\n/* 只在申请 GPU / 连接 / 准备模型 / 关闭时出现：讲清在等什么、已经等了多久。 */\n.ofs-sessionbar {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  min-height: 34px;\n  margin: 12px 16px 0;\n  padding: 7px 12px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  line-height: 1.4;\n  animation: ofs-fade-in 220ms ease;\n}\n\n.ofs-sessionbar-label {\n  flex: 0 0 auto;\n  font-weight: 600;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n.ofs-sessionbar-hint {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-sessionbar-time {\n  flex: 0 0 auto;\n  padding-left: 10px;\n  border-left: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n/* ── 骨架 ───────────────────────────────────────────────────── */\n.ofs-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: grid;\n  /* 单轨创作面板 + 自适应预览区；视图切换与状态全部收在顶栏。 */\n  grid-template-columns: 320px minmax(0, 1fr);\n  grid-template-rows: minmax(0, 1fr);\n}\n\n.ofs-body.is-gallery {\n  grid-template-columns: minmax(0, 1fr);\n}\n\n.ofs-main {\n  position: relative;\n  min-width: 0;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  margin: 14px;\n}\n\n/* ── 异常指引 ───────────────────────────────────────────────── */\n.ofs-guidance {\n  display: flex;\n  align-items: flex-start;\n  gap: 10px;\n  margin: 12px 16px 0;\n  padding: 10px 12px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n  border-radius: 14px;\n  background: var(--ofs-warn-soft);\n  animation: ofs-fade-in 220ms ease;\n}\n\n.ofs-guidance-icon {\n  display: grid;\n  place-items: center;\n  flex: 0 0 auto;\n  width: 28px;\n  height: 28px;\n  border-radius: 9px;\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  color: var(--ofs-warn);\n}\n\n.ofs-guidance-body {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  min-width: 0;\n}\n\n.ofs-guidance-title {\n  font-size: 12.5px;\n  color: var(--ofs-ink);\n}\n\n.ofs-guidance-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-guidance-actions .ofs-chip.is-on {\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);\n  color: var(--ofs-warn);\n  text-decoration: none;\n}\n\n.ofs-guidance-detail {\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  overflow-wrap: anywhere;\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n  line-clamp: 2;\n  overflow: hidden;\n}\n\n/* 指引卡的可执行提示（Windows PATH、凭据文件位置、GPU 开启步骤）：不截断，允许换行。 */\n.ofs-guidance-note {\n  margin: 0;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.55;\n  overflow-wrap: anywhere;\n}\n\n.ofs-guidance-command {\n  display: inline-block;\n  max-width: 100%;\n  padding: 3px 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 8px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 70%, transparent);\n  color: var(--ofs-ink);\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  overflow-wrap: anywhere;\n}\n\n/* 直连登录的 manual 兜底：授权链接 + 复制按钮 + 授权码输入 + 行内校验错误。 */\n.ofs-guidance-manual {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  min-width: 0;\n}\n\n.ofs-guidance-url {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-guidance-code {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-guidance-code-input {\n  flex: 1 1 200px;\n  min-width: 0;\n  height: 30px;\n  font-size: 11.5px;\n}\n\n.ofs-guidance-code-error {\n  margin: 0;\n  color: var(--ofs-error);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n/* ── Toast ──────────────────────────────────────────────────── */\n.ofs-toast {\n  position: absolute;\n  left: 50%;\n  bottom: 132px;\n  z-index: 60;\n  transform: translateX(-50%);\n  max-width: 78%;\n  padding: 9px 16px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 88%, transparent);\n  box-shadow: var(--ofs-shadow-lift);\n  backdrop-filter: blur(14px);\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  animation: ofs-pop-in 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n/* ── 运行日志抽屉 ───────────────────────────────────────────── */\n.ofs-logs {\n  position: fixed;\n  inset: 0;\n  z-index: 100;\n  display: flex;\n  justify-content: flex-end;\n  background: rgb(16 16 18 / 38%);\n  backdrop-filter: blur(2px);\n  -webkit-backdrop-filter: blur(2px);\n  animation: ofs-fade-in 160ms ease;\n}\n\n.ofs-logs-panel {\n  display: flex;\n  flex-direction: column;\n  width: min(560px, 100%);\n  height: 100%;\n  border-left: 1px solid var(--ofs-window-border);\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-window);\n  animation: ofs-slide-in 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-logs-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n  padding: 12px 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-logs-title {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n/* 远端 / Host 双视图切换：紧凑胶囊，与 header 里的复制按钮同一视觉语言。 */\n.ofs-logs-tabs {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n}\n\n.ofs-logs-tab {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11.5px;\n}\n\n.ofs-logs-copy {\n  height: 30px;\n}\n\n.ofs-logs-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  background: var(--ofs-sunken);\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-logs-body::-webkit-scrollbar {\n  width: 8px;\n}\n\n.ofs-logs-body::-webkit-scrollbar-thumb {\n  border: 2px solid transparent;\n  border-radius: 8px;\n  background: var(--ofs-ink-4);\n  background-clip: content-box;\n}\n\n.ofs-logs-lines {\n  margin: 0;\n  padding: 14px 16px 22px;\n  color: var(--ofs-ink-2);\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  line-height: 1.65;\n  font-variant-numeric: tabular-nums;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.ofs-logs-note {\n  margin: 0;\n  padding: 18px 16px;\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n  line-height: 1.6;\n}\n\n.ofs-logs-note.is-warn {\n  color: var(--ofs-warn);\n}\n\n/* 自动兜底提示：远端没有日志、已切到 Host 本地日志时说明来源。 */\n.ofs-logs-fallback {\n  margin: 0;\n  padding: 9px 16px;\n  border-bottom: 1px solid color-mix(in oklab, var(--ofs-accent) 22%, transparent);\n  background: color-mix(in oklab, var(--ofs-accent) 10%, transparent);\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n@keyframes ofs-slide-in {\n  from {\n    opacity: 0;\n    transform: translateX(18px);\n  }\n  to {\n    opacity: 1;\n    transform: translateX(0);\n  }\n}\n\n/* ── 运行设置抽屉 ─────────────────────────────────────────────\n * 与日志抽屉同一套抽屉骨架（右侧滑入、遮罩、焦点陷阱），\n * 内容区更窄（440px）：设置项是短表单，不需要日志那样的整屏宽度。\n */\n.ofs-settings {\n  position: fixed;\n  inset: 0;\n  z-index: 100;\n  display: flex;\n  justify-content: flex-end;\n  background: rgb(16 16 18 / 38%);\n  backdrop-filter: blur(2px);\n  -webkit-backdrop-filter: blur(2px);\n  animation: ofs-fade-in 160ms ease;\n}\n\n.ofs-settings-panel {\n  display: flex;\n  flex-direction: column;\n  width: min(440px, 100%);\n  height: 100%;\n  border-left: 1px solid var(--ofs-window-border);\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-window);\n  animation: ofs-slide-in 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-settings-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  padding: 12px 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-settings-title {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n.ofs-settings-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-settings-note {\n  margin: 0;\n  padding: 18px 16px;\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n  line-height: 1.6;\n}\n\n/* 读取失败：不白屏，给原因 + 重试。 */\n.ofs-settings-error-state {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 10px;\n  padding: 18px 16px;\n}\n\n.ofs-settings-form {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 4px 16px 16px;\n}\n\n/* 生效提示：温和的暖色窄条，说明改动要等下次唤醒。 */\n.ofs-settings-effective {\n  margin: 10px 0 2px;\n  padding: 8px 10px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n  border-radius: 10px;\n  background: var(--ofs-warn-soft);\n  color: var(--ofs-warn);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n.ofs-settings-section {\n  display: flex;\n  flex-direction: column;\n  gap: 9px;\n  padding: 13px 0;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-settings-section:last-of-type {\n  border-bottom: 0;\n}\n\n.ofs-settings-section-title {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-settings-row {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ofs-settings-label {\n  font-size: 11.5px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-settings-quick {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-settings-quick-item {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11.5px;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-settings-field {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.ofs-settings-input,\n.ofs-settings-textarea {\n  width: 100%;\n  padding: 0 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-settings-input {\n  height: 32px;\n}\n\n.ofs-settings-textarea {\n  min-height: 66px;\n  padding: 8px 10px;\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-settings-input:focus-visible,\n.ofs-settings-textarea:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-settings-options {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n/* 加速器单选：原生 radio 收进 label 里，视觉仍是轻量卡片。 */\n.ofs-settings-option {\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 32px;\n  padding: 0 12px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-settings-option:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-settings-option input {\n  margin: 0;\n  accent-color: var(--ofs-accent);\n}\n\n.ofs-settings-option.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-settings-inline {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ofs-settings-muted {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-settings-clear {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11px;\n}\n\n/* 高级折叠头：一行标题 + 箭头，默认收起，不占表单纵向空间。 */\n.ofs-settings-advanced-toggle {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-settings-advanced-toggle:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-settings-advanced {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  padding-top: 9px;\n}\n\n.ofs-settings-hint {\n  font-size: 10.5px;\n  line-height: 1.5;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-settings-errors {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.ofs-settings-error-item {\n  color: var(--ofs-error);\n  font-size: 11px;\n  line-height: 1.5;\n  overflow-wrap: anywhere;\n}\n\n.ofs-settings-error {\n  margin: 0;\n  color: var(--ofs-error);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n/* 底部操作条：滚动时贴住抽屉底部，保存按钮始终可点。 */\n.ofs-settings-foot {\n  position: sticky;\n  bottom: 0;\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n  margin-top: 4px;\n  padding: 12px 0 4px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-settings-save {\n  height: 32px;\n  padding: 0 16px;\n  font-size: 12.5px;\n}\n';
 
 // src/styles/panel.css
 var panel_default = "/*\n * 左侧创作面板（表单 / 对话两种形态共用的卡片容器与表单控件）。\n */\n\n.ofs-panel {\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n  min-width: 0;\n  margin: 14px 0 14px 14px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  overflow: hidden;\n}\n\n.ofs-panel-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 15px 15px 11px;\n}\n\n.ofs-panel-head h2 {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-panel-scroll {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 0 15px 14px;\n  display: flex;\n  flex-direction: column;\n  gap: 0;\n  scroll-behavior: smooth;\n}\n\n/* ── 分区 ───────────────────────────────────────────────────── */\n.ofs-fieldset {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 10px 0;\n}\n\n.ofs-fieldset:first-child {\n  padding-top: 2px;\n}\n\n.ofs-fieldset + .ofs-fieldset {\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-fieldset-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-fieldset-head h3 {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n/* ── 提示词输入 ─────────────────────────────────────────────── */\n.ofs-composer {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  padding: 10px 10px 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-sunken) 100%);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: 0 0 0 3px rgb(20 20 22 / 10%);\n}\n\n.ofs-composer-input {\n  width: 100%;\n  min-height: 66px;\n  resize: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  line-height: 1.62;\n}\n\n.ofs-composer-input:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-composer-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-composer-foot {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-counter {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-text-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  padding: 3px 7px;\n  border: 0;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transition: background-color 150ms ease;\n}\n\n.ofs-text-action:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-text-action:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* ── 建议 chips ─────────────────────────────────────────────── */\n.ofs-suggestions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-suggestion {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  max-width: 100%;\n  height: 24px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 10.5px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-suggestion:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-suggestion.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n}\n\n/* ── 灵感与润色 ─────────────────────────────────────────────── */\n.ofs-inspire {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  padding-top: 2px;\n}\n\n.ofs-inspire-label,\n.ofs-refine-head,\n.ofs-refine-dim {\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-refine {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 9px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-sunken);\n}\n\n.ofs-refine-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  color: var(--ofs-ink-2);\n  font-weight: 600;\n}\n\n.ofs-refine-group {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n/* ── 风格 tile：每格是一张试印出来的小相纸 ─────────────────── */\n.ofs-tiles {\n  display: flex;\n  gap: 8px;\n}\n\n.ofs-tile {\n  appearance: none;\n  flex: 1 1 0;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  cursor: pointer;\n}\n\n.ofs-tile-art {\n  position: relative;\n  display: block;\n  width: 100%;\n  aspect-ratio: 1 / 1;\n  overflow: hidden;\n  border: 1px solid var(--ofs-print-edge);\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow: 0 6px 14px -9px rgb(16 16 20 / 30%);\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease,\n    border-color 180ms ease;\n}\n\n.ofs-plate {\n  display: block;\n  width: 100%;\n  height: 100%;\n}\n\n.ofs-tile:hover .ofs-tile-art {\n  transform: translateY(-2px);\n  border-color: var(--ofs-print-edge);\n  box-shadow: 0 10px 20px -10px rgb(16 16 20 / 34%);\n}\n\n.ofs-tile-label {\n  font-size: 10.5px;\n  line-height: 1.3;\n  color: var(--ofs-ink-3);\n  text-align: center;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n.ofs-tile.is-on .ofs-tile-art {\n  box-shadow:\n    0 0 0 2px var(--ofs-card-solid),\n    0 0 0 4px var(--ofs-accent),\n    0 10px 20px -12px rgb(16 16 20 / 30%);\n}\n\n.ofs-tile.is-on .ofs-tile-label {\n  color: var(--ofs-accent);\n  font-weight: 600;\n}\n\n/* ── 画面比例 ───────────────────────────────────────────────── */\n.ofs-ratio-row {\n  display: flex;\n  gap: 8px;\n}\n\n.ofs-ratio {\n  appearance: none;\n  flex: 1 1 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 6px;\n  padding: 10px 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-3);\n  cursor: pointer;\n  transition:\n    border-color 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-ratio:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-ratio.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-ratio-glyph {\n  display: block;\n  border: 1.5px solid currentColor;\n  border-radius: 3px;\n}\n\n.ofs-ratio-glyph--1-1 { width: 19px; height: 19px; }\n.ofs-ratio-glyph--16-9 { width: 25px; height: 14px; }\n.ofs-ratio-glyph--9-16 { width: 14px; height: 25px; }\n.ofs-ratio-glyph--4-3 { width: 22px; height: 17px; }\n.ofs-ratio-glyph--3-4 { width: 17px; height: 22px; }\n\n.ofs-ratio-label {\n  font-size: 11px;\n  font-weight: 550;\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 高级设置行 ─────────────────────────────────────────────── */\n.ofs-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-row {\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  overflow: hidden;\n  transition: border-color 160ms ease;\n}\n\n.ofs-row.is-open,\n.ofs-row:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-row-head {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  padding: 9px 12px;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n}\n\n.ofs-row-toggle {\n  appearance: none;\n  flex: 1 1 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  min-width: 0;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-row-head:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-chevron {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-4);\n  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-chevron.is-open {\n  transform: rotate(180deg);\n}\n\n.ofs-row-textarea {\n  display: block;\n  width: calc(100% - 20px);\n  min-height: 64px;\n  margin: 0 10px 10px;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-grid2 {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 8px;\n  padding: 0 10px 10px;\n}\n\n.ofs-field {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ofs-field > span {\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field-label {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n.ofs-field input,\n.ofs-field select {\n  width: 100%;\n  height: 30px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-field input:focus-visible,\n.ofs-field select:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n/* ── 底部生成 ───────────────────────────────────────────────── */\n.ofs-panel-foot {\n  position: relative;\n  z-index: 1;\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 12px 15px 14px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card);\n  box-shadow: 0 -16px 20px -18px rgb(16 16 20 / 20%);\n}\n\n.ofs-generate {\n  position: relative;\n  overflow: hidden;\n  width: 100%;\n  height: 42px;\n  border-radius: 14px;\n  font-size: 13.5px;\n  letter-spacing: 0.02em;\n}\n\n/* 主操作上的一道扫光：光从相纸表面扫过去，只出现在悬停与提交中 */\n.ofs-generate::after {\n  content: '';\n  position: absolute;\n  inset: -34% -40%;\n  background: linear-gradient(102deg, transparent 42%, rgb(255 255 255 / 17%) 50%, transparent 58%);\n  opacity: 0;\n  transform: translateX(-72%);\n  pointer-events: none;\n}\n\n.ofs-generate:hover:not(:disabled)::after {\n  animation: ofs-light-sweep 820ms cubic-bezier(0.3, 0.8, 0.35, 1) 1;\n}\n\n.ofs-generate.is-busy::after {\n  animation: ofs-light-sweep 2600ms cubic-bezier(0.45, 0, 0.55, 1) infinite;\n}\n\n@keyframes ofs-light-sweep {\n  from {\n    opacity: 0;\n    transform: translateX(-72%);\n  }\n  16% {\n    opacity: 1;\n  }\n  to {\n    opacity: 0;\n    transform: translateX(72%);\n  }\n}\n\n.ofs-hint {\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n  text-align: center;\n}\n\n/* ── 提示词动作（英译 / 润色并列，实心操作仍只有底部生成） ─────── */\n.ofs-composer-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n/* 英译是次级动作：默认用静色，悬停才提到强调色，不和润色抢注意力。 */\n.ofs-translate-action {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-translate-action:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n/* ── 方形尺寸档位（与上方画幅比例是两行不同概念） ─────────────── */\n.ofs-size-row {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  margin-top: 10px;\n}\n\n.ofs-size-label {\n  flex: 0 0 auto;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-size-options {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-size {\n  appearance: none;\n  height: 26px;\n  padding: 0 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  font-weight: 550;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-size:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-size.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-size-hint {\n  margin-top: 6px;\n  text-align: left;\n}\n\n/* 高级设置里的分组小标题：占满两列，把自定义宽高和上面的参数分开 */\n.ofs-grid-head {\n  grid-column: 1 / -1;\n  padding-top: 2px;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-link {\n  appearance: none;\n  margin-left: 6px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: inherit;\n  cursor: pointer;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}";
@@ -2579,18 +2798,39 @@ function accountStatusOf(probe, sessionState) {
   if (status && status.auth === "ok" || sessionProvesAuth(sessionState)) return "ok";
   return status ? status.auth : "unknown";
 }
-function probeFailureCode(probe) {
+function probeFailureCode(probe, options = {}) {
   const status = probeStatusOf(probe);
   if (!status) return "";
-  if (status.cli === "failed") return "cli_missing";
+  const transport = options && options.transport === "direct" ? "direct" : "cli";
+  if (status.cli === "failed") return transport === "direct" ? "auth_required" : "cli_missing";
   if (status.auth === "failed") return "auth_required";
   return "";
 }
-function probeOutcomeOf(payload) {
+function accessMethodKey(transport) {
+  return transport === "direct" ? "studio.probe.direct" : "studio.probe.cli";
+}
+function accessStatusKey(transport, status) {
+  if (transport !== "direct") {
+    if (status === "ok") return "value.ok";
+    if (status === "failed") return "value.failed";
+    return "value.unknown";
+  }
+  if (status === "ok") return "studio.probe.directOk";
+  if (status === "failed") return "studio.probe.directLoginRequired";
+  return "value.unknown";
+}
+function accessStatusOf(status, transport) {
+  if (!status || typeof status !== "object") return "unknown";
+  if (transport !== "direct") return status.cli || "unknown";
+  if (status.auth === "ok") return "ok";
+  if (status.auth === "failed") return "failed";
+  return "unknown";
+}
+function probeOutcomeOf(payload, options = {}) {
   const data = payload && typeof payload === "object" ? payload : {};
   const probe = data.probe && typeof data.probe === "object" ? data.probe : null;
   if (data.ok === true) return { ok: true, probe, code: "", detail: "" };
-  const code = probeFailureCode(probe) || "probe_failed";
+  const code = probeFailureCode(probe, options) || "probe_failed";
   return { ok: false, probe, code, detail: probeFailureDetail(probe) };
 }
 function probeFailureDetail(probe) {
@@ -2821,7 +3061,13 @@ function GuidanceCard(props) {
   const { resetToSafe, retryFocusedJob } = actions;
   const { startSession: startSession2, runProbe: runProbe2, retryHost } = compute;
   const { copyInstallCommand, copyText, openLogs } = ui;
+  const [code, setCode] = import_react5.default.useState("");
+  const directMode = compute && compute.kaggleTransport === "direct";
+  const login = compute && compute.kaggleLogin ? compute.kaggleLogin : null;
   if (!kind) return null;
+  if (directMode && login && (kind === "auth" || kind === "cli")) {
+    return renderDirectLogin({ t, guidance, login, runProbe: runProbe2, copyText, openLogs, dismiss, detail, code, setCode });
+  }
   const cards = {
     oom: {
       title: t("studio.guidance.oom.title"),
@@ -2953,6 +3199,117 @@ function GuidanceCard(props) {
         hasSecondary ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip", onClick: viewLogs, children: t("studio.guidance.viewLogs") }) : null,
         hasSecondary ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip", onClick: copyDiagnostics, children: t("studio.guidance.copyDiag") }) : null,
         dismiss ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip", onClick: dismiss, children: t("studio.guidance.close") }) : null
+      ] })
+    ] })
+  ] });
+}
+function renderDirectLogin({ t, guidance, login, runProbe: runProbe2, copyText, openLogs, dismiss, detail, code, setCode }) {
+  const view = login.login && typeof login.login === "object" ? login.login : {};
+  const state = typeof view.state === "string" ? view.state : "idle";
+  const pending = state === "pending";
+  const manual = view.mode === "manual";
+  const url = typeof view.url === "string" ? view.url : "";
+  const title = t("studio.guidance.auth.directTitle");
+  const note = formatText(t("studio.guidance.auth.directHint"), { path: KAGGLE_CREDENTIAL_PATH });
+  function viewLogs(event) {
+    if (typeof openLogs !== "function") return;
+    openLogs(event && event.currentTarget ? event.currentTarget : null);
+  }
+  const notes = [];
+  if (pending) {
+    notes.push(t("studio.guidance.auth.waiting"));
+    if (manual) notes.push(t("studio.guidance.auth.waitingManual"));
+  } else if (state === "failed") {
+    notes.push(formatText(t("studio.guidance.auth.failed"), {
+      reason: login.errorKey ? t(login.errorKey) : t("studio.guidance.auth.reason.unknown")
+    }));
+  } else if (state === "cancelled") {
+    notes.push(t("studio.guidance.auth.cancelled"));
+  } else if (state === "done") {
+    const username = loginUsernameOf(view);
+    notes.push(username ? formatText(t("studio.guidance.auth.loginDoneWithUser"), { username }) : t("studio.guidance.auth.loginDone"));
+  }
+  return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance", role: "alert", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-guidance-icon", children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Icon, { name: "alert", size: 15 }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance-body", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { className: "ofs-guidance-title", children: title }),
+      detail ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { className: "ofs-guidance-detail", title: detail, children: detail }) : null,
+      pending && manual && url ? /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance-manual", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance-url", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("code", { className: "ofs-guidance-command", children: url }),
+          typeof copyText === "function" ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+            "button",
+            {
+              type: "button",
+              className: "ofs-chip",
+              onClick: () => copyText(url, "studio.guidance.auth.urlCopied"),
+              children: t("studio.guidance.auth.copyUrl")
+            }
+          ) : null
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance-code", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+            "input",
+            {
+              className: "ofs-settings-input ofs-guidance-code-input",
+              type: "text",
+              autoComplete: "off",
+              spellCheck: false,
+              value: code,
+              "aria-label": t("studio.guidance.auth.codeLabel"),
+              placeholder: t("studio.guidance.auth.codePlaceholder"),
+              onChange: (event) => setCode(event.target.value)
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+            "button",
+            {
+              type: "button",
+              className: "ofs-chip",
+              disabled: !loginCodeCanSubmit(code) || Boolean(login.busy),
+              onClick: () => login.submit(code),
+              children: t("studio.guidance.auth.codeSubmit")
+            }
+          )
+        ] }),
+        login.codeErrorKey ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { className: "ofs-guidance-code-error", role: "alert", children: t(login.codeErrorKey) }) : null
+      ] }) : null,
+      notes.map((text) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { className: "ofs-guidance-note", children: text }, text)),
+      !pending ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { className: "ofs-guidance-note", children: note }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-guidance-actions", children: [
+        pending ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+          "button",
+          {
+            type: "button",
+            className: "ofs-chip is-on",
+            disabled: Boolean(login.busy),
+            onClick: login.cancel,
+            children: t("studio.guidance.auth.cancel")
+          }
+        ) : state === "done" ? null : /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+          "button",
+          {
+            type: "button",
+            className: "ofs-chip is-on",
+            disabled: Boolean(login.pending),
+            onClick: login.start,
+            children: state === "failed" ? t("studio.guidance.auth.retry") : t("studio.guidance.auth.loginAction")
+          }
+        ),
+        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip", onClick: runProbe2, children: t("studio.guidance.cli.action") }),
+        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-chip", onClick: viewLogs, children: t("studio.guidance.viewLogs") }),
+        dismiss ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+          "button",
+          {
+            type: "button",
+            className: "ofs-chip",
+            onClick: () => {
+              if (pending) login.cancel();
+              dismiss();
+            },
+            children: t("studio.guidance.close")
+          }
+        ) : null
       ] })
     ] })
   ] });
@@ -3885,6 +4242,12 @@ function quickIdleMinutes(value) {
   if (!Number.isInteger(minutes)) return null;
   return IDLE.quickMinutes.includes(minutes) ? minutes : null;
 }
+function normalizeKaggleTransport(value) {
+  return SETTINGS.kaggleTransports.includes(value) ? value : SETTINGS.defaultKaggleTransport;
+}
+function kaggleTransportLabelKey(transport) {
+  return `studio.settings.kaggleTransport.option.${normalizeKaggleTransport(transport)}`;
+}
 function parseLineList(text, options = {}) {
   const maxItems = options.maxItems ?? SETTINGS.maxItems;
   const maxChars = options.maxItemChars ?? SETTINGS.maxItemChars;
@@ -3968,6 +4331,8 @@ function formFromSettings(view) {
   return {
     idleMinutes: String(idleMinutesOf(source.idleTimeoutSec)),
     accelerator,
+    // 旧宿主缺 kaggleTransport 时按 cli 处理：直连是试验特性，不能默认打开。
+    kaggleTransport: normalizeKaggleTransport(source.kaggleTransport),
     hfToken: "",
     clearHfToken: false,
     datasetSourcesText: formatLineList(source.datasetSources),
@@ -3998,6 +4363,8 @@ function buildSettingsPayload(form, view) {
   const accelerator = SETTINGS.accelerators.includes(source.accelerator) ? source.accelerator : SETTINGS.defaultAccelerator;
   const baseAccelerator = SETTINGS.accelerators.includes(base.accelerator) ? base.accelerator : SETTINGS.defaultAccelerator;
   if (accelerator !== baseAccelerator) payload.accelerator = accelerator;
+  const transport = normalizeKaggleTransport(source.kaggleTransport);
+  if (transport !== normalizeKaggleTransport(base.kaggleTransport)) payload.kaggleTransport = transport;
   const token2 = typeof source.hfToken === "string" ? source.hfToken.trim() : "";
   if (source.clearHfToken === true) payload.clearHfToken = true;
   else if (token2) payload.hfToken = token2;
@@ -4238,6 +4605,40 @@ function SettingsDrawer(props) {
           }
         ),
         advancedOpen ? /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-settings-advanced", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-settings-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.kaggleTransport.label") }),
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+              "div",
+              {
+                className: "ofs-settings-options",
+                role: "radiogroup",
+                "aria-label": t("studio.settings.kaggleTransport.label"),
+                children: SETTINGS.kaggleTransports.map((transport) => /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
+                  "label",
+                  {
+                    className: `ofs-settings-option${form.kaggleTransport === transport ? " is-on" : ""}`,
+                    children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+                        "input",
+                        {
+                          type: "radio",
+                          name: "ofs-kaggle-transport",
+                          value: transport,
+                          checked: form.kaggleTransport === transport,
+                          onChange: () => patchForm({ kaggleTransport: transport })
+                        }
+                      ),
+                      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { children: t(kaggleTransportLabelKey(transport)) })
+                    ]
+                  },
+                  transport
+                ))
+              }
+            ),
+            form.kaggleTransport === "direct" ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("small", { className: "ofs-settings-hint", children: formatText(t("studio.settings.kaggleTransport.directHint"), {
+              path: KAGGLE_CREDENTIAL_PATH
+            }) }) : null
+          ] }),
           /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("label", { className: "ofs-settings-field", children: [
             /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.dataset.label") }),
             /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
@@ -4854,6 +5255,7 @@ function TopBar(props) {
   const loadedPreset = presets.find((item) => item.id === (session && session.presetId)) || presets.find((item) => item.id === fields.presetId) || null;
   const steadyRaw = loadedPreset && loadedPreset.steadySeconds !== void 0 ? loadedPreset.steadySeconds : loadedPreset && loadedPreset.measured ? loadedPreset.measured.steadySeconds : null;
   const steadySeconds = Number.isFinite(steadyRaw) ? steadyRaw : null;
+  const kaggleTransport = compute.kaggleTransport === "direct" ? "direct" : "cli";
   const probePayload = probe || snapshot && snapshot.probe || probeReport && probeReport.probe || null;
   const probeInfo = probeStatusOf(probePayload);
   const accountStatus = accountStatusOf(probePayload, sessionState);
@@ -4975,9 +5377,9 @@ function TopBar(props) {
           probing ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { children: t("action.probing") }) : null,
           probeInfo ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(import_jsx_runtime16.Fragment, { children: [
             /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { children: [
-              t("studio.probe.cli"),
+              t(accessMethodKey(kaggleTransport)),
               " · ",
-              statusText(probeInfo.cli)
+              t(accessStatusKey(kaggleTransport, accessStatusOf(probeInfo, kaggleTransport)))
             ] }),
             /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { children: [
               t("studio.probe.quota"),
@@ -5364,7 +5766,7 @@ function useCompletionNotice({ t, ui, job, activeJob }) {
 }
 
 // src/studio/useStudio.js
-var import_react21 = __toESM(require("react"), 1);
+var import_react22 = __toESM(require("react"), 1);
 
 // src/logic/prompt.js
 function composePrompt(base, suffix) {
@@ -5788,27 +6190,228 @@ function useChatThread({ t, isEn, alive, state, form, generate }) {
   };
 }
 
-// src/studio/hooks/useSessionControl.js
+// src/studio/hooks/useKaggleLogin.js
 var import_react18 = __toESM(require("react"), 1);
+var NETWORK_ERROR_KEY = "studio.guidance.auth.reason.network";
+var REQUEST_ERROR_KEY = "studio.guidance.auth.reason.request";
+var UNAVAILABLE_ERROR_KEY = "studio.guidance.auth.reason.unavailable";
+var TIMEOUT_ERROR_KEY = "studio.guidance.auth.reason.timeout";
+function useKaggleLogin({ t, ui, onDone } = {}) {
+  const translate = typeof t === "function" ? t : (key) => key;
+  const [login, setLogin] = import_react18.default.useState(emptyLoginView);
+  const [busy, setBusy] = import_react18.default.useState(false);
+  const [errorKey, setErrorKey] = import_react18.default.useState("");
+  const [codeErrorKey, setCodeErrorKey] = import_react18.default.useState("");
+  const timerRef = import_react18.default.useRef(null);
+  const startedAtRef = import_react18.default.useRef(0);
+  const busyRef = import_react18.default.useRef(false);
+  const sessionRef = import_react18.default.useRef(0);
+  const aliveRef = import_react18.default.useRef(true);
+  const viewRef = import_react18.default.useRef(emptyLoginView());
+  const onDoneRef = import_react18.default.useRef(onDone);
+  onDoneRef.current = onDone;
+  function toast(key) {
+    if (ui && typeof ui.showToast === "function") ui.showToast(translate(key));
+  }
+  function markBusy(next) {
+    busyRef.current = next;
+    setBusy(next);
+  }
+  function stopPolling() {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+  function schedulePoll(token2) {
+    if (timerRef.current !== null || !aliveRef.current || sessionRef.current !== token2) return;
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      tick(token2);
+    }, KAGGLE_LOGIN.pollMs);
+  }
+  function commitView(view, token2) {
+    if (!aliveRef.current || sessionRef.current !== token2) return false;
+    viewRef.current = view;
+    setLogin(view);
+    setErrorKey("");
+    return true;
+  }
+  function failOnce(key, token2) {
+    if (!aliveRef.current || token2 !== void 0 && sessionRef.current !== token2) return;
+    stopPolling();
+    const base = viewRef.current && typeof viewRef.current === "object" ? viewRef.current : emptyLoginView();
+    const view = { ...base, state: "failed", message: null, finishedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    viewRef.current = view;
+    setLogin(view);
+    setErrorKey(key);
+    toast(key);
+  }
+  function failFromResult(result, token2) {
+    const code = result && typeof result.code === "string" ? result.code : "";
+    const status = result && Number.isFinite(result.status) ? result.status : 0;
+    if (status === 404 || code === "http_404") failOnce(UNAVAILABLE_ERROR_KEY, token2);
+    else if (code === "network") failOnce(NETWORK_ERROR_KEY, token2);
+    else failOnce(REQUEST_ERROR_KEY, token2);
+  }
+  function applyTerminalOrPending(view, token2) {
+    if (!commitView(view, token2)) return;
+    if (view.state === "done") {
+      stopPolling();
+      if (typeof onDoneRef.current === "function") onDoneRef.current(view);
+      toast("studio.guidance.auth.loginDone");
+      return;
+    }
+    if (!isLoginPending(view)) {
+      stopPolling();
+      return;
+    }
+    schedulePoll(token2);
+  }
+  async function tick(token2) {
+    if (!aliveRef.current || sessionRef.current !== token2) return;
+    if (loginTimedOut(startedAtRef.current, Date.now())) {
+      failOnce(TIMEOUT_ERROR_KEY, token2);
+      return;
+    }
+    const result = await fetchKaggleLogin();
+    if (!aliveRef.current || sessionRef.current !== token2) return;
+    const view = loginViewOf(result);
+    if (!view) {
+      failFromResult(result, token2);
+      return;
+    }
+    applyTerminalOrPending(view, token2);
+  }
+  async function start() {
+    if (busyRef.current) return;
+    const token2 = sessionRef.current + 1;
+    sessionRef.current = token2;
+    stopPolling();
+    markBusy(true);
+    setErrorKey("");
+    setCodeErrorKey("");
+    const result = await startKaggleLogin();
+    if (!aliveRef.current || sessionRef.current !== token2) return;
+    markBusy(false);
+    const view = loginViewOf(result);
+    if (!view) {
+      failFromResult(result, token2);
+      return;
+    }
+    startedAtRef.current = Date.now();
+    if (!commitView(view, token2)) return;
+    if (view.state === "done") {
+      stopPolling();
+      if (typeof onDoneRef.current === "function") onDoneRef.current(view);
+      toast("studio.guidance.auth.loginDone");
+      return;
+    }
+    if (isLoginPending(view)) schedulePoll(token2);
+  }
+  async function cancel() {
+    const token2 = sessionRef.current + 1;
+    sessionRef.current = token2;
+    stopPolling();
+    markBusy(true);
+    const result = await cancelKaggleLogin();
+    if (!aliveRef.current || sessionRef.current !== token2) return;
+    markBusy(false);
+    const view = loginViewOf(result);
+    const base = view || viewRef.current || emptyLoginView();
+    const cancelled = {
+      ...base,
+      state: "cancelled",
+      message: null,
+      finishedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    viewRef.current = cancelled;
+    setLogin(cancelled);
+    setErrorKey("");
+    setCodeErrorKey("");
+    toast("studio.guidance.auth.cancelled");
+  }
+  async function submit(raw) {
+    const check = validateLoginCode(raw);
+    if (!check.ok) {
+      setCodeErrorKey(check.message);
+      return false;
+    }
+    setCodeErrorKey("");
+    if (busyRef.current) return false;
+    markBusy(true);
+    const result = await submitKaggleLoginCode(check.code);
+    if (!aliveRef.current) return false;
+    markBusy(false);
+    const view = loginViewOf(result);
+    if (!view) {
+      failOnce(NETWORK_ERROR_KEY);
+      return false;
+    }
+    applyTerminalOrPending(view, sessionRef.current);
+    return true;
+  }
+  function reset() {
+    sessionRef.current += 1;
+    stopPolling();
+    viewRef.current = emptyLoginView();
+    setLogin(viewRef.current);
+    markBusy(false);
+    setErrorKey("");
+    setCodeErrorKey("");
+  }
+  import_react18.default.useEffect(() => {
+    aliveRef.current = true;
+    function onVisibility() {
+      if (document.hidden) {
+        stopPolling();
+        return;
+      }
+      if (isLoginPending(viewRef.current)) schedulePoll(sessionRef.current);
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      aliveRef.current = false;
+      stopPolling();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
+  return {
+    login,
+    // pending = 登录会话仍在进行（请求在途或等待授权），用于禁用重复发起。
+    pending: busy || isLoginPending(login),
+    busy,
+    errorKey: errorKey || loginFailureKey(login),
+    codeErrorKey,
+    start,
+    cancel,
+    submit,
+    reset
+  };
+}
+
+// src/studio/hooks/useSessionControl.js
+var import_react19 = __toESM(require("react"), 1);
 function rememberCancelling(previous, id) {
   if (!Array.isArray(previous)) return [id];
   return previous.includes(id) ? previous : [...previous, id];
 }
 function useSessionControl({ t, host, ui, alive }) {
-  const [busy, setBusy] = import_react18.default.useState("");
-  const [probing, setProbing] = import_react18.default.useState(false);
-  const [probeReport, setProbeReport] = import_react18.default.useState(null);
-  const [cancellingIds, setCancellingIds] = import_react18.default.useState([]);
-  const cancellingRef = import_react18.default.useRef(/* @__PURE__ */ new Set());
+  const [busy, setBusy] = import_react19.default.useState("");
+  const [probing, setProbing] = import_react19.default.useState(false);
+  const [probeReport, setProbeReport] = import_react19.default.useState(null);
+  const [cancellingIds, setCancellingIds] = import_react19.default.useState([]);
+  const cancellingRef = import_react19.default.useRef(/* @__PURE__ */ new Set());
   const state = host.state;
   const session = state && state.session || null;
+  const kaggleTransport = normalizeKaggleTransport(state && state.kaggleTransport);
   const sessionState = session && session.state || "absent";
   const pendingJobs = pendingJobsOf(state);
   const activeJob = pendingJobs[0] ?? null;
   const focusedJob = activeJob || state && state.lastJob || stateJobs(state)[0] || null;
   const status = computeStatusOf(t, { session });
   const pendingSignature = pendingJobs.map((job) => job.id).join(",");
-  import_react18.default.useEffect(() => {
+  import_react19.default.useEffect(() => {
     const activeIds = new Set(pendingJobs.map((job) => job.id));
     for (const id of [...cancellingRef.current]) {
       if (!activeIds.has(id)) cancellingRef.current.delete(id);
@@ -5818,9 +6421,9 @@ function useSessionControl({ t, host, ui, alive }) {
       return next.length === prev.length ? prev : next;
     });
   }, [pendingSignature]);
-  const hostErrorKeyRef = import_react18.default.useRef("");
-  const hostErrorCodeRef = import_react18.default.useRef("");
-  import_react18.default.useEffect(() => {
+  const hostErrorKeyRef = import_react19.default.useRef("");
+  const hostErrorCodeRef = import_react19.default.useRef("");
+  import_react19.default.useEffect(() => {
     if (!host.error) {
       if (!hostErrorCodeRef.current) return;
       const code = hostErrorCodeRef.current;
@@ -5902,7 +6505,7 @@ function useSessionControl({ t, host, ui, alive }) {
       ui.showToast(result.code === "timeout" ? t("studio.probe.timeout") : t("studio.probe.failed"));
       return;
     }
-    const outcome = probeOutcomeOf(result.data);
+    const outcome = probeOutcomeOf(result.data, { transport: kaggleTransport });
     if (outcome.ok) {
       setProbeReport({ status: "ok", message: "", probe: outcome.probe });
       if (ui.error && (ui.error.code === "cli_missing" || ui.error.code === "auth_required")) ui.setError(null);
@@ -5917,6 +6520,7 @@ function useSessionControl({ t, host, ui, alive }) {
   return {
     session,
     sessionState,
+    kaggleTransport,
     status,
     pendingJobs,
     activeJob,
@@ -5936,7 +6540,7 @@ function useSessionControl({ t, host, ui, alive }) {
 }
 
 // src/studio/hooks/useStudioForm.js
-var import_react19 = __toESM(require("react"), 1);
+var import_react20 = __toESM(require("react"), 1);
 
 // src/logic/preset.js
 function detectCjk(text) {
@@ -6058,14 +6662,14 @@ var EMPTY_FORM = {
 };
 function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const { presets, defaultPreset } = preset;
-  const [form, setForm] = import_react19.default.useState(() => ({
+  const [form, setForm] = import_react20.default.useState(() => ({
     ...EMPTY_FORM,
     prompt: initialPrompt
   }));
-  const [refineGroups, setRefineGroups] = import_react19.default.useState([]);
-  const [refineSource, setRefineSource] = import_react19.default.useState("");
-  const [enhancing, setEnhancing] = import_react19.default.useState(false);
-  const [translating, setTranslating] = import_react19.default.useState(false);
+  const [refineGroups, setRefineGroups] = import_react20.default.useState([]);
+  const [refineSource, setRefineSource] = import_react20.default.useState("");
+  const [enhancing, setEnhancing] = import_react20.default.useState(false);
+  const [translating, setTranslating] = import_react20.default.useState(false);
   const ratioId = (() => {
     const match = DEFAULT_RATIOS.find((ratio) => {
       const size = ratioToSize(ratio);
@@ -6081,7 +6685,7 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const englishPromptHint = detectCjk(form.prompt) && presetNeedsEnglish(activePreset);
   const sizeOptions = presetSizeOptions(activePreset);
   const selectedSize = form.width === form.height && sizeOptions.includes(form.width) ? form.width : null;
-  import_react19.default.useEffect(() => {
+  import_react20.default.useEffect(() => {
     if (presets.length === 0) return;
     setForm((prev) => {
       if (prev.presetId && presets.some((item2) => item2.id === prev.presetId)) return prev;
@@ -6225,7 +6829,7 @@ ${value}` : value });
 }
 
 // src/studio/hooks/useWorkLibrary.js
-var import_react20 = __toESM(require("react"), 1);
+var import_react21 = __toESM(require("react"), 1);
 var PAGE_SIZE = LIMITS.history.pageSize;
 function flattenHistory(items) {
   const images = [];
@@ -6236,15 +6840,15 @@ function flattenHistory(items) {
   return images;
 }
 function useWorkLibrary({ t, alive, ui, state }) {
-  const [selectedPath, setSelectedPath] = import_react20.default.useState("");
-  const [historyItems, setHistoryItems] = import_react20.default.useState([]);
-  const [historyHasMoreState, setHistoryHasMoreState] = import_react20.default.useState(false);
-  const [historyLoadingMore, setHistoryLoadingMore] = import_react20.default.useState(false);
-  const [favorites, setFavorites] = import_react20.default.useState([]);
-  const offsetRef = import_react20.default.useRef(0);
-  const hasMoreRef = import_react20.default.useRef(false);
-  const loadingMoreRef = import_react20.default.useRef(false);
-  const loadHistory = import_react20.default.useCallback(async () => {
+  const [selectedPath, setSelectedPath] = import_react21.default.useState("");
+  const [historyItems, setHistoryItems] = import_react21.default.useState([]);
+  const [historyHasMoreState, setHistoryHasMoreState] = import_react21.default.useState(false);
+  const [historyLoadingMore, setHistoryLoadingMore] = import_react21.default.useState(false);
+  const [favorites, setFavorites] = import_react21.default.useState([]);
+  const offsetRef = import_react21.default.useRef(0);
+  const hasMoreRef = import_react21.default.useRef(false);
+  const loadingMoreRef = import_react21.default.useRef(false);
+  const loadHistory = import_react21.default.useCallback(async () => {
     const result = await alive(fetchHistory(PAGE_SIZE, 0));
     if (!result) return;
     if (result.ok && result.data && Array.isArray(result.data.items)) {
@@ -6260,7 +6864,7 @@ function useWorkLibrary({ t, alive, ui, state }) {
       ui.fail(result.code, result.message);
     }
   }, [alive]);
-  const loadMoreHistory = import_react20.default.useCallback(async () => {
+  const loadMoreHistory = import_react21.default.useCallback(async () => {
     if (loadingMoreRef.current || !hasMoreRef.current) return;
     loadingMoreRef.current = true;
     setHistoryLoadingMore(true);
@@ -6283,10 +6887,10 @@ function useWorkLibrary({ t, alive, ui, state }) {
       setHistoryLoadingMore(false);
     }
   }, [alive]);
-  import_react20.default.useEffect(() => {
+  import_react21.default.useEffect(() => {
     loadHistory();
   }, [loadHistory]);
-  const loadLibrary = import_react20.default.useCallback(async () => {
+  const loadLibrary = import_react21.default.useCallback(async () => {
     const result = await alive(fetchLibrary());
     if (!result) return;
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
@@ -6295,16 +6899,16 @@ function useWorkLibrary({ t, alive, ui, state }) {
       ui.fail(result.code, result.message);
     }
   }, [alive]);
-  import_react20.default.useEffect(() => {
+  import_react21.default.useEffect(() => {
     loadLibrary();
   }, [loadLibrary]);
-  const baselineRef = import_react20.default.useRef(false);
-  const seenJobRef = import_react20.default.useRef("");
-  const announcedRef = import_react20.default.useRef(false);
+  const baselineRef = import_react21.default.useRef(false);
+  const seenJobRef = import_react21.default.useRef("");
+  const announcedRef = import_react21.default.useRef(false);
   const lastJob = state && state.lastJob ? state.lastJob : null;
   const lastJobKey = lastJob ? `${lastJob.id}:${lastJob.status}` : "";
   const sessionState = state && state.session && state.session.state || "absent";
-  import_react20.default.useEffect(() => {
+  import_react21.default.useEffect(() => {
     if (!state) return;
     if (!baselineRef.current) {
       baselineRef.current = true;
@@ -6320,8 +6924,8 @@ function useWorkLibrary({ t, alive, ui, state }) {
     ui.showToast(t("studio.toast.firstImage"));
   }, [lastJobKey, sessionState]);
   const lastJobId = state && state.lastJob ? `${state.lastJob.id}:${state.lastJob.finishedAt ?? ""}` : "";
-  const lastSeenRef = import_react20.default.useRef("");
-  import_react20.default.useEffect(() => {
+  const lastSeenRef = import_react21.default.useRef("");
+  import_react21.default.useEffect(() => {
     if (!lastJobId || lastSeenRef.current === lastJobId) return;
     lastSeenRef.current = lastJobId;
     loadHistory();
@@ -6425,14 +7029,14 @@ function useWorkLibrary({ t, alive, ui, state }) {
 
 // src/studio/useStudio.js
 function useAlive() {
-  const ref = import_react21.default.useRef(true);
-  import_react21.default.useEffect(() => {
+  const ref = import_react22.default.useRef(true);
+  import_react22.default.useEffect(() => {
     ref.current = true;
     return () => {
       ref.current = false;
     };
   }, []);
-  return import_react21.default.useCallback(async (promise) => {
+  return import_react22.default.useCallback(async (promise) => {
     const value = await promise;
     return ref.current ? value : null;
   }, []);
@@ -6448,17 +7052,18 @@ function useStudio(props) {
   const initialPanelMode = props && props.panelMode === "chat" ? "chat" : "form";
   const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : [];
   const defaultPreset = state && state.defaultPreset || "";
-  const [sending, setSending] = import_react21.default.useState(false);
-  const pendingRef = import_react21.default.useRef(null);
+  const [sending, setSending] = import_react22.default.useState(false);
+  const pendingRef = import_react22.default.useRef(null);
   const ui = useStudioUi({ t, initialView, initialPanelMode });
   const control = useSessionControl({ t, host, ui, alive });
+  const kaggleLogin = useKaggleLogin({ t, ui, onDone: () => control.runProbe() });
   const form = useStudioForm({ t, isEn, alive, ui, preset: { presets, defaultPreset }, initialPrompt });
   const chat = useChatThread({ t, isEn, alive, state, form, generate });
   const library = useWorkLibrary({ t, alive, ui, state });
   function startSession2() {
     return control.startSession(form.form.presetId || defaultPreset);
   }
-  const compute = { ...control, presets, defaultPreset, startSession: startSession2, retryHost };
+  const compute = { ...control, presets, defaultPreset, startSession: startSession2, retryHost, kaggleLogin };
   async function generate(overrides, options = {}) {
     if (sending) return;
     const body = form.buildBody(overrides);
@@ -6525,7 +7130,10 @@ function useStudio(props) {
   function dismissGuidance() {
     ui.dismissGuidance(guidanceKey);
   }
-  const guidanceCode = ui.error && ui.error.code || control.session && control.session.error && control.session.error.code || control.focusedJob && control.focusedJob.status === "failed" && control.focusedJob.error && control.focusedJob.error.code || "";
+  const rawGuidanceCode = ui.error && ui.error.code || control.session && control.session.error && control.session.error.code || control.focusedJob && control.focusedJob.status === "failed" && control.focusedJob.error && control.focusedJob.error.code || "";
+  const authProven = accountStatusOf(control.probe, control.sessionState) === "ok";
+  const suppressAuth = authProven && (rawGuidanceCode === "auth_required" || rawGuidanceCode === "cli_missing");
+  const guidanceCode = suppressAuth ? "" : rawGuidanceCode;
   const guidanceDetail = isConnectionCode(guidanceCode) ? t("error.network") : guidanceDetailOf({ error: ui.error, session: control.session, job: control.focusedJob });
   const guidanceKey = guidanceCode ? `${guidanceCode}|${guidanceDetail}` : "";
   const guidanceKind = guidanceCode && ui.dismissed !== guidanceKey ? guidanceKindOf(guidanceCode) : "";

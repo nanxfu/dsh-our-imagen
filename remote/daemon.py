@@ -86,7 +86,7 @@ os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 # ─────────────────────────────────────────────────────────────────────────────
 EMBEDDED_CONFIG_B64 = ""
 
-VERSION = "0.8.1"
+VERSION = "0.8.2"
 
 # 日志环容量：Host 侧按 docs/SPEC.md 实现，最多 400 行。
 LOG_MAX_LINES = 400

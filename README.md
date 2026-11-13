@@ -246,6 +246,11 @@ kaggle auth login
 
 验证：`kaggle quota` 能打印 GPU/TPU 配额即配置成功。
 
+> **试验特性（0.8.2）：不装 `kaggle` CLI 也能用。** 打开工作台 → 顶栏「GPU 状态」→「运行设置」→「高级」→
+> 「Kaggle 访问方式」选**直连**，然后点指引卡上的「在浏览器中登录 Kaggle」完成一次 OAuth 授权即可
+> （凭据写入 `%USERPROFILE%\.kaggle\credentials.json`，与 `kaggle auth login` 同格式，可随时切回 CLI）。
+> 喜欢命令行也可以用 `node tools/kaggle-login.mjs` 走同一条登录链路。
+
 ---
 
 ### 第二步：在 DSH 中加载插件

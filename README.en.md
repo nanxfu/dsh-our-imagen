@@ -245,6 +245,11 @@ kaggle auth login
 
 Verify with `kaggle quota`: if it prints GPU/TPU quota, the setup works.
 
+> **Experimental (0.8.2): works without the `kaggle` CLI.** Open the workbench → GPU status → Settings →
+> Advanced → set **Kaggle access** to **direct**, then click "Sign in to Kaggle in browser" on the guidance card
+> (credentials are written to `%USERPROFILE%\.kaggle\credentials.json`, the same format as `kaggle auth login`;
+> you can switch back to the CLI at any time). Prefer a terminal? Run `node tools/kaggle-login.mjs` for the same flow.
+
 ---
 
 ### Step 2: Load Plugin in DSH
