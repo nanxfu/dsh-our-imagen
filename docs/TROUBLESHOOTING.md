@@ -76,6 +76,8 @@ pipConstraints:
 
 只钉单个包（例如 `transformers==5.22.2`）通常没问题，但不要把「上限」当成固化手段：生态里任何一个包的大版本跃迁都可能改变依赖图。当前没有单独的 pip 镜像源配置项，如果你的环境需要 PyPI 镜像，建议在 Kaggle 侧用 `pip config` 或自带 `PIP_INDEX_URL`（插件不代管网络出口配置）。
 
+遇到依赖冲突时，优先参考第 8 节的「已知良好版本参考（LKGR）」——那是一组在真机上验证过的组合，可直接填进设置抽屉的 `pipConstraints`。
+
 ### 1.4 为什么不用 venv
 
 考虑过给远端建 venv，但没有采用：
@@ -104,6 +106,8 @@ pipConstraints:
 ## 3. 磁盘空间不足
 
 Kaggle 容器的 `/kaggle/working` 通常只有 20 GB，写入层满了会转只读。daemon 在下载权重前会按预设的 `downloadGb` × 1.15 做预检，并给出「需 X GiB / 可用 Y GiB」。
+
+0.8.0 起，daemon 还会在**切换模型前**按 LRU 清理 HuggingFace 缓存：先释放旧 pipeline，再保留目标模型依赖的全部仓库与 `localModels` 预挂载仓库，把其余 `models--*` 按最近修改时间从旧到新删除；日志里出现 `[cache] evicted <repo> freed=<X>GiB` 即清理生效。清理完仍不够时才会报「磁盘空间不足：需 X GiB / 可用 Y GiB」。
 
 处理：
 - 优先用权重预挂载（`datasetSources` + `localModels`），跳过下载；
@@ -141,6 +145,7 @@ Host 侧网络问题（代理环境）由 `lib/net.js` 处理：内置 fetch 失
 | `cli_missing` | 本机没有 `kaggle` 命令 | `pip install -U kaggle` |
 | `cli_timeout` | CLI 启动或调用超过 30 秒 | 检查代理/DNS；重试环境检查 |
 | `auth_required` | 没找到凭证或凭证失效 | 重新在 Kaggle 设置页生成 token，写入 `%USERPROFILE%\.kaggle\access_token` |
+| `gpu_unavailable` | 远端容器没拿到 GPU（`torch.cuda.is_available()` 为 `False`） | 检查 Kaggle 账号是否已完成手机号验证，并确认已启用 GPU 加速器；修复后重新唤醒云端 |
 | 配额一直显示不可用 | Kaggle quota 接口偶发失败 | 算力弹层会回退展示最近一次成功检查时间与当时配额 |
 ---
 
@@ -160,3 +165,38 @@ Host 侧网络问题（代理环境）由 `lib/net.js` 处理：内置 fetch 失
 | `auth_required` / `push_failed` | Kaggle 凭证或推送失败 | 见第 6 节 |
 
 成功产物在 `.tmp/verify/`：`<id>.png` 样张与 `<id>.report.json` 完整报告；带 `--write` 时 `measured` 会写回原 JSON。
+
+---
+
+## 8. 已知良好版本参考（LKGR）
+
+LKGR（Last Known Good Revision）是一组**在真实 Kaggle GPU 上跑通过图、且依赖可解析**的 Python 依赖版本组合。用途只有一个：当你遇到上游依赖冲突（第 1、2 节）时，把某一行的版本填进运行设置 →「高级预挂载与依赖锁定 → `pip` 依赖约束」，让远端按这组已验证组合安装。
+
+使用前先明确三点：
+
+- **这不是插件的默认行为**。`remote/daemon.py` 的 `PIP_CONSTRAINTS` 默认仍是空对象 `{}`，每次冷启动都按镜像当前状态安装最新兼容组合，再用导入自检兜底；本表只是可选的「回退基线」。
+- **只在出问题时用**。日常不需要预先钉版本：生态里任何一次大版本跃迁都会改变依赖图，钉死旧组合反而可能把 pip 卡在更老的版本上。
+- **表中的组合必须来自真机实测**（`npm run test:gpu`），不要手填「看起来合理」的版本号。
+
+| diffusers | transformers | accelerate | peft | huggingface-hub | 验证模型与设备 | 验证日期 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 待 0.8.0 真机 `npm run test:gpu` 回填 | 待回填 | 待回填 | 待回填 | 待回填 | 待回填（建议覆盖 SDXL / FLUX.2 / Anima 三种架构，Kaggle 2×Tesla T4） | 待回填 |
+
+填写说明：
+
+1. 在真机上跑一次连续切模型验证（会消耗 GPU 配额）：
+   ```powershell
+   npm run test:gpu -- --presets sdxl-lightning,flux2-klein-4b,anima-light-lavender
+   ```
+   脚本会把 `/health.versions`（python / torch / diffusers / transformers / accelerate / peft / huggingface_hub / safetensors / pillow 的纯版本号）、每个模型的加载/出图耗时与远端 `[cache]` 日志摘要写进 `report.json`。
+2. 把当次运行 `versions` 里的 diffusers / transformers / accelerate / peft / huggingface_hub 抄到本表新行，同时记录验证过的模型与设备（例如「SDXL Lightning + FLUX.2 klein + Anima / 2×Tesla T4」）和日期。
+3. 用户遇到冲突时，按行把版本写成逐行约束填入设置抽屉，例如：
+   ```text
+   diffusers==0.42.1
+   transformers==5.22.2
+   accelerate==1.15.0
+   peft==0.21.2
+   huggingface-hub==2.4.0
+   ```
+   保存后**下次唤醒会话生效**（设置抽屉顶部会提示「当前云端实例已运行，修改将在下次唤醒时生效」）。
+4. 某一行在后续版本里失效时（例如能装上但 `import` 自检失败），在该行标注失效日期并补一行新的验证组合，**不要直接覆盖历史行**——历史行是回退依据。

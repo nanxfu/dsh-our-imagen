@@ -33,6 +33,14 @@
    Cloudflare quick tunnel / 本地代理上会被判成响应空闲中途掐断（表现为
    cloudflared ``context canceled``），80s 级的模型必中；拆成短请求后，任何一层
    代理或隧道都不会再因为「长时间零字节」丢掉整次生成。
+11. **0.8.0 切模型缓存清理**：Kaggle 20GB 磁盘放不下两个大模型的全量权重。切换
+    pipeline 时先释放旧模型，再按「目标模型依赖 + 预挂载仓库」构建 keep_set，把
+   HF 缓存里其余 ``models--*`` 按 mtime 旧→新删除；每次删完重读磁盘，够了就停，
+   清完仍不足才抛「磁盘空间不足」。只读挂载目录永远不碰。
+12. **0.8.0 无 GPU 明确报错**：Kaggle 账号未完成手机号验证时会静默降级成 CPU 容器。
+   启动阶段检测到没 GPU 就立刻 ``fail_boot('gpu_unavailable', …)``，文案直接给出
+   「手机号验证 + 启用 GPU 加速器」的下一步；``/health.last_error_code`` 与 ntfy
+   ``error`` 事件都带该码，Host 据此出专用指引卡，不再用 CPU 硬跑。
 """
 
 from __future__ import annotations
@@ -40,6 +48,7 @@ from __future__ import annotations
 import base64
 import gc
 import hmac
+import importlib.metadata
 import inspect
 import io
 import json
@@ -1059,17 +1068,35 @@ def anima_local_assets(pipeline_spec: dict) -> dict[str, str]:
     return assets
 
 
+def _with_headroom(gb: float) -> float:
+    """下载/清理判定统一叠加 DISK_HEADROOM 余量：缓存与解压临时文件也会占空间。"""
+    return round(float(gb) * DISK_HEADROOM, 2)
+
+
 def required_download_gb(pipeline_spec: dict) -> float | None:
     """按 pipeline spec 的 downloadGb 估算下载需求（含 15% 余量）；缺失/非法返回 None。"""
     raw = pipeline_spec.get("downloadGb")
     if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
         return None
-    return round(float(raw) * DISK_HEADROOM, 2)
+    return _with_headroom(raw)
 
 
 def disk_usage_root() -> str:
     """Kaggle 容器里权重落在 /kaggle/working；其他环境（本地调试）退回当前目录。"""
     return "/kaggle/working" if os.path.isdir("/kaggle/working") else os.getcwd()
+
+
+def disk_usage_target() -> str:
+    """磁盘测量目标：HF 实际缓存目录（不存在时取最近存在祖先）。
+
+    权重走 ``snapshot_download()`` 落在 HF 缓存目录，它与 ``/kaggle/working`` 未必
+    同一文件系统（见 docs/WORKBENCH_AUDIT_AND_RELIABILITY_PLAN.md §5.1），只量
+    ``/kaggle/working`` 可能把「缓存盘已满」误判成「空间充足」。
+    """
+    try:
+        return _existing_ancestor(hf_hub_cache_dir())
+    except Exception:
+        return disk_usage_root()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1222,11 +1249,14 @@ def _log_cache_probe() -> None:
 
 
 def disk_precheck(pipeline_spec: dict, root: str | None = None, usage=None) -> dict | None:  # noqa: ANN001
-    """磁盘预检：返回 ``{required_gb, free_gb, path, enough}``；没有体积信息时返回 None。"""
+    """磁盘预检：返回 ``{required_gb, free_gb, path, enough}``；没有体积信息时返回 None。
+
+    默认测量 ``disk_usage_target()``（HF 缓存目录），而不是只看 ``/kaggle/working``。
+    """
     required = required_download_gb(pipeline_spec)
     if required is None:
         return None
-    target = root or disk_usage_root()
+    target = root or disk_usage_target()
     read_usage = usage or shutil.disk_usage
     try:
         info = read_usage(target)
@@ -1256,6 +1286,255 @@ def ensure_disk_capacity(pipeline_spec: dict) -> None:
     raise LoadError(
         f"磁盘空间不足（{pipeline_spec.get('base')}）：{disk_usage_text(result)}（{result['path']}）"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# M4.1 切模型 LRU 缓存清理
+#
+# Kaggle 容器磁盘约 20GB，权重走 snapshot_download() 落在 HF 缓存目录，旧权重不会随
+# 切模型自动释放，连续切换两个大模型就会爆盘（见
+# docs/WORKBENCH_AUDIT_AND_RELIABILITY_PLAN.md §5.1）。策略：
+#   1. keep_set = 目标 pipeline 递归收集的全部仓库 + local_models 预挂载仓库，绝不删除；
+#   2. 只扫 hf_hub_cache_dir() 下的 models--*，按 mtime 从旧到新逐个大清；
+#   3. 每删一个就重新读盘，够了立即停；清完仍不足才抛 LoadError。
+# 只读挂载目录（/kaggle/input/...）永远不在扫描范围内，且会做路径重叠二次保护。
+# ─────────────────────────────────────────────────────────────────────────────
+
+HF_CACHE_REPO_PREFIX = "models--"
+_HF_REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def _repo_key(repo: str) -> str:
+    """仓库 id 归一化（大小写与首尾斜杠无关），仅用于 keep_set 比较。"""
+    return str(repo or "").strip().strip("/").lower()
+
+
+def pipeline_repos(pipeline_spec) -> list[str]:  # noqa: ANN001
+    """递归收集 pipeline 描述依赖的全部 HF repo id（去重、去空、保持出现顺序）。
+
+    覆盖 ``base`` / ``vae`` / ``textEncoder`` / ``tokenizers`` / ``lora`` / ``refiner``
+    / ``adapter`` 等全部嵌套字段。判定规则是「值形如 ``org/name``」，只认结构不认
+    具体 loader，新增 loader 不必回来改这里；多收集只会多保留缓存，是安全方向。
+    """
+    found: list[str] = []
+    seen: set[str] = set()
+
+    def visit(value) -> None:  # noqa: ANN001
+        if isinstance(value, str):
+            text = value.strip()
+            if _HF_REPO_RE.match(text):
+                key = _repo_key(text)
+                if key not in seen:
+                    seen.add(key)
+                    found.append(text)
+            return
+        if isinstance(value, dict):
+            for item in value.values():
+                visit(item)
+            return
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                visit(item)
+
+    visit(pipeline_spec)
+    return found
+
+
+def cache_keep_repos(pipeline_spec) -> set[str]:  # noqa: ANN001
+    """切模型清理的不可删仓库集合：目标 pipeline 全部依赖 + 所有预挂载仓库。
+
+    预挂载仓库即使不在本次 pipeline 里也保留：用户明确配置了本地权重映射，对应
+    缓存可能是同一份权重的历史下载，删掉只会让回退在线加载时重新下载。
+    """
+    keep = {repo for repo in pipeline_repos(pipeline_spec) if repo}
+    keep.update(str(repo).strip() for repo in (CONFIG.local_models or {}) if str(repo).strip())
+    return keep
+
+
+def cache_repo_candidates(dir_name: str) -> set[str]:
+    """缓存目录名 → 可能的 repo id 集合（``models--org--name`` → ``org/name``）。
+
+    HF 只把 repo id 里的 ``/`` 编码成 ``--``，但仓库名本身也可能含 ``--``，所以
+    同时尝试「第一个 ``--`` 分隔」「最后一个 ``--`` 分隔」「全部替换」三种还原，
+    只保留形如 ``org/name`` 的候选；命中任意一个即视为不可删（宁可少删）。
+    """
+    if not dir_name.startswith(HF_CACHE_REPO_PREFIX):
+        return set()
+    body = dir_name[len(HF_CACHE_REPO_PREFIX) :]
+    if not body:
+        return set()
+    candidates = {body.replace("--", "/")}
+    first, sep, rest = body.partition("--")
+    if sep and first and rest:
+        candidates.add(f"{first}/{rest}")
+    head, sep, tail = body.rpartition("--")
+    if sep and head and tail:
+        candidates.add(f"{head}/{tail}")
+    return {item for item in candidates if _HF_REPO_RE.match(item)}
+
+
+def repo_from_cache_dir_name(dir_name: str) -> str | None:
+    """缓存目录名还原 repo id（供日志展示）；无法还原返回 None。"""
+    body = dir_name[len(HF_CACHE_REPO_PREFIX) :] if dir_name.startswith(HF_CACHE_REPO_PREFIX) else ""
+    first, sep, rest = body.partition("--")
+    preferred = f"{first}/{rest}" if sep and first and rest else ""
+    candidates = cache_repo_candidates(dir_name)
+    if not candidates:
+        return None
+    return preferred if preferred in candidates else sorted(candidates)[0]
+
+
+def cache_model_dirs(root: str | None = None) -> list[dict]:
+    """枚举 HF 缓存目录下的 ``models--*`` 项，按最近修改时间从旧到新排序。
+
+    mtime 是主依据；atime 只做同 mtime 时的次序参考（部分挂载点 atime 不可靠）。
+    """
+    target = root or hf_hub_cache_dir()
+    try:
+        names = os.listdir(target)
+    except OSError:
+        return []
+    entries: list[dict] = []
+    for name in names:
+        if not name.startswith(HF_CACHE_REPO_PREFIX):
+            continue
+        repos = cache_repo_candidates(name)
+        if not repos:
+            # 结构不认识的目录不参与清理：无法判断是否在用，删错代价远大于收益。
+            continue
+        path = os.path.join(target, name)
+        try:
+            if not os.path.isdir(path):
+                continue
+            info = os.stat(path)
+        except OSError:
+            continue
+        entries.append(
+            {
+                "name": name,
+                "path": path,
+                "repos": repos,
+                "mtime": float(getattr(info, "st_mtime", 0.0) or 0.0),
+                "atime": float(getattr(info, "st_atime", 0.0) or 0.0),
+            }
+        )
+    entries.sort(key=lambda item: (item["mtime"], item["atime"], item["name"]))
+    return entries
+
+
+def _cache_path_protected(path: str) -> bool:
+    """path 与任何 local_models 预挂载目录重叠时视为受保护（二次防线）。"""
+    try:
+        base = os.path.abspath(os.path.expanduser(path))
+    except Exception:
+        return True
+    for mapped in (CONFIG.local_models or {}).values():
+        try:
+            other = os.path.abspath(os.path.expanduser(str(mapped)))
+        except Exception:
+            continue
+        if not other:
+            continue
+        try:
+            common = os.path.commonpath([base, other])
+        except (ValueError, OSError):
+            continue
+        if common in (base, other):
+            return True
+    return False
+
+
+def _cache_free_gib(path: str, usage=None) -> float | None:  # noqa: ANN001
+    """读 path（不存在时取最近存在祖先）所在磁盘的剩余 GiB；失败返回 None。"""
+    read_usage = usage or shutil.disk_usage
+    try:
+        info = read_usage(_existing_ancestor(path))
+    except Exception as exc:
+        log(f"[cache] WARN 无法读取磁盘剩余空间（跳过清理判定）：{short(exc)}")
+        return None
+    return round(float(getattr(info, "free", 0)) / 2**30, 2)
+
+
+def _dir_size_gib(path: str) -> float:
+    """目录占用 GiB（删除前统计，仅用于日志里的 freed=<X>GiB）。"""
+    total = 0
+    for base, _dirs, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.path.getsize(os.path.join(base, name))
+            except OSError:
+                continue
+    return round(total / 2**30, 2)
+
+
+def evict_cache_for(required_gb, keep_repos=None, *, root: str | None = None, usage=None) -> dict:  # noqa: ANN001
+    """按需清理 HF 缓存（LRU），返回 ``{required_gb, free_gb, path, evicted, enough}``。
+
+    ``required_gb`` 是未经余量放大的下载估算，内部按 ``DISK_HEADROOM`` 放大后再与
+    可用空间比较；``keep_repos`` 与 ``CONFIG.local_models`` 里的仓库永不删除。
+    空间足够时不扫描目录；把可删项清完仍不足时抛 ``LoadError``（需/可用两位小数）。
+    """
+    required = _with_headroom(required_gb)
+    target = root or hf_hub_cache_dir()
+    result: dict = {"required_gb": required, "free_gb": None, "path": target, "evicted": [], "enough": True}
+    free = _cache_free_gib(target, usage)
+    if free is None:
+        return result
+    result["free_gb"] = free
+    if free >= required:
+        return result
+
+    keep = {_repo_key(repo) for repo in (keep_repos or ()) if _repo_key(repo)}
+    keep.update(_repo_key(repo) for repo in (CONFIG.local_models or {}) if _repo_key(repo))
+    log(f"[cache] 可用空间不足：需 {required:.2f} GiB / 可用 {free:.2f} GiB，按 LRU 清理 {target}")
+    for entry in cache_model_dirs(target):
+        if free >= required:
+            break
+        if _cache_path_protected(entry["path"]):
+            log(f"[cache] 跳过预挂载目录：{entry['name']}")
+            continue
+        if {_repo_key(repo) for repo in entry["repos"]} & keep:
+            log(f"[cache] 保留当前模型/预挂载缓存：{repo_from_cache_dir_name(entry['name'])}")
+            continue
+        repo = repo_from_cache_dir_name(entry["name"]) or entry["name"]
+        freed = _dir_size_gib(entry["path"])
+        try:
+            shutil.rmtree(entry["path"])
+        except OSError as exc:
+            log(f"[cache] WARN 删除缓存失败（{repo}）：{short(exc)}")
+            continue
+        result["evicted"].append({"repo": repo, "path": entry["path"], "freed_gib": freed})
+        log(f"[cache] evicted {repo} freed={freed:.2f}GiB")
+        measured = _cache_free_gib(target, usage)
+        if measured is None:
+            # 删完读不到盘就不再判定：与其误报失败，不如让后续下载自己暴露问题。
+            result["free_gb"] = None
+            return result
+        free = measured
+        result["free_gb"] = free
+
+    if free < required:
+        result["enough"] = False
+        raise LoadError(f"磁盘空间不足：需 {required:.2f} GiB / 可用 {free:.2f} GiB")
+    log(f"[cache] 清理完成：需 {required:.2f} GiB / 可用 {free:.2f} GiB")
+    return result
+
+
+def ensure_cache_capacity(pipeline_spec: dict) -> None:
+    """切模型前的缓存清理闸门：空间足够时不扫目录、不删文件，清完仍不足才报错。
+
+    与 ``ensure_disk_capacity`` 的分工：后者在下载前直接预检报错，这里先尝试 LRU
+    清理旧模型缓存再决定是否失败。预挂载模型不下载、不占 HF 缓存，直接跳过。
+    """
+    base = str(pipeline_spec.get("base") or "")
+    if resolve_local_model(base):
+        return
+    if str(pipeline_spec.get("loader") or "") == "anima" and anima_local_assets(pipeline_spec).get("dit"):
+        return
+    raw = pipeline_spec.get("downloadGb")
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
+        return
+    evict_cache_for(raw, cache_keep_repos(pipeline_spec))
 
 
 def _prefetch_weights(base: str, allow_patterns) -> None:  # noqa: ANN001
@@ -1455,6 +1734,9 @@ def ensure_pipeline(pipeline_spec: dict) -> tuple[object, float]:
     _log_cache_probe()
     started = time.time()
     try:
+        # M4.1：真正下载/加载前按需清理旧模型缓存。切模型时 release_pipeline 已先执行
+        # （其中含 gc.collect() 与 torch.cuda.empty_cache()），这里只删磁盘上的旧权重。
+        ensure_cache_capacity(pipeline_spec)
         pipe, identity = build_pipeline(pipeline_spec)
     except RequestError:
         set_phase(previous_phase)
@@ -1801,12 +2083,63 @@ def start_job_worker() -> threading.Thread:
 # HTTP 服务
 # ─────────────────────────────────────────────────────────────────────────────
 
+# M4.2：/health 的依赖版本快照。三项依次为「输出键名 / 已加载模块名 / PyPI 发行名」。
+# 只输出纯版本号，绝不包含 token、路径或安装位置；取不到的键直接省略。
+HEALTH_VERSION_MODULES = (
+    ("torch", "torch", "torch"),
+    ("diffusers", "diffusers", "diffusers"),
+    ("transformers", "transformers", "transformers"),
+    ("accelerate", "accelerate", "accelerate"),
+    ("peft", "peft", "peft"),
+    ("huggingface_hub", "huggingface_hub", "huggingface-hub"),
+    ("safetensors", "safetensors", "safetensors"),
+    ("pillow", "PIL", "pillow"),
+)
+_VERSION_RE = re.compile(r"^[0-9][0-9A-Za-z.+!_-]{0,63}$")
+
+
+def _clean_version(value) -> str | None:  # noqa: ANN001
+    """只接受纯版本号字符串（数字开头）；其他形态丢弃，避免把路径带进 /health。"""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text or not _VERSION_RE.match(text):
+        return None
+    return text
+
+
+def dependency_versions() -> dict:
+    """python + torch/diffusers/... 的版本快照；取不到就省略该键，绝不抛异常。
+
+    优先读已加载模块的 ``__version__``（不额外 import 重库），回退到
+    importlib.metadata；两种来源都做纯版本号校验。
+    """
+    versions: dict = {}
+    python_version = _clean_version(platform.python_version())
+    if python_version:
+        versions["python"] = python_version
+    for key, module_name, dist_name in HEALTH_VERSION_MODULES:
+        version = None
+        module = sys.modules.get(module_name)
+        if module is not None:
+            version = _clean_version(getattr(module, "__version__", None))
+        if version is None:
+            try:
+                version = _clean_version(importlib.metadata.version(dist_name))
+            except Exception:
+                version = None
+        if version is not None:
+            versions[key] = version
+    return versions
+
 
 def health_payload() -> dict:
     return {
         "status": "error" if STATE.phase == "error" else "ok",
         "phase": STATE.phase,
         "version": protocol_version(),
+        # M4.2：依赖版本快照（纯版本号，不含 token / 路径），用于 LKGR 基线与故障归因。
+        "versions": dependency_versions(),
         "model_id": STATE.model_id,
         "loaded": list(STATE.loaded),
         "device": STATE.device,
@@ -2362,8 +2695,18 @@ def _log_environment() -> None:
             continue
 
 
+# M3.3：Kaggle 未绑定手机号或未启用 GPU 加速器时会静默降级成 CPU 容器。这里必须立刻
+# 给出可执行的下一步，而不是继续用 CPU 硬跑（那会表现为超时或模糊的 CUDA 报错）。
+GPU_UNAVAILABLE_MESSAGE = (
+    "未检测到可用 GPU（当前为 CPU 容器）。"
+    "请检查 Kaggle 账号是否已完成手机号验证，并确认已启用 GPU 加速器"
+    "（本插件推送 Kernel 时默认开启 2×Tesla T4）"
+)
+
+
 def runtime_boot() -> None:
     """后台线程：探测 GPU → 装依赖 →（可选）预加载模型 → phase=ready。"""
+    torch_error = ""
     try:
         import torch
 
@@ -2375,14 +2718,15 @@ def runtime_boot() -> None:
             STATE.device = None
             STATE.device_count = 0
     except Exception as exc:
-        log(f"[cuda] 导入 torch 失败：{short(exc)}")
+        torch_error = short(exc)
+        log(f"[cuda] 导入 torch 失败：{torch_error}")
 
     if not STATE.device_count:
-        message = (
-            "未检测到可用 GPU（torch.cuda.is_available() 为 False）。"
-            "Kaggle 静默降级到 CPU 时请检查设置里的手机号验证。"
-        )
-        fail_boot("load_failed", message)
+        if torch_error:
+            # torch 都没能导入时无法确认 GPU 状态，保留 load_failed 以免误导成账号问题。
+            fail_boot("load_failed", f"无法确认 GPU 可用性：{torch_error}")
+        else:
+            fail_boot("gpu_unavailable", GPU_UNAVAILABLE_MESSAGE)
         return
 
     try:

@@ -32,6 +32,12 @@
       run_task 回传实际出图尺寸（PIL image.size，而不是请求宽高）
   19. 缓存探针：[cache] 日志含 HF 缓存目录/挂载点/剩余空间，token 值不落日志（含路径
       里夹带 token 时的脱敏），读盘失败降级为 unknown，进程内只打一次
+ 20. M4.1 切模型 LRU 缓存清理：pipeline 依赖仓库递归收集、缓存目录名还原 repo id、
+      keep_set（含 local_models 预挂载）、按 mtime 旧→新逐出、达标即停、空间不足
+      抛 LoadError；盘空间默认按 HF 缓存目录测量
+ 21. M3.3 无 GPU：phase=error / last_error_code='gpu_unavailable'、文案含手机号验证与
+      GPU 加速器、ntfy error 事件带码；torch 导入失败仍归 load_failed
+ 22. M4.2 /health.versions：依赖版本快照只含纯版本号，取不到省略，不含 token / 路径
 
 运行：python test/daemon-unit.py
 """
@@ -55,6 +61,10 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 DAEMON_PATH = ROOT / "remote" / "daemon.py"
 ANIMA_RUNTIME_PATH = ROOT / "remote" / "anima_runtime.py"
+
+# 版本号只在 shared/contract.js 维护：测试期望值从生成物 remote/contract.json 读取，
+# 升版本时不必改这里的常量（npm run test:contract 会先校验生成物与契约一致）。
+CONTRACT_VERSION = json.loads((ROOT / "remote" / "contract.json").read_text(encoding="utf-8"))["version"]
 
 
 def _load_daemon():
@@ -85,7 +95,7 @@ AUTH_TOKEN = "test-token-0123456789"
 
 # 与 shared/contract.js 的 daemonContract() 同形：daemon 只消费 version 与 limits。
 CONTRACT = {
-    "version": "0.7.0",
+    "version": CONTRACT_VERSION,
     "limits": {
         "width": {"min": 256, "max": 1536, "step": 8},
         "height": {"min": 256, "max": 1536, "step": 8},
@@ -228,7 +238,7 @@ class ImportSideEffectTest(unittest.TestCase):
         self.assertIsInstance(d.CONFIG, d.DaemonConfig)
         self.assertIsInstance(d.STATE, d.RuntimeState)
         self.assertIsInstance(d.BOOT, d.BootState)
-        self.assertEqual(d.VERSION, "0.7.0")
+        self.assertEqual(d.VERSION, CONTRACT_VERSION)
         self.assertEqual(d.STATE.phase, "booting")
         self.assertIsNone(d.BOOT.tunnel_url)
         self.assertFalse(d.BOOT.published_ready)
@@ -358,7 +368,7 @@ class BuildConfigTest(DaemonUnitTest):
         with mock.patch.object(d, "EMBEDDED_CONFIG_B64", encoded):
             config = d.load_config()
         self.assertEqual(config.auth_token, "embedded-token")
-        self.assertEqual(config.contract["version"], "0.7.0")
+        self.assertEqual(config.contract["version"], CONTRACT_VERSION)
 
     def test_load_config_without_payload_returns_defaults(self) -> None:
         with mock.patch.object(d, "EMBEDDED_CONFIG_B64", ""), mock.patch.dict(os.environ, {}, clear=True):
@@ -378,7 +388,7 @@ class BuildConfigTest(DaemonUnitTest):
 
 class ProtocolVersionTest(DaemonUnitTest):
     def test_falls_back_to_file_version(self) -> None:
-        self.assertEqual(d.protocol_version(), "0.7.0")
+        self.assertEqual(d.protocol_version(), CONTRACT_VERSION)
 
     def test_prefers_injected_version(self) -> None:
         d.CONFIG.version = "0.3.1-injected"
@@ -453,6 +463,83 @@ class FailBootTest(DaemonUnitTest):
         d.fail_boot("unauthorized", "未配置 auth_token")
         self.assertEqual(d.STATE.last_error_code, "unauthorized")
         self.assertEqual(d.STATE.phase, "error")
+
+
+class GpuUnavailableBootTest(DaemonUnitTest):
+    """M3.3：CPU 容器必须立刻给出可执行报错码与文案，而不是继续硬跑。"""
+
+    @staticmethod
+    def fake_cpu_torch():
+        return types.SimpleNamespace(
+            __version__="2.8.0+cpu",
+            version=types.SimpleNamespace(cuda=None),
+            cuda=types.SimpleNamespace(is_available=lambda: False, device_count=lambda: 0),
+        )
+
+    def test_reports_gpu_unavailable_code_and_actionable_message(self) -> None:
+        published: list[dict] = []
+        with mock.patch.dict(sys.modules, {"torch": self.fake_cpu_torch()}), mock.patch.object(
+            d, "ntfy_publish", side_effect=lambda payload, _label: published.append(payload) or True
+        ):
+            d.runtime_boot()
+        self.assertEqual(d.STATE.phase, "error")
+        self.assertEqual(d.STATE.last_error_code, "gpu_unavailable")
+        self.assertIsNone(d.STATE.device)
+        self.assertEqual(d.STATE.device_count, 0)
+        detail = d.STATE.detail or ""
+        self.assertIn("未检测到可用 GPU", detail)
+        self.assertIn("手机号验证", detail)
+        self.assertIn("GPU 加速器", detail)
+        # /health 要把码透传给 Host（前端专用指引卡按 code 分支）。
+        health = d.health_payload()
+        self.assertEqual(health["status"], "error")
+        self.assertEqual(health["phase"], "error")
+        self.assertEqual(health["last_error_code"], "gpu_unavailable")
+        self.assertIn("手机号验证", health["last_error"] or "")
+        # ntfy error 事件同样带码，Host 会据此把错误写进会话。
+        errors = [item for item in published if item.get("type") == "error"]
+        self.assertEqual(len(errors), 1, published)
+        self.assertEqual(errors[0]["code"], "gpu_unavailable")
+        self.assertIn("GPU 加速器", errors[0]["message"])
+
+    def test_gpu_available_keeps_boot_going(self) -> None:
+        calls: list[str] = []
+
+        def fake_install() -> None:
+            calls.append("install")
+
+        def fake_preload(_spec):  # noqa: ANN001
+            calls.append("preload")
+            return (object(), 0.0)
+
+        torch_module = types.SimpleNamespace(
+            __version__="2.8.0+cu128",
+            version=types.SimpleNamespace(cuda="12.8"),
+            cuda=types.SimpleNamespace(
+                is_available=lambda: True,
+                get_device_name=lambda _index: "Tesla T4",
+                device_count=lambda: 2,
+            ),
+        )
+        d.CONFIG.preload = {"loader": "sdxl", "base": "org/base"}
+        with mock.patch.dict(sys.modules, {"torch": torch_module}), mock.patch.object(
+            d, "install_dependencies", side_effect=fake_install
+        ), mock.patch.object(d, "ensure_pipeline", side_effect=fake_preload):
+            d.runtime_boot()
+        self.assertEqual(d.STATE.phase, "ready")
+        self.assertIsNone(d.STATE.last_error_code)
+        self.assertEqual(d.STATE.device, "Tesla T4")
+        self.assertEqual(d.STATE.device_count, 2)
+        self.assertEqual(calls, ["install", "preload"])
+
+    def test_torch_import_failure_stays_load_failed(self) -> None:
+        # torch 都导入不了时无法断言「账号没开 GPU」，不能误报成 gpu_unavailable。
+        d.CONFIG.ntfy_topic = ""
+        with mock.patch.dict(sys.modules, {"torch": None}):
+            d.runtime_boot()
+        self.assertEqual(d.STATE.phase, "error")
+        self.assertEqual(d.STATE.last_error_code, "load_failed")
+        self.assertIn("无法确认 GPU 可用性", d.STATE.detail or "")
 
 
 class ValidateSpecTest(DaemonUnitTest):
@@ -694,6 +781,7 @@ class HealthPayloadTest(DaemonUnitTest):
         "status",
         "phase",
         "version",
+        "versions",
         "model_id",
         "loaded",
         "device",
@@ -716,10 +804,12 @@ class HealthPayloadTest(DaemonUnitTest):
         self.assertEqual(set(payload), self.REQUIRED_KEYS)
         self.assertEqual(payload["phase"], "booting")
         self.assertEqual(payload["status"], "ok")
-        self.assertEqual(payload["version"], "0.7.0")
+        self.assertEqual(payload["version"], CONTRACT_VERSION)
         self.assertEqual(payload["idle_timeout_sec"], 1800)
         self.assertGreaterEqual(payload["idle_seconds"], 0)
         self.assertGreaterEqual(payload["uptime_seconds"], 0)
+        self.assertIsInstance(payload["versions"], dict)
+        self.assertIsInstance(payload["versions"].get("python"), str)
 
     def test_error_phase_flips_status(self) -> None:
         d.record_error("load_failed", "pip 失败")
@@ -742,6 +832,50 @@ class HealthPayloadTest(DaemonUnitTest):
         payload = d.health_payload()
         self.assertEqual(payload["loaded"], ["sdxl:org/base"])
         self.assertIsNot(payload["loaded"], d.STATE.loaded)
+
+
+class HealthVersionsTest(DaemonUnitTest):
+    """M4.2：/health.versions 依赖快照只含纯版本号，不含 token / 路径。"""
+
+    def test_versions_are_pure_version_strings(self) -> None:
+        payload = d.health_payload()
+        versions = payload["versions"]
+        self.assertIsInstance(versions, dict)
+        self.assertIn("python", versions)
+        for key, value in versions.items():
+            self.assertIsInstance(value, str, key)
+            self.assertRegex(value, r"^[0-9][0-9A-Za-z.+!_-]*$", key)
+            self.assertNotIn(os.sep, value)
+            self.assertNotIn("/", value)
+
+    def test_token_values_never_leak_into_versions(self) -> None:
+        secret = "hf_SECRET_never_in_versions"
+        d.CONFIG.hf_token = secret
+        with mock.patch.dict(
+            os.environ, {"HF_TOKEN": secret, "HUGGING_FACE_HUB_TOKEN": secret}, clear=False
+        ):
+            versions = d.health_payload()["versions"]
+        self.assertNotIn(secret, json.dumps(versions, ensure_ascii=False))
+
+    def test_invalid_versions_are_dropped_without_raising(self) -> None:
+        fake = types.SimpleNamespace(__version__="/home/kaggle/secret/path")
+        with mock.patch.dict(sys.modules, {"fake_weird_module": fake}):
+            with mock.patch.object(
+                d, "HEALTH_VERSION_MODULES", (("weird", "fake_weird_module", "nonexistent-dist-xyz"),)
+            ):
+                versions = d.dependency_versions()
+        self.assertIn("python", versions)
+        self.assertNotIn("weird", versions)
+        self.assertNotIn("secret", json.dumps(versions, ensure_ascii=False))
+
+    def test_missing_packages_are_omitted(self) -> None:
+        with mock.patch.object(
+            d, "HEALTH_VERSION_MODULES", (("missing", "definitely_missing_module_xyz", "definitely-missing-dist-xyz"),)
+        ):
+            versions = d.dependency_versions()
+        self.assertIsInstance(versions, dict)
+        self.assertNotIn("missing", versions)
+        self.assertIsInstance(d.health_payload()["versions"], dict)
 
 
 class JobProtocolTest(DaemonUnitTest):
@@ -1228,6 +1362,16 @@ class DiskPrecheckTest(DaemonUnitTest):
         self.assertFalse(result["enough"])
         self.assertEqual(result["path"], "/kaggle/working")
 
+    def test_default_target_is_hf_cache_dir(self) -> None:
+        # M4.1：默认按 HF 实际缓存目录量盘，而不是只看 /kaggle/working。
+        with tempfile.TemporaryDirectory() as directory:
+            expected = os.path.abspath(directory)
+            with mock.patch.dict(os.environ, {"HF_HUB_CACHE": directory}, clear=False):
+                result = d.disk_precheck({"base": "org/model", "downloadGb": 1.0}, usage=fake_usage(10.0))
+        self.assertEqual(result["path"], expected)
+        self.assertEqual(result["free_gb"], 10.0)
+        self.assertTrue(result["enough"])
+
     def test_insufficient_space_raises_readable_error(self) -> None:
         spec = {"base": "black-forest-labs/FLUX.2-klein-4B", "downloadGb": 15.2}
         result = d.disk_precheck(spec, root="/kaggle/working", usage=fake_usage(10.0))
@@ -1374,6 +1518,279 @@ class CacheProbeTest(DaemonUnitTest):
             d.ensure_pipeline({"loader": "sdxl", "base": "org/other"})
         cache_lines = [line for line in self.logs().splitlines() if "[cache]" in line]
         self.assertEqual(len(cache_lines), 1, self.logs())
+
+
+class PipelineReposTest(DaemonUnitTest):
+    """M4.1：pipeline 依赖仓库收集与 keep_set（含 local_models 只读挂载）。"""
+
+    def test_collects_nested_pipeline_repos(self) -> None:
+        spec = {
+            "loader": "sdxl-lora",
+            "base": "stabilityai/stable-diffusion-xl-base-1.0",
+            "lora": {"repo": "ByteDance/SDXL-Lightning", "weight": "sdxl_lightning_4step_lora.safetensors"},
+            "scheduler": {"type": "euler", "timestepSpacing": "trailing"},
+            "variant": "fp16",
+            "downloadGb": 6.78,
+            "allowPatterns": ["model_index.json", "**/config.json", "**/*.fp16.safetensors"],
+        }
+        self.assertEqual(
+            d.pipeline_repos(spec),
+            ["stabilityai/stable-diffusion-xl-base-1.0", "ByteDance/SDXL-Lightning"],
+        )
+
+    def test_collects_anima_assets_and_dedupes(self) -> None:
+        spec = {
+            "loader": "anima",
+            "base": "Johnny-Z/Anima-Light-Lavender",
+            "weight": "anima-light-lavender.safetensors",
+            "textEncoder": {"repo": "circlestone-labs/Anima", "weight": "split_files/text_encoders/te.safetensors"},
+            "vae": {"repo": "Qwen/Qwen-Image", "subfolder": "vae"},
+            "tokenizers": {"repo": "hugging-apps/anima-light-lavender-demo", "repoType": "space"},
+            "unused": {"repo": "Qwen/Qwen-Image"},
+        }
+        repos = d.pipeline_repos(spec)
+        self.assertEqual(
+            repos,
+            [
+                "Johnny-Z/Anima-Light-Lavender",
+                "circlestone-labs/Anima",
+                "Qwen/Qwen-Image",
+                "hugging-apps/anima-light-lavender-demo",
+            ],
+        )
+        # 大小写不同的同一仓库只保留首次出现。
+        self.assertEqual(d.pipeline_repos({"a": "Org/Name", "b": "org/name"}), ["Org/Name"])
+
+    def test_ignores_non_repo_strings(self) -> None:
+        spec = {
+            "base": "org/model",
+            "weights": ["split_files/x/y.safetensors", "/kaggle/input/hub/x", "weight.safetensors"],
+            "url": "https://huggingface.co/org/model",
+            "numbers": [1, 2.5, None, True],
+            "dicts": [{"nested": ["org/another-model", ""]}],
+        }
+        self.assertEqual(d.pipeline_repos(spec), ["org/model", "org/another-model"])
+
+    def test_keep_set_adds_mounted_repos(self) -> None:
+        d.CONFIG.local_models = {"Qwen/Qwen-Image": "/kaggle/input/qwen-image", "org/extra": "/kaggle/input/x"}
+        keep = d.cache_keep_repos({"loader": "anima", "base": "org/base", "vae": {"repo": "Qwen/Qwen-Image"}})
+        self.assertIn("org/base", keep)
+        self.assertIn("Qwen/Qwen-Image", keep)
+        self.assertIn("org/extra", keep)
+        self.assertNotIn("", keep)
+
+    def test_cache_dir_name_round_trip(self) -> None:
+        self.assertEqual(d.repo_from_cache_dir_name("models--org--name"), "org/name")
+        self.assertEqual(d.repo_from_cache_dir_name("models--stabilityai--stable-diffusion-xl-base-1.0"), "stabilityai/stable-diffusion-xl-base-1.0")
+        # 仓库名自带 `--` 时不能被还原成多级路径。
+        self.assertEqual(d.repo_from_cache_dir_name("models--org--name--v2"), "org/name--v2")
+        self.assertIsNone(d.repo_from_cache_dir_name("models--garbage"))
+        self.assertIsNone(d.repo_from_cache_dir_name("datasets--org--name"))
+        self.assertEqual(d.cache_repo_candidates("models--org--name"), {"org/name"})
+
+
+def make_cache_dir(root: str, name: str, mtime: float, size_bytes: int = 1024) -> str:
+    """在缓存根下伪造一个 ``models--*`` 目录，并固定 mtime 供 LRU 排序断言。"""
+    path = Path(root, name)
+    path.mkdir(parents=True, exist_ok=True)
+    Path(path, "blob.bin").write_bytes(b"x" * size_bytes)
+    os.utime(path, (mtime, mtime))
+    return str(path)
+
+
+def dir_count_usage(root: str, base_free_gb: float, per_dir_gb: float = 1.0):  # noqa: ANN201
+    """disk_usage 替身：每删掉一个 models--* 目录，可用空间 +per_dir_gb。"""
+    initial = len([name for name in os.listdir(root) if name.startswith("models--")])
+
+    def usage(_path):  # noqa: ANN001
+        remaining = len([name for name in os.listdir(root) if name.startswith("models--")])
+        free_gb = base_free_gb + (initial - remaining) * per_dir_gb
+        return types.SimpleNamespace(free=int(free_gb * 2**30), total=int(20 * 2**30))
+
+    return usage
+
+
+class CacheEvictTest(DaemonUnitTest):
+    """M4.1：LRU 缓存清理顺序、keep_set、预挂载保护、空间不足报错。"""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+        super().tearDown()
+
+    def evict(self, required_gb, keep_repos=None, usage=None, root=None):  # noqa: ANN001, ANN201
+        return d.evict_cache_for(
+            required_gb,
+            keep_repos or (),
+            root=self.root if root is None else root,
+            usage=usage or dir_count_usage(self.root, 0.5),
+        )
+
+    def test_evicts_oldest_first_and_stops_when_enough(self) -> None:
+        make_cache_dir(self.root, "models--org--old", mtime=1000)
+        make_cache_dir(self.root, "models--org--mid", mtime=2000)
+        make_cache_dir(self.root, "models--org--new", mtime=3000)
+        # 需 2.0 × 1.15 = 2.30 GiB；基础可用 0.5，每删一个 +1.0 → 删两个后 2.5 达标。
+        result = self.evict(2.0)
+        self.assertTrue(result["enough"])
+        self.assertEqual([item["repo"] for item in result["evicted"]], ["org/old", "org/mid"])
+        self.assertEqual(result["free_gb"], 2.5)
+        self.assertFalse(Path(self.root, "models--org--old").exists())
+        self.assertFalse(Path(self.root, "models--org--mid").exists())
+        self.assertTrue(Path(self.root, "models--org--new").exists(), "达标后不应继续删")
+        logs = self.logs()
+        self.assertIn("[cache] evicted org/old freed=", logs)
+        self.assertIn("[cache] evicted org/mid freed=", logs)
+        self.assertNotIn("evicted org/new", logs)
+
+    def test_keep_set_is_never_evicted(self) -> None:
+        # 当前模型的 base + vae + lora 全部在 keep_set 内。
+        spec = {
+            "loader": "sdxl-lora",
+            "base": "org/base",
+            "lora": {"repo": "org/lora"},
+            "vae": {"repo": "org/vae"},
+        }
+        make_cache_dir(self.root, "models--org--base", mtime=1000)
+        make_cache_dir(self.root, "models--org--lora", mtime=1001)
+        make_cache_dir(self.root, "models--org--vae", mtime=1002)
+        make_cache_dir(self.root, "models--org--stale", mtime=1003)
+        result = self.evict(1.0, keep_repos=d.cache_keep_repos(spec), usage=dir_count_usage(self.root, 0.2))
+        # 需 1.15 GiB：删掉 stale 后 1.2 GiB 即达标。
+        self.assertEqual([item["repo"] for item in result["evicted"]], ["org/stale"])
+        for name in ("models--org--base", "models--org--lora", "models--org--vae"):
+            self.assertTrue(Path(self.root, name).exists(), name)
+        self.assertLogContains("保留当前模型/预挂载缓存")
+
+    def test_mounted_local_models_are_untouched(self) -> None:
+        mount_dir = Path(self.root, "kaggle-input", "anima")
+        mount_dir.mkdir(parents=True)
+        Path(mount_dir, "model_index.json").write_text("{}", encoding="utf-8")
+        d.CONFIG.local_models = {"org/mounted": str(mount_dir)}
+        make_cache_dir(self.root, "models--org--mounted", mtime=1000)
+        make_cache_dir(self.root, "models--org--stale", mtime=1001)
+        result = self.evict(1.0, usage=dir_count_usage(self.root, 0.2))
+        self.assertEqual([item["repo"] for item in result["evicted"]], ["org/stale"])
+        self.assertTrue(Path(self.root, "models--org--mounted").exists(), "预挂载仓库的缓存目录不能删")
+        self.assertTrue(Path(mount_dir, "model_index.json").exists(), "只读挂载目录不能删")
+
+    def test_insufficient_space_raises_readable_load_error(self) -> None:
+        make_cache_dir(self.root, "models--org--a", mtime=1000)
+        make_cache_dir(self.root, "models--org--b", mtime=2000)
+        with self.assertRaises(d.LoadError) as ctx:
+            self.evict(10.0, usage=dir_count_usage(self.root, 0.5))
+        message = str(ctx.exception)
+        self.assertIn("磁盘空间不足", message)
+        self.assertIn("需 11.50 GiB", message)
+        self.assertIn("可用 2.50 GiB", message)
+        # 可删项应全部清完，再判定失败。
+        self.assertFalse(Path(self.root, "models--org--a").exists())
+        self.assertFalse(Path(self.root, "models--org--b").exists())
+        self.assertEqual(self.logs().count("[cache] evicted "), 2)
+
+    def test_enough_space_does_not_scan_or_delete(self) -> None:
+        make_cache_dir(self.root, "models--org--old", mtime=1000)
+        result = self.evict(1.0, usage=dir_count_usage(self.root, 10.0))
+        self.assertTrue(result["enough"])
+        self.assertEqual(result["evicted"], [])
+        self.assertTrue(Path(self.root, "models--org--old").exists())
+        self.assertNotIn("[cache] evicted", self.logs())
+
+    def test_default_root_follows_hf_hub_cache_dir(self) -> None:
+        make_cache_dir(self.root, "models--org--old", mtime=1000)
+        make_cache_dir(self.root, "models--org--new", mtime=2000)
+        with mock.patch.dict(os.environ, {"HF_HUB_CACHE": self.root}, clear=False):
+            result = d.evict_cache_for(0.5, (), usage=dir_count_usage(self.root, 0.0))
+        self.assertEqual(result["path"], os.path.abspath(self.root))
+        self.assertEqual([item["repo"] for item in result["evicted"]], ["org/old"])
+
+    def test_usage_failure_degrades_without_deleting(self) -> None:
+        make_cache_dir(self.root, "models--org--old", mtime=1000)
+
+        def broken(_path):  # noqa: ANN001
+            raise OSError("denied")
+
+        result = self.evict(100.0, usage=broken)
+        self.assertTrue(result["enough"])
+        self.assertEqual(result["evicted"], [])
+        self.assertTrue(Path(self.root, "models--org--old").exists())
+        self.assertLogContains("无法读取磁盘剩余空间")
+
+    def test_unrecognized_cache_dirs_are_skipped(self) -> None:
+        Path(self.root, "models--garbage").mkdir()
+        Path(self.root, "not-a-cache-dir").mkdir()
+        self.assertEqual([entry["name"] for entry in d.cache_model_dirs(self.root)], [])
+        with self.assertRaises(d.LoadError):
+            self.evict(100.0, usage=dir_count_usage(self.root, 0.0))
+        self.assertTrue(Path(self.root, "models--garbage").exists())
+
+
+class CacheCapacityTest(DaemonUnitTest):
+    """M4.1：ensure_pipeline 加载路径上的缓存清理闸门与跳过条件。"""
+
+    def test_local_mounted_pipeline_skips_eviction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "model_index.json").write_text("{}", encoding="utf-8")
+            d.CONFIG.local_models = {"org/base": directory}
+            with mock.patch.object(d, "evict_cache_for", side_effect=AssertionError("预挂载时不应清理缓存")):
+                d.ensure_cache_capacity({"loader": "sdxl", "base": "org/base", "downloadGb": 15.2})
+
+    def test_missing_download_gb_skips_eviction(self) -> None:
+        with mock.patch.object(d, "evict_cache_for", side_effect=AssertionError("没有体积信息时不应清理")):
+            d.ensure_cache_capacity({"loader": "sdxl", "base": "org/base"})
+
+    def test_anima_local_dit_skips_eviction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "anima.safetensors").write_bytes(b"stub")
+            d.CONFIG.local_models = {"Johnny-Z/Anima": directory}
+            spec = {
+                "loader": "anima",
+                "base": "Johnny-Z/Anima",
+                "weight": "anima.safetensors",
+                "downloadGb": 5.6,
+            }
+            with mock.patch.object(d, "evict_cache_for", side_effect=AssertionError("预挂载 DiT 时不应清理")):
+                d.ensure_cache_capacity(spec)
+
+    def test_calls_evict_with_pipeline_keep_set(self) -> None:
+        calls: list[tuple] = []
+        with mock.patch.object(d, "evict_cache_for", side_effect=lambda required, keep: calls.append((required, keep)) or {}):
+            d.ensure_cache_capacity(
+                {
+                    "loader": "sdxl-lora",
+                    "base": "org/base",
+                    "lora": {"repo": "org/lora"},
+                    "downloadGb": 6.78,
+                }
+            )
+        self.assertEqual(calls[0][0], 6.78)
+        self.assertIn("org/base", calls[0][1])
+        self.assertIn("org/lora", calls[0][1])
+
+    def test_ensure_pipeline_evicts_before_build(self) -> None:
+        order: list[str] = []
+        with tempfile.TemporaryDirectory() as root:
+            make_cache_dir(root, "models--org--old", mtime=1000)
+            make_cache_dir(root, "models--org--base", mtime=2000)
+            spec = {"loader": "sdxl", "base": "org/base", "downloadGb": 0.5}
+
+            def fake_build(_spec):  # noqa: ANN001
+                order.append("build")
+                return object(), "sdxl:org/base"
+
+            with mock.patch.dict(os.environ, {"HF_HUB_CACHE": root}, clear=False):
+                with mock.patch.object(d, "_log_cache_probe"), mock.patch.object(
+                    d, "build_pipeline", side_effect=fake_build
+                ), mock.patch.object(d.shutil, "disk_usage", dir_count_usage(root, 0.0)):
+                    d.ensure_pipeline(spec)
+            self.assertFalse(Path(root, "models--org--old").exists())
+            self.assertTrue(Path(root, "models--org--base").exists())
+            self.assertEqual(order, ["build"])
+        self.assertLogContains("[cache] evicted org/old")
 
 
 class LocalModelTest(DaemonUnitTest):
