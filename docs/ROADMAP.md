@@ -99,21 +99,30 @@
 
 ---
 
-## 五、 v0.9 开发计划（规划中）
+## 五、 v0.9 开发计划（进行中）
 
-> **基线**：`0.8.0`（2026-11-13，已完整落地 `WORKBENCH_AUDIT_AND_RELIABILITY_PLAN.md` 三批可靠性与交互改造并完成 M4.2 真机验证；`0.5.0 ~ 0.8.0` 变更详见 [CHANGELOG](../CHANGELOG.md)）。
+> **基线**：`0.8.1`（2026-11-13，v0.9 M1 已落地；`0.5.0 ~ 0.8.1` 变更详见 [CHANGELOG](../CHANGELOG.md)）。
 > **v0.9 主题**：新手零门槛（试验特性） + 图生图闭环 + 遗留体验与可靠性收口。
 
 ### 1. M1：体验修复与可靠性收口（纯离线可测）
-- **意图确认卡行内微调**：`ChatPanel.jsx` 确认卡里的英文 `prompt` / `negative` 支持行内直接编辑后再点「按此生成」，无需为微调几个词重新发起对话重猜。
-- **卸载未关机补清理**：保持 `SessionManager.dispose()` 不阻塞卸载的取舍；若 `/shutdown` 未能发出或失败，在 `<workspace>/.imagen/` 记录轻量待清理会话，下次插件启动时优先补发一次关机释放每周 GPU 额度。
-- **固定 `cloudflared` 版本与校验和**：`remote/daemon.py` 下载 `cloudflared` 从滚动 `latest` 改为固定版本并做 SHA256 校验，消除上游发版或半截文件导致的冷启动随机失败。
-- **顺手体验与文案修正**：
-  - 记住表单「高级设置」折叠区的上次展开状态（默认仍保持收起）；
-  - 校准 `auth_required` 指引文案：明确 `kaggle auth login` 写入 `~/.kaggle/credentials.json`（OAuth 凭据，靠 `refresh_token` 自动续期），同时兼容网页端手动生成的 `~/.kaggle/access_token` 与旧版 `kaggle.json`；
-  - 视体量评估是否一并补齐工作区对话历史持久化（走宿主接口写工作区，不引入 `localStorage`）。
 
-### 2. M2：新手零门槛 — Node.js 直连 Kaggle 与内置 OAuth 授权（试验特性）
+> **状态：✅ 已在 0.8.1 完成（2026-11-13）**，实现说明见各项末尾。
+
+- **意图确认卡行内微调**：`ChatPanel.jsx` 确认卡里的英文 `prompt` / `negative` 支持行内直接编辑后再点「按此生成」，无需为微调几个词重新发起对话重猜。
+  - **实现**：确认卡上提示词与排除项改为受契约上限约束的文本域；`useChatThread` 新增 `updateIntent` / `updateIntentField`（白名单 `prompt` / `negative`，纯函数再兜一层裁剪），生成走 `intentOverrides`——提示词仍合并风格后缀，排除项为空串时显式覆盖（卡上清空即真的不带负向词），提示词为空时按钮禁用。纯逻辑断言在 `test/check-client-logic.mjs`，交互与真实 hook 状态流转在 `test/check-client-render.mjs`。
+- **卸载未关机补清理**：保持 `SessionManager.dispose()` 不阻塞卸载的取舍；若 `/shutdown` 未能发出或失败，在 `<workspace>/.imagen/` 记录轻量待清理会话，下次插件启动时优先补发一次关机释放每周 GPU 额度。
+  - **实现**：新增 `lib/session/pending-cleanup.js`（版本 1、原子写、目录 0700 / 文件 0600、TTL 24h、最多补发 5 次）。`dispose()` 先**同步**写待清理记录（进程随时可能退出），再 best-effort 关机：成功清记录，失败保留记录并删除 `session.json`（避免下次 `restore()` 接手）。`index.js` 启动改为「`cleanupPendingSession()` → `restore()`」顺序执行。token 只落盘、不进日志；离线断言 65 项见 `test/session-pending-cleanup.mjs`，`test/session-restore.mjs` 的 dispose 用例同步新语义。
+- **固定 `cloudflared` 版本与校验和**：`remote/daemon.py` 下载 `cloudflared` 从滚动 `latest` 改为固定版本并做 SHA256 校验，消除上游发版或半截文件导致的冷启动随机失败。
+  - **实现**：固定 `2026.11.0`（`cloudflared-linux-amd64`，40,283,099 字节，SHA256 `51f7c68b…a51fd`，已与官方 Release 校验和及本机实下载复算交叉核对）；流式写 `.part` 时边写边算校验和、120 MB 上限、校验不匹配与下载异常各重试一次，第二次失败带「期望 / 实际」报错并回退备用通道。新增 9 项离线断言（假 `urlopen`/假响应流，不联网）。
+- **顺手体验与文案修正**：
+  - 记住表单「高级设置」折叠区的上次展开状态（默认仍保持收起）——**实现**：新增 `/imagen-api/ui-state`（GET/POST 同 path、白名单字段来自契约 `UI_STATE`）与 `<workspace>/.imagen/ui-state.json`；客户端挂载读一次、切换时 fire-and-forget 保存，失败静默回落默认值。宿主断言 21 项见 `test/ui-state-host.mjs`。
+  - 校准 `auth_required` 指引文案：明确 `kaggle auth login` 写入 `~/.kaggle/credentials.json`（OAuth 凭据，靠 `refresh_token` 自动续期），同时兼容网页端手动生成的 `~/.kaggle/access_token` 与旧版 `kaggle.json`——**实现**：客户端拆出三个路径常量，`GuidanceCard`、zh/en 字典与 `lib/kaggle.js` 的探测说明统一口径。
+  - 视体量评估是否一并补齐工作区对话历史持久化——**评估结论：本轮不做**。`useChatThread` 的消息里混有任务状态气泡与图片 URL，直接落盘需要额外的消息序列化版本、恢复时的中断态归一（`pending` / `running` 气泡在重启后必须收敛为可读状态）与图片失效处理；本轮已把通用的界面态持久化通道建好，对话历史作为独立批次排在 M1 之后再评估，避免把「界面偏好」与「业务数据」混进同一个文件。
+
+### 2. M2：新手零门槛 — Node.js 直连 Kaggle 与内置 OAuth 授权（试验特性，规划中）
+
+> **状态：⏳ 下一轮**（M1 已为这一步打好凭据口径与指引卡基础）。
+
 - **定位与隔离**：作为 **试验特性（Feature Flag）** 接入，默认保持现有 `kaggle` CLI 路径不变，零回归风险；在设置抽屉高级区提供开关（`experimentalDirectKaggle` / `kaggleTransport`）。
 - **直连客户端（`lib/kaggle-direct.js`）**：实现与 `lib/kaggle.js` 相同的调用契约（`probeKaggle`、`kaggleUsername`、`pushKernel`、`kernelStatus`、`kernelLogs`），由 `SessionManager` 通过 `deps` 注入切换；全部请求走 `lib/net.js` 复用系统代理 `curl` 兜底，消除每次 CLI 调用 9~15 秒的 Python 冷启耗时与 Windows `Scripts` PATH 困扰。
 - **内置 OAuth PKCE 登录**：由宿主发起标准 OAuth 2.0 + PKCE（`S256`、`client_id="kagglesdk"`）并拉起系统浏览器授权；回调收码换取 Token 后写入 `~/.kaggle/credentials.json`（权限 `0600`，不写工作区 `.imagen/`、不进日志与诊断），并兼容读取已有 `access_token` / `kaggle.json`。无法打开本地回调的远端无头环境保留复制 URL + 粘贴授权码兜底。
@@ -121,6 +130,9 @@
 - **验收**：离线 mock HTTP 覆盖全部直连分支与边界；真机使用真实 Kaggle 账号验证无 CLI 环境下「一键登录 → 唤醒 → 出图」全链路。
 
 ### 3. M3：图生图（Img2Img / 参考图垫图重绘）
+
+> **状态：⏳ 规划中**（排在 M2 之后；需要真机 2×Tesla T4 验证显存无额外增长）。
+
 - **模型能力边界先行**：并非所有运行时都支持 `from_pipe` 零显存派生。`models/*.json` 新增能力标记（如 `supportsImg2Img`），**首期优先对 SDXL 家族（`sdxl` / `sdxl-lora`）开放**，前端对不支持的预设（如 `flux2` / `anima`）置灰并明确提示。
 - **契约与远端推理**：
   - `shared/contract.js` 补充 `strength` 边界与参考图尺寸/体积上限（受 `remoteGenerateMaxBytes` 约束）；

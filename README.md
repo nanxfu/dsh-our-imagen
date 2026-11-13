@@ -219,7 +219,8 @@
 
 > 提示：Kaggle 账号必须在个人设置里完成**手机号绑定验证**（Phone Verification），平台才会给分配免费 GPU；未绑定的账号会被降级为纯 CPU。
 
-**推荐方式（kaggle CLI 2.x）**：安装 CLI 后直接登录，凭据会自动写入本机，不需要手动创建文件。
+**推荐方式（kaggle CLI 2.x）**：安装 CLI 后直接登录。命令会拉起浏览器完成 OAuth 授权，把 OAuth 凭据
+（含 `refresh_token`，过期可自动续期）写入 `%USERPROFILE%\.kaggle\credentials.json`，不需要手动创建文件。
 
 ```powershell
 pip install -U kaggle

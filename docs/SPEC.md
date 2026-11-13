@@ -4,7 +4,7 @@
 > 本文档只描述语义、请求/响应形状与使用约束，不重复维护数值。`node test/check-contract.mjs` 会校验
 > 宿主注册的路由、宿主错误码、客户端文案与本文档是否跟随契约。
 >
-> **版本**：0.8.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
+> **版本**：0.8.1（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
 
 ---
 
@@ -40,6 +40,18 @@
 则回 ntfy 会合点重新取隧道地址；Kernel 已结束或记录不可用时尽力关机并删除记录。
 记录含远端 Bearer Token，只落盘、不进任何日志与对外快照；`session/stop` 与成功的 `dispose` 会删除它。
 开发模式（`devEndpoint`）不读写该记录。
+
+**卸载补清理（0.8.1）**：`dispose()` 不阻塞卸载，关机通知只是 best-effort。若通知没能发出或失败，
+Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token` / `kernelId` / `topic` / `presetId` /
+`attempts` / `savedAt`）写入 `<workspace>/.imagen/pending-cleanup.json`（原子写，目录 0700 / 文件 0600），
+并删除 `session.json`（用户已明确退出，下次启动不应被 `restore()` 接手）。下次插件启动时先
+`cleanupPendingSession()` 补发一次 `/shutdown`，再执行 `restore()`：
+
+- 补发成功 → 清掉待清理记录与残留会话记录；
+- 补发失败 → `attempts` 累加后保留，等待下次启动再试；
+- 记录超过 24 小时（Kernel 最长运行 3 小时，视为已结束）、补发满 5 次或地址不可信 → 丢弃并记一条 warn。
+
+记录含远端 Bearer Token，只落盘、不进日志；开发模式（`devEndpoint`）不写该记录。
 
 ### 1.2 任务状态（Job Status）
 
@@ -131,7 +143,7 @@
 
 > **例外**：`GET /imagen-api/file` 返回图片二进制流（`image/png` 等），不是 JSON。
 
-路由总览（19 条，以 `shared/contract.js` 的 `ROUTES` 为准）：
+路由总览（21 条方法 / 19 个唯一路径，以 `shared/contract.js` 的 `ROUTES` 为准；同一 path 的 GET/POST 各占一行）：
 
 | 方法 | 路径 | 用途 |
 | :--- | :--- | :--- |
@@ -154,6 +166,8 @@
 | POST | `/imagen-api/reveal` | 在文件管理器中打开产物目录 |
 | GET | `/imagen-api/settings` | 读取运行设置的脱敏视图（`hfToken` 只回布尔与来源） |
 | POST | `/imagen-api/settings` | 保存运行设置（空闲关机 / 加速器 / HF Token / 预挂载 / 依赖约束） |
+| GET | `/imagen-api/ui-state` | 读取工作台界面状态（高级设置折叠等白名单字段） |
+| POST | `/imagen-api/ui-state` | 保存工作台界面状态（合并白名单字段） |
 
 ### 2.1 会话与状态
 
@@ -182,7 +196,7 @@
 
 ```json
 {
-  "version": "0.8.0",
+  "version": "0.8.1",
   "defaultPreset": "sdxl-lightning",
   "presets": [
     {
@@ -643,6 +657,37 @@
 
 ---
 
+### 2.5 工作台界面状态（ui-state）
+
+把「表单高级设置折叠区是否展开」这类纯界面偏好持久化到 `<workspace>/.imagen/ui-state.json`
+（目录 0700 / 文件 0600，同目录临时文件 + `rename` 原子写），下次打开工作台沿用上次状态。
+
+界面态不是业务数据：只允许契约 `UI_STATE.defaults` 登记的白名单字段，字段类型与默认值以契约为准；
+文件不存在、损坏或超过 `UI_STATE.maxBytes` 时一律回落到默认值，绝不阻塞插件加载或出图主链路。
+未登记的字段在保存时直接丢弃（不报错），已登记字段类型不匹配才按 `invalid_request` 拒绝。
+
+#### `GET /imagen-api/ui-state`
+
+- **响应**：`{ "ok": true, "uiState": UiStateView }`（始终返回白名单全量视图，不是稀疏补丁）
+
+#### `POST /imagen-api/ui-state`
+
+- **请求体**：扁平补丁（只提交改动过的字段），例如 `{ "advancedOpen": true }`
+- **响应**：`{ "ok": true, "uiState": UiStateView }`（与保存后的生效值一致）
+- **错误**：`400 invalid_body`（请求体不是合法 JSON 或不是对象）、`400 invalid_request`（已登记字段类型不匹配）
+
+`UiStateView`：
+
+| 字段 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `advancedOpen` | boolean | 表单「高级设置」折叠区是否展开，默认 `false`（收起） |
+
+> **实现约束（同 path 的 GET/POST）**：与 `/imagen-api/settings` 相同，DSH 宿主的 exact 路由表
+> 以 path 为键、同一 path 不允许注册两次，因此只注册一条路由、用 `method: [GET, POST]` 在 handler
+> 内按方法分发；方法不匹配时返回 `405` 且 `Allow: GET, POST`。
+
+---
+
 ## 3. DSH 会话 Agent 工具规范
 
 插件向 DSH 会话模型注入 4 个标准 Tool，支持对话中直接出图：
@@ -826,5 +871,20 @@
 3. **空闲倒计时**：顶栏 GPU 状态弹层在会话就绪时展示「已空闲 X 分钟 / 满 Y 分钟自动关机」，数据来自会话快照的 `idleSeconds` 与 `idleTimeoutSec`；远端未上报时不显示该行（不展示 0 或猜测值）。
 4. **新手卡点加固**：
    - `cli_missing` 卡除「复制安装命令」外，明确提示 Windows 用户：安装后若仍提示找不到命令，请确认 Python Scripts 目录已加入系统 PATH 并重启 DSH Desktop。
-   - `auth_required` 卡给出 `kaggle auth login` 登录命令（可一键复制）与凭据位置 `%USERPROFILE%\.kaggle\access_token`（同时兼容旧版 `kaggle.json`），并提供打开 Kaggle 账户设置获取 API Token 的按钮。
+   - `auth_required` 卡明确 `kaggle auth login` 会把 OAuth 凭据写入 `%USERPROFILE%\.kaggle\credentials.json`
+     （含 `refresh_token`，过期可自动续期），同时说明网页端生成的 `%USERPROFILE%\.kaggle\access_token`
+     与旧版 `%USERPROFILE%\.kaggle\kaggle.json` 仍然兼容，并提供打开 Kaggle 账户设置获取 API Token 的按钮。
    - `gpu_unavailable` 使用独立卡片（不复用「生成失败，重试一次」），主操作是打开 Kaggle 账户设置完成手机号验证，次级可重新唤醒云端。
+
+### 5.7 第四批交互补充（确认卡行内微调 / 折叠记忆 / 凭据指引）
+
+1. **意图确认卡行内微调**：对话模式生成的确认卡上，英文提示词与排除项都是可直接编辑的文本域（分别受
+   `LIMITS.prompt.maxChars` / `LIMITS.negativePrompt.maxChars` 限制）；改完直接点「按此生成」，按卡片当前
+   内容提交（提示词仍合并当前风格后缀），不必为改几个词重新发起对话。提示词被清空时「按此生成」禁用；
+   卡片上的排除项清空后提交即真的不带负向词。
+2. **高级设置折叠记忆**：表单「高级设置」折叠区默认收起，展开/收起状态通过 `/imagen-api/ui-state`
+   持久化（见 §2.5），下次打开工作台沿用；读取失败静默回落默认收起，不弹错误提示。界面状态不进
+   `/state` 快照，也不参与出图参数。
+3. **凭据指引三口径**：`auth_required` 卡与 `/probe` 的说明使用同一口径——`kaggle auth login` 写入
+   OAuth 凭据（`credentials.json`，含 `refresh_token` 自动续期）；网页端生成的 API Token 可保存为
+   `access_token`；旧版 CLI 的 `kaggle.json` 仍兼容。三个路径都由客户端常量提供，文案里不写死反斜杠。

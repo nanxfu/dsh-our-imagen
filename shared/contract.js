@@ -12,7 +12,7 @@
  *    随注入配置下发（见 `remote/daemon.py` 的 config 解析）。
  */
 
-export const VERSION = '0.8.0'
+export const VERSION = '0.8.1'
 
 /**
  * Host HTTP 路由表（index.js 注册时必须逐一对应）。
@@ -43,6 +43,9 @@ export const ROUTES = {
   // 运行设置抽屉：GET 读脱敏视图（hfToken 只回布尔与来源），POST 保存用户覆盖项。
   settings: { method: 'GET', path: '/imagen-api/settings' },
   settingsSave: { method: 'POST', path: '/imagen-api/settings' },
+  // 工作台界面状态（高级设置折叠等）：GET 读归一化视图，POST 合并保存白名单字段。
+  uiState: { method: 'GET', path: '/imagen-api/ui-state' },
+  uiStateSave: { method: 'POST', path: '/imagen-api/ui-state' },
 }
 
 /** 客户端请求用的相对路径（与改造前 `request('imagen-api/state')` 完全同形）。 */
@@ -151,6 +154,23 @@ export const SETTINGS = {
   maxItemChars: 256,
   // `publicSettingsView()` 的脱敏字段取值域：settings=用户在抽屉里设置的，config=宿主插件配置。
   hfTokenSources: ['settings', 'config', 'none'],
+}
+
+/**
+ * 工作台界面状态的持久化口径（`<workspace>/.imagen/ui-state.json`）。
+ *
+ * 界面态只是体验优化，不是业务数据：只允许下列白名单字段，字段类型与默认值由这里决定，
+ * Host（归一 / 落盘）与 Client（初始化 / 归一）共同引用，未登记的字段一律丢弃。
+ * 文件损坏、超限或不存在都回落到默认值，绝不影响出图主链路。
+ */
+export const UI_STATE = {
+  version: 1,
+  defaults: {
+    // 表单「高级设置」折叠区是否展开：默认收起，没有记录时也回落到 false。
+    advancedOpen: false,
+  },
+  // 落盘文件大小上限：超过按损坏记录处理（界面态丢失不影响出图）。
+  maxBytes: 64 * 1024,
 }
 
 /**

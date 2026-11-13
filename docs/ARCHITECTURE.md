@@ -96,6 +96,13 @@ Host 在启动流程的关键节点（构建 Kernel 目录后、push 成功后�
 按 2→60 秒指数退避重拉；拿到新地址后重新向 ntfy 广播 ready，主循环每 300 秒再重播一次，
 Host 心跳丢失后即可靠会合点重新发现新地址。`/health` 会带上 `tunnel_provider` / `tunnel_state` / `tunnel_restarts`。
 
+cloudflared 二进制**固定版本并校验 SHA256**（0.8.1 起）：下载地址是
+`.../releases/download/<固定 tag>/cloudflared-linux-amd64`，不再使用滚动的 `/latest/download/`。
+流式下载到 `/tmp/cloudflared.part` 时边写边算校验和，超过 120 MB 立即中止；校验不匹配或下载异常
+各重试一次（第二次仍失败则带「期望 / 实际」校验和报错，`start_tunnel` 收敛进 `BOOT.tunnel_error`）。
+这样上游发版或网络只传半截文件都不会留下坏二进制，冷启动失败也有可读原因。
+校验和是公开信息，日志可打印；token 仍然只来自注入配置、不落日志。
+
 如果配置了 `fallbackTunnelCommand`，cloudflared 失败或超时后会按通道计划尝试备用命令（自建 FRP 等），
 成功后 `provider=custom`。Host 侧只信任回环、`*.trycloudflare.com` 与 `trustedTunnelDomains` 白名单内的
 https 地址，未登记的域名不会收到 Bearer token。
@@ -142,6 +149,35 @@ Kaggle 镜像的包版本会随平台更新，插件里写死版本上限反而�
 
 注意 `reconnectMaxAttempts` 的语义：它限制的是「每个连续 ready 周期内允许几次重新会合」，
 每次健康检查成功都会清零，不是会话生命周期内的总次数——真正的硬上限是上面的续期窗口。
+
+### 2.14 卸载未关机的补清理
+`dispose()` 必须立刻返回（DSH 退出 / 插件热重载不能被网络等待拖住），所以 `/shutdown` 只能 best-effort。
+但如果这次通知没发出去或失败，Kaggle Kernel 会继续空转、白白消耗每周额度——这正是 0.8.1 补的缺口：
+
+1. `dispose()` 先**同步**把最小连接信息写入 `<workspace>/.imagen/pending-cleanup.json`
+   （`endpointUrl` / `token` / `kernelId` / `topic` / `presetId` / `attempts` / `savedAt`，原子写、
+   目录 0700 / 文件 0600）。同步写是因为进程随后可能立刻退出，异步写来不及完成；
+2. 再 best-effort 发 `/shutdown`：成功则清掉待清理记录与会话记录，失败则保留待清理记录；
+3. 无论补发成败，只要责任已经移交下一次启动，就删除 `session.json`——用户明确是「退出」，
+   下次启动不该让 `restore()` 去接手或长时间等会合；
+4. 下次启动的 `index.js` 先 `cleanupPendingSession()` 补发一次关机，再执行 `restore()`；
+   补发失败累加 `attempts` 等下次再试，超过 24 小时（Kernel 最长 3 小时）、补发满 5 次或地址不可信时
+   丢弃记录并留 warn。token 只落盘，日志只记 `kernelId` / `attempts` / 原因。
+
+相关离线断言见 `test/session-pending-cleanup.mjs` 与 `test/session-restore.mjs` 的 E2 组。
+
+### 2.15 工作台界面状态持久化
+「表单高级设置是否展开」这类界面偏好存 `<workspace>/.imagen/ui-state.json`，通过
+`GET/POST /imagen-api/ui-state` 读写（同一 path 只注册一条路由、按 method 分发，与运行设置同款）。
+
+- 白名单字段与默认值来自契约 `UI_STATE.defaults`，Host 与 Client 共用；未知字段保存时直接丢弃，
+  已登记字段类型不符返回 `400 invalid_request`；
+- 文件不存在 / JSON 损坏 / 版本不符 / 超过 `UI_STATE.maxBytes`（64 KiB）一律回落默认值并顺手清理，
+  绝不阻塞插件加载；
+- 客户端挂载时读一次，失败静默按默认收起；切换时先改本地状态再 fire-and-forget 保存，
+  保存失败不回滚、不提示——界面态丢失不影响出图。
+
+相关离线断言见 `test/ui-state-host.mjs`（21 项）与客户端 `check-client-*` 的界面态用例。
 
 ---
 

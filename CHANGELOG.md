@@ -1,5 +1,32 @@
 # 变更记录
 
+## 0.8.1 — 2026-11-13
+
+> v0.9 第一个里程碑（M1：体验修复与可靠性收口）的发布版本；v0.9 主题里的 M2（Node 直连 Kaggle + 内置 OAuth，试验特性）与 M3（图生图）仍按 [ROADMAP](docs/ROADMAP.md) 规划推进。
+
+### 改进
+
+- **对话确认卡可以行内改词**：`ChatPanel.jsx` 的意图确认卡上，英文提示词与排除项从只读文本改为可直接编辑的文本域（分别受 `LIMITS.prompt.maxChars` / `LIMITS.negativePrompt.maxChars` 约束），改完直接点「按此生成」即按卡片当前内容提交，不必为微调几个词重新发起对话让模型重猜。`useChatThread` 新增白名单编辑动作（`updateIntent` / `updateIntentField`），生成走 `intentOverrides`：提示词仍合并当前风格后缀，排除项以卡片当前值为准（在卡上清空后提交即真的不带负向词），提示词为空时按钮禁用、hook 不提交。
+- **「高级设置」展开状态会被记住**：表单「高级设置」折叠区默认仍收起，但展开 / 收起状态通过新增的 `GET/POST /imagen-api/ui-state` 持久化到 `<workspace>/.imagen/ui-state.json`，下次打开工作台沿用。客户端挂载时读一次、切换时先改本地状态再 fire-and-forget 保存；读取或保存失败静默回落默认值，不提示、不阻塞出图。白名单字段与默认值由契约 `UI_STATE` 统一定义（Host 与 Client 共用），未知字段保存时丢弃，已登记字段类型不符返回 `400 invalid_request`。
+- **卸载时没关掉的云端实例，下次启动会补发关机**：`dispose()` 保持不阻塞卸载，但在关机通知失败时先**同步**把最小连接信息写入 `<workspace>/.imagen/pending-cleanup.json`（含 endpoint / token / kernelId / topic / attempts），并删除 `session.json`——用户已明确退出，下次启动不再让 `restore()` 去接手或长时间等会合。插件启动时先 `cleanupPendingSession()` 补发一次 `/shutdown` 再执行 `restore()`：补发成功清记录，失败累加次数等下次再试；记录超过 24 小时（Kernel 最长运行 3 小时）、补发满 5 次或地址不可信时丢弃并留 warn。token 只落盘、不进日志；开发模式不写该记录。
+- **cloudflared 下载改为固定版本 + SHA256 校验**：`remote/daemon.py` 的 cloudflared 下载地址从滚动的 `/releases/latest/download/` 改为固定 tag `2026.11.0`，并对 `cloudflared-linux-amd64` 做 SHA256 校验（`51f7c68b…a51fd`，40,283,099 字节；校验和已与官方 Release 说明及本机实际下载复算交叉核对）。流式下载到 `.part` 时边写边算校验和、超过 120 MB 立即中止；校验不匹配或下载异常各重试一次，第二次仍失败时带「期望 / 实际」校验和报错，由现有 `start_tunnel` 收敛进 `BOOT.tunnel_error` 并回退备用通道。消除上游发版或网络只传半截文件导致的冷启动随机失败。
+- **凭据指引校准为三口径**：`auth_required` 卡与 `/probe` 说明统一为——`kaggle auth login` 完成 OAuth 授权并把凭据写入 `%USERPROFILE%\.kaggle\credentials.json`（含 `refresh_token`，过期可自动续期）；Kaggle 网页生成的 API Token 可保存为 `%USERPROFILE%\.kaggle\access_token`；旧版 CLI 的 `%USERPROFILE%\.kaggle\kaggle.json` 仍兼容。中英文字典同步，文案里的反斜杠路径由常量注入。
+
+### 工程
+
+- 契约新增 `ROUTES.uiState` / `ROUTES.uiStateSave`（共用 path `/imagen-api/ui-state`，宿主按 method 数组分发，与运行设置同款）与 `UI_STATE`（白名单字段、默认值、落盘上限 64 KiB）；路由总览为 21 条方法 / 19 个唯一路径；`node test/check-contract.mjs` 11/11 通过（含 `docs/SPEC.md` 跟随）。
+- 新增 `lib/ui-state.js`（原子读写、0700/0600、损坏 / 版本不符 / 超限回落默认值）、`lib/routes/ui-state.js`、`lib/session/pending-cleanup.js`；`index.js` 启动流程改为「补清理 → 恢复」顺序执行，各自吞异常、不阻塞插件加载。
+- 测试：新增 `test/ui-state-host.mjs`（21 项）与 `test/session-pending-cleanup.mjs`（65 项）；`test/daemon-unit.py` 164→173（固定版本 / 校验和不匹配重试 / 下载异常重试 / 超大小上限中止 / 复用已有文件，全部假 `urlopen` 不联网）；`test/session-restore.mjs` 79→84（dispose 语义重写为「同步写待清理记录 + 失败删会话记录」）；`test/check-client-logic.mjs` 52→54、`test/check-client-render.mjs` 45→48（用新增的 hook 级渲染能力断言真实状态流转与「按此生成」实际提交值）、`check-client-locale` zh/en 各 344→350 键；`test/load-client.mjs` 增加 `requests` 请求记录（method + JSON body）与 `rerender()` / `settle()`。
+- 版本升到 0.8.1：契约 / `package.json` / `remote/daemon.py` / `test/mock-daemon.py` / `test/tunnel-probe.py` / `remote/contract.json` / `client.js` 同步；`client.js` 重新构建（429,503 字节）。
+
+### 文档
+
+- `docs/SPEC.md`：§1.1 补「卸载补清理」语义，新增 §2.5 工作台界面状态（ui-state）接口与 §5.7 第四批交互补充（确认卡行内微调 / 折叠记忆 / 凭据三口径）；版本标识与路由总览同步。
+- `docs/ARCHITECTURE.md`：§2.9 补 cloudflared 固定版本与校验和，新增 §2.14「卸载未关机的补清理」与 §2.15「工作台界面状态持久化」。
+- `docs/TROUBLESHOOTING.md`：隧道排错表补「cloudflared 下载失败 / SHA256 校验失败」一行；会话恢复一节补 `pending-cleanup.json` 的说明；§6 凭据处理改为三口径。
+- `README.md` / `README.en.md`：Kaggle 登录说明改为 OAuth 凭据口径（`credentials.json` + `refresh_token`），手动方式保留 `access_token` 与 `kaggle.json` 兼容。
+- `docs/ROADMAP.md`：v0.9 M1 标记为已完成（0.8.1）并逐项补实现说明；记录「工作区对话历史持久化」的评估结论（本轮不做，理由与后续排期写清）。
+
 ## 0.8.0 — 2026-11-13
 
 ### 改进

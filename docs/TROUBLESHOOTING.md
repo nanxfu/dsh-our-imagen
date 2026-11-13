@@ -129,6 +129,7 @@ Kaggle 容器的 `/kaggle/working` 通常只有 20 GB，写入层满了会转只
 | :--- | :--- |
 | 一直显示「正在排队等 GPU」 | Kaggle 账号是否绑定手机号；`kaggle kernels status <kernelId>` 看是否 PENDING |
 | 「隧道握手超时」 | 容器内 cloudflared 没拿到地址；日志里搜 `[tunnel]` 与 `[cloudflared]` |
+| `cloudflared 下载失败` / `SHA256 校验失败` | 0.8.1 起二进制固定版本并校验 SHA256，日志会写「期望 / 实际」校验和前缀；多为容器网络被代理拦截或上游资产异常，重试一次仍失败会自动回退备用通道（若配置了 `fallbackTunnelCommand`） |
 | 在线但每张图都失败 | Host 心跳丢失后会重取隧道地址；0.4.x 远端会在隧道重建后重播 ready，搜 `[tunnel] 通道 ... 就绪` |
 | 国内网络访问 Cloudflare 不稳定 | 可配置自建 https 隧道（`fallbackTunnelCommand` + `trustedTunnelDomains`）；未登记域名不会被信任 |
 
@@ -140,6 +141,9 @@ Host 侧网络问题（代理环境）由 `lib/net.js` 处理：内置 fetch 失
 
 - 会话记录在 `<workspace>/.imagen/session.json`，含远端 token，只落盘、不进日志。
 - 正常关机（`session/stop`）或成功卸载会删除记录；进程崩溃留下的记录会在下次启动时探活、重新会合或清理。
+- 卸载时关机通知失败的场景（例如退出瞬间隧道断开）会另写 `<workspace>/.imagen/pending-cleanup.json`：
+  下次插件启动先补发一次 `/shutdown`，成功即删除；失败会累计次数，补发满 5 次或记录超过 24 小时自动放弃。
+  两个记录都含远端 token，只落盘；排查时可以连同 `session.json` 一起删除（远端 Kernel 会按空闲超时自行退出）。
 - 如果怀疑记录异常（例如工作区从别的机器拷过来），删除该文件即可，下次启动会当成「无历史会话」。
 - 开发模式（注入 `devEndpoint`）不读写该记录。
 
@@ -151,7 +155,7 @@ Host 侧网络问题（代理环境）由 `lib/net.js` 处理：内置 fetch 失
 | :--- | :--- | :--- |
 | `cli_missing` | 本机没有 `kaggle` 命令 | `pip install -U kaggle` |
 | `cli_timeout` | CLI 启动或调用超过 30 秒 | 检查代理/DNS；重试环境检查 |
-| `auth_required` | 没找到凭证或凭证失效 | 新版 CLI 直接运行 `kaggle auth login`（自动写入 `%USERPROFILE%\.kaggle\access_token`）；旧版 CLI 在 Kaggle 设置页生成 Token 后保存为 `%USERPROFILE%\.kaggle\kaggle.json`，或直接写入 `%USERPROFILE%\.kaggle\access_token` |
+| `auth_required` | 没找到凭证或凭证失效 | 新版 CLI 直接运行 `kaggle auth login`：完成 OAuth 授权后凭据写入 `%USERPROFILE%\.kaggle\credentials.json`（含 `refresh_token`，过期可自动续期）；也可在 Kaggle 设置页生成 API Token 保存为 `%USERPROFILE%\.kaggle\access_token`；旧版 CLI 仍兼容 `%USERPROFILE%\.kaggle\kaggle.json` |
 | `gpu_unavailable` | 远端容器没拿到 GPU（`torch.cuda.is_available()` 为 `False`） | 检查 Kaggle 账号是否已完成手机号验证，并确认已启用 GPU 加速器；修复后重新唤醒云端 |
 | 配额一直显示不可用 | Kaggle quota 接口偶发失败 | 算力弹层会回退展示最近一次成功检查时间与当时配额 |
 ---

@@ -328,7 +328,7 @@ var zh = {
   "studio.guidance.closed.title": "云端已关闭，任务没有执行",
   "studio.guidance.auth.title": "Kaggle 账号缺少手机号绑定或凭据不可用",
   "studio.guidance.auth.action": "打开 Kaggle 设置",
-  "studio.guidance.auth.credentialHint": "凭据写入 {path}；旧版 kaggle CLI 也支持把 API Token 保存为 {legacy}。",
+  "studio.guidance.auth.credentialHint": "kaggle auth login 会把 OAuth 凭据写入 {path}（含 refresh_token，过期可自动续期）；也可使用 Kaggle 网页生成的 API Token 保存为 {token}；旧版 CLI 仍兼容 {legacy}。",
   "studio.guidance.auth.copyLogin": "复制登录命令",
   "studio.guidance.auth.copied": "已复制登录命令",
   "studio.guidance.gpu.title": "云端没有拿到 GPU",
@@ -380,6 +380,10 @@ var zh = {
   "studio.chat.parsing": "正在解析你的描述…",
   "studio.chat.intent.title": "生成确认",
   "studio.chat.intent.summary": "中文摘要",
+  "studio.chat.intent.promptLabel": "英文提示词",
+  "studio.chat.intent.negativeLabel": "排除项",
+  "studio.chat.intent.negativePlaceholder": "不希望出现的元素，可留空",
+  "studio.chat.intent.editHint": "可直接修改后再生成，不必重新对话。",
   "studio.chat.intent.generate": "按此生成",
   "studio.chat.intent.lockSeed": "沿用上张构图（锁定种子）",
   "studio.chat.clarify.title": "需要确认一个参数",
@@ -701,7 +705,7 @@ var en = {
   "studio.guidance.closed.title": "The cloud is closed, so the task did not run",
   "studio.guidance.auth.title": "The Kaggle account needs phone verification or usable credentials",
   "studio.guidance.auth.action": "Open Kaggle settings",
-  "studio.guidance.auth.credentialHint": "Credentials are written to {path}; older kaggle CLIs also accept an API token saved as {legacy}.",
+  "studio.guidance.auth.credentialHint": "kaggle auth login writes OAuth credentials to {path} (with a refresh_token, so it renews automatically). You can also save an API token generated on the Kaggle website as {token}; older CLIs still accept {legacy}.",
   "studio.guidance.auth.copyLogin": "Copy login command",
   "studio.guidance.auth.copied": "Login command copied",
   "studio.guidance.gpu.title": "The cloud instance did not get a GPU",
@@ -753,6 +757,10 @@ var en = {
   "studio.chat.parsing": "Reading your description…",
   "studio.chat.intent.title": "Ready to generate",
   "studio.chat.intent.summary": "Summary",
+  "studio.chat.intent.promptLabel": "English prompt",
+  "studio.chat.intent.negativeLabel": "Exclusions",
+  "studio.chat.intent.negativePlaceholder": "What to keep out; can be left empty",
+  "studio.chat.intent.editHint": "Edit these fields, then generate — no need to rephrase.",
   "studio.chat.intent.generate": "Generate this",
   "studio.chat.intent.lockSeed": "Reuse last composition (lock seed)",
   "studio.chat.clarify.title": "One setting to confirm",
@@ -1064,7 +1072,7 @@ function jobColor(status) {
 }
 
 // shared/contract.js
-var VERSION = "0.8.0";
+var VERSION = "0.8.1";
 var ROUTES = {
   state: { method: "GET", path: "/imagen-api/state" },
   probe: { method: "POST", path: "/imagen-api/probe" },
@@ -1088,7 +1096,10 @@ var ROUTES = {
   reveal: { method: "POST", path: "/imagen-api/reveal" },
   // 运行设置抽屉：GET 读脱敏视图（hfToken 只回布尔与来源），POST 保存用户覆盖项。
   settings: { method: "GET", path: "/imagen-api/settings" },
-  settingsSave: { method: "POST", path: "/imagen-api/settings" }
+  settingsSave: { method: "POST", path: "/imagen-api/settings" },
+  // 工作台界面状态（高级设置折叠等）：GET 读归一化视图，POST 合并保存白名单字段。
+  uiState: { method: "GET", path: "/imagen-api/ui-state" },
+  uiStateSave: { method: "POST", path: "/imagen-api/ui-state" }
 };
 function clientPath(route) {
   return route.path.replace(/^\//, "");
@@ -1181,6 +1192,15 @@ var SETTINGS = {
   maxItemChars: 256,
   // `publicSettingsView()` 的脱敏字段取值域：settings=用户在抽屉里设置的，config=宿主插件配置。
   hfTokenSources: ["settings", "config", "none"]
+};
+var UI_STATE = {
+  version: 1,
+  defaults: {
+    // 表单「高级设置」折叠区是否展开：默认收起，没有记录时也回落到 false。
+    advancedOpen: false
+  },
+  // 落盘文件大小上限：超过按损坏记录处理（界面态丢失不影响出图）。
+  maxBytes: 64 * 1024
 };
 var RATIO_IDS = ["1:1", "16:9", "9:16", "4:3", "3:4"];
 var STYLE_IDS = ["film", "concept", "cyberpunk", "ink", "clay"];
@@ -1408,6 +1428,15 @@ function saveSettings(payload) {
     body: JSON.stringify(payload && typeof payload === "object" ? payload : {})
   });
 }
+function fetchUiState() {
+  return request(routePath("uiState"), { method: "GET" });
+}
+function saveUiState(patch) {
+  return request(routePath("uiStateSave"), {
+    method: "POST",
+    body: JSON.stringify(patch && typeof patch === "object" ? patch : {})
+  });
+}
 
 // src/hooks/useHostState.js
 function useHostState() {
@@ -1516,7 +1545,7 @@ var filmstrip_default = "/*\n * 底部最近生成栏：悬浮玻璃条，左边
 var gallery_default = "/*\n * 作品画廊：作品集式的卡片墙。\n *\n * 结构：\n *   .ofs-gallery          自身滚动容器（高度由 .ofs-main 决定）\n *     .ofs-gallery-tools  轻浮的玻璃工具卡：标题 / 搜索 / 模型 / 收藏 / 批量动作\n *     .ofs-gallery-group  今天 / 本周 / 更早\n *       .ofs-gallery-wall CSS columns 瀑布流：图片按原始宽高比自然高度\n *\n * 卡片是「图片 + 两行提示词 + 标签行」的白卡：圆角、描边、阴影全部来自\n * tokens.css；网格只负责列宽，不裁切图片、不拉伸比例。\n */\n\n/* ── 容器 ───────────────────────────────────────────────────── */\n.ofs-gallery {\n  /* 吸顶工具卡要贴住滚动口，padding-top 用变量参与 top 偏移，避免内容从顶部缝隙露出 */\n  --ofs-gallery-pad-top: 18px;\n  position: relative;\n  flex: 1 1 auto;\n  height: 100%;\n  min-height: 0;\n  overflow-y: auto;\n  overflow-x: hidden;\n  display: flex;\n  flex-direction: column;\n  gap: var(--ofs-gap);\n  padding: var(--ofs-gallery-pad-top) 20px 26px;\n  overscroll-behavior: contain;\n}\n\n.ofs-gallery.is-empty {\n  min-height: 360px;\n}\n\n/* ── 工具卡 ─────────────────────────────────────────────────── */\n.ofs-gallery-tools {\n  position: sticky;\n  top: calc(-1 * var(--ofs-gallery-pad-top));\n  z-index: 3;\n  flex: 0 0 auto;\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 10px 12px;\n  padding: 12px 14px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-window);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(18px) saturate(140%);\n  -webkit-backdrop-filter: blur(18px) saturate(140%);\n}\n\n.ofs-gallery-headline {\n  display: flex;\n  align-items: baseline;\n  gap: 9px;\n  min-width: 0;\n}\n\n.ofs-gallery-title {\n  font-size: 15px;\n  font-weight: 650;\n  letter-spacing: -0.01em;\n  line-height: 1.3;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n.ofs-gallery-count {\n  font-size: 12px;\n  line-height: 1.4;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-gallery-count b {\n  font-weight: 600;\n  color: var(--ofs-ink-2);\n  font-variant-numeric: tabular-nums;\n}\n\n/* 搜索：胶囊内嵌放大镜 */\n.ofs-gallery-search {\n  position: relative;\n  display: flex;\n  align-items: center;\n  flex: 1 1 200px;\n  max-width: 320px;\n  height: 34px;\n  padding: 0 12px 0 32px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-3);\n  cursor: text;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease,\n    box-shadow 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-gallery-search:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-focus-ring);\n  color: var(--ofs-accent);\n}\n\n.ofs-gallery-search-icon {\n  position: absolute;\n  left: 11px;\n  top: 50%;\n  transform: translateY(-50%);\n  pointer-events: none;\n}\n\n.ofs-gallery-search-input {\n  width: 100%;\n  height: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n}\n\n.ofs-gallery-search-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-gallery-search-input:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-gallery-search-input::-webkit-search-cancel-button,\n.ofs-gallery-search-input::-webkit-search-decoration {\n  appearance: none;\n  -webkit-appearance: none;\n}\n\n/* 模型过滤：原生 select，外观融进胶囊体系 */\n.ofs-gallery-select {\n  position: relative;\n  display: inline-flex;\n  align-items: center;\n  flex: 0 0 auto;\n}\n\n.ofs-gallery-select-input {\n  appearance: none;\n  -webkit-appearance: none;\n  height: 34px;\n  max-width: 200px;\n  padding: 0 30px 0 13px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  text-overflow: ellipsis;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease;\n}\n\n.ofs-gallery-select-input:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-gallery-select-input:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-gallery-select-input option {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n}\n\n.ofs-gallery-select-caret {\n  position: absolute;\n  right: 11px;\n  top: 50%;\n  transform: translateY(-50%);\n  color: var(--ofs-ink-3);\n  pointer-events: none;\n}\n\n/* 工具条里的 chip 与输入同高，避免一排控件高低不齐 */\n.ofs-gallery-tools .ofs-chip {\n  height: 32px;\n  padding: 0 13px;\n  font-size: 12.5px;\n}\n\n.ofs-gallery-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 8px;\n  margin-left: auto;\n}\n\n.ofs-gallery-selected {\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  height: 32px;\n  padding: 0 12px;\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  font-size: 12px;\n  font-weight: 600;\n  white-space: nowrap;\n}\n\n.ofs-gallery-selected b {\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 分组：小字重对比 + 一条极淡分隔 ─────────────────────────── */\n.ofs-gallery-group {\n  flex: 0 0 auto;\n}\n\n.ofs-gallery-group-title {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  margin: 0 0 12px;\n  padding-left: 2px;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  line-height: 1.4;\n  letter-spacing: 0.02em;\n}\n\n.ofs-gallery-group-title::after {\n  content: '';\n  flex: 1 1 auto;\n  height: 1px;\n  border-radius: 1px;\n  background: var(--ofs-hairline);\n}\n\n/* ── 卡片墙：JS 分列，图片按原始比例撑高 ─────────────────────── */\n/*\n * CSS 多列是列优先填充，最新作品会先占满左列；这里改成「每列一个纵向 flex」，\n * 由 Gallery.jsx 按行优先分桶（断点见 logic/gallery.js）。图片仍按原始宽高比\n * 撑高，不裁切、不拉伸。\n */\n.ofs-gallery-wall {\n  display: flex;\n  align-items: flex-start;\n  gap: var(--ofs-gap);\n}\n\n.ofs-gallery-col {\n  flex: 1 1 0;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n}\n\n.ofs-gallery-card {\n  display: block;\n  width: 100%;\n  margin: 0 0 var(--ofs-gap);\n  padding: 6px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-card);\n  color: var(--ofs-ink);\n  break-inside: avoid;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease,\n    border-color 180ms ease;\n}\n\n.ofs-gallery-card:hover {\n  transform: translateY(-2px);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-gallery-card.is-picked {\n  border-color: var(--ofs-accent);\n  box-shadow: var(--ofs-focus-ring), var(--ofs-shadow-card);\n}\n\n.ofs-gallery-card.is-picked:hover {\n  box-shadow: var(--ofs-focus-ring), var(--ofs-shadow-lift);\n}\n\n/* 图片区：按钮铺满，悬浮操作覆盖在图片底部 */\n.ofs-gallery-stage {\n  position: relative;\n  display: block;\n  border-radius: calc(var(--ofs-r-lg) - 7px);\n  overflow: hidden;\n  background: var(--ofs-sunken);\n}\n\n.ofs-gallery-media {\n  appearance: none;\n  position: relative;\n  display: block;\n  width: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  cursor: pointer;\n}\n\n.ofs-gallery-media img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n/* 悬停操作：带回参数 / 生成变体 / 查看大图 */\n.ofs-gallery-hover {\n  position: absolute;\n  right: 6px;\n  bottom: 6px;\n  left: 6px;\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n  gap: 4px;\n  opacity: 0;\n  pointer-events: none;\n  transition: opacity 150ms ease;\n}\n\n.ofs-gallery-card:hover .ofs-gallery-hover,\n.ofs-gallery-card:focus-within .ofs-gallery-hover {\n  opacity: 1;\n  pointer-events: auto;\n}\n\n.ofs-gallery-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  height: 22px;\n  padding: 0 7px;\n  border: 1px solid rgb(255 255 255 / 26%);\n  border-radius: var(--ofs-r-pill);\n  background: rgb(20 20 22 / 62%);\n  color: #fff;\n  font-size: 10px;\n  white-space: nowrap;\n  cursor: pointer;\n  backdrop-filter: blur(6px);\n  -webkit-backdrop-filter: blur(6px);\n}\n\n.ofs-gallery-action:hover {\n  background: rgb(20 20 22 / 82%);\n}\n\n/* 触屏设备没有 hover：操作条常显，否则手机上无法「带回参数 / 生成变体」。 */\n@media (hover: none) {\n  .ofs-gallery-hover {\n    opacity: 1;\n    pointer-events: auto;\n  }\n}\n\n/* 批量选择：左上角圆点，选中后墨黑填充 */\n.ofs-gallery-pick {\n  position: absolute;\n  top: 9px;\n  left: 9px;\n  display: grid;\n  place-items: center;\n  width: 20px;\n  height: 20px;\n  border: 1.5px solid rgb(20 20 22 / 16%);\n  border-radius: 50%;\n  background: rgb(255 255 255 / 72%);\n  color: var(--ofs-accent-ink);\n  box-shadow: 0 1px 4px rgb(24 24 27 / 22%);\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease;\n}\n\n.ofs-gallery-pick.is-on {\n  border-color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n/* 收藏星标：右上角玻璃圆点，已收藏常显；未收藏在卡片悬停 / 键盘聚焦时出现。\n   它是图片上方的独立按钮，不嵌在图片按钮里，避免嵌套交互元素。 */\n.ofs-gallery-star {\n  appearance: none;\n  position: absolute;\n  top: 8px;\n  right: 8px;\n  z-index: 2;\n  display: grid;\n  place-items: center;\n  width: 24px;\n  height: 24px;\n  padding: 0;\n  border: 0;\n  border-radius: 50%;\n  background: color-mix(in oklab, var(--ofs-card-solid) 84%, transparent);\n  color: var(--ofs-ink-3);\n  box-shadow: 0 1px 4px rgb(24 24 27 / 22%);\n  backdrop-filter: blur(4px);\n  -webkit-backdrop-filter: blur(4px);\n  cursor: pointer;\n  opacity: 0;\n  pointer-events: none;\n  transition:\n    opacity 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-gallery-star.is-on {\n  opacity: 1;\n  pointer-events: auto;\n  color: var(--ofs-ink);\n}\n\n.ofs-gallery-card:hover .ofs-gallery-star,\n.ofs-gallery-card:focus-within .ofs-gallery-star {\n  opacity: 1;\n  pointer-events: auto;\n}\n\n.ofs-gallery-star:hover {\n  color: var(--ofs-accent);\n}\n\n/* 触屏没有 hover：星标常显，否则手机上无法收藏。 */\n@media (hover: none) {\n  .ofs-gallery-star {\n    opacity: 1;\n    pointer-events: auto;\n  }\n}\n\n/* 卡身：两行提示词 + 标签行；整块可点开大图 */\n.ofs-gallery-body {\n  appearance: none;\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  width: 100%;\n  min-width: 0;\n  padding: 10px 8px 8px;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-gallery-caption {\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n  line-clamp: 2;\n  overflow: hidden;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  font-weight: 500;\n  line-height: 1.5;\n  word-break: break-word;\n}\n\n.ofs-gallery-tags {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.3;\n}\n\n.ofs-gallery-tags em {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-style: normal;\n  font-weight: 500;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-gallery-tags span {\n  flex: 0 0 auto;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 空态：一张柔光卡片，一句话 ─────────────────────────────── */\n.ofs-gallery-empty {\n  flex: 0 0 auto;\n  margin: auto;\n  width: 100%;\n  max-width: 380px;\n  padding: 40px 30px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(120% 150% at 50% -18%, color-mix(in oklab, var(--ofs-ink) 6%, transparent) 0%, transparent 62%),\n    var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  text-align: center;\n}\n\n.ofs-gallery-empty p {\n  color: var(--ofs-ink-2);\n  font-size: 13px;\n  line-height: 1.7;\n}\n\n.ofs-gallery-empty-actions {\n  display: flex;\n  justify-content: center;\n  margin-top: 14px;\n}\n\n/* ── 历史分页脚 ─────────────────────────────────────────────── */\n.ofs-gallery-foot {\n  flex: 0 0 auto;\n  display: flex;\n  justify-content: center;\n  padding: 8px 0 4px;\n}\n\n.ofs-gallery-more {\n  height: 32px;\n  padding: 0 18px;\n}\n\n.ofs-gallery-more[aria-busy='true'] {\n  opacity: 0.6;\n}\n\n.ofs-gallery-all-loaded {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  text-align: center;\n}\n\n/* ── 响应式 ─────────────────────────────────────────────────── */\n/* 列数由 Gallery.jsx 的 useColumnCount 按 900 / 1180 / 1400 三个断点决定，\n   这里只调工具卡各自在不同宽度下的排布。 */\n@media (max-width: 1180px) {\n  .ofs-gallery {\n    --ofs-gallery-pad-top: 16px;\n    padding: 16px 18px 24px;\n  }\n\n  .ofs-gallery-search {\n    max-width: 260px;\n  }\n}\n\n@media (max-width: 900px) {\n  /* 窄窗里工具卡不再吸顶：它本身会折成两三行，吸顶太占高度 */\n  .ofs-gallery-tools {\n    position: static;\n  }\n}\n\n@media (max-width: 700px) {\n  .ofs-gallery {\n    --ofs-gallery-pad-top: 12px;\n    gap: 12px;\n    padding: 12px 12px 22px;\n  }\n\n  .ofs-gallery-tools {\n    gap: 8px;\n    padding: 10px 11px;\n  }\n\n  .ofs-gallery-search {\n    flex: 1 1 100%;\n    max-width: none;\n  }\n\n  .ofs-gallery-select-input {\n    max-width: 116px;\n  }\n\n  .ofs-gallery-tools .ofs-chip {\n    padding: 0 10px;\n  }\n\n  .ofs-gallery-empty {\n    padding: 32px 22px;\n  }\n}";
 
 // src/styles/chat.css
-var chat_default = "/*\n * 对话式面板：柔和消息流。\n *\n * 卡片外壳（背景 / 圆角 / 阴影 / 外边距）、头部与分段控件都由 panel.css 提供，\n * 这里只写卡片内部：消息流、空态、建议行与底部悬浮输入区。\n * 所有选择器挂在 .ofs-panel--chat 下，避免和表单式面板共用的类名互相影响；\n * 对话专属的类名统一用 ofs-chat- / ofs-msg- 前缀。\n */\n\n/* ── 消息流 ─────────────────────────────────────────────────── */\n/* 面板落在单轨布局的第一列；单独挂载预览时这句不影响其它容器。 */\n.ofs-panel--chat {\n  grid-column: 1;\n}\n\n.ofs-panel--chat .ofs-thread {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 6px 15px 10px;\n}\n\n/* 空态用 auto 外边距居中，内容超高时自然回到顶部可滚动，不会被裁掉。 */\n.ofs-panel--chat .ofs-thread.is-empty {\n  justify-content: flex-start;\n}\n\n.ofs-chat-empty {\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 13px;\n  margin: auto 0;\n  /* 稍微上提，避免视觉重心压在输入区上。 */\n  padding-bottom: 26px;\n  animation: ofs-fade-in 260ms ease both;\n}\n\n.ofs-chat-empty-text {\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  line-height: 1.7;\n  text-align: center;\n}\n\n.ofs-chat-examples {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-panel--chat .ofs-chat-example {\n  display: flex;\n  align-items: center;\n  height: auto;\n  min-height: 30px;\n  padding: 7px 12px;\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  text-align: left;\n  white-space: normal;\n}\n\n.ofs-panel--chat .ofs-chat-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 消息 ───────────────────────────────────────────────────── */\n.ofs-panel--chat .ofs-msg {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  max-width: 100%;\n  min-width: 0;\n  animation: ofs-fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;\n}\n\n.ofs-panel--chat .ofs-msg p {\n  font-size: 12.5px;\n  line-height: 1.62;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n\n/* 用户：右对齐的浅灰底，右下角收小圆角但不出气泡尾巴。 */\n.ofs-panel--chat .ofs-msg--user {\n  align-self: flex-end;\n  max-width: 88%;\n  padding: 8px 13px;\n  border: 1px solid var(--ofs-accent-soft-border);\n  border-radius: 16px 16px 6px 16px;\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-ink);\n}\n\n/* 助手：整宽白卡，左上角收小圆角，跟用户消息形成对角呼应。 */\n.ofs-panel--chat .ofs-msg--assistant {\n  align-self: stretch;\n}\n\n.ofs-chat-author {\n  display: flex;\n  align-items: center;\n  gap: 7px;\n  padding-left: 2px;\n}\n\n.ofs-chat-author-name {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.04em;\n}\n\n.ofs-chat-dot {\n  flex: 0 0 auto;\n}\n\n/* 排队与渲染中：状态点换成琥珀色呼吸，不用转圈。 */\n.ofs-panel--chat .ofs-chat-dot.is-live {\n  animation: ofs-chat-breathe 2.2s ease-out infinite;\n}\n\n@keyframes ofs-chat-breathe {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 36%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n}\n\n.ofs-msg-card {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px 13px 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 6px 16px 16px 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n/* 生成中：卡片留一条柔光微光条，扫过即表示在跑。 */\n.ofs-chat-shimmer {\n  display: block;\n  width: 58%;\n  height: 3px;\n  margin-top: -2px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(90deg, transparent 0%, var(--ofs-accent-2) 52%, transparent 100%);\n  background-size: 220% 100%;\n  opacity: 0.62;\n  animation: ofs-shimmer 2s linear infinite;\n}\n\n/* 意图确认卡：整理后的提示词、比例与风格，一个提交按钮。 */\n.ofs-intent {\n  gap: 7px;\n}\n\n.ofs-intent-title {\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-intent-prompt {\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  line-height: 1.55;\n  word-break: break-word;\n}\n\n/* 中文摘要：英文提示词之后的一行弱化说明，只用于确认画面是否符合本意。 */\n.ofs-intent-summary {\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  word-break: break-word;\n}\n\n.ofs-intent-summary-label {\n  margin-right: 6px;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n}\n\n/* 中文提示词软提示：跟在提示词输入框下方，样式沿用 .ofs-hint，只补一点间距。 */\n.ofs-prompt-lang-hint {\n  margin-top: 6px;\n}\n\n.ofs-intent-question {\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n}\n\n.ofs-intent-meta {\n  display: flex;\n  align-items: center;\n  gap: 5px;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-intent-note {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  line-height: 1.5;\n}\n\n/* 意图卡上的「沿用上张构图」开关：可选行为，视觉上弱于主按钮。 */\n.ofs-intent-lock {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  align-self: flex-start;\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  line-height: 1.4;\n  cursor: pointer;\n  user-select: none;\n}\n\n.ofs-intent-lock input {\n  width: 13px;\n  height: 13px;\n  margin: 0;\n  accent-color: var(--ofs-accent);\n  cursor: pointer;\n}\n\n/* 上一张图没有可复用种子时置灰，避免开了一个不生效的开关。 */\n.ofs-intent-lock.is-disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n.ofs-intent-go {\n  align-self: flex-start;\n  height: 30px;\n  margin-top: 2px;\n  padding: 0 14px;\n  border-radius: 10px;\n  font-size: 12px;\n}\n\n/* 结果缩略图：整宽图片卡，元信息压在右下角。 */\n.ofs-msg-thumb {\n  appearance: none;\n  position: relative;\n  display: block;\n  width: 100%;\n  margin-top: 1px;\n  padding: 0;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 12px;\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  cursor: pointer;\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease,\n    border-color 180ms ease;\n}\n\n.ofs-msg-thumb img {\n  display: block;\n  width: 100%;\n  height: 132px;\n  object-fit: cover;\n}\n\n.ofs-msg-thumb:hover {\n  transform: translateY(-1px);\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-msg-thumb:active {\n  transform: translateY(0) scale(0.995);\n}\n\n.ofs-msg-thumb-meta {\n  position: absolute;\n  right: 7px;\n  bottom: 7px;\n  padding: 2px 8px;\n  border-radius: var(--ofs-r-pill);\n  background: rgb(17 17 20 / 52%);\n  backdrop-filter: blur(8px);\n  -webkit-backdrop-filter: blur(8px);\n  color: rgb(255 255 255 / 93%);\n  font-size: 10px;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.01em;\n}\n\n/* ── 底部：建议 / 动作 / 输入 ────────────────────────────────── */\n.ofs-chat-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px 15px 14px;\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-chat-tools {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-panel--chat .ofs-chat-tools .ofs-chip {\n  height: 27px;\n  padding: 0 11px;\n  font-size: 11.5px;\n}\n\n/* 输入区：白/玻璃的圆角卡，靠内发光描边和柔影浮起来。 */\n.ofs-chat-composer {\n  display: flex;\n  align-items: flex-end;\n  gap: 8px;\n  padding: 9px 9px 9px 12px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-card) 100%);\n  box-shadow:\n    inset 0 1px 0 var(--ofs-window-border),\n    var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-chat-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow:\n    inset 0 1px 0 var(--ofs-window-border),\n    0 0 0 3px color-mix(in oklab, var(--ofs-accent) 12%, transparent),\n    var(--ofs-shadow-card);\n}\n\n.ofs-chat-composer textarea {\n  flex: 1 1 auto;\n  min-width: 0;\n  min-height: 42px;\n  max-height: 128px;\n  padding: 2px 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  line-height: 1.6;\n  resize: none;\n  overflow-y: auto;\n  /* 支持的浏览器里让输入框随内容长到 max-height；不支持时退化成固定两行。 */\n  field-sizing: content;\n}\n\n.ofs-chat-composer textarea:focus,\n.ofs-chat-composer textarea:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-chat-composer textarea::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n/* 发送：墨黑实心圆钮（深色主题由 tokens 反相成浅灰），hover 轻抬升，禁用降饱和。 */\n.ofs-chat-send {\n  appearance: none;\n  flex: 0 0 auto;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  padding: 0;\n  border: 0;\n  border-radius: 50%;\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n  box-shadow: var(--ofs-shadow-accent);\n  cursor: pointer;\n  transition:\n    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-chat-send:hover:not(:disabled) {\n  transform: translateY(-1px);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-chat-send:active:not(:disabled) {\n  transform: translateY(0) scale(0.94);\n}\n\n.ofs-chat-send:disabled {\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-4);\n  box-shadow: none;\n  filter: saturate(0);\n  cursor: default;\n}\n\n/* 窄窗下面板被压到 46vh：收紧留白，让最后两条消息仍然可见。 */\n@media (max-width: 820px) {\n  .ofs-panel--chat .ofs-thread {\n    padding: 0 13px 8px;\n  }\n\n  .ofs-chat-dock {\n    padding: 8px 13px 12px;\n  }\n\n  .ofs-msg-thumb img {\n    height: 112px;\n  }\n}\n\n/* 动效停用时，微光条改成一条静态浅色线，信息不丢。 */\n@media (prefers-reduced-motion: reduce) {\n  .ofs-chat-shimmer {\n    background: var(--ofs-accent-soft-border);\n    opacity: 0.9;\n    animation: none;\n  }\n\n  .ofs-panel--chat .ofs-chat-dot.is-live {\n    animation: none;\n  }\n}";
+var chat_default = "/*\n * 对话式面板：柔和消息流。\n *\n * 卡片外壳（背景 / 圆角 / 阴影 / 外边距）、头部与分段控件都由 panel.css 提供，\n * 这里只写卡片内部：消息流、空态、建议行与底部悬浮输入区。\n * 所有选择器挂在 .ofs-panel--chat 下，避免和表单式面板共用的类名互相影响；\n * 对话专属的类名统一用 ofs-chat- / ofs-msg- 前缀。\n */\n\n/* ── 消息流 ─────────────────────────────────────────────────── */\n/* 面板落在单轨布局的第一列；单独挂载预览时这句不影响其它容器。 */\n.ofs-panel--chat {\n  grid-column: 1;\n}\n\n.ofs-panel--chat .ofs-thread {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 6px 15px 10px;\n}\n\n/* 空态用 auto 外边距居中，内容超高时自然回到顶部可滚动，不会被裁掉。 */\n.ofs-panel--chat .ofs-thread.is-empty {\n  justify-content: flex-start;\n}\n\n.ofs-chat-empty {\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 13px;\n  margin: auto 0;\n  /* 稍微上提，避免视觉重心压在输入区上。 */\n  padding-bottom: 26px;\n  animation: ofs-fade-in 260ms ease both;\n}\n\n.ofs-chat-empty-text {\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  line-height: 1.7;\n  text-align: center;\n}\n\n.ofs-chat-examples {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-panel--chat .ofs-chat-example {\n  display: flex;\n  align-items: center;\n  height: auto;\n  min-height: 30px;\n  padding: 7px 12px;\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  text-align: left;\n  white-space: normal;\n}\n\n.ofs-panel--chat .ofs-chat-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 消息 ───────────────────────────────────────────────────── */\n.ofs-panel--chat .ofs-msg {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  max-width: 100%;\n  min-width: 0;\n  animation: ofs-fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;\n}\n\n.ofs-panel--chat .ofs-msg p {\n  font-size: 12.5px;\n  line-height: 1.62;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n\n/* 用户：右对齐的浅灰底，右下角收小圆角但不出气泡尾巴。 */\n.ofs-panel--chat .ofs-msg--user {\n  align-self: flex-end;\n  max-width: 88%;\n  padding: 8px 13px;\n  border: 1px solid var(--ofs-accent-soft-border);\n  border-radius: 16px 16px 6px 16px;\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-ink);\n}\n\n/* 助手：整宽白卡，左上角收小圆角，跟用户消息形成对角呼应。 */\n.ofs-panel--chat .ofs-msg--assistant {\n  align-self: stretch;\n}\n\n.ofs-chat-author {\n  display: flex;\n  align-items: center;\n  gap: 7px;\n  padding-left: 2px;\n}\n\n.ofs-chat-author-name {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.04em;\n}\n\n.ofs-chat-dot {\n  flex: 0 0 auto;\n}\n\n/* 排队与渲染中：状态点换成琥珀色呼吸，不用转圈。 */\n.ofs-panel--chat .ofs-chat-dot.is-live {\n  animation: ofs-chat-breathe 2.2s ease-out infinite;\n}\n\n@keyframes ofs-chat-breathe {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 36%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n}\n\n.ofs-msg-card {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px 13px 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 6px 16px 16px 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n/* 生成中：卡片留一条柔光微光条，扫过即表示在跑。 */\n.ofs-chat-shimmer {\n  display: block;\n  width: 58%;\n  height: 3px;\n  margin-top: -2px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(90deg, transparent 0%, var(--ofs-accent-2) 52%, transparent 100%);\n  background-size: 220% 100%;\n  opacity: 0.62;\n  animation: ofs-shimmer 2s linear infinite;\n}\n\n/* 意图确认卡：整理后的提示词、比例与风格，一个提交按钮。 */\n.ofs-intent {\n  gap: 7px;\n}\n\n.ofs-intent-title {\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-3);\n}\n\n/* 意图卡行内微调：提示词与排除项直接可编辑，改完再点「按此生成」。 */\n.ofs-intent-field {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ofs-intent-field-label {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n}\n\n/* 文本域沿用输入区的浅底与描边，焦点态与其它输入框一致。 */\n.ofs-intent-prompt,\n.ofs-intent-negative {\n  box-sizing: border-box;\n  width: 100%;\n  min-height: 46px;\n  padding: 6px 9px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 8px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-family: inherit;\n  font-size: 12px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-intent-prompt:focus,\n.ofs-intent-negative:focus {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 12%, transparent);\n}\n\n.ofs-intent-prompt::placeholder,\n.ofs-intent-negative::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-intent-edit-hint {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  line-height: 1.5;\n}\n\n/* 中文摘要：英文提示词之后的一行弱化说明，只用于确认画面是否符合本意。 */\n.ofs-intent-summary {\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  word-break: break-word;\n}\n\n.ofs-intent-summary-label {\n  margin-right: 6px;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n}\n\n/* 中文提示词软提示：跟在提示词输入框下方，样式沿用 .ofs-hint，只补一点间距。 */\n.ofs-prompt-lang-hint {\n  margin-top: 6px;\n}\n\n.ofs-intent-question {\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n}\n\n.ofs-intent-meta {\n  display: flex;\n  align-items: center;\n  gap: 5px;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-intent-note {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  line-height: 1.5;\n}\n\n/* 意图卡上的「沿用上张构图」开关：可选行为，视觉上弱于主按钮。 */\n.ofs-intent-lock {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  align-self: flex-start;\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  line-height: 1.4;\n  cursor: pointer;\n  user-select: none;\n}\n\n.ofs-intent-lock input {\n  width: 13px;\n  height: 13px;\n  margin: 0;\n  accent-color: var(--ofs-accent);\n  cursor: pointer;\n}\n\n/* 上一张图没有可复用种子时置灰，避免开了一个不生效的开关。 */\n.ofs-intent-lock.is-disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n.ofs-intent-go {\n  align-self: flex-start;\n  height: 30px;\n  margin-top: 2px;\n  padding: 0 14px;\n  border-radius: 10px;\n  font-size: 12px;\n}\n\n/* 结果缩略图：整宽图片卡，元信息压在右下角。 */\n.ofs-msg-thumb {\n  appearance: none;\n  position: relative;\n  display: block;\n  width: 100%;\n  margin-top: 1px;\n  padding: 0;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 12px;\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  cursor: pointer;\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease,\n    border-color 180ms ease;\n}\n\n.ofs-msg-thumb img {\n  display: block;\n  width: 100%;\n  height: 132px;\n  object-fit: cover;\n}\n\n.ofs-msg-thumb:hover {\n  transform: translateY(-1px);\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-msg-thumb:active {\n  transform: translateY(0) scale(0.995);\n}\n\n.ofs-msg-thumb-meta {\n  position: absolute;\n  right: 7px;\n  bottom: 7px;\n  padding: 2px 8px;\n  border-radius: var(--ofs-r-pill);\n  background: rgb(17 17 20 / 52%);\n  backdrop-filter: blur(8px);\n  -webkit-backdrop-filter: blur(8px);\n  color: rgb(255 255 255 / 93%);\n  font-size: 10px;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.01em;\n}\n\n/* ── 底部：建议 / 动作 / 输入 ────────────────────────────────── */\n.ofs-chat-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px 15px 14px;\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-chat-tools {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-panel--chat .ofs-chat-tools .ofs-chip {\n  height: 27px;\n  padding: 0 11px;\n  font-size: 11.5px;\n}\n\n/* 输入区：白/玻璃的圆角卡，靠内发光描边和柔影浮起来。 */\n.ofs-chat-composer {\n  display: flex;\n  align-items: flex-end;\n  gap: 8px;\n  padding: 9px 9px 9px 12px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-card) 100%);\n  box-shadow:\n    inset 0 1px 0 var(--ofs-window-border),\n    var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-chat-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow:\n    inset 0 1px 0 var(--ofs-window-border),\n    0 0 0 3px color-mix(in oklab, var(--ofs-accent) 12%, transparent),\n    var(--ofs-shadow-card);\n}\n\n.ofs-chat-composer textarea {\n  flex: 1 1 auto;\n  min-width: 0;\n  min-height: 42px;\n  max-height: 128px;\n  padding: 2px 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  line-height: 1.6;\n  resize: none;\n  overflow-y: auto;\n  /* 支持的浏览器里让输入框随内容长到 max-height；不支持时退化成固定两行。 */\n  field-sizing: content;\n}\n\n.ofs-chat-composer textarea:focus,\n.ofs-chat-composer textarea:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-chat-composer textarea::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n/* 发送：墨黑实心圆钮（深色主题由 tokens 反相成浅灰），hover 轻抬升，禁用降饱和。 */\n.ofs-chat-send {\n  appearance: none;\n  flex: 0 0 auto;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  padding: 0;\n  border: 0;\n  border-radius: 50%;\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n  box-shadow: var(--ofs-shadow-accent);\n  cursor: pointer;\n  transition:\n    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-chat-send:hover:not(:disabled) {\n  transform: translateY(-1px);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-chat-send:active:not(:disabled) {\n  transform: translateY(0) scale(0.94);\n}\n\n.ofs-chat-send:disabled {\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-4);\n  box-shadow: none;\n  filter: saturate(0);\n  cursor: default;\n}\n\n/* 窄窗下面板被压到 46vh：收紧留白，让最后两条消息仍然可见。 */\n@media (max-width: 820px) {\n  .ofs-panel--chat .ofs-thread {\n    padding: 0 13px 8px;\n  }\n\n  .ofs-chat-dock {\n    padding: 8px 13px 12px;\n  }\n\n  .ofs-msg-thumb img {\n    height: 112px;\n  }\n}\n\n/* 动效停用时，微光条改成一条静态浅色线，信息不丢。 */\n@media (prefers-reduced-motion: reduce) {\n  .ofs-chat-shimmer {\n    background: var(--ofs-accent-soft-border);\n    opacity: 0.9;\n    animation: none;\n  }\n\n  .ofs-panel--chat .ofs-chat-dot.is-live {\n    animation: none;\n  }\n}";
 
 // src/styles/responsive.css
 var responsive_default = "/*\n * 响应式：这是桌面端的整页工作台，先保桌面；窄窗口按「面板在上、画布在下」收，\n * 不把桌面布局硬挤成不可用的三列。\n */\n\n@media (max-width: 1120px) {\n  .ofs-brand-sub {\n    display: none;\n  }\n\n  .ofs-model-eta,\n  .ofs-model-div {\n    display: none;\n  }\n\n  .ofs-dock-button {\n    padding: 0 9px;\n    font-size: 11px;\n  }\n}\n\n@media (max-width: 980px) {\n  .ofs-root {\n    padding: 10px;\n  }\n\n  .ofs-app {\n    border-radius: var(--ofs-r-lg);\n  }\n\n  .ofs-topbar {\n    gap: 10px;\n    padding: 0 12px;\n    height: 54px;\n  }\n\n  .ofs-brand-name {\n    font-size: 13px;\n  }\n\n  .ofs-tab {\n    padding: 0 9px;\n    font-size: 12px;\n  }\n\n  .ofs-panel {\n    margin: 10px 0 10px 10px;\n  }\n\n  .ofs-main {\n    margin: 10px;\n  }\n\n  .ofs-filmstrip {\n    margin: 0 10px 10px;\n    min-height: 84px;\n    padding: 8px 10px;\n    border-radius: var(--ofs-r-md);\n  }\n\n  .ofs-thumb {\n    width: 54px;\n    height: 54px;\n    border-radius: 10px;\n  }\n\n  .ofs-stage-foot {\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n\n  .ofs-stage-meta {\n    font-size: 10.5px;\n  }\n\n  .ofs-dock {\n    gap: 4px;\n  }\n\n  .ofs-dock-button {\n    height: 28px;\n    padding: 0 8px;\n    font-size: 10.5px;\n    gap: 4px;\n  }\n\n  .ofs-figure {\n    border-radius: var(--ofs-r-lg);\n  }\n}\n\n/* 窄窗：面板在上、画面预览在下 */\n@media (max-width: 820px) {\n  .ofs-root {\n    padding: 8px;\n    font-size: 12.5px;\n  }\n\n  .ofs-topbar {\n    flex-wrap: wrap;\n    height: auto;\n    min-height: 52px;\n    padding: 8px 10px;\n    row-gap: 6px;\n  }\n\n  .ofs-tabs {\n    margin-left: 0;\n    order: 3;\n    flex: 1 1 100%;\n    justify-content: flex-start;\n  }\n\n  .ofs-compute em {\n    display: none;\n  }\n\n  .ofs-model-wrap {\n    margin-left: auto;\n  }\n\n  /* 画布在上、面板在下：两块都留在视口内，提交后进度不会被整张表单挤出视野。 */\n  .ofs-body,\n  .ofs-body.is-gallery {\n    display: flex;\n    flex-direction: column;\n    overflow: hidden;\n  }\n\n  .ofs-body > .ofs-main {\n    order: -1;\n  }\n\n  .ofs-main {\n    flex: 0 0 auto;\n    min-height: 0;\n    height: 42vh;\n    margin: 8px;\n  }\n\n  .ofs-body.is-gallery .ofs-main {\n    flex: 1 1 auto;\n    height: auto;\n  }\n\n  .ofs-panel {\n    flex: 1 1 auto;\n    min-height: 0;\n    margin: 0 8px 8px;\n    max-height: none;\n  }\n\n  /* 窄窗优先保留状态标签与计时，提示句让位给半句省略。 */\n  .ofs-sessionbar {\n    margin: 8px 10px 0;\n    padding: 6px 10px;\n  }\n\n  .ofs-sessionbar-hint {\n    display: none;\n  }\n\n  .ofs-stage,\n  .ofs-figure {\n    min-height: 0;\n  }\n\n  /* 窄屏不再按比例约束取景框：空态文案要放得下，裁切标记随之收起。 */\n  .ofs-frame {\n    width: 100%;\n    height: 100%;\n    aspect-ratio: auto;\n  }\n\n  .ofs-frame-body {\n    padding: 12px 14px;\n  }\n\n  .ofs-marks {\n    display: none;\n  }\n\n  .ofs-filmstrip {\n    display: none;\n  }\n\n  /* 胶片条整条收起后，用画面预览左上角的迷你胶囊补上「当前任务 + 排队数量」。 */\n  .ofs-queue-pill {\n    position: absolute;\n    top: 10px;\n    left: 10px;\n    z-index: 3;\n    display: inline-flex;\n    align-items: center;\n    gap: 7px;\n    max-width: calc(100% - 20px);\n    padding: 6px 11px;\n    border: 1px solid var(--ofs-window-border);\n    border-radius: var(--ofs-r-pill);\n    background: color-mix(in oklab, var(--ofs-card-solid) 78%, transparent);\n    box-shadow: var(--ofs-shadow-card);\n    backdrop-filter: blur(14px);\n    -webkit-backdrop-filter: blur(14px);\n    color: var(--ofs-ink-2);\n    font-size: 11px;\n    white-space: nowrap;\n  }\n\n  .ofs-queue-pill-label {\n    overflow: hidden;\n    text-overflow: ellipsis;\n  }\n\n  .ofs-queue-pill-count {\n    color: var(--ofs-ink-3);\n    font-variant-numeric: tabular-nums;\n  }\n\n  .ofs-logs-panel {\n    width: 100%;\n    border-left: 0;\n  }\n\n  .ofs-settings-panel {\n    width: 100%;\n    border-left: 0;\n  }\n\n  .ofs-panel-head {\n    padding: 12px 13px 9px;\n  }\n\n  .ofs-panel-scroll {\n    padding: 0 13px 12px;\n  }\n\n  .ofs-panel-foot {\n    padding: 10px 13px 12px;\n  }\n\n  .ofs-toast {\n    bottom: 24px;\n    max-width: 86%;\n  }\n\n  .ofs-stage-foot {\n    padding: 0 2px;\n  }\n\n  .ofs-stage-prompt {\n    flex: 1 1 100%;\n  }\n\n  .ofs-dock {\n    flex: 1 1 100%;\n    flex-wrap: wrap;\n  }\n\n  .ofs-tile-label {\n    font-size: 9.5px;\n  }\n\n  .ofs-composer-input {\n    min-height: 76px;\n  }\n\n  /* 窄窗里方形尺寸档位折行，标签不再和按钮挤在一行 */\n  .ofs-size-row {\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n}\n\n@media (max-width: 520px) {\n  .ofs-brand-name {\n    font-size: 12.5px;\n  }\n\n  .ofs-tab {\n    height: 26px;\n    padding: 0 8px;\n    font-size: 11.5px;\n  }\n\n  .ofs-model-menu {\n    width: calc(100vw - 20px);\n  }\n\n  .ofs-compute {\n    height: 30px;\n    padding: 0 9px;\n  }\n\n  .ofs-model {\n    height: 30px;\n    padding: 0 8px;\n    gap: 5px;\n  }\n\n  .ofs-model-family {\n    height: 15px;\n    font-size: 9.5px;\n  }\n\n  .ofs-panel-head h2 {\n    font-size: 14px;\n  }\n\n  .ofs-empty-title {\n    font-size: 15px;\n  }\n\n  /* 手机竖屏再收一点画布高度，给表单留出可滚动空间。 */\n  .ofs-main {\n    height: 38vh;\n  }\n}\n\n/*\n * 触屏热区 ≥44px（P2.3）：只在粗指针设备（手指 / 触控笔）生效，\n * 桌面鼠标的紧凑版式不受影响。图标按钮做正方形，文字按钮只抬最小高度。\n */\n@media (pointer: coarse) {\n  .ofs-icon-btn,\n  .ofs-glass-btn,\n  .ofs-lightbox-close {\n    width: 44px;\n    height: 44px;\n  }\n\n  .ofs-popover-row,\n  .ofs-filmstrip-link {\n    height: auto;\n    min-height: 44px;\n  }\n\n  .ofs-tab,\n  .ofs-dock-button,\n  .ofs-chip,\n  .ofs-example,\n  .ofs-suggestion,\n  .ofs-text-action,\n  .ofs-size,\n  .ofs-ghost-cancel,\n  .ofs-gallery-action {\n    height: auto;\n    min-height: 44px;\n  }\n\n  .ofs-gallery-action {\n    padding: 0 12px;\n    font-size: 11px;\n  }\n\n  .ofs-dock-button {\n    padding: 0 12px;\n  }\n}\n";
@@ -1777,7 +1806,7 @@ function ChatPanel(props) {
   const { t, ui, form, chat, library, actions } = props;
   const { panelMode: mode, setPanelMode: setMode } = ui;
   const { patchForm } = form;
-  const { messages, interpreting, interpret, generateIntent, toggleIntentLockSeed, canLockSeed, resolveClarify, clearThread } = chat;
+  const { messages, interpreting, interpret, updateIntentField, generateIntent, toggleIntentLockSeed, canLockSeed, resolveClarify, clearThread } = chat;
   const { openMessage: openImage } = library;
   const { sending } = actions;
   const [draft, setDraft] = import_react2.default.useState("");
@@ -1820,13 +1849,49 @@ function ChatPanel(props) {
         ] })
       ] }, message.id);
     }
+    const editField = typeof updateIntentField === "function" ? updateIntentField : () => {
+    };
+    const promptValue = typeof message.prompt === "string" ? message.prompt : "";
+    const negativeValue = typeof message.negative === "string" ? message.negative : "";
+    const canGenerate = promptValue.trim().length > 0;
     return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-msg-card ofs-intent", children: [
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-intent-title", children: t("studio.chat.intent.title") }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "ofs-intent-prompt", children: message.prompt }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "ofs-intent-edit-hint", children: t("studio.chat.intent.editHint") }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("label", { className: "ofs-intent-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-intent-field-label", children: t("studio.chat.intent.promptLabel") }),
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+          "textarea",
+          {
+            className: "ofs-intent-prompt",
+            rows: 2,
+            value: promptValue,
+            maxLength: LIMITS.prompt.maxChars,
+            spellCheck: false,
+            "aria-label": t("studio.chat.intent.promptLabel"),
+            onChange: (event) => editField(message.id, "prompt", event.target.value)
+          }
+        )
+      ] }),
       message.summary && message.summary !== message.prompt ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("p", { className: "ofs-intent-summary", children: [
         /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-intent-summary-label", children: t("studio.chat.intent.summary") }),
         message.summary
       ] }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("label", { className: "ofs-intent-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "ofs-intent-field-label", children: t("studio.chat.intent.negativeLabel") }),
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+          "textarea",
+          {
+            className: "ofs-intent-negative",
+            rows: 2,
+            value: negativeValue,
+            maxLength: LIMITS.negativePrompt.maxChars,
+            placeholder: t("studio.chat.intent.negativePlaceholder"),
+            spellCheck: false,
+            "aria-label": t("studio.chat.intent.negativeLabel"),
+            onChange: (event) => editField(message.id, "negative", event.target.value)
+          }
+        )
+      ] }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-intent-meta", children: [
         /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { children: ratioLabel(t, message.ratioId) }),
         /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { "aria-hidden": "true", children: "·" }),
@@ -1851,7 +1916,7 @@ function ChatPanel(props) {
           type: "button",
           className: "ofs-btn is-primary ofs-intent-go",
           onClick: () => generateIntent(message),
-          disabled: sending,
+          disabled: sending || !canGenerate,
           children: sending ? t("studio.generating") : t("studio.chat.intent.generate")
         }
       )
@@ -2415,7 +2480,8 @@ var KAGGLE_SETTINGS_URL = "https://www.kaggle.com/settings/api";
 var KAGGLE_ACCOUNT_URL = "https://www.kaggle.com/settings";
 var KAGGLE_INSTALL_COMMAND = "pip install -U kaggle";
 var KAGGLE_LOGIN_COMMAND = "kaggle auth login";
-var KAGGLE_CREDENTIAL_PATH = "%USERPROFILE%\\.kaggle\\access_token";
+var KAGGLE_CREDENTIAL_PATH = "%USERPROFILE%\\.kaggle\\credentials.json";
+var KAGGLE_ACCESS_TOKEN_PATH = "%USERPROFILE%\\.kaggle\\access_token";
 var KAGGLE_LEGACY_CREDENTIAL_PATH = "%USERPROFILE%\\.kaggle\\kaggle.json";
 var SESSION_CODES = /* @__PURE__ */ new Set([
   "push_failed",
@@ -2776,10 +2842,12 @@ function GuidanceCard(props) {
     },
     auth: {
       title: t("studio.guidance.auth.title"),
-      // 新版 CLI 一条命令就完成授权，比让用户手动改文件少两步。
+      // 新版 CLI 一条命令就完成 OAuth 授权，比让用户手动改文件少两步；
+      // 凭据位置与网页 Token / 旧版 kaggle.json 的兼容口径都由常量提供。
       command: KAGGLE_LOGIN_COMMAND,
       note: formatText(t("studio.guidance.auth.credentialHint"), {
         path: KAGGLE_CREDENTIAL_PATH,
+        token: KAGGLE_ACCESS_TOKEN_PATH,
         legacy: KAGGLE_LEGACY_CREDENTIAL_PATH
       }),
       actions: [
@@ -3409,12 +3477,14 @@ function Rail(props) {
   const { t, ui, form, actions } = props;
   const {
     advancedOpen,
+    toggleAdvancedOpen,
     setAdvancedOpen,
     negativeOpen,
     setNegativeOpen,
     panelMode: mode,
     setPanelMode: setMode
   } = ui;
+  const toggleAdvanced = typeof toggleAdvancedOpen === "function" ? toggleAdvancedOpen : () => setAdvancedOpen((open) => !open);
   const {
     form: fields,
     patchForm,
@@ -3639,7 +3709,7 @@ function Rail(props) {
             {
               type: "button",
               className: "ofs-row-toggle",
-              onClick: () => setAdvancedOpen((open) => !open),
+              onClick: toggleAdvanced,
               "aria-expanded": advancedOpen,
               children: [
                 /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { children: t("studio.rail.params") }),
@@ -5061,10 +5131,40 @@ function completionNotice(input = {}) {
   return { title: `${NOTICE_TITLE_PREFIX}${stripNoticePrefix(title)}`, notify: true, completed: true };
 }
 
+// src/logic/uiState.js
+var UI_STATE_FIELDS = Object.keys(UI_STATE.defaults);
+function normalizeUiState(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const view = {};
+  for (const field of UI_STATE_FIELDS) {
+    const fallback = UI_STATE.defaults[field];
+    view[field] = typeof source[field] === typeof fallback ? source[field] : fallback;
+  }
+  return view;
+}
+function uiStateViewOf(result) {
+  if (!result || result.ok !== true) return null;
+  const data = result.data && typeof result.data === "object" ? result.data : null;
+  if (!data || data.ok !== true) return null;
+  const view = data.uiState;
+  if (!view || typeof view !== "object" || Array.isArray(view)) return null;
+  return normalizeUiState(view);
+}
+function buildUiStatePatch(partial) {
+  const source = partial && typeof partial === "object" && !Array.isArray(partial) ? partial : {};
+  const patch = {};
+  for (const field of UI_STATE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(source, field)) continue;
+    if (typeof source[field] !== typeof UI_STATE.defaults[field]) continue;
+    patch[field] = source[field];
+  }
+  return patch;
+}
+
 // src/studio/hooks/useStudioUi.js
 function useStudioUi({ t, initialView, initialPanelMode }) {
   const [view, setView] = import_react16.default.useState(initialView);
-  const [advancedOpen, setAdvancedOpen] = import_react16.default.useState(false);
+  const [advancedOpen, setAdvancedOpen] = import_react16.default.useState(UI_STATE.defaults.advancedOpen);
   const [negativeOpen, setNegativeOpen] = import_react16.default.useState(false);
   const [error, setError] = import_react16.default.useState(null);
   const [dismissed, setDismissed] = import_react16.default.useState("");
@@ -5077,6 +5177,23 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
   const settingsReturnRef = import_react16.default.useRef(null);
   function showToast(text) {
     setToast({ text, id: Date.now() });
+  }
+  import_react16.default.useEffect(() => {
+    let alive = true;
+    Promise.resolve(fetchUiState()).then((result) => {
+      if (!alive) return;
+      const saved = uiStateViewOf(result);
+      if (saved) setAdvancedOpen(saved.advancedOpen);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  function toggleAdvancedOpen() {
+    const next = !advancedOpen;
+    setAdvancedOpen(next);
+    Promise.resolve(saveUiState(buildUiStatePatch({ advancedOpen: next }))).catch(() => {
+    });
   }
   function fail(code, message) {
     setDismissed("");
@@ -5138,7 +5255,9 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
     panelMode,
     setPanelMode,
     advancedOpen,
+    // setAdvancedOpen 只给预览 / 测试直接注入折叠态；业务路径请用 toggleAdvancedOpen（会持久化）。
     setAdvancedOpen,
+    toggleAdvancedOpen,
     negativeOpen,
     setNegativeOpen,
     toast,
@@ -5467,6 +5586,7 @@ function retryOverrides(source) {
 var import_react17 = __toESM(require("react"), 1);
 
 // src/logic/intent.js
+var INTENT_EDITABLE_FIELDS = ["prompt", "negative"];
 function lastIntentPrompt(messages) {
   if (!Array.isArray(messages)) return "";
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -5488,6 +5608,7 @@ function intentFormPatch(intent, ratios) {
     patch.height = ratio.height;
   }
   if (typeof intent.styleId === "string" && intent.styleId) patch.styleId = intent.styleId;
+  if (typeof intent.negative === "string") patch.negative = intentNegative(intent.negative);
   return patch;
 }
 function intentPrompt(intent, capsules) {
@@ -5495,6 +5616,20 @@ function intentPrompt(intent, capsules) {
   if (!base) return "";
   const capsule = (Array.isArray(capsules) ? capsules : []).find((item) => item && item.id === intent.styleId);
   return capsule ? `${base}, ${capsule.suffix}` : base;
+}
+function intentFieldPatch(field, value) {
+  if (!INTENT_EDITABLE_FIELDS.includes(field)) return null;
+  const text = typeof value === "string" ? value : "";
+  const max = field === "prompt" ? LIMITS.prompt.maxChars : LIMITS.negativePrompt.maxChars;
+  return { [field]: text.slice(0, max) };
+}
+function intentNegative(value) {
+  return (typeof value === "string" ? value.trim() : "").slice(0, LIMITS.negativePrompt.maxChars);
+}
+function intentOverrides(intent, capsules) {
+  const prompt = intentPrompt(intent, capsules);
+  if (!prompt) return null;
+  return { prompt, negativePrompt: intentNegative(intent && intent.negative) };
 }
 function lastSeedOf(lastJob) {
   const params = lastJob && lastJob.params || null;
@@ -5580,6 +5715,7 @@ function useChatThread({ t, isEn, alive, state, form, generate }) {
         role: "assistant",
         kind: "intent",
         prompt: data.prompt,
+        negative: intentNegative(form.form.negative),
         summary: typeof data.summary === "string" ? data.summary : "",
         ratioId: typeof data.ratioId === "string" ? data.ratioId : "",
         styleId: typeof data.styleId === "string" ? data.styleId : "",
@@ -5599,9 +5735,23 @@ function useChatThread({ t, isEn, alive, state, form, generate }) {
       return next;
     }));
   }
+  function updateIntent(messageId, patch) {
+    const source = patch && typeof patch === "object" ? patch : {};
+    const next = {};
+    for (const field of INTENT_EDITABLE_FIELDS) {
+      if (!Object.prototype.hasOwnProperty.call(source, field)) continue;
+      const applied = intentFieldPatch(field, source[field]);
+      if (applied) next[field] = applied[field];
+    }
+    if (Object.keys(next).length === 0) return;
+    setMessages((prev) => prev.map((message) => message && message.id === messageId ? { ...message, ...next } : message));
+  }
+  function updateIntentField(messageId, field, value) {
+    updateIntent(messageId, { [field]: value });
+  }
   async function generateIntent(message) {
-    if (!message || !message.prompt) return;
-    const overrides = { prompt: intentPrompt(message, STYLE_CAPSULES) };
+    const overrides = intentOverrides(message, STYLE_CAPSULES);
+    if (!overrides) return;
     const ratio = DEFAULT_RATIOS.find((item) => item.id === message.ratioId);
     if (ratio) {
       overrides.width = ratio.width;
@@ -5627,6 +5777,8 @@ function useChatThread({ t, isEn, alive, state, form, generate }) {
     interpreting,
     interpret,
     resolveClarify,
+    updateIntent,
+    updateIntentField,
     generateIntent,
     toggleIntentLockSeed,
     // 上一张图没有可复用种子时，确认卡上的锁种开关置灰。
