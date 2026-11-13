@@ -11,8 +11,29 @@
  */
 
 import { LIMITS } from '../../shared/contract.js'
-import { clampInt, clampNumber, clampSize, parseSeed } from './clamp.js'
+import { clampInt, clampNumber, clampSize, clampStrength, parseSeed } from './clamp.js'
 import { composePrompt } from './prompt.js'
+
+/** 参考图的文件名：路径只用于向宿主定位作品，界面只显示文件名。 */
+export function referenceFileName(path) {
+  const value = String(path ?? '').trim()
+  if (!value) return ''
+  const parts = value.split(/[\\/]/)
+  return parts[parts.length - 1] || value
+}
+
+/**
+ * 表单里的参考图 → 可提交的工作区相对路径。
+ *
+ * 参考图由「以此图重绘」从画廊条目写入（`{ path, url }`）：`path` 与
+ * `/imagen-api/file?path=` 使用同一口径，`url` 只用于界面缩略图，绝不进请求体。
+ * 没有可用路径时返回空串，按普通文生图处理（不产生 reference 字段）。
+ */
+export function referencePathOf(form) {
+  const input = form && typeof form === 'object' ? form : {}
+  const reference = input.reference && typeof input.reference === 'object' ? input.reference : null
+  return reference && typeof reference.path === 'string' ? reference.path.trim() : ''
+}
 
 /**
  * @param {object} form 表单状态
@@ -46,9 +67,21 @@ export function buildGenerateBody(form, options = {}) {
   const presetId = input.presetId || options.defaultPreset || ''
   if (presetId) body.presetId = presetId
 
+  // 图生图：只有表单里确实有参考图才输出 reference；否则请求体与纯文生图逐字一致。
+  // 覆盖项也能改这两个字段（重试 / 变体链路），走同一套归一规则。
+  const hasOverride = (key) => overrides !== null && Object.prototype.hasOwnProperty.call(overrides, key)
+  const referencePath = referencePathOf({
+    reference: hasOverride('reference') ? overrides.reference : input.reference,
+  })
+  if (referencePath) {
+    const strength = hasOverride('strength') ? overrides.strength : input.strength
+    body.reference = { path: referencePath, strength: clampStrength(strength) }
+  }
+
   if (overrides) {
     for (const [key, value] of Object.entries(overrides)) {
-      if (key === 'prompt') continue
+      // prompt 已在上面处理；reference / strength 只经归一后进入 body，避免把 url 带出去。
+      if (key === 'prompt' || key === 'reference' || key === 'strength') continue
       body[key] = value
     }
   }

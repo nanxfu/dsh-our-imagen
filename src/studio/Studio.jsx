@@ -74,6 +74,7 @@ export function Studio(props) {
                 onExport={library.exportPaths}
                 onRecall={actions.iterate}
                 onVariant={actions.reroll}
+                onReference={actions.referenceImage}
                 onToggleFavorite={library.toggleFavorite}
                 onZoom={library.zoomImage}
                 onOpen={(entry) => {

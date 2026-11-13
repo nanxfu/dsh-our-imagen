@@ -631,3 +631,107 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* ── 参考图槽位与重绘强度（只在已有参考图时出现） ─────────────── */
+.ofs-reference {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-md);
+  background: var(--ofs-sunken);
+}
+
+/* 当前预设不支持垫图：整块置灰，一眼看出这次生成会被拦下 */
+.ofs-reference.is-unsupported {
+  opacity: 0.55;
+  filter: grayscale(0.4);
+}
+
+.ofs-reference-thumb {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  overflow: hidden;
+  border: 1px solid var(--ofs-print-edge);
+  border-radius: 10px;
+  background: var(--ofs-print-paper);
+  color: var(--ofs-ink-4);
+}
+
+.ofs-reference-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ofs-reference-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+}
+
+.ofs-reference-name {
+  overflow: hidden;
+  color: var(--ofs-ink-2);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ofs-reference-strength {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ofs-reference-strength-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--ofs-ink-3);
+}
+
+.ofs-reference-strength-head b {
+  color: var(--ofs-ink-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ofs-reference-range {
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--ofs-accent);
+}
+
+.ofs-reference-range:disabled {
+  cursor: default;
+}
+
+.ofs-reference-remove {
+  color: var(--ofs-ink-3);
+  font-weight: 550;
+}
+
+.ofs-reference-remove:hover:not(:disabled) {
+  color: var(--ofs-accent);
+}
+
+.ofs-reference-warn {
+  color: var(--ofs-warn);
+  text-align: left;
+}
+
+.ofs-reference-hint {
+  text-align: left;
+}

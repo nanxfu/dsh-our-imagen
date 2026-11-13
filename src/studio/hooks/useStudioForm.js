@@ -1,5 +1,5 @@
 /**
- * 表单域：提示词 / 负向 / 预设 / 比例 / 方形尺寸 / 风格 / 润色与英译。
+ * 表单域：提示词 / 负向 / 预设 / 比例 / 方形尺寸 / 风格 / 参考图与重绘强度 / 润色与英译。
  *
  * 负责表单状态、预设同步 effect 与生成请求体拼装。
  * 依赖入参：{ t, isEn, alive, ui, preset, initialPrompt }；preset 是宿主的预设配置
@@ -8,8 +8,10 @@
 
 import React from 'react'
 
+import { LIMITS } from '../../../shared/contract.js'
+
 import { enhancePromptRequest } from '../../api/resources.js'
-import { clampSize } from '../../logic/clamp.js'
+import { clampSize, clampStrength } from '../../logic/clamp.js'
 import { buildGenerateBody } from '../../logic/generate.js'
 import {
   customSizePatch,
@@ -17,6 +19,8 @@ import {
   presetNeedsEnglish,
   presetSelectPatch,
   presetSizeOptions,
+  referencePresetOf,
+  supportsImg2Img,
 } from '../../logic/preset.js'
 import { applyNegativePatch, negativePromptOf, toggleStyle, translateOutcomeOf } from '../../logic/prompt.js'
 import { isRefineApplied, refineSeparator, toggleRefineTerm } from '../../logic/refine.js'
@@ -35,6 +39,9 @@ const EMPTY_FORM = {
   seed: '',
   count: 1,
   styleId: '',
+  // 图生图：参考图来自画廊「以此图重绘」（{ path, url }），strength 是重绘强度。
+  reference: null,
+  strength: LIMITS.strength.default,
 }
 
 export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
@@ -70,6 +77,13 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const sizeOptions = presetSizeOptions(activePreset)
   // 选中态由尺寸反推：只有精确等于某一档且宽高相等时才高亮，和比例行天然一致。
   const selectedSize = form.width === form.height && sizeOptions.includes(form.width) ? form.width : null
+
+  // 图生图能力只在有参考图时才起作用：旧宿主缺 supportsImg2Img 按不支持处理，
+  // 但没有参考图时不做任何判断，文生图流程与改造前完全一致。
+  const reference = form.reference || null
+  const referenceSupported = supportsImg2Img(activePreset)
+  // 预设列表还没拿到时不做拦截，交给宿主判断，避免启动瞬间误拦文生图。
+  const referenceBlocked = Boolean(reference && presets.length > 0 && !referenceSupported)
 
   // 预设同步：只在用户没手动改过时套用推荐值（初始预设同样回填 negativeHint 层）。
   React.useEffect(() => {
@@ -124,6 +138,47 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   /** 自定义宽/高输入：只改对应一边，边界与步长由 customSizePatch 钳制。 */
   function applyCustomSize(partial) {
     patchForm(customSizePatch(partial))
+  }
+
+  /** 重绘强度：滑块本身按契约 step 取值，这里再兜一次边界与浮点噪声。 */
+  function applyStrength(value) {
+    patchForm({ strength: clampStrength(value) })
+  }
+
+  /** 移除参考图：后续生成回到纯文生图，当前预设保持用户选择不变。 */
+  function removeReference() {
+    patchForm({ reference: null })
+  }
+
+  /**
+   * 以此图重绘：把画廊条目设为参考图。
+   *
+   * - 当前预设支持图生图：只写入参考图；
+   * - 不支持：自动切到支持图生图的预设（优先 `sdxl-lightning`）并套用其推荐参数，
+   *   返回 switchedPreset 供组合层 toast；
+   * - 一个支持的预设都没有（旧宿主）：什么都不改，返回失败让组合层明确提示。
+   *
+   * 参考图只取 `image.path`（提交用）与 `image.url`（缩略图）；path 缺失时按失败处理，
+   * 不能把只有文件名的旧记录发给宿主。
+   */
+  function applyReference(entry) {
+    const image = entry && entry.image ? entry.image : null
+    const path = image && typeof image.path === 'string' ? image.path.trim() : ''
+    if (!path) return { ok: false, switchedPreset: null, reason: 'no_path' }
+    const url = image && typeof image.url === 'string' ? image.url : ''
+    const active = presets.find((item) => item.id === form.presetId) || null
+    if (supportsImg2Img(active)) {
+      patchForm({ reference: { path, url } })
+      return { ok: true, switchedPreset: null, reason: '' }
+    }
+    const target = referencePresetOf(presets)
+    if (!target) return { ok: false, switchedPreset: null, reason: 'unsupported' }
+    // 换预设与写参考图合成一次提交：尺寸 / 步数 / 负向词与参考图同时到位。
+    setForm((prev) => applyNegativePatch(prev, {
+      ...presetSelectPatch(target, prev, presets),
+      reference: { path, url },
+    }))
+    return { ok: true, switchedPreset: target, reason: '' }
   }
 
   async function enhance() {
@@ -232,6 +287,14 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     selectedSize,
     applySize,
     applyCustomSize,
+    // 图生图：参考图 / 重绘强度与它们的能力判断、动作。
+    reference,
+    strength: clampStrength(form.strength),
+    referenceSupported,
+    referenceBlocked,
+    applyStrength,
+    removeReference,
+    applyReference,
     negativeLayers: form.negativeLayers,
     refineGroups: refineGroups.map((group) => ({
       ...group,

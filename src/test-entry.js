@@ -30,6 +30,7 @@ import { ModelCardPicker } from './studio/ModelCardPicker.jsx'
 import { useChatThread } from './studio/hooks/useChatThread.js'
 import { useKaggleLogin } from './studio/hooks/useKaggleLogin.js'
 import { useStudioUi } from './studio/hooks/useStudioUi.js'
+import { useStudio } from './studio/useStudio.js'
 
 export const __test = {
   dict,
@@ -44,6 +45,7 @@ export const __test = {
     useChatThread,
     useKaggleLogin,
     useStudioUi,
+    useStudio,
   },
   components: {
     StatusChip,

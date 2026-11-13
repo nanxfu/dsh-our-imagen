@@ -72,6 +72,7 @@ export function Gallery(props) {
     onExport,
     onRecall,
     onVariant,
+    onReference,
     onToggleFavorite,
     hasMore,
     loadingMore,
@@ -222,6 +223,11 @@ export function Gallery(props) {
               <button type="button" className="ofs-gallery-action" onClick={() => onVariant(entry)}>
                 <Icon name="reroll" size={12} />
                 {t('studio.action.reroll')}
+              </button>
+              {/* 以此图重绘：把这张作品设为参考图，动作由组合层负责切视图与能力判断。 */}
+              <button type="button" className="ofs-gallery-action" onClick={() => onReference(entry)}>
+                <Icon name="image" size={12} />
+                {t('studio.action.reference')}
               </button>
               <button type="button" className="ofs-gallery-action" onClick={() => onZoom(entry)}>
                 <Icon name="expand" size={12} />

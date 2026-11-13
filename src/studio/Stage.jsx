@@ -35,7 +35,7 @@ export function Stage(props) {
   const progressText = activeJob ? jobProgressText(t, activeJob, sessionState) : ''
   const { useInspiration } = form
   const { selected, isFavorite, toggleFavorite } = library
-  const { iterate, reroll } = actions
+  const { iterate, reroll, referenceImage } = actions
   const image = selected && selected.image ? selected.image : null
   const item = (selected && selected.item) || null
   const params = (item && item.params) || null
@@ -248,6 +248,19 @@ export function Stage(props) {
             aria-label={t('studio.stage.close')}
           >
             <Icon name="close" size={16} />
+          </button>
+          {/* 大图预览里的「以此图重绘」：设为参考图后由组合层收起放大层并切回创作视图。 */}
+          <button
+            type="button"
+            className="ofs-lightbox-action"
+            onClick={(event) => {
+              // 放大层本身点任意位置都会关闭，这个按钮单独处理，避免先关层再弹提示。
+              if (event && typeof event.stopPropagation === 'function') event.stopPropagation()
+              if (typeof referenceImage === 'function') referenceImage(selected)
+            }}
+          >
+            <Icon name="image" size={15} />
+            {t('studio.action.reference')}
           </button>
         </div>
       ) : null}

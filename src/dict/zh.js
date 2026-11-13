@@ -189,6 +189,7 @@ export const zh = {
   'studio.action.openFolder': '在文件夹中打开',
   'studio.action.favorite': '收藏',
   'studio.action.favorited': '已收藏',
+  'studio.action.reference': '以此图重绘',
 
   // ── 最近生成 ─────────────────────────────────────────────────
   'studio.filmstrip.empty': '生成的每一批作品会显示在这里',
@@ -376,6 +377,18 @@ export const zh = {
   'studio.rail.frame': '画面设置',
   'studio.rail.advanced': '高级设置',
   'studio.rail.params': '步数 / 引导强度 / 种子',
+
+  // ── 参考图与垫图重绘 ─────────────────────────────────────────
+  'studio.reference.title': '参考图',
+  'studio.reference.strength': '重绘强度',
+  'studio.reference.hint': '强度越低越贴近参考图，越高越自由发挥。',
+  'studio.reference.remove': '移除',
+  'studio.reference.unsupported': '当前模型不支持垫图重绘，请切换模型或移除参考图。',
+  'studio.reference.blocked': '当前模型不支持垫图重绘，已拦下本次生成；请切换模型或移除参考图。',
+  'studio.reference.switched': '当前模型不支持垫图重绘，已切到 {preset}。',
+  'studio.reference.applied': '已设为参考图，可调整重绘强度。',
+  'studio.reference.unavailable': '当前宿主版本不支持垫图重绘，无法把作品设为参考图。',
+  'studio.reference.noPath': '这张作品没有可用的文件路径，无法作为参考图。',
 
   // ── 创作助手 ─────────────────────────────────────────────────
   'studio.chat.assistant': '创作助手',

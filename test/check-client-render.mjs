@@ -186,14 +186,14 @@ const scenarios = {
     history: { items: [historyItem] },
     props: {},
     view: 'gallery',
-    expect: ['作品画廊', '全部模型', '测试用的荷花池塘', '今天', '已加载全部作品'],
+    expect: ['作品画廊', '全部模型', '测试用的荷花池塘', '今天', '已加载全部作品', '以此图重绘'],
     reject: [],
     structure: {
       required: {
         'ofs-gallery': 1,
         'ofs-gallery-group': 1,
         'ofs-gallery-card': 1,
-        'ofs-gallery-action': 3,
+        'ofs-gallery-action': 4,
         // 画廊列由 JS 分桶（行优先）：1280px 视口下 4 列，卡片直接收藏的星标每张一个。
         'ofs-gallery-col': 4,
         'ofs-gallery-star': 1,
@@ -828,7 +828,7 @@ await check('画廊悬停动作把完整作品条目交给回调', async () => {
     },
     testBuild: true,
   })
-  const received = { recall: null, variant: null, zoom: null }
+  const received = { recall: null, variant: null, zoom: null, reference: null }
   const entry = { image: historyItem.images[0], item: historyItem }
   const tree = await client.mountRaw(client.components.Gallery, {
     t: client.internals.i18n.fallbackTranslate('zh'),
@@ -841,6 +841,7 @@ await check('画廊悬停动作把完整作品条目交给回调', async () => {
     onOpen: () => {},
     onRecall: (value) => { received.recall = value },
     onVariant: (value) => { received.variant = value },
+    onReference: (value) => { received.reference = value },
     onZoom: (value) => { received.zoom = value },
   })
   client.unmount()
@@ -849,13 +850,14 @@ await check('画廊悬停动作把完整作品条目交给回调', async () => {
     tree,
     (node) => node.type === 'button' && node.props && node.props.className === 'ofs-gallery-action',
   )
-  assert.equal(actions.length, 3, '每张作品应有带回参数 / 生成变体 / 查看大图三个动作')
+  assert.equal(actions.length, 4, '每张作品应有带回参数 / 生成变体 / 以此图重绘 / 查看大图四个动作')
   for (const node of actions) node.props.onClick()
 
   // 回归：曾经把 entry.item 直接传给动作，导致 iteratePatch 拿不到图片而静默失败。
   assert.equal(received.recall && received.recall.item, historyItem, '带回参数应收到 { image, item } 形状的条目')
   assert.equal(received.recall && received.recall.image, historyItem.images[0], '条目里应带图片信息')
   assert.equal(received.variant && received.variant.item, historyItem, '生成变体应收到完整条目')
+  assert.equal(received.reference && received.reference.image, historyItem.images[0], '以此图重绘应收到完整条目')
   assert.equal(received.zoom && received.zoom.item, historyItem, '查看大图应收到完整条目')
 })
 
@@ -2001,6 +2003,437 @@ await check('渲染：大图预览 dialog 与图片 alt', async () => {
   assert.ok(lightboxImages.length >= 2, '放大层应包含大图')
   for (const node of lightboxImages) {
     assert.ok(typeof node.props.alt === 'string' && node.props.alt.length > 0, '放大层 img 应有非空 alt')
+  }
+})
+
+// 图生图（M3）：参考图槽位只在有参考图时出现，强度滑块按契约取值，移除后回到文生图界面。
+await check('渲染：以此图重绘设置参考图，槽位可调强度、可移除', async () => {
+  const img2imgPreset = { ...preset, supportsImg2Img: true }
+  const client = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/state': { ...readyState, presets: [img2imgPreset], defaultPreset: 'sdxl-lightning' },
+      '/imagen-api/history': { items: [historyItem] },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+    },
+    testBuild: true,
+  })
+  try {
+    let tree = await client.mountRaw(client.components.Studio, { view: 'gallery' })
+    // 文生图界面（画廊）里不存在任何参考图占位。
+    assertStructure('no-reference', tree, { required: { 'ofs-gallery': 1 }, forbidden: ['ofs-reference'] })
+
+    const trigger = findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && node.props?.className === 'ofs-gallery-action'
+        && collectText(node).join('').includes('以此图重绘'),
+    )[0]
+    assert.ok(trigger, '画廊卡片应提供「以此图重绘」')
+    trigger.props.onClick()
+    tree = await client.rerenderRaw()
+
+    // 点击后切回创作视图，参考图槽位出现。
+    let text = collectText(tree).join(' | ')
+    assert.ok(text.includes('已设为参考图'), '应提示已设为参考图')
+    assert.ok(text.includes('重绘强度'), '槽位应带重绘强度滑块')
+    assert.ok(text.includes('7.png'), '槽位只显示文件名')
+    assertStructure('reference-set', tree, {
+      required: {
+        'ofs-panel--form': 1,
+        'ofs-reference': 1,
+        'ofs-reference-thumb': 1,
+        'ofs-reference-range': 1,
+        'ofs-reference-remove': 1,
+      },
+      forbidden: ['ofs-gallery', 'ofs-reference-warn'],
+    })
+
+    const range = findNodes(tree, (node) => node.type === 'input' && node.props?.type === 'range')[0]
+    assert.ok(range, '参考图槽位应带重绘强度滑块')
+    assert.equal(range.props.min, LIMITS.strength.min)
+    assert.equal(range.props.max, LIMITS.strength.max)
+    assert.equal(range.props.step, LIMITS.strength.step)
+    assert.equal(range.props.value, LIMITS.strength.default)
+    assert.equal(range.props['aria-label'], '重绘强度')
+    assert.ok(collectText(tree).join('').includes('0.60'), '强度显示两位小数')
+
+    range.props.onChange({ target: { value: '0.75' } })
+    tree = await client.rerenderRaw()
+    const updatedRange = findNodes(tree, (node) => node.type === 'input' && node.props?.type === 'range')[0]
+    assert.equal(updatedRange.props.value, 0.75, '拖动滑块应更新重绘强度')
+    assert.ok(collectText(tree).join(' ').includes('0.75'), '强度读数应跟随滑块')
+
+    const remove = findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && typeof node.props?.className === 'string'
+        && node.props.className.split(' ').includes('ofs-reference-remove'),
+    )[0]
+    assert.ok(remove, '缺少移除按钮')
+    remove.props.onClick()
+    tree = await client.rerenderRaw()
+    assertStructure('reference-removed', tree, { required: {}, forbidden: ['ofs-reference', 'ofs-reference-range'] })
+    text = collectText(tree).join(' | ')
+    // toast「已设为参考图，可调整重绘强度」还在，但槽位本身的说明已随参考图一起消失。
+    assert.ok(!text.includes('强度越低越贴近参考图'), '移除参考图后界面回到文生图状态')
+  } finally {
+    client.unmount()
+  }
+})
+
+// 提交链路：没有参考图时请求体与改造前一致；有参考图时带 reference: { path, strength }，
+// 且提交成功后参考图保留，方便连续迭代。
+await check('渲染：生成请求体按参考图区分文生图 / 图生图，提交后保留参考图', async () => {
+  const img2imgPreset = { ...preset, supportsImg2Img: true }
+  const responses = {
+    '/imagen-api/state': { ...readyState, presets: [img2imgPreset], defaultPreset: 'sdxl-lightning' },
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    '/imagen-api/generate': { id: 'job-new', status: 'queued' },
+  }
+  const findGenerateButton = (tree) => findNodes(
+    tree,
+    (node) => node.type === 'button'
+      && typeof node.props?.className === 'string'
+      && node.props.className.split(' ').includes('ofs-generate'),
+  )[0]
+
+  // 1) 纯文生图：请求体里没有 reference / strength。
+  let client = await loadClient({ now: NOW, responses, testBuild: true })
+  try {
+    const tree = await client.mountRaw(client.components.Studio, { initialPrompt: '雨夜街景' })
+    const generateButton = findGenerateButton(tree)
+    assert.ok(generateButton, '缺少生成按钮')
+    generateButton.props.onClick()
+    await client.settle()
+    const txt2img = client.requests.filter((item) => item.path === '/imagen-api/generate').pop()
+    assert.ok(txt2img, '应提交生成请求')
+    assert.ok(!('reference' in txt2img.body), '文生图请求体不得出现 reference')
+    assert.ok(!('strength' in txt2img.body), '文生图请求体不得出现 strength')
+  } finally {
+    client.unmount()
+  }
+
+  // 2) 图生图：先以画廊作品为参考图，再拖动强度后提交。
+  client = await loadClient({ now: NOW, responses, testBuild: true })
+  try {
+    let tree = await client.mountRaw(client.components.Studio, { view: 'gallery', initialPrompt: '雨夜街景' })
+    const trigger = findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && node.props?.className === 'ofs-gallery-action'
+        && collectText(node).join('').includes('以此图重绘'),
+    )[0]
+    trigger.props.onClick()
+    tree = await client.rerenderRaw()
+    const range = findNodes(tree, (node) => node.type === 'input' && node.props?.type === 'range')[0]
+    range.props.onChange({ target: { value: '0.35' } })
+    tree = await client.rerenderRaw()
+
+    const generateButton = findGenerateButton(tree)
+    generateButton.props.onClick()
+    await client.settle()
+    const img2img = client.requests.filter((item) => item.path === '/imagen-api/generate').pop()
+    assert.ok(img2img, '应提交图生图请求')
+    assert.deepEqual(img2img.body.reference, {
+      path: historyItem.images[0].path,
+      strength: 0.35,
+    }, '请求体应带参考图路径与重绘强度')
+    assert.ok(img2img.body.prompt.includes('雨夜街景'), '图生图仍然提交提示词')
+
+    // 提交成功后参考图保留，用户可连续迭代。
+    tree = await client.rerenderRaw()
+    assertStructure('reference-kept', tree, { required: { 'ofs-reference': 1 }, forbidden: ['ofs-reference-warn'] })
+  } finally {
+    client.unmount()
+  }
+})
+
+// 预设能力：以不支持垫图的模型启动，点「以此图重绘」应自动切到支持垫图的预设并说明。
+await check('渲染：不支持垫图的预设自动切换并点名模型', async () => {
+  const flux = {
+    ...preset,
+    id: 'flux2-klein-4b',
+    label: 'Klein 4B',
+    short: 'Klein 4B',
+    family: 'FLUX.2',
+    description: { zh: '轻量快速，风格化强', en: 'Lightweight and fast' },
+    supportsImg2Img: false,
+  }
+  const lightning = { ...preset, supportsImg2Img: true }
+  const responses = {
+    '/imagen-api/state': { ...readyState, presets: [flux, lightning], defaultPreset: 'flux2-klein-4b' },
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    '/imagen-api/generate': { id: 'job-new', status: 'queued' },
+  }
+  const client = await loadClient({ now: NOW, responses, testBuild: true })
+  try {
+    let tree = await client.mountRaw(client.components.Studio, { view: 'gallery', initialPrompt: '雨夜街景' })
+    const trigger = findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && node.props?.className === 'ofs-gallery-action'
+        && collectText(node).join('').includes('以此图重绘'),
+    )[0]
+    trigger.props.onClick()
+    tree = await client.rerenderRaw()
+
+    const text = collectText(tree).join(' | ')
+    assert.ok(text.includes('当前模型不支持垫图重绘，已切到 SDXL Lightning'), '自动切换预设要 toast 说明切到了哪个模型')
+    const modelNow = findNodes(
+      tree,
+      (node) => typeof node.props?.className === 'string' && node.props.className.split(' ').includes('ofs-model-now'),
+    )[0]
+    assert.equal(collectText(modelNow).join(''), 'Lightning', '应切到支持垫图的 sdxl-lightning')
+    assertStructure('reference-switched', tree, {
+      required: { 'ofs-reference': 1, 'ofs-reference-range': 1 },
+      forbidden: ['ofs-reference-warn', 'ofs-gallery'],
+    })
+    assert.equal(
+      findNodes(tree, (node) => node.type === 'input' && node.props?.type === 'range')[0].props.disabled,
+      false,
+      '支持垫图的预设下滑块可用',
+    )
+  } finally {
+    client.unmount()
+  }
+})
+
+// 参考图存在但当前预设不支持垫图：槽位置灰、滑块禁用、给出一行明确说明。
+await check('渲染：不支持垫图时参考图槽位置灰并给出说明', async () => {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const patched = []
+  const tree = await client.mountRaw(client.components.Rail, {
+    t,
+    ui: {
+      advancedOpen: false,
+      setAdvancedOpen: () => {},
+      negativeOpen: false,
+      setNegativeOpen: () => {},
+      panelMode: 'form',
+      setPanelMode: () => {},
+    },
+    form: {
+      form: {
+        prompt: '雨夜街景',
+        negative: '',
+        presetId: 'flux2-klein-4b',
+        width: 1024,
+        height: 1024,
+        steps: 4,
+        cfg: 0,
+        seed: '',
+        count: 1,
+        styleId: '',
+        reference: { path: 'imagen-output/job-1/7.png', url: '/imagen-api/file?path=7.png' },
+        strength: 0.6,
+      },
+      patchForm: (partial) => patched.push(partial),
+      selectPreset: () => {},
+      styleId: '',
+      applyStyle: () => {},
+      ratioId: '1:1',
+      applyRatio: () => {},
+      sizeOptions: [1024],
+      selectedSize: 1024,
+      applySize: () => {},
+      applyCustomSize: () => {},
+      refineGroups: [],
+      refineSource: '',
+      enhancing: false,
+      enhance: () => {},
+      translating: false,
+      translate: () => {},
+      toggleRefine: () => {},
+      useInspiration: () => {},
+      englishPromptHint: false,
+      reference: { path: 'imagen-output/job-1/7.png', url: '/imagen-api/file?path=7.png' },
+      strength: 0.6,
+      referenceSupported: false,
+      referenceBlocked: true,
+      applyStrength: (value) => patched.push({ strength: Number(value) }),
+      removeReference: () => patched.push({ reference: null }),
+    },
+    actions: { sending: false, generate: () => {} },
+  })
+  client.unmount()
+
+  const text = collectText(tree).join(' | ')
+  assert.ok(text.includes('当前模型不支持垫图重绘，请切换模型或移除参考图'), '置灰槽位要写明下一步')
+  assertStructure('reference-unsupported', tree, {
+    required: { 'ofs-reference': 1, 'ofs-reference-warn': 1, 'ofs-reference-range': 1 },
+    forbidden: ['ofs-reference-hint'],
+  })
+  const range = findNodes(tree, (node) => node.type === 'input' && node.props?.type === 'range')[0]
+  assert.equal(range.props.disabled, true, '不支持垫图时滑块禁用')
+  range.props.onChange({ target: { value: '0.7' } })
+  assert.deepEqual(patched.at(-1), { strength: 0.7 }, '禁用态滑块仍按契约更新表单（便于切回支持模型后继续用）')
+  const remove = findNodes(
+    tree,
+    (node) => node.type === 'button'
+      && typeof node.props?.className === 'string'
+      && node.props.className.split(' ').includes('ofs-reference-remove'),
+  )[0]
+  remove.props.onClick()
+  assert.deepEqual(patched.at(-1), { reference: null }, '移除按钮应清空参考图')
+})
+
+// 手动切回不支持垫图的预设后，生成被拦下并 toast 说明；这里直接驱动组合层 hook，
+// 避免依赖假渲染器对嵌套组件本地状态的模拟（顶部栏模型卡属于内嵌组件）。
+await check('渲染：参考图与预设能力不匹配时生成被拦下（useStudio）', async () => {
+  const flux = { ...preset, id: 'flux2-klein-4b', label: 'Klein 4B', short: 'Klein 4B', family: 'FLUX.2', supportsImg2Img: false }
+  const lightning = { ...preset, supportsImg2Img: true }
+  const responses = {
+    '/imagen-api/state': { ...readyState, presets: [flux, lightning], defaultPreset: 'flux2-klein-4b' },
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    '/imagen-api/generate': { id: 'job-new', status: 'queued' },
+  }
+  const client = await loadClient({ now: NOW, responses, testBuild: true })
+  const React = client.react
+  const h = React.createElement
+  const latest = {}
+  function Harness() {
+    const studio = client.hooks.useStudio({ t: client.internals.i18n.fallbackTranslate('zh') })
+    latest.studio = studio
+    return h('div', { className: 'ofs-studio-harness' }, String(studio.form.referenceBlocked))
+  }
+  try {
+    await client.mountRaw(Harness, {})
+    await client.settle()
+
+    // 以不支持垫图的 flux 启动：设为参考图会自动切到 sdxl-lightning。
+    assert.equal(latest.studio.form.form.presetId, 'flux2-klein-4b', '初始预设应来自 state.defaultPreset')
+    const applied = latest.studio.form.applyReference({ image: historyItem.images[0], item: historyItem })
+    await client.rerenderRaw()
+    assert.equal(applied.ok, true)
+    assert.equal(applied.switchedPreset && applied.switchedPreset.id, 'sdxl-lightning', '应回退到支持垫图的预设')
+    assert.equal(latest.studio.form.form.reference.path, historyItem.images[0].path, '参考图路径来自作品 image.path')
+    assert.equal(latest.studio.form.referenceBlocked, false)
+
+    // 手动切回不支持垫图的预设：不强制改回，而是把状态标成阻塞并给出提示。
+    latest.studio.form.selectPreset(flux)
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.form.presetId, 'flux2-klein-4b')
+    assert.equal(latest.studio.form.referenceBlocked, true, '参考图 + 不支持垫图的预设应标记阻塞')
+
+    // 提交被拦下：不发生成请求，toast 说明原因与下一步。
+    const before = client.requests.filter((item) => item.path === '/imagen-api/generate').length
+    await latest.studio.actions.generate()
+    await client.settle()
+    await client.rerenderRaw()
+    assert.equal(
+      client.requests.filter((item) => item.path === '/imagen-api/generate').length,
+      before,
+      '必须拦下生成，不能悄悄退回文生图',
+    )
+    assert.ok(
+      latest.studio.ui.toast && latest.studio.ui.toast.text.includes('已拦下本次生成'),
+      '拦下生成要 toast 说明',
+    )
+
+    // 移除参考图后回到正常文生图：同样配置下可以提交。
+    latest.studio.form.removeReference()
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.referenceBlocked, false)
+    latest.studio.form.patchForm({ prompt: '雨夜街景' })
+    await client.rerenderRaw()
+    await latest.studio.actions.generate()
+    await client.settle()
+    const submitted = client.requests.filter((item) => item.path === '/imagen-api/generate').pop()
+    assert.ok(submitted, '移除参考图后应能继续文生图')
+    assert.ok(!('reference' in submitted.body))
+  } finally {
+    client.unmount()
+  }
+})
+
+// 旧宿主兼容：/state.presets 没有 supportsImg2Img 时按不支持处理，但纯文生图不受任何影响。
+await check('渲染：旧宿主没有 supportsImg2Img 时文生图不回归', async () => {
+  const responses = {
+    '/imagen-api/state': readyState,
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    '/imagen-api/generate': { id: 'job-old', status: 'queued' },
+  }
+
+  // 1) 纯文生图照常提交。
+  let client = await loadClient({ now: NOW, responses, testBuild: true })
+  try {
+    const tree = await client.mountRaw(client.components.Studio, { initialPrompt: '雨夜街景' })
+    findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && typeof node.props?.className === 'string'
+        && node.props.className.split(' ').includes('ofs-generate'),
+    )[0].props.onClick()
+    await client.settle()
+    const submitted = client.requests.filter((item) => item.path === '/imagen-api/generate').pop()
+    assert.ok(submitted, '旧宿主下文生图仍应照常提交')
+    assert.ok(!('reference' in submitted.body), '旧宿主文生图请求体不带 reference')
+  } finally {
+    client.unmount()
+  }
+
+  // 2) 「以此图重绘」明确提示宿主不支持，且不把参考图写进表单。
+  client = await loadClient({ now: NOW, responses, testBuild: true })
+  try {
+    let tree = await client.mountRaw(client.components.Studio, { view: 'gallery' })
+    const trigger = findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && node.props?.className === 'ofs-gallery-action'
+        && collectText(node).join('').includes('以此图重绘'),
+    )[0]
+    trigger.props.onClick()
+    tree = await client.rerenderRaw()
+    const text = collectText(tree).join(' | ')
+    assert.ok(text.includes('当前宿主版本不支持垫图重绘'), '旧宿主要明确提示不支持垫图')
+    assertStructure('legacy-host', tree, { required: { 'ofs-gallery': 1 }, forbidden: ['ofs-reference'] })
+  } finally {
+    client.unmount()
+  }
+})
+
+// 大图预览里的「以此图重绘」：与卡片动作一致，点完收起放大层并切回创作视图。
+await check('渲染：大图预览里的以此图重绘', async () => {
+  const img2imgPreset = { ...preset, supportsImg2Img: true }
+  const client = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/state': { ...readyState, presets: [img2imgPreset], defaultPreset: 'sdxl-lightning' },
+      '/imagen-api/history': { items: [historyItem] },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+    },
+    testBuild: true,
+  })
+  try {
+    let tree = await client.mountRaw(client.components.Studio, {})
+    const zoomButton = findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && typeof node.props?.className === 'string'
+        && node.props.className.split(' ').includes('ofs-glass-btn')
+        && node.props['aria-label'] === '点击查看原图',
+    )[0]
+    assert.ok(zoomButton, '舞台应有查看原图入口')
+    zoomButton.props.onClick()
+    tree = await client.rerenderRaw()
+    assertStructure('lightbox-open', tree, { required: { 'ofs-lightbox': 1, 'ofs-lightbox-action': 1 }, forbidden: [] })
+    assert.ok(collectText(tree).join(' | ').includes('以此图重绘'), '大图预览应提供「以此图重绘」')
+
+    findNodes(tree, (node) => node.type === 'button' && node.props?.className === 'ofs-lightbox-action')[0].props.onClick()
+    tree = await client.rerenderRaw()
+    assertStructure('lightbox-reference', tree, {
+      required: { 'ofs-reference': 1 },
+      forbidden: ['ofs-lightbox'],
+    })
+    assert.ok(collectText(tree).join(' | ').includes('已设为参考图'))
+  } finally {
+    client.unmount()
   }
 })
 

@@ -189,6 +189,7 @@ export const en = {
   'studio.action.openFolder': 'Show in folder',
   'studio.action.favorite': 'Favorite',
   'studio.action.favorited': 'Favorited',
+  'studio.action.reference': 'Redraw from this',
 
   // ── Recent ────────────────────────────────────────────────────
   'studio.filmstrip.empty': 'Each batch you generate shows up here',
@@ -376,6 +377,18 @@ export const en = {
   'studio.rail.frame': 'Frame',
   'studio.rail.advanced': 'Advanced',
   'studio.rail.params': 'Steps / guidance / seed',
+
+  // ── Reference image and image-to-image ────────────────────────
+  'studio.reference.title': 'Reference image',
+  'studio.reference.strength': 'Redraw strength',
+  'studio.reference.hint': 'Lower stays closer to the reference; higher gives the model more freedom.',
+  'studio.reference.remove': 'Remove',
+  'studio.reference.unsupported': 'This model does not support image-to-image. Switch models or remove the reference image.',
+  'studio.reference.blocked': 'This model does not support image-to-image, so this generation was stopped. Switch models or remove the reference image.',
+  'studio.reference.switched': 'This model does not support image-to-image, so it switched to {preset}.',
+  'studio.reference.applied': 'Set as the reference image; adjust the redraw strength.',
+  'studio.reference.unavailable': 'The installed host does not support image-to-image, so this work cannot be used as a reference.',
+  'studio.reference.noPath': 'This work has no usable file path and cannot be used as a reference.',
 
   // ── Creation assistant ────────────────────────────────────────
   'studio.chat.assistant': 'Assistant',

@@ -6,7 +6,7 @@
  * 这些规则不碰 React 与网络，便于离线断言。
  */
 
-import { LIMITS } from '../../shared/contract.js'
+import { DEFAULT_PRESET, LIMITS } from '../../shared/contract.js'
 
 import { clampInt, clampNumber, clampSize } from './clamp.js'
 import { negativeLayersPatch, resolveNegativeLayers } from './prompt.js'
@@ -64,6 +64,27 @@ export function customSizePatch(partial) {
   if (Object.prototype.hasOwnProperty.call(input, 'width')) patch.width = clampSize(input.width)
   if (Object.prototype.hasOwnProperty.call(input, 'height')) patch.height = clampSize(input.height)
   return patch
+}
+
+/**
+ * 预设是否支持垫图重绘（图生图）。
+ *
+ * `supportsImg2Img` 由宿主 `/state.presets` 下发；旧宿主没有这个字段，
+ * 一律按不支持处理。只有用户主动放参考图时才用它判断，文生图流程不受影响。
+ */
+export function supportsImg2Img(preset) {
+  return Boolean(preset && preset.supportsImg2Img === true)
+}
+
+/**
+ * 参考图兜底预设：优先 `sdxl-lightning`，否则列表里第一个支持图生图的预设。
+ * 一个都没有（旧宿主 / 预设都没声明能力）时返回 null，由调用方明确提示。
+ */
+export function referencePresetOf(presets) {
+  const list = Array.isArray(presets) ? presets.filter((item) => item && item.id) : []
+  const preferred = list.find((item) => item.id === DEFAULT_PRESET)
+  if (preferred && supportsImg2Img(preferred)) return preferred
+  return list.find(supportsImg2Img) || null
 }
 
 /**

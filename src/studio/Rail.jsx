@@ -9,6 +9,7 @@ import React from 'react'
 import { LIMITS } from '../../shared/contract.js'
 
 import { Tooltip } from '../components/Tooltip.jsx'
+import { referenceFileName } from '../logic/generate.js'
 import { Icon } from './icons.jsx'
 import { DEFAULT_RATIOS, STYLE_CAPSULES } from './presets.js'
 
@@ -210,6 +211,11 @@ export function Rail(props) {
     toggleRefine,
     useInspiration,
     englishPromptHint,
+    reference,
+    strength,
+    referenceBlocked,
+    applyStrength,
+    removeReference,
   } = form
   const { sending, generate } = actions
 
@@ -217,6 +223,12 @@ export function Rail(props) {
   const hasPrompt = fields.prompt.trim().length > 0
   // 防御式取档位：预览/测试可能只给部分表单字段，缺失时该行整体不渲染。
   const sizes = Array.isArray(sizeOptions) ? sizeOptions : []
+  // 参考图与重绘强度：没有参考图时整块不渲染，文生图界面与改造前完全一致。
+  const referenceImage = reference && typeof reference === 'object' ? reference : null
+  const referenceName = referenceImage ? referenceFileName(referenceImage.path) : ''
+  const strengthValue = Number.isFinite(Number(strength)) ? Number(strength) : LIMITS.strength.default
+  const onRemoveReference = typeof removeReference === 'function' ? removeReference : () => {}
+  const onStrengthChange = typeof applyStrength === 'function' ? applyStrength : () => {}
 
   return (
     <aside className="ofs-panel ofs-panel--form">
@@ -333,6 +345,56 @@ export function Rail(props) {
             </div>
           ) : null}
         </Fieldset>
+
+        {/* 参考图：只在已有参考图时出现（来自画廊「以此图重绘」）。
+            当前预设不支持垫图时槽位置灰，并写明下一步该切模型还是移除参考图。 */}
+        {referenceImage ? (
+          <Fieldset
+            title={t('studio.reference.title')}
+            action={(
+              <button type="button" className="ofs-text-action ofs-reference-remove" onClick={onRemoveReference}>
+                {t('studio.reference.remove')}
+              </button>
+            )}
+          >
+            <div className={referenceBlocked ? 'ofs-reference is-unsupported' : 'ofs-reference'}>
+              <span className="ofs-reference-thumb">
+                {referenceImage.url ? (
+                  <img src={referenceImage.url} alt={referenceName || t('studio.reference.title')} loading="lazy" />
+                ) : (
+                  <Icon name="image" size={18} />
+                )}
+              </span>
+              <div className="ofs-reference-meta">
+                <span className="ofs-reference-name" title={referenceName || undefined}>
+                  {referenceName || '—'}
+                </span>
+                <label className="ofs-reference-strength">
+                  <span className="ofs-reference-strength-head">
+                    {t('studio.reference.strength')}
+                    <b>{strengthValue.toFixed(2)}</b>
+                  </span>
+                  <input
+                    type="range"
+                    className="ofs-reference-range"
+                    min={LIMITS.strength.min}
+                    max={LIMITS.strength.max}
+                    step={LIMITS.strength.step}
+                    value={strengthValue}
+                    disabled={Boolean(referenceBlocked)}
+                    aria-label={t('studio.reference.strength')}
+                    onChange={(event) => onStrengthChange(event.target.value)}
+                  />
+                </label>
+              </div>
+            </div>
+            {referenceBlocked ? (
+              <p className="ofs-hint ofs-reference-warn">{t('studio.reference.unsupported')}</p>
+            ) : (
+              <p className="ofs-hint ofs-reference-hint">{t('studio.reference.hint')}</p>
+            )}
+          </Fieldset>
+        ) : null}
 
         <Fieldset title={t('studio.style')}>
           <div className="ofs-tiles">

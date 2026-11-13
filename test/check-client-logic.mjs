@@ -84,6 +84,41 @@ await check('参数边界与共享契约一致', () => {
   assert.equal(logic.parseSeed(LIMITS.seed.max), LIMITS.seed.max)
 })
 
+await check('重绘强度钳制：边界 / step 对齐 / 默认值', () => {
+  // 边界来自 LIMITS.strength（min 0.2 / max 0.9 / step 0.05 / default 0.6）。
+  assert.equal(logic.clampStrength(LIMITS.strength.default), LIMITS.strength.default)
+  assert.equal(logic.clampStrength(0.55), 0.55)
+  assert.equal(logic.clampStrength(LIMITS.strength.min), LIMITS.strength.min, '下边界原样保留')
+  assert.equal(logic.clampStrength(LIMITS.strength.max), LIMITS.strength.max, '上边界原样保留')
+  assert.equal(logic.clampStrength(0.01), LIMITS.strength.min, '低于下界钳到 min')
+  assert.equal(logic.clampStrength(3), LIMITS.strength.max, '高于上界钳到 max')
+  assert.equal(logic.clampStrength('x'), LIMITS.strength.default, '非法值回落默认值')
+  assert.equal(logic.clampStrength(undefined), LIMITS.strength.default)
+  assert.equal(logic.clampStrength(null), LIMITS.strength.default)
+  // step 对齐：取最近档位（不是简单截断），且浮点噪声不能漏进请求体。
+  assert.equal(logic.clampStrength(0.63), 0.65)
+  assert.equal(logic.clampStrength(0.62), 0.6)
+  assert.equal(logic.clampStrength(0.87), 0.85)
+  assert.equal(logic.clampStrength(0.8500000001), 0.85)
+  for (const input of [0.2, 0.21, 0.33, 0.444, 0.5555, 0.678, 0.71, 0.899, 0.9]) {
+    const value = logic.clampStrength(input)
+    assert.ok(value >= LIMITS.strength.min && value <= LIMITS.strength.max, `${input} 钳制后越界：${value}`)
+    const steps = (value - LIMITS.strength.min) / LIMITS.strength.step
+    assert.ok(Math.abs(steps - Math.round(steps)) < 1e-9, `${input} 应落在 step 档位上，实际 ${value}`)
+    assert.equal(Number(value.toFixed(2)), value, `${input} 不应带浮点噪声，实际 ${value}`)
+  }
+  assert.equal(logic.clampStrength(0.2 + 9 * 0.05), 0.65, '0.2 + 9×0.05 的浮点尾巴要清掉')
+})
+
+await check('参考图文件名只取最后一段', () => {
+  assert.equal(logic.referenceFileName('imagen-output/job-1/7.png'), '7.png')
+  assert.equal(logic.referenceFileName('imagen-output\\job-1\\8.png'), '8.png')
+  assert.equal(logic.referenceFileName('  7.png  '), '7.png')
+  assert.equal(logic.referenceFileName(''), '')
+  assert.equal(logic.referenceFileName(null), '')
+  assert.equal(logic.referenceFileName(undefined), '')
+})
+
 await check('时长格式化', () => {
   assert.equal(logic.formatDuration(t, 9500), '9.5秒')
   assert.equal(logic.formatDuration(t, 30000), '30秒')
@@ -1055,6 +1090,59 @@ await check('最终请求体带风格后缀', () => {
   assert.equal(empty.prompt, '', '没有原文时不产生只有后缀的提示词')
 })
 
+await check('请求体：只有带参考图时才出现 reference（文生图请求体不变）', () => {
+  const form = {
+    prompt: '一只赛博猫',
+    negative: '',
+    presetId: 'sdxl-lightning',
+    width: 1024,
+    height: 1024,
+    steps: 4,
+    cfg: 0,
+    seed: '',
+    count: 1,
+  }
+  const txt2img = logic.buildGenerateBody(form)
+  assert.ok(!('reference' in txt2img), '没有参考图时请求体不得出现 reference 字段')
+  // 旧表单形状（没有 strength / reference 字段）与显式 null 必须得到同一个请求体。
+  assert.deepEqual(
+    logic.buildGenerateBody({ ...form, reference: null, strength: LIMITS.strength.default }),
+    txt2img,
+    '无参考图时请求体与改造前逐字一致',
+  )
+
+  const img2img = logic.buildGenerateBody({
+    ...form,
+    reference: { path: ' imagen-output/job-1/7.png ', url: '/imagen-api/file?path=x' },
+    strength: 0.75,
+  })
+  assert.deepEqual(
+    img2img.reference,
+    { path: 'imagen-output/job-1/7.png', strength: 0.75 },
+    '参考图只提交 path 与 strength，url 绝不进请求体',
+  )
+  assert.ok(!JSON.stringify(img2img).includes('/imagen-api/file'), '缩略图 url 不能被序列化进请求体')
+  assert.ok(!('strength' in img2img), 'strength 只存在于 reference 内部，不单独出现在顶层')
+
+  // 越界 / 非 step 档位的强度按契约归一后再提交。
+  const clamped = logic.buildGenerateBody({ ...form, reference: { path: 'imagen-output/a.png' }, strength: 3 })
+  assert.equal(clamped.reference.strength, LIMITS.strength.max)
+  // 只有 url 没有路径：按文生图处理，不输出残缺的 reference。
+  assert.ok(!('reference' in logic.buildGenerateBody({ ...form, reference: { url: '/x' }, strength: 0.6 })))
+
+  // 覆盖项（对话 / 变体 / 重试链路）同样按同一套规则归一。
+  const overridden = logic.buildGenerateBody(form, {
+    overrides: { prompt: '聊天输入', reference: { path: 'imagen-output/b.png', url: '/y' }, strength: 0.35 },
+  })
+  assert.deepEqual(overridden.reference, { path: 'imagen-output/b.png', strength: 0.35 })
+  assert.ok(!('strength' in overridden), '覆盖项里的 strength 也只在 reference 内部')
+  // 覆盖成 null 时回到文生图（显式移除参考图）。
+  assert.ok(!('reference' in logic.buildGenerateBody(
+    { ...form, reference: { path: 'imagen-output/a.png' }, strength: 0.6 },
+    { overrides: { reference: null } },
+  )))
+})
+
 await check('负向分层：切换/取消风格只增删风格层，不清模型负向词', () => {
   const capsule = { id: 'film', negative: 'blurry, low quality' }
   // 旧 bug：取消风格时把「恰好等于风格负向词」的整段文本清空，模型推荐词跟着丢。
@@ -1179,6 +1267,27 @@ await check('切换预设按层替换模型负向词', () => {
   assert.equal(oversized.steps, LIMITS.steps.max)
   assert.equal(oversized.cfg, LIMITS.cfg.max)
   assert.deepEqual(logic.presetSelectPatch(null, form, presets), {})
+})
+
+await check('参考图预设回退：支持能力来自预设公开视图，缺字段按 false', () => {
+  const lightning = { id: 'sdxl-lightning', supportsImg2Img: true }
+  const turbo = { id: 'sdxl-turbo', supportsImg2Img: true }
+  const animagine = { id: 'animagine-xl-3.1', supportsImg2Img: true }
+  const flux = { id: 'flux2-klein-4b', supportsImg2Img: false }
+
+  assert.equal(logic.supportsImg2Img(lightning), true)
+  assert.equal(logic.supportsImg2Img(flux), false)
+  assert.equal(logic.supportsImg2Img({ id: 'legacy' }), false, '旧宿主缺 supportsImg2Img 按不支持处理')
+  assert.equal(logic.supportsImg2Img(null), false)
+  assert.equal(logic.supportsImg2Img(undefined), false)
+  assert.equal(logic.supportsImg2Img({ id: 'truthy', supportsImg2Img: 1 }), false, '只认严格的 true')
+
+  // 优先 sdxl-lightning（默认预设），其次列表里的第一个支持者。
+  assert.equal(logic.referencePresetOf([flux, turbo, lightning]), lightning)
+  assert.equal(logic.referencePresetOf([flux, animagine, turbo]), animagine)
+  assert.equal(logic.referencePresetOf([flux, { id: 'animagine-xl-3.1' }]), null, '一个都不支持时返回 null')
+  assert.deepEqual(logic.referencePresetOf(null), null)
+  assert.deepEqual(logic.referencePresetOf([]), null)
 })
 
 await check('负向层数据与展示文本同步（用户编辑 / 历史回填）', () => {

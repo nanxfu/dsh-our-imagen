@@ -15,6 +15,7 @@ import { submitGenerate } from '../api/resources.js'
 import { useHostState } from '../hooks/useHostState.js'
 import { translator } from '../i18n.js'
 import { guidanceDetailOf, guidanceKindOf, isConnectionCode } from '../logic/guidance.js'
+import { formatText } from '../logic/format.js'
 import { iteratePatch, rerollOverrides, retryOverrides } from '../logic/generate.js'
 import { accountStatusOf } from '../logic/probe.js'
 import { useChatThread } from './hooks/useChatThread.js'
@@ -82,6 +83,12 @@ export function useStudio(props) {
 
   async function generate(overrides, options = {}) {
     if (sending) return
+    // 参考图与当前预设的能力不匹配时拦下本次生成：既不能悄悄丢掉参考图当文生图发出去，
+    // 也不该把注定失败的请求交给宿主。提示里写明下一步（切模型或移除参考图）。
+    if (form.referenceBlocked) {
+      ui.showToast(t('studio.reference.blocked'))
+      return
+    }
     const body = form.buildBody(overrides)
     if (!body.prompt) {
       ui.fail('need_prompt', '')
@@ -132,6 +139,34 @@ export function useStudio(props) {
     ui.setView('studio')
     ui.setPanelMode('form')
     ui.showToast(t('studio.toast.recalled'))
+  }
+
+  /**
+   * 以此图重绘：把画廊作品设为参考图并切回创作视图。
+   *
+   * 预设是否支持垫图由表单域判断：不支持时自动切到支持的预设，toast 里说明切到了哪个；
+   * 旧宿主一个支持的预设都没有时保持表单不变并明确提示（不把参考图塞给必然拒绝的宿主）。
+   */
+  function referenceImage(entry) {
+    const target = entry || library.selected
+    const result = form.applyReference(target)
+    if (!result || !result.ok) {
+      // 旧记录缺 image.path 与「宿主一个支持垫图的预设都没有」要分开说清楚。
+      const failedKey = result && result.reason === 'no_path' ? 'studio.reference.noPath' : 'studio.reference.unavailable'
+      ui.showToast(t(failedKey))
+      return
+    }
+    ui.setView('studio')
+    ui.setPanelMode('form')
+    // 从大图预览触发时一并收起放大层，用户能直接看到左侧参考图槽位。
+    ui.setZoom(false)
+    if (result.switchedPreset) {
+      const preset = result.switchedPreset
+      const label = preset.label || preset.short || preset.id
+      ui.showToast(formatText(t('studio.reference.switched'), { preset: label }))
+      return
+    }
+    ui.showToast(t('studio.reference.applied'))
   }
 
   /** 按失败任务原来的参数重试；没有任务时退回上一次提交的 body。 */
@@ -190,6 +225,6 @@ export function useStudio(props) {
     chat,
     library,
     guidance: { kind: guidanceKind, detail: guidanceDetail, dismiss: dismissGuidance },
-    actions: { sending, generate, reroll, iterate, retryFocusedJob, resetToSafe },
+    actions: { sending, generate, reroll, iterate, referenceImage, retryFocusedJob, resetToSafe },
   }
 }
