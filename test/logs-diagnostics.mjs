@@ -545,6 +545,7 @@ await check('GuidanceCard 六类卡片、次级动作与加固提示', async () 
     'studio.guidance.gpu.title',
     'KAGGLE_ACCOUNT_URL',
     'KAGGLE_CREDENTIAL_PATH',
+    'KAGGLE_ACCESS_TOKEN_PATH',
     'KAGGLE_LEGACY_CREDENTIAL_PATH',
     'KAGGLE_LOGIN_COMMAND',
     'studio.guidance.auth.copyLogin',

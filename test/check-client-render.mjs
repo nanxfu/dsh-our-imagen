@@ -25,7 +25,9 @@ import {
   enhancePromptRequest,
   fetchHistory,
   fetchSettings as fetchSettingsRequest,
+  fetchUiState as fetchUiStateRequest,
   saveSettings as saveSettingsRequest,
+  saveUiState as saveUiStateRequest,
 } from '../src/api/resources.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -586,8 +588,10 @@ const scenarios = {
     expect: [
       'Kaggle 账号缺少手机号绑定或凭据不可用',
       'kaggle auth login',
-      '凭据写入 %USERPROFILE%\\.kaggle\\access_token',
-      'kaggle.json',
+      '%USERPROFILE%\\.kaggle\\credentials.json',
+      'refresh_token',
+      '%USERPROFILE%\\.kaggle\\access_token',
+      '%USERPROFILE%\\.kaggle\\kaggle.json',
       '打开 Kaggle 设置',
       '复制登录命令',
       '重新检查环境',
@@ -1786,7 +1790,7 @@ await check('渲染：gpu / auth / cli 指引卡动作与提示', async () => {
     viewLogsButton.props.onClick()
     assert.equal(viewedLogs.length, 1, '[gpu-card] 查看日志应交给 openLogs')
 
-    // auth 卡：给出 CLI 2.x 登录命令（可复制）+ 凭据写入位置 + 旧版兼容位置。
+    // auth 卡：给出 CLI 2.x 登录命令（可复制）+ OAuth 凭据位置 + 网页 Token / 旧版兼容位置。
     const authTree = await client.mountRaw(client.components.GuidanceCard, {
       ...baseProps,
       guidance: { kind: 'auth', detail: '', dismiss: () => {} },
@@ -1794,8 +1798,10 @@ await check('渲染：gpu / auth / cli 指引卡动作与提示', async () => {
     const authText = collectText(authTree).join(' | ')
     for (const needle of [
       'kaggle auth login',
-      '凭据写入 %USERPROFILE%\\.kaggle\\access_token',
-      'kaggle.json',
+      '%USERPROFILE%\\.kaggle\\credentials.json',
+      'refresh_token',
+      '%USERPROFILE%\\.kaggle\\access_token',
+      '%USERPROFILE%\\.kaggle\\kaggle.json',
       '复制登录命令',
     ]) {
       assert.ok(authText.includes(needle), `[auth-card] 缺少文案：${needle}（实际：${authText}）`)
@@ -1992,8 +1998,10 @@ await check('渲染：大图预览 dialog 与图片 alt', async () => {
   }
 })
 
-await check('渲染：意图确认卡同时展示英文提示词与中文摘要', async () => {
+await check('渲染：意图确认卡行内微调（提示词 / 排除项可编辑）', async () => {
   const mountIntent = async (message, options = {}) => {
+    const edits = []
+    const generated = []
     const lockCalls = []
     const client = await loadClient({
       now: NOW,
@@ -2013,7 +2021,9 @@ await check('渲染：意图确认卡同时展示英文提示词与中文摘要'
         messages: [message],
         interpreting: false,
         interpret: () => {},
-        generateIntent: () => {},
+        updateIntentField: (id, field, value) => edits.push({ id, field, value }),
+        updateIntent: (id, patch) => edits.push({ id, patch }),
+        generateIntent: (target) => generated.push(target),
         toggleIntentLockSeed: (id) => lockCalls.push(id),
         canLockSeed: options.canLockSeed !== false,
         resolveClarify: () => {},
@@ -2023,7 +2033,27 @@ await check('渲染：意图确认卡同时展示英文提示词与中文摘要'
       actions: { sending: false },
     })
     client.unmount()
-    return { tree, text: collectText(tree).join(' | '), lockCalls }
+    const textareaOf = (className) => findNodes(
+      tree,
+      (node) => node.type === 'textarea'
+        && typeof node.props?.className === 'string'
+        && node.props.className.split(' ').includes(className),
+    )[0] || null
+    return {
+      tree,
+      text: collectText(tree).join(' | '),
+      promptArea: textareaOf('ofs-intent-prompt'),
+      negativeArea: textareaOf('ofs-intent-negative'),
+      goButton: findNodes(
+        tree,
+        (node) => node.type === 'button'
+          && typeof node.props?.className === 'string'
+          && node.props.className.split(' ').includes('ofs-intent-go'),
+      )[0],
+      edits,
+      generated,
+      lockCalls,
+    }
   }
 
   const modelMessage = {
@@ -2031,6 +2061,7 @@ await check('渲染：意图确认卡同时展示英文提示词与中文摘要'
     role: 'assistant',
     kind: 'intent',
     prompt: 'rainy night city street, wet pavement reflecting neon signs',
+    negative: 'blurry, low quality',
     summary: '雨夜城市街景，湿润路面倒映霓虹招牌',
     ratioId: '16:9',
     styleId: 'film',
@@ -2038,13 +2069,26 @@ await check('渲染：意图确认卡同时展示英文提示词与中文摘要'
     source: 'model',
   }
   const model = await mountIntent(modelMessage)
-  assert.ok(model.text.includes('rainy night city street, wet pavement reflecting neon signs'), '[intent] 应展示英文提示词')
+
+  // 提示词与排除项都是可编辑 textarea：值来自消息，长度受契约限制。
+  assert.ok(model.promptArea, '[intent] 缺少提示词文本域')
+  assert.equal(model.promptArea.props.value, modelMessage.prompt)
+  assert.equal(model.promptArea.props.maxLength, LIMITS.prompt.maxChars)
+  assert.equal(model.promptArea.props['aria-label'], '英文提示词')
+  assert.ok(model.negativeArea, '[intent] 缺少排除项文本域')
+  assert.equal(model.negativeArea.props.value, 'blurry, low quality')
+  assert.equal(model.negativeArea.props.maxLength, LIMITS.negativePrompt.maxChars)
+  assert.equal(model.negativeArea.props.placeholder, '不希望出现的元素，可留空')
   assert.ok(model.text.includes('雨夜城市街景，湿润路面倒映霓虹招牌'), '[intent] 应展示中文摘要')
   assert.ok(model.text.includes('中文摘要'), '[intent] 摘要应有中文标签')
+  assert.ok(model.text.includes('可直接修改后再生成'), '[intent] 应提示可在卡上直接微调')
   assertStructure('intent-model', model.tree, {
     required: {
       'ofs-intent': 1,
+      'ofs-intent-field': 2,
       'ofs-intent-prompt': 1,
+      'ofs-intent-negative': 1,
+      'ofs-intent-edit-hint': 1,
       'ofs-intent-summary': 1,
       'ofs-intent-summary-label': 1,
       'ofs-intent-lock': 1,
@@ -2052,6 +2096,28 @@ await check('渲染：意图确认卡同时展示英文提示词与中文摘要'
     },
     forbidden: ['ofs-intent-note', 'ofs-intent-question'],
   })
+
+  // 编辑回调带上消息 id 与字段名；白名单校验与契约裁剪由 useChatThread 再做一次。
+  model.promptArea.props.onChange({ target: { value: 'edited rainy street' } })
+  model.negativeArea.props.onChange({ target: { value: 'blurry' } })
+  assert.deepEqual(model.edits, [
+    { id: 1, field: 'prompt', value: 'edited rainy street' },
+    { id: 1, field: 'negative', value: 'blurry' },
+  ])
+
+  // 「按此生成」提交当前消息对象：行内编辑后的值会随状态更新进入提交参数。
+  model.goButton.props.onClick()
+  assert.equal(model.generated.length, 1, '[intent] 点「按此生成」应把确认卡交给 generateIntent')
+  assert.equal(model.generated[0].prompt, modelMessage.prompt)
+  const edited = await mountIntent({ ...modelMessage, prompt: 'edited rainy street', negative: 'blurry' })
+  edited.goButton.props.onClick()
+  assert.equal(edited.generated[0].prompt, 'edited rainy street')
+  assert.equal(edited.generated[0].negative, 'blurry')
+
+  // 提示词清空后禁止提交；有内容时按钮可用。
+  const blank = await mountIntent({ ...modelMessage, prompt: '   ' })
+  assert.equal(blank.goButton.props.disabled, true, '[intent] 提示词为空时「按此生成」应禁用')
+  assert.equal(model.goButton.props.disabled, false, '[intent] 有提示词时按钮可用')
 
   // 锁种开关默认关闭：不传 lockSeed 的确认卡渲染成未勾选，点一下才把这张卡的状态交回 hook。
   const lockCheckbox = findNodes(
@@ -2085,14 +2151,111 @@ await check('渲染：意图确认卡同时展示英文提示词与中文摘要'
   assert.ok(disabledLabel, '[intent] 置灰态应有对应的结构类名')
 
   // 本地兜底：prompt 与 summary 都是原文，不重复渲染摘要，改为标注「模型未响应」。
-  const local = await mountIntent({ ...modelMessage, prompt: '雨夜街景', summary: '雨夜街景', source: 'local', ratioId: '', styleId: '' })
-  assert.ok(local.text.includes('雨夜街景'))
+  const local = await mountIntent({
+    ...modelMessage,
+    prompt: '雨夜街景',
+    summary: '雨夜街景',
+    negative: '',
+    source: 'local',
+    ratioId: '',
+    styleId: '',
+  })
+  assert.equal(local.promptArea.props.value, '雨夜街景')
   assert.ok(!local.text.includes('中文摘要'), '[intent] 原文兜底时不应重复显示摘要')
   assert.ok(local.text.includes('模型未响应'), '[intent] 本地兜底应说明来源')
   assertStructure('intent-local', local.tree, {
     required: { 'ofs-intent-note': 1 },
     forbidden: ['ofs-intent-summary'],
   })
+})
+
+// 行内编辑的真实状态流转：直接挂载 useChatThread，断言编辑后的值真的进入生成覆盖项。
+await check('渲染：意图卡编辑后「按此生成」提交编辑值（useChatThread）', async () => {
+  const client = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/intent': {
+        ok: true,
+        prompt: 'rainy night city street',
+        summary: '雨夜城市街景',
+        ratioId: '16:9',
+        styleId: 'film',
+        source: 'model',
+      },
+    },
+    testBuild: true,
+  })
+  const React = client.react
+  const h = React.createElement
+  const { useChatThread } = client.hooks
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const latest = { chat: null }
+  const calls = { generates: [], patches: [] }
+  const form = {
+    form: { negative: 'blurry, low quality', seed: '', presetId: 'sdxl-lightning' },
+    patchForm: (patch) => calls.patches.push(patch),
+  }
+  function Harness(props) {
+    const chat = useChatThread({
+      t,
+      isEn: false,
+      alive: async (promise) => promise,
+      state: { lastJob: null },
+      form,
+      generate: async (overrides) => calls.generates.push(overrides),
+    })
+    props.latest.chat = chat
+    React.useEffect(() => {
+      chat.interpret('画一张横版雨夜街景')
+    }, [])
+    return h('div', { className: 'ofs-intent-harness' }, String(chat.messages.length))
+  }
+  try {
+    await client.mountRaw(Harness, { latest })
+    await client.settle()
+    const chat = latest.chat
+    assert.equal(chat.messages.length, 2, '解析完成后应有一条用户消息与一张意图卡')
+    const intent = chat.messages[1]
+    assert.equal(intent.kind, 'intent')
+    assert.equal(intent.prompt, 'rainy night city street')
+    assert.equal(intent.negative, 'blurry, low quality', '意图卡排除项来自当前表单快照')
+
+    // 行内编辑只改白名单字段。
+    chat.updateIntentField(intent.id, 'prompt', '  edited rainy street  ')
+    chat.updateIntentField(intent.id, 'negative', '  blurry  ')
+    await client.rerender()
+    assert.equal(latest.chat.messages[1].prompt, '  edited rainy street  ')
+    assert.equal(latest.chat.messages[1].negative, '  blurry  ')
+    latest.chat.updateIntent(intent.id, { ratioId: '1:1', styleId: 'ink', prompt: 'kept' })
+    await client.rerender()
+    assert.equal(latest.chat.messages[1].ratioId, '16:9', '比例仍由澄清卡决定，行内编辑不能改写')
+    assert.equal(latest.chat.messages[1].styleId, 'film', '风格仍由澄清卡决定，行内编辑不能改写')
+    assert.equal(latest.chat.messages[1].prompt, 'kept', '白名单字段仍生效')
+
+    // 按此生成：编辑后的提示词合并风格后缀，编辑后的排除项进入生成覆盖项。
+    await latest.chat.generateIntent(latest.chat.messages[1])
+    assert.deepEqual(calls.generates, [{
+      prompt: 'kept, cinematic film photography, 35mm, natural skin texture, soft grain',
+      negativePrompt: 'blurry',
+      width: 1152,
+      height: 648,
+    }], '生成覆盖项应使用编辑后的提示词与排除项')
+    assert.deepEqual(calls.patches.at(-1), {
+      prompt: 'kept',
+      negative: 'blurry',
+      width: 1152,
+      height: 648,
+      styleId: 'film',
+    }, '确认卡参数应回填表单')
+
+    // 提示词清空后不提交。
+    latest.chat.updateIntentField(intent.id, 'prompt', '   ')
+    await client.rerender()
+    await latest.chat.generateIntent(latest.chat.messages[1])
+    assert.equal(calls.generates.length, 1, '空提示词不应提交生成')
+  } finally {
+    client.unmount()
+  }
 })
 
 await check('渲染：中文提示词的英文软提示（不拦截生成）', async () => {
@@ -2506,6 +2669,8 @@ await check('资源层：取消 / 历史分页 / 英译的请求形状', async (
     await enhancePromptRequest({ prompt: '雨夜街景', presetId: 'sdxl-lightning', locale: 'zh', mode: 'translate' })
     await fetchSettingsRequest()
     await saveSettingsRequest({ idleTimeoutSec: 2700, accelerator: 'NvidiaTeslaP100' })
+    await fetchUiStateRequest()
+    await saveUiStateRequest({ advancedOpen: true })
   } finally {
     globalThis.fetch = savedFetch
     if (savedHasDocument) globalThis.document = savedDocument
@@ -2534,6 +2699,164 @@ await check('资源层：取消 / 历史分页 / 英译的请求形状', async (
     { idleTimeoutSec: 2700, accelerator: 'NvidiaTeslaP100' },
     '设置请求体是部分字段对象',
   )
+  // 界面态：GET 与 POST 共用契约里的 /ui-state 路径，POST 是扁平补丁。
+  assert.equal(calls[6].url, 'http://localhost/imagen-api/ui-state', '读取界面态必须走契约 ROUTES.uiState')
+  assert.equal(calls[6].method, 'GET')
+  assert.equal(calls[7].url, 'http://localhost/imagen-api/ui-state', '保存界面态必须走契约 ROUTES.uiStateSave')
+  assert.equal(calls[7].method, 'POST')
+  assert.deepEqual(JSON.parse(calls[7].body), { advancedOpen: true }, '界面态请求体是扁平补丁')
+})
+
+// ── 工作台界面态持久化（M1：记住「高级设置」折叠状态） ─────────────
+
+// 域 hook 级：挂载读取一次、切换先本地后保存、失败静默回落默认值。
+await check('渲染：高级设置折叠状态读取与保存（useStudioUi）', async () => {
+  const mountUi = async (options = {}) => {
+    const client = await loadClient({
+      now: NOW,
+      responses: options.responses ?? {},
+      failures: options.failures ?? {},
+      testBuild: true,
+    })
+    const React = client.react
+    const { useStudioUi } = client.hooks
+    const latest = { ui: null }
+    function Harness(props) {
+      const ui = useStudioUi({ t: props.t, initialView: 'studio', initialPanelMode: 'form' })
+      props.latest.ui = ui
+      return React.createElement('div', { className: 'ofs-ui-harness' }, String(ui.advancedOpen))
+    }
+    try {
+      await client.mountRaw(Harness, { latest, t: client.internals.i18n.fallbackTranslate('zh') })
+      await client.settle()
+      return { client, latest }
+    } catch (error) {
+      client.unmount()
+      throw error
+    }
+  }
+  const uiStateRequests = (client, method) => client.requests
+    .filter((item) => item.path === '/imagen-api/ui-state' && item.method === method)
+
+  // 宿主记录为展开：挂载后直接展开。
+  const opened = await mountUi({
+    responses: { '/imagen-api/ui-state': { ok: true, uiState: { advancedOpen: true } } },
+  })
+  try {
+    assert.equal(opened.latest.ui.advancedOpen, true, '挂载时应读取宿主保存的折叠状态')
+    assert.equal(uiStateRequests(opened.client, 'GET').length, 1, '挂载只读取一次界面态')
+    // 收起：先更新本地状态，再 fire-and-forget 保存扁平补丁。
+    opened.latest.ui.toggleAdvancedOpen()
+    await opened.client.settle()
+    const collapsedTree = await opened.client.rerender()
+    assert.equal(collectText(collapsedTree).join(''), 'false', '切换后本地状态应立刻收起')
+    assert.deepEqual(
+      uiStateRequests(opened.client, 'POST').map((item) => item.body),
+      [{ advancedOpen: false }],
+      '收起后应保存扁平补丁',
+    )
+    // 再展开：保存的补丁跟着变。
+    opened.latest.ui.toggleAdvancedOpen()
+    await opened.client.settle()
+    await opened.client.rerender()
+    assert.deepEqual(
+      uiStateRequests(opened.client, 'POST').map((item) => item.body),
+      [{ advancedOpen: false }, { advancedOpen: true }],
+    )
+  } finally {
+    opened.client.unmount()
+  }
+
+  // 读取失败：静默回落默认收起，切换仍然可用并尝试保存。
+  const failed = await mountUi({ failures: { '/imagen-api/ui-state': 'Failed to fetch' } })
+  try {
+    assert.equal(failed.latest.ui.advancedOpen, false, '读取失败应按契约默认值收起')
+    failed.latest.ui.toggleAdvancedOpen()
+    await failed.client.settle()
+    await failed.client.rerender()
+    assert.equal(failed.latest.ui.advancedOpen, true, '保存失败不影响本地切换')
+    assert.deepEqual(
+      uiStateRequests(failed.client, 'POST').map((item) => item.body),
+      [{ advancedOpen: true }],
+      '读取失败后仍应尝试保存',
+    )
+  } finally {
+    failed.client.unmount()
+  }
+
+  // 宿主返回未知字段 / 类型错误：只认白名单且类型正确的值。
+  const dirty = await mountUi({
+    responses: { '/imagen-api/ui-state': { ok: true, uiState: { advancedOpen: 'yes', mystery: 1 } } },
+  })
+  try {
+    assert.equal(dirty.latest.ui.advancedOpen, false, '类型不符的界面态应按默认值处理')
+  } finally {
+    dirty.client.unmount()
+  }
+})
+
+// 工作台级：Rail 真的按读取到的折叠态渲染，点击后收起并保存。
+await check('渲染：工作台按宿主界面态展开高级设置并保存折叠', async () => {
+  const responses = {
+    '/imagen-api/state': readyState,
+    '/imagen-api/history': { items: [] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    '/imagen-api/ui-state': { ok: true, uiState: { advancedOpen: true } },
+  }
+  const client = await loadClient({ now: NOW, responses, testBuild: true })
+  try {
+    let tree = await client.mountRaw(client.components.Studio, {})
+    const stepsInput = (node) => node.type === 'input' && node.props?.['aria-label'] === '采样步数'
+    assert.equal(findNodes(tree, stepsInput).length, 1, '界面态为展开时应渲染高级设置')
+    const toggle = findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && String(node.props?.className).includes('ofs-row-toggle')
+        && collectText(node).join('').includes('步数'),
+    )[0]
+    assert.ok(toggle, '缺少高级设置折叠按钮')
+    assert.equal(toggle.props['aria-expanded'], true, '展开态按钮应带 aria-expanded=true')
+
+    toggle.props.onClick()
+    await client.settle()
+    tree = await client.rerender()
+    assert.equal(findNodes(tree, stepsInput).length, 0, '收起后不再渲染高级设置')
+    assert.deepEqual(
+      client.requests
+        .filter((item) => item.path === '/imagen-api/ui-state' && item.method === 'POST')
+        .map((item) => item.body),
+      [{ advancedOpen: false }],
+      '收起后应保存界面态',
+    )
+  } finally {
+    client.unmount()
+  }
+
+  // 读取失败：静默回落默认收起，不弹指引卡。
+  const fallback = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/state': readyState,
+      '/imagen-api/history': { items: [] },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+    },
+    failures: { '/imagen-api/ui-state': 'Failed to fetch' },
+    testBuild: true,
+  })
+  try {
+    const tree = await fallback.mountRaw(fallback.components.Studio, {})
+    assert.equal(
+      findNodes(tree, (node) => node.type === 'input' && node.props?.['aria-label'] === '采样步数').length,
+      0,
+      '读取失败应按默认值收起',
+    )
+    assert.ok(
+      !collectText(tree).join(' | ').includes('连不上本地服务'),
+      '界面态读取失败不应弹指引卡',
+    )
+  } finally {
+    fallback.unmount()
+  }
 })
 
 // 工作台集成：运行中的任务点取消 → 请求契约里的取消接口并刷新宿主快照。

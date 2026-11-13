@@ -22,6 +22,8 @@
  *     触发下一轮渲染。
  *   - memo 不做 props 比较，不能用来验证"跳过重渲染"；只保证包装后的类型可被渲染器展开。
  *   - useMemo 的依赖按 Object.is 浅比较；deps 为 undefined 时每次渲染重算。
+ *   - 测试在 mount 之后点击按钮 / 直接调用动作改变了 state 时，用 rerender() 把新状态刷到树上；
+ *     挂起的异步流程用 settle() 等待落地。fake fetch 的完整请求（method + body）记在 requests 里。
  */
 
 import { readFile } from 'node:fs/promises'
@@ -166,20 +168,16 @@ function createRenderer(now) {
     }
   }
 
-  async function mount(component, props, maxPasses = 40) {
-    effectCleanups.forEach((cleanup) => {
-      if (typeof cleanup === 'function') cleanup()
-    })
-    slots.length = 0
-    effectDeps = []
-    effectCleanups = []
-    dirty = false
+  let mountedComponent = null
+  let mountedProps = null
 
+  /** 连续渲染到状态收敛；mount 与 rerender 共用，hook 槽位与 effect 依赖由调用方维护。 */
+  async function runPasses(maxPasses) {
     for (let pass = 0; pass < maxPasses; pass += 1) {
       dirty = false
       slotIndex = 0
       pendingEffects = []
-      const tree = component(props)
+      const tree = mountedComponent(mountedProps)
 
       let ranEffect = false
       pendingEffects.forEach((item, index) => {
@@ -196,15 +194,39 @@ function createRenderer(now) {
     throw new Error('渲染未在预期轮次内收敛')
   }
 
+  async function mount(component, props, maxPasses = 40) {
+    effectCleanups.forEach((cleanup) => {
+      if (typeof cleanup === 'function') cleanup()
+    })
+    slots.length = 0
+    effectDeps = []
+    effectCleanups = []
+    dirty = false
+    mountedComponent = component
+    mountedProps = props
+    return runPasses(maxPasses)
+  }
+
+  /**
+   * 重新渲染已挂载的组件：外部调用 setState（点击回调、直接调动作）后，
+   * 用它在保留 hook 槽位的前提下把新状态刷到树上。effect 依赖未变时不会重跑。
+   */
+  async function rerender(maxPasses = 40) {
+    if (!mountedComponent) throw new Error('尚未挂载组件，无法重新渲染')
+    return runPasses(maxPasses)
+  }
+
   function unmount() {
     unmounted = true
     effectCleanups.forEach((cleanup) => {
       if (typeof cleanup === 'function') cleanup()
     })
     effectCleanups = []
+    mountedComponent = null
+    mountedProps = null
   }
 
-  return { React, jsxRuntime, mount, unmount }
+  return { React, jsxRuntime, mount, rerender, settle, unmount }
 }
 
 /** 深拷渲染树：保留结构、样式与文本；回调替换成占位串，便于比对。 */
@@ -268,9 +290,21 @@ export async function loadClient(options = {}) {
   const fakeClear = (id) => timers.delete(id)
 
   const fetches = []
-  const fakeFetch = async (url) => {
+  // 完整请求记录（method + 解析后的 JSON body）：断言「提交了什么」比只看 URL 更可靠。
+  const requests = []
+  const fakeFetch = async (url, init) => {
     const parsed = new URL(String(url))
     const key = parsed.pathname
+    const method = (init && init.method) || 'GET'
+    let body = null
+    if (init && typeof init.body === 'string' && init.body) {
+      try {
+        body = JSON.parse(init.body)
+      } catch {
+        body = init.body
+      }
+    }
+    requests.push({ path: key, search: parsed.search, method, body })
     fetches.push(`${parsed.pathname}${parsed.search}`)
     if (key in failures) throw new TypeError(failures[key])
     if (!(key in responses)) return { ok: false, status: 404, json: async () => null }
@@ -350,6 +384,7 @@ export async function loadClient(options = {}) {
       mod,
       react: renderer.React,
       fetches,
+      requests,
       timers,
       internals,
       DICT: internals?.dict?.DICT ?? null,
@@ -357,6 +392,7 @@ export async function loadClient(options = {}) {
       styles: internals?.theme?.styles ?? null,
       KEYFRAMES: internals?.theme?.KEYFRAMES ?? null,
       components: internals?.components ?? null,
+      hooks: internals?.hooks ?? null,
       Workbench: internals?.components?.Workbench ?? null,
       StatusChip: internals?.components?.StatusChip ?? null,
       Lightbox: internals?.components?.Lightbox ?? null,
@@ -370,6 +406,20 @@ export async function loadClient(options = {}) {
       mountRaw: async (component, props) => {
         install()
         return renderer.mount(component, props)
+      },
+      /** 外部 setState（点击回调、直接调动作）后把新状态刷到树上。 */
+      rerender: async () => {
+        install()
+        return serializeTree(await renderer.rerender())
+      },
+      rerenderRaw: async () => {
+        install()
+        return renderer.rerender()
+      },
+      /** 等待挂起的异步流程（fetch / 微任务）落地，用于断言副作用。 */
+      settle: async (rounds) => {
+        install()
+        await renderer.settle(rounds)
       },
       unmount: () => {
         renderer.unmount()

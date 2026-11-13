@@ -178,12 +178,18 @@ export function Rail(props) {
   const { t, ui, form, actions } = props
   const {
     advancedOpen,
+    toggleAdvancedOpen,
     setAdvancedOpen,
     negativeOpen,
     setNegativeOpen,
     panelMode: mode,
     setPanelMode: setMode,
   } = ui
+  // 业务路径由 useStudioUi 的 toggleAdvancedOpen 更新并持久化；
+  // 预览 / 测试只注入 setAdvancedOpen 时退化为纯本地切换。
+  const toggleAdvanced = typeof toggleAdvancedOpen === 'function'
+    ? toggleAdvancedOpen
+    : () => setAdvancedOpen((open) => !open)
   const {
     form: fields,
     patchForm,
@@ -423,7 +429,7 @@ export function Rail(props) {
                 <button
                   type="button"
                   className="ofs-row-toggle"
-                  onClick={() => setAdvancedOpen((open) => !open)}
+                  onClick={toggleAdvanced}
                   aria-expanded={advancedOpen}
                 >
                   <span>{t('studio.rail.params')}</span>

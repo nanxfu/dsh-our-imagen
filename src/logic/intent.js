@@ -5,6 +5,15 @@
  * 这里不碰网络与 React，方便离线断言合并规则。
  */
 
+import { LIMITS } from '../../shared/contract.js'
+
+/**
+ * 意图确认卡上可直接编辑的字段。
+ *
+ * 比例与风格仍由澄清卡或当前设置决定，这里不开放，避免编辑动作变成任意状态写入口。
+ */
+export const INTENT_EDITABLE_FIELDS = ['prompt', 'negative']
+
 /** 最近一条意图卡里的画面描述；没有就返回空串。 */
 export function lastIntentPrompt(messages) {
   if (!Array.isArray(messages)) return ''
@@ -23,7 +32,7 @@ export function lastIntentPrompt(messages) {
   return ''
 }
 
-/** 意图 → 表单补丁：提示词、像素尺寸、风格 id。 */
+/** 意图 → 表单补丁：提示词、像素尺寸、风格 id 与卡片上的排除项。 */
 export function intentFormPatch(intent, ratios) {
   const patch = {}
   if (!intent || typeof intent !== 'object') return patch
@@ -35,6 +44,8 @@ export function intentFormPatch(intent, ratios) {
     patch.height = ratio.height
   }
   if (typeof intent.styleId === 'string' && intent.styleId) patch.styleId = intent.styleId
+  // 卡片上的排除项可能被用户改过：落表单时以卡片当前值为准，避免表单与本次提交不一致。
+  if (typeof intent.negative === 'string') patch.negative = intentNegative(intent.negative)
   return patch
 }
 
@@ -48,6 +59,37 @@ export function intentPrompt(intent, capsules) {
   if (!base) return ''
   const capsule = (Array.isArray(capsules) ? capsules : []).find((item) => item && item.id === intent.styleId)
   return capsule ? `${base}, ${capsule.suffix}` : base
+}
+
+/**
+ * 意图卡字段编辑补丁：字段白名单 + 按契约裁剪。
+ *
+ * textarea 的 maxLength 只是浏览器行为，粘贴与程序化赋值仍可能超限；
+ * 非白名单字段返回 null，调用方应忽略这次编辑。
+ */
+export function intentFieldPatch(field, value) {
+  if (!INTENT_EDITABLE_FIELDS.includes(field)) return null
+  const text = typeof value === 'string' ? value : ''
+  const max = field === 'prompt' ? LIMITS.prompt.maxChars : LIMITS.negativePrompt.maxChars
+  return { [field]: text.slice(0, max) }
+}
+
+/** 负向提示词兜底：去首尾空白并按契约上限裁剪；非字符串按空串处理。 */
+export function intentNegative(value) {
+  return (typeof value === 'string' ? value.trim() : '').slice(0, LIMITS.negativePrompt.maxChars)
+}
+
+/**
+ * 意图卡 → 生成覆盖项。
+ *
+ * 提示词仍是「编辑后的卡片文本 + 风格后缀」；负向提示词以卡片当前值为准，
+ * 空串也显式覆盖——用户在卡上清空排除项，就应该真的不带负向词。
+ * 返回 null 表示提示词为空，调用方应拦下生成。
+ */
+export function intentOverrides(intent, capsules) {
+  const prompt = intentPrompt(intent, capsules)
+  if (!prompt) return null
+  return { prompt, negativePrompt: intentNegative(intent && intent.negative) }
 }
 
 /** 上一张图可复用的种子；缺失或非法返回 null。 */

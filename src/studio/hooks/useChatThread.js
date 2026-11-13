@@ -12,7 +12,16 @@ import { parseIntentRequest } from '../../api/resources.js'
 import { stateJobs } from '../../logic/jobs.js'
 import { formatSeconds } from '../../logic/format.js'
 import { errorText } from '../../logic/error.js'
-import { intentFormPatch, intentPrompt, intentSeedOf, lastIntentPrompt, lastSeedOf } from '../../logic/intent.js'
+import {
+  INTENT_EDITABLE_FIELDS,
+  intentFieldPatch,
+  intentFormPatch,
+  intentNegative,
+  intentOverrides,
+  intentSeedOf,
+  lastIntentPrompt,
+  lastSeedOf,
+} from '../../logic/intent.js'
 import { DEFAULT_RATIOS, STYLE_CAPSULES } from '../presets.js'
 
 /**
@@ -103,10 +112,12 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
       const data = result.data
       // 意图只进确认卡，不动表单：用户还没点「按此生成」之前，
       // 不该丢掉自己在左侧写的提示词或参数。
+      // 排除项先快照当前表单值：卡片上可直接编辑，不要求用户回到表单里改。
       pushMessages([{
         role: 'assistant',
         kind: 'intent',
         prompt: data.prompt,
+        negative: intentNegative(form.form.negative),
         summary: typeof data.summary === 'string' ? data.summary : '',
         ratioId: typeof data.ratioId === 'string' ? data.ratioId : '',
         styleId: typeof data.styleId === 'string' ? data.styleId : '',
@@ -129,10 +140,34 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     }))
   }
 
-  /** 生成意图卡：先落表单，再按卡片参数提交。 */
+  /**
+   * 意图卡行内微调：只接受白名单字段（提示词 / 排除项），按契约裁剪后写回消息。
+   * 比例与风格仍由澄清卡决定，这里不开放，避免编辑动作变成任意状态写入口。
+   */
+  function updateIntent(messageId, patch) {
+    const source = patch && typeof patch === 'object' ? patch : {}
+    const next = {}
+    for (const field of INTENT_EDITABLE_FIELDS) {
+      if (!Object.prototype.hasOwnProperty.call(source, field)) continue
+      const applied = intentFieldPatch(field, source[field])
+      if (applied) next[field] = applied[field]
+    }
+    if (Object.keys(next).length === 0) return
+    setMessages((prev) => prev.map((message) => (
+      message && message.id === messageId ? { ...message, ...next } : message
+    )))
+  }
+
+  /** 单个字段编辑：textarea 的 onChange 走这里。 */
+  function updateIntentField(messageId, field, value) {
+    updateIntent(messageId, { [field]: value })
+  }
+
+  /** 生成意图卡：先落表单，再按卡片参数（含行内改过的提示词与排除项）提交。 */
   async function generateIntent(message) {
-    if (!message || !message.prompt) return
-    const overrides = { prompt: intentPrompt(message, STYLE_CAPSULES) }
+    // 编辑后的提示词仍要合并风格后缀；为空时不提交，界面上按钮同时置灰。
+    const overrides = intentOverrides(message, STYLE_CAPSULES)
+    if (!overrides) return
     const ratio = DEFAULT_RATIOS.find((item) => item.id === message.ratioId)
     if (ratio) {
       overrides.width = ratio.width
@@ -163,6 +198,8 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     interpreting,
     interpret,
     resolveClarify,
+    updateIntent,
+    updateIntentField,
     generateIntent,
     toggleIntentLockSeed,
     // 上一张图没有可复用种子时，确认卡上的锁种开关置灰。

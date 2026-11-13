@@ -30,7 +30,7 @@ import { NOTICE_TITLE_PREFIX, completionNotice, isCompletion, stripNoticePrefix 
 import { styles, token } from '../src/theme.js'
 import { ACTIVE_STATUS, TRANSIENT_SESSION, PHASE_STATE, NS } from '../src/constants.js'
 import { DEFAULT_RATIOS, STYLE_CAPSULES } from '../src/studio/presets.js'
-import { RATIO_IDS, STYLE_IDS, LIMITS, LOGS, SETTINGS } from '../shared/contract.js'
+import { RATIO_IDS, STYLE_IDS, LIMITS, LOGS, SETTINGS, UI_STATE } from '../shared/contract.js'
 
 const t = fallbackTranslate('zh')
 const te = fallbackTranslate('en')
@@ -334,6 +334,56 @@ await check('意图确认卡的种子策略：默认随机，显式锁种才沿�
   assert.equal(logic.intentSeedOf({ lockSeed: true }, null, ''), null, '没有上一张图时退回随机')
 })
 
+await check('意图确认卡行内微调：字段白名单、裁剪与生成覆盖项', () => {
+  // 只有提示词与排除项可编辑；比例 / 风格仍由澄清卡与当前设置决定。
+  assert.deepEqual(logic.INTENT_EDITABLE_FIELDS, ['prompt', 'negative'])
+  // 编辑时不 trim：边打字边去空格会让光标跳位，裁剪放到提交时做。
+  assert.deepEqual(logic.intentFieldPatch('prompt', ' edited '), { prompt: ' edited ' })
+  assert.deepEqual(logic.intentFieldPatch('negative', 'blurry, text'), { negative: 'blurry, text' })
+  assert.deepEqual(logic.intentFieldPatch('prompt', null), { prompt: '' }, '非字符串按清空处理')
+  assert.equal(logic.intentFieldPatch('ratioId', '16:9'), null, '非白名单字段应忽略')
+  assert.equal(logic.intentFieldPatch('styleId', 'ink'), null)
+  // textarea 的 maxLength 拦不住粘贴与程序化赋值，纯函数再按契约兜一层。
+  assert.equal(
+    logic.intentFieldPatch('prompt', 'x'.repeat(LIMITS.prompt.maxChars + 10)).prompt.length,
+    LIMITS.prompt.maxChars,
+  )
+  assert.equal(
+    logic.intentFieldPatch('negative', 'x'.repeat(LIMITS.negativePrompt.maxChars + 10)).negative.length,
+    LIMITS.negativePrompt.maxChars,
+  )
+
+  // 排除项快照 / 覆盖项：去首尾空白并按契约裁剪。
+  assert.equal(logic.intentNegative('  blurry, text  '), 'blurry, text')
+  assert.equal(logic.intentNegative(null), '')
+  assert.equal(logic.intentNegative('x'.repeat(LIMITS.negativePrompt.maxChars + 5)).length, LIMITS.negativePrompt.maxChars)
+
+  const capsules = [{ id: 'film', suffix: 'cinematic film' }]
+  assert.deepEqual(
+    logic.intentOverrides({ prompt: '  rainy street  ', negative: ' blurry ', styleId: 'film' }, capsules),
+    { prompt: 'rainy street, cinematic film', negativePrompt: 'blurry' },
+    '编辑后的提示词仍要合并风格后缀，排除项按编辑值提交',
+  )
+  assert.deepEqual(
+    logic.intentOverrides({ prompt: 'rainy street', negative: '' }, capsules),
+    { prompt: 'rainy street', negativePrompt: '' },
+    '在卡上清空排除项必须显式覆盖，不能沿用表单旧值',
+  )
+  assert.equal(logic.intentOverrides({ prompt: '   ', negative: 'blurry' }, capsules), null, '空提示词不产生覆盖项')
+  assert.equal(logic.intentOverrides(null, capsules), null)
+
+  // 落表单补丁：卡片上的排除项以当前值为准；旧意图卡没有 negative 字段时不覆盖表单。
+  assert.deepEqual(
+    logic.intentFormPatch({ prompt: 'rainy', negative: ' blurry ', ratioId: '', styleId: '' }, []),
+    { prompt: 'rainy', negative: 'blurry' },
+  )
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(logic.intentFormPatch({ prompt: 'x' }, []), 'negative'),
+    false,
+    '没有卡片排除项时不改动表单',
+  )
+})
+
 await check('过渡态已等待时长', () => {
   const session = { state: 'provisioning', startedAt: at(-90) }
   assert.equal(logic.sessionElapsedMs(session, NOW), 90000)
@@ -596,6 +646,39 @@ await check('运行设置：加速器展示名与错误文案齐全', () => {
   }
 })
 
+await check('工作台界面态：归一化、响应解析与保存补丁', () => {
+  // 白名单字段与默认值来自契约：任何损坏 / 旧版本输入都回落默认值，不抛异常。
+  assert.deepEqual(logic.normalizeUiState(null), UI_STATE.defaults)
+  assert.deepEqual(logic.normalizeUiState(undefined), UI_STATE.defaults)
+  assert.deepEqual(logic.normalizeUiState('x'), UI_STATE.defaults)
+  assert.deepEqual(logic.normalizeUiState([]), UI_STATE.defaults)
+  assert.deepEqual(logic.normalizeUiState({ advancedOpen: true, mystery: 1 }), { advancedOpen: true }, '未知字段丢弃')
+  assert.deepEqual(logic.normalizeUiState({ advancedOpen: 'yes' }), { advancedOpen: false }, '类型不符回落默认值')
+  assert.deepEqual(logic.normalizeUiState({ advancedOpen: null }), { advancedOpen: false })
+  assert.deepEqual(Object.keys(logic.normalizeUiState({})), Object.keys(UI_STATE.defaults), '归一结果始终是全量视图')
+
+  // 响应形状：只认 `{ ok: true, data: { ok: true, uiState } }`，其余一律 null 由调用方回落默认值。
+  assert.deepEqual(
+    logic.uiStateViewOf({ ok: true, data: { ok: true, uiState: { advancedOpen: true, extra: 'x' } } }),
+    { advancedOpen: true },
+  )
+  assert.equal(logic.uiStateViewOf({ ok: false, code: 'network' }), null)
+  assert.equal(logic.uiStateViewOf({ ok: true, data: { ok: false } }), null)
+  assert.equal(logic.uiStateViewOf({ ok: true, data: { ok: true } }), null)
+  assert.equal(logic.uiStateViewOf({ ok: true, data: { ok: true, uiState: [] } }), null)
+  assert.equal(logic.uiStateViewOf(null), null)
+
+  // 保存补丁：只带白名单字段且类型正确，未知字段与空补丁不提交。
+  assert.deepEqual(logic.buildUiStatePatch({ advancedOpen: true }), { advancedOpen: true })
+  assert.deepEqual(logic.buildUiStatePatch({ advancedOpen: false }), { advancedOpen: false })
+  assert.deepEqual(logic.buildUiStatePatch({ unknown: true }), {})
+  assert.deepEqual(logic.buildUiStatePatch({ advancedOpen: 'yes' }), {})
+  assert.deepEqual(logic.buildUiStatePatch({}), {})
+  assert.deepEqual(logic.buildUiStatePatch(null), {})
+  assert.deepEqual(logic.buildUiStatePatch([]), {})
+  assert.equal(UI_STATE.defaults.advancedOpen, false, '高级设置默认收起')
+})
+
 await check('状态色与常量表一致', () => {
   assert.equal(logic.toneColor('ok'), token.ok)
   assert.equal(logic.toneColor('warn'), token.warn)
@@ -667,11 +750,27 @@ await check('错误码映射到指引类型', () => {
   assert.notEqual(logic.guidanceKindOf('gpu_unavailable'), 'generate')
   assert.equal(logic.KAGGLE_ACCOUNT_URL, 'https://www.kaggle.com/settings')
   assert.equal(logic.KAGGLE_SETTINGS_URL, 'https://www.kaggle.com/settings/api')
-  // 凭据口径对齐 kaggle CLI 2.x：主导路径是 access_token（kaggle auth login 写入），
-  // 旧版 kaggle.json 仍作为兼容位置同时展示，避免把用户误导到已过时的手工步骤。
+  // 凭据口径对齐 kaggle CLI 2.x：kaggle auth login 写 OAuth 凭据 credentials.json
+  //（含 refresh_token 自动续期），同时兼容网页端生成的 access_token 与旧版 kaggle.json。
   assert.equal(logic.KAGGLE_LOGIN_COMMAND, 'kaggle auth login')
-  assert.match(logic.KAGGLE_CREDENTIAL_PATH, /^%USERPROFILE%\\\.kaggle\\access_token$/)
+  assert.match(logic.KAGGLE_CREDENTIAL_PATH, /^%USERPROFILE%\\\.kaggle\\credentials\.json$/)
+  assert.match(logic.KAGGLE_ACCESS_TOKEN_PATH, /^%USERPROFILE%\\\.kaggle\\access_token$/)
   assert.match(logic.KAGGLE_LEGACY_CREDENTIAL_PATH, /^%USERPROFILE%\\\.kaggle\\kaggle\.json$/)
+  // 三个位置互不替代：卡片文案必须同时给出 OAuth 凭据、网页 Token 与旧版兼容位置。
+  assert.equal(
+    new Set([
+      logic.KAGGLE_CREDENTIAL_PATH,
+      logic.KAGGLE_ACCESS_TOKEN_PATH,
+      logic.KAGGLE_LEGACY_CREDENTIAL_PATH,
+    ]).size,
+    3,
+  )
+  const authHint = zh['studio.guidance.auth.credentialHint']
+  for (const placeholder of ['{path}', '{token}', '{legacy}']) {
+    assert.ok(authHint.includes(placeholder), `凭据指引缺少占位符：${placeholder}`)
+  }
+  assert.match(authHint, /refresh_token/, '中文凭据指引应说明 OAuth 凭据可自动续期')
+  assert.match(en['studio.guidance.auth.credentialHint'], /refresh_token/, '英文凭据指引应说明 OAuth 凭据可自动续期')
 })
 
 await check('指引卡详情优先级', () => {

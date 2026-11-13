@@ -19,6 +19,7 @@ import { VERSION } from '../../shared/contract.js'
 import { Icon } from './icons.jsx'
 import { fetchLogs, fetchState } from '../api/resources.js'
 import {
+  KAGGLE_ACCESS_TOKEN_PATH,
   KAGGLE_ACCOUNT_URL,
   KAGGLE_CREDENTIAL_PATH,
   KAGGLE_INSTALL_COMMAND,
@@ -74,10 +75,12 @@ export function GuidanceCard(props) {
     },
     auth: {
       title: t('studio.guidance.auth.title'),
-      // 新版 CLI 一条命令就完成授权，比让用户手动改文件少两步。
+      // 新版 CLI 一条命令就完成 OAuth 授权，比让用户手动改文件少两步；
+      // 凭据位置与网页 Token / 旧版 kaggle.json 的兼容口径都由常量提供。
       command: KAGGLE_LOGIN_COMMAND,
       note: formatText(t('studio.guidance.auth.credentialHint'), {
         path: KAGGLE_CREDENTIAL_PATH,
+        token: KAGGLE_ACCESS_TOKEN_PATH,
         legacy: KAGGLE_LEGACY_CREDENTIAL_PATH,
       }),
       actions: [

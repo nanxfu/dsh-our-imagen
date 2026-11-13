@@ -7,17 +7,19 @@
 
 import React from 'react'
 
-import { TIMEOUTS } from '../../../shared/contract.js'
+import { TIMEOUTS, UI_STATE } from '../../../shared/contract.js'
 
-import { fetchState } from '../../api/resources.js'
+import { fetchState, fetchUiState, saveUiState } from '../../api/resources.js'
 import { KAGGLE_INSTALL_COMMAND } from '../../logic/guidance.js'
 import { activeJobOf } from '../../logic/jobs.js'
 import { completionNotice, isCompletion, stripNoticePrefix } from '../../logic/notice.js'
+import { buildUiStatePatch, uiStateViewOf } from '../../logic/uiState.js'
 
 export function useStudioUi({ t, initialView, initialPanelMode }) {
   // 初始视图与面板形态可由 props 指定（预览与测试用），由组合层算好后传入。
   const [view, setView] = React.useState(initialView)
-  const [advancedOpen, setAdvancedOpen] = React.useState(false)
+  // 折叠态先按契约默认值收起；挂载后读一次宿主保存的界面态再覆盖。
+  const [advancedOpen, setAdvancedOpen] = React.useState(UI_STATE.defaults.advancedOpen)
   const [negativeOpen, setNegativeOpen] = React.useState(false)
   const [error, setError] = React.useState(null)
   const [dismissed, setDismissed] = React.useState('')
@@ -33,6 +35,29 @@ export function useStudioUi({ t, initialView, initialPanelMode }) {
 
   function showToast(text) {
     setToast({ text, id: Date.now() })
+  }
+
+  // 界面态只是体验优化：挂载时读一次，失败静默回落默认值（收起），不弹错误提示。
+  React.useEffect(() => {
+    let alive = true
+    Promise.resolve(fetchUiState()).then((result) => {
+      if (!alive) return
+      const saved = uiStateViewOf(result)
+      if (saved) setAdvancedOpen(saved.advancedOpen)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  /**
+   * 展开 / 收起「高级设置」：先更新本地状态，再 fire-and-forget 保存。
+   * 保存失败不回滚、不提示——界面态丢失不影响出图。
+   */
+  function toggleAdvancedOpen() {
+    const next = !advancedOpen
+    setAdvancedOpen(next)
+    Promise.resolve(saveUiState(buildUiStatePatch({ advancedOpen: next }))).catch(() => {})
   }
 
   // 新的本地错误出现时，恢复之前被手动收起的指引卡。
@@ -112,7 +137,9 @@ export function useStudioUi({ t, initialView, initialPanelMode }) {
     panelMode,
     setPanelMode,
     advancedOpen,
+    // setAdvancedOpen 只给预览 / 测试直接注入折叠态；业务路径请用 toggleAdvancedOpen（会持久化）。
     setAdvancedOpen,
+    toggleAdvancedOpen,
     negativeOpen,
     setNegativeOpen,
     toast,

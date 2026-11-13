@@ -44,7 +44,7 @@ export function ChatPanel(props) {
   const { t, ui, form, chat, library, actions } = props
   const { panelMode: mode, setPanelMode: setMode } = ui
   const { patchForm } = form
-  const { messages, interpreting, interpret, generateIntent, toggleIntentLockSeed, canLockSeed, resolveClarify, clearThread } = chat
+  const { messages, interpreting, interpret, updateIntentField, generateIntent, toggleIntentLockSeed, canLockSeed, resolveClarify, clearThread } = chat
   const { openMessage: openImage } = library
   const { sending } = actions
 
@@ -100,17 +100,49 @@ export function ChatPanel(props) {
       )
     }
 
+    // 预览 / 测试可能只给部分 chat 域，缺编辑动作时文本域退化为只读展示。
+    const editField = typeof updateIntentField === 'function' ? updateIntentField : () => {}
+    const promptValue = typeof message.prompt === 'string' ? message.prompt : ''
+    const negativeValue = typeof message.negative === 'string' ? message.negative : ''
+    const canGenerate = promptValue.trim().length > 0
+
     return (
       <div className="ofs-msg-card ofs-intent" key={message.id}>
         <span className="ofs-intent-title">{t('studio.chat.intent.title')}</span>
-        {/* 英文提示词是真正发给模型的内容，主展示；summary 是 UI 语言的画面概述，只作确认参考。 */}
-        <p className="ofs-intent-prompt">{message.prompt}</p>
+        <p className="ofs-intent-edit-hint">{t('studio.chat.intent.editHint')}</p>
+        {/* 英文提示词是真正发给模型的内容：直接在卡上改，不必为几个词重新对话。 */}
+        <label className="ofs-intent-field">
+          <span className="ofs-intent-field-label">{t('studio.chat.intent.promptLabel')}</span>
+          <textarea
+            className="ofs-intent-prompt"
+            rows={2}
+            value={promptValue}
+            maxLength={LIMITS.prompt.maxChars}
+            spellCheck={false}
+            aria-label={t('studio.chat.intent.promptLabel')}
+            onChange={(event) => editField(message.id, 'prompt', event.target.value)}
+          />
+        </label>
         {message.summary && message.summary !== message.prompt ? (
           <p className="ofs-intent-summary">
             <span className="ofs-intent-summary-label">{t('studio.chat.intent.summary')}</span>
             {message.summary}
           </p>
         ) : null}
+        {/* 排除项同样行内可改；在卡上清空后提交就不带负向词。 */}
+        <label className="ofs-intent-field">
+          <span className="ofs-intent-field-label">{t('studio.chat.intent.negativeLabel')}</span>
+          <textarea
+            className="ofs-intent-negative"
+            rows={2}
+            value={negativeValue}
+            maxLength={LIMITS.negativePrompt.maxChars}
+            placeholder={t('studio.chat.intent.negativePlaceholder')}
+            spellCheck={false}
+            aria-label={t('studio.chat.intent.negativeLabel')}
+            onChange={(event) => editField(message.id, 'negative', event.target.value)}
+          />
+        </label>
         <div className="ofs-intent-meta">
           <span>{ratioLabel(t, message.ratioId)}</span>
           <span aria-hidden="true">·</span>
@@ -131,7 +163,8 @@ export function ChatPanel(props) {
           type="button"
           className="ofs-btn is-primary ofs-intent-go"
           onClick={() => generateIntent(message)}
-          disabled={sending}
+          // 提示词被清空时不允许提交：宿主会以 invalid_prompt 拒绝，没必要走一次往返。
+          disabled={sending || !canGenerate}
         >
           {sending ? t('studio.generating') : t('studio.chat.intent.generate')}
         </button>

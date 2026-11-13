@@ -142,3 +142,19 @@ export function saveSettings(payload) {
     body: JSON.stringify(payload && typeof payload === 'object' ? payload : {}),
   })
 }
+
+/**
+ * 工作台界面态：GET 返回白名单全量视图 `{ ok, uiState }`。
+ * 读取失败只回落默认值，不弹错误提示（界面态不是业务数据）。
+ */
+export function fetchUiState() {
+  return request(routePath('uiState'), { method: 'GET' })
+}
+
+/** 保存界面态：请求体是扁平补丁（如 `{ advancedOpen: true }`），响应与 GET 相同。 */
+export function saveUiState(patch) {
+  return request(routePath('uiStateSave'), {
+    method: 'POST',
+    body: JSON.stringify(patch && typeof patch === 'object' ? patch : {}),
+  })
+}

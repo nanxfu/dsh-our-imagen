@@ -172,11 +172,53 @@
   color: var(--ofs-ink-3);
 }
 
-.ofs-intent-prompt {
+/* 意图卡行内微调：提示词与排除项直接可编辑，改完再点「按此生成」。 */
+.ofs-intent-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ofs-intent-field-label {
+  color: var(--ofs-ink-3);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* 文本域沿用输入区的浅底与描边，焦点态与其它输入框一致。 */
+.ofs-intent-prompt,
+.ofs-intent-negative {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 46px;
+  padding: 6px 9px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: 8px;
+  background: var(--ofs-sunken);
   color: var(--ofs-ink);
-  font-size: 12.5px;
+  font-family: inherit;
+  font-size: 12px;
   line-height: 1.55;
-  word-break: break-word;
+  resize: vertical;
+}
+
+.ofs-intent-prompt:focus,
+.ofs-intent-negative:focus {
+  outline: none;
+  border-color: var(--ofs-accent-soft-border);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 12%, transparent);
+}
+
+.ofs-intent-prompt::placeholder,
+.ofs-intent-negative::placeholder {
+  color: var(--ofs-ink-3);
+}
+
+.ofs-intent-edit-hint {
+  color: var(--ofs-ink-3);
+  font-size: 10.5px;
+  line-height: 1.5;
 }
 
 /* 中文摘要：英文提示词之后的一行弱化说明，只用于确认画面是否符合本意。 */

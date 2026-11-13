@@ -12,17 +12,21 @@ export const KAGGLE_ACCOUNT_URL = 'https://www.kaggle.com/settings'
 /** 本地未安装 kaggle CLI 时给出的安装命令（与 README / probes notes 一致）。 */
 export const KAGGLE_INSTALL_COMMAND = 'pip install -U kaggle'
 /**
- * kaggle CLI 2.x 的登录命令：跑一次就把 access_token 写进 `%USERPROFILE%\.kaggle\access_token`
- * （本项目实测的 CLI 2.2.5 即为此格式），不需要用户手动创建文件。
+ * kaggle CLI 2.x 的登录命令：跑一次完成 OAuth 授权，把凭据写入
+ * `%USERPROFILE%\.kaggle\credentials.json`（含 refresh_token，过期可自动续期）。
  */
 export const KAGGLE_LOGIN_COMMAND = 'kaggle auth login'
 /**
- * Windows 下的 Kaggle 凭据文件位置。
+ * Windows 下的 Kaggle 凭据文件位置（三个口径互不替代，卡片上要同时说清）：
+ *  - credentials.json：kaggle auth login 写入的 OAuth 凭据，主路径；
+ *  - access_token：Kaggle 网页端手动生成的 API Token，可直接保存使用；
+ *  - kaggle.json：旧版 CLI / 手动 API Token 的兼容位置，仍然有效。
+ *
  * 单独放在常量里而不是字典里：反斜杠在字典源码里会形成转义字面量，
- * 文案改用 {path} 占位符引用，翻译文本里就不必出现反斜杠。
+ * 文案改用 {path} / {token} / {legacy} 占位符引用，翻译文本里就不必出现反斜杠。
  */
-export const KAGGLE_CREDENTIAL_PATH = '%USERPROFILE%\\.kaggle\\access_token'
-/** 旧版 CLI / 手动 API Token 的兼容位置（仍然有效，但不要求用户再手动创建）。 */
+export const KAGGLE_CREDENTIAL_PATH = '%USERPROFILE%\\.kaggle\\credentials.json'
+export const KAGGLE_ACCESS_TOKEN_PATH = '%USERPROFILE%\\.kaggle\\access_token'
 export const KAGGLE_LEGACY_CREDENTIAL_PATH = '%USERPROFILE%\\.kaggle\\kaggle.json'
 
 /** 会话级错误：可以「重新唤醒」。 */
