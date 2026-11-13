@@ -759,6 +759,11 @@
 
 排障与真机验证方法见 [`docs/TROUBLESHOOTING.md`](TROUBLESHOOTING.md) 的「已知良好版本参考（LKGR）」章节。
 
+> **实测环境说明（2026-11-13，2×Tesla T4）**：当前 Kaggle 镜像的 HF 缓存挂载在根卷 `/`
+> （`[cache]` 探针实测约 966.6 GiB 可用），不在约 19.5 GiB 的 `/kaggle/working` 上；同一会话内
+> 连续切换三种架构模型（合计约 27 GB 权重）未触发逐出、磁盘未爆。逐出逻辑是**小容量镜像 /
+> 未来镜像变更时的兜底**，判断依据始终是缓存目录自己所在盘的余量，而不是写死 `/kaggle/working`。
+
 ---
 
 ## 5. 工作台交互与界面规范 (Studio UI Specification)

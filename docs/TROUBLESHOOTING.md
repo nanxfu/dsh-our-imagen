@@ -109,10 +109,17 @@ Kaggle 容器的 `/kaggle/working` 通常只有 20 GB，写入层满了会转只
 
 0.8.0 起，daemon 还会在**切换模型前**按 LRU 清理 HuggingFace 缓存：先释放旧 pipeline，再保留目标模型依赖的全部仓库与 `localModels` 预挂载仓库，把其余 `models--*` 按最近修改时间从旧到新删除；日志里出现 `[cache] evicted <repo> freed=<X>GiB` 即清理生效。清理完仍不够时才会报「磁盘空间不足：需 X GiB / 可用 Y GiB」。
 
+**实测基线（2026-11-13，2×Tesla T4）**：远端 `[cache]` 探针输出为
+`HF_HUB_CACHE=/root/.cache/huggingface/hub | mount=/ | free=966.6GiB | /kaggle/working mount=/kaggle/working free=19.5GiB`。
+也就是说当前镜像的权重缓存落在根卷 `/`（约 966 GiB 可用），不在 20 GB 的 `/kaggle/working` 上；
+同一会话内连续切换 sdxl-lightning → flux2-klein-4b → anima-light-lavender（合计约 27 GB 权重）未触发逐出
+（`evictedCount=0`）、磁盘未爆。逐出逻辑是**小容量镜像 / 未来镜像变更时的兜底**，由 `test/daemon-unit.py`
+的 8 项缓存清理用例覆盖；判断依据始终是缓存目录自己所在盘的余量（`disk_usage_target()`），而不是写死 `/kaggle/working`。
+
 处理：
 - 优先用权重预挂载（`datasetSources` + `localModels`），跳过下载；
 - 或先跑一次小模型（SDXL Turbo / Lightning）确认链路，再换大模型；
-- 远端日志里 `[env] disk ...` 行会列出挂载点可用空间。
+- 远端日志里 `[cache]` / `[env] disk ...` 行会列出缓存目录与挂载点可用空间。
 
 ---
 
@@ -180,7 +187,12 @@ LKGR（Last Known Good Revision）是一组**在真实 Kaggle GPU 上跑通过�
 
 | diffusers | transformers | accelerate | peft | huggingface-hub | 验证模型与设备 | 验证日期 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| 待 0.8.0 真机 `npm run test:gpu` 回填 | 待回填 | 待回填 | 待回填 | 待回填 | 待回填（建议覆盖 SDXL / FLUX.2 / Anima 三种架构，Kaggle 2×Tesla T4） | 待回填 |
+| 0.43.0 | 5.22.2 | 1.15.0 | 0.21.2 | 1.33.0 | sdxl-lightning（SDXL-LoRA）+ flux2-klein-4b（FLUX.2）+ anima-light-lavender（Anima）/ Kaggle 2×Tesla T4 | 2026-11-13 |
+
+> 同次实测的完整版本快照：python 3.13.16、torch 2.11.0+cu130、safetensors 0.8.0、pillow 13.0.0
+> （`report.json` 的 `versions` 字段）。三个模型在**同一会话**内连续切换均出图成功，
+> 加载耗时分别为 0s / 125.9s / 89.6s，出图 16.2s / 10.1s / 76.3s。
+> 复现命令：`npm run test:gpu -- --presets sdxl-lightning,flux2-klein-4b,anima-light-lavender`。
 
 填写说明：
 
