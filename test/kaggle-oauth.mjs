@@ -23,6 +23,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
+  browserCommand,
   buildAuthorizeUrl,
   buildPkcePair,
   canOpenBrowser,
@@ -251,6 +252,16 @@ async function checkPureFunctions() {
     assert.equal(canOpenBrowser({ platform: 'darwin', env: {} }), true)
     assert.equal(canOpenBrowser({ platform: 'linux', env: {} }), false)
     assert.equal(canOpenBrowser({ platform: 'linux', env: { DISPLAY: ':0' } }), true)
+
+    // 回归：Windows 上不能用 `cmd.exe /c start`——链接里的 `&` 会被 cmd 当命令分隔符截断，
+    // Kaggle 侧表现为 400 Must specify State。rundll32 把 URL 当普通参数，不经 cmd 解析。
+    const url = 'https://www.kaggle.com/api/v1/oauth2/authorize?response_type=code&client_id=kagglesdk&state=abc'
+    const win = browserCommand('win32', url)
+    assert.equal(win.command, 'rundll32.exe')
+    assert.deepEqual(win.args, ['url.dll,FileProtocolHandler', url], 'URL 必须作为完整参数传入，不能被截断')
+    assert.equal(win.command.includes('cmd'), false)
+    assert.deepEqual(browserCommand('darwin', url), { command: 'open', args: [url] })
+    assert.deepEqual(browserCommand('linux', url), { command: 'xdg-open', args: [url] })
   })
 }
 

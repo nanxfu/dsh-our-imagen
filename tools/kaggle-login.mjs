@@ -23,7 +23,7 @@ import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 
 import { kagglePaths, probeKaggle } from '../lib/kaggle-direct.js'
-import { createKaggleLogin } from '../lib/kaggle-oauth.js'
+import { browserCommand, createDefaultBrowserOpener, createKaggleLogin } from '../lib/kaggle-oauth.js'
 import { KAGGLE_LOGIN } from '../shared/contract.js'
 
 const args = process.argv.slice(2)
@@ -104,6 +104,14 @@ async function main() {
   const backup = await backupCredentials(paths.credentials)
   if (backup) console.log(`已备份旧凭据：${backup}`)
 
+  // 打开浏览器的同时把授权链接打印出来：Windows 上曾因 cmd.exe 把 & 当命令分隔符截断链接
+  // 导致 Kaggle 报 400 Must specify State；打印一份可以让用户手动复制，验收不再依赖自动打开。
+  const openSystemBrowser = createDefaultBrowserOpener({ platform: process.platform, log: consoleLog })
+  const openBrowser = async (url) => {
+    console.log('\n授权链接（浏览器若未自动打开，请手动复制到浏览器；窗口内有效，不要分享给他人）：\n')
+    console.log(`  ${url}\n`)
+    return openSystemBrowser(url)
+  }
   const login = createKaggleLogin({
     ctx: {},
     log: consoleLog,
@@ -111,6 +119,7 @@ async function main() {
     env: process.env,
     platform: process.platform,
     timeoutMs,
+    openBrowser,
   })
 
   let started
