@@ -144,7 +144,7 @@ Host 侧网络问题（代理环境）由 `lib/net.js` 处理：内置 fetch 失
 | :--- | :--- | :--- |
 | `cli_missing` | 本机没有 `kaggle` 命令 | `pip install -U kaggle` |
 | `cli_timeout` | CLI 启动或调用超过 30 秒 | 检查代理/DNS；重试环境检查 |
-| `auth_required` | 没找到凭证或凭证失效 | 重新在 Kaggle 设置页生成 token，写入 `%USERPROFILE%\.kaggle\access_token` |
+| `auth_required` | 没找到凭证或凭证失效 | 新版 CLI 直接运行 `kaggle auth login`（自动写入 `%USERPROFILE%\.kaggle\access_token`）；旧版 CLI 在 Kaggle 设置页生成 Token 后保存为 `%USERPROFILE%\.kaggle\kaggle.json`，或直接写入 `%USERPROFILE%\.kaggle\access_token` |
 | `gpu_unavailable` | 远端容器没拿到 GPU（`torch.cuda.is_available()` 为 `False`） | 检查 Kaggle 账号是否已完成手机号验证，并确认已启用 GPU 加速器；修复后重新唤醒云端 |
 | 配额一直显示不可用 | Kaggle quota 接口偶发失败 | 算力弹层会回退展示最近一次成功检查时间与当时配额 |
 ---

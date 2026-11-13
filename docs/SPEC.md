@@ -821,5 +821,5 @@
 3. **空闲倒计时**：顶栏 GPU 状态弹层在会话就绪时展示「已空闲 X 分钟 / 满 Y 分钟自动关机」，数据来自会话快照的 `idleSeconds` 与 `idleTimeoutSec`；远端未上报时不显示该行（不展示 0 或猜测值）。
 4. **新手卡点加固**：
    - `cli_missing` 卡除「复制安装命令」外，明确提示 Windows 用户：安装后若仍提示找不到命令，请确认 Python Scripts 目录已加入系统 PATH 并重启 DSH Desktop。
-   - `auth_required` 卡写明凭据文件位置 `%USERPROFILE%\.kaggle\kaggle.json`，并提供打开 Kaggle 账户设置获取 API Token 的按钮。
+   - `auth_required` 卡给出 `kaggle auth login` 登录命令（可一键复制）与凭据位置 `%USERPROFILE%\.kaggle\access_token`（同时兼容旧版 `kaggle.json`），并提供打开 Kaggle 账户设置获取 API Token 的按钮。
    - `gpu_unavailable` 使用独立卡片（不复用「生成失败，重试一次」），主操作是打开 Kaggle 账户设置完成手机号验证，次级可重新唤醒云端。

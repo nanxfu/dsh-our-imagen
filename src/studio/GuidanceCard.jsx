@@ -22,6 +22,8 @@ import {
   KAGGLE_ACCOUNT_URL,
   KAGGLE_CREDENTIAL_PATH,
   KAGGLE_INSTALL_COMMAND,
+  KAGGLE_LEGACY_CREDENTIAL_PATH,
+  KAGGLE_LOGIN_COMMAND,
   KAGGLE_SETTINGS_URL,
 } from '../logic/guidance.js'
 import { formatText } from '../logic/format.js'
@@ -72,9 +74,22 @@ export function GuidanceCard(props) {
     },
     auth: {
       title: t('studio.guidance.auth.title'),
-      note: formatText(t('studio.guidance.auth.credentialHint'), { path: KAGGLE_CREDENTIAL_PATH }),
+      // 新版 CLI 一条命令就完成授权，比让用户手动改文件少两步。
+      command: KAGGLE_LOGIN_COMMAND,
+      note: formatText(t('studio.guidance.auth.credentialHint'), {
+        path: KAGGLE_CREDENTIAL_PATH,
+        legacy: KAGGLE_LEGACY_CREDENTIAL_PATH,
+      }),
       actions: [
         { key: 'settings', label: t('studio.guidance.auth.action'), href: KAGGLE_SETTINGS_URL },
+        {
+          key: 'copyLogin',
+          label: t('studio.guidance.auth.copyLogin'),
+          run:
+            typeof copyText === 'function'
+              ? () => copyText(KAGGLE_LOGIN_COMMAND, 'studio.guidance.auth.copied')
+              : undefined,
+        },
         { key: 'recheck', label: t('studio.guidance.cli.action'), run: runProbe },
       ],
     },

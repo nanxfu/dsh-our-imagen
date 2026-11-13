@@ -328,7 +328,9 @@ var zh = {
   "studio.guidance.closed.title": "云端已关闭，任务没有执行",
   "studio.guidance.auth.title": "Kaggle 账号缺少手机号绑定或凭据不可用",
   "studio.guidance.auth.action": "打开 Kaggle 设置",
-  "studio.guidance.auth.credentialHint": "凭据文件位于 {path}；点「打开 Kaggle 设置」可获取 API Token。",
+  "studio.guidance.auth.credentialHint": "凭据写入 {path}；旧版 kaggle CLI 也支持把 API Token 保存为 {legacy}。",
+  "studio.guidance.auth.copyLogin": "复制登录命令",
+  "studio.guidance.auth.copied": "已复制登录命令",
   "studio.guidance.gpu.title": "云端没有拿到 GPU",
   "studio.guidance.gpu.action": "打开 Kaggle 账户设置",
   "studio.guidance.gpu.hint": "请确认 Kaggle 账号已完成手机号验证，并在账户设置中启用 GPU 加速器，然后重新唤醒云端。",
@@ -699,7 +701,9 @@ var en = {
   "studio.guidance.closed.title": "The cloud is closed, so the task did not run",
   "studio.guidance.auth.title": "The Kaggle account needs phone verification or usable credentials",
   "studio.guidance.auth.action": "Open Kaggle settings",
-  "studio.guidance.auth.credentialHint": "Credentials live at {path}; use “Open Kaggle settings” to get an API token.",
+  "studio.guidance.auth.credentialHint": "Credentials are written to {path}; older kaggle CLIs also accept an API token saved as {legacy}.",
+  "studio.guidance.auth.copyLogin": "Copy login command",
+  "studio.guidance.auth.copied": "Login command copied",
   "studio.guidance.gpu.title": "The cloud instance did not get a GPU",
   "studio.guidance.gpu.action": "Open Kaggle account settings",
   "studio.guidance.gpu.hint": "Make sure your Kaggle account has a verified phone number and that the GPU accelerator is enabled in account settings, then wake the cloud again.",
@@ -2410,7 +2414,9 @@ var import_react5 = __toESM(require("react"), 1);
 var KAGGLE_SETTINGS_URL = "https://www.kaggle.com/settings/api";
 var KAGGLE_ACCOUNT_URL = "https://www.kaggle.com/settings";
 var KAGGLE_INSTALL_COMMAND = "pip install -U kaggle";
-var KAGGLE_CREDENTIAL_PATH = "%USERPROFILE%\\.kaggle\\kaggle.json";
+var KAGGLE_LOGIN_COMMAND = "kaggle auth login";
+var KAGGLE_CREDENTIAL_PATH = "%USERPROFILE%\\.kaggle\\access_token";
+var KAGGLE_LEGACY_CREDENTIAL_PATH = "%USERPROFILE%\\.kaggle\\kaggle.json";
 var SESSION_CODES = /* @__PURE__ */ new Set([
   "push_failed",
   "queue_timeout",
@@ -2770,9 +2776,19 @@ function GuidanceCard(props) {
     },
     auth: {
       title: t("studio.guidance.auth.title"),
-      note: formatText(t("studio.guidance.auth.credentialHint"), { path: KAGGLE_CREDENTIAL_PATH }),
+      // 新版 CLI 一条命令就完成授权，比让用户手动改文件少两步。
+      command: KAGGLE_LOGIN_COMMAND,
+      note: formatText(t("studio.guidance.auth.credentialHint"), {
+        path: KAGGLE_CREDENTIAL_PATH,
+        legacy: KAGGLE_LEGACY_CREDENTIAL_PATH
+      }),
       actions: [
         { key: "settings", label: t("studio.guidance.auth.action"), href: KAGGLE_SETTINGS_URL },
+        {
+          key: "copyLogin",
+          label: t("studio.guidance.auth.copyLogin"),
+          run: typeof copyText === "function" ? () => copyText(KAGGLE_LOGIN_COMMAND, "studio.guidance.auth.copied") : void 0
+        },
         { key: "recheck", label: t("studio.guidance.cli.action"), run: runProbe2 }
       ]
     },

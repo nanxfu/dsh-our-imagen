@@ -22,6 +22,7 @@
 
 ### 修复
 
+- **凭据指引对齐 kaggle CLI 2.x（此前口径过时）**：`auth_required` 指引卡与探测提示原先只写旧版 `%USERPROFILE%\.kaggle\kaggle.json`；实际 CLI 2.x 用 `kaggle auth login` 把 `access_token` 写进 `%USERPROFILE%\.kaggle\access_token`（本机验证的 CLI 2.2.5 即此格式）。现在卡片给出可一键复制的 `kaggle auth login`，同时说明凭据写入位置与旧版 `kaggle.json` 兼容；README / TROUBLESHOOTING / SPEC 同步，避免新手照旧文案去手工建文件。
 - **代理环境下 curl 兜底必然失败（`value.includes is not a function`）**：`lib/net.js` 的降级路径把 `new URL(...)` 对象直接塞进 DSH subprocess 的 `argv`，并且没有传必需的 `cwd`；`subprocess-local` 会对 `argv` 逐项做字符串校验、把 `cwd` 当字符串校验，于是每次降级都抛 `TypeError`：
   - URL 对象（`/health`、`/generate`、`/job`、`/shutdown`、`/logs`）→ `TypeError: value.includes is not a function`；
   - 字符串 URL（ntfy 会合轮询）→ `TypeError: Cannot read properties of undefined (reading 'includes')`。

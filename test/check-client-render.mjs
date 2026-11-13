@@ -585,18 +585,22 @@ const scenarios = {
     props: {},
     expect: [
       'Kaggle 账号缺少手机号绑定或凭据不可用',
-      '凭据文件位于 %USERPROFILE%\\.kaggle\\kaggle.json',
+      'kaggle auth login',
+      '凭据写入 %USERPROFILE%\\.kaggle\\access_token',
+      'kaggle.json',
       '打开 Kaggle 设置',
+      '复制登录命令',
       '重新检查环境',
     ],
     reject: ['生成没有成功'],
     structure: {
       required: {
         'ofs-guidance': 1,
+        'ofs-guidance-command': 1,
         'ofs-guidance-note': 1,
         'ofs-guidance-actions': 1,
       },
-      forbidden: ['ofs-guidance-command', 'ofs-image'],
+      forbidden: ['ofs-image'],
     },
   },
 }
@@ -1723,6 +1727,7 @@ await check('渲染：gpu / auth / cli 指引卡动作与提示', async () => {
     const started = []
     const viewedLogs = []
     const copiedCommands = []
+    const copiedLogins = []
     const baseProps = {
       t,
       actions: { resetToSafe: () => {}, retryFocusedJob: () => {} },
@@ -1735,7 +1740,7 @@ await check('渲染：gpu / auth / cli 指引卡动作与提示', async () => {
       },
       ui: {
         openLogs: () => viewedLogs.push(true),
-        copyText: () => {},
+        copyText: () => copiedLogins.push(true),
         copyInstallCommand: () => copiedCommands.push(true),
       },
     }
@@ -1781,18 +1786,29 @@ await check('渲染：gpu / auth / cli 指引卡动作与提示', async () => {
     viewLogsButton.props.onClick()
     assert.equal(viewedLogs.length, 1, '[gpu-card] 查看日志应交给 openLogs')
 
-    // auth 卡：凭据文件位置 + 保持 API Token 设置页按钮。
+    // auth 卡：给出 CLI 2.x 登录命令（可复制）+ 凭据写入位置 + 旧版兼容位置。
     const authTree = await client.mountRaw(client.components.GuidanceCard, {
       ...baseProps,
       guidance: { kind: 'auth', detail: '', dismiss: () => {} },
     })
     const authText = collectText(authTree).join(' | ')
-    assert.ok(
-      authText.includes('凭据文件位于 %USERPROFILE%\\.kaggle\\kaggle.json'),
-      `[auth-card] 缺少 Windows 凭据路径：${authText}`,
-    )
+    for (const needle of [
+      'kaggle auth login',
+      '凭据写入 %USERPROFILE%\\.kaggle\\access_token',
+      'kaggle.json',
+      '复制登录命令',
+    ]) {
+      assert.ok(authText.includes(needle), `[auth-card] 缺少文案：${needle}（实际：${authText}）`)
+    }
     const authLink = findNodes(authTree, (node) => node.type === 'a')[0]
     assert.equal(authLink.props.href, 'https://www.kaggle.com/settings/api')
+    const copyLoginButton = findNodes(
+      authTree,
+      (node) => node.type === 'button' && collectText(node).join('').includes('复制登录命令'),
+    )[0]
+    assert.ok(copyLoginButton, '[auth-card] 缺少复制登录命令按钮')
+    copyLoginButton.props.onClick()
+    assert.equal(copiedLogins.length, 1, '[auth-card] 复制登录命令应走 ui.copyText')
 
     // cli 卡：安装命令下给 Windows PATH 提示。
     const cliTree = await client.mountRaw(client.components.GuidanceCard, {

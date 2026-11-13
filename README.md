@@ -219,6 +219,15 @@
 
 > 提示：Kaggle 账号必须在个人设置里完成**手机号绑定验证**（Phone Verification），平台才会给分配免费 GPU；未绑定的账号会被降级为纯 CPU。
 
+**推荐方式（kaggle CLI 2.x）**：安装 CLI 后直接登录，凭据会自动写入本机，不需要手动创建文件。
+
+```powershell
+pip install -U kaggle
+kaggle auth login
+```
+
+**手动方式（旧版 CLI / API Token）**：
+
 1. 打开 [Kaggle API Settings](https://www.kaggle.com/settings/api)，点击 **Create New Token**。
 2. 拿到你的 Token（或 `kaggle.json`），写入本地配置文件：
 
@@ -233,6 +242,8 @@
   printf '%s' '你的_Kaggle_Token' > ~/.kaggle/access_token
   chmod 600 ~/.kaggle/access_token
   ```
+
+验证：`kaggle quota` 能打印 GPU/TPU 配额即配置成功。
 
 ---
 

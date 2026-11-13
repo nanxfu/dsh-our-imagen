@@ -12,11 +12,18 @@ export const KAGGLE_ACCOUNT_URL = 'https://www.kaggle.com/settings'
 /** 本地未安装 kaggle CLI 时给出的安装命令（与 README / probes notes 一致）。 */
 export const KAGGLE_INSTALL_COMMAND = 'pip install -U kaggle'
 /**
+ * kaggle CLI 2.x 的登录命令：跑一次就把 access_token 写进 `%USERPROFILE%\.kaggle\access_token`
+ * （本项目实测的 CLI 2.2.5 即为此格式），不需要用户手动创建文件。
+ */
+export const KAGGLE_LOGIN_COMMAND = 'kaggle auth login'
+/**
  * Windows 下的 Kaggle 凭据文件位置。
  * 单独放在常量里而不是字典里：反斜杠在字典源码里会形成转义字面量，
  * 文案改用 {path} 占位符引用，翻译文本里就不必出现反斜杠。
  */
-export const KAGGLE_CREDENTIAL_PATH = '%USERPROFILE%\\.kaggle\\kaggle.json'
+export const KAGGLE_CREDENTIAL_PATH = '%USERPROFILE%\\.kaggle\\access_token'
+/** 旧版 CLI / 手动 API Token 的兼容位置（仍然有效，但不要求用户再手动创建）。 */
+export const KAGGLE_LEGACY_CREDENTIAL_PATH = '%USERPROFILE%\\.kaggle\\kaggle.json'
 
 /** 会话级错误：可以「重新唤醒」。 */
 const SESSION_CODES = new Set([

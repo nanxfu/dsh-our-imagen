@@ -667,7 +667,11 @@ await check('错误码映射到指引类型', () => {
   assert.notEqual(logic.guidanceKindOf('gpu_unavailable'), 'generate')
   assert.equal(logic.KAGGLE_ACCOUNT_URL, 'https://www.kaggle.com/settings')
   assert.equal(logic.KAGGLE_SETTINGS_URL, 'https://www.kaggle.com/settings/api')
-  assert.match(logic.KAGGLE_CREDENTIAL_PATH, /^%USERPROFILE%\\\.kaggle\\kaggle\.json$/)
+  // 凭据口径对齐 kaggle CLI 2.x：主导路径是 access_token（kaggle auth login 写入），
+  // 旧版 kaggle.json 仍作为兼容位置同时展示，避免把用户误导到已过时的手工步骤。
+  assert.equal(logic.KAGGLE_LOGIN_COMMAND, 'kaggle auth login')
+  assert.match(logic.KAGGLE_CREDENTIAL_PATH, /^%USERPROFILE%\\\.kaggle\\access_token$/)
+  assert.match(logic.KAGGLE_LEGACY_CREDENTIAL_PATH, /^%USERPROFILE%\\\.kaggle\\kaggle\.json$/)
 })
 
 await check('指引卡详情优先级', () => {
