@@ -649,9 +649,13 @@ function chatMessages() {
       role: 'assistant',
       kind: 'intent',
       prompt: CHAT_INTENT,
+      summary: '极简京都旅行海报：红色鸟居与竹林，顶部 KYOTO 字样，横版构图',
       ratioId: '16:9',
-      styleId: 'concept',
+      negative: '',
+      count: 1,
+      lockSeed: false,
       clarify: null,
+      modelHint: null,
       source: 'model',
     },
     { id: 3, role: 'user', text: '可以，就这样生成' },
@@ -668,6 +672,17 @@ function chatMessages() {
   ]
 }
 
+/** 预览里对话面板用的表单域替身（与 useStudioForm 的公开形状一致）。 */
+function chatFormStub() {
+  return {
+    // 默认预设在 CFG=0 下不消费负向词，替身按真实判定隐藏「排除项」，与产品行为一致。
+    form: { prompt: '', negative: '', presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0, seed: '', count: 1 },
+    patchForm: () => {},
+    negativeActive: false,
+    applyIntent: () => true,
+  }
+}
+
 async function renderChat(options = {}) {
   const client = await loadClient({
     now: NOW,
@@ -680,8 +695,8 @@ async function renderChat(options = {}) {
   })
   const tree = await client.mountRaw(client.components.ChatPanel, {
     t: client.internals.i18n.fallbackTranslate('zh'),
-    ui: { panelMode: 'chat', setPanelMode: () => {} },
-    form: { patchForm: () => {} },
+    ui: { panelMode: 'chat', setPanelMode: () => {}, showToast: () => {} },
+    form: chatFormStub(),
     chat: {
       messages: chatMessages(),
       interpreting: false,
@@ -745,8 +760,8 @@ async function renderChatComposed(options = {}) {
 
   const chatPanel = await client.mountRaw(ChatPanel, {
     t,
-    ui: { panelMode: 'chat', setPanelMode: () => {} },
-    form: { patchForm: () => {} },
+    ui: { panelMode: 'chat', setPanelMode: () => {}, showToast: () => {} },
+    form: chatFormStub(),
     chat: {
       messages: chatMessages(),
       interpreting: false,
@@ -832,19 +847,27 @@ async function renderRefine(options = {}) {
         cfg: 1.5,
         seed: '',
         count: 1,
-        styleId: 'cyberpunk',
       },
       patchForm: () => {},
-      styleId: 'cyberpunk',
-      applyStyle: () => {},
       ratioId: '1:1',
       applyRatio: () => {},
+      sizeTiers: [768, 1024, 1152],
+      selectedTier: 1024,
+      applyTier: () => {},
+      applyCustomSize: () => {},
+      negativeActive: true,
+      negativeHint: 'blurry, low quality, deformed, extra limbs',
+      applyCfg: () => {},
+      resetSeed: () => {},
       refineGroups: groups,
       refineSource: 'model',
       enhancing: false,
       enhance: () => {},
+      translating: false,
+      translate: () => {},
       toggleRefine: () => {},
       useInspiration: () => {},
+      englishPromptHint: false,
     },
     actions: { sending: false, generate: () => {} },
   })

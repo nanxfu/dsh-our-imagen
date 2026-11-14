@@ -36,7 +36,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 15px 14px;
+  padding: 0 15px 12px;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -47,8 +47,8 @@
 .ofs-fieldset {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 10px 0;
+  gap: 6px;
+  padding: 8px 0;
 }
 
 .ofs-fieldset:first-child {
@@ -94,7 +94,7 @@
 
 .ofs-composer-input {
   width: 100%;
-  min-height: 66px;
+  min-height: 60px;
   resize: none;
   border: 0;
   background: transparent;
@@ -170,7 +170,7 @@
   border-radius: var(--ofs-r-pill);
   background: var(--ofs-card);
   color: var(--ofs-ink-2);
-  font-size: 10.5px;
+  font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -204,7 +204,7 @@
 .ofs-inspire-label,
 .ofs-refine-head,
 .ofs-refine-dim {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--ofs-ink-3);
 }
 
@@ -227,79 +227,29 @@
   font-weight: 600;
 }
 
+/* 头部右侧：来源说明 + 收起/展开，弱化处理，不与标题抢层级。 */
+.ofs-refine-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ofs-refine-toggle {
+  padding: 2px 4px;
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--ofs-ink-2);
+}
+
+.ofs-refine-toggle:hover:not(:disabled) {
+  color: var(--ofs-accent);
+}
+
 .ofs-refine-group {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-/* ── 风格 tile：每格是一张试印出来的小相纸 ─────────────────── */
-.ofs-tiles {
-  display: flex;
-  gap: 8px;
-}
-
-.ofs-tile {
-  appearance: none;
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.ofs-tile-art {
-  position: relative;
-  display: block;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  overflow: hidden;
-  border: 1px solid var(--ofs-print-edge);
-  border-radius: 3px;
-  background: var(--ofs-print-paper);
-  box-shadow: 0 6px 14px -9px rgb(16 16 20 / 30%);
-  transition:
-    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 180ms ease,
-    border-color 180ms ease;
-}
-
-.ofs-plate {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.ofs-tile:hover .ofs-tile-art {
-  transform: translateY(-2px);
-  border-color: var(--ofs-print-edge);
-  box-shadow: 0 10px 20px -10px rgb(16 16 20 / 34%);
-}
-
-.ofs-tile-label {
-  font-size: 10.5px;
-  line-height: 1.3;
-  color: var(--ofs-ink-3);
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ofs-tile.is-on .ofs-tile-art {
-  box-shadow:
-    0 0 0 2px var(--ofs-card-solid),
-    0 0 0 4px var(--ofs-accent),
-    0 10px 20px -12px rgb(16 16 20 / 30%);
-}
-
-.ofs-tile.is-on .ofs-tile-label {
-  color: var(--ofs-accent);
-  font-weight: 600;
 }
 
 /* ── 画面比例 ───────────────────────────────────────────────── */
@@ -314,8 +264,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 10px 0 8px;
+  gap: 5px;
+  padding: 8px 0 7px;
   border: 1px solid var(--ofs-sunken-border);
   border-radius: var(--ofs-r-md);
   background: var(--ofs-card);
@@ -447,7 +397,7 @@
 }
 
 .ofs-field > span {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--ofs-ink-3);
 }
 
@@ -455,6 +405,35 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
+}
+
+/* 种子字段占满两列：输入框与「恢复随机」并排 */
+.ofs-field--wide {
+  grid-column: 1 / -1;
+}
+
+.ofs-seed-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ofs-seed-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ofs-seed-reset {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--ofs-ink-2);
+}
+
+.ofs-seed-reset:hover:not(:disabled) {
+  color: var(--ofs-accent);
 }
 
 .ofs-field input,
@@ -478,6 +457,62 @@
   box-shadow: var(--ofs-focus-ring);
 }
 
+/* ── 底部生成：张数分段 / 主按钮 / 规格摘要 ───────────────────── */
+.ofs-qty-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ofs-qty-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--ofs-ink-3);
+}
+
+.ofs-qty {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.ofs-qty-option {
+  appearance: none;
+  height: 28px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: 9px;
+  background: var(--ofs-card);
+  color: var(--ofs-ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.ofs-qty-option:hover {
+  border-color: var(--ofs-accent-soft-border);
+  color: var(--ofs-ink);
+}
+
+.ofs-qty-option.is-on {
+  border-color: var(--ofs-accent);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+  box-shadow: inset 0 0 0 1px var(--ofs-accent);
+}
+
+/* 规格摘要：尺寸 · 比例 · 张数（有参考图补一项），等宽数字不抖动 */
+.ofs-spec-summary {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
 /* ── 底部生成 ───────────────────────────────────────────────── */
 .ofs-panel-foot {
   position: relative;
@@ -485,8 +520,8 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 12px 15px 14px;
+  gap: 6px;
+  padding: 10px 15px 12px;
   border-top: 1px solid var(--ofs-hairline);
   background: var(--ofs-card);
   box-shadow: 0 -16px 20px -18px rgb(16 16 20 / 20%);
@@ -536,7 +571,7 @@
 }
 
 .ofs-hint {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--ofs-ink-3);
   text-align: center;
 }
@@ -565,17 +600,34 @@
 }
 
 .ofs-frame-label {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--ofs-ink-3);
 }
 
-/* 标题栏右侧的实时尺寸读数：等宽数字，尺寸位数变化时不左右跳动 */
+/* 标题栏右侧的实时读数：等宽数字，位数变化时不左右跳动 */
 .ofs-frame-readout {
   flex: 0 0 auto;
-  font-size: 10.5px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--ofs-ink-3);
   white-space: nowrap;
+}
+
+/* 高级设置折叠态的读数摘要：一眼看清将用什么参数生成 */
+.ofs-row-readout {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ofs-ink-3);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 有参考图时：画面设置只说明「尺寸跟随参考图」，不再渲染任何尺寸控件 */
+.ofs-follow-reference-hint {
+  text-align: left;
 }
 
 /* 紧凑一行两列：宽 [1024] × 高 [1024]（不复用带卡片内边距的 .ofs-grid2） */
@@ -595,7 +647,7 @@
 
 .ofs-size-custom-field > span {
   flex: 0 0 auto;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--ofs-ink-3);
 }
 
@@ -647,6 +699,34 @@
   background: var(--ofs-accent-soft);
   color: var(--ofs-accent);
   box-shadow: 0 0 0 1px var(--ofs-accent);
+}
+
+/* ── 自定义宽高（默认折叠，按需展开精调） ────────────────────── */
+.ofs-custom-toggle {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ofs-ink-3);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ofs-custom-toggle:hover {
+  color: var(--ofs-ink-2);
+}
+
+.ofs-custom-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 2px;
 }
 
 .ofs-size-hint {
@@ -732,7 +812,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--ofs-ink-3);
 }
 

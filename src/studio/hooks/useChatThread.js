@@ -1,7 +1,7 @@
 /**
- * 对话线程域：消息列表、意图解析、澄清卡与助手气泡同步。
+ * 对话线程域：消息列表、意图解析、通用澄清卡与助手气泡同步。
  *
- * 一条助手气泡只反映真实任务进度；意图只进确认卡，不动表单。
+ * 一条助手气泡只反映真实任务进度；意图只进确认卡，用户点「按此生成」或「带入参数面板」前不动表单。
  * 依赖入参：{ t, isEn, alive, state, form, generate }。form 是表单域对象，
  * generate 由组合层提供（函数声明提升，本 hook 在事件回调里调用时已完成初始化）。
  */
@@ -14,15 +14,20 @@ import { formatSeconds } from '../../logic/format.js'
 import { errorText } from '../../logic/error.js'
 import {
   INTENT_EDITABLE_FIELDS,
+  intentClarify,
+  intentCount,
   intentFieldPatch,
   intentFormPatch,
+  intentHistory,
+  intentModelHint,
   intentNegative,
   intentOverrides,
+  intentRatio,
   intentSeedOf,
   lastIntentPrompt,
   lastSeedOf,
 } from '../../logic/intent.js'
-import { DEFAULT_RATIOS, STYLE_CAPSULES } from '../presets.js'
+import { DEFAULT_RATIOS } from '../presets.js'
 
 /**
  * 任务快照 → 气泡补丁。只映射真实状态，未知状态返回 null（保持原样）。
@@ -87,14 +92,19 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
   }
 
   /**
-   * 对话模式：把一句话交给宿主模型解析成生成参数。
-   * 宿主返回的 prompt 永远是英文（预设按英文提示词训练），summary 是 UI 语言的画面概述。
-   * 模型不可用时宿主会退回原文＋当前设置，界面仍然给出确认卡，不阻塞出图。
+   * 对话模式：把一句话交给宿主模型解析成生成参数（意图 v2）。
+   *
+   * 请求带上表单当前 CFG 与最近对话：宿主据此判断负向词是否生效、上一轮是延续还是新主题。
+   * 宿主返回的 prompt 永远是英文，summary 是 UI 语言的画面概述；模型不可用时宿主会退回
+   * 原文＋当前设置，界面仍然给出确认卡，不阻塞出图。
    */
   async function interpret(text) {
     const value = String(text ?? '').trim()
     if (!value || interpreting || interpretingRef.current) return
     interpretingRef.current = true
+    // 多轮上下文与旧字段都取「这条消息之前」的对话：history 给新宿主，
+    // previousPrompt 留给不认 history 的旧宿主。
+    const history = intentHistory(messages)
     const previousPrompt = lastIntentPrompt(messages)
     pushMessages([{ role: 'user', text: value }])
     setInterpreting(true)
@@ -102,8 +112,10 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
       text: value,
       previousPrompt,
       locale: isEn ? 'en' : 'zh',
-      // 意图解析按当前预设的提示词配方（danbooru / natural / concise）约束英文提示词。
+      // 意图解析按当前预设的提示词配方约束英文提示词，并让宿主知道 CFG 下的负向词能力。
       presetId: form.form.presetId,
+      cfg: form.form.cfg,
+      history,
     }))
     interpretingRef.current = false
     if (!result) return
@@ -112,16 +124,17 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
       const data = result.data
       // 意图只进确认卡，不动表单：用户还没点「按此生成」之前，
       // 不该丢掉自己在左侧写的提示词或参数。
-      // 排除项先快照当前表单值：卡片上可直接编辑，不要求用户回到表单里改。
       pushMessages([{
         role: 'assistant',
         kind: 'intent',
         prompt: data.prompt,
-        negative: intentNegative(form.form.negative),
         summary: typeof data.summary === 'string' ? data.summary : '',
-        ratioId: typeof data.ratioId === 'string' ? data.ratioId : '',
-        styleId: typeof data.styleId === 'string' ? data.styleId : '',
-        clarify: data.clarify || null,
+        ratioId: intentRatio(data.ratioId),
+        negative: intentNegative(data.negative),
+        count: intentCount(data.count),
+        lockSeed: false,
+        clarify: intentClarify(data.clarify),
+        modelHint: intentModelHint(data.modelHint, form.form.presetId),
         source: data.source === 'model' ? 'model' : 'local',
       }])
       return
@@ -129,20 +142,30 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     pushMessages([{ role: 'assistant', kind: 'error', text: errorText(t, result) }])
   }
 
-  /** 澄清卡选定后，把答案并回意图卡。 */
-  function resolveClarify(messageId, field, value) {
-    setMessages((prev) => prev.map((message) => {
-      if (!message || message.id !== messageId) return message
-      const next = { ...message, clarify: null }
-      if (field === 'ratio') next.ratioId = value || ''
-      if (field === 'style') next.styleId = value || ''
-      return next
-    }))
+  /**
+   * 通用澄清卡：
+   * - 选项非空 → 把选项当作新一轮用户输入、带着该卡草稿提示词重新解析（走多轮 history）；
+   * - 空串（「先按当前设置」）→ 只清掉澄清，还原成确认卡，不自动提交。
+   *
+   * 重新解析前先移除旧澄清卡：选完就应得到新一轮确认卡，线程里不该同时留着
+   * 一张旧草稿卡和一张新结果卡，让用户不知道该按哪张生成。旧卡在 closure 的
+   * messages 里仍然可见，所以 history 会带上它的草稿提示词。
+   */
+  function resolveClarify(messageId, option) {
+    const value = typeof option === 'string' ? option.trim() : ''
+    if (!value) {
+      setMessages((prev) => prev.map((message) => (
+        message && message.id === messageId ? { ...message, clarify: null } : message
+      )))
+      return
+    }
+    setMessages((prev) => prev.filter((message) => !(message && message.id === messageId)))
+    interpret(value)
   }
 
   /**
-   * 意图卡行内微调：只接受白名单字段（提示词 / 排除项），按契约裁剪后写回消息。
-   * 比例与风格仍由澄清卡决定，这里不开放，避免编辑动作变成任意状态写入口。
+   * 意图卡行内微调：只接受白名单字段（提示词 / 排除项 / 生成张数），
+   * 按契约裁剪后写回消息。比例仍由当前设置或重新解析决定，这里不开放。
    */
   function updateIntent(messageId, patch) {
     const source = patch && typeof patch === 'object' ? patch : {}
@@ -158,15 +181,20 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     )))
   }
 
-  /** 单个字段编辑：textarea 的 onChange 走这里。 */
+  /** 单个字段编辑：textarea / 张数分段控件的 onChange 走这里。 */
   function updateIntentField(messageId, field, value) {
     updateIntent(messageId, { [field]: value })
   }
 
-  /** 生成意图卡：先落表单，再按卡片参数（含行内改过的提示词与排除项）提交。 */
+  /**
+   * 生成意图卡：先落表单，再按卡片参数提交。
+   *
+   * 覆盖项 = 编辑后的提示词、张数、比例尺寸、负向词（仅当前模型/CFG 消费负向词时取卡上值，
+   * 否则空串）与种子策略；提示词为空时按钮置灰、这里也再拦一次。
+   */
   async function generateIntent(message) {
-    // 编辑后的提示词仍要合并风格后缀；为空时不提交，界面上按钮同时置灰。
-    const overrides = intentOverrides(message, STYLE_CAPSULES)
+    const negativeActive = form.negativeActive === true
+    const overrides = intentOverrides(message, { negativeActive })
     if (!overrides) return
     const ratio = DEFAULT_RATIOS.find((item) => item.id === message.ratioId)
     if (ratio) {
@@ -176,9 +204,18 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     // 默认随机种子：跨主题对话沿用上一张的种子会让构图僵化，只有卡上显式打开开关才沿用。
     const seed = intentSeedOf(message, state && state.lastJob, form.form.seed)
     if (seed !== null) overrides.seed = seed
-    const patch = intentFormPatch(message, DEFAULT_RATIOS)
+    const patch = intentFormPatch(message, DEFAULT_RATIOS, { negativeActive })
     if (Object.keys(patch).length > 0) form.patchForm(patch)
     await generate(overrides, { pushUser: false })
+  }
+
+  /**
+   * 带入参数面板：把确认卡内容写进表单（提示词 / 宽高 / 张数 / 可用时的排除项），
+   * 切换模式与轻提示由 ChatPanel 负责。返回是否成功，失败时调用方不切换面板。
+   */
+  function handoffIntent(message) {
+    if (!message || typeof form.applyIntent !== 'function') return false
+    return Boolean(form.applyIntent(message))
   }
 
   /** 意图卡上的「沿用上张构图」开关：默认关闭，只改这张卡自己的状态。 */
@@ -201,6 +238,7 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     updateIntent,
     updateIntentField,
     generateIntent,
+    handoffIntent,
     toggleIntentLockSeed,
     // 上一张图没有可复用种子时，确认卡上的锁种开关置灰。
     canLockSeed: lastSeedOf(state && state.lastJob) !== null,

@@ -150,3 +150,17 @@
 - **验收**：契约与客户端单测覆盖边界与降级；真机 `2×Tesla T4` 验证单一会话内「文生图 → 垫图重绘」显存无额外增长。
   - **离线**：daemon 单测 232 项（+59，含真实 Pillow 可选集成用例）、`host-e2e` 41 项（含参考图全链路与越界拒绝）、`jobs-wait` 23 项（参考图校验/载荷/meta）、客户端逻辑 63 项 / 渲染 64 项 / 文案 396 键全绿。
   - **真机**：`node test/gpu-live.mjs --preset sdxl-lightning --img2img` 已在 2×Tesla T4 跑通：文生图 15.63s → 垫图重绘 7.0s（`loadSeconds=0`，from_pipe 复用底座），重绘前后 `/health.gpu_memory` 的 `allocated_mb` 7000→7000、`max_allocated_mb` 10233→10233、`reserved_mb` +2 MiB（噪声），**显存无额外增长**；产物与版本快照见 CHANGELOG「真机验收」小节。
+
+---
+
+## 六、 创作面板减法与 AI 助手升级
+
+> **状态：✅ 已在 0.10.0 落地**，实现说明见各项末尾；设计参考见 [STUDIO_PANEL_AND_ASSISTANT_DESIGN.md](STUDIO_PANEL_AND_ASSISTANT_DESIGN.md)，变更明细见 [CHANGELOG](../CHANGELOG.md) 的 0.10.0 条目。
+
+- **创作参数面板重构**：聚焦「快速换词 + 调比例 + 多张抽卡」高频场景——移除静态 5 风格黑盒拼接、按模型能力隐匿无效排除项（`CFG=0` 场景）、理顺画面设置与参考图互斥关系、提权生成张数与折叠摘要。
+  - **实现**：删除 5 个风格试印条、`StylePlate` 与提交时的风格后缀 / 负向词拼接；「排除项」改由 `shared/models-guide.js` 的 `negativePromptActive(preset, cfg)` 判定显隐（Host 与 Client 共用），`CFG=0` 的极速模型与不支持负向词的 `flux2-klein-4b` 默认隐藏、提交时不再发无效参数；有参考图时「画面设置」只显示「跟随参考图」读数与说明，文生图时按 `RATIO_IDS` 选比例 → 分辨率档位（长边）→ 自定义宽高折叠，档位数值按比例缩放并对齐 `LIMITS` 步长；生成张数（1~4）从高级区提权到底部主视线；高级设置折叠态显示读数摘要（如 `4 步 · CFG 0 · 随机种子`）并补「恢复随机」；功能标签字号由 10.5px 提升到 11px，同步清理过时文案。
+- **AI 助手设计与提示词打磨**：将「助手从 0 到 1 启发与组织、表单从 1 到 N 批量抽卡」两条线打通；向大模型统一注入身份认知、模型库最佳实践与软性引导策略（不依赖强硬分支规则）。
+  - **实现**：新增 `shared/models-guide.js` 作为模型知识唯一口径（提示词配方、负向词能力、全库用法摘要），由 `lib/intent.js` / `lib/enhance.js` / `lib/tools.js` 与客户端共同消费；系统提示词改为「身份与使命 / 模型手册 / 组织与沟通策略」三段式；意图 JSON 升级为 v2（`prompt` / `summary` / `ratioId` / `negative` / `clarify` / `modelHint`），边界写入契约 `INTENT`；`lib/llm.js` 支持 `options.messages` 多轮消息（内容块数组为多模态预留），`POST /intent` 请求新增 `history` 并按 `LIMITS.intentHistory` 裁剪；确认卡改为摘要优先、支持内联编辑与张数分段，新增「带入参数面板」，空态示例只填对话草稿，通用澄清卡提供 2~4 个选项与「先按当前设置」。
+- **远期迭代方向**：支持参考图视觉理解与交互式追问，以及「灵感图墙 + 关键 Prompt 词拆解」学习体验。
+
+> **验证**：离线断言覆盖负向词显隐、分辨率档位、张数提权、确认卡与通用澄清、多轮 `history`——`check-client-logic` 64、`check-client-render` 70、`check-client-locale` zh/en 各 399 键、`host-e2e` 46、`daemon-unit` 232，其余既有套件不变，`npm test` 全绿。远端链路未改动（`remote/daemon.py` 仅版本号变更），本轮无新增真机验收；变更明细见 [CHANGELOG](../CHANGELOG.md) 的 0.10.0 条目。

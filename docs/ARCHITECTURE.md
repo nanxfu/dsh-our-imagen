@@ -241,6 +241,45 @@ Windows 上不再依赖 Python `Scripts` 目录进 PATH。
 `contract.limits.reference.maxBytes` 推导（base64 膨胀后约 12 MB），Host 的出图路由也单独放宽到同一量级，
 其余路由仍是 256 KiB。
 
+### 2.19 模型知识单一来源（`shared/models-guide.js`）
+`models/*.json` 是模型事实的唯一来源，但「这些事实怎么变成提示词要求、负向词能力判断与用法摘要」过去散落在多处：
+`lib/intent.js` 手写 `promptStyle` 分支，`lib/enhance.js` 维护过时的 `FAST_PRESETS` 名单，`lib/tools.js` 的
+工具描述只列预设 id，客户端再各自判断负向词是否生效。新增一款模型要改多处，容易漏。
+
+0.10.0 起把这层口径收进 `shared/models-guide.js`（纯函数，只 import `shared/contract.js`，不写死模型清单）：
+
+| 函数 | 职责 |
+| :--- | :--- |
+| `promptStyleName(style)` | 提示词配方的展示名（Danbooru 标签 / 自然语言 / 简短短语） |
+| `promptStyleRule(preset)` | 当前模型的英文提示词书写规则（中文句，直接进 system prompt） |
+| `negativePromptActive(preset, cfg)` | 当前配置下负向词是否生效，Host 与 Client 共用 |
+| `negativeGuidance(preset, cfg)` | 给大模型的负向词一句话指导（无能力时要求用正面描述表达排除意图） |
+| `modelUsageLine(preset)` / `modelCatalogText()` | 单模型 / 全库用法摘要（写法、步数、CFG、负向词、垫图、耗时、定位） |
+
+消费方：
+
+- Host 助手层：`lib/intent.js` 拼系统提示词并约束 `negative`，`lib/enhance.js` 选润色口径，`lib/tools.js` 生成 `imagen_generate` 的模型说明；
+- 客户端：`src/logic/preset.js` 等按 `negativePromptActive()` 决定「排除项」显隐与提交时是否携带；
+- 测试：直接断言规则本身，不重复抄一份模型事实。
+
+因此新增 / 调整模型只改 `models/<id>.json` 并重建生成资产，助手与界面的模型知识自动跟随。
+
+### 2.20 创作助手的提示词结构与多轮通道
+助手层（`lib/intent.js`）的系统提示词按三段组织，模型事实与沟通策略分离：
+
+1. **身份与使命**：面向新手创作者的图像生成导演 / 提示词顾问，用最小沟通成本把中文想法变成高出图质量的英文提示词；
+2. **模型手册**：当前模型 + 全库概要（来自 `models-guide.js`），写明提示词写法、质量词、负向词能力、垫图能力、速度与专长；明显更合适时允许给模型建议，但不硬拦；
+3. **组织与沟通策略**（软性引导，不做硬分支）：主体、场景、光线、视角、材质拆解得具体可感；区分「延续上一轮修改」与「全新主题」；无负向能力时用正面描述表达排除意图（不要把 `no xxx` 写进正向提示词）；信息不足时给轻度澄清，足够明确时直接给参数。
+
+意图接口 `POST /imagen-api/intent` 的 JSON 同步升级到 v2（字段与边界以 `shared/contract.js` 的 `INTENT` 与 `docs/SPEC.md` 为准）：
+`prompt` / `summary` / `ratioId` / `negative` / `clarify`（一个问题 + 2~4 个选项）/ `modelHint`（建议模型 + 短理由）。
+澄清不再绑死比例 / 风格枚举，澄清轮也要给出草稿 `prompt`；`negative` 在当前配置下不生效时必须为空串。
+
+多轮上下文由 `lib/llm.js` 的 `options.messages` 承载：元素为 `{ role, content }`，`content` 允许字符串或内容块数组
+`[{ type: 'text', text }]`（为后续多模态预留），`options.prompt` 保留为单轮快捷方式；`prepareCall` 优先、`stream` 兜底、
+超时与空串降级的行为不变。请求侧 `history` 是可选数组：客户端只回传最近若干条消息，Host 再按 `LIMITS.intentHistory`
+裁剪（条数、单条长度、`user` / `assistant` 角色白名单），非法项直接丢弃；`history` 非空时优先于旧的 `previousPrompt`。
+
 ---
 
 ## 3. 本地脱机调试技巧（不烧 Kaggle 额度）

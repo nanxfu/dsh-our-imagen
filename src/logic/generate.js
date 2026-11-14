@@ -2,17 +2,17 @@
  * 生成参数的构造与回填。
  *
  * 两个方向都收敛在这里，避免「请求体构造」与「历史回填」各占一个碎屑文件：
- *  - `buildGenerateBody()`：表单值 + 风格后缀 + 显式覆盖项 → POST /generate 请求体；
+ *  - `buildGenerateBody()`：表单值 + 显式覆盖项 → POST /generate 请求体；
  *  - `iteratePatch()` / `rerollOverrides()` / `retryOverrides()`：当前选中的作品或
  *    失败任务 → 表单补丁 / 生成参数覆盖项。
  *
- * 抽到 logic/ 是为了让「风格后缀真的进入最终 prompt」「历史图能复现」这类行为可以
- * 离线断言，useStudio 只负责收集状态与发起请求。
+ * 0.10.0 起提示词不再拼接风格后缀；负向词按 `negativePromptActive` 的结果门控，
+ * 当前模型/CFG 不消费负向词时提交空串，不发无效参数。
  */
 
 import { LIMITS } from '../../shared/contract.js'
 import { clampInt, clampNumber, clampSize, clampStrength, parseSeed } from './clamp.js'
-import { composePrompt } from './prompt.js'
+import { negativeForSubmit } from './prompt.js'
 
 /** 参考图的文件名：路径只用于向宿主定位作品，界面只显示文件名。 */
 export function referenceFileName(path) {
@@ -38,23 +38,25 @@ export function referencePathOf(form) {
 /**
  * @param {object} form 表单状态
  * @param {object} [options]
- * @param {string} [options.styleSuffix] 当前风格后缀（仅在没有显式 prompt 时追加）
  * @param {string} [options.defaultPreset] 预设兜底 id
+ * @param {boolean} [options.negativeActive] `negativePromptActive()` 的结果；
+ *   显式 false 时提交体 `negativePrompt` 恒为空串（含覆盖项里的负向词）
  * @param {object} [options.overrides] 显式覆盖项（对话输入 / 生成变体 / 重试）
  * @returns {object} POST /generate（路径由 shared/contract.js 提供）的请求体
  */
 export function buildGenerateBody(form, options = {}) {
   const input = form || {}
   const overrides = options.overrides && typeof options.overrides === 'object' ? options.overrides : null
+  const negativeActive = options.negativeActive !== false
   const explicit = overrides && typeof overrides.prompt === 'string' ? overrides.prompt : null
   const maxPromptChars = LIMITS.prompt.maxChars
   const prompt = explicit !== null
     ? explicit.trim().slice(0, maxPromptChars)
-    : composePrompt(input.prompt, options.styleSuffix).slice(0, maxPromptChars)
+    : String(input.prompt ?? '').trim().slice(0, maxPromptChars)
 
   const body = {
     prompt,
-    negativePrompt: String(input.negative ?? '').trim(),
+    negativePrompt: negativeForSubmit(input, negativeActive),
     width: clampSize(input.width),
     height: clampSize(input.height),
     steps: clampInt(input.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
@@ -85,6 +87,9 @@ export function buildGenerateBody(form, options = {}) {
       body[key] = value
     }
   }
+  // 覆盖项也可能带 negativePrompt（对话 / 变体 / 重试链路）：当前配置不消费负向词时
+  // 统一清空，保证请求体不出现无效参数。
+  if (!negativeActive) body.negativePrompt = ''
   return body
 }
 
@@ -137,7 +142,7 @@ function recallOf(entry, presets) {
 /**
  * 「带回参数」→ 表单补丁。
  * prompt 用作品自己的提示词；尺寸用产物像素（不再用最近任务兜底）；
- * steps/cfg 优先作品 params，其次预设推荐值；styleId 清空，避免后缀重复。
+ * steps/cfg 优先作品 params，其次预设推荐值。
  */
 export function iteratePatch(entry, form, presets) {
   const base = form || {}
@@ -145,11 +150,7 @@ export function iteratePatch(entry, form, presets) {
   const patch = {}
 
   const prompt = recall.prompt.trim()
-  // 回填的是作品自己的最终提示词（通常已含风格后缀），因此清空风格选择避免重复追加。
-  if (prompt) {
-    patch.prompt = prompt
-    patch.styleId = ''
-  }
+  if (prompt) patch.prompt = prompt
   if (recall.negative !== null) patch.negative = recall.negative
   if (recall.width !== null) patch.width = recall.width
   if (recall.height !== null) patch.height = recall.height

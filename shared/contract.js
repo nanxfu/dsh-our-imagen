@@ -12,7 +12,7 @@
  *    随注入配置下发（见 `remote/daemon.py` 的 config 解析）。
  */
 
-export const VERSION = '0.9.0'
+export const VERSION = '0.10.0'
 
 /**
  * Host HTTP 路由表（index.js 注册时必须逐一对应）。
@@ -86,6 +86,9 @@ export const LIMITS = {
   historyTool: { defaultLimit: 5, maxLimit: 30 },
   libraryDelete: { maxPaths: 200 },
   intentText: { maxChars: 2000 },
+  // 对话多轮上下文：客户端只回传最近若干条消息，Host 路由再裁剪一次，
+  // 避免把整段聊天记录塞进模型（也约束请求体大小）。
+  intentHistory: { maxMessages: 12, maxMessageChars: 2000 },
 }
 
 /** 宿主与远端之间共享的超时（毫秒）。远端层不再各自保留默认值。 */
@@ -206,14 +209,32 @@ export const UI_STATE = {
 }
 
 /**
- * 画面比例与风格 id 的唯一来源。
+ * 画面比例 id 的唯一来源。
  *
- * 前端 `src/studio/ratios.js` / `capsules.js` 只保留「id → 尺寸 / 词表」的数据，
- * 顺序与合法取值以本文件为准；`lib/intent.js` 校验模型返回的 clarify 也引用这里。
+ * 前端 `src/studio/presets.js` 只保留「id → 像素」数据，顺序与合法取值以本文件为准；
+ * `lib/intent.js` 校验模型返回的比例也引用这里。
+ *
+ * 0.10.0 起移除静态「风格预设」：风格由提示词内容与模型本身表达，
+ * 不再有 STYLE_IDS / styleId 这套暗箱后缀机制。
  */
 export const RATIO_IDS = ['1:1', '16:9', '9:16', '4:3', '3:4']
 
-export const STYLE_IDS = ['film', 'concept', 'cyberpunk', 'ink', 'clay']
+/**
+ * 对话意图解析（`POST /imagen-api/intent`）的结构边界。
+ *
+ * Host 按这里归一模型输出，Client 不重复校验；改结构时同步 `docs/SPEC.md` 与测试。
+ */
+export const INTENT = {
+  // 中文摘要只进界面，给用户的确认信息，写太长没有意义。
+  summaryMaxChars: 400,
+  // 通用澄清：一条问题 + 2~4 个选项（点击后作为新一轮用户输入重新解析）。
+  clarifyMinOptions: 2,
+  clarifyMaxOptions: 4,
+  clarifyQuestionMaxChars: 80,
+  clarifyOptionMaxChars: 40,
+  // 模型建议：只允许合法预设 id，且不能是当前预设。
+  modelHintReasonMaxChars: 80,
+}
 
 /**
  * 错误码词表（唯一来源）。

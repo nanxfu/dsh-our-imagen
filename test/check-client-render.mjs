@@ -53,14 +53,29 @@ const preset = {
   gpus: 1,
   downloadGb: 6.78,
   size: 1024,
+  // 分辨率档位（长边）：Rail 的档位行消费这个数组。
+  sizeOptions: [768, 1024, 1152],
   steps: 4,
   cfg: 0,
   steadySeconds: 6.2,
   tier: 'fast',
   promptStyle: 'concise',
   negativeHint: 'blurry, low quality, deformed, extra limbs',
+  // 模型管线是否真的消费 negative_prompt：客户端据此决定排除项是否展示与提交。
+  supportsNegative: true,
 }
 const turbo = { ...preset, id: 'sdxl-turbo', label: 'SDXL Turbo', short: 'Turbo', description: { zh: '实时低延迟，适合构图灵感与草稿速探', en: 'Real-time low latency, ideal for drafting' }, license: '非商用研究许可', licenseKind: 'restricted', tier: 'usable' }
+// 写实模型：推荐 CFG 5 > 0 且带 negativeHint，默认配置下负向词就可用的样本。
+const realvis = {
+  ...preset,
+  id: 'realvis-v5',
+  label: 'RealVisXL V5.0',
+  short: 'RealVis V5',
+  description: { zh: '写实人像与摄影质感首选', en: 'Photorealistic portraits and photography' },
+  cfg: 5,
+  steps: 8,
+  tier: 'quality',
+}
 
 const image = (seed) => ({
   path: `imagen-output/job-1/${seed}.png`,
@@ -105,8 +120,8 @@ const scenarios = {
     state: readyState,
     history: { items: [historyItem] },
     props: {},
-    expect: ['创作设置', '提示词', '风格预设', '画面设置', '高级设置', '立即生成', '带回参数', '云端就绪', '灵感示例', '测试用的荷花池塘'],
-    reject: [],
+    expect: ['创作设置', '提示词', '分辨率档位', '画面设置', '高级设置', '立即生成', '带回参数', '云端就绪', '灵感示例', '测试用的荷花池塘'],
+    reject: ['风格预设'],
     structure: {
       required: {
         'ofs-root': 1,
@@ -116,14 +131,59 @@ const scenarios = {
         'ofs-main': 1,
         'ofs-panel': 1,
         'ofs-panel--form': 1,
-        'ofs-fieldset': 4,
-        'ofs-tile': 5,
+        // 无参考图时三个分区：提示词 / 画面设置 / 高级设置。
+        'ofs-fieldset': 3,
+        'ofs-fieldset-head': 3,
+        'ofs-panel-scroll': 1,
+        'ofs-panel-foot': 1,
+        'ofs-qty': 1,
+        'ofs-qty-option': 4,
+        'ofs-generate': 1,
+        'ofs-spec-summary': 1,
         'ofs-batch': 1,
         'ofs-thumb': 2,
         'ofs-image': 1,
         'ofs-dock': 1,
       },
-      forbidden: ['ofs-guidance', 'ofs-panel--chat', 'ofs-gallery', 'ofs-figure--empty', 'ofs-toast', 'ofs-stage-progress', 'ofs-queue-pill'],
+      forbidden: [
+        'ofs-guidance',
+        'ofs-panel--chat',
+        'ofs-gallery',
+        'ofs-figure--empty',
+        'ofs-toast',
+        'ofs-stage-progress',
+        'ofs-queue-pill',
+        // 0.10.0 删掉的风格试印条，以及默认配置（CFG=0）下不应出现的负向词行 / 参考图跟随。
+        'ofs-tile',
+        'ofs-row-textarea',
+        'ofs-follow-reference',
+        'ofs-size-custom',
+      ],
+    },
+  },
+  // 负向词可用：写实模型默认 CFG 5 > 0 且带推荐负向词，高级设置里应出现「排除项」行；
+  // 行默认折叠，所以只有标题没有文本域。
+  negativeOn: {
+    state: {
+      defaultPreset: 'realvis-v5',
+      presets: [realvis],
+      session: { state: 'ready', modelId: 'realvis-v5', device: 'Tesla T4', idleTimeoutSec: 1800, error: null },
+      jobs: [],
+      lastJob: null,
+      probe: probeOk,
+    },
+    history: { items: [] },
+    props: {},
+    expect: ['排除项', '高级设置'],
+    reject: [],
+    structure: {
+      required: {
+        'ofs-panel--form': 1,
+        // 排除项行 + 参数行；两行都可折叠。
+        'ofs-row': 2,
+        'ofs-row-toggle': 2,
+      },
+      forbidden: ['ofs-row-textarea', 'ofs-tile'],
     },
   },
   chat: {
@@ -166,7 +226,13 @@ const scenarios = {
         'ofs-body': 1,
         'ofs-main': 1,
         'ofs-panel--form': 1,
-        'ofs-fieldset': 4,
+        // 提示词 / 画面设置 / 高级设置：无参考图时三个分区。
+        'ofs-fieldset': 3,
+        'ofs-fieldset-head': 3,
+        'ofs-panel-foot': 1,
+        'ofs-qty-option': 4,
+        'ofs-generate': 1,
+        'ofs-spec-summary': 1,
         'ofs-stage': 1,
         'ofs-figure--empty': 1,
         'ofs-empty-card': 1,
@@ -178,7 +244,7 @@ const scenarios = {
         'ofs-slot': 3,
         'ofs-link': 1,
       },
-      forbidden: ['ofs-image', 'ofs-batch', 'ofs-panel--chat', 'ofs-guidance', 'ofs-gallery', 'ofs-stage-progress'],
+      forbidden: ['ofs-image', 'ofs-batch', 'ofs-panel--chat', 'ofs-guidance', 'ofs-gallery', 'ofs-stage-progress', 'ofs-tile', 'ofs-row-textarea'],
     },
   },
   gallery: {
@@ -2160,6 +2226,9 @@ await check('渲染：不支持垫图的预设自动切换并点名模型', asyn
     family: 'FLUX.2',
     description: { zh: '轻量快速，风格化强', en: 'Lightweight and fast' },
     supportsImg2Img: false,
+    // FLUX.2 管线不接受 negative_prompt：排除项永远隐藏（用户抬高 CFG 也一样）。
+    supportsNegative: false,
+    negativeHint: '',
   }
   const lightning = { ...preset, supportsImg2Img: true }
   const responses = {
@@ -2227,20 +2296,21 @@ await check('渲染：不支持垫图时参考图槽位置灰并给出说明', a
         cfg: 0,
         seed: '',
         count: 1,
-        styleId: '',
         reference: { path: 'imagen-output/job-1/7.png', url: '/imagen-api/file?path=7.png' },
         strength: 0.6,
       },
       patchForm: (partial) => patched.push(partial),
       selectPreset: () => {},
-      styleId: '',
-      applyStyle: () => {},
       ratioId: '1:1',
       applyRatio: () => {},
-      sizeOptions: [1024],
-      selectedSize: 1024,
-      applySize: () => {},
+      sizeTiers: [1024],
+      selectedTier: 1024,
+      applyTier: () => {},
       applyCustomSize: () => {},
+      applyCfg: () => {},
+      resetSeed: () => {},
+      negativeActive: false,
+      negativeHint: '',
       refineGroups: [],
       refineSource: '',
       enhancing: false,
@@ -2284,7 +2354,16 @@ await check('渲染：不支持垫图时参考图槽位置灰并给出说明', a
 // 手动切回不支持垫图的预设后，生成被拦下并 toast 说明；这里直接驱动组合层 hook，
 // 避免依赖假渲染器对嵌套组件本地状态的模拟（顶部栏模型卡属于内嵌组件）。
 await check('渲染：参考图与预设能力不匹配时生成被拦下（useStudio）', async () => {
-  const flux = { ...preset, id: 'flux2-klein-4b', label: 'Klein 4B', short: 'Klein 4B', family: 'FLUX.2', supportsImg2Img: false }
+  const flux = {
+    ...preset,
+    id: 'flux2-klein-4b',
+    label: 'Klein 4B',
+    short: 'Klein 4B',
+    family: 'FLUX.2',
+    supportsImg2Img: false,
+    supportsNegative: false,
+    negativeHint: '',
+  }
   const lightning = { ...preset, supportsImg2Img: true }
   const responses = {
     '/imagen-api/state': { ...readyState, presets: [flux, lightning], defaultPreset: 'flux2-klein-4b' },
@@ -2437,202 +2516,349 @@ await check('渲染：大图预览里的以此图重绘', async () => {
   }
 })
 
-await check('渲染：意图确认卡行内微调（提示词 / 排除项可编辑）', async () => {
-  const mountIntent = async (message, options = {}) => {
-    const edits = []
-    const generated = []
-    const lockCalls = []
-    const client = await loadClient({
-      now: NOW,
-      responses: {
-        '/imagen-api/state': readyState,
-        '/imagen-api/history': { items: [] },
-        '/imagen-api/library': { favorites: [], deleted: [] },
-      },
-      testBuild: true,
-    })
-    const t = client.internals.i18n.fallbackTranslate('zh')
+// ── 对话确认卡 v2（0.10.0：摘要优先 / 张数 / 模型建议 / 带入参数面板 / 通用澄清） ──
+
+/** 按类名收集节点：ChatPanel 用例只看稳定的结构类名，不锁内部组件拆分。 */
+const findClass = (tree, className) => findNodes(
+  tree,
+  (node) => typeof node.props?.className === 'string'
+    && node.props.className.split(/\s+/).includes(className),
+)
+
+/** 按类名取第一个文本域（提示词 / 排除项共用）。 */
+const textareaOfClass = (tree, className) => findNodes(
+  tree,
+  (node) => node.type === 'textarea'
+    && typeof node.props?.className === 'string'
+    && node.props.className.split(/\s+/).includes(className),
+)[0] || null
+
+/**
+ * ChatPanel 的测试替身：领域对象最小化，动作只记录不执行。
+ * 返回 client 供「点示例后重渲染」这类需要本地状态落地的用例继续驱动。
+ */
+async function mountChatPanel(options = {}) {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const calls = {
+    edits: [],
+    generated: [],
+    handed: [],
+    modes: [],
+    toasts: [],
+    resolved: [],
+    locked: [],
+    patches: [],
+    applied: [],
+    interpreted: [],
+    cleared: [],
+  }
+  const chat = {
+    messages: options.messages ?? [],
+    interpreting: Boolean(options.interpreting),
+    interpret: (text) => calls.interpreted.push(text),
+    updateIntentField: (id, field, value) => calls.edits.push({ id, field, value }),
+    updateIntent: (id, patch) => calls.edits.push({ id, patch }),
+    generateIntent: (message) => calls.generated.push(message),
+    handoffIntent: (message) => {
+      calls.handed.push(message)
+      return options.handoffOk !== false
+    },
+    toggleIntentLockSeed: (id) => calls.locked.push(id),
+    canLockSeed: options.canLockSeed !== false,
+    resolveClarify: (id, option) => calls.resolved.push({ id, option }),
+    clearThread: () => calls.cleared.push(true),
+  }
+  const t = client.internals.i18n.fallbackTranslate(options.locale ?? 'zh')
+  try {
     const tree = await client.mountRaw(client.components.ChatPanel, {
       t,
-      ui: { panelMode: 'chat', setPanelMode: () => {} },
-      form: { patchForm: () => {} },
-      chat: {
-        messages: [message],
-        interpreting: false,
-        interpret: () => {},
-        updateIntentField: (id, field, value) => edits.push({ id, field, value }),
-        updateIntent: (id, patch) => edits.push({ id, patch }),
-        generateIntent: (target) => generated.push(target),
-        toggleIntentLockSeed: (id) => lockCalls.push(id),
-        canLockSeed: options.canLockSeed !== false,
-        resolveClarify: () => {},
-        clearThread: () => {},
+      ui: {
+        panelMode: 'chat',
+        setPanelMode: (mode) => calls.modes.push(mode),
+        showToast: (text) => calls.toasts.push(text),
       },
+      form: {
+        patchForm: (patch) => calls.patches.push(patch),
+        negativeActive: options.negativeActive === true,
+        ...(options.form ?? {}),
+      },
+      chat,
       library: { openMessage: () => {} },
-      actions: { sending: false },
+      actions: { sending: Boolean(options.sending) },
     })
+    return { client, tree, calls, t }
+  } catch (error) {
     client.unmount()
-    const textareaOf = (className) => findNodes(
-      tree,
-      (node) => node.type === 'textarea'
-        && typeof node.props?.className === 'string'
-        && node.props.className.split(' ').includes(className),
-    )[0] || null
-    return {
-      tree,
-      text: collectText(tree).join(' | '),
-      promptArea: textareaOf('ofs-intent-prompt'),
-      negativeArea: textareaOf('ofs-intent-negative'),
-      goButton: findNodes(
-        tree,
-        (node) => node.type === 'button'
-          && typeof node.props?.className === 'string'
-          && node.props.className.split(' ').includes('ofs-intent-go'),
-      )[0],
-      edits,
-      generated,
-      lockCalls,
-    }
+    throw error
   }
+}
 
-  const modelMessage = {
+await check('渲染：确认卡摘要优先、张数分段、模型建议与带入参数面板', async () => {
+  const message = {
     id: 1,
     role: 'assistant',
     kind: 'intent',
     prompt: 'rainy night city street, wet pavement reflecting neon signs',
-    negative: 'blurry, low quality',
     summary: '雨夜城市街景，湿润路面倒映霓虹招牌',
     ratioId: '16:9',
-    styleId: 'film',
+    negative: 'blurry, low quality',
+    count: 2,
+    lockSeed: false,
     clarify: null,
+    modelHint: { presetId: 'flux2-klein-4b', reason: '轻量快速，适合草稿' },
     source: 'model',
   }
-  const model = await mountIntent(modelMessage)
+  const mounted = await mountChatPanel({ messages: [message], negativeActive: true })
+  try {
+    const { tree, calls, t } = mounted
+    const text = collectText(tree).join(' | ')
 
-  // 提示词与排除项都是可编辑 textarea：值来自消息，长度受契约限制。
-  assert.ok(model.promptArea, '[intent] 缺少提示词文本域')
-  assert.equal(model.promptArea.props.value, modelMessage.prompt)
-  assert.equal(model.promptArea.props.maxLength, LIMITS.prompt.maxChars)
-  assert.equal(model.promptArea.props['aria-label'], '英文提示词')
-  assert.ok(model.negativeArea, '[intent] 缺少排除项文本域')
-  assert.equal(model.negativeArea.props.value, 'blurry, low quality')
-  assert.equal(model.negativeArea.props.maxLength, LIMITS.negativePrompt.maxChars)
-  assert.equal(model.negativeArea.props.placeholder, '不希望出现的元素，可留空')
-  assert.ok(model.text.includes('雨夜城市街景，湿润路面倒映霓虹招牌'), '[intent] 应展示中文摘要')
-  assert.ok(model.text.includes('中文摘要'), '[intent] 摘要应有中文标签')
-  assert.ok(model.text.includes('可直接修改后再生成'), '[intent] 应提示可在卡上直接微调')
-  assertStructure('intent-model', model.tree, {
-    required: {
-      'ofs-intent': 1,
-      'ofs-intent-field': 2,
-      'ofs-intent-prompt': 1,
-      'ofs-intent-negative': 1,
-      'ofs-intent-edit-hint': 1,
-      'ofs-intent-summary': 1,
-      'ofs-intent-summary-label': 1,
-      'ofs-intent-lock': 1,
-      'ofs-intent-go': 1,
-    },
-    forbidden: ['ofs-intent-note', 'ofs-intent-question'],
-  })
+    // 摘要优先：中文摘要排在英文提示词之前；0.10.0 起不再有风格行。
+    assert.ok(text.includes('雨夜城市街景，湿润路面倒映霓虹招牌'), '[intent] 应展示中文摘要')
+    assert.ok(text.includes('中文摘要'), '[intent] 摘要应有中文标签')
+    assert.ok(
+      text.indexOf('雨夜城市街景，湿润路面倒映霓虹招牌') < text.indexOf('英文提示词'),
+      '[intent] 中文摘要应排在英文提示词之前',
+    )
+    assert.ok(text.includes('可直接修改后再生成'), '[intent] 应提示可在卡上直接微调')
+    assert.ok(text.includes('更合适的模型：FLUX.2 Klein 4B（轻量快速，适合草稿）'), '[intent] 模型建议应带模型名与理由')
+    assert.ok(text.includes('16:9'), '[intent] 元信息行应显示比例')
+    assert.ok(!text.includes('风格'), '[intent] 0.10.0 起确认卡不再有风格行')
 
-  // 编辑回调带上消息 id 与字段名；白名单校验与契约裁剪由 useChatThread 再做一次。
-  model.promptArea.props.onChange({ target: { value: 'edited rainy street' } })
-  model.negativeArea.props.onChange({ target: { value: 'blurry' } })
-  assert.deepEqual(model.edits, [
-    { id: 1, field: 'prompt', value: 'edited rainy street' },
-    { id: 1, field: 'negative', value: 'blurry' },
-  ])
+    // 英文提示词 / 排除项都可编辑，长度受契约限制。
+    const promptArea = textareaOfClass(tree, 'ofs-intent-prompt')
+    assert.ok(promptArea, '[intent] 缺少提示词文本域')
+    assert.equal(promptArea.props.value, message.prompt)
+    assert.equal(promptArea.props.maxLength, LIMITS.prompt.maxChars)
+    assert.equal(promptArea.props['aria-label'], '英文提示词')
+    const negativeArea = textareaOfClass(tree, 'ofs-intent-negative')
+    assert.ok(negativeArea, '[intent] 负向词可用时应渲染排除项文本域')
+    assert.equal(negativeArea.props.value, 'blurry, low quality')
+    assert.equal(negativeArea.props.maxLength, LIMITS.negativePrompt.maxChars)
 
-  // 「按此生成」提交当前消息对象：行内编辑后的值会随状态更新进入提交参数。
-  model.goButton.props.onClick()
-  assert.equal(model.generated.length, 1, '[intent] 点「按此生成」应把确认卡交给 generateIntent')
-  assert.equal(model.generated[0].prompt, modelMessage.prompt)
-  const edited = await mountIntent({ ...modelMessage, prompt: 'edited rainy street', negative: 'blurry' })
-  edited.goButton.props.onClick()
-  assert.equal(edited.generated[0].prompt, 'edited rainy street')
-  assert.equal(edited.generated[0].negative, 'blurry')
+    // 张数：四格分段，当前值来自消息；点击把字段与新值交回 useChatThread。
+    const qty = findClass(tree, 'ofs-intent-qty')
+    assert.equal(qty.length, 1)
+    assert.equal(qty[0].props.role, 'group')
+    assert.equal(qty[0].props['aria-label'], '生成张数')
+    const qtyOptions = findClass(tree, 'ofs-intent-qty-option')
+    assert.equal(qtyOptions.length, 4, '[intent] 生成张数应为 1~4 四格')
+    assert.deepEqual(qtyOptions.map((node) => collectText(node).join('')), ['1', '2', '3', '4'])
+    assert.deepEqual(
+      qtyOptions.map((node) => node.props['aria-pressed']),
+      [false, true, false, false],
+      '消息 count=2 时第二格高亮',
+    )
+    qtyOptions[2].props.onClick()
+    assert.deepEqual(calls.edits, [{ id: 1, field: 'count', value: 3 }], '[intent] 点张数应把字段与值交回 useChatThread')
 
-  // 提示词清空后禁止提交；有内容时按钮可用。
-  const blank = await mountIntent({ ...modelMessage, prompt: '   ' })
-  assert.equal(blank.goButton.props.disabled, true, '[intent] 提示词为空时「按此生成」应禁用')
-  assert.equal(model.goButton.props.disabled, false, '[intent] 有提示词时按钮可用')
+    // 行内编辑回调带消息 id 与字段名；白名单校验与契约裁剪由 useChatThread 再做一次。
+    promptArea.props.onChange({ target: { value: 'edited rainy street' } })
+    negativeArea.props.onChange({ target: { value: 'blurry' } })
+    assert.deepEqual(calls.edits.slice(1), [
+      { id: 1, field: 'prompt', value: 'edited rainy street' },
+      { id: 1, field: 'negative', value: 'blurry' },
+    ])
 
-  // 锁种开关默认关闭：不传 lockSeed 的确认卡渲染成未勾选，点一下才把这张卡的状态交回 hook。
-  const lockCheckbox = findNodes(
-    model.tree,
-    (node) => node.type === 'input' && node.props && node.props.type === 'checkbox',
-  )[0]
-  assert.ok(lockCheckbox, '[intent] 缺少「沿用上张构图」开关')
-  assert.equal(lockCheckbox.props.checked, false, '[intent] 锁种开关默认关闭')
-  assert.notEqual(lockCheckbox.props.disabled, true, '[intent] 有上一张图时开关可用')
-  lockCheckbox.props.onChange()
-  assert.deepEqual(model.lockCalls, [1], '[intent] 点开关应把这张卡的 id 交给 toggleIntentLockSeed')
+    // 主按钮「按此生成」提交当前消息；次级动作把确认卡写进参数面板并切模式 + 轻提示。
+    const goButton = findClass(tree, 'ofs-intent-go')[0]
+    assert.ok(goButton, '[intent] 缺少「按此生成」主按钮')
+    assert.equal(collectText(goButton).join(''), '按此生成')
+    assert.equal(goButton.props.disabled, false)
+    goButton.props.onClick()
+    assert.equal(calls.generated.length, 1, '[intent] 点「按此生成」应把确认卡交给 generateIntent')
+    assert.equal(calls.generated[0].prompt, message.prompt)
 
-  // 已勾选 + 没有可复用种子两种状态：勾选态来自 message.lockSeed；无种子时置灰。
-  const locked = await mountIntent({ ...modelMessage, lockSeed: true })
-  const lockedBox = findNodes(
-    locked.tree,
-    (node) => node.type === 'input' && node.props && node.props.type === 'checkbox',
-  )[0]
-  assert.equal(lockedBox.props.checked, true, '[intent] lockSeed 打开时开关应勾选')
+    const handoffButton = findClass(tree, 'ofs-intent-handoff')[0]
+    assert.ok(handoffButton, '[intent] 缺少「带入参数面板」次级动作')
+    assert.equal(collectText(handoffButton).join(''), '带入参数面板')
+    handoffButton.props.onClick()
+    assert.equal(calls.handed.length, 1, '[intent] 点次级动作应把确认卡交给 handoffIntent')
+    assert.deepEqual(calls.modes, ['form'], '[intent] 带入成功后应切回参数表单')
+    assert.deepEqual(calls.toasts, [t('studio.chat.intent.handoffDone')], '[intent] 带入成功应给轻提示')
 
-  const noSeed = await mountIntent(modelMessage, { canLockSeed: false })
-  const noSeedBox = findNodes(
-    noSeed.tree,
-    (node) => node.type === 'input' && node.props && node.props.type === 'checkbox',
-  )[0]
-  assert.equal(noSeedBox.props.disabled, true, '[intent] 没有上一张图时锁种开关置灰')
-  const disabledLabel = findNodes(
-    noSeed.tree,
-    (node) => node.props && node.props.className === 'ofs-intent-lock is-disabled',
-  )[0]
-  assert.ok(disabledLabel, '[intent] 置灰态应有对应的结构类名')
+    // 「沿用上张构图（锁定种子）」保持：默认关闭、点一下把这张卡的 id 交回 hook。
+    const lockBox = findNodes(tree, (node) => node.type === 'input' && node.props?.type === 'checkbox')[0]
+    assert.ok(lockBox, '[intent] 缺少「沿用上张构图」开关')
+    assert.equal(lockBox.props.checked, false, '[intent] 锁种开关默认关闭')
+    lockBox.props.onChange()
+    assert.deepEqual(calls.locked, [1])
 
-  // 本地兜底：prompt 与 summary 都是原文，不重复渲染摘要，改为标注「模型未响应」。
-  const local = await mountIntent({
-    ...modelMessage,
-    prompt: '雨夜街景',
-    summary: '雨夜街景',
-    negative: '',
-    source: 'local',
-    ratioId: '',
-    styleId: '',
-  })
-  assert.equal(local.promptArea.props.value, '雨夜街景')
-  assert.ok(!local.text.includes('中文摘要'), '[intent] 原文兜底时不应重复显示摘要')
-  assert.ok(local.text.includes('模型未响应'), '[intent] 本地兜底应说明来源')
-  assertStructure('intent-local', local.tree, {
-    required: { 'ofs-intent-note': 1 },
-    forbidden: ['ofs-intent-summary'],
-  })
+    assertStructure('intent-card', tree, {
+      required: {
+        'ofs-intent': 1,
+        'ofs-intent-title': 1,
+        'ofs-intent-summary': 1,
+        'ofs-intent-summary-label': 1,
+        'ofs-intent-edit-hint': 1,
+        'ofs-intent-field': 2,
+        'ofs-intent-prompt': 1,
+        'ofs-intent-negative': 1,
+        'ofs-intent-meta': 1,
+        'ofs-intent-model-hint': 1,
+        'ofs-intent-qty': 1,
+        'ofs-intent-qty-option': 4,
+        'ofs-intent-lock': 1,
+        'ofs-intent-actions': 1,
+        'ofs-intent-go': 1,
+        'ofs-intent-handoff': 1,
+      },
+      forbidden: ['ofs-intent-question', 'ofs-intent-clarify', 'ofs-intent-note', 'ofs-suggestions'],
+    })
+  } finally {
+    mounted.client.unmount()
+  }
 })
 
-// 行内编辑的真实状态流转：直接挂载 useChatThread，断言编辑后的值真的进入生成覆盖项。
-await check('渲染：意图卡编辑后「按此生成」提交编辑值（useChatThread）', async () => {
-  const client = await loadClient({
-    now: NOW,
-    responses: {
-      '/imagen-api/intent': {
-        ok: true,
-        prompt: 'rainy night city street',
-        summary: '雨夜城市街景',
-        ratioId: '16:9',
-        styleId: 'film',
-        source: 'model',
-      },
-    },
-    testBuild: true,
+await check('渲染：排除项按 negativeActive 显隐，本地兜底与空提示词状态', async () => {
+  const base = {
+    id: 2,
+    role: 'assistant',
+    kind: 'intent',
+    prompt: 'rainy night city street',
+    summary: '雨夜城市街景',
+    ratioId: '',
+    negative: 'blurry',
+    count: 1,
+    clarify: null,
+    modelHint: null,
+    source: 'model',
+  }
+
+  // 负向词不可用（CFG=0 的极速模型 / FLUX.2 等）：整行排除项与「排除项」文案都不渲染。
+  const hidden = await mountChatPanel({ messages: [base], negativeActive: false })
+  try {
+    const text = collectText(hidden.tree).join(' | ')
+    assert.ok(!text.includes('排除项'), '[intent] 负向词不可用时不应出现排除项文案')
+    assertStructure('intent-negative-hidden', hidden.tree, {
+      required: { 'ofs-intent-field': 1, 'ofs-intent-prompt': 1 },
+      forbidden: ['ofs-intent-negative'],
+    })
+    // 没有模型建议时不渲染弱提示行。
+    assert.equal(findClass(hidden.tree, 'ofs-intent-model-hint').length, 0)
+  } finally {
+    hidden.client.unmount()
+  }
+
+  // 本地兜底：prompt 与 summary 都是原文，不重复渲染摘要，改为标注「模型未响应」。
+  const local = await mountChatPanel({
+    messages: [{ ...base, prompt: '雨夜街景', summary: '雨夜街景', negative: '', source: 'local' }],
+    negativeActive: false,
   })
+  try {
+    const text = collectText(local.tree).join(' | ')
+    assert.ok(!text.includes('中文摘要'), '[intent] 原文兜底时不应重复显示摘要')
+    assert.ok(text.includes('模型未响应'), '[intent] 本地兜底应说明来源')
+    assertStructure('intent-local', local.tree, {
+      required: { 'ofs-intent-note': 1 },
+      forbidden: ['ofs-intent-summary', 'ofs-intent-summary-label'],
+    })
+  } finally {
+    local.client.unmount()
+  }
+
+  // 提示词为空：主按钮与次级动作都禁用，避免一次注定被拒的宿主往返。
+  const blank = await mountChatPanel({ messages: [{ ...base, prompt: '   ' }], negativeActive: true })
+  try {
+    assert.equal(findClass(blank.tree, 'ofs-intent-go')[0].props.disabled, true, '[intent] 空提示词时不应提交')
+    assert.equal(findClass(blank.tree, 'ofs-intent-handoff')[0].props.disabled, true, '[intent] 空提示词时不能带入面板')
+  } finally {
+    blank.client.unmount()
+  }
+})
+
+await check('渲染：通用澄清卡（问题 + 2~4 选项 + 先按当前设置）', async () => {
+  const message = {
+    id: 7,
+    role: 'assistant',
+    kind: 'intent',
+    prompt: 'draft rainy street',
+    summary: '',
+    ratioId: '',
+    negative: '',
+    count: 1,
+    clarify: { question: '想要横版还是竖版？', options: ['横版', '竖版'] },
+    modelHint: null,
+    source: 'model',
+  }
+  const mounted = await mountChatPanel({ messages: [message] })
+  try {
+    const { tree, calls } = mounted
+    const text = collectText(tree).join(' | ')
+    assert.ok(text.includes('想先确认一下'), '[clarify] 缺少标题')
+    assert.ok(text.includes('想要横版还是竖版？'), '[clarify] 缺少问题')
+    assert.ok(text.includes('先按当前设置'), '[clarify] 缺少「先按当前设置」')
+    assert.ok(!text.includes('生成确认'), '[clarify] 澄清卡不应显示确认卡标题')
+
+    const options = findClass(tree, 'ofs-suggestion')
+    assert.deepEqual(
+      options.map((node) => collectText(node).join('')),
+      ['横版', '竖版', '先按当前设置'],
+      '[clarify] 选项按钮顺序：宿主选项在前，「先按当前设置」在最后',
+    )
+    options[0].props.onClick()
+    assert.deepEqual(calls.resolved, [{ id: 7, option: '横版' }], '[clarify] 点选项应把选项交回 resolveClarify')
+    options[2].props.onClick()
+    assert.deepEqual(calls.resolved.at(-1), { id: 7, option: '' }, '[clarify] 「先按当前设置」用空串表示只清澄清')
+
+    assertStructure('clarify-card', tree, {
+      required: {
+        'ofs-intent': 1,
+        'ofs-intent-clarify': 1,
+        'ofs-intent-question': 1,
+        'ofs-suggestions': 1,
+        'ofs-suggestion': 3,
+      },
+      forbidden: ['ofs-intent-go', 'ofs-intent-handoff', 'ofs-intent-qty', 'ofs-intent-prompt', 'ofs-intent-negative'],
+    })
+  } finally {
+    mounted.client.unmount()
+  }
+})
+
+await check('渲染：空态示例只填对话草稿，不改参数表单', async () => {
+  const mounted = await mountChatPanel({ messages: [] })
+  try {
+    const { client, calls, t } = mounted
+    const examples = findClass(mounted.tree, 'ofs-chat-example')
+    assert.equal(examples.length, 5, '[empty] 空态应给出五个灵感示例')
+    examples[0].props.onClick()
+    const tree = await client.rerenderRaw()
+    const composer = findNodes(tree, (node) => node.type === 'textarea')[0]
+    assert.equal(composer.props.value, t('studio.inspire.1'), '[empty] 点示例应把示例文案填进对话草稿')
+    assert.equal(calls.patches.length, 0, '[empty] 点示例不应越过确认卡直接改参数表单')
+  } finally {
+    mounted.client.unmount()
+  }
+})
+
+// 意图 v2 的真实状态流转：直接挂载 useChatThread，断言请求参数、消息字段、
+// 张数钳制、负向词门控、多轮 history、通用澄清与带入参数面板。
+await check('渲染：意图 v2 状态流（cfg / history / 张数 / 负向词门控 / 澄清 / 带入面板）', async () => {
+  const responses = {
+    '/imagen-api/intent': {
+      ok: true,
+      source: 'model',
+      prompt: 'rainy night city street, wet pavement reflecting neon signs',
+      summary: '雨夜城市街景，湿润路面倒映霓虹招牌',
+      ratioId: '16:9',
+      negative: 'blurry, low quality',
+      clarify: null,
+      modelHint: { presetId: 'flux2-klein-4b', reason: '轻量快速，适合草稿' },
+    },
+  }
+  const client = await loadClient({ now: NOW, responses, testBuild: true })
   const React = client.react
   const h = React.createElement
   const { useChatThread } = client.hooks
   const t = client.internals.i18n.fallbackTranslate('zh')
   const latest = { chat: null }
-  const calls = { generates: [], patches: [] }
+  const calls = { generates: [], patches: [], applied: [] }
   const form = {
-    form: { negative: 'blurry, low quality', seed: '', presetId: 'sdxl-lightning' },
+    form: { negative: 'blurry', seed: '', presetId: 'sdxl-lightning', cfg: 7 },
+    negativeActive: true,
     patchForm: (patch) => calls.patches.push(patch),
+    applyIntent: (message) => { calls.applied.push(message); return true },
   }
   function Harness(props) {
     const chat = useChatThread({
@@ -2652,46 +2878,271 @@ await check('渲染：意图卡编辑后「按此生成」提交编辑值（useC
   try {
     await client.mountRaw(Harness, { latest })
     await client.settle()
-    const chat = latest.chat
-    assert.equal(chat.messages.length, 2, '解析完成后应有一条用户消息与一张意图卡')
-    const intent = chat.messages[1]
+
+    // 请求带表单当前 CFG 与预设；首轮还没有多轮上下文，不发空 history。
+    const firstRequest = client.requests.find((item) => item.path === '/imagen-api/intent')
+    assert.equal(firstRequest.body.text, '画一张横版雨夜街景')
+    assert.equal(firstRequest.body.cfg, 7, '请求必须带表单当前 CFG')
+    assert.equal(firstRequest.body.presetId, 'sdxl-lightning')
+    assert.equal(firstRequest.body.locale, 'zh')
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(firstRequest.body, 'history'),
+      false,
+      '首轮没有历史时不应发送空 history',
+    )
+
+    // 消息字段 v2：没有 styleId，新增 count / modelHint 等。
+    const intent = latest.chat.messages[1]
     assert.equal(intent.kind, 'intent')
-    assert.equal(intent.prompt, 'rainy night city street')
-    assert.equal(intent.negative, 'blurry, low quality', '意图卡排除项来自当前表单快照')
+    assert.equal(intent.prompt, responses['/imagen-api/intent'].prompt)
+    assert.equal(intent.summary, '雨夜城市街景，湿润路面倒映霓虹招牌')
+    assert.equal(intent.ratioId, '16:9')
+    assert.equal(intent.negative, 'blurry, low quality')
+    assert.equal(intent.count, 1, '宿主没给张数时默认 1')
+    assert.equal(intent.clarify, null)
+    assert.deepEqual(intent.modelHint, { presetId: 'flux2-klein-4b', reason: '轻量快速，适合草稿' })
+    assert.equal(intent.source, 'model')
+    assert.equal(Object.prototype.hasOwnProperty.call(intent, 'styleId'), false, '意图消息不应再有 styleId')
 
-    // 行内编辑只改白名单字段。
-    chat.updateIntentField(intent.id, 'prompt', '  edited rainy street  ')
-    chat.updateIntentField(intent.id, 'negative', '  blurry  ')
-    await client.rerender()
-    assert.equal(latest.chat.messages[1].prompt, '  edited rainy street  ')
-    assert.equal(latest.chat.messages[1].negative, '  blurry  ')
-    latest.chat.updateIntent(intent.id, { ratioId: '1:1', styleId: 'ink', prompt: 'kept' })
-    await client.rerender()
-    assert.equal(latest.chat.messages[1].ratioId, '16:9', '比例仍由澄清卡决定，行内编辑不能改写')
-    assert.equal(latest.chat.messages[1].styleId, 'film', '风格仍由澄清卡决定，行内编辑不能改写')
-    assert.equal(latest.chat.messages[1].prompt, 'kept', '白名单字段仍生效')
+    // 张数行内编辑：钳制 1~4，非法值回落 1。
+    latest.chat.updateIntentField(intent.id, 'count', 3)
+    await client.rerenderRaw()
+    assert.equal(latest.chat.messages[1].count, 3)
+    latest.chat.updateIntentField(intent.id, 'count', 9)
+    await client.rerenderRaw()
+    assert.equal(latest.chat.messages[1].count, 4, '超过上限应钳制到 4')
+    latest.chat.updateIntentField(intent.id, 'count', 0)
+    await client.rerenderRaw()
+    assert.equal(latest.chat.messages[1].count, 1, '低于下限应钳制到 1')
+    latest.chat.updateIntentField(intent.id, 'count', 2)
+    await client.rerenderRaw()
 
-    // 按此生成：编辑后的提示词合并风格后缀，编辑后的排除项进入生成覆盖项。
+    // 按此生成：提示词 / 张数 / 比例尺寸 / 排除项进入覆盖项，并回填表单。
     await latest.chat.generateIntent(latest.chat.messages[1])
     assert.deepEqual(calls.generates, [{
-      prompt: 'kept, cinematic film photography, 35mm, natural skin texture, soft grain',
-      negativePrompt: 'blurry',
+      prompt: 'rainy night city street, wet pavement reflecting neon signs',
+      count: 2,
+      negativePrompt: 'blurry, low quality',
       width: 1152,
       height: 648,
-    }], '生成覆盖项应使用编辑后的提示词与排除项')
+    }], '生成覆盖项应带编辑后的张数与比例尺寸')
     assert.deepEqual(calls.patches.at(-1), {
-      prompt: 'kept',
-      negative: 'blurry',
+      prompt: 'rainy night city street, wet pavement reflecting neon signs',
+      count: 2,
       width: 1152,
       height: 648,
-      styleId: 'film',
+      negative: 'blurry, low quality',
     }, '确认卡参数应回填表单')
 
-    // 提示词清空后不提交。
-    latest.chat.updateIntentField(intent.id, 'prompt', '   ')
-    await client.rerender()
+    // negativeActive=false（CFG=0 或模型不支持负向词）：覆盖项置空串，表单也不写 negative。
+    form.negativeActive = false
     await latest.chat.generateIntent(latest.chat.messages[1])
-    assert.equal(calls.generates.length, 1, '空提示词不应提交生成')
+    assert.equal(calls.generates.at(-1).negativePrompt, '', '负向词不可用时提交空串')
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(calls.patches.at(-1), 'negative'),
+      false,
+      '负向词不可用时不应写进表单',
+    )
+    form.negativeActive = true
+
+    // 第二轮：history 同时包含用户原话与上一张卡片的英文提示词；宿主给通用澄清。
+    responses['/imagen-api/intent'] = {
+      ok: true,
+      source: 'model',
+      prompt: 'draft of the next scene',
+      summary: '下一幕草稿',
+      ratioId: '1:1',
+      negative: '',
+      clarify: { question: '横版还是竖版？', options: ['横版', '竖版'] },
+      modelHint: null,
+    }
+    await latest.chat.interpret('再画一版')
+    await client.settle()
+    await client.rerenderRaw()
+    const secondRequest = client.requests.filter((item) => item.path === '/imagen-api/intent').at(-1)
+    assert.deepEqual(secondRequest.body.history, [
+      { role: 'user', content: '画一张横版雨夜街景' },
+      { role: 'assistant', content: 'rainy night city street, wet pavement reflecting neon signs' },
+    ], 'history 应带上一轮用户原话与英文提示词')
+
+    const clarifyCard = latest.chat.messages.at(-1)
+    assert.ok(clarifyCard.clarify, '应生成通用澄清卡')
+    assert.deepEqual(clarifyCard.clarify, { question: '横版还是竖版？', options: ['横版', '竖版'] })
+
+    // 点选项：旧澄清卡被替换，选项作为用户消息进入下一轮，history 带上该卡草稿提示词。
+    const clarifyCount = latest.chat.messages.length
+    latest.chat.resolveClarify(clarifyCard.id, '横版')
+    await client.settle()
+    await client.rerenderRaw()
+    const afterResolve = latest.chat.messages
+    assert.equal(
+      afterResolve.some((message) => message.id === clarifyCard.id),
+      false,
+      '选完选项后旧澄清卡应被新一轮结果替换',
+    )
+    assert.equal(afterResolve.length, clarifyCount + 1, '旧卡移除后新增一条用户消息与一张确认卡')
+    assert.equal(afterResolve.at(-2).role, 'user')
+    assert.equal(afterResolve.at(-2).text, '横版')
+    const thirdRequest = client.requests.filter((item) => item.path === '/imagen-api/intent').at(-1)
+    assert.equal(thirdRequest.body.text, '横版', '点选项应以选项文本重新解析')
+    assert.deepEqual(
+      thirdRequest.body.history.at(-1),
+      { role: 'assistant', content: 'draft of the next scene\n[Clarify] 横版还是竖版？' },
+      '重新解析要带上该卡草稿提示词与澄清问题',
+    )
+
+    // 「先按当前设置」：只清澄清、不发解析请求，卡片还原为确认卡。
+    responses['/imagen-api/intent'] = {
+      ok: true,
+      source: 'model',
+      prompt: 'draft two',
+      summary: '',
+      ratioId: '',
+      negative: '',
+      clarify: { question: '要写实还是插画？', options: ['写实', '插画'] },
+      modelHint: null,
+    }
+    await latest.chat.interpret('再来一版')
+    await client.settle()
+    await client.rerenderRaw()
+    const secondClarify = latest.chat.messages.at(-1)
+    assert.ok(secondClarify.clarify, '应再次得到澄清卡')
+    const requestsBeforeKeep = client.requests.filter((item) => item.path === '/imagen-api/intent').length
+    latest.chat.resolveClarify(secondClarify.id, '')
+    await client.rerenderRaw()
+    const restored = latest.chat.messages.find((message) => message.id === secondClarify.id)
+    assert.ok(restored && restored.clarify === null, '空选项只清澄清、还原成确认卡')
+    assert.equal(
+      client.requests.filter((item) => item.path === '/imagen-api/intent').length,
+      requestsBeforeKeep,
+      '「先按当前设置」不应再发解析请求',
+    )
+
+    // 带入参数面板：转交 form.applyIntent 并把成功与否原样返回。
+    assert.equal(latest.chat.handoffIntent(latest.chat.messages.at(-1)), true)
+    assert.equal(calls.applied.at(-1).prompt, latest.chat.messages.at(-1).prompt)
+    form.applyIntent = () => false
+    assert.equal(latest.chat.handoffIntent(latest.chat.messages.at(-1)), false, '表单拒收时应返回 false')
+  } finally {
+    client.unmount()
+  }
+})
+
+// 带入参数面板的端到端粘合：useChatThread.handoffIntent → useStudioForm.applyIntent，
+// 确认卡内容真的写进工作台表单（而不是只在 ChatPanel 的测试替身里记录）。
+await check('渲染：带入参数面板写入真实表单（useStudio + handoffIntent）', async () => {
+  const responses = {
+    '/imagen-api/state': {
+      defaultPreset: 'realvis-v5',
+      presets: [realvis, preset],
+      session: { state: 'ready', modelId: 'realvis-v5', device: 'Tesla T4', idleTimeoutSec: 1800, error: null },
+      jobs: [],
+      lastJob: null,
+      probe: probeOk,
+    },
+    '/imagen-api/history': { items: [] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+  }
+  const client = await loadClient({ now: NOW, responses, testBuild: true })
+  const React = client.react
+  const h = React.createElement
+  const latest = {}
+  function Harness() {
+    const studio = client.hooks.useStudio({
+      t: client.internals.i18n.fallbackTranslate('zh'),
+    })
+    latest.studio = studio
+    return h('div', { className: 'ofs-handoff-harness' }, String(studio.form.form.count))
+  }
+  try {
+    await client.mountRaw(Harness, {})
+    await client.settle()
+    // 初始预设同步为 realvis：CFG 5 > 0 且带推荐负向词，排除项可用。
+    assert.equal(latest.studio.form.form.presetId, 'realvis-v5')
+    assert.equal(latest.studio.form.negativeActive, true)
+
+    const message = { prompt: '  rainy street, neon lights  ', ratioId: '16:9', negative: 'blurry', count: 3, kind: 'intent' }
+    assert.equal(latest.studio.chat.handoffIntent(message), true, '带入成功应返回 true')
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.form.prompt, 'rainy street, neon lights', '提示词去空白后写入表单')
+    assert.equal(latest.studio.form.form.width, 1152, '比例换算成宽高')
+    assert.equal(latest.studio.form.form.height, 648)
+    assert.equal(latest.studio.form.form.count, 3, '张数写入表单')
+    assert.equal(latest.studio.form.form.negative, 'blurry', '负向词可用时写入表单')
+
+    // 空提示词：不写表单、返回 false（ChatPanel 据此不切面板、不提示成功）。
+    const before = JSON.stringify(latest.studio.form.form)
+    assert.equal(latest.studio.chat.handoffIntent({ prompt: '   ', ratioId: '1:1', count: 2 }), false)
+    await client.rerenderRaw()
+    assert.equal(JSON.stringify(latest.studio.form.form), before, '空提示词不应改动表单')
+  } finally {
+    client.unmount()
+  }
+})
+
+// 意图纯函数：多轮历史裁剪、通用澄清与模型建议归一；不依赖 React，离线断言。
+await check('渲染：意图纯函数（history / 澄清 / 模型建议归一）', async () => {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  try {
+    const pure = client.PURE
+    const messages = []
+    for (let index = 0; index < 8; index += 1) {
+      messages.push({ id: index * 2 + 1, role: 'user', text: `第 ${index} 句` })
+      messages.push({
+        id: index * 2 + 2,
+        role: 'assistant',
+        kind: 'intent',
+        prompt: `prompt ${index}`,
+        summary: `摘要 ${index}`,
+      })
+    }
+    messages.push({ id: 99, role: 'assistant', kind: 'job', text: '正在生成…' })
+    const history = pure.intentHistory(messages)
+    assert.equal(history.length, LIMITS.intentHistory.maxMessages, 'history 只保留最近 12 条')
+    assert.deepEqual(history[0], { role: 'user', content: '第 2 句' })
+    assert.deepEqual(history.at(-1), { role: 'assistant', content: 'prompt 7' })
+    assert.equal(history.some((item) => item.content.includes('正在生成')), false, '任务气泡不进上下文')
+    assert.deepEqual(
+      pure.intentHistory([
+        { role: 'user', text: '画一只橘猫' },
+        {
+          role: 'assistant',
+          kind: 'intent',
+          prompt: 'an orange cat',
+          clarify: { question: '想要什么场景和光线？', options: ['窗边午后阳光', '雪夜霓虹'] },
+        },
+      ]),
+      [
+        { role: 'user', content: '画一只橘猫' },
+        { role: 'assistant', content: 'an orange cat\n[Clarify] 想要什么场景和光线？' },
+      ],
+      '带澄清问题的意图卡会把问题保留进多轮历史',
+    )
+    assert.deepEqual(pure.intentHistory(null), [])
+
+    // 澄清归一：2~4 个去重选项；不足 2 个或没有问题时整条丢弃。
+    assert.deepEqual(
+      pure.intentClarify({ question: ' 要横版吗？ ', options: [' 横版 ', '横版', '竖版'] }),
+      { question: '要横版吗？', options: ['横版', '竖版'] },
+      '问题去空白、选项去重',
+    )
+    assert.equal(pure.intentClarify({ question: '只有一个选项', options: ['横版'] }), null)
+    assert.equal(pure.intentClarify({ question: '', options: ['横版', '竖版'] }), null)
+    assert.equal(pure.intentClarify(null), null)
+    assert.equal(pure.intentClarify({ question: '最多四个？', options: ['1', '2', '3', '4', '5'] }).options.length, 4)
+
+    // 模型建议归一：预设必须真实存在、不能与当前预设相同、理由必填。
+    assert.deepEqual(
+      pure.intentModelHint({ presetId: 'flux2-klein-4b', reason: ' 轻量快速 ' }, 'sdxl-lightning'),
+      { presetId: 'flux2-klein-4b', reason: '轻量快速' },
+    )
+    assert.equal(pure.intentModelHint({ presetId: 'sdxl-lightning', reason: '同款' }, 'sdxl-lightning'), null)
+    assert.equal(pure.intentModelHint({ presetId: 'not-a-model', reason: '未知' }, 'sdxl-lightning'), null)
+    assert.equal(pure.intentModelHint({ presetId: 'flux2-klein-4b', reason: '  ' }, 'sdxl-lightning'), null)
+
+    // 比例归一：只认契约比例。
+    assert.equal(pure.intentRatio('16:9'), '16:9')
+    assert.equal(pure.intentRatio('21:9'), '')
   } finally {
     client.unmount()
   }
@@ -2753,17 +3204,19 @@ await check('渲染：润色标签显示中文 label、点击插入英文 text',
       setPanelMode: () => {},
     },
     form: {
-      form: { prompt: '', negative: '', presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0, seed: '', count: 1, styleId: '' },
+      form: { prompt: '', negative: '', presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0, seed: '', count: 1 },
       patchForm: () => {},
       selectPreset: () => {},
-      styleId: '',
-      applyStyle: () => {},
       ratioId: '1:1',
       applyRatio: () => {},
-      sizeOptions: [],
-      selectedSize: null,
-      applySize: () => {},
+      sizeTiers: [1024],
+      selectedTier: 1024,
+      applyTier: () => {},
       applyCustomSize: () => {},
+      applyCfg: () => {},
+      resetSeed: () => {},
+      negativeActive: false,
+      negativeHint: '',
       refineGroups: [
         {
           dimension: 'lighting',
@@ -2973,17 +3426,17 @@ await check('渲染：画廊加载更多推进 offset 且不重复请求首页',
   assert.ok(client.fetches.includes(next), `加载更多应按已加载 2 条推进 offset，实际请求：${client.fetches.join(', ')}`)
 })
 
-// 画面设置三段同构（比例 / 1:1 推荐尺寸 / 自定义宽高）+ 宽高编辑草稿 + 空值恢复。
-// 三处控件共用同一份 width/height：快捷档改成多少、手动改单边会不会联动，都在这一个视野里。
-await check('渲染：画面设置三段、宽高草稿与空值恢复', async () => {
+// 画面设置（0.10.0）：画幅比例 → 分辨率档位（长边）→「自定义宽高」折叠；
+// 自定义输入仍走本地草稿 + 失焦提交，宽高互不联动；页脚是张数 + 生成 + 规格摘要。
+await check('渲染：画面设置比例 / 档位 / 自定义宽高与页脚规格摘要', async () => {
   const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
   const t = client.internals.i18n.fallbackTranslate('zh')
-  const calls = { translate: 0, size: [], ratio: [], patch: [], custom: [] }
+  const calls = { translate: 0, tier: [], ratio: [], patch: [], custom: [] }
   const formProps = {
     form: {
       prompt: '雨夜街景',
       negative: 'blurry, my own',
-      negativeLayers: { model: 'blurry', style: '', user: 'my own' },
+      negativeLayers: { model: '', user: 'blurry, my own' },
       presetId: 'sdxl-lightning',
       width: 1024,
       height: 1024,
@@ -2991,18 +3444,19 @@ await check('渲染：画面设置三段、宽高草稿与空值恢复', async (
       cfg: 0,
       seed: '',
       count: 1,
-      styleId: '',
     },
     patchForm: (partial) => calls.patch.push(partial),
     selectPreset: () => {},
-    styleId: '',
-    applyStyle: () => {},
     ratioId: '1:1',
     applyRatio: (id) => calls.ratio.push(id),
-    sizeOptions: [768, 1024, 1152],
-    selectedSize: 1024,
-    applySize: (size) => calls.size.push(size),
+    sizeTiers: [768, 1024, 1152],
+    selectedTier: 1024,
+    applyTier: (tier) => calls.tier.push(tier),
     applyCustomSize: (partial) => calls.custom.push(partial),
+    applyCfg: () => {},
+    resetSeed: () => {},
+    negativeActive: false,
+    negativeHint: '',
     refineGroups: [],
     refineSource: '',
     enhancing: false,
@@ -3014,8 +3468,9 @@ await check('渲染：画面设置三段、宽高草稿与空值恢复', async (
     englishPromptHint: false,
   }
   const ui = {
-    advancedOpen: true,
+    advancedOpen: false,
     setAdvancedOpen: () => {},
+    toggleAdvancedOpen: () => {},
     negativeOpen: false,
     setNegativeOpen: () => {},
     panelMode: 'form',
@@ -3029,157 +3484,165 @@ await check('渲染：画面设置三段、宽高草稿与空值恢复', async (
     ...props,
   })
   const textOf = (tree) => collectText(tree).join(' | ')
-  const widthInputOf = (tree) => findNodes(tree, (node) => node.type === 'input' && node.props?.['aria-label'] === '宽')[0]
-  const heightInputOf = (tree) => findNodes(tree, (node) => node.type === 'input' && node.props?.['aria-label'] === '高')[0]
-
-  let tree = await client.mountRaw(client.components.Rail, railProps())
-  let text = textOf(tree)
-  assert.ok(text.includes('转为英文'), '提示词区应有「转为英文」按钮')
-  assert.ok(text.includes('润色'), '润色按钮仍在，二者并列')
-
-  // 三段同构：比例 / 1:1 推荐尺寸 / 自定义宽高 都在「画面设置」里。
-  assert.ok(text.includes('画幅比例'), '画面设置应有画幅比例标签')
-  assert.ok(text.includes('1:1 推荐尺寸'), '方形档位应明确标注为 1:1 推荐尺寸')
-  assert.ok(text.includes('自定义宽高'), '画面设置应有自定义宽高行')
-  assert.ok(text.includes('1024 × 1024 · 1:1'), '标题栏读数应与当前尺寸 / 比例一致')
-  assert.ok(
-    text.includes(`${LIMITS.width.min}–${LIMITS.width.max}、${LIMITS.width.step} 的整数倍`),
-    '宽高说明应写明合法范围与步长（注入自 LIMITS）',
-  )
-  assert.ok(text.includes('宽高互不联动'), '宽高说明应写明互不联动')
-
-  // 转英文按钮：点击交给 translate 动作。
-  const translateButton = findNodes(
+  const widthInputOf = (tree) => findNodes(
     tree,
-    (node) => node.type === 'button'
-      && typeof node.props?.className === 'string'
-      && node.props.className.split(' ').includes('ofs-translate-action'),
+    (node) => node.type === 'input' && node.props?.['aria-label'] === '宽',
   )[0]
-  assert.ok(translateButton, '缺少「转为英文」按钮')
-  assert.notEqual(translateButton.props.disabled, true)
-  translateButton.props.onClick()
-  assert.equal(calls.translate, 1, '点击应调用 translate()')
-
-  // 画幅比例：5 个按钮，当前 1:1 高亮；点击交给 applyRatio。
-  const ratioButtons = findNodes(
+  const heightInputOf = (tree) => findNodes(
     tree,
-    (node) => node.type === 'button'
-      && typeof node.props?.className === 'string'
-      && node.props.className.split(' ').includes('ofs-ratio'),
-  )
-  assert.equal(ratioButtons.length, 5)
-  assert.equal(ratioButtons[0].props['aria-pressed'], true, '宽高 1024×1024 时 1:1 高亮')
-  ratioButtons[1].props.onClick()
-  assert.deepEqual(calls.ratio, ['16:9'], '点击比例应交给 applyRatio')
-
-  // 方形档位：三个数字按钮，当前 1024 精确匹配时选中。
-  const sizeButtons = findNodes(
-    tree,
-    (node) => node.type === 'button'
-      && typeof node.props?.className === 'string'
-      && node.props.className.split(' ').includes('ofs-size'),
-  )
-  assert.equal(sizeButtons.length, 3, `方形档位应消费 sizeOptions，实际：${textOf(tree)}`)
-  assert.deepEqual(sizeButtons.map((node) => collectText(node).join('')), ['768', '1024', '1152'])
-  assert.equal(sizeButtons[1].props['aria-pressed'], true, '宽高等于 1024 时 1024 档位选中')
-  sizeButtons[0].props.onClick()
-  assert.deepEqual(calls.size, [768], '点击档位应设置宽高为该值')
-
-  // 外部改动（点比例 / 方形档 / 切模型 / 带回参数）→ 标题栏读数与宽高输入框同步。
-  formProps.form.width = 768
-  formProps.form.height = 768
-  tree = await client.rerenderRaw()
-  text = textOf(tree)
-  assert.ok(text.includes('768 × 768 · 1:1'), '方形档 768 也是 1:1，读数不应变成无比例')
-  assert.equal(widthInputOf(tree).props.value, '768', '输入框草稿跟随外部尺寸变化')
-  assert.equal(heightInputOf(tree).props.value, '768')
-
-  // 比例匹配不上任何预设时，读数明确写「自定义」。
-  formProps.form.width = 800
-  formProps.form.height = 600
-  formProps.ratioId = ''
-  tree = await client.rerenderRaw()
-  assert.ok(textOf(tree).includes('800 × 600 · 自定义'), '无匹配比例时读数显示自定义')
-
-  // 输入过程只落在本地草稿，不写表单；失焦才归一化提交。
-  assert.equal(widthInputOf(tree).props.type, 'number')
-  assert.equal(widthInputOf(tree).props.min, LIMITS.width.min)
-  assert.equal(widthInputOf(tree).props.max, LIMITS.width.max)
-  assert.equal(widthInputOf(tree).props.step, LIMITS.width.step)
-  assert.equal(heightInputOf(tree).props.max, LIMITS.height.max)
-  widthInputOf(tree).props.onChange({ target: { value: '720' } })
-  assert.equal(calls.patch.length, 0, '输入过程不应把原始文本写进表单')
-  tree = await client.rerenderRaw()
-  assert.equal(widthInputOf(tree).props.value, '720', '草稿即时反映输入')
-  widthInputOf(tree).props.onBlur()
-  assert.deepEqual(calls.custom, [{ width: 720 }], '修改宽只提交宽，高不联动')
-  assert.equal(calls.patch.length, 0)
-
-  // 清空后失焦：恢复修改前的合法值（800），既不提交也不跳成 256。
-  tree = await client.rerenderRaw()
-  widthInputOf(tree).props.onChange({ target: { value: '' } })
-  tree = await client.rerenderRaw()
-  assert.equal(widthInputOf(tree).props.value, '', '清空后输入框为空')
-  widthInputOf(tree).props.onBlur()
-  assert.equal(calls.custom.length, 1, '空值失焦不应提交表单')
-  tree = await client.rerenderRaw()
-  assert.equal(widthInputOf(tree).props.value, '800', '恢复到修改前的合法值')
-  assert.notEqual(widthInputOf(tree).props.value, '256', '不能因 Number(\'\') 钳成下限 256')
-
-  // 改高不联动宽；超界按契约上限钳制，非 8 倍数按 step 对齐。
-  heightInputOf(tree).props.onChange({ target: { value: '99999' } })
-  tree = await client.rerenderRaw()
-  heightInputOf(tree).props.onBlur()
-  assert.deepEqual(calls.custom.at(-1), { height: LIMITS.height.max }, '超界按契约上限钳制')
-  assert.equal(widthInputOf(tree).props.value, '800', '改高后宽仍保持 800')
-  tree = await client.rerenderRaw()
-  assert.equal(heightInputOf(tree).props.value, String(LIMITS.height.max))
-  heightInputOf(tree).props.onChange({ target: { value: '253' } })
-  tree = await client.rerenderRaw()
-  heightInputOf(tree).props.onBlur()
-  assert.deepEqual(calls.custom.at(-1), { height: LIMITS.height.min }, '非 8 倍数按 step 对齐')
-
-  // 回车等价失焦，方便「改完直接按 Enter」。
-  const heightForEnter = heightInputOf(tree)
-  let blurred = 0
-  heightForEnter.props.onKeyDown({ key: 'Enter', currentTarget: { blur: () => { blurred += 1 } } })
-  assert.equal(blurred, 1, '回车应提交（等价失焦）')
-
-  // 自定义宽高常驻「画面设置」：高级设置折叠时仍在，采样参数不渲染。
-  const collapsed = await client.mountRaw(client.components.Rail, railProps({ ui: { ...ui, advancedOpen: false } }))
-  assert.ok(widthInputOf(collapsed), '高级设置折叠时自定义宽高仍可用')
-  assert.equal(
-    findNodes(collapsed, (node) => node.type === 'input' && node.props?.['aria-label'] === '采样步数').length,
-    0,
-    '高级设置折叠时不应渲染步数输入',
-  )
-
-  // 翻译中显示进行中文案并禁用按钮。
-  const translatingClient = await loadClient({ now: NOW, responses: {}, testBuild: true })
-  const translatingTree = await translatingClient.mountRaw(
-    translatingClient.components.Rail,
-    {
-      t: translatingClient.internals.i18n.fallbackTranslate('zh'),
-      ui,
-      form: { ...formProps, translating: true },
-      actions: { sending: false, generate: () => {} },
-    },
-  )
-  assert.ok(textOf(translatingTree).includes('正在翻译…'), '翻译中按钮显示进行中文案')
-  const translatingButton = findNodes(
-    translatingTree,
-    (node) => node.type === 'button'
-      && typeof node.props?.className === 'string'
-      && node.props.className.split(' ').includes('ofs-translate-action'),
+    (node) => node.type === 'input' && node.props?.['aria-label'] === '高',
   )[0]
-  assert.equal(translatingButton.props.disabled, true, '翻译中按钮禁用')
-  translatingClient.unmount()
-  client.unmount()
+  const customToggleOf = (tree) => findNodes(
+    tree,
+    (node) => node.type === 'button'
+      && typeof node.props?.className === 'string'
+      && node.props.className.split(' ').includes('ofs-custom-toggle'),
+  )[0]
 
-  assert.equal(client.PURE.mergeNegativeLayers({ model: 'blurry', style: '', user: 'my own' }), 'blurry, my own')
+  const tree = await client.mountRaw(client.components.Rail, railProps())
+  try {
+    let text = textOf(tree)
+    assert.ok(text.includes('转为英文'), '提示词区应有「转为英文」按钮')
+    assert.ok(text.includes('润色'), '润色按钮仍在，二者并列')
+    // 画面设置三段：画幅比例 → 分辨率档位 → 自定义宽高折叠；不再有方形推荐尺寸行。
+    assert.ok(text.includes('画幅比例'), '画面设置应有画幅比例标签')
+    assert.ok(text.includes('分辨率档位'), '画面设置应有分辨率档位标签')
+    assert.ok(text.includes('自定义宽高'), '画面设置应有自定义宽高折叠入口')
+    assert.ok(!text.includes('推荐尺寸'), '0.10.0 起不再有方形推荐尺寸行')
+    assert.ok(!text.includes('风格'), '参数面板不再有风格预设')
+    // 页脚规格摘要：尺寸 · 比例 · 张数。
+    assert.ok(text.includes('1024 × 1024 · 1:1 · 1 张'), `页脚应有规格摘要，实际：${text}`)
+
+    // 转英文按钮：点击交给 translate 动作。
+    const translateButton = findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && typeof node.props?.className === 'string'
+        && node.props.className.split(' ').includes('ofs-translate-action'),
+    )[0]
+    assert.ok(translateButton, '缺少「转为英文」按钮')
+    assert.notEqual(translateButton.props.disabled, true)
+    translateButton.props.onClick()
+    assert.equal(calls.translate, 1, '点击应调用 translate()')
+
+    // 画幅比例：5 个按钮，当前 1:1 高亮；点击交给 applyRatio。
+    const ratioButtons = findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && typeof node.props?.className === 'string'
+        && node.props.className.split(' ').includes('ofs-ratio'),
+    )
+    assert.equal(ratioButtons.length, 5)
+    assert.equal(ratioButtons[0].props['aria-pressed'], true, '宽高 1024×1024 时 1:1 高亮')
+    ratioButtons[1].props.onClick()
+    assert.deepEqual(calls.ratio, ['16:9'], '点击比例应交给 applyRatio')
+
+    // 分辨率档位（长边）：消费 sizeTiers，当前长边 1024 命中时选中。
+    const tierButtons = findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && typeof node.props?.className === 'string'
+        && node.props.className.split(' ').includes('ofs-size'),
+    )
+    assert.equal(tierButtons.length, 3, '档位行应消费 sizeTiers')
+    assert.deepEqual(tierButtons.map((node) => collectText(node).join('')), ['768', '1024', '1152'])
+    assert.equal(tierButtons[1].props['aria-pressed'], true, '长边 1024 命中 1024 档')
+    tierButtons[0].props.onClick()
+    assert.deepEqual(calls.tier, [768], '点击档位应交给 applyTier')
+
+    // 自定义宽高默认折叠；展开后才渲染输入框。
+    const toggle = customToggleOf(tree)
+    assert.ok(toggle, '缺少自定义宽高折叠入口')
+    assert.equal(toggle.props['aria-expanded'], false, '自定义宽高默认折叠')
+    assert.equal(widthInputOf(tree), undefined, '折叠时不渲染宽输入框')
+    toggle.props.onClick()
+    let expanded = await client.rerenderRaw()
+    assert.equal(customToggleOf(expanded).props['aria-expanded'], true)
+    assert.ok(widthInputOf(expanded), '展开后渲染宽输入框')
+    assert.equal(widthInputOf(expanded).props.value, '1024')
+    assert.equal(widthInputOf(expanded).props.type, 'number')
+    assert.equal(widthInputOf(expanded).props.min, LIMITS.width.min)
+    assert.equal(widthInputOf(expanded).props.max, LIMITS.width.max)
+    assert.equal(widthInputOf(expanded).props.step, LIMITS.width.step)
+    assert.equal(heightInputOf(expanded).props.max, LIMITS.height.max)
+    assert.ok(
+      textOf(expanded).includes(`${LIMITS.width.min}–${LIMITS.width.max}`),
+      '宽高说明应写明合法范围（注入自 LIMITS）',
+    )
+    assert.ok(textOf(expanded).includes(`${LIMITS.width.step} 的整数倍`), '宽高说明应写明步长')
+    assert.ok(textOf(expanded).includes('宽高互不联动'), '宽高说明应写明互不联动')
+
+    // 输入过程只落在本地草稿，不写表单；失焦才归一化提交，且宽高互不联动。
+    widthInputOf(expanded).props.onChange({ target: { value: '720' } })
+    assert.equal(calls.patch.length, 0, '输入过程不应把原始文本写进表单')
+    expanded = await client.rerenderRaw()
+    assert.equal(widthInputOf(expanded).props.value, '720', '草稿即时反映输入')
+    widthInputOf(expanded).props.onBlur()
+    assert.deepEqual(calls.custom, [{ width: 720 }], '修改宽只提交宽，高不联动')
+
+    // 清空后失焦：恢复修改前的合法值（1024），既不提交也不跳成 256。
+    expanded = await client.rerenderRaw()
+    widthInputOf(expanded).props.onChange({ target: { value: '' } })
+    expanded = await client.rerenderRaw()
+    assert.equal(widthInputOf(expanded).props.value, '', '清空后输入框为空')
+    widthInputOf(expanded).props.onBlur()
+    assert.equal(calls.custom.length, 1, '空值失焦不应提交表单')
+    expanded = await client.rerenderRaw()
+    assert.equal(widthInputOf(expanded).props.value, '1024', '恢复到修改前的合法值')
+    assert.notEqual(widthInputOf(expanded).props.value, '256', "不能因 Number('') 钳成下限 256")
+
+    // 改高超界按契约上限钳制，非 8 倍数按 step 对齐；宽保持 1024。
+    heightInputOf(expanded).props.onChange({ target: { value: '99999' } })
+    expanded = await client.rerenderRaw()
+    heightInputOf(expanded).props.onBlur()
+    assert.deepEqual(calls.custom.at(-1), { height: LIMITS.height.max }, '超界按契约上限钳制')
+    expanded = await client.rerenderRaw()
+    assert.equal(widthInputOf(expanded).props.value, '1024', '改高后宽仍保持 1024')
+    heightInputOf(expanded).props.onChange({ target: { value: '253' } })
+    expanded = await client.rerenderRaw()
+    heightInputOf(expanded).props.onBlur()
+    assert.deepEqual(calls.custom.at(-1), { height: LIMITS.height.min }, '非 8 倍数按 step 对齐')
+
+    // 回车等价失焦，方便「改完直接按 Enter」。
+    const heightForEnter = heightInputOf(expanded)
+    let blurred = 0
+    heightForEnter.props.onKeyDown({ key: 'Enter', currentTarget: { blur: () => { blurred += 1 } } })
+    assert.equal(blurred, 1, '回车应提交（等价失焦）')
+
+    // 高级设置默认折叠：不渲染步数输入，折叠态标题右侧给参数读数。
+    assert.equal(
+      findNodes(expanded, (node) => node.type === 'input' && node.props?.['aria-label'] === '采样步数').length,
+      0,
+      '高级设置折叠时不应渲染步数输入',
+    )
+    assert.ok(textOf(expanded).includes('4 步 · CFG 0 · 随机种子'), '折叠态应有参数读数')
+
+    // 翻译中：按钮显示进行中文案并禁用。
+    const translatingClient = await loadClient({ now: NOW, responses: {}, testBuild: true })
+    const translatingTree = await translatingClient.mountRaw(
+      translatingClient.components.Rail,
+      {
+        t: translatingClient.internals.i18n.fallbackTranslate('zh'),
+        ui,
+        form: { ...formProps, translating: true },
+        actions: { sending: false, generate: () => {} },
+      },
+    )
+    assert.ok(textOf(translatingTree).includes('正在翻译…'), '翻译中按钮显示进行中文案')
+    const translatingButton = findNodes(
+      translatingTree,
+      (node) => node.type === 'button'
+        && typeof node.props?.className === 'string'
+        && node.props.className.split(' ').includes('ofs-translate-action'),
+    )[0]
+    assert.equal(translatingButton.props.disabled, true, '翻译中按钮禁用')
+    translatingClient.unmount()
+  } finally {
+    client.unmount()
+  }
 })
 
-// 资源层请求形状：取消走契约路由 + JSON body；历史拼 limit/offset；英译带 mode。
+
 await check('资源层：取消 / 历史分页 / 英译的请求形状', async () => {
   const savedFetch = globalThis.fetch
   const savedDocument = Object.prototype.hasOwnProperty.call(globalThis, 'document')

@@ -53,8 +53,9 @@ Imagen Studio decouples the visual user experience from the underlying diffusion
 
 ### 1. Dedicated Full-Page Studio
 * **Curated Open-Source Models**: From ultra-fast `SDXL Lightning` and `Hyper-SDXL`, to cinematic `SDXL Base` and `RealVisXL`, anime-tailored `Animagine XL 3.1` / `Anima`, and cutting-edge `FLUX.2 Klein 4B`.
-* **Single-Track Creative Rail**: Prompt, negative prompt, aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4), step count, and seed all in one clear view.
-* **4-Dimension Prompt Polish**: Non-destructive quick additions for Lighting, Material, Composition, and Mood — English fragments go into the prompt while the UI shows localized labels.
+* **Single-Track Creative Rail**: prompt, aspect ratio, resolution tier (long edge), custom size, steps / guidance / seed in one clear view; image count (1–4) sits in the footer so you can swap words, change ratio, and batch-draw without extra expansion.
+* **Only Effective Parameters Shown**: the exclusion field appears only when the selected model really consumes negative prompts and CFG > 0 (hidden by default for CFG=0 fast models and `FLUX.2 Klein 4B`), and is never submitted when unavailable; with a reference image, Frame Settings states that output size follows the reference image.
+* **4-Dimension Prompt Polish**: Lighting, Material, Composition, and Mood in one click — collapsible, non-destructive additions; English fragments go into the prompt while the UI shows localized labels.
 * **Reference-based redraw (img2img)**: Turn any gallery piece into a reference image with one click and iterate with a redraw-strength slider (SDXL family presets first).
 * **Bottom Filmstrip & History Drawer**: Review recent generations instantly, with one-click actions to bring back parameters or generate variants.
 
@@ -74,8 +75,9 @@ Imagen Studio decouples the visual user experience from the underlying diffusion
 
 ### 2. Creation Assistant & Chat Tools
 * **In-Chat Generation**: The host automatically registers `imagen_generate`, `imagen_session`, and `imagen_history` agent tools.
-* **Natural Language Intent Alignment**: Describe your idea casually; the built-in assistant refines it into standard English prompts, suggests appropriate aspect ratios, and **presents a clear confirmation card before executing**.
-* **Seamless Bi-Directional Flow**: Images created in chat can be expanded from the right-hand filmstrip and opened in the full studio for further editing.
+* **Natural Language Intent Alignment**: Describe your idea casually; the built-in assistant turns it into a standard English prompt, infers the aspect ratio and decides whether exclusions are available for the current model. It supports general clarifying questions and multi-turn edits, and **always shows a confirmation card before executing**.
+* **Model Knowledge Built In**: The assistant knows the prompt style, negative-prompt capability, and strengths of all 9 models, and suggests a better fit as a soft hint without blocking your current choice.
+* **Seamless Bi-Directional Flow**: Hand the confirmation card off to the parameter form for further tuning and batch draws; images created in chat can be expanded from the right-hand filmstrip and opened in the full studio for further editing.
 
 </td>
 <td width="52%">

@@ -27,6 +27,7 @@
   ],
   "runtime": "default",
   "supportsImg2Img": true,
+  "supportsNegative": true,
   "pipeline": {
     "loader": "sdxl",
     "base": "playgroundai/playground-v2.5-1024px-aesthetic",

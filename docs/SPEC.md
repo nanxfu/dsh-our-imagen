@@ -4,7 +4,7 @@
 > 本文档只描述语义、请求/响应形状与使用约束，不重复维护数值。`node test/check-contract.mjs` 会校验
 > 宿主注册的路由、宿主错误码、客户端文案与本文档是否跟随契约。
 >
-> **版本**：0.9.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
+> **版本**：0.10.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
 
 ---
 
@@ -200,7 +200,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 
 ```json
 {
-  "version": "0.9.0",
+  "version": "0.10.0",
   "defaultPreset": "sdxl-lightning",
   "presets": [
     {
@@ -229,7 +229,9 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
       "tier": "fast",
       "negativeHint": "blurry, low quality, deformed, extra limbs",
       "promptStyle": "concise",
-      "qualityPrefix": ""
+      "qualityPrefix": "",
+      "supportsImg2Img": true,
+      "supportsNegative": true
     }
   ],
   "session": {
@@ -263,7 +265,8 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 ```
 
 > `presets` 是 `publicPresets()` 的结果：不含 `pipeline`（下发远端 daemon 用的加载描述），避免同一份数据在
-> 客户端快照里出现两份。
+> 客户端快照里出现两份；`supportsImg2Img` / `supportsNegative` 等能力字段随公开视图下发，客户端据此决定参考图
+> 槽位与「排除项」是否可用。
 
 #### `POST /imagen-api/probe`
 
@@ -588,6 +591,9 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 - 每条建议固定拆成两段：`text` 是要追加进 prompt 的英文短语（九个预设都按英文提示词训练，发给模型的只能是英文），
   `label` 是给用户看的 UI 语言短标签（`locale=en` 时与 `text` 相同）。
 - `source`：`model`（宿主模型）/ `local`（同结构本地兜底）；空提示词返回空 `groups`、`source: "local"`。
+- `presetId` 决定润色的书写口径：system prompt 由模型资产生成（当前模型的提示词配方与质量词前缀、速度档位、
+  负向词能力，见 `shared/models-guide.js`），并要求「原文已覆盖的维度不再重复给同类建议」；`presetId` 缺失或未知时
+  按通用口径处理，不把默认预设冒充成用户指定的模型。
 
 **translate 模式**
 
@@ -599,30 +605,58 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 
 #### `POST /imagen-api/intent`
 
-对话模式意图解析：把一句话整理成生成参数，必要时返回澄清项。
+对话模式意图解析（意图 JSON v2）：把一句话整理成可直接执行的生成参数，必要时返回通用澄清项或模型建议。
 
-- **请求体**：`{ "text": "画一张横版的雨夜街景", "previousPrompt": "", "presetId": "sdxl-lightning", "locale": "zh" }`
-  （后三者可选；`presetId` 决定 prompt 的书写口径：danbooru 标签 / 自然语言 / 短句，未知 id 回退默认预设）
-- **错误**：`400 invalid_request`（`text` 为空或超过 2000 字符）。
+- **请求体**：
+
+| 字段 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `text` | string | 必填。本轮用户输入，trim 后 1~`LIMITS.intentText.maxChars`（2000）字符 |
+| `previousPrompt` | string | 可选。上一轮英文提示词；`history` 为空时作为上一轮上下文（旧客户端兼容） |
+| `locale` | string | 可选，`zh`（默认）/ `en`。只决定 `summary` / `clarify` / `modelHint.reason` 的语言，不影响 `prompt` / `negative` |
+| `presetId` | string | 可选。当前预设 id，决定提示词书写口径与负向词能力；未知 id 回退默认预设 |
+| `cfg` | number | 可选。客户端当前表单的 CFG，决定本次 `negative` 是否生效；非法 / 缺失时回落预设推荐值 |
+| `history` | array | 可选。多轮上下文，元素 `{ role: "user" \| "assistant", content: string }`；Host 按 `LIMITS.intentHistory` 裁剪：角色白名单、单条非空且截断到 2000 字符、只保留最近 12 条，非法项丢弃不报错。`history` 非空时优先于 `previousPrompt` |
+
+请求示例：
+
+```json
+{
+  "text": "画一张横版的雨夜街景，不要文字",
+  "locale": "zh",
+  "presetId": "sdxl-base",
+  "cfg": 7.5,
+  "history": [
+    { "role": "user", "content": "上一轮：雨夜街景" },
+    { "role": "assistant", "content": "rainy night city street, wet pavement reflecting neon signs" }
+  ]
+}
+```
+
+- **错误**：`400 invalid_request`（`text` 为空或超过 `LIMITS.intentText.maxChars`）。
+
 - **响应**：
 
 ```json
 {
   "ok": true,
   "source": "model",
-  "prompt": "masterpiece, best quality, highres, rainy night city street, wet pavement reflecting neon signs, cinematic lighting",
-  "summary": "雨夜城市街景，湿润路面倒映霓虹招牌，电影感光影",
+  "prompt": "rainy night city street in 16:9, wet pavement reflecting neon signs, cinematic lighting",
+  "summary": "横版雨夜街景，湿润路面倒映霓虹招牌，电影感光影",
   "ratioId": "16:9",
-  "styleId": "film",
-  "clarify": null
+  "negative": "text, watermark",
+  "clarify": null,
+  "modelHint": null
 }
 ```
 
-- `prompt` **恒为英文**（九个预设都按英文提示词训练），不随 `locale` 变化；`locale` 只决定 `summary` 用哪种语言写。
-- `summary` 是给用户确认用的本轮画面概述，只进界面、不会发给生图模型。
-- `ratioId` 取值 `1:1 / 16:9 / 9:16 / 4:3 / 3:4 / ""`；`styleId` 取值 `film / concept / cyberpunk / ink / clay / ""`，留空表示沿用当前设置。
-- `clarify` 仅在用户要求互相矛盾时出现：`{ "field": "ratio"|"style", "options": [...] }`。
-- 无可用模型时 `source` 为 `local`，`prompt` 与 `summary` 都是原文（宿主不具备本地翻译能力，界面会提示这是本地兜底结果）。
+- `prompt` **恒为英文**，不随 `locale` 变化；`negative` 也恒为英文。
+- `ratioId` 只取契约 `RATIO_IDS`（`1:1` / `16:9` / `9:16` / `4:3` / `3:4`），模型无法判断时为空串；不再有风格字段。
+- `negative`：仅在 `negativePromptActive(preset, cfg)` 为 true 时可能非空，否则**必须为空串**（避免把无效参数带进表单）；长度受 `LIMITS.negativePrompt.maxChars` 限制。
+- `summary`：给用户确认用的本轮画面概述（UI 语言），只进界面、不发给生图模型；截断到 `INTENT.summaryMaxChars`。
+- `clarify`：`null` 或 `{ "question": string, "options": string[] }`。`question` ≤ `INTENT.clarifyQuestionMaxChars`；`options` 去重后 2~4 条、每条 ≤ `INTENT.clarifyOptionMaxChars`，不足 2 条时整条丢弃。澄清轮仍必须给出草稿 `prompt`，不再要求空提示词。
+- `modelHint`：`null` 或 `{ "presetId": string, "reason": string }`。`presetId` 必须存在于契约 `PRESETS` 且不能等于当前预设；`reason` 是 UI 语言短理由（≤ `INTENT.modelHintReasonMaxChars`），模型没给理由时用该预设的定位描述兜底。模型建议只是弱提示，不改变本次生成使用的预设。
+- 无可用模型或输出不可解析时 `source` 为 `local`：`prompt` 与 `summary` 都是用户原话，`ratioId` / `negative` 为空串，`clarify` / `modelHint` 为 `null`；界面会明确提示这是本地兜底结果。
 
 #### `POST /imagen-api/reveal`
 
@@ -766,13 +800,15 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
   首次调用若远端会话未启动，会自动拉起 Kernel（可能需要排队 10 分钟以上）。
   等待超时不影响任务继续执行：返回里的 `jobId`（形如 `j_1a2b3c4d`）可配合 `imagen_cancel` 取消，或用
   `imagen_history` 轮询结果；传 `saveTo` 可把图片直接交付到工作区路径。
+  描述末尾注入**模型库概要**：每个预设一行（名称 / 家族 / 步数 / 实测耗时 / 提示词写法 / 默认 CFG 与负向词能力 /
+  是否支持垫图 / 定位），让 Agent 能按专长选模型，而不是只看到 id 枚举。
 - **输入参数**（`additionalProperties: false`）：
 
 | 参数 | 类型 | 必填 | 说明 |
 | :--- | :--- | :---: | :--- |
 | `prompt` | string | 是 | 画面描述，建议英文，不超过 2000 字符 |
-| `negativePrompt` | string | 否 | 反向提示词，仅在 `cfg > 0` 时生效 |
-| `presetId` | string | 否 | 预设 id（枚举来自契约 `PRESETS`），默认 `sdxl-lightning` |
+| `negativePrompt` | string | 否 | 排除项（反向提示词）。只在所选模型真的消费负向词且 `CFG > 0` 时生效；`CFG=0` 的极速模型或不支持负向词的模型会忽略它，需要排除内容时改用正面描述 |
+| `presetId` | string | 否 | 预设 id（枚举来自契约 `PRESETS`），默认 `sdxl-lightning`；具体写法与专长见工具描述里的模型库 |
 | `width` | integer | 否 | 宽度 256–1536，默认取预设 |
 | `height` | integer | 否 | 高度 256–1536，默认取预设 |
 | `steps` | integer | 否 | 采样步数 1–60，默认取预设 |
@@ -837,21 +873,25 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 **数值以 `shared/contract.js` 的 `PRESETS` 为准**（`peakVramMb` 为实测峰值显存，`loadSeconds` 为首次加载耗时，
 `steadySeconds` 为加载完成后的单张稳定耗时）。
 
-`presets` 的公开视图另带三个提示词字段：`negativeHint`（该预设推荐的负向提示词，客户端切预设时在用户没写过
-负向词的前提下自动回填）、`promptStyle`（`danbooru` / `natural` / `concise`，决定意图解析时给模型的书写口径）
-与 `qualityPrefix`（danbooru 系模型的质量词前缀，无则为空串）。字段来源是 `models/*.json`。
+`presets` 的公开视图随模型资产下发提示词与能力字段：`negativeHint`（该预设推荐的负向提示词，切换预设或把 CFG 抬到可用时自动回填模型负向层）、
+`promptStyle`（`danbooru` / `natural` / `concise`，决定意图解析与润色时给模型的书写口径）、`qualityPrefix`（质量词前缀，无则为空串）、
+`supportsImg2Img`（是否支持垫图重绘）与 `supportsNegative`（管线是否真的消费 `negative_prompt`）。字段来源是 `models/*.json`。
+负向词最终是否可用还要看 CFG 与推荐词，判定规则见 [`docs/MODEL_ASSET_SPEC.md`](MODEL_ASSET_SPEC.md) §2.3。
 
-| 预设 ID | 基础模型与权重 | 默认尺寸（可选档位） | 步数 / CFG | 加载 / 单张耗时 | 峰值显存 | 下载量 | 卡数 | 档位 |
-| :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :--- |
-| **`sdxl-lightning`** *(默认)* | `stabilityai/stable-diffusion-xl-base-1.0` + `ByteDance/SDXL-Lightning` (4-step LoRA) | 1024（768 / 1024 / 1152） | 4 步 / 0 | 7.7s / 6.2s | 10347 MB | 6.78 GB | 1 | fast |
-| **`hyper-sdxl-8step`** | `stabilityai/stable-diffusion-xl-base-1.0` + `ByteDance/Hyper-SD` (8-step LoRA) | 1024（768 / 1024） | 8 步 / 0 | 14.3s / 7.74s | 10347 MB | 7.35 GB | 1 | fast |
-| **`sdxl-turbo`** | `stabilityai/sdxl-turbo` | 512（512 / 768 / 1024） | 4 步 / 0 | 4.0s / 1.87s | 7666 MB | 6.62 GB | 1 | fast |
-| **`playground-v2.5`** | `playgroundai/playground-v2.5-1024px-aesthetic` | 1024（768 / 1024） | 30 步 / 3 | 5.7s / 28.34s | 9967 MB | 6.46 GB | 1 | usable |
-| **`sdxl-base`** | `stabilityai/stable-diffusion-xl-base-1.0` | 1024（768 / 1024 / 1152） | 25 步 / 7.5 | 5.8s / 27.8s | 9966 MB | 6.78 GB | 1 | usable |
-| **`realvis-v5`** | `SG161222/RealVisXL_V5.0` | 1024（768 / 1024） | 25 步 / 5 | 5.2s / 24.53s | 9967 MB | 6.46 GB | 1 | usable |
-| **`flux2-klein-4b`** *(实验)* | `black-forest-labs/FLUX.2-klein-4B` | 1024（768 / 1024） | 4 步 / 1.0 | 28.2s / 10.24s | 7929 MB | 15.2 GB | 2 | fast |
-| **`animagine-xl-3.1`** | `cagliostrolab/animagine-xl-3.1` | 1024（768 / 1024） | 28 步 / 7 | 4.8s / 26.17s | 9176 MB | 6.46 GB | 1 | usable |
-| **`anima-light-lavender`** | `Johnny-Z/Anima-Light-Lavender`（Cosmos-Predict2 2B DiT + Qwen3-0.6B + Qwen-Image VAE，单文件 checkpoint，`anima` loader） | 1024（768 / 1024 / 1152） | 25 步 / 4 | 43.5s / 80.64s | 8470 MB | 5.25 GB | 1 | usable |
+| 预设 ID | 基础模型与权重 | 默认尺寸（可选档位） | 步数 / CFG | 加载 / 单张耗时 | 峰值显存 | 下载量 | 卡数 | 档位 | 负向词 |
+| :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :--- | :--- |
+| **`sdxl-lightning`** *(默认)* | `stabilityai/stable-diffusion-xl-base-1.0` + `ByteDance/SDXL-Lightning` (4-step LoRA) | 1024（768 / 1024 / 1152） | 4 步 / 0 | 7.7s / 6.2s | 10347 MB | 6.78 GB | 1 | fast | 支持（默认隐藏） |
+| **`hyper-sdxl-8step`** | `stabilityai/stable-diffusion-xl-base-1.0` + `ByteDance/Hyper-SD` (8-step LoRA) | 1024（768 / 1024） | 8 步 / 0 | 14.3s / 7.74s | 10347 MB | 7.35 GB | 1 | fast | 支持（默认隐藏） |
+| **`sdxl-turbo`** | `stabilityai/sdxl-turbo` | 512（512 / 768 / 1024） | 4 步 / 0 | 4.0s / 1.87s | 7666 MB | 6.62 GB | 1 | fast | 支持（默认隐藏） |
+| **`playground-v2.5`** | `playgroundai/playground-v2.5-1024px-aesthetic` | 1024（768 / 1024） | 30 步 / 3 | 5.7s / 28.34s | 9967 MB | 6.46 GB | 1 | usable | 支持 |
+| **`sdxl-base`** | `stabilityai/stable-diffusion-xl-base-1.0` | 1024（768 / 1024 / 1152） | 25 步 / 7.5 | 5.8s / 27.8s | 9966 MB | 6.78 GB | 1 | usable | 支持 |
+| **`realvis-v5`** | `SG161222/RealVisXL_V5.0` | 1024（768 / 1024） | 25 步 / 5 | 5.2s / 24.53s | 9967 MB | 6.46 GB | 1 | usable | 支持 |
+| **`flux2-klein-4b`** *(实验)* | `black-forest-labs/FLUX.2-klein-4B` | 1024（768 / 1024） | 4 步 / 1.0 | 28.2s / 10.24s | 7929 MB | 15.2 GB | 2 | fast | 不支持 |
+| **`animagine-xl-3.1`** | `cagliostrolab/animagine-xl-3.1` | 1024（768 / 1024） | 28 步 / 7 | 4.8s / 26.17s | 9176 MB | 6.46 GB | 1 | usable | 支持 |
+| **`anima-light-lavender`** | `Johnny-Z/Anima-Light-Lavender`（Cosmos-Predict2 2B DiT + Qwen3-0.6B + Qwen-Image VAE，单文件 checkpoint，`anima` loader） | 1024（768 / 1024 / 1152） | 25 步 / 4 | 43.5s / 80.64s | 8470 MB | 5.25 GB | 1 | usable | 支持（默认隐藏） |
+
+> **负向词列**：「支持」表示默认配置下「排除项」可见；「支持（默认隐藏）」表示模型有负向词能力，但默认 CFG（0 或等于推荐值）
+> 与推荐词条件下不展示，用户抬高 CFG 后出现；「不支持」表示管线 `__call__` 没有 `negative_prompt` 参数（`flux2`），传了也会被丢弃。
 
 > **双卡说明**：`flux2-klein-4b` 的 pipeline 使用 `deviceMap: "balanced"`，Kernel 申请 2×T4 时按 `gpus: 2` 下发；
 > 其余预设单卡即可。
@@ -893,14 +933,14 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | **历史产物视图** | 资产画廊 (`Asset Gallery`) | **作品画廊** (`Gallery`) | 本地历史生成资产管理 |
 | **随机数生成** | 换种子抽卡 (`Reroll`) | **生成变体** (`New Variant`) | 换随机 seed 生成新图 |
 | **参数复用** | 以此图微调 (`Iterate`) | **带回参数** (`Recall`) | 将历史图片的完整参数回填表单 |
-| **画风标签** | 风格胶囊 (`Capsule`) | **风格预设** (`Style`) | 预置画风选择器 |
+| **出图模型** | 风格胶囊 (`Capsule`) / 风格预设 (`Style`) | **模型预设** (`Model preset`) | 顶栏模型选择卡里的出图模型及其推荐参数；画风由提示词内容与模型本身表达，0.10.0 起不再有静态风格选择器 |
 | **算力状态** | 算力胶囊 (`Compute Pill`) | **GPU 状态** (`GPU Status`) | 顶栏远端算力状态指示条 |
 | **额度展示** | 免费额度 (`Free Quota`) | **Kaggle 剩余算力** (`Kaggle Quota`) | 明确指出算力来源与属性 |
 
 ### 5.2 布局结构规范
 
 工作台采用桌面优先的**单轨创作面板 + 居中画面自适应预览**布局：
-1. **单轨面板 (320px 恒定)**：固定在左侧，自上而下承载提示词、灵感预设/智能润色、风格预设、画面设置（画幅比例 / 1:1 推荐尺寸 / 自定义宽高，三段同构、共用同一份宽高）与高级参数（采样步数、CFG、种子、张数，默认折叠抽屉）及生成 CTA。
+1. **单轨面板 (320px 恒定)**：固定在左侧，自上而下为：提示词（输入框 / 英译与润色 / 英文软提示；灵感示例仅在提示词为空时出现，润色建议可收起）；参考图槽位（仅已有参考图时，含重绘强度）；画面设置（有参考图时只说明「出图尺寸跟随参考图」；文生图时是画幅比例 → 分辨率档位（长边）→「自定义宽高」折叠）；高级设置（默认折叠：可用时的排除项 + 步数 / 引导强度 / 随机种子，折叠态标题右侧显示读数摘要）；页脚（生成张数 1~4 → 立即生成 → 规格摘要）。
 2. **画面预览区 (自适应填充)**：大图按比例 contain 居中渲染，图下配操作胶囊（带回参数、生成变体、复制绝对路径、在文件夹中打开）。
 3. **最近生成栏 (底部常驻)**：横向滚动展示待执行任务与最近批次缩略图（62×62、12px 圆角），支持快速点选切图。队列串行执行，但待执行任务可能不止一个：每个任务各占一张卡，按真实执行顺序从左到右排列——进行中的卡带一份显影扫描光与已用时间，排队中的卡只写位次与已排队时长。
 4. **画廊卡片墙 (独立全宽视图)**：5 列自然高度卡片墙，不裁切图片，按时间线分段，支持搜索、模型筛选与批量管理。
@@ -911,7 +951,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 
 | 字段 / 区域 | 界面展示标签 | 悬浮图标 | 悬浮提示完整内容 (Tooltip Content) |
 | :--- | :--- | :---: | :--- |
-| **排除项** | 排除项 | `(ℹ)` | 画面中不希望出现的元素。注意：仅在引导强度 (CFG) > 0 时生效。 |
+| **排除项** | 排除项 | `(ℹ)` | 画面中不希望出现的元素。仅在所选模型支持负向词且引导强度 (CFG) > 0 时可用；默认 4 步极速模型的 CFG 为 0，不适用排除项。 |
 | **采样步数** | 采样步数 | `(ℹ)` | 模型迭代去噪的步数。SDXL Lightning 推荐 4~8 步，SDXL Base 推荐 25~30 步。 |
 | **引导强度** | 引导强度 (CFG) | `(ℹ)` | 数值越高越贴合提示词，过高可能产生色彩失真。默认推荐 1.5~7.0。 |
 | **Kaggle 账号** | 账号 | `(!)` | Kaggle 账号必须完成手机号绑定。未绑定的账号会被平台静默降级为 CPU，无法出图。 |
@@ -921,15 +961,16 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 
 ### 5.4 启发式灵感与模块化分层润色
 
-1. **灵感示例预设**：在提示词输入框为空或点击灵感时，提供预置启发式场景卡（科幻赛博、人像摄影、东方意境、3D 萌系、微距自然），点击直接填入。
-2. **结构化维度润色**：当调用智能润色时，由大模型解析提取 4 个可点选追加的维度标签（光影材质、构图视角、画面氛围、色彩基调），用户按需点击追加到提示词末尾，禁止强制一次性替换原文本。追加进提示词的是英文短语（模型可读），界面上显示的是对应语言的短标签（人可读）。
+1. **灵感示例**：仅在提示词为空时显示 5 个预置启发式场景卡（科幻街景、人像摄影、东方意境、3D 萌系、微距自然），点击直接填入；提示词非空时整块隐藏，不再长期占据首屏高度。
+2. **结构化维度润色**：调用「润色」时按光影 / 材质 / 构图 / 氛围四个维度返回可点选追加的英文短语，界面显示对应语言的短标签；点击追加到提示词末尾、再次点击撤销，不强制替换原文本。润色区头部提供「收起 / 展开」（默认展开）；模型不可用时回退为同结构的通用建议并明确标注。
+3. **模型配方对齐**：润色提示词按当前模型资产的书写配方、质量词前缀、速度档位与负向词能力生成，并要求避开原文已覆盖的维度；不再维护独立的硬编码模型名单。
 
 ### 5.5 第二批交互补充（取消 / 分页 / 英译 / 尺寸 / 日志诊断）
 
 1. **任务取消**：最近生成栏的每张暗房卡（`queued` / `waiting-session` / `running`）带「取消」按钮；取消请求发出后按钮显示「正在停止…」并禁用，避免重复提交。`running` 任务为合作式停止，文案不得写成「已取消」直到任务真正进入 `cancelled` 终态。
 2. **历史分页**：画廊底部在 `hasMore=true` 时显示「加载更多」（一次性追加下一页并去重），加载完显示「已加载全部作品」；加载失败保留已加载内容，不清空列表。
 3. **一键转英文**：提示词输入框下方提供「转为英文」次级动作（与「润色」并列，不抢占底部生成按钮的实心样式）。只有服务端 `source="model"` 且返回非空译文时才替换表单内容；`source="local"` 必须提示「模型不可用，未能翻译」，不得把原文当作译文。
-4. **画面尺寸**：「画面设置」按「画幅比例 → 1:1 推荐尺寸 → 自定义宽高」三段同构排列，三者共用同一份 `width / height`；方形档位只来自当前预设的 `sizeOptions`（等宽高）。点比例或方形档会同时改写宽高，自定义宽高只改对应一边、宽高互不联动；标题栏右侧实时显示生效尺寸与比例（如 `1024 × 1024 · 1:1`，无匹配比例时显示「自定义」）。详见 §5.10。
+4. **画面尺寸**：「画面设置」在文生图时按「画幅比例 → 分辨率档位（长边）→ 自定义宽高」组织（0.10.0 起，详见 §5.11）；有参考图时只说明出图尺寸跟随参考图。比例高亮按约分后的长宽比匹配，自定义宽高只改对应一边、宽高互不联动。
 5. **日志与诊断**：运行日志抽屉缺省展示远端日志，可手动切换到 Host 日志；远端日志为空且 Host 有内容时自动兜底并给出「已切换到 Host 本地日志」的来源说明。会话 / 网络 / 生成 / 通用 / 授权五类指引卡提供「查看日志」与「复制诊断信息」两个次级动作（普通 `ofs-chip`，不占用主操作的实心样式），复制的诊断文本包含脱敏环境指纹与阶段耗时，不含 token、代理 URL、绝对路径与提示词正文。
 
 ### 5.6 第三批交互补充（运行设置 / 新手卡点 / 空闲倒计时）
@@ -948,8 +989,8 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 
 1. **意图确认卡行内微调**：对话模式生成的确认卡上，英文提示词与排除项都是可直接编辑的文本域（分别受
    `LIMITS.prompt.maxChars` / `LIMITS.negativePrompt.maxChars` 限制）；改完直接点「按此生成」，按卡片当前
-   内容提交（提示词仍合并当前风格后缀），不必为改几个词重新发起对话。提示词被清空时「按此生成」禁用；
-   卡片上的排除项清空后提交即真的不带负向词。
+   内容提交（不再合并任何风格后缀；负向词是否提交由当前模型 / CFG 是否真的可用决定），不必为改几个词重新发起对话。
+   提示词被清空时「按此生成」禁用；卡片上的排除项清空后提交即真的不带负向词。0.10.0 起生成张数也可在卡上直接调整（见 §5.11）。
 2. **高级设置折叠记忆**：表单「高级设置」折叠区默认收起，展开/收起状态通过 `/imagen-api/ui-state`
    持久化（见 §2.5），下次打开工作台沿用；读取失败静默回落默认收起，不弹错误提示。界面状态不进
    `/state` 快照，也不参与出图参数。
@@ -986,17 +1027,53 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 
 ### 5.10 第七批交互补充（画面尺寸收口）
 
-1. **单区收口**：创作面板「画面设置」内按「画幅比例 / 1:1 推荐尺寸 / 自定义宽高」三段同构展示，三段共用
-   同一份 `width / height`；「高级设置」回归 2×2 采样参数网格（步数、引导强度、随机种子、生成张数），
-   折叠状态持久化逻辑不变。点快捷档时下方的宽高数值即时同步，手填单边时另一边不联动。
-2. **标题栏读数**：`画面设置` 标题右侧实时显示生效尺寸与比例匹配状态（如 `1024 × 1024 · 1:1`）；比例匹配
-   不上任何契约比例时显示 `1024 × 800 · 自定义`，避免「高亮消失」被误读为异常。读数取自表单里已归一化的
-   宽高，与将提交的值一致。
-3. **宽高编辑草稿**：宽 / 高输入框的编辑过程只维护本地草稿，失焦或按 `Enter` 才归一化写回表单；清空或纯空白
+> 0.10.0 起「画面设置」的结构再次调整（画幅比例 → 分辨率档位 → 自定义宽高折叠，见 §5.11），
+> 本节保留输入与校验层面的规则，这些规则仍然生效。
+
+1. **宽高编辑草稿**：宽 / 高输入框的编辑过程只维护本地草稿，失焦或按 `Enter` 才归一化写回表单；清空或纯空白
    失焦时恢复修改前的合法值（例如 `800`），不会因 `Number('') === 0` 静默跳成契约下限 `256`。输入有效数字
    但越界或不是 `8` 的整数倍时，仍按契约边界钳制并对齐 `LIMITS.width.step`。
-4. **比例高亮语义**：比例高亮按约分后的长宽比匹配（`ratioIdOf()`），不再要求像素精确相等——方形档 `768` /
-   `1152` 同样高亮 `1:1`，`800 × 600` 高亮 `4:3`；上方比例高亮始终是当前尺寸的匹配反馈。
-5. **文案与边界单一来源**：尺寸说明合并为一条，合法范围与步长从 `LIMITS.width` 注入（`formatText`），不写死
-   数字；`1:1 推荐尺寸` 的展示标签与分组 `aria-label` 拆键，窄屏下「宽 × 高」保持单行不溢出。
+2. **比例高亮语义**：比例高亮按约分后的长宽比匹配（`ratioIdOf()`），不再要求像素精确相等——在 `1:1` 比例下点档位
+   `768` / `1152` 同样高亮 `1:1`，`800 × 600` 高亮 `4:3`；比例高亮始终是当前尺寸的匹配反馈。
+3. **文案与边界单一来源**：自定义宽高的边界说明从 `LIMITS.width` 注入（`formatText`），不写死数字；窄屏下
+   「宽 × 高」保持单行不溢出。
+4. **尺寸控件收口**：宽高输入与档位选择都在「画面设置」内，不再出现在「高级设置」；「高级设置」只保留采样参数
+   （步数 / 引导强度 / 随机种子）与当前模型可用时的排除项。
 
+### 5.11 第八批交互补充（参数面板减法与助手升级，0.10.0）
+
+**参数面板**
+
+1. **删除静态风格预设**：移除 5 个风格试印条、`StylePlate`、`toggleStyle` 与提交时的风格后缀 / 风格负向层拼接；
+   风格由提示词内容与模型本身表达。
+2. **排除项按真实能力显隐**：界面与提交共用 `shared/models-guide.js` 的 `negativePromptActive(preset, cfg)`。
+   默认 `CFG=0` 的极速模型与不支持负向词的 `flux2-klein-4b` 默认不显示排除项；抬高 CFG 后出现，回到默认后再隐藏。
+   隐藏时不渲染、不提交，避免「填了但后端忽略」；首次把 CFG 从不可用抬到可用且模型推荐词非空时，自动补上推荐负向词。
+3. **画面设置与参考图互斥**：有参考图时不再渲染比例 / 档位 / 宽高控件，只在标题右侧显示尺寸读数，并在正文说明
+   「出图尺寸跟随参考图 {size}」；没有宽高信息时显示「出图尺寸跟随参考图」。文生图时结构为：5 个画幅比例 →
+   分辨率档位（长边，取当前预设 `sizeOptions`，短边按比例换算并对齐 8px）→「自定义宽高」折叠（草稿 + 失焦 / 回车提交）。
+4. **生成张数提权**：生成张数 1~4 改为页脚左侧带「张数」标签的分段选择器；立即生成按钮下方常驻规格摘要
+   「`1024 × 1024 · 1:1 · 2 张`」，有参考图时补「参考图」，提示词为空时显示「先写画面描述」。
+5. **高级设置自解释**：折叠态标题右侧显示读数摘要（如「4 步 · CFG 0 · 随机种子」）；随机种子输入框旁提供
+   「恢复随机」；排除项行仅在可用时出现在高级设置内。
+6. **灵感与润色**：灵感示例仅在提示词为空时出现；润色建议可收起 / 展开（默认展开），追加与撤销行为不变。
+
+**创作助手**
+
+7. **模型知识单一来源**：新增 `shared/models-guide.js`，把 `models/*.json` 的模型事实整理成提示词配方、负向词能力判断
+   与模型用法摘要；`lib/intent.js`、`lib/enhance.js`、`lib/tools.js` 与客户端共用，不再各自手写模型名单。
+8. **三段式提示词**：system prompt 按「身份与使命 → 模型手册（当前模型 + 全库概要）→ 组织与沟通策略（软性引导）」组织；
+   负向词写法、模型建议与澄清都由软性策略表达，不做硬分支规则。
+9. **意图确认卡**：结构为标题「生成确认」→ 中文摘要（与提示词不同时才显示）→ 编辑提示 → 英文提示词文本域 → 比例 →
+   模型建议弱提示（「更合适的模型：{model}（{reason}）」）→ 排除项（仅 `negativePromptActive` 为 true 时）→
+   生成张数分段（默认 1 张）→「沿用上张构图（锁定种子）」（默认关闭，没有可复用的上张种子时禁用）→
+   「按此生成」主按钮 + 「带入参数面板」次级动作。提示词 / 排除项 / 张数可直接编辑，提示词清空时按钮禁用。
+10. **带入参数面板**：把确认卡的提示词、比例对应宽高、生成张数与可用时的排除项写进表单，切到「参数表单」并轻提示；
+    提示词为空时不做改动、不切换。
+11. **通用澄清卡**：`clarify` 非空时显示「想先确认一下」+ 问题 + 2~4 个选项 +「先按当前设置」。点选项 = 追加一条
+    用户消息并以该卡草稿提示词走多轮重新解析（旧卡被新结果替换）；点「先按当前设置」= 只清掉澄清、还原成确认卡，
+    不自动提交。
+12. **多轮上下文与种子**：解析请求携带当前 `cfg` 与最近对话 `history`（只取用户原话与意图卡上的英文提示词，
+    任务 / 错误气泡不进上下文）；Host 裁剪后作为多轮消息送入模型，`history` 非空时优先于 `previousPrompt`。
+    确认卡默认随机种子，只有显式勾选「沿用上张构图」且表单未手填种子时才沿用上一张，避免跨主题对话构图僵化。
+13. **空态示例**：点击灵感示例只填入对话草稿，不改动参数表单。

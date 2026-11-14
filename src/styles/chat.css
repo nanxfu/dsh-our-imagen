@@ -160,7 +160,7 @@
   animation: ofs-shimmer 2s linear infinite;
 }
 
-/* 意图确认卡：整理后的提示词、比例与风格，一个提交按钮。 */
+/* 意图确认卡：中文摘要优先，英文提示词可编辑，比例 / 张数 / 排除项按能力给出。 */
 .ofs-intent {
   gap: 7px;
 }
@@ -221,11 +221,11 @@
   line-height: 1.5;
 }
 
-/* 中文摘要：英文提示词之后的一行弱化说明，只用于确认画面是否符合本意。 */
+/* 中文摘要：放在英文提示词之前，先让用户确认画面对不对。 */
 .ofs-intent-summary {
-  color: var(--ofs-ink-2);
-  font-size: 11.5px;
-  line-height: 1.5;
+  color: var(--ofs-ink);
+  font-size: 12px;
+  line-height: 1.6;
   word-break: break-word;
 }
 
@@ -233,6 +233,14 @@
   margin-right: 6px;
   color: var(--ofs-ink-3);
   font-size: 10.5px;
+}
+
+/* 模型建议：弱提示，不抢主按钮与提示词的注意力，也不拦着按当前模型生成。 */
+.ofs-intent-model-hint {
+  color: var(--ofs-ink-3);
+  font-size: 11px;
+  line-height: 1.55;
+  word-break: break-word;
 }
 
 /* 中文提示词软提示：跟在提示词输入框下方，样式沿用 .ofs-hint，只补一点间距。 */
@@ -286,13 +294,87 @@
   cursor: default;
 }
 
-.ofs-intent-go {
-  align-self: flex-start;
-  height: 30px;
+/* 生成张数：四格分段，与参数面板的张数选择保持同一视觉语言。 */
+.ofs-intent-qty-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ofs-intent-qty-label {
+  flex: 0 0 auto;
+  color: var(--ofs-ink-3);
+  font-size: 11px;
+}
+
+.ofs-intent-qty {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: var(--ofs-r-md);
+  background: var(--ofs-sunken);
+}
+
+.ofs-intent-qty-option {
+  appearance: none;
+  min-width: 30px;
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: calc(var(--ofs-r-md) - 3px);
+  background: transparent;
+  color: var(--ofs-ink-3);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.ofs-intent-qty-option:hover {
+  color: var(--ofs-ink);
+}
+
+.ofs-intent-qty-option.is-on {
+  background: var(--ofs-card-solid);
+  color: var(--ofs-accent);
+  box-shadow: var(--ofs-shadow-card);
+}
+
+/* 主操作与次级操作同一行：生成是主按钮，带入参数面板更轻。 */
+.ofs-intent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 2px;
+}
+
+.ofs-intent-go {
+  height: 30px;
   padding: 0 14px;
   border-radius: 10px;
   font-size: 12px;
+}
+
+.ofs-intent-handoff {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 通用澄清卡：问题 + 2~4 个选项 + 「先按当前设置」。 */
+.ofs-intent-clarify {
+  gap: 9px;
+}
+
+.ofs-intent-clarify .ofs-suggestions {
+  gap: 6px;
 }
 
 /* 结果缩略图：整宽图片卡，元信息压在右下角。 */

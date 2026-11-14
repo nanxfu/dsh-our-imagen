@@ -80,7 +80,7 @@
   .ofs-dock-button {
     height: 28px;
     padding: 0 8px;
-    font-size: 10.5px;
+    font-size: 11px;
     gap: 4px;
   }
 
@@ -256,17 +256,13 @@
     flex-wrap: wrap;
   }
 
-  .ofs-tile-label {
-    font-size: 9.5px;
-  }
-
   .ofs-composer-input {
     min-height: 76px;
   }
 
   /* 窄窗里自定义宽高仍是「宽 × 高」一行，空间不够时只压缩输入框宽度（min-width: 0） */
   .ofs-size-custom-field > span {
-    font-size: 10px;
+    font-size: 11px;
   }
 }
 

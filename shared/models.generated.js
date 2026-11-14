@@ -33,6 +33,7 @@ export const MODELS = [
     ],
     "runtime": "default",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "pipeline": {
       "loader": "sdxl-lora",
       "base": "stabilityai/stable-diffusion-xl-base-1.0",
@@ -91,6 +92,7 @@ export const MODELS = [
     ],
     "runtime": "default",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "pipeline": {
       "loader": "sdxl-lora",
       "base": "stabilityai/stable-diffusion-xl-base-1.0",
@@ -150,6 +152,7 @@ export const MODELS = [
     ],
     "runtime": "default",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "pipeline": {
       "loader": "sdxl",
       "base": "stabilityai/sdxl-turbo",
@@ -202,6 +205,7 @@ export const MODELS = [
     ],
     "runtime": "default",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "pipeline": {
       "loader": "sdxl",
       "base": "playgroundai/playground-v2.5-1024px-aesthetic",
@@ -258,6 +262,7 @@ export const MODELS = [
     ],
     "runtime": "default",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "pipeline": {
       "loader": "sdxl",
       "base": "stabilityai/stable-diffusion-xl-base-1.0",
@@ -310,6 +315,7 @@ export const MODELS = [
     ],
     "runtime": "default",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "pipeline": {
       "loader": "sdxl",
       "base": "SG161222/RealVisXL_V5.0",
@@ -365,6 +371,7 @@ export const MODELS = [
     ],
     "runtime": "default",
     "supportsImg2Img": false,
+    "supportsNegative": false,
     "pipeline": {
       "loader": "flux2",
       "base": "black-forest-labs/FLUX.2-klein-4B",
@@ -411,6 +418,7 @@ export const MODELS = [
     ],
     "runtime": "default",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "pipeline": {
       "loader": "sdxl",
       "base": "cagliostrolab/animagine-xl-3.1",
@@ -467,6 +475,7 @@ export const MODELS = [
     ],
     "runtime": "default",
     "supportsImg2Img": false,
+    "supportsNegative": true,
     "pipeline": {
       "loader": "anima",
       "base": "Johnny-Z/Anima-Light-Lavender",
@@ -529,6 +538,7 @@ export const PRESETS = [
     "promptStyle": "concise",
     "qualityPrefix": "",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "sizeOptions": [
       768,
       1024,
@@ -584,6 +594,7 @@ export const PRESETS = [
     "promptStyle": "concise",
     "qualityPrefix": "",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "sizeOptions": [
       768,
       1024
@@ -638,6 +649,7 @@ export const PRESETS = [
     "promptStyle": "concise",
     "qualityPrefix": "",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "sizeOptions": [
       512,
       768,
@@ -687,6 +699,7 @@ export const PRESETS = [
     "promptStyle": "natural",
     "qualityPrefix": "",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "sizeOptions": [
       768,
       1024
@@ -738,6 +751,7 @@ export const PRESETS = [
     "promptStyle": "natural",
     "qualityPrefix": "",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "sizeOptions": [
       768,
       1024,
@@ -787,6 +801,7 @@ export const PRESETS = [
     "promptStyle": "natural",
     "qualityPrefix": "",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "sizeOptions": [
       768,
       1024
@@ -838,6 +853,7 @@ export const PRESETS = [
     "promptStyle": "natural",
     "qualityPrefix": "",
     "supportsImg2Img": false,
+    "supportsNegative": false,
     "sizeOptions": [
       768,
       1024
@@ -880,6 +896,7 @@ export const PRESETS = [
     "promptStyle": "danbooru",
     "qualityPrefix": "masterpiece, best quality, highres",
     "supportsImg2Img": true,
+    "supportsNegative": true,
     "sizeOptions": [
       768,
       1024
@@ -931,6 +948,7 @@ export const PRESETS = [
     "promptStyle": "natural",
     "qualityPrefix": "",
     "supportsImg2Img": false,
+    "supportsNegative": true,
     "sizeOptions": [
       768,
       1024,

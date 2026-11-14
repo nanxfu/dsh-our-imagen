@@ -99,11 +99,23 @@ export function enhancePromptRequest({ prompt, presetId, locale, mode } = {}) {
   })
 }
 
-/** 把一句话解析成生成参数。 */
-export function parseIntentRequest({ text, previousPrompt, locale, presetId }) {
+/**
+ * 把一句话解析成生成参数（意图 v2）。
+ *
+ * - `cfg`：表单当前 CFG，Host 据此判断负向词是否生效（缺失时回落到预设推荐值）；
+ * - `history`：最近对话 `[{ role: 'user'|'assistant', content }]`，由调用方按
+ *   `LIMITS.intentHistory` 裁剪后传入，Host 会再裁剪一次；空数组不发送；
+ * - `previousPrompt` 保留为旧宿主的兼容字段，新宿主在 history 非空时优先用 history。
+ */
+export function parseIntentRequest({ text, previousPrompt, locale, presetId, cfg, history } = {}) {
+  const body = { text, previousPrompt, locale, presetId }
+  // cfg=0 是合法值（极速模型默认不用负向词），不能用真值判断；非数字才省略。
+  const cfgValue = Number(cfg)
+  if (cfg !== '' && cfg !== null && cfg !== undefined && Number.isFinite(cfgValue)) body.cfg = cfgValue
+  if (Array.isArray(history) && history.length > 0) body.history = history
   return request(routePath('intent'), {
     method: 'POST',
-    body: JSON.stringify({ text, previousPrompt, locale, presetId }),
+    body: JSON.stringify(body),
   })
 }
 

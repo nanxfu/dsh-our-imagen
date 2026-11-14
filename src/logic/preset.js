@@ -1,12 +1,15 @@
 /**
- * 预设切换与提示词语言的纯逻辑。
+ * 预设切换、分辨率档位与提示词语言的纯逻辑。
  *
- * 切换预设要同时处理四件事：套用推荐尺寸 / 步数 / 引导强度、替换模型负向词层、
- * 从预设的 sizeOptions 得到方形尺寸档位、以及判断当前提示词是否需要英文提醒。
- * 这些规则不碰 React 与网络，便于离线断言。
+ * 切换预设要同时处理三件事：套用推荐尺寸 / 步数 / 引导强度、替换模型负向词层、
+ * 判断当前提示词是否需要英文提醒。分辨率档位按「长边」定义，短边跟随当前画幅比例
+ * 换算；这些规则不碰 React 与网络，便于离线断言。
+ *
+ * 0.10.0 起不再有静态风格预设：这里不处理风格层与风格后缀。
  */
 
 import { DEFAULT_PRESET, LIMITS, RATIO_IDS } from '../../shared/contract.js'
+import { negativePromptActive } from '../../shared/models-guide.js'
 
 import { clampInt, clampNumber, clampSize } from './clamp.js'
 import { negativeLayersPatch, resolveNegativeLayers } from './prompt.js'
@@ -60,31 +63,71 @@ function hintOf(preset) {
 }
 
 /**
- * 预设的方形尺寸档位：`sizeOptions` 是「等宽高的方形尺寸数组」，与画幅比例是两行不同概念。
+ * 预设的分辨率档位（长边）：`sizeOptions` 是「长边像素」数组，与画幅比例是两行不同概念。
  *
  * 读到非法值（非数字 / 非正数）直接丢弃，统一按契约边界钳制并去重、升序排列；
  * 旧预设没有 `sizeOptions` 时回退到预设自身的 `size`，保证总有一档可选。
  */
-export function presetSizeOptions(preset) {
+export function sizeTiersOf(preset) {
   const source = preset && typeof preset === 'object' ? preset : {}
   const raw = Array.isArray(source.sizeOptions) ? source.sizeOptions : []
-  const options = []
+  const tiers = []
   for (const value of raw) {
     const number = Number(value)
     if (!Number.isFinite(number) || number <= 0) continue
-    const size = clampSize(number)
-    if (!options.includes(size)) options.push(size)
+    const tier = clampSize(number)
+    if (!tiers.includes(tier)) tiers.push(tier)
   }
-  if (options.length === 0) {
+  if (tiers.length === 0) {
     const fallback = Number(source.size)
-    if (Number.isFinite(fallback) && fallback > 0) options.push(clampSize(fallback))
+    if (Number.isFinite(fallback) && fallback > 0) tiers.push(clampSize(fallback))
   }
-  return options.sort((left, right) => left - right)
+  return tiers.sort((left, right) => left - right)
+}
+
+/** 比例入参归一：接受 `{ width, height }`、`{ id }` 或契约比例字符串。 */
+function ratioSpecOf(ratio) {
+  if (ratio && typeof ratio === 'object') {
+    const width = Number(ratio.width)
+    const height = Number(ratio.height)
+    if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+      return { width, height }
+    }
+  }
+  const raw = typeof ratio === 'string' ? ratio : String((ratio && ratio.id) || '')
+  const parts = raw.split(':').map((part) => Number(part))
+  if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) return { width: parts[0], height: parts[1] }
+  return null
+}
+
+/**
+ * 画幅比例 + 长边档位 → 宽高。
+ *
+ * 长边取档位值；短边按比例四舍五入并对齐契约步长（`LIMITS.width.step`），
+ * 最后统一按契约边界钳制。比例缺失时退化为正方形（长边即宽高）。
+ */
+export function tierPatchOf(ratio, tier) {
+  const long = clampSize(tier)
+  const spec = ratioSpecOf(ratio)
+  if (!spec || spec.width === spec.height) return { width: long, height: long }
+  if (spec.width > spec.height) {
+    return { width: long, height: clampSize(Math.round((long * spec.height) / spec.width)) }
+  }
+  return { width: clampSize(Math.round((long * spec.width) / spec.height)), height: long }
+}
+
+/**
+ * 当前宽高命中的长边档位；长边不在给定档位里（手动改过宽高）时返回 null。
+ */
+export function selectedTierOf(width, height, tiers) {
+  const list = Array.isArray(tiers) ? tiers : []
+  const long = Math.max(clampSize(width), clampSize(height))
+  return list.includes(long) ? long : null
 }
 
 /**
  * 自定义宽高补丁：只处理传入的字段（宽或高单独改），按契约边界与步长钳制。
- * 传给 `patchForm()` 后分别更新宽/高，比例行与方形档位的选中态由尺寸反推。
+ * 传给 `patchForm()` 后分别更新宽/高，比例行与档位的选中态由尺寸反推。
  *
  * 空串 / null 交给 `clampSize` 的缺失值约定（回退 1024）；「清空后失焦恢复原值」
  * 属于输入框编辑态，由 Rail 的局部草稿层处理，不在这里兜。
@@ -122,9 +165,8 @@ export function referencePresetOf(presets) {
  * 切换预设 → 表单补丁。
  *
  * 负向提示词的跟随规则（按层）：
- *  - model 层整层替换为新预设的 negativeHint；新预设没有推荐值时清空，
- *    不再残留上一个预设的旧词；
- *  - style 层只在风格仍选中时保留（取消风格由 toggleStyle 处理）；
+ *  - model 层：新预设在当前 CFG 下「真的会消费负向词」时写入其 negativeHint，
+ *    否则清空（默认 CFG=0 的极速模型、无负向能力的模型都不该挂着一串不发出去的词）；
  *  - user 层原样保留。
  */
 export function presetSelectPatch(next, current, presets) {
@@ -143,13 +185,13 @@ export function presetSelectPatch(next, current, presets) {
 
   const list = Array.isArray(presets) ? presets : []
   const layers = resolveNegativeLayers(form, list)
+  // 负向模型层只在「该预设 + 本次生效的 CFG」下真的可用时才写入。
+  const effectiveCfg = cfg !== null ? cfg : form.cfg
   const nextLayers = {
     ...layers,
-    model: hintOf(target),
-    // 没有选中风格时 style 层不应存在；切换预设不负责清除仍选中风格的词。
-    style: form.styleId ? layers.style : '',
+    model: negativePromptActive(target, effectiveCfg) ? hintOf(target) : '',
   }
-  // 三层数据与合并后的展示文本一起进补丁，表单状态不会出现半同步。
+  // 两层数据与合并后的展示文本一起进补丁，表单状态不会出现半同步。
   Object.assign(patch, negativeLayersPatch(nextLayers))
   return patch
 }

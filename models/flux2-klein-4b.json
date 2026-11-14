@@ -24,6 +24,7 @@
   "sizeOptions": [768, 1024],
   "runtime": "default",
   "supportsImg2Img": false,
+  "supportsNegative": false,
   "pipeline": {
     "loader": "flux2",
     "base": "black-forest-labs/FLUX.2-klein-4B",

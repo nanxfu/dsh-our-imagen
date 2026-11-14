@@ -33,8 +33,17 @@ user-invocable: true
 - `order` 取现有最大值 + 10；
 - `measured` 四个字段先填 `null`，等真机验证回填；
 - `runtime` 只能是 `"default"`；
+- 展示字段 `family` / `short` / `description{zh,en}` 与提示词配方 `promptStyle` / `qualityPrefix` 都是必填：
+  `promptStyle` 只允许 `danbooru` / `natural` / `concise`，`qualityPrefix` 没有质量词前缀时写空串；
 - `supportsImg2Img` 默认 `false`。只有 loader 属于 `sdxl` / `sdxl-lora`（首期仅 SDXL 家族）、且真机验证过
   `AutoPipelineForImage2Image.from_pipe` 复用底座可出图时才标 `true`；不确定就保持 false，宁缺毋滥；
+- `supportsNegative` 必填布尔值，语义是「模型管线是否真的消费 `negative_prompt`」，不是「CFG 是否大于 0」。
+  只有 loader 的生成管线 `__call__` 接受 `negative_prompt` 才标 `true`（`sdxl` / `sdxl-lora` / `anima` 为 true，
+  `flux2` 的 `Flux2Pipeline.__call__` 没有该参数，必须 `false`）；判断不了填 `false`，标错会让界面多出无效输入框、
+  让助手输出被丢弃的负向词；
+- `negativeHint` 是「模型推荐默认负向词」，与 `supportsNegative` 相互独立：支持负向词但默认不推荐时可以是空串
+  （如 `anima-light-lavender`）。「排除项」是否展示由 `shared/models-guide.js` 的 `negativePromptActive(preset, cfg)`
+  联合判定，不要按 `negativeHint` 是否为空单独推断能力；
 - 字段格式见本 skill 末尾模板，完整定义见 `docs/MODEL_ASSET_SPEC.md`。
 
 写完后先自检一遍 JSON 合法性，再进入下一步。
@@ -112,6 +121,12 @@ npm test
   "id": "<id>",
   "order": 999,
   "label": "<中文展示名>",
+  "family": "<家族，如 SDXL / FLUX / Anima>",
+  "short": "<触发器短名>",
+  "description": {
+    "zh": "<中文定位描述>",
+    "en": "<English description>"
+  },
   "repo": "<owner/name>",
   "params": "<参数规模说明>",
   "license": "<许可证>",
@@ -123,9 +138,12 @@ npm test
   "steps": 4,
   "cfg": 0,
   "negativeHint": "",
+  "promptStyle": "concise",
+  "qualityPrefix": "",
   "sizeOptions": [768, 1024],
   "runtime": "default",
   "supportsImg2Img": false,
+  "supportsNegative": false,
   "pipeline": {
     "loader": "sdxl",
     "base": "<owner/name>",

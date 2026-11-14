@@ -27,10 +27,13 @@ import {
   sanitizeSession,
 } from '../src/logic/logs.js'
 import { NOTICE_TITLE_PREFIX, completionNotice, isCompletion, stripNoticePrefix } from '../src/logic/notice.js'
+import { negativePromptActive } from '../shared/models-guide.js'
+import * as contract from '../shared/contract.js'
+import * as studioPresets from '../src/studio/presets.js'
 import { styles, token } from '../src/theme.js'
 import { ACTIVE_STATUS, TRANSIENT_SESSION, PHASE_STATE, NS } from '../src/constants.js'
-import { DEFAULT_RATIOS, STYLE_CAPSULES } from '../src/studio/presets.js'
-import { RATIO_IDS, STYLE_IDS, LIMITS, LOGS, KAGGLE_LOGIN, SETTINGS, UI_STATE } from '../shared/contract.js'
+import { DEFAULT_RATIOS } from '../src/studio/presets.js'
+import { RATIO_IDS, LIMITS, LOGS, KAGGLE_LOGIN, SETTINGS, UI_STATE } from '../shared/contract.js'
 
 const t = fallbackTranslate('zh')
 const te = fallbackTranslate('en')
@@ -376,15 +379,15 @@ await check('意图确认卡的种子策略：默认随机，显式锁种才沿�
   assert.equal(logic.intentSeedOf({ lockSeed: true }, null, ''), null, '没有上一张图时退回随机')
 })
 
-await check('意图确认卡行内微调：字段白名单、裁剪与生成覆盖项', () => {
-  // 只有提示词与排除项可编辑；比例 / 风格仍由澄清卡与当前设置决定。
-  assert.deepEqual(logic.INTENT_EDITABLE_FIELDS, ['prompt', 'negative'])
+await check('意图确认卡行内微调：字段白名单与裁剪', () => {
+  // 只有提示词、排除项与张数可编辑；比例仍由当前设置或重新解析决定。
+  assert.deepEqual(logic.INTENT_EDITABLE_FIELDS, ['prompt', 'negative', 'count'])
   // 编辑时不 trim：边打字边去空格会让光标跳位，裁剪放到提交时做。
   assert.deepEqual(logic.intentFieldPatch('prompt', ' edited '), { prompt: ' edited ' })
   assert.deepEqual(logic.intentFieldPatch('negative', 'blurry, text'), { negative: 'blurry, text' })
   assert.deepEqual(logic.intentFieldPatch('prompt', null), { prompt: '' }, '非字符串按清空处理')
   assert.equal(logic.intentFieldPatch('ratioId', '16:9'), null, '非白名单字段应忽略')
-  assert.equal(logic.intentFieldPatch('styleId', 'ink'), null)
+  assert.equal(logic.intentFieldPatch('styleId', 'ink'), null, '风格字段已删除')
   // textarea 的 maxLength 拦不住粘贴与程序化赋值，纯函数再按契约兜一层。
   assert.equal(
     logic.intentFieldPatch('prompt', 'x'.repeat(LIMITS.prompt.maxChars + 10)).prompt.length,
@@ -395,35 +398,10 @@ await check('意图确认卡行内微调：字段白名单、裁剪与生成覆�
     LIMITS.negativePrompt.maxChars,
   )
 
-  // 排除项快照 / 覆盖项：去首尾空白并按契约裁剪。
+  // 排除项快照：去首尾空白并按契约裁剪。
   assert.equal(logic.intentNegative('  blurry, text  '), 'blurry, text')
   assert.equal(logic.intentNegative(null), '')
   assert.equal(logic.intentNegative('x'.repeat(LIMITS.negativePrompt.maxChars + 5)).length, LIMITS.negativePrompt.maxChars)
-
-  const capsules = [{ id: 'film', suffix: 'cinematic film' }]
-  assert.deepEqual(
-    logic.intentOverrides({ prompt: '  rainy street  ', negative: ' blurry ', styleId: 'film' }, capsules),
-    { prompt: 'rainy street, cinematic film', negativePrompt: 'blurry' },
-    '编辑后的提示词仍要合并风格后缀，排除项按编辑值提交',
-  )
-  assert.deepEqual(
-    logic.intentOverrides({ prompt: 'rainy street', negative: '' }, capsules),
-    { prompt: 'rainy street', negativePrompt: '' },
-    '在卡上清空排除项必须显式覆盖，不能沿用表单旧值',
-  )
-  assert.equal(logic.intentOverrides({ prompt: '   ', negative: 'blurry' }, capsules), null, '空提示词不产生覆盖项')
-  assert.equal(logic.intentOverrides(null, capsules), null)
-
-  // 落表单补丁：卡片上的排除项以当前值为准；旧意图卡没有 negative 字段时不覆盖表单。
-  assert.deepEqual(
-    logic.intentFormPatch({ prompt: 'rainy', negative: ' blurry ', ratioId: '', styleId: '' }, []),
-    { prompt: 'rainy', negative: 'blurry' },
-  )
-  assert.equal(
-    Object.prototype.hasOwnProperty.call(logic.intentFormPatch({ prompt: 'x' }, []), 'negative'),
-    false,
-    '没有卡片排除项时不改动表单',
-  )
 })
 
 await check('过渡态已等待时长', () => {
@@ -1057,44 +1035,83 @@ await check('指引卡详情优先级', () => {
   assert.ok(logic.guidanceDetailOf({ error: { message: 'x'.repeat(400) } }).length <= 240, '详情应截断')
 })
 
-await check('风格后缀拼装', () => {
-  assert.equal(logic.composePrompt('一只猫', 'cinematic'), '一只猫, cinematic')
-  assert.equal(logic.composePrompt('  一只猫  ', '  '), '一只猫')
-  assert.equal(logic.composePrompt('', 'cinematic'), '', '没有原文时不产生只有后缀的提示词')
-  assert.equal(logic.composePrompt('a, film', 'film'), 'a, film', '后缀已存在时不重复追加')
-  assert.equal(logic.composePrompt('a, cinematic film', 'cinematic film'), 'a, cinematic film')
+await check('负向词能力判定：模型支持且 CFG > 0 才可用', () => {
+  // 规则来自 shared/models-guide.js（Host 与 Client 共用），这里锁客户端消费的结论。
+  const capable = { id: 'sdxl-base', cfg: 7, negativeHint: 'blurry, low quality' }
+  const incapable = { id: 'flux2-klein-4b', cfg: 1, negativeHint: 'blurry', supportsNegative: false }
+  const legacy = { id: 'old-host', cfg: 7, negativeHint: 'blurry' }
+  const legacyNoHint = { id: 'old-host', cfg: 7, negativeHint: '' }
+
+  // 1) 旧宿主没有 supportsNegative：用 negativeHint 非空兜底判断管线能力。
+  assert.equal(negativePromptActive(legacy, 7), true, '旧宿主有推荐词即视为可用')
+  assert.equal(negativePromptActive(legacyNoHint, 7), false, '旧宿主没有推荐词即视为不可用')
+  assert.equal(negativePromptActive(legacy, 0), false, 'CFG=0 时仍不可用')
+
+  // 2) 默认 4 步极速模型 cfg=0：默认隐藏排除项。
+  assert.equal(negativePromptActive({ id: 'sdxl-lightning', cfg: 0, negativeHint: 'blurry' }, 0), false)
+  // 3) 用户主动抬高 CFG 后出现；恢复推荐值后再次隐藏。
+  assert.equal(negativePromptActive({ id: 'sdxl-lightning', cfg: 0, negativeHint: 'blurry' }, 1.5), true)
+  assert.equal(negativePromptActive({ id: 'sdxl-lightning', cfg: 0, negativeHint: 'blurry' }, 0), false)
+  // 4) supportsNegative=false（FLUX.2 管线没有 negative_prompt 参数）永不出现。
+  assert.equal(negativePromptActive(incapable, 7), false)
+  assert.equal(negativePromptActive({ ...incapable, cfg: 0 }, 20), false)
+  assert.equal(negativePromptActive({ id: 'flux2-klein-4b', supportsNegative: false, negativeHint: '' }, 20), false)
+
+  // 没有推荐词但模型声明支持负向词：CFG 必须高于预设推荐值才算「用户主动抬高」。
+  const noHint = { id: 'sdxl-turbo', cfg: 1, negativeHint: '', supportsNegative: true }
+  assert.equal(negativePromptActive(noHint, 1), false)
+  assert.equal(negativePromptActive(noHint, 2), true)
+
+  // 预设缺失（旧宿主 / 尚未拿到预设）：只看 cfg > 0。
+  assert.equal(negativePromptActive(null, 0), false)
+  assert.equal(negativePromptActive(null, 1.5), true)
+  assert.equal(negativePromptActive(undefined, 0), false)
+  // 非法 CFG 回落到预设推荐值。
+  assert.equal(negativePromptActive(capable, 'x'), true)
+  assert.equal(negativePromptActive({ id: 'sdxl-lightning', cfg: 0, negativeHint: 'blurry' }, undefined), false)
 })
 
-await check('最终请求体带风格后缀', () => {
+await check('提交体：负向词按 negativeActive 门控，提示词不再拼接后缀', () => {
   const form = {
-    prompt: ' 一只赛博猫 ',
-    negative: ' blurry ',
+    prompt: ' 一只霓虹猫 ',
+    negative: ' blurry, low quality ',
     presetId: 'sdxl-lightning',
     width: 1024,
     height: 1024,
     steps: 4,
     cfg: 0,
     seed: '',
-    count: 1,
+    count: 2,
   }
-  const body = logic.buildGenerateBody(form, { styleSuffix: 'cinematic film, 35mm', defaultPreset: 'sdxl-lightning' })
-  assert.equal(body.prompt, '一只赛博猫, cinematic film, 35mm', '风格后缀应进入最终请求体')
-  assert.equal(body.negativePrompt, 'blurry')
-  assert.equal(body.presetId, 'sdxl-lightning')
-  assert.equal(body.seed, -1)
-  assert.equal(body.waitSeconds, 0)
-  assert.equal(body.autoStart, true)
-
-  const chat = logic.buildGenerateBody(form, {
-    styleSuffix: 'cinematic film',
-    defaultPreset: 'sdxl-lightning',
-    overrides: { prompt: '聊天输入' },
+  // 可用：原样提交合并后的负向词；提示词只有用户原文，没有任何风格后缀。
+  const on = logic.buildGenerateBody(form, { negativeActive: true })
+  assert.equal(on.prompt, '一只霓虹猫')
+  assert.equal(on.negativePrompt, 'blurry, low quality')
+  assert.equal(on.count, 2)
+  assert.equal(Object.prototype.hasOwnProperty.call(on, 'styleId'), false, '请求体不再有 styleId')
+  // 不可用：不发送无效负向参数（字段置空串，而不是省略）。
+  const off = logic.buildGenerateBody(form, { negativeActive: false })
+  assert.equal(off.negativePrompt, '')
+  assert.equal(off.prompt, '一只霓虹猫')
+  // 门控同样作用于覆盖项（对话 / 变体 / 重试链路）。
+  const overridden = logic.buildGenerateBody(form, {
+    negativeActive: false,
+    overrides: { prompt: '聊天输入', negativePrompt: 'card negative' },
   })
-  assert.equal(chat.prompt, '聊天输入', '显式 prompt（对话 / 生成变体 / 重试）不追加风格后缀')
-  assert.equal(chat.seed, -1)
-
-  const empty = logic.buildGenerateBody({ ...form, prompt: '  ' }, { styleSuffix: 'cinematic film' })
-  assert.equal(empty.prompt, '', '没有原文时不产生只有后缀的提示词')
+  assert.equal(overridden.prompt, '聊天输入')
+  assert.equal(overridden.negativePrompt, '', '覆盖项里的负向词也不能绕过门控')
+  assert.equal(overridden.seed, -1)
+  // 不传 negativeActive 的旧调用方保持原有提交行为（不门控）。
+  assert.equal(logic.buildGenerateBody(form).negativePrompt, 'blurry, low quality')
+  // negativeForSubmit 是 useStudioForm.buildBody 的合并入口。
+  assert.equal(logic.negativeForSubmit({ negative: ' blurry ' }, true), 'blurry')
+  assert.equal(logic.negativeForSubmit({ negative: 'blurry' }, false), '')
+  assert.equal(
+    logic.negativeForSubmit({ negativeLayers: { model: 'blurry', user: 'my own' } }, true),
+    'blurry, my own',
+  )
+  // 提示词为空时不产生任何内容。
+  assert.equal(logic.buildGenerateBody({ ...form, prompt: '  ' }, { negativeActive: true }).prompt, '')
 })
 
 await check('请求体：只有带参考图时才出现 reference（文生图请求体不变）', () => {
@@ -1150,115 +1167,117 @@ await check('请求体：只有带参考图时才出现 reference（文生图请
   )))
 })
 
-await check('负向分层：切换/取消风格只增删风格层，不清模型负向词', () => {
-  const capsule = { id: 'film', negative: 'blurry, low quality' }
-  // 旧 bug：取消风格时把「恰好等于风格负向词」的整段文本清空，模型推荐词跟着丢。
-  const selected = {
-    styleId: 'film',
-    negative: 'extra limbs, blurry, low quality, my own',
-    negativeLayers: { model: 'extra limbs', style: 'blurry, low quality', user: 'my own' },
-  }
-  const off = logic.toggleStyle(selected, capsule)
-  assert.equal(off.styleId, '')
-  assert.equal(off.negativeLayers.style, '', '取消风格只清风格层')
-  assert.equal(off.negativeLayers.model, 'extra limbs', '取消风格不得清除模型负向词')
-  assert.equal(off.negativeLayers.user, 'my own')
-  assert.equal(off.negative, 'extra limbs, my own')
-
-  // 选中风格：追加风格层，模型层与用户层保留。
-  const base = {
-    styleId: '',
-    negative: 'extra limbs, my own',
-    negativeLayers: { model: 'extra limbs', style: '', user: 'my own' },
-  }
-  const on = logic.toggleStyle(base, capsule)
-  assert.equal(on.styleId, 'film')
-  assert.equal(on.negativeLayers.model, 'extra limbs')
-  assert.equal(on.negativeLayers.style, 'blurry, low quality')
-  assert.equal(on.negativeLayers.user, 'my own')
-  assert.equal(on.negative, 'extra limbs, blurry, low quality, my own')
-
-  // 三层合并按 model → style → user 顺序、不区分大小写去重。
+await check('负向分层：model → user 两层合并，用户编辑整段接管', () => {
+  // 风格层随静态风格预设一起删除：数据层只剩模型推荐与用户手写两层。
+  assert.deepEqual(logic.emptyNegativeLayers(), { model: '', user: '' })
   assert.equal(
-    logic.mergeNegativeLayers({ model: 'Blurry, low quality', style: 'blurry, watermark', user: 'watermark, my own' }),
-    'Blurry, low quality, watermark, my own',
+    logic.mergeNegativeLayers({ model: 'Blurry, low quality', user: 'blurry, watermark' }),
+    'Blurry, low quality, watermark',
+    '按 model → user 顺序拼接，不区分大小写去重',
   )
   assert.equal(logic.mergeNegativeLayers(null), '')
-  assert.equal(logic.mergeNegativeLayers({ model: ' a ， b ', style: 'b', user: '' }), 'a, b', '全角逗号与空格也归一')
+  assert.equal(logic.mergeNegativeLayers({ model: ' a ， b ', user: 'b' }), 'a, b', '全角逗号与空格也归一')
   assert.deepEqual(
-    logic.normalizeNegativeLayers({ model: '  a ', style: 3, user: null }),
-    { model: 'a', style: '', user: '' },
-    '非法层值按空串处理',
+    logic.normalizeNegativeLayers({ model: '  a ', user: null, style: '遗留风格层' }),
+    { model: 'a', user: '' },
+    '非法层值与已删除的风格层都按空串处理',
   )
-  assert.deepEqual(logic.normalizeNegativeLayers(null), { model: '', style: '', user: '' })
+  assert.deepEqual(logic.normalizeNegativeLayers(null), { model: '', user: '' })
+
+  // 旧状态只有 negative、没有层数据：等于当前预设推荐词时归到 model 层，否则按用户手写。
+  const presets = [{ id: 'sdxl-base', negativeHint: 'blurry, low quality' }]
+  assert.deepEqual(
+    logic.resolveNegativeLayers({ presetId: 'sdxl-base', negative: 'blurry, low quality' }, presets),
+    { model: 'blurry, low quality', user: '' },
+  )
+  assert.deepEqual(
+    logic.resolveNegativeLayers({ presetId: 'sdxl-base', negative: 'my own' }, presets),
+    { model: '', user: 'my own' },
+  )
+
+  // 用户编辑展示文本：整段写入 user 层，展示文本与之一致。
+  const typed = logic.applyNegativePatch(
+    { prompt: 'x', negative: '', negativeLayers: { model: 'blurry', user: '' } },
+    { negative: 'my own, text' },
+  )
+  assert.equal(typed.negative, 'my own, text')
+  assert.deepEqual(typed.negativeLayers, { model: '', user: 'my own, text' }, '用户编辑整段写入 user 层')
+  // 层数据变更：展示文本同步成去重合并结果。
+  const layered = logic.applyNegativePatch({}, { negativeLayers: { model: 'blurry', user: 'blurry, my own' } })
+  assert.equal(layered.negative, 'blurry, my own', '展示文本与层数据保持同步')
+  // 普通补丁不动负向。
+  assert.equal(
+    logic.applyNegativePatch({ negative: 'a', negativeLayers: { model: '', user: 'a' } }, { prompt: 'x' }).negative,
+    'a',
+  )
+  // 提交值以层数据合并结果为准；没有层数据时退回旧字段。
+  assert.equal(
+    logic.negativePromptOf({ negativeLayers: { model: 'blurry, low quality', user: 'my own' } }),
+    'blurry, low quality, my own',
+  )
+  assert.equal(logic.negativePromptOf({ negative: '  legacy  ' }), 'legacy')
+  assert.equal(logic.negativePromptOf(null), '')
 })
 
-await check('画面比例与风格 id 由契约唯一登记', () => {
-  // 前端只保留「id → 尺寸 / 词表」的数据，清单与顺序必须来自 shared/contract.js。
+await check('画面比例由契约唯一登记，静态风格数据已删除', () => {
+  // 前端只保留「id → 像素」数据，清单与顺序必须来自 shared/contract.js。
   assert.deepEqual(DEFAULT_RATIOS.map((ratio) => ratio.id), RATIO_IDS)
-  assert.deepEqual(STYLE_CAPSULES.map((capsule) => capsule.id), STYLE_IDS)
-  for (const capsule of STYLE_CAPSULES) {
-    assert.ok(capsule.labelKey, `${capsule.id} 缺少 labelKey`)
-    assert.ok(capsule.suffix && capsule.negative, `${capsule.id} 缺少风格后缀或负向词`)
+  for (const ratio of DEFAULT_RATIOS) {
+    assert.ok(ratio.width > 0 && ratio.height > 0, `${ratio.id} 缺少像素数据`)
+    assert.equal(logic.ratioIdOf(ratio.width, ratio.height), ratio.id, `${ratio.id} 的像素应反推回同一比例`)
   }
+  // 0.10.0 起没有风格胶囊 / 风格词表 / 风格负向层，契约也不再导出 STYLE_IDS。
+  assert.equal('STYLE_CAPSULES' in studioPresets, false, 'presets.js 不应再导出 STYLE_CAPSULES')
+  assert.equal('STYLE_IDS' in contract, false, 'contract.js 不应再导出 STYLE_IDS')
 })
 
-await check('切换预设按层替换模型负向词', () => {
-  const presets = [
-    { id: 'sdxl-lightning', size: 1024, steps: 4, cfg: 0, negativeHint: 'blurry, low quality, deformed, extra limbs' },
-    { id: 'sdxl-base', size: 1024, steps: 25, cfg: 7, negativeHint: 'blurry, low quality, deformed, extra limbs' },
-    { id: 'animagine-xl-3.1', size: 1024, steps: 28, cfg: 7, negativeHint: 'nsfw, lowres, watermark' },
-  ]
-  const flux = { id: 'flux2-klein-4b', size: 1024, steps: 4, cfg: 1, negativeHint: '' }
-  const all = [...presets, flux]
+await check('切换预设按负向能力写入模型负向词层', () => {
+  const lightning = { id: 'sdxl-lightning', size: 1024, steps: 4, cfg: 0, negativeHint: 'blurry, low quality, deformed, extra limbs', supportsNegative: true }
+  const base = { id: 'sdxl-base', size: 1024, steps: 25, cfg: 7, negativeHint: 'blurry, low quality, deformed, extra limbs', supportsNegative: true }
+  const animagine = { id: 'animagine-xl-3.1', size: 1024, steps: 28, cfg: 7, negativeHint: 'nsfw, lowres, watermark', supportsNegative: true }
+  const flux = { id: 'flux2-klein-4b', size: 1024, steps: 4, cfg: 1, negativeHint: '', supportsNegative: false }
+  const all = [lightning, base, animagine, flux]
   const form = {
-    presetId: 'sdxl-lightning',
+    presetId: 'sdxl-base',
     width: 1024,
     height: 1024,
-    steps: 4,
-    cfg: 0,
-    styleId: '',
+    steps: 25,
+    cfg: 7,
     negative: 'blurry, low quality, deformed, extra limbs, my own',
-    negativeLayers: { model: 'blurry, low quality, deformed, extra limbs', style: '', user: 'my own' },
+    negativeLayers: { model: 'blurry, low quality, deformed, extra limbs', user: 'my own' },
   }
 
-  // 切换到没有 negativeHint 的预设：模型层清空，用户层保留（旧 bug：残留上一个预设的旧词）。
-  const cleared = logic.presetSelectPatch(flux, form, all)
-  assert.equal(cleared.presetId, 'flux2-klein-4b')
-  assert.equal(cleared.negativeLayers.model, '', '新预设无 negativeHint 时模型层必须清空')
-  assert.equal(cleared.negativeLayers.user, 'my own', '用户层原样保留')
-  assert.equal(cleared.negative, 'my own', '展示文本不得残留旧预设的负向词')
+  // 切到 cfg=0 的极速模型：模型层清空（不挂一串永远不会发出去的词），用户层保留。
+  const off = logic.presetSelectPatch(lightning, form, all)
+  assert.equal(off.presetId, 'sdxl-lightning')
+  assert.equal(off.negativeLayers.model, '', 'CFG=0 的预设不写模型负向词')
+  assert.equal(off.negativeLayers.user, 'my own', '用户层原样保留')
+  assert.equal(off.negative, 'my own', '展示文本不得残留上一个预设的负向词')
+  assert.equal(off.cfg, 0, '套用新预设推荐 CFG')
 
-  // 切换到有 negativeHint 的预设：模型层整层替换，用户层保留。
-  const swapped = logic.presetSelectPatch(presets[2], form, all)
-  assert.equal(swapped.negativeLayers.model, 'nsfw, lowres, watermark')
-  assert.equal(swapped.negativeLayers.user, 'my own')
-  assert.equal(swapped.negative, 'nsfw, lowres, watermark, my own')
-  // 推荐尺寸 / 步数 / 引导强度照旧套用。
-  assert.equal(swapped.steps, 28, '套用新预设推荐步数')
-  assert.equal(swapped.cfg, 7, '套用新预设推荐引导强度')
-  assert.equal(swapped.width, 1024)
-  assert.equal(swapped.height, 1024)
+  // 切到真实消费负向词的预设（cfg=7）：模型层整层替换，用户层保留。
+  const on = logic.presetSelectPatch(animagine, form, all)
+  assert.equal(on.negativeLayers.model, 'nsfw, lowres, watermark')
+  assert.equal(on.negativeLayers.user, 'my own')
+  assert.equal(on.negative, 'nsfw, lowres, watermark, my own')
+  assert.equal(on.steps, 28, '套用新预设推荐步数')
+  assert.equal(on.cfg, 7, '套用新预设推荐引导强度')
+  assert.equal(on.width, 1024)
+  assert.equal(on.height, 1024)
 
-  // 风格仍选中时保留风格层；风格已取消时不保留残留风格词。
-  const styled = logic.presetSelectPatch(presets[2], {
-    ...form,
-    styleId: 'film',
-    negative: 'blurry, grain, text, my own',
-    negativeLayers: { model: 'blurry', style: 'grain, text', user: 'my own' },
-  }, all)
-  assert.equal(styled.negativeLayers.style, 'grain, text', '风格仍选中时保留风格层')
-  assert.equal(styled.negative, 'nsfw, lowres, watermark, grain, text, my own')
+  // 无负向能力的模型永不写模型层。
+  const fluxPatch = logic.presetSelectPatch(flux, form, all)
+  assert.equal(fluxPatch.negativeLayers.model, '')
+  assert.equal(fluxPatch.negativeLayers.user, 'my own')
 
   // 旧状态只有 negative、没有层数据：等于上一个预设推荐值时按模型层识别。
-  const legacy = logic.presetSelectPatch(presets[2], {
+  const legacy = logic.presetSelectPatch(base, {
     ...form,
     negativeLayers: undefined,
     negative: 'blurry, low quality, deformed, extra limbs',
   }, all)
-  assert.equal(legacy.negativeLayers.model, 'nsfw, lowres, watermark')
+  assert.equal(legacy.negativeLayers.model, 'blurry, low quality, deformed, extra limbs')
   assert.equal(legacy.negativeLayers.user, '', '旧状态里的模型推荐值不应被误当用户词')
-  // 旧状态里用户自己写的内容按 user 层保留。
   const legacyUser = logic.presetSelectPatch(flux, { ...form, negativeLayers: undefined, negative: 'my own' }, all)
   assert.equal(legacyUser.negativeLayers.model, '')
   assert.equal(legacyUser.negativeLayers.user, 'my own')
@@ -1267,13 +1286,13 @@ await check('切换预设按层替换模型负向词', () => {
   const oversized = logic.presetSelectPatch(
     { id: 'x', size: 4096, steps: 999, cfg: 99, negativeHint: '' },
     form,
-    presets,
+    all,
   )
   assert.equal(oversized.width, LIMITS.width.max)
   assert.equal(oversized.height, LIMITS.height.max)
   assert.equal(oversized.steps, LIMITS.steps.max)
   assert.equal(oversized.cfg, LIMITS.cfg.max)
-  assert.deepEqual(logic.presetSelectPatch(null, form, presets), {})
+  assert.deepEqual(logic.presetSelectPatch(null, form, all), {})
 })
 
 await check('参考图预设回退：支持能力来自预设公开视图，缺字段按 false', () => {
@@ -1301,24 +1320,24 @@ await check('负向层数据与展示文本同步（用户编辑 / 历史回填�
   const form = {
     prompt: '雨夜街景',
     negative: '',
-    negativeLayers: { model: '', style: '', user: '' },
+    negativeLayers: { model: '', user: '' },
   }
   // 用户编辑输入框：整段写入 user 层，展示文本与之一致。
   const typed = logic.applyNegativePatch(form, { negative: 'my own, blurry' })
   assert.equal(typed.negative, 'my own, blurry')
-  assert.deepEqual(typed.negativeLayers, { model: '', style: '', user: 'my own, blurry' }, '用户编辑整段写入 user 层')
+  assert.deepEqual(typed.negativeLayers, { model: '', user: 'my own, blurry' }, '用户编辑整段写入 user 层')
   assert.equal(typed.prompt, '雨夜街景', '不相关字段保持')
-  // 三层数据变更：展示文本同步成去重合并结果。
+  // 层数据变更：展示文本同步成去重合并结果。
   const layered = logic.applyNegativePatch(form, {
-    negativeLayers: { model: 'blurry', style: 'text', user: 'blurry, my own' },
+    negativeLayers: { model: 'blurry', user: 'blurry, my own' },
   })
   assert.equal(layered.negativeLayers.model, 'blurry')
-  assert.equal(layered.negative, 'blurry, text, my own', '展示文本与层数据保持同步')
+  assert.equal(layered.negative, 'blurry, my own', '展示文本与层数据保持同步')
   // 普通补丁不动负向。
   assert.equal(logic.applyNegativePatch(form, { prompt: 'x' }).negative, '')
   // 提交值以层数据合并结果为准。
   assert.equal(
-    logic.negativePromptOf({ negativeLayers: { model: 'blurry, low quality', style: 'blurry', user: 'my own' } }),
+    logic.negativePromptOf({ negativeLayers: { model: 'blurry, low quality', user: 'my own' } }),
     'blurry, low quality, my own',
   )
   assert.equal(logic.negativePromptOf({ negative: '  legacy  ' }), 'legacy', '没有层数据时退回旧字段')
@@ -1340,17 +1359,49 @@ await check('一键英译：只有模型真的翻译了才算成功', () => {
   assert.equal(logic.translateOutcomeOf(undefined).ok, false)
 })
 
-await check('1:1 推荐尺寸档位与自定义宽高', () => {
-  // sizeOptions 是「等宽高的方形尺寸」数组，在「画面设置」里以「1:1 推荐尺寸」展示，与画幅比例是不同概念。
-  assert.deepEqual(logic.presetSizeOptions({ sizeOptions: [768, 1024, 1152], size: 1024 }), [768, 1024, 1152])
+await check('分辨率档位按长边换算，短边对齐契约步长', () => {
+  // 档位是「长边」数组：在「画面设置」里以分辨率档位展示，与画幅比例是不同概念。
+  assert.deepEqual(logic.sizeTiersOf({ sizeOptions: [768, 1024, 1152], size: 1024 }), [768, 1024, 1152])
   assert.deepEqual(
-    logic.presetSizeOptions({ sizeOptions: [1024, 768, 1024, 'x', -8], size: 1024 }),
+    logic.sizeTiersOf({ sizeOptions: [1024, 768, 1024, 'x', -8], size: 1024 }),
     [768, 1024],
     '去重、丢弃非法值并排序',
   )
-  assert.deepEqual(logic.presetSizeOptions({ size: 1024 }), [1024], '缺 sizeOptions 时回退预设 size')
-  assert.deepEqual(logic.presetSizeOptions({ sizeOptions: [], size: 99999 }), [LIMITS.width.max], '回退值同样按契约钳制')
-  assert.deepEqual(logic.presetSizeOptions(null), [], '没有预设时没有档位')
+  assert.deepEqual(logic.sizeTiersOf({ size: 1024 }), [1024], '缺 sizeOptions 时回退预设 size')
+  assert.deepEqual(logic.sizeTiersOf({ sizeOptions: [], size: 99999 }), [LIMITS.width.max], '回退值同样按契约钳制')
+  assert.deepEqual(logic.sizeTiersOf(null), [], '没有预设时没有档位')
+
+  // tierPatchOf：长边 = 档位，短边按比例四舍五入并对齐 8 的步长。
+  assert.deepEqual(logic.tierPatchOf('1:1', 1024), { width: 1024, height: 1024 })
+  assert.deepEqual(logic.tierPatchOf('16:9', 1024), { width: 1024, height: 576 })
+  assert.deepEqual(logic.tierPatchOf('9:16', 1024), { width: 576, height: 1024 })
+  assert.deepEqual(logic.tierPatchOf('4:3', 768), { width: 768, height: 576 })
+  assert.deepEqual(logic.tierPatchOf('3:4', 768), { width: 576, height: 768 })
+  assert.deepEqual(logic.tierPatchOf('16:9', 1152), { width: 1152, height: 648 })
+  // 任意比例、任意档位：短边都对齐 LIMITS.width.step，且宽高都落在契约边界内。
+  for (const ratio of [...RATIO_IDS, '21:9']) {
+    for (const tier of [512, 768, 1024, 1152, 1536]) {
+      const patch = logic.tierPatchOf(ratio, tier)
+      assert.ok(patch.width >= LIMITS.width.min && patch.width <= LIMITS.width.max, `${ratio}@${tier} 宽度越界：${patch.width}`)
+      assert.ok(patch.height >= LIMITS.height.min && patch.height <= LIMITS.height.max, `${ratio}@${tier} 高度越界：${patch.height}`)
+      assert.equal(patch.width % LIMITS.width.step, 0, `${ratio}@${tier} 宽度未对齐步长：${patch.width}`)
+      assert.equal(patch.height % LIMITS.height.step, 0, `${ratio}@${tier} 高度未对齐步长：${patch.height}`)
+    }
+  }
+  // 档位本身在契约边界内时长边保持不变。
+  assert.equal(Math.max(logic.tierPatchOf('16:9', 1024).width, logic.tierPatchOf('16:9', 1024).height), 1024)
+  // 比例对象（DEFAULT_RATIOS 条目）与 id 字符串等价；非法比例退化为正方形。
+  assert.deepEqual(logic.tierPatchOf(DEFAULT_RATIOS[0], 768), logic.tierPatchOf(DEFAULT_RATIOS[0].id, 768))
+  assert.deepEqual(logic.tierPatchOf('weird', 1024), { width: 1024, height: 1024 })
+
+  // selectedTierOf：长边命中档位才返回该档；手动改过宽高返回 null。
+  const tiers = [768, 1024, 1152]
+  assert.equal(logic.selectedTierOf(1024, 1024, tiers), 1024)
+  assert.equal(logic.selectedTierOf(1152, 648, tiers), 1152, '16:9 的长边 1152 命中 1152 档')
+  assert.equal(logic.selectedTierOf(768, 1024, tiers), 1024, '竖构图按长边命中档位')
+  assert.equal(logic.selectedTierOf(800, 600, tiers), null)
+  assert.equal(logic.selectedTierOf(1024, 1024, null), null)
+
   // 自定义宽高：只改传入的一边，按契约边界与 8 的步长钳制。
   assert.deepEqual(logic.customSizePatch({ width: 99999 }), { width: LIMITS.width.max })
   assert.deepEqual(logic.customSizePatch({ height: 1 }), { height: LIMITS.height.min })
@@ -1405,7 +1456,6 @@ await check('带回参数的回填参数', () => {
     cfg: 0,
     seed: '',
     count: 1,
-    styleId: 'film',
   }
   // 真实 Host 形状：只有 prompt / presetId / images，没有 params。
   const real = {
@@ -1420,7 +1470,7 @@ await check('带回参数的回填参数', () => {
   assert.equal(patch.cfg, 7.5)
   assert.equal(patch.seed, '17')
   assert.equal(patch.presetId, 'sdxl-base')
-  assert.equal(patch.styleId, '', '回填最终提示词后清空风格，避免后缀重复')
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, 'styleId'), false, '0.10.0 起回填不再写 styleId')
   assert.equal(Object.prototype.hasOwnProperty.call(patch, 'negative'), false, '没有作品负向提示词时不覆盖草稿')
 
   const withParams = {
@@ -1646,13 +1696,7 @@ await check('润色建议：界面显示中文 label，插入提示词的始终�
   assert.equal(logic.toggleRefineTerm(next, option.text, logic.refineSeparator(next)), '雨夜街景')
 })
 
-await check('风格预设与灵感文案都在字典里', () => {
-  for (const capsule of STYLE_CAPSULES) {
-    assert.ok(zh[capsule.labelKey], `缺少中文风格名：${capsule.labelKey}`)
-    assert.ok(en[capsule.labelKey], `缺少英文风格名：${capsule.labelKey}`)
-    assert.equal(typeof capsule.suffix, 'string')
-    assert.ok(capsule.suffix.length > 0)
-  }
+await check('灵感示例文案都在字典里，风格文案已删除', () => {
   for (const suffix of ['1', '2', '3', '4', '5']) {
     const key = `studio.inspire.${suffix}`
     assert.ok(zh[key], `缺少中文灵感：${key}`)
@@ -1660,15 +1704,20 @@ await check('风格预设与灵感文案都在字典里', () => {
     assert.ok(zh[`${key}.label`], `缺少中文灵感名：${key}.label`)
     assert.ok(en[`${key}.label`], `缺少英文灵感名：${key}.label`)
   }
+  // 静态风格相关的文案键随功能一起删除，避免字典里留下永远不展示的文案。
+  for (const key of ['studio.style', 'studio.chat.styleAuto', 'studio.chat.clarify.ratio', 'studio.chat.clarify.style']) {
+    assert.equal(Object.prototype.hasOwnProperty.call(zh, key), false, `${key} 应已删除`)
+    assert.equal(Object.prototype.hasOwnProperty.call(en, key), false, `${key} 的英文文案应已删除`)
+  }
 })
 
-await check('对话意图映射到表单与提示词', () => {
+await check('对话意图 v2：映射到表单与生成参数', () => {
   const messages = [
     { id: 1, role: 'user', text: '画一张横版的雨夜街景' },
-    { id: 2, role: 'assistant', kind: 'intent', prompt: '雨夜街景，湿润地面倒映霓虹', ratioId: '16:9', styleId: 'cyberpunk' },
+    { id: 2, role: 'assistant', kind: 'intent', prompt: 'rainy night street, neon reflections', ratioId: '16:9', negative: 'blurry', count: 3 },
     { id: 3, role: 'user', text: '背景加一只黑猫' },
   ]
-  assert.equal(logic.lastIntentPrompt(messages), '雨夜街景，湿润地面倒映霓虹')
+  assert.equal(logic.lastIntentPrompt(messages), 'rainy night street, neon reflections')
   assert.equal(logic.lastIntentPrompt([]), '')
   assert.equal(logic.lastIntentPrompt([{ role: 'assistant', kind: 'job', text: 'x' }]), '')
 
@@ -1677,16 +1726,49 @@ await check('对话意图映射到表单与提示词', () => {
     { id: '16:9', width: 1152, height: 648 },
   ]
   assert.deepEqual(
-    logic.intentFormPatch({ prompt: '雨夜街景', ratioId: '16:9', styleId: 'cyberpunk' }, ratios),
-    { prompt: '雨夜街景', width: 1152, height: 648, styleId: 'cyberpunk' },
+    logic.intentFormPatch({ prompt: 'rainy night street', ratioId: '16:9', count: 3 }, ratios),
+    { prompt: 'rainy night street', width: 1152, height: 648, count: 3 },
+    '确认卡写表单：比例换算宽高、张数归一；没有 negativeActive 时不写排除项',
   )
-  // 没有匹配的比例时不覆盖表单尺寸。
-  assert.deepEqual(logic.intentFormPatch({ prompt: 'x', ratioId: '' }, ratios), { prompt: 'x' })
+  // 没有匹配的比例时不覆盖表单尺寸；张数钳制 1~4；可用时才写排除项。
+  assert.deepEqual(
+    logic.intentFormPatch({ prompt: 'x', ratioId: '', count: 9, negative: 'blurry' }, ratios, { negativeActive: true }),
+    { prompt: 'x', count: 4, negative: 'blurry' },
+  )
+  assert.deepEqual(
+    logic.intentFormPatch({ prompt: 'x', count: 2, negative: 'blurry' }, ratios, { negativeActive: false }),
+    { prompt: 'x', count: 2 },
+    '排除项不可用时不写入表单',
+  )
+  assert.deepEqual(logic.intentFormPatch(null, ratios), {})
 
-  const capsules = [{ id: 'cyberpunk', suffix: 'cyberpunk neon city' }]
-  assert.equal(logic.intentPrompt({ prompt: '雨夜街景', styleId: 'cyberpunk' }, capsules), '雨夜街景, cyberpunk neon city')
-  assert.equal(logic.intentPrompt({ prompt: '雨夜街景', styleId: '' }, capsules), '雨夜街景')
-  assert.equal(logic.intentPrompt({ prompt: '', styleId: 'cyberpunk' }, capsules), '')
+  // 生成覆盖项：提示词不合并任何后缀；张数进请求；负向词受 negativeActive 门控。
+  const message = { prompt: '  rainy night street  ', negative: ' blurry ', count: 3 }
+  assert.deepEqual(logic.intentOverrides(message, { negativeActive: true }), {
+    prompt: 'rainy night street',
+    count: 3,
+    negativePrompt: 'blurry',
+  })
+  assert.deepEqual(logic.intentOverrides(message, { negativeActive: false }), {
+    prompt: 'rainy night street',
+    count: 3,
+    negativePrompt: '',
+  })
+  // 张数归一：非数字回落 1，越界钳制到 1~4。
+  assert.equal(logic.intentOverrides({ ...message, count: 'x' }, { negativeActive: false }).count, 1)
+  assert.equal(logic.intentOverrides({ ...message, count: 9 }, { negativeActive: false }).count, 4)
+  assert.equal(logic.intentOverrides({ ...message, count: 2.6 }, { negativeActive: false }).count, 3)
+  assert.equal(logic.intentOverrides({ prompt: '   ' }, { negativeActive: false }), null, '空提示词不产生覆盖项')
+  // 编辑白名单：prompt / negative / count；count 走纯逻辑归一。
+  assert.deepEqual(logic.INTENT_EDITABLE_FIELDS, ['prompt', 'negative', 'count'])
+  assert.deepEqual(logic.intentFieldPatch('count', '3'), { count: 3 })
+  assert.deepEqual(logic.intentFieldPatch('count', 9), { count: 4 })
+  assert.deepEqual(logic.intentFieldPatch('count', 0), { count: 1 })
+  assert.deepEqual(logic.intentFieldPatch('count', 2.6), { count: 3 })
+  assert.deepEqual(logic.intentFieldPatch('count', 'x'), { count: 1 })
+  assert.deepEqual(logic.intentFieldPatch('count', undefined), { count: 1 })
+  assert.equal(logic.intentFieldPatch('styleId', 'ink'), null, '非白名单字段应忽略')
+  assert.equal(logic.intentFieldPatch('ratioId', '16:9'), null)
 })
 
 await check('悬浮提示的定位夹在容器内', () => {

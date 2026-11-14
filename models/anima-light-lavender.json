@@ -28,6 +28,7 @@
   ],
   "runtime": "default",
   "supportsImg2Img": false,
+  "supportsNegative": true,
   "pipeline": {
     "loader": "anima",
     "base": "Johnny-Z/Anima-Light-Lavender",

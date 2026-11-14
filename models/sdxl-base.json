@@ -24,6 +24,7 @@
   "sizeOptions": [768, 1024, 1152],
   "runtime": "default",
   "supportsImg2Img": true,
+  "supportsNegative": true,
   "pipeline": {
     "loader": "sdxl",
     "base": "stabilityai/stable-diffusion-xl-base-1.0",

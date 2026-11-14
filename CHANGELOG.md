@@ -1,24 +1,49 @@
 # 变更记录
 
-## 未发布
+## 0.10.0 — 2026-11-14
+
+> v0.10 首个版本：创作参数面板做减法（去风格预设、按模型真实能力显隐排除项、画面设置与参考图互斥、生成张数提权），AI 助手做加法（模型知识单一来源、意图 JSON v2、多轮上下文、通用澄清、确认卡带入参数面板），并把契约、测试、文档与版本收口到 0.10.0。
+
+### 破坏性变更
+
+- **契约**：`shared/contract.js` 的 `VERSION` 升到 `0.10.0`；删除 `STYLE_IDS` 导出与全部风格预设注释；新增 `INTENT`（摘要 / 澄清 / 模型建议的字符与条数边界）与 `LIMITS.intentHistory = { maxMessages: 12, maxMessageChars: 2000 }`。
+- **模型资产**：`models/*.json` 新增必填布尔字段 `supportsNegative`（管线是否真的消费 `negative_prompt`）。9 个预设中只有 `flux2-klein-4b` 为 `false`（diffusers `Flux2Pipeline.__call__` 没有该参数）；`tools/build-assets.mjs` 校验并生成到 `shared/models.generated.js` 的 `MODELS` / `PRESETS`，`publicPresets()` 随 `/state.presets` 下发客户端。
+- **`POST /imagen-api/intent` 响应 v2**：请求新增 `cfg` 与 `history`（Host 按 `LIMITS.intentHistory` 裁剪）；响应改为 `{ source, prompt, summary, ratioId, negative, clarify, modelHint }`，**删除 `styleId`**；澄清从「ratio / style 固定字段枚举」改为通用问题 + 2~4 个选项；`negative` 只在当前模型与 CFG 真正可用时非空。旧客户端读取 `styleId` 会得到 `undefined`，需按 v2 字段适配。
+- **兼容性**：`previousPrompt` 保留，`history` 非空时优先于它；`presetId` / `locale` / `text` 的语义与错误码不变。
+- **界面文案键**：删除 `studio.style*`、`studio.chat.clarify.ratio` / `.style`、`studio.chat.styleAuto` 等风格相关键；新增 `studio.rail.followReference*`、`studio.seed.reset`、`studio.refine.collapse/expand`、`studio.chat.intent.handoff*`、`studio.chat.intent.modelHint`、`studio.countShort` 等（`studio.rail.customSize` 沿用既有键，自定义宽高的边界说明复用 `studio.rail.sizeHint`）。中英各 399 键、严格同构。
 
 ### 改进
 
-- **画面尺寸收口到「画面设置」**：把「自定义宽高」从默认折叠的「高级设置」移入「画面设置」，与「画幅比例」「1:1 推荐尺寸」形成三段同构，并新增标题栏实时读数（`1024 × 1024 · 1:1`；没有匹配比例时显示「自定义」）。「高级设置」回归 2×2 采样参数网格，标题同步补上「张数」；折叠状态持久化逻辑不变。
-- **宽高输入框改为本地草稿**：输入过程不写表单，失焦或按 `Enter` 才归一化提交；清空 / 纯空白失焦恢复修改前的合法值，不再因 `Number('') === 0` 静默跳成 `256`。改宽或改高只提交对应一边，另一边不联动。
-- **比例高亮按长宽比匹配**：新增纯逻辑 `ratioIdOf(width, height)`（最大公约数约分后匹配契约 `RATIO_IDS`）；方形档 `768` / `1152` 同样高亮 `1:1`，`800 × 600` 高亮 `4:3`。
-- **尺寸说明合并为一条**：写明「点快捷档会同时改写宽高、手填宽高只改一边」与合法范围（`LIMITS` 注入，不写死数字）；`1:1 推荐尺寸` 的展示标签与分组 `aria-label` 拆键，窄屏下「宽 × 高」保持单行。
+- **移除静态风格预设**：删除 5 个风格试印条（`StylePlate`）与提交时的风格后缀 / 风格负向层拼接（`composePrompt` / `toggleStyle`）；风格回到提示词内容与模型本身表达。
+- **排除项按真实能力显隐**：新增 `shared/models-guide.js` 的 `negativePromptActive(preset, cfg)` 作为唯一判定——默认 `CFG=0` 的极速模型与不支持负向词的 `flux2-klein-4b` 默认隐藏「排除项」，抬高 CFG 后出现，恢复默认后再隐藏；隐藏时不渲染、不提交，提交体 `negativePrompt` 置空串；CFG 由不可用抬到可用且模型推荐词非空时自动补词。
+- **画面设置**：文生图改为「5 个画幅比例 → 分辨率档位（长边，取自预设 `sizeOptions`，短边按比例换算并对齐 8px）→ 自定义宽高折叠」；有参考图时不再渲染可点却无效的比例 / 档位 / 宽高控件，只显示尺寸读数与「出图尺寸跟随参考图 {size}」说明。
+- **宽高编辑与比例高亮**：宽高输入仍是本地草稿（失焦或回车提交，清空恢复原值）；比例高亮按约分后的长宽比匹配（`768` / `1152` 都算 `1:1`，`800 × 600` 算 `4:3`）；尺寸边界说明从契约注入。
+- **生成张数提权**：1~4 张从高级折叠区移到页脚，左侧带「张数」标签的分段选择器；立即生成按钮下常驻规格摘要（尺寸 · 比例 · 张数，有参考图时补「参考图」，提示词为空时显示「先写画面描述」）。
+- **高级设置自解释**：折叠态标题右侧显示读数摘要（如「4 步 · CFG 0 · 随机种子」）；随机种子补「恢复随机」；分组文案改为「步数 / 引导强度 / 随机种子」。
+- **提示词区**：灵感示例仅在提示词为空时出现；润色建议可收起 / 展开（默认展开）；英文软提示改为提示可点「转为英文」，不再引导去创作助手。
+- **创作助手**：
+  - 新增 `shared/models-guide.js`（纯函数，只 import 契约）：提示词配方展示名与书写规则、负向词能力判定与指导、单模型 / 全库用法摘要；由 `lib/intent.js`、`lib/enhance.js`、`lib/tools.js` 与客户端共用，新增模型不必再改多处提示词逻辑。
+  - `lib/intent.js` 改为三段式 system prompt（身份与使命 / 模型手册 / 组织与沟通策略，软性引导），输出意图 v2；`lib/enhance.js` 按模型资产选择润色口径并避开原文已覆盖的维度；`lib/tools.js` 的 `imagen_generate` 描述注入模型库概要，`describeJob` 补模型定位。
+  - `lib/llm.js` 支持 `options.messages` 多轮消息（`content` 可为字符串或文本内容块数组，为多模态预留），`options.prompt` 保留单轮兼容；`prepareCall` 优先、`stream` 兜底、超时与空串降级行为不变。
+  - 确认卡改为摘要优先（中文摘要 → 可编辑英文提示词 → 比例 → 模型建议弱提示 → 可用时的排除项 → 张数分段 → 锁定种子 → 「按此生成」/「带入参数面板」）；新增通用澄清卡（问题 + 2~4 个选项 +「先按当前设置」；选项作为新一轮输入重解析，空串只清澄清）；「带入参数面板」写表单 + 切到参数表单 + 轻提示；空态示例只填对话草稿，不改表单；确认卡默认随机种子，仅显式勾选「沿用上张构图（锁定种子）」且表单未手填种子时继承上一张。
 
 ### 工程
 
-- 纯逻辑：`clampSize` 对缺失值（`''` / 纯空白 / `null` / `undefined`）回退默认尺寸 `1024`（与 `clampStrength` 同一约定），`clampSize('x') -> 1024` 旧契约不变；新增 `ratioIdOf()` 并补单测。
-- 样式：新增 `.ofs-frame-group` / `.ofs-frame-label` / `.ofs-frame-readout` / `.ofs-size-custom*`；移除只服务旧结构的 `.ofs-size-row` / `.ofs-size-label` / `.ofs-grid-head`，窄屏规则改为压缩宽高行标签。
-- 测试：`check-client-logic` 64（+1：缺失值回退、比例匹配、空串补丁）、`check-client-render` 64（画面设置三段、读数同步、草稿提交、清空恢复、改高不改宽、折叠态下宽高仍常驻）、`check-client-locale` zh/en 各 399 键；`client.js` 已重新构建，`npm test` 全绿。
-- 远端未改动：不涉及宿主超时、会话逻辑或 `remote/daemon.py`。
+- 版本同步：`package.json` / `package-lock.json` / `shared/contract.js` / `remote/daemon.py` / `test/mock-daemon.py` / `test/tunnel-probe.py` / `remote/contract.json` / `client.js` 均为 0.10.0。
+- 远端链路不变：`remote/daemon.py` 只做版本号变更；负向词仍按 `__call__` 签名与 `cfg > 0` 双条件兜底，不读取客户端能力标记。
+- 客户端纯逻辑：`src/logic/preset.js` 新增 `sizeTiersOf` / `tierPatchOf` / `selectedTierOf`，`presetSelectPatch` 去风格且负向模型层按 `negativePromptActive` 写入；`src/logic/prompt.js` 负向层简化为 `{ model, user }` 并新增 `negativeForSubmit`；`src/logic/intent.js` 改为意图 v2 的归一 / 编辑 / 提交纯逻辑（`INTENT_EDITABLE_FIELDS = ['prompt', 'negative', 'count']`）。
+- 样式：删除风格试印条样式，新增分辨率档位、张数分段、自定义宽高折叠、页脚摘要与润色头部样式；创作面板细小功能字号由 10.5px 提升到 11px（`docs/DESIGN.md` 的 Caption 字阶同步），并清理窄屏死规则。
+- 测试：`check-client-logic` 64、`check-client-render` 70、`check-client-locale` zh/en 各 399 键、`host-e2e` 46、`daemon-unit` 232，其余既有套件不变；`npm test` 全绿。
 
 ### 文档
 
-- `docs/SPEC.md`：§5.2 布局描述与 §5.5 第 4 条同步更新，新增 §5.10 第七批交互补充（画面尺寸收口）。
+- `docs/SPEC.md`：`/intent` 请求响应 v2、`presets` 公开视图能力字段、`enhance` 的模型配方说明、`imagen_generate` 工具描述与排除项生效条件、§5 布局与尺寸 / 助手相关小节，新增 §5.11「第八批交互补充」。
+- `docs/MODEL_ASSET_SPEC.md`：新增 §2.3 `supportsNegative`（语义、flux2 为 false 的理由、与 CFG 的联合判定、下发与消费方式）。
+- `docs/ARCHITECTURE.md`：新增 §2.19 模型知识单一来源与 §2.20 助手提示词结构 / 多轮通道。
+- `docs/DESIGN.md`：删除风格试印条小节，更新单轨面板结构与 Caption 字阶（11px）。
+- `docs/ROADMAP.md`：第六节标记 0.10.0 已落地并回填实现要点。
+- `docs/PRODUCT.md` / `README.md` / `README.en.md`：能力清单去风格预设并补充面板减法与助手升级；`docs/WORKBENCH_AUDIT_AND_RELIABILITY_PLAN.md` 在文首补历史说明。
+- `skills/model-asset-intake/SKILL.md`：字段模板补 `supportsNegative` 与必填展示 / 配方字段。
 
 ## 0.9.0 — 2026-11-13
 

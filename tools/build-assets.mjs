@@ -44,6 +44,7 @@ const REQUIRED_FIELDS = [
   'qualityPrefix',
   'sizeOptions',
   'runtime',
+  'supportsNegative',
   'pipeline',
   'measured',
 ]
@@ -147,6 +148,12 @@ export async function loadModels(modelsDir = MODELS_DIR) {
     if (typeof model.qualityPrefix !== 'string') {
       fail(`${where} 的 qualityPrefix 必须是字符串（没有质量词前缀时写空串）`)
     }
+    // 负向提示词能力：管线是否真的消费 negative_prompt（不是「cfg 是否 > 0」）。
+    // diffusers 的 Flux2Pipeline 没有 negative_prompt 参数，所以 flux2 必须显式标 false；
+    // 旧资产缺省时按 false 处理，避免界面/助手把无效参数当成有效能力。
+    if (typeof model.supportsNegative !== 'boolean') {
+      fail(`${where} 的 supportsNegative 必须是布尔值（管线是否真的消费 negative_prompt）`)
+    }
     // 图生图（垫图重绘）能力：可以缺省（缺省按 false 归一），显式给出时必须是布尔值。
     // 只有整套 diffusers 管线能用 AutoPipelineForImage2Image.from_pipe 复用的模型才能标 true。
     if ('supportsImg2Img' in model && typeof model.supportsImg2Img !== 'boolean') {
@@ -163,8 +170,9 @@ export async function loadModels(modelsDir = MODELS_DIR) {
 function projectModels(models) {
   return models.map((model) => ({
     ...model,
-    // 能力字段落盘前归一成布尔值：旧资产没写该字段时按 false（不支持图生图）。
+    // 能力字段落盘前归一成布尔值：旧资产没写该字段时按 false（不支持图生图 / 不消费负向词）。
     supportsImg2Img: model.supportsImg2Img === true,
+    supportsNegative: model.supportsNegative === true,
     measured: Object.fromEntries(MEASURED_FIELDS.map((field) => [field, model.measured[field] ?? null])),
   }))
 }
@@ -196,6 +204,8 @@ function projectPresets(models) {
     qualityPrefix: model.qualityPrefix,
     // 图生图（垫图重绘）能力：客户端据此决定是否允许放参考图；daemon 侧还会按 loader 兜底。
     supportsImg2Img: model.supportsImg2Img === true,
+    // 负向提示词能力：客户端据此显隐「排除项」、助手据此决定是否输出 negative。
+    supportsNegative: model.supportsNegative === true,
     sizeOptions: model.sizeOptions,
     pipeline: model.pipeline,
   }))

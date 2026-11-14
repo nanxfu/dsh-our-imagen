@@ -2,6 +2,17 @@
  * 左侧创作面板（表单式）。
  *
  * 分区按内容分组；接收 { t, ui, form, actions }。
+ *
+ * 0.10.0 布局（320px 单轨，自上而下）：
+ *  1. 提示词：输入框 / 英译与润色 / 英文软提示；灵感示例仅在提示词为空时出现，
+ *     润色建议可收起。
+ *  2. 参考图槽位（仅已有参考图时）。
+ *  3. 画面设置：有参考图时只说明「尺寸跟随参考图」；文生图时是 5 个画幅比例 →
+ *     分辨率档位（长边）→「自定义宽高」折叠。
+ *  4. 高级设置（折叠）：排除项仅在当前模型/CFG 可用时出现；步数、CFG、随机种子。
+ *  5. 页脚：生成张数 1~4 → 立即生成 → 规格摘要。
+ *
+ * 静态风格试印条与风格后缀已删除：风格由提示词内容与模型本身表达。
  */
 
 import React from 'react'
@@ -13,157 +24,11 @@ import { clampSize } from '../logic/clamp.js'
 import { formatText } from '../logic/format.js'
 import { referenceFileName } from '../logic/generate.js'
 import { Icon } from './icons.jsx'
-import { DEFAULT_RATIOS, STYLE_CAPSULES } from './presets.js'
-
-/**
- * 风格试印条：五种风格的灰度小样。
- *
- * 风格预设不是抽象色块，而是暗房里先试印出来的一小片相纸：每种风格画一张 64×64 的
- * 单色示意图，选风格时看到的是「这个风格长什么样」，不是「这个按钮是什么颜色」。
- * 全部为内联 SVG，不引入任何位图资产，也不使用彩色；每个小样以 style id 作前缀，
- * 保证渐变 / 滤镜 id 唯一。
- */
-const SPECIMENS = {
-  // 写实摄影：天空柔光 + 两道山脊的景深
-  film: (uid) => (
-    <>
-      <defs>
-        <linearGradient id={`${uid}-sky`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#f5f5f7" />
-          <stop offset="62%" stopColor="#c5c5cd" />
-          <stop offset="100%" stopColor="#9b9ba4" />
-        </linearGradient>
-        <linearGradient id={`${uid}-far`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#8f8f99" />
-          <stop offset="100%" stopColor="#5b5b64" />
-        </linearGradient>
-        <linearGradient id={`${uid}-near`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#33333a" />
-          <stop offset="100%" stopColor="#151519" />
-        </linearGradient>
-        <radialGradient id={`${uid}-sun`}>
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <rect width="64" height="64" fill={`url(#${uid}-sky)`} />
-      <circle cx="42" cy="27" r="15" fill={`url(#${uid}-sun)`} />
-      <path d="M0 38 L12 33 L21 37 L33 30 L45 36 L56 32 L64 35 V64 H0Z" fill={`url(#${uid}-far)`} />
-      <path d="M0 64 V47 L16 42 L30 48 L46 43 L64 46 V64Z" fill={`url(#${uid}-near)`} />
-    </>
-  ),
-
-  // 概念原画：压暗的场景 + 一道边缘光
-  concept: (uid) => (
-    <>
-      <defs>
-        <linearGradient id={`${uid}-bg`} x1="0" y1="0" x2="0.4" y2="1">
-          <stop offset="0%" stopColor="#565661" />
-          <stop offset="52%" stopColor="#2b2b32" />
-          <stop offset="100%" stopColor="#141417" />
-        </linearGradient>
-      </defs>
-      <rect width="64" height="64" fill={`url(#${uid}-bg)`} />
-      <circle cx="46" cy="15" r="10" fill="#ffffff" opacity="0.08" />
-      <circle cx="46" cy="15" r="5.6" fill="#dcdce4" opacity="0.94" />
-      <path d="M0 64 V46 L11 33 L18 40 L27 21 L34 32 L40 17 L48 29 L56 24 L64 32 V64Z" fill="#0d0d10" />
-      <path
-        d="M11 33 L18 40 M27 21 L34 32 M40 17 L48 29"
-        fill="none"
-        stroke="#f2f2f7"
-        strokeWidth="1"
-        strokeLinecap="round"
-        opacity="0.75"
-      />
-      <rect y="50" width="64" height="3" fill="#ffffff" opacity="0.08" />
-    </>
-  ),
-
-  // 赛博朋克：两柱灯牌立在楼群剪影里，湿地面留下反光（仍然是单色）
-  cyberpunk: (uid) => (
-    <>
-      <defs>
-        <linearGradient id={`${uid}-bg`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#2c2c34" />
-          <stop offset="100%" stopColor="#0d0d10" />
-        </linearGradient>
-        <linearGradient id={`${uid}-refl`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.42" />
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-        </linearGradient>
-        <filter id={`${uid}-glow`} x="-70%" y="-25%" width="240%" height="160%">
-          <feGaussianBlur stdDeviation="2.6" />
-        </filter>
-      </defs>
-      <rect width="64" height="64" fill={`url(#${uid}-bg)`} />
-      <g filter={`url(#${uid}-glow)`} opacity="0.9">
-        <rect x="13" y="17" width="4.2" height="28" rx="1.2" fill="#f4f4f8" />
-        <rect x="42" y="11" width="5.2" height="34" rx="1.4" fill="#fbfbfd" />
-        <rect x="22" y="27" width="2.4" height="18" rx="1" fill="#cfcfda" />
-      </g>
-      <path d="M0 64 V41 H7.4 V64Z M7.4 64 V33 H18.6 V64Z M28 64 V46 H36 V64Z M46 64 V36 H64 V64Z" fill="#09090c" />
-      <rect y="50" width="64" height="14" fill="#08080b" />
-      <g opacity="0.5">
-        <rect x="13" y="50" width="4.2" height="11" fill={`url(#${uid}-refl)`} />
-        <rect x="42" y="50" width="5.2" height="12" fill={`url(#${uid}-refl)`} />
-      </g>
-    </>
-  ),
-
-  // 水墨写意：两笔淡墨山影、一条水线与一处留白
-  ink: (uid) => (
-    <>
-      <defs>
-        <linearGradient id={`${uid}-wash`} x1="0" y1="0" x2="0.3" y2="1">
-          <stop offset="0%" stopColor="#2a2a30" stopOpacity="0.88" />
-          <stop offset="100%" stopColor="#2a2a30" stopOpacity="0.14" />
-        </linearGradient>
-      </defs>
-      <rect width="64" height="64" fill="#fbfbfc" />
-      <path d="M2 44 C 10 33 17 28 26 24 C 21 31 15 38 8 45 Z" fill={`url(#${uid}-wash)`} />
-      <path d="M30 47 C 37 40 44 36 55 32 C 48 39 42 44 36 49 Z" fill="#3a3a42" opacity="0.7" />
-      <path d="M0 52 C 16 49 34 51 64 45" fill="none" stroke="#8e8e98" strokeWidth="0.8" opacity="0.5" />
-      <circle cx="48" cy="17" r="2.4" fill="#a0a0aa" />
-      <path d="M6 58 C 20 56 36 57 58 52" fill="none" stroke="#c4c4cc" strokeWidth="0.7" opacity="0.65" />
-    </>
-  ),
-
-  // 3D 渲染：柔和棚拍光下的一颗黏土球
-  clay: (uid) => (
-    <>
-      <defs>
-        <linearGradient id={`${uid}-bg`} x1="0" y1="0" x2="0.6" y2="1">
-          <stop offset="0%" stopColor="#f8f8fa" />
-          <stop offset="100%" stopColor="#dcdce2" />
-        </linearGradient>
-        <radialGradient id={`${uid}-ball`} cx="36%" cy="30%" r="78%">
-          <stop offset="0%" stopColor="#fdfdfe" />
-          <stop offset="52%" stopColor="#cfcfd7" />
-          <stop offset="100%" stopColor="#8b8b96" />
-        </radialGradient>
-      </defs>
-      <rect width="64" height="64" fill={`url(#${uid}-bg)`} />
-      <ellipse cx="32" cy="51" rx="19" ry="5" fill="#26262c" opacity="0.16" />
-      <circle cx="32" cy="30" r="17.5" fill={`url(#${uid}-ball)`} />
-      <ellipse cx="25" cy="23" rx="5.4" ry="3.4" fill="#ffffff" opacity="0.62" transform="rotate(-24 25 23)" />
-      <path d="M20 44 C 26 47 38 47 44 43" fill="none" stroke="#6f6f79" strokeWidth="0.9" opacity="0.32" />
-    </>
-  ),
-}
-
-/** 传 { id }：风格 id 对应 STYLE_CAPSULES 的 id。 */
-export function StylePlate(props) {
-  const draw = SPECIMENS[props.id]
-  if (!draw) return null
-  return (
-    <svg className="ofs-plate" viewBox="0 0 64 64" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
-      {draw(`ofs-plate-${props.id}`)}
-    </svg>
-  )
-}
+import { DEFAULT_RATIOS } from './presets.js'
 
 const PROMPT_MAX = LIMITS.prompt.maxChars
 const INSPIRE_KEYS = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
+const COUNT_OPTIONS = [1, 2, 3, 4]
 
 /**
  * 表单尺寸 → 宽/高输入框的展示文本。
@@ -174,6 +39,11 @@ const INSPIRE_KEYS = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3'
 function sizeDraftOf(fields) {
   const source = fields && typeof fields === 'object' ? fields : {}
   return { width: String(clampSize(source.width)), height: String(clampSize(source.height)) }
+}
+
+function finiteSize(value) {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : null
 }
 
 function Fieldset(props) {
@@ -207,14 +77,16 @@ export function Rail(props) {
   const {
     form: fields,
     patchForm,
-    styleId,
-    applyStyle,
     ratioId,
     applyRatio,
-    sizeOptions,
-    selectedSize,
-    applySize,
     applyCustomSize,
+    sizeTiers,
+    selectedTier,
+    applyTier,
+    applyCfg,
+    resetSeed,
+    negativeActive,
+    negativeHint,
     refineGroups,
     refineSource,
     enhancing,
@@ -233,8 +105,8 @@ export function Rail(props) {
   const { sending, generate } = actions
 
   // 宽/高输入框的编辑草稿：表单里只存合法数字，输入过程中的原始文本（含空串）先落在本地，
-  // 失焦 / 回车时再归一化提交。外部改动（比例、方形档、切换模型、带回参数）通过下面这个
-  // effect 同步回草稿，保证输入框、标题栏读数与将提交的宽高永远是同一个值。
+  // 失焦 / 回车时再归一化提交。外部改动（比例、档位、切换模型、带回参数）通过下面这个
+  // effect 同步回草稿，保证输入框、读数与将提交的宽高永远是同一个值。
   const [sizeDraft, setSizeDraft] = React.useState(() => sizeDraftOf(fields))
   const syncedSize = React.useRef(undefined)
   React.useEffect(() => {
@@ -246,7 +118,17 @@ export function Rail(props) {
     setSizeDraft(sizeDraftOf(fields))
   }, [fields.width, fields.height])
 
+  // 「自定义宽高」默认折叠；输入草稿逻辑不变，展开后才渲染输入框。
+  const [customOpen, setCustomOpen] = React.useState(false)
+  // 润色建议默认展开，头部可收起。
+  const [refineOpen, setRefineOpen] = React.useState(true)
+
   const onCustomSize = typeof applyCustomSize === 'function' ? applyCustomSize : () => {}
+  const onTier = typeof applyTier === 'function' ? applyTier : () => {}
+  const onResetSeed = typeof resetSeed === 'function' ? resetSeed : () => patchForm({ seed: '' })
+  const onCfgChange = typeof applyCfg === 'function'
+    ? applyCfg
+    : (value) => patchForm({ cfg: Number(value) })
 
   /** 改写草稿：输入过程不碰表单，避免半截数字进入提交值。 */
   function updateSizeDraft(key, value) {
@@ -268,23 +150,42 @@ export function Rail(props) {
   const promptLength = fields.prompt.length
   const hasPrompt = fields.prompt.trim().length > 0
   // 防御式取档位：预览/测试可能只给部分表单字段，缺失时该行整体不渲染。
-  const sizes = Array.isArray(sizeOptions) ? sizeOptions : []
-  // 参考图与重绘强度：没有参考图时整块不渲染，文生图界面与改造前完全一致。
+  const tiers = Array.isArray(sizeTiers) ? sizeTiers : []
+  // 排除项：只有当前模型 + CFG 真的消费负向词时才出现（Host 与 Client 共用同一判定）。
+  const showNegative = negativeActive === true
+  // 占位提示用模型推荐词，但过长的推荐词（如 Animagine 的 200+ 字符）会撑乱输入框，截断展示。
+  const negativePlaceholder = negativeHint.length > 60
+    ? `${negativeHint.slice(0, 60)}…`
+    : (negativeHint || t('studio.negativePlaceholder'))
+
+  // 参考图：没有参考图时整块不渲染，文生图界面与改造前一致。
   const referenceImage = reference && typeof reference === 'object' ? reference : null
   const referenceName = referenceImage ? referenceFileName(referenceImage.path) : ''
+  const referenceWidth = referenceImage ? finiteSize(referenceImage.width) : null
+  const referenceHeight = referenceImage ? finiteSize(referenceImage.height) : null
+  const referenceSize = referenceWidth && referenceHeight ? `${referenceWidth} × ${referenceHeight}` : ''
   const strengthValue = Number.isFinite(Number(strength)) ? Number(strength) : LIMITS.strength.default
   const onRemoveReference = typeof removeReference === 'function' ? removeReference : () => {}
   const onStrengthChange = typeof applyStrength === 'function' ? applyStrength : () => {}
 
-  // 标题栏读数：当前生效尺寸 + 比例匹配状态；匹配不上预设比例时明确写「自定义」，
-  // 让「手动改过宽高」是一个被解释的状态，而不是高亮消失看起来像坏了。
-  const frameReadout = `${clampSize(fields.width)} × ${clampSize(fields.height)} · ${ratioId || t('studio.rail.custom')}`
-  // 边界与步长注入自 shared/contract.js，文案不写死数字。
-  const sizeHint = formatText(t('studio.rail.sizeHint'), {
-    min: LIMITS.width.min,
-    max: LIMITS.width.max,
-    step: LIMITS.width.step,
-  })
+  // 高级设置折叠态读数：一眼看清将用什么参数生成，不必展开。
+  const stepsValue = Number.isFinite(Number(fields.steps)) ? Math.round(Number(fields.steps)) : LIMITS.steps.min
+  const cfgValue = Number.isFinite(Number(fields.cfg)) ? Number(fields.cfg) : LIMITS.cfg.min
+  const seedText = String(fields.seed ?? '').trim()
+  const paramsReadout = [
+    `${stepsValue} ${t('studio.preset.stepsUnit')}`,
+    `CFG ${cfgValue}`,
+    seedText ? `${t('studio.meta.seed')} ${seedText}` : t('studio.seed'),
+  ].join(' · ')
+
+  // 页脚规格摘要：尺寸 · 比例 · 张数；有参考图时补一项「参考图」。
+  const countValue = Number.isFinite(Number(fields.count)) ? Math.round(Number(fields.count)) : 1
+  const specParts = [
+    `${clampSize(fields.width)} × ${clampSize(fields.height)}`,
+    ratioId || t('studio.rail.custom'),
+    `${countValue} ${t('unit.image')}`,
+  ]
+  if (referenceImage) specParts.push(t('studio.reference.title'))
 
   return (
     <aside className="ofs-panel ofs-panel--form">
@@ -354,50 +255,67 @@ export function Rail(props) {
           {/* 预设都按英文提示词训练：中文输入只提示，不拦截生成。 */}
           {englishPromptHint ? <p className="ofs-hint ofs-prompt-lang-hint">{t('studio.prompt.englishHint')}</p> : null}
 
-          <div className="ofs-inspire">
-            <span className="ofs-inspire-label">{t('studio.inspire.title')}</span>
-            <div className="ofs-suggestions">
-              {INSPIRE_KEYS.map((key) => (
-                <button
-                  type="button"
-                  key={key}
-                  className="ofs-suggestion"
-                  onClick={() => useInspiration(t(key))}
-                  title={t(key)}
-                >
-                  {t(`${key}.label`)}
-                </button>
-              ))}
+          {/* 灵感示例只在提示词为空时出现，不长期占据首屏高度。 */}
+          {hasPrompt ? null : (
+            <div className="ofs-inspire">
+              <span className="ofs-inspire-label">{t('studio.inspire.title')}</span>
+              <div className="ofs-suggestions">
+                {INSPIRE_KEYS.map((key) => (
+                  <button
+                    type="button"
+                    key={key}
+                    className="ofs-suggestion"
+                    onClick={() => useInspiration(t(key))}
+                    title={t(key)}
+                  >
+                    {t(`${key}.label`)}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {refineGroups.length > 0 ? (
             <div className="ofs-refine">
               <div className="ofs-refine-head">
                 <span>{t('studio.refine.title')}</span>
-                {refineSource === 'local' ? <span className="ofs-muted">{t('studio.enhance.local')}</span> : null}
+                <span className="ofs-refine-head-actions">
+                  {refineSource === 'local' ? <span className="ofs-muted">{t('studio.enhance.local')}</span> : null}
+                  <button
+                    type="button"
+                    className="ofs-text-action ofs-refine-toggle"
+                    aria-expanded={refineOpen}
+                    onClick={() => setRefineOpen((open) => !open)}
+                  >
+                    {refineOpen ? t('studio.refine.collapse') : t('studio.refine.expand')}
+                  </button>
+                </span>
               </div>
-              {refineGroups.map((group) => (
-                <div className="ofs-refine-group" key={group.dimension}>
-                  <span className="ofs-refine-dim">{t(`studio.refine.${group.dimension}`)}</span>
-                  <div className="ofs-suggestions">
-                    {group.options.map((option) => (
-                      <button
-                        type="button"
-                        key={option.id}
-                        className={option.applied ? 'ofs-suggestion is-on' : 'ofs-suggestion'}
-                        // 界面显示 UI 语言标签，插入提示词的始终是英文本。
-                        onClick={() => toggleRefine(option.text)}
-                        aria-pressed={option.applied}
-                        title={option.text}
-                      >
-                        {option.label || option.text}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <p className="ofs-hint">{t('studio.refine.hint')}</p>
+              {refineOpen ? (
+                <>
+                  {refineGroups.map((group) => (
+                    <div className="ofs-refine-group" key={group.dimension}>
+                      <span className="ofs-refine-dim">{t(`studio.refine.${group.dimension}`)}</span>
+                      <div className="ofs-suggestions">
+                        {group.options.map((option) => (
+                          <button
+                            type="button"
+                            key={option.id}
+                            className={option.applied ? 'ofs-suggestion is-on' : 'ofs-suggestion'}
+                            // 界面显示 UI 语言标签，插入提示词的始终是英文本。
+                            onClick={() => toggleRefine(option.text)}
+                            aria-pressed={option.applied}
+                            title={option.text}
+                          >
+                            {option.label || option.text}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <p className="ofs-hint">{t('studio.refine.hint')}</p>
+                </>
+              ) : null}
             </div>
           ) : null}
         </Fieldset>
@@ -452,142 +370,159 @@ export function Rail(props) {
           </Fieldset>
         ) : null}
 
-        <Fieldset title={t('studio.style')}>
-          <div className="ofs-tiles">
-            {STYLE_CAPSULES.map((capsule) => (
-              <button
-                type="button"
-                key={capsule.id}
-                className={styleId === capsule.id ? 'ofs-tile is-on' : 'ofs-tile'}
-                onClick={() => applyStyle(capsule.id)}
-                aria-pressed={styleId === capsule.id}
-                title={t(capsule.labelKey)}
-              >
-                <span className="ofs-tile-art" aria-hidden="true">
-                  <StylePlate id={capsule.id} />
-                </span>
-                <span className="ofs-tile-label">{t(capsule.labelKey)}</span>
-              </button>
-            ))}
-          </div>
-        </Fieldset>
-
-        {/* 画面设置：画幅比例 / 1:1 推荐尺寸 / 自定义宽高 三段同构，三者共用同一份宽高状态，
-            同一视野内就能看到「点了快捷档之后宽高变成了多少」。 */}
+        {/* 画面设置：有参考图时尺寸由参考图决定，后端不再消费宽高，
+            因此收起比例 / 档位 / 宽高控件，只说明事实，避免「可点却无效」。 */}
         <Fieldset
           title={t('studio.rail.frame')}
-          action={<span className="ofs-frame-readout">{frameReadout}</span>}
+          action={referenceImage
+            ? <span className="ofs-frame-readout">{referenceSize || t('studio.rail.followReference')}</span>
+            : null}
         >
-          <div className="ofs-frame-group">
-            <span className="ofs-frame-label">{t('studio.rail.ratio')}</span>
-            <div className="ofs-ratio-row" role="group" aria-label={t('studio.rail.ratio')}>
-              {DEFAULT_RATIOS.map((ratio) => (
-                <button
-                  type="button"
-                  key={ratio.id}
-                  className={ratioId === ratio.id ? 'ofs-ratio is-on' : 'ofs-ratio'}
-                  onClick={() => applyRatio(ratio.id)}
-                  aria-pressed={ratioId === ratio.id}
-                >
-                  <span className={`ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(':', '-')}`} aria-hidden="true" />
-                  <span className="ofs-ratio-label">{ratio.id}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 方形档位只来自当前预设的 sizeOptions（等宽高）；点选会同时改写宽高。 */}
-          {sizes.length > 0 ? (
-            <div className="ofs-frame-group">
-              <span className="ofs-frame-label">{t('studio.rail.size')}</span>
-              <div className="ofs-size-options" role="group" aria-label={t('studio.rail.sizeAria')}>
-                {sizes.map((size) => (
-                  <button
-                    type="button"
-                    key={size}
-                    className={selectedSize === size ? 'ofs-size is-on' : 'ofs-size'}
-                    onClick={() => applySize(size)}
-                    aria-pressed={selectedSize === size}
-                    title={`${size} × ${size}`}
-                  >
-                    {size}
-                  </button>
-                ))}
+          {referenceImage ? (
+            referenceSize ? (
+              <p className="ofs-hint ofs-follow-reference-hint">
+                {formatText(t('studio.rail.followReferenceSize'), { size: referenceSize })}
+              </p>
+            ) : null
+          ) : (
+            <>
+              <div className="ofs-frame-group">
+                <span className="ofs-frame-label">{t('studio.rail.ratio')}</span>
+                <div className="ofs-ratio-row" role="group" aria-label={t('studio.rail.ratio')}>
+                  {DEFAULT_RATIOS.map((ratio) => (
+                    <button
+                      type="button"
+                      key={ratio.id}
+                      className={ratioId === ratio.id ? 'ofs-ratio is-on' : 'ofs-ratio'}
+                      onClick={() => applyRatio(ratio.id)}
+                      aria-pressed={ratioId === ratio.id}
+                    >
+                      <span className={`ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(':', '-')}`} aria-hidden="true" />
+                      <span className="ofs-ratio-label">{ratio.id}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : null}
 
-          {/* 自定义宽高：只改对应的那一边，另一边不联动；编辑过程走本地草稿，失焦才提交。 */}
-          <div className="ofs-frame-group">
-            <span className="ofs-frame-label">{t('studio.rail.customSize')}</span>
-            <div className="ofs-size-custom">
-              <label className="ofs-size-custom-field">
-                <span>{t('studio.rail.width')}</span>
-                <input
-                  type="number"
-                  min={LIMITS.width.min}
-                  max={LIMITS.width.max}
-                  step={LIMITS.width.step}
-                  value={sizeDraft.width}
-                  aria-label={t('studio.rail.width')}
-                  onChange={(event) => updateSizeDraft('width', event.target.value)}
-                  onBlur={() => commitSizeDraft('width')}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') event.currentTarget.blur()
-                  }}
-                />
-              </label>
-              <span className="ofs-size-custom-times" aria-hidden="true">×</span>
-              <label className="ofs-size-custom-field">
-                <span>{t('studio.rail.height')}</span>
-                <input
-                  type="number"
-                  min={LIMITS.height.min}
-                  max={LIMITS.height.max}
-                  step={LIMITS.height.step}
-                  value={sizeDraft.height}
-                  aria-label={t('studio.rail.height')}
-                  onChange={(event) => updateSizeDraft('height', event.target.value)}
-                  onBlur={() => commitSizeDraft('height')}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') event.currentTarget.blur()
-                  }}
-                />
-              </label>
-            </div>
-          </div>
+              {/* 分辨率档位按长边定义：长边取档，短边按当前画幅比例换算。 */}
+              {tiers.length > 0 ? (
+                <div className="ofs-frame-group">
+                  <span className="ofs-frame-label">{t('studio.rail.size')}</span>
+                  <div className="ofs-size-options" role="group" aria-label={t('studio.rail.sizeAria')}>
+                    {tiers.map((tier) => (
+                      <button
+                        type="button"
+                        key={tier}
+                        className={selectedTier === tier ? 'ofs-size is-on' : 'ofs-size'}
+                        onClick={() => onTier(tier)}
+                        aria-pressed={selectedTier === tier}
+                        title={`${tier} px`}
+                      >
+                        {tier}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
-          <p className="ofs-hint ofs-size-hint">{sizeHint}</p>
-        </Fieldset>
-
-        <Fieldset title={t('studio.rail.advanced')}>
-          <div className="ofs-rows">
-            <div className={negativeOpen ? 'ofs-row is-open' : 'ofs-row'}>
-              <div className="ofs-row-head">
+              {/* 自定义宽高：默认折叠，编辑过程走本地草稿，失焦才提交。 */}
+              <div className="ofs-frame-group">
                 <button
                   type="button"
-                  className="ofs-row-toggle"
-                  onClick={() => setNegativeOpen((open) => !open)}
-                  aria-expanded={negativeOpen}
+                  className="ofs-custom-toggle"
+                  aria-expanded={customOpen}
+                  onClick={() => setCustomOpen((open) => !open)}
                 >
-                  <span>{t('studio.negative')}</span>
-                  <span className={negativeOpen ? 'ofs-chevron is-open' : 'ofs-chevron'} aria-hidden="true">
+                  <span>{t('studio.rail.customSize')}</span>
+                  <span className={customOpen ? 'ofs-chevron is-open' : 'ofs-chevron'} aria-hidden="true">
                     <Icon name="chevronDown" size={14} />
                   </span>
                 </button>
-                <Tooltip text={t('studio.negativeTooltip')} />
+                {customOpen ? (
+                  <div className="ofs-custom-body">
+                    <div className="ofs-size-custom">
+                      <label className="ofs-size-custom-field">
+                        <span>{t('studio.rail.width')}</span>
+                        <input
+                          type="number"
+                          min={LIMITS.width.min}
+                          max={LIMITS.width.max}
+                          step={LIMITS.width.step}
+                          value={sizeDraft.width}
+                          aria-label={t('studio.rail.width')}
+                          onChange={(event) => updateSizeDraft('width', event.target.value)}
+                          onBlur={() => commitSizeDraft('width')}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') event.currentTarget.blur()
+                          }}
+                        />
+                      </label>
+                      <span className="ofs-size-custom-times" aria-hidden="true">×</span>
+                      <label className="ofs-size-custom-field">
+                        <span>{t('studio.rail.height')}</span>
+                        <input
+                          type="number"
+                          min={LIMITS.height.min}
+                          max={LIMITS.height.max}
+                          step={LIMITS.height.step}
+                          value={sizeDraft.height}
+                          aria-label={t('studio.rail.height')}
+                          onChange={(event) => updateSizeDraft('height', event.target.value)}
+                          onBlur={() => commitSizeDraft('height')}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') event.currentTarget.blur()
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <p className="ofs-hint ofs-size-hint">
+                      {formatText(t('studio.rail.sizeHint'), {
+                        min: LIMITS.width.min,
+                        max: LIMITS.width.max,
+                        step: LIMITS.width.step,
+                      })}
+                    </p>
+                  </div>
+                ) : null}
               </div>
-              {negativeOpen ? (
-                <textarea
-                  className="ofs-row-textarea"
-                  rows={3}
-                  value={fields.negative}
-                  placeholder={t('studio.negativePlaceholder')}
-                  spellCheck={false}
-                  onChange={(event) => patchForm({ negative: event.target.value })}
-                />
-              ) : null}
-            </div>
+            </>
+          )}
+        </Fieldset>
+
+        <Fieldset
+          title={t('studio.rail.advanced')}
+          action={advancedOpen ? null : <span className="ofs-row-readout">{paramsReadout}</span>}
+        >
+          <div className="ofs-rows">
+            {/* 排除项只在当前模型 + CFG 真的消费负向词时出现；隐藏时不写、不提交。 */}
+            {showNegative ? (
+              <div className={negativeOpen ? 'ofs-row is-open' : 'ofs-row'}>
+                <div className="ofs-row-head">
+                  <button
+                    type="button"
+                    className="ofs-row-toggle"
+                    onClick={() => setNegativeOpen((open) => !open)}
+                    aria-expanded={negativeOpen}
+                  >
+                    <span>{t('studio.negative')}</span>
+                    <span className={negativeOpen ? 'ofs-chevron is-open' : 'ofs-chevron'} aria-hidden="true">
+                      <Icon name="chevronDown" size={14} />
+                    </span>
+                  </button>
+                  <Tooltip text={t('studio.negativeTooltip')} />
+                </div>
+                {negativeOpen ? (
+                  <textarea
+                    className="ofs-row-textarea"
+                    rows={3}
+                    value={fields.negative}
+                    placeholder={negativePlaceholder}
+                    spellCheck={false}
+                    onChange={(event) => patchForm({ negative: event.target.value })}
+                  />
+                ) : null}
+              </div>
+            ) : null}
 
             <div className={advancedOpen ? 'ofs-row is-open' : 'ofs-row'}>
               <div className="ofs-row-head">
@@ -612,8 +547,8 @@ export function Rail(props) {
                     </span>
                     <input
                       type="number"
-                      min={1}
-                      max={60}
+                      min={LIMITS.steps.min}
+                      max={LIMITS.steps.max}
                       value={fields.steps}
                       aria-label={t('studio.steps')}
                       onChange={(event) => patchForm({ steps: Number(event.target.value) })}
@@ -626,38 +561,34 @@ export function Rail(props) {
                     </span>
                     <input
                       type="number"
-                      min={0}
-                      max={20}
+                      min={LIMITS.cfg.min}
+                      max={LIMITS.cfg.max}
                       step={0.5}
                       value={fields.cfg}
                       aria-label={t('studio.cfg')}
-                      onChange={(event) => patchForm({ cfg: Number(event.target.value) })}
+                      onChange={(event) => onCfgChange(Number(event.target.value))}
                     />
                   </div>
-                  <div className="ofs-field">
+                  <div className="ofs-field ofs-field--wide">
                     <span>{t('studio.seed')}</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={fields.seed}
-                      placeholder={t('studio.random')}
-                      aria-label={t('studio.seed')}
-                      onChange={(event) => patchForm({ seed: event.target.value })}
-                    />
-                  </div>
-                  <div className="ofs-field">
-                    <span>{t('studio.count')}</span>
-                    <select
-                      value={fields.count}
-                      aria-label={t('studio.count')}
-                      onChange={(event) => patchForm({ count: Number(event.target.value) })}
-                    >
-                      {[1, 2, 3, 4].map((value) => (
-                        <option key={value} value={value}>
-                          {value}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="ofs-seed-row">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={fields.seed}
+                        placeholder={t('studio.random')}
+                        aria-label={t('studio.seed')}
+                        onChange={(event) => patchForm({ seed: event.target.value })}
+                      />
+                      <button
+                        type="button"
+                        className="ofs-text-action ofs-seed-reset"
+                        onClick={onResetSeed}
+                        disabled={!seedText}
+                      >
+                        {t('studio.seed.reset')}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : null}
@@ -667,6 +598,23 @@ export function Rail(props) {
       </div>
 
       <div className="ofs-panel-foot">
+        {/* 生成张数提权到页脚：抽卡是高频动作，不再埋进高级折叠区。 */}
+        <div className="ofs-qty-row">
+          <span className="ofs-qty-label">{t('studio.countShort')}</span>
+          <div className="ofs-qty" role="group" aria-label={t('studio.count')}>
+            {COUNT_OPTIONS.map((value) => (
+              <button
+                type="button"
+                key={value}
+                className={countValue === value ? 'ofs-qty-option is-on' : 'ofs-qty-option'}
+                onClick={() => patchForm({ count: value })}
+                aria-pressed={countValue === value}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        </div>
         <button
           type="button"
           className={sending ? 'ofs-btn is-primary ofs-generate is-busy' : 'ofs-btn is-primary ofs-generate'}
@@ -676,7 +624,9 @@ export function Rail(props) {
           <Icon name="sparkles" size={16} />
           {sending ? t('studio.generating') : t('studio.generate')}
         </button>
-        <p className="ofs-hint">{hasPrompt ? t('studio.generateHint') : t('studio.promptHint')}</p>
+        <p className="ofs-hint ofs-spec-summary">
+          {hasPrompt ? specParts.join(' · ') : t('studio.promptHint')}
+        </p>
       </div>
     </aside>
   )

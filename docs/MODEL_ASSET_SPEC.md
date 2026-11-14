@@ -41,6 +41,7 @@
   "sizeOptions": [768, 1024, 1152],
   "runtime": "default",
   "supportsImg2Img": true,
+  "supportsNegative": true,
   "pipeline": {
     "loader": "sdxl-lora",
     "base": "stabilityai/stable-diffusion-xl-base-1.0",
@@ -81,6 +82,7 @@
 | `promptStyle` / `qualityPrefix` | 提示词配方：提示词的书写口径与质量词前缀，见 §2.1 |
 | `runtime` | 运行时底座。当前只允许 `"default"`（统一验证过的环境） |
 | `supportsImg2Img` | 图生图（垫图重绘）能力。可缺省，缺省按 `false`；只有能用 `AutoPipelineForImage2Image.from_pipe` 复用整管的模型才能标 `true`，见 §2.2 |
+| `supportsNegative` | 负向提示词能力：模型管线是否真的消费 `negative_prompt`。必填布尔值，见 §2.3 |
 | `pipeline` | 下发给远端 Daemon 的加载描述；`downloadGb` 用于下载前磁盘预检 |
 | `measured` | 靶场实测指标：峰值显存、加载耗时、稳态耗时、实际下载量。未实测的字段填 `null` |
 
@@ -130,6 +132,42 @@
 - daemon：`SUPPORTED_IMG2IMG_LOADERS`（`sdxl` / `sdxl-lora`）是最后一道兜底，其它 loader 一律按 `invalid_request` 拒绝（文案「该模型不支持垫图重绘」）。
 
 校验：`tools/build-assets.mjs` 要求该字段若存在必须是布尔值；缺省按 `false` 归一后写入 `shared/models.generated.js`（`npm run models:check` 会一并校验生成物同步）。
+
+### 2.3 负向提示词能力（supportsNegative）
+
+`supportsNegative` 描述**模型管线是否真的消费 `negative_prompt`**，与「CFG 是否大于 0」是两件事：前者是管线能力，后者决定本次请求里的负向词是否生效。
+
+| 取值 | 含义 |
+| :--- | :--- |
+| `true` | 管线接受负向提示词：`negative_prompt` 会参与条件编码（SDXL 家族在 `cfg > 0` 时生效，`anima` 运行时在 CFG > 1 时作为无条件分支参与引导，推荐 CFG=4） |
+| `false` | 管线没有负向词输入，传了也会被丢弃；客户端与助手应隐藏「排除项」，避免用户填写无效参数 |
+
+当前 9 个预设中只有 `flux2-klein-4b` 为 `false`：diffusers 的 `Flux2Pipeline.__call__` 没有 `negative_prompt` 参数，`remote/daemon.py` 的 `run_task()` 按 `__call__` 签名（`STATE.sig_params`）过滤参数，即使请求里带了负向词也不会传进管线。其余 8 个（`sdxl-lightning` / `hyper-sdxl-8step` / `sdxl-turbo` / `playground-v2.5` / `sdxl-base` / `realvis-v5` / `animagine-xl-3.1` / `anima-light-lavender`）为 `true`：SDXL 家族走 diffusers 的 `negative_prompt` 形参；`anima-light-lavender` 的自定义运行时显式接收并使用负向词。
+
+判定标准：
+
+- 查看 loader 对应生成管线的 `__call__` 是否接受 `negative_prompt`（diffusers 源码 / 模型卡），或真机确认负向词确实改变出图；
+- 不确定时填 `false`：标错的成本不对称——`false` 只是隐藏了可用能力，`true` 会让界面多出一个实际被丢弃的输入框，并让助手输出无效负向词；
+- 该字段与 `negativeHint`（模型推荐默认负向词）相互独立：支持负向词但默认不推荐时 `negativeHint` 可以是空串（如 `anima-light-lavender`），此时排除项默认隐藏，用户主动抬高 CFG 后出现。
+
+联合判定：是否展示/使用负向词由 `shared/models-guide.js` 的 `negativePromptActive(preset, cfg)` 决定，Host 与 Client 共用同一份规则，不得各写一套：
+
+1. 预设缺失（旧宿主 / 尚未拿到预设）→ 只看 `cfg > 0`；
+2. 预设带 `supportsNegative` → 必须为 `true`；旧宿主预设没有该字段时，用 `negativeHint` 非空兜底；
+3. 必须 `cfg > 0`（CFG=0 的采样会忽略负向词，daemon 也不会传）；
+4. 且 `negativeHint` 非空，或用户把 CFG 抬到高于预设推荐值。
+
+结果：默认 `cfg = 0` 的 4 步极速模型（`sdxl-lightning` / `hyper-sdxl-8step` / `sdxl-turbo`）与 `flux2-klein-4b` 默认隐藏排除项；用户抬高 CFG 后出现，恢复默认后再次隐藏。
+
+消费方：
+
+- 构建：`tools/build-assets.mjs` 把 `supportsNegative` 列为必填字段，缺失或非布尔值直接失败；归一后写入 `shared/models.generated.js` 的 `MODELS` 与 `PRESETS`。
+- 下发：`shared/contract.js` 的 `publicPresets()` 只剔除 `pipeline`，`supportsNegative` 随 `/state` 的 `presets` 原样下发给客户端。
+- 客户端：按 `negativePromptActive()` 决定「排除项」显隐；提交时不可用则把 `negativePrompt` 置空串，不发无效参数。
+- Host 助手：`lib/intent.js` 用同一函数决定响应里的 `negative` 是否必须为空串，`lib/enhance.js` / `lib/tools.js` 复用同一模型目录生成提示词与工具描述。
+- daemon：不读该字段，按「`negative_prompt` 在 `__call__` 签名内」且 `cfg > 0` 双条件兜底，不信任客户端标记。
+
+校验：`npm run models:check` 与 `node test/check-contract.mjs` 会校验生成物与 `models/` 同步。
 
 ## 3. 录入与验证流程
 

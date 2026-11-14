@@ -17,10 +17,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { apply as applyPlugin } from '../index.js'
+import { invokeLlm } from '../lib/llm.js'
 import { createLogRoutes } from '../lib/routes/logs.js'
 import { normalizeSaveTo, resolveWorkspaceWritePath } from '../lib/paths.js'
 import { registerTools } from '../lib/tools.js'
-import { LIMITS, VERSION } from '../shared/contract.js'
+import { INTENT, LIMITS, VERSION } from '../shared/contract.js'
 
 // 1×1 透明 PNG，用于伪造远端返回
 const PNG_B64 =
@@ -342,6 +343,27 @@ async function main() {
     assert.deepEqual(cancel.parameters.required, ['jobId'], 'imagen_cancel 必须要求 jobId')
     assert.equal(cancel.parameters.properties.jobId.type, 'string')
     assert.equal(cancel.parameters.additionalProperties, false)
+  })
+
+  await check('Agent 工具描述注入模型库知识', () => {
+    const generate = fake.tools.find((tool) => tool.name === 'imagen_generate')
+    // 模型知识来自 models/*.json 的单一来源：描述里能看到各模型定位与写法，而不是只有 id 枚举。
+    assert.match(generate.description, /可用模型/, '工具描述应带模型库')
+    for (const label of ['SDXL Lightning', 'RealVisXL V5.0', 'FLUX.2 Klein 4B', 'Animagine XL 3.1']) {
+      assert.ok(generate.description.includes(label), `工具描述应包含模型画像：${label}`)
+    }
+    assert.ok(generate.description.includes('提示词写法'), '模型库应包含提示词写法')
+    assert.match(
+      generate.parameters.properties.negativePrompt.description,
+      /CFG > 0/,
+      'negativePrompt 参数说明应写明负向词生效条件',
+    )
+    assert.match(
+      generate.parameters.properties.negativePrompt.description,
+      /不支持负向词/,
+      'negativePrompt 参数说明应写明模型能力差异',
+    )
+    assert.match(generate.parameters.properties.presetId.description, /模型库/, 'presetId 参数说明应指向模型库')
   })
 
   await check('初始状态为 absent', async () => {
@@ -710,6 +732,9 @@ async function main() {
     assert.equal(typeof value.text, 'string')
     assert.match(value.text, /imagen-output\//)
     assert.match(value.text, /seed/)
+    // describeJob 补模型定位：Agent 能看出这批图用的模型与取向。
+    assert.match(value.text, /预设：SDXL Lightning（sdxl-lightning）/)
+    assert.match(value.text, /定位：4 步极速出图/)
     const rendered = tool.output.render({}, value)
     assert.equal(rendered[0].type, 'text')
   })
@@ -1011,6 +1036,31 @@ async function main() {
       assert.deepEqual([lighting.options[1].text, lighting.options[1].label], ['neon glow', 'neon glow'])
       assert.ok(llm.calls[0].system.includes('英文短语'), 'system prompt 应要求英文短语')
       assert.ok(llm.calls[0].system.includes('label'), 'system prompt 应要求 UI 语言标签')
+      // 模型配方来自模型资产：写法、速度档位、负向词能力都注入 system prompt，不再手写 ID 列表。
+      assert.ok(llm.calls[0].system.includes('SDXL Lightning'), 'system prompt 应带当前模型画像')
+      assert.ok(llm.calls[0].system.includes('简短短语'), 'concise 模型应要求简短英文短语')
+      assert.ok(llm.calls[0].system.includes('快速档'), '快速档模型应要求短语短而聚焦')
+      assert.ok(llm.calls[0].system.includes('原文'), '润色应引导避开原文已覆盖的维度')
+
+      const natural = await json(host.origin, '/imagen-api/enhance', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: '一只赛博猫', presetId: 'realvis-v5', locale: 'zh' }),
+      })
+      assert.equal(natural.body.source, 'model')
+      const naturalCall = llm.calls.at(-1)
+      assert.ok(naturalCall.system.includes('RealVisXL V5.0'), 'system prompt 应带目标模型画像')
+      assert.ok(naturalCall.system.includes('自然语言段落'), 'natural 模型应要求自然语言段落')
+      assert.ok(naturalCall.system.includes('多步质量档'), '多步模型应要求更细的质感描写')
+
+      // 无负向词能力的模型：润色建议必须引导用正面视觉描述表达排除意图。
+      const flux = await json(host.origin, '/imagen-api/enhance', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: '一尘不染的白色房间', presetId: 'flux2-klein-4b', locale: 'zh' }),
+      })
+      assert.equal(flux.body.source, 'model')
+      assert.ok(llm.calls.at(-1).system.includes('不接受负向提示词'), '无负向能力模型应提示用正面描述')
     } finally {
       fake.setLlm(null)
     }
@@ -1078,24 +1128,79 @@ async function main() {
     }
   })
 
-  await check('对话意图解析（无模型时走本地兜底）', async () => {
+  await check('llm 多轮：messages 字符串 / 内容块与 prompt 单轮兼容', async () => {
+    const calls = []
+    const llmCtx = {
+      get(name) {
+        if (name === 'llm') {
+          return {
+            stream: async function* (options) {
+              calls.push(options)
+              yield { text: 'ok' }
+            },
+          }
+        }
+        if (name === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'mock-provider', model: 'mock-model' }) }
+        return undefined
+      },
+    }
+    const reply = await invokeLlm(llmCtx, {
+      messages: [
+        { role: 'user', content: '第一轮：雨夜街景' },
+        { role: 'assistant', content: [{ type: 'text', text: 'rainy night street' }] },
+        { role: 'user', content: [{ type: 'text', text: '第二轮：加上霓虹' }, { type: 'image', url: 'ignored' }] },
+        { role: 'system', content: '' },
+        null,
+      ],
+      systemPrompt: 'sys',
+    })
+    assert.equal(reply, 'ok')
+    assert.deepEqual(calls[0].messages.map((message) => message.role), ['user', 'assistant', 'user'])
+    assert.deepEqual(calls[0].messages[0].content, [{ type: 'text', text: '第一轮：雨夜街景' }], '字符串内容归一成文本块')
+    assert.deepEqual(
+      calls[0].messages[1].content,
+      [{ type: 'text', text: 'rainy night street' }],
+      '内容块数组原样传递',
+    )
+    assert.deepEqual(
+      calls[0].messages[2].content,
+      [{ type: 'text', text: '第二轮：加上霓虹' }],
+      '当前只传递文本块，其它类型丢弃',
+    )
+
+    // 不传 messages 时仍走 prompt 单轮（旧调用方兼容）。
+    await invokeLlm(llmCtx, { prompt: '单轮提示词', systemPrompt: 'sys' })
+    assert.deepEqual(calls[1].messages, [{ role: 'user', content: [{ type: 'text', text: '单轮提示词' }] }])
+  })
+
+  await check('对话意图解析（无模型时走本地兜底，v2 形状）', async () => {
+    const text = '给我画一张横版的雨夜街景，要写实一点'
     const result = await json(host.origin, '/imagen-api/intent', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        text: '给我画一张横版的雨夜街景，要写实一点',
-        presetId: 'animagine-xl-3.1',
-        locale: 'zh',
-      }),
+      body: JSON.stringify({ text, presetId: 'animagine-xl-3.1', locale: 'zh' }),
     })
     assert.equal(result.status, 200)
     assert.equal(result.body.ok, true)
     assert.equal(result.body.source, 'local', '测试环境没有宿主模型，应走本地兜底')
-    assert.equal(result.body.prompt, '给我画一张横版的雨夜街景，要写实一点', '无模型时 prompt 保持原文')
-    assert.equal(result.body.summary, '给我画一张横版的雨夜街景，要写实一点', '无模型时 summary 与原文一致')
+    assert.equal(result.body.prompt, text, '无模型时 prompt 保持原文')
+    assert.equal(result.body.summary, text, '无模型时 summary 与原文一致')
     assert.equal(result.body.ratioId, '')
-    assert.equal(result.body.styleId, '')
+    assert.equal(result.body.negative, '', '无模型时 negative 为空串')
     assert.equal(result.body.clarify, null)
+    assert.equal(result.body.modelHint, null)
+    // v2 去风格：响应里不再有 styleId，字段集合固定。
+    assert.equal('styleId' in result.body, false, 'v2 不再返回 styleId')
+    assert.deepEqual(Object.keys(result.body).sort(), [
+      'clarify',
+      'modelHint',
+      'negative',
+      'ok',
+      'prompt',
+      'ratioId',
+      'source',
+      'summary',
+    ])
 
     const blank = await json(host.origin, '/imagen-api/intent', {
       method: 'POST',
@@ -1103,15 +1208,25 @@ async function main() {
       body: JSON.stringify({ text: '   ' }),
     })
     assert.equal(blank.status, 400, '空对话内容应返回 400')
+
+    const tooLong = await json(host.origin, '/imagen-api/intent', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: 'x'.repeat(LIMITS.intentText.maxChars + 1) }),
+    })
+    assert.equal(tooLong.status, 400, '超长对话内容应返回 400')
+    assert.equal(tooLong.body.error.code, 'invalid_request')
   })
 
-  await check('意图解析（有模型）：中文输入产出英文 prompt 与 UI 语言摘要', async () => {
+  await check('意图解析（有模型）：英文 prompt、UI 语言摘要与 v2 字段归一', async () => {
     const llm = createFakeLlm(JSON.stringify({
       prompt: 'masterpiece, best quality, highres, rainy night city street, wet pavement reflecting neon signs, cinematic lighting',
       summary: '雨夜城市街景，湿润路面倒映霓虹招牌，电影感光影',
       ratio: '16:9',
+      negative: 'blurry, low quality, text, watermark',
       style: 'film',
       clarify: null,
+      modelHint: { presetId: 'realvis-v5', reason: '写实街景与皮肤质感更适合 RealVisXL' },
     }))
     fake.setLlm(llm)
     try {
@@ -1126,15 +1241,29 @@ async function main() {
       assert.ok(!/[\u3400-\u9fff]/.test(result.body.prompt), '中文不得进入提示词')
       assert.match(result.body.summary, /[\u3400-\u9fff]/, '中文界面的摘要用中文')
       assert.equal(result.body.ratioId, '16:9')
-      assert.equal(result.body.styleId, 'film')
+      assert.equal(result.body.negative, 'blurry, low quality, text, watermark', '可用负向词的模型应透传 negative')
       assert.equal(result.body.clarify, null)
+      assert.deepEqual(
+        result.body.modelHint,
+        { presetId: 'realvis-v5', reason: '写实街景与皮肤质感更适合 RealVisXL' },
+        '合法 modelHint 原样透传',
+      )
+      assert.equal('styleId' in result.body, false, '模型输出的旧 style 字段应被忽略')
 
-      // danbooru 预设：system prompt 要求逗号标签流，并把预设的质量词前缀固定写进去。
+      // 三段式 system prompt：身份 / 模型手册（当前模型 + 全库）/ 软性策略 + v2 字段规则。
       const call = llm.calls[0]
-      assert.ok(call.messages[0].content[0].text.includes('雨夜街景'), '用户原话应原样发给模型')
+      assert.equal(call.messages.at(-1).content[0].text, '画一张横版的雨夜街景，要写实一点', '用户原话应原样发给模型')
+      assert.ok(call.system.includes('【身份与使命】'), 'system prompt 应有身份与使命段')
+      assert.ok(call.system.includes('【模型手册】'), 'system prompt 应有模型手册段')
+      assert.ok(call.system.includes('【组织与沟通策略】'), 'system prompt 应有组织与沟通策略段')
+      assert.ok(call.system.includes('Animagine XL 3.1'), '模型手册应带当前模型画像')
+      assert.ok(call.system.includes('RealVisXL V5.0'), '模型手册应带全库模型')
       assert.ok(call.system.includes('Danbooru'), 'danbooru 预设应要求标签流')
       assert.ok(call.system.includes('masterpiece, best quality, highres'), '质量词前缀应写进 system prompt')
       assert.ok(call.system.includes('summary'), 'system prompt 应约定 summary 字段')
+      assert.ok(call.system.includes('"negative"'), 'system prompt 应约定 negative 字段')
+      assert.ok(call.system.includes('modelHint') && call.system.includes('clarify'), 'system prompt 应约定澄清与模型建议')
+      assert.ok(!call.system.includes('"style"'), 'v2 system prompt 不再要求 style 字段')
 
       // 自然语言预设：要求换成英文段落；同一个模型输出仍按同一套字段解析。
       const natural = await json(host.origin, '/imagen-api/intent', {
@@ -1144,6 +1273,231 @@ async function main() {
       })
       assert.equal(natural.body.source, 'model')
       assert.ok(llm.calls[1].system.includes('自然语言段落'), 'natural 预设应要求自然语言段落')
+
+      // 没有 history 时，旧的 previousPrompt 仍以「上一轮提示词」注入，兼容旧客户端。
+      await json(host.origin, '/imagen-api/intent', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: '在雨夜里加一把伞', previousPrompt: 'rainy night street, neon signs' }),
+      })
+      const withPrevious = llm.calls.at(-1)
+      assert.ok(withPrevious.system.includes('上一轮提示词'), 'previousPrompt 应作为上一轮上下文注入')
+      assert.ok(withPrevious.system.includes('rainy night street, neon signs'))
+    } finally {
+      fake.setLlm(null)
+    }
+  })
+
+  await check('意图解析 v2：negative 按模型能力与 CFG 决定', async () => {
+    const llm = createFakeLlm(JSON.stringify({
+      prompt: 'rainy street, neon signs',
+      summary: '雨夜街道',
+      ratio: '1:1',
+      negative: 'blurry, low quality',
+      clarify: null,
+      modelHint: null,
+    }))
+    fake.setLlm(llm)
+    try {
+      const request = (body) =>
+        json(host.origin, '/imagen-api/intent', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+
+      // CFG=0（默认 4 步极速模型）：negative 必须空串，system prompt 明确说不生效。
+      const zero = await request({ text: '雨夜街道', presetId: 'sdxl-lightning', cfg: 0 })
+      assert.equal(zero.body.negative, '', 'CFG=0 时 negative 必须是空串')
+      assert.ok(llm.calls.at(-1).system.includes('CFG=0'))
+      assert.ok(llm.calls.at(-1).system.includes('负向词不生效'))
+
+      // 用户主动抬高 CFG：模型有能力 + negativeHint 非空 → 生效。
+      const raised = await request({ text: '雨夜街道', presetId: 'sdxl-lightning', cfg: 5 })
+      assert.equal(raised.body.negative, 'blurry, low quality', 'CFG 抬高后 negative 应透传')
+      assert.ok(llm.calls.at(-1).system.includes('CFG=5'))
+
+      // 推荐 CFG>0 且带 negativeHint 的模型：默认即可用负向词。
+      const animagine = await request({ text: '二次元少女', presetId: 'animagine-xl-3.1' })
+      assert.equal(animagine.body.negative, 'blurry, low quality', '推荐配置可用负向词时应透传')
+
+      // 不支持负向词的模型：即使 CFG 很高也必须空串。
+      const flux = await request({ text: '雨夜街道', presetId: 'flux2-klein-4b', cfg: 9 })
+      assert.equal(flux.body.negative, '', '不支持负向词的模型必须空串')
+      assert.ok(llm.calls.at(-1).system.includes('不支持负向词'))
+
+      // cfg 缺失/非法：回落到预设推荐值（sdxl-lightning 推荐 0）。
+      const missing = await request({ text: '雨夜街道', presetId: 'sdxl-lightning' })
+      assert.equal(missing.body.negative, '', '缺失 cfg 回落推荐值')
+      assert.ok(llm.calls.at(-1).system.includes('CFG=0'))
+      const invalid = await request({ text: '雨夜街道', presetId: 'sdxl-lightning', cfg: 'abc' })
+      assert.equal(invalid.status, 200, '非法 cfg 忽略而不是报错')
+      assert.equal(invalid.body.negative, '')
+      assert.ok(llm.calls.at(-1).system.includes('CFG=0'))
+    } finally {
+      fake.setLlm(null)
+    }
+  })
+
+  await check('意图解析 v2：clarify / modelHint 按契约边界归一', async () => {
+    const llm = createFakeLlm(JSON.stringify({
+      prompt: 'rainy street',
+      summary: '摘要'.repeat(300),
+      ratio: 'bogus',
+      negative: 'blurry',
+      clarify: {
+        question: '你更想要哪一种画面走向？'.repeat(10),
+        options: ['写实摄影', '二次元插画', '写实摄影', '   ', '水墨写意', '3D 渲染'],
+      },
+      modelHint: { presetId: 'sdxl-lightning', reason: '同款模型' },
+    }))
+    fake.setLlm(llm)
+    try {
+      const result = await json(host.origin, '/imagen-api/intent', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: '画个雨夜街道', presetId: 'sdxl-lightning', cfg: 4 }),
+      })
+      assert.equal(result.body.ratioId, '', '非法比例回落空串')
+      assert.ok(result.body.summary.length <= INTENT.summaryMaxChars, 'summary 应按契约截断')
+      assert.ok(result.body.clarify, '有效澄清应保留')
+      assert.ok(result.body.clarify.question.length <= INTENT.clarifyQuestionMaxChars, '问题应截断')
+      assert.deepEqual(
+        result.body.clarify.options,
+        ['写实摄影', '二次元插画', '水墨写意', '3D 渲染'],
+        '选项应去重、丢空、截到 2~4 条',
+      )
+      for (const option of result.body.clarify.options) {
+        assert.ok(option.length <= INTENT.clarifyOptionMaxChars, '选项应截断')
+      }
+      assert.equal(result.body.modelHint, null, '与当前预设相同的 modelHint 应丢弃')
+
+      // 理由为空：用目标模型的定位补一句；未知预设 id 丢弃。
+      fake.setLlm(createFakeLlm(JSON.stringify({
+        prompt: 'x',
+        summary: 'y',
+        ratio: '',
+        negative: '',
+        clarify: null,
+        modelHint: { presetId: 'flux2-klein-4b' },
+      })))
+      const fallbackReason = await json(host.origin, '/imagen-api/intent', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: '画个雨夜街道', presetId: 'sdxl-lightning' }),
+      })
+      assert.equal(fallbackReason.body.modelHint.presetId, 'flux2-klein-4b')
+      assert.ok(fallbackReason.body.modelHint.reason.length > 0, '空理由应由模型定位补齐')
+      assert.ok(fallbackReason.body.modelHint.reason.length <= INTENT.modelHintReasonMaxChars)
+      assert.match(fallbackReason.body.modelHint.reason, /商业级质感/, '理由应取自目标模型定位')
+
+      fake.setLlm(createFakeLlm(JSON.stringify({
+        prompt: 'x',
+        summary: 'y',
+        ratio: '',
+        negative: '',
+        clarify: { question: '只有一个选项', options: ['唯一选项'] },
+        modelHint: { presetId: 'no-such-model', reason: '不存在' },
+      })))
+      const dropped = await json(host.origin, '/imagen-api/intent', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: '画个雨夜街道' }),
+      })
+      assert.equal(dropped.body.clarify, null, '有效选项不足 2 条时丢弃澄清')
+      assert.equal(dropped.body.modelHint, null, '不存在的模型 id 应丢弃')
+
+      // 模型仍返回旧字段（style / clarify.field）时不崩、按 v2 归一。
+      fake.setLlm(createFakeLlm(JSON.stringify({
+        prompt: 'x',
+        summary: 'y',
+        ratio: '16:9',
+        style: 'ink',
+        clarify: { field: 'ratio', options: ['1:1', '16:9'] },
+      })))
+      const legacy = await json(host.origin, '/imagen-api/intent', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: '画个雨夜街道' }),
+      })
+      assert.equal(legacy.body.ratioId, '16:9')
+      assert.equal(legacy.body.clarify, null, '旧式 clarify 没有 question，按无效丢弃')
+      assert.equal('styleId' in legacy.body, false)
+    } finally {
+      fake.setLlm(null)
+    }
+  })
+
+  await check('意图解析：history 多轮裁剪与 cfg 透传', async () => {
+    const llm = createFakeLlm(JSON.stringify({
+      prompt: 'rainy street, heavier rain',
+      summary: '雨夜街道，雨势更大',
+      ratio: '',
+      negative: 'blurry, low quality',
+      clarify: null,
+      modelHint: null,
+    }))
+    fake.setLlm(llm)
+    try {
+      // 构造超量 + 非法项的历史：只保留最近 maxMessages 条合法消息，单条超长截断。
+      const history = []
+      for (let index = 0; index < LIMITS.intentHistory.maxMessages + 3; index += 1) {
+        history.push({ role: index % 2 === 0 ? 'user' : 'assistant', content: `第 ${index} 条` })
+      }
+      history.push({ role: 'system', content: '系统消息应被丢弃' })
+      history.push({ role: 'user', content: 42 })
+      history.push({ role: 'assistant', content: 'x'.repeat(LIMITS.intentHistory.maxMessageChars + 500) })
+
+      const result = await json(host.origin, '/imagen-api/intent', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          text: '继续修改，把雨下大一点',
+          previousPrompt: 'OLD-PROMPT-SHOULD-BE-IGNORED',
+          presetId: 'sdxl-lightning',
+          cfg: 6,
+          history,
+        }),
+      })
+      assert.equal(result.status, 200, JSON.stringify(result.body))
+      assert.equal(result.body.source, 'model')
+      assert.equal(result.body.negative, 'blurry, low quality', 'cfg=6 透传后负向词应生效')
+
+      const call = llm.calls.at(-1)
+      assert.equal(
+        call.messages.length,
+        LIMITS.intentHistory.maxMessages + 1,
+        'history 按 maxMessages 裁剪后追加当前用户消息',
+      )
+      assert.equal(call.messages.at(-1).role, 'user')
+      assert.equal(call.messages.at(-1).content[0].text, '继续修改，把雨下大一点')
+      assert.equal(
+        call.messages.at(-2).content[0].text.length,
+        LIMITS.intentHistory.maxMessageChars,
+        '超长历史消息按单条上限截断',
+      )
+      for (const message of call.messages) {
+        assert.ok(['user', 'assistant'].includes(message.role), `历史 role 只允许 user/assistant：${message.role}`)
+        assert.equal(message.content[0].type, 'text')
+      }
+      assert.ok(
+        !call.messages.some((message) => message.content[0].text === '系统消息应被丢弃'),
+        '非法 role 的历史项应被丢弃',
+      )
+      assert.ok(call.system.includes('CFG=6'), 'cfg 应透传进 system prompt')
+      assert.ok(
+        !call.system.includes('OLD-PROMPT-SHOULD-BE-IGNORED'),
+        'history 非空时优先 history，不再注入 previousPrompt',
+      )
+
+      // history 非数组 / 全非法：不报错，等价于单轮解析。
+      const invalidHistory = await json(host.origin, '/imagen-api/intent', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: '再来一张', presetId: 'sdxl-lightning', cfg: 6, history: 'not-an-array' }),
+      })
+      assert.equal(invalidHistory.status, 200)
+      assert.equal(llm.calls.at(-1).messages.length, 1, '非法 history 只保留当前用户消息')
     } finally {
       fake.setLlm(null)
     }
