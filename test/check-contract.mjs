@@ -35,6 +35,7 @@ import {
   hostErrorCodes,
 } from '../shared/contract.js'
 import { loadModels, renderGenerated, readGenerated } from '../tools/build-assets.mjs'
+import { createCheckRunner } from './helpers/check.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const ROUTE_LIST = Object.values(ROUTES).map((route) => route.path)
@@ -46,16 +47,15 @@ const ROUTE_SET = new Set(ROUTE_LIST)
 const HOST_CODES = hostErrorCodes()
 const API_CODE_RE = /\/imagen-api\/[A-Za-z0-9_\-/]*/g
 
-let passed = 0
-const failedChecks = []
+const runner = createCheckRunner()
 
 function pass(id, title, note = '') {
-  passed += 1
+  runner.record(true, id)
   console.log(`✓ ${id}. ${title}${note ? `（${note}）` : ''}`)
 }
 
 function fail(id, title, details = []) {
-  failedChecks.push(id)
+  runner.record(false, id)
   console.log(`✗ ${id}. ${title}`)
   for (const detail of details) console.log(`    - ${detail}`)
 }
@@ -544,12 +544,14 @@ async function main() {
   for (const check of CHECKS) await check()
 
   console.log('')
+  const failed = runner.results.filter((item) => !item.ok)
   const total = CHECKS.length
-  if (failedChecks.length === 0) {
-    console.log(`契约校验通过：${passed}/${total} 项`)
+  const passedCount = total - failed.length
+  if (failed.length === 0) {
+    console.log(`契约校验通过：${passedCount}/${total} 项`)
     return
   }
-  console.log(`契约校验失败：${failedChecks.length}/${total} 项未通过（${failedChecks.join(', ')}）`)
+  console.log(`契约校验失败：${failed.length}/${total} 项未通过（${failed.map((item) => item.name).join(', ')}）`)
   process.exitCode = 1
 }
 

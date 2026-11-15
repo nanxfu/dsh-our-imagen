@@ -14,7 +14,6 @@
  */
 
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -23,23 +22,55 @@ import { fileURLToPath } from 'node:url'
 import { buildKernelFolder, hasInlineMarkerLine, normalizeDatasetSources, removeKernelFolder } from '../lib/kernel.js'
 import { buildKernelConfig } from '../lib/session/provisioner.js'
 import { VERSION } from '../shared/contract.js'
+import { createCheckRunner } from './helpers/check.mjs'
+import { assertPythonImports, assertPythonSyntax } from './helpers/python-check.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const DAEMON_SOURCE = join(ROOT, 'remote', 'daemon.py')
-const ANIMA_RUNTIME_SOURCE = join(ROOT, 'remote', 'anima_runtime.py')
-const PIPELINE_LOADER_SOURCE = join(ROOT, 'remote', 'pipeline_loader.py')
+const INLINE_MODULES = [
+  {
+    name: 'log_ring',
+    file: 'log_ring.py',
+    source: join(ROOT, 'remote', 'log_ring.py'),
+    marker: /^[ \t]*from log_ring import [^\n]*#\s*@@INLINE:log_ring\.py@@[ \t]*$/m,
+    importLine: /^[ \t]*from log_ring import /m,
+    defs: ['log', 'install_stream_tee', 'log_since'],
+  },
+  {
+    name: 'pipeline_loader',
+    file: 'pipeline_loader.py',
+    source: join(ROOT, 'remote', 'pipeline_loader.py'),
+    marker: /^[ \t]*from pipeline_loader import [^\n]*#\s*@@INLINE:pipeline_loader\.py@@[ \t]*$/m,
+    importLine: /^[ \t]*from pipeline_loader import /m,
+    defs: ['load_diffusers_pipeline', 'filter_call_kwargs'],
+  },
+  {
+    name: 'cache_ops',
+    file: 'cache_ops.py',
+    source: join(ROOT, 'remote', 'cache_ops.py'),
+    marker: /^[ \t]*from cache_ops import [^\n]*#\s*@@INLINE:cache_ops\.py@@[ \t]*$/m,
+    importLine: /^[ \t]*from cache_ops import /m,
+    defs: ['run_disk_precheck', 'evict_cache_dirs'],
+  },
+  {
+    name: 'anima_runtime',
+    file: 'anima_runtime.py',
+    source: join(ROOT, 'remote', 'anima_runtime.py'),
+    marker: /^[ \t]*from anima_runtime import [^\n]*#\s*@@INLINE:anima_runtime\.py@@[ \t]*$/m,
+    importLine: /^[ \t]*from anima_runtime import /m,
+    defs: ['_anima_toolkit', 'load_anima_runtime'],
+  },
+  {
+    name: 'tunnel',
+    file: 'tunnel.py',
+    source: join(ROOT, 'remote', 'tunnel.py'),
+    marker: /^[ \t]*from tunnel import [^\n]*#\s*@@INLINE:tunnel\.py@@[ \t]*$/m,
+    importLine: /^[ \t]*from tunnel import /m,
+    defs: ['run_start_tunnel', 'verify_or_download_cloudflared'],
+  },
+]
 
-const results = []
-async function check(name, fn) {
-  try {
-    await fn()
-    results.push({ name, ok: true })
-    console.log(`PASS ${name}`)
-  } catch (error) {
-    results.push({ name, ok: false, error })
-    console.log(`FAIL ${name}\n  ${error?.message ?? error}`)
-  }
-}
+const { check, summary } = createCheckRunner()
 
 /** 从打包后的脚本里取出注入的配置（base64 JSON）。 */
 function readInjectedConfig(source) {
@@ -52,57 +83,6 @@ function readInjectedConfig(source) {
 function stripInjectedConfig(source) {
   assert.match(source, /^EMBEDDED_CONFIG_B64 = "[A-Za-z0-9+/=]*"$/m, '注入行格式不正确')
   return source.replace(/^EMBEDDED_CONFIG_B64 = "[A-Za-z0-9+/=]*"$/m, 'EMBEDDED_CONFIG_B64 = ""')
-}
-
-/** 本机可用的 python 命令；没有就返回 null（语法编译按任务约定跳过并注明）。 */
-function pythonCommand() {
-  for (const name of ['python', 'python3']) {
-    const result = spawnSync(name, ['--version'], { encoding: 'utf8', windowsHide: true })
-    if (result.status === 0) return name
-  }
-  return null
-}
-
-/** 用 python 的 compile() 做语法检查（只编译不执行，不 import torch）。 */
-function assertPythonSyntax(filePath) {
-  const python = pythonCommand()
-  if (!python) {
-    console.log('  （跳过 python 语法编译：本机没有 python / python3）')
-    return
-  }
-  const script =
-    'import sys; compile(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1], "exec")'
-  const result = spawnSync(python, ['-c', script, filePath], { encoding: 'utf8', windowsHide: true })
-  assert.equal(result.status, 0, `python 语法编译失败：${result.stderr || result.stdout}`)
-}
-
-/**
- * 在临时目录里 import 打包产物，验证它确实是单文件自包含。
- *
- * 只执行模块顶层代码（daemon / payload 都只在 `if __name__ == "__main__"` 里启动），
- * 不 import torch、不联网；模块自身若还有未内联的本地依赖会直接 ImportError。
- */
-function assertPythonImports(filePath, symbolNames) {
-  const python = pythonCommand()
-  if (!python) {
-    console.log('  （跳过 python 导入自检：本机没有 python / python3）')
-    return
-  }
-  const script = [
-    'import importlib.util, sys',
-    'spec = importlib.util.spec_from_file_location("packaged_under_test", sys.argv[1])',
-    'module = importlib.util.module_from_spec(spec)',
-    'sys.modules[spec.name] = module',
-    'spec.loader.exec_module(module)',
-    'missing = [name for name in sys.argv[2:] if not hasattr(module, name)]',
-    'sys.exit("缺少符号: " + ",".join(missing) if missing else 0)',
-  ].join('\n')
-  const result = spawnSync(python, ['-c', script, filePath, ...symbolNames], {
-    encoding: 'utf8',
-    windowsHide: true,
-    cwd: tmpdir(),
-  })
-  assert.equal(result.status, 0, `python 隔离导入失败（未自包含）：${result.stderr || result.stdout}`)
 }
 
 async function main() {
@@ -186,20 +166,17 @@ async function main() {
       })
 
       // 注入只改一行、内联只替换标记行：其余内容必须与 remote/daemon.py 逐字一致。
-      const runtimeSource = await readFile(ANIMA_RUNTIME_SOURCE, 'utf8')
-      const loaderSource = await readFile(PIPELINE_LOADER_SOURCE, 'utf8')
-      const runtimeMarkerRe = /^[ \t]*from anima_runtime import [^\n]*#\s*@@INLINE:anima_runtime\.py@@[ \t]*$/m
-      const loaderMarkerRe = /^[ \t]*from pipeline_loader import [^\n]*#\s*@@INLINE:pipeline_loader\.py@@[ \t]*$/m
-      assert.match(daemonSource, runtimeMarkerRe, 'remote/daemon.py 缺少 anima_runtime 内联标记行')
-      assert.match(daemonSource, loaderMarkerRe, 'remote/daemon.py 缺少 pipeline_loader 内联标记行')
-      const expectedSource = daemonSource
-        .replace(runtimeMarkerRe, () => runtimeSource.trimEnd())
-        .replace(loaderMarkerRe, () => loaderSource.trimEnd())
+      let expectedSource = daemonSource
+      for (const mod of INLINE_MODULES) {
+        assert.match(daemonSource, mod.marker, `remote/daemon.py 缺少 ${mod.name} 内联标记行`)
+        const modSource = await readFile(mod.source, 'utf8')
+        expectedSource = expectedSource.replace(mod.marker, () => modSource.trimEnd())
+      }
       assert.equal(stripInjectedConfig(patched), expectedSource)
       assert.equal(patched.match(/^VERSION = "([^"]+)"$/m)?.[1], VERSION)
     })
 
-    await check('打包产物自包含：anima 运行时与 pipeline_loader 只内联一份、无残留标记', async () => {
+    await check('打包产物自包含：共享模块各只内联一份、无残留标记', async () => {
       const folder = await buildKernelFolder({
         username: 'tester',
         slug: 'a1b2c3d4',
@@ -208,39 +185,39 @@ async function main() {
       })
       cleanup(folder.dir)
       const patched = await readFile(join(folder.dir, 'daemon.py'), 'utf8')
-      assert.doesNotMatch(patched, /^[ \t]*from anima_runtime import /m, '仍有未解析的 anima_runtime import 行')
-      assert.doesNotMatch(patched, /^[ \t]*from pipeline_loader import /m, '仍有未解析的 pipeline_loader import 行')
       assert.equal(hasInlineMarkerLine(patched), false, '仍有未处理的 @@INLINE 标记')
-      assert.equal(patched.match(/^def _anima_toolkit\(/gm)?.length, 1, '_anima_toolkit 应恰好一份')
-      assert.equal(patched.match(/^def load_anima_runtime\(/gm)?.length, 1, 'load_anima_runtime 应恰好一份')
-      assert.equal(patched.match(/^def load_diffusers_pipeline\(/gm)?.length, 1, 'load_diffusers_pipeline 应恰好一份')
-      const runtimeSource = await readFile(ANIMA_RUNTIME_SOURCE, 'utf8')
-      const loaderSource = await readFile(PIPELINE_LOADER_SOURCE, 'utf8')
-      assert.ok(patched.includes(runtimeSource.trimEnd()), '产物未包含 remote/anima_runtime.py 全文')
-      assert.ok(patched.includes(loaderSource.trimEnd()), '产物未包含 remote/pipeline_loader.py 全文')
+      const exportedSymbols = ['build_pipeline', 'main']
+      for (const mod of INLINE_MODULES) {
+        assert.doesNotMatch(patched, mod.importLine, `仍有未解析的 ${mod.name} import 行`)
+        const modSource = await readFile(mod.source, 'utf8')
+        assert.ok(patched.includes(modSource.trimEnd()), `产物未包含 remote/${mod.file} 全文`)
+        for (const fn of mod.defs) {
+          const defsCount = patched.match(new RegExp(`^def ${fn}\\(`, 'gm'))?.length ?? 0
+          assert.equal(defsCount, 1, `${fn} 应恰好一份，实际 ${defsCount} 份`)
+          exportedSymbols.push(fn)
+        }
+      }
       assertPythonSyntax(join(folder.dir, 'daemon.py'))
       // 隔离目录内 import：产物不依赖 remote/ 目录，证明是真的单文件自包含。
-      assertPythonImports(join(folder.dir, 'daemon.py'), [
-        'load_anima_runtime',
-        'load_diffusers_pipeline',
-        'build_pipeline',
-        'main',
-      ])
+      assertPythonImports(join(folder.dir, 'daemon.py'), exportedSymbols)
     })
 
-    await check('源文件保持单份真源：daemon.py 不再复制 anima 运行时与 pipeline_loader', async () => {
-      assert.equal(daemonSource.match(/@@INLINE:/g)?.length, 2, 'remote/daemon.py 应有两处内联标记')
-      assert.doesNotMatch(daemonSource, /^def _anima_toolkit\(/m)
-      assert.doesNotMatch(daemonSource, /^def load_anima_runtime\(/m)
-      assert.doesNotMatch(daemonSource, /^def load_diffusers_pipeline\(/m)
-      const runtimeSource = await readFile(ANIMA_RUNTIME_SOURCE, 'utf8')
-      const loaderSource = await readFile(PIPELINE_LOADER_SOURCE, 'utf8')
-      assert.match(runtimeSource, /^def _anima_toolkit\(/m)
-      assert.match(runtimeSource, /^def load_anima_runtime\(/m)
+    await check('源文件保持单份真源：daemon.py 不再复制已抽取的共享模块', async () => {
+      assert.equal(
+        daemonSource.match(/@@INLINE:/g)?.length,
+        INLINE_MODULES.length,
+        `remote/daemon.py 应有 ${INLINE_MODULES.length} 处内联标记`,
+      )
+      for (const mod of INLINE_MODULES) {
+        const modSource = await readFile(mod.source, 'utf8')
+        for (const fn of mod.defs) {
+          assert.doesNotMatch(daemonSource, new RegExp(`^def ${fn}\\(`, 'm'), `daemon.py 仍内嵌 ${fn}`)
+          assert.match(modSource, new RegExp(`^def ${fn}\\(`, 'm'), `remote/${mod.file} 缺少 ${fn}`)
+        }
+      }
+      const runtimeSource = await readFile(INLINE_MODULES.find((m) => m.name === 'anima_runtime').source, 'utf8')
       assert.match(runtimeSource, /^import os$/m)
       assert.match(runtimeSource, /^import time$/m)
-      assert.match(loaderSource, /^def load_diffusers_pipeline\(/m)
-      assert.match(loaderSource, /^def filter_call_kwargs\(/m)
     })
 
     await check('内联标记指向缺失模块时给出可读错误', async () => {
@@ -335,9 +312,7 @@ async function main() {
     }
   }
 
-  const failed = results.filter((item) => !item.ok)
-  console.log(`\n${results.length - failed.length}/${results.length} 通过`)
-  if (failed.length > 0) process.exitCode = 1
+  summary()
 }
 
 main().catch((error) => {

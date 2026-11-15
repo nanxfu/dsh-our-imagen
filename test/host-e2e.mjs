@@ -22,6 +22,8 @@ import { createLogRoutes } from '../lib/routes/logs.js'
 import { normalizeSaveTo, resolveWorkspaceWritePath } from '../lib/paths.js'
 import { registerTools } from '../lib/tools.js'
 import { INTENT, LIMITS, VERSION } from '../shared/contract.js'
+import { createCheckRunner } from './helpers/check.mjs'
+import { createFakeContext, json, startHost } from './helpers/fake-context.mjs'
 
 // 1×1 透明 PNG，用于伪造远端返回
 const PNG_B64 =
@@ -150,105 +152,6 @@ function startMockDaemon() {
   })
 }
 
-function createFakeContext(workspace) {
-  const routes = []
-  const tools = []
-  const cleanups = []
-  let origin = ''
-  // 默认没有可用模型：enhance / intent 走本地兜底。需要模型分支时用 setLlm 注入替身。
-  let llm = null
-
-  const ctx = {
-    get(name) {
-      if (name === 'workingDirectory') return { defaultDirectory: workspace }
-      if (name === 'llm') return llm
-      if (name === 'agentDefaultModel') {
-        return llm ? { currentSelection: () => ({ provider: 'mock-provider', model: 'mock-model' }) } : undefined
-      }
-      return undefined
-    },
-    effect(fn, _label) {
-      const disposer = fn()
-      if (typeof disposer === 'function') cleanups.push(disposer)
-      return disposer
-    },
-    webServer: {
-      register(route) {
-        routes.push(route)
-        return () => {
-          const index = routes.indexOf(route)
-          if (index >= 0) routes.splice(index, 1)
-        }
-      },
-      getOrigin: () => origin,
-    },
-    subprocess: {
-      async resolveExecutable(name) {
-        throw new Error(`测试环境不执行外部命令：${name}`)
-      },
-    },
-    tools: {
-      register(tool) {
-        tools.push(tool)
-        return () => {}
-      },
-    },
-  }
-
-  return {
-    ctx,
-    routes,
-    tools,
-    setOrigin(value) {
-      origin = value
-    },
-    /** 注入 / 移除宿主模型替身；传 null 表示「没有可用模型」。 */
-    setLlm(next) {
-      llm = next
-    },
-    dispose() {
-      for (const cleanup of cleanups.reverse()) {
-        try {
-          cleanup()
-        } catch {}
-      }
-    },
-  }
-}
-
-function startHost(routes) {
-  const server = createServer((req, res) => {
-    let pathname = '/'
-    try {
-      pathname = new URL(req.url, 'http://placeholder.local').pathname
-    } catch {}
-    const route = routes.find((item) => item.path === pathname)
-    if (!route) {
-      res.writeHead(404)
-      return res.end()
-    }
-    Promise.resolve(route.handler(req, res)).catch((error) => {
-      if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' })
-      res.end(String(error?.stack ?? error))
-    })
-  })
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve({ server, origin: `http://127.0.0.1:${server.address().port}` }))
-  })
-}
-
-async function json(base, path, options) {
-  const res = await fetch(new URL(path, base), options)
-  const text = await res.text()
-  let body = null
-  try {
-    body = text ? JSON.parse(text) : null
-  } catch {
-    body = text
-  }
-  return { status: res.status, body }
-}
-
 /** 轮询 Host 的 GET /job，直到 predicate 成立；超时抛出最后快照便于定位。 */
 async function waitUntilJob(origin, id, predicate, { timeoutMs = 8000, intervalMs = 20 } = {}) {
   const deadline = Date.now() + timeoutMs
@@ -288,17 +191,7 @@ async function seedHistoryEntry(workspace, dirName, jobId, prompt) {
   )
 }
 
-const results = []
-async function check(name, fn) {
-  try {
-    await fn()
-    results.push({ name, ok: true })
-    console.log(`PASS ${name}`)
-  } catch (error) {
-    results.push({ name, ok: false, error })
-    console.log(`FAIL ${name}\n  ${error?.message ?? error}`)
-  }
-}
+const { check, summary } = createCheckRunner()
 
 async function main() {
   const workspace = await mkdtemp(join(tmpdir(), 'imagen-host-test-'))
@@ -1659,9 +1552,7 @@ async function main() {
   mock.server.close()
   await rm(workspace, { recursive: true, force: true })
 
-  const failed = results.filter((item) => !item.ok)
-  console.log(`\n${results.length - failed.length}/${results.length} 通过`)
-  if (failed.length > 0) process.exitCode = 1
+  summary()
 }
 
 main().catch((error) => {

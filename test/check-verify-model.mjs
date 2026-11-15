@@ -16,6 +16,8 @@ import { fileURLToPath } from 'node:url'
 
 import { buildKernelFolder, hasInlineMarkerLine, removeKernelFolder } from '../lib/kernel.js'
 import { classifyFailure, payloadConfigOf } from '../tools/verify-model.mjs'
+import { createCheckRunner } from './helpers/check.mjs'
+import { assertPythonImports, assertPythonSyntax } from './helpers/python-check.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const TOOL = join(ROOT, 'tools', 'verify-model.mjs')
@@ -23,65 +25,7 @@ const PAYLOAD_SOURCE = join(ROOT, 'tools', 'payload', 'verify-model.py')
 const ANIMA_RUNTIME_SOURCE = join(ROOT, 'remote', 'anima_runtime.py')
 const PIPELINE_LOADER_SOURCE = join(ROOT, 'remote', 'pipeline_loader.py')
 
-const failures = []
-let passed = 0
-
-async function check(name, fn) {
-  try {
-    await fn()
-    passed += 1
-    console.log(`PASS ${name}`)
-  } catch (error) {
-    failures.push(name)
-    console.log(`FAIL ${name}\n  ${error?.message ?? error}`)
-  }
-}
-
-/** 本机可用的 python 命令；没有就返回 null（语法编译按任务约定跳过并注明）。 */
-function pythonCommand() {
-  for (const name of ['python', 'python3']) {
-    const result = spawnSync(name, ['--version'], { encoding: 'utf8', windowsHide: true })
-    if (result.status === 0) return name
-  }
-  return null
-}
-
-/** 用 python 的 compile() 做语法检查（只编译不执行，不 import torch）。 */
-function assertPythonSyntax(sourcePath) {
-  const python = pythonCommand()
-  if (!python) {
-    console.log('  （跳过 python 语法编译：本机没有 python / python3）')
-    return
-  }
-  const script =
-    'import sys; compile(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1], "exec")'
-  const result = spawnSync(python, ['-c', script, sourcePath], { encoding: 'utf8', windowsHide: true })
-  if (result.status !== 0) throw new Error(`python 语法编译失败：${result.stderr || result.stdout}`)
-}
-
-/** 在临时目录里 import 打包产物（只执行模块顶层），验证 payload 真的自包含。 */
-function assertPythonImports(sourcePath, symbolNames) {
-  const python = pythonCommand()
-  if (!python) {
-    console.log('  （跳过 python 导入自检：本机没有 python / python3）')
-    return
-  }
-  const script = [
-    'import importlib.util, sys',
-    'spec = importlib.util.spec_from_file_location("packaged_payload", sys.argv[1])',
-    'module = importlib.util.module_from_spec(spec)',
-    'sys.modules[spec.name] = module',
-    'spec.loader.exec_module(module)',
-    'missing = [name for name in sys.argv[2:] if not hasattr(module, name)]',
-    'sys.exit("缺少符号: " + ",".join(missing) if missing else 0)',
-  ].join('\n')
-  const result = spawnSync(python, ['-c', script, sourcePath, ...symbolNames], {
-    encoding: 'utf8',
-    windowsHide: true,
-    cwd: tmpdir(),
-  })
-  if (result.status !== 0) throw new Error(`python 隔离导入失败（未自包含）：${result.stderr || result.stdout}`)
-}
+const { check, summary } = createCheckRunner()
 
 function validModel() {
   return {
@@ -127,7 +71,7 @@ async function main() {
     const validPath = join(dir, 'dryrun-model.json')
     await writeFile(validPath, `${JSON.stringify(validModel(), null, 2)}\n`, 'utf8')
     const valid = runTool(['--config', validPath, '--dry-run'])
-    check('dry-run 通过：配置校验与 Kernel 打包演练都成功', () => {
+    await check('dry-run 通过：配置校验与 Kernel 打包演练都成功', () => {
       if (valid.status !== 0) throw new Error(`退出码 ${valid.status}\n${valid.stdout}\n${valid.stderr}`)
       if (!valid.stdout.includes('dry-run')) throw new Error(`输出缺少 dry-run 标记\n${valid.stdout}`)
       if (!valid.stdout.includes('Kernel 打包演练通过')) throw new Error(`输出缺少打包结果\n${valid.stdout}`)
@@ -171,7 +115,11 @@ async function main() {
           throw new Error(`load_diffusers_pipeline 定义 ${loaderDefs.length} 份，应为 1 份`)
         }
         assertPythonSyntax(packagedPath)
-        assertPythonImports(packagedPath, ['load_anima_runtime', 'load_diffusers_pipeline', 'load_pipe', 'main'])
+        assertPythonImports(
+          packagedPath,
+          ['load_anima_runtime', 'load_diffusers_pipeline', 'load_pipe', 'main'],
+          'packaged_payload',
+        )
       } finally {
         await removeKernelFolder(folder.dir)
       }
@@ -182,18 +130,18 @@ async function main() {
     const brokenPath = join(dir, 'broken.json')
     await writeFile(brokenPath, `${JSON.stringify(broken, null, 2)}\n`, 'utf8')
     const brokenRun = runTool(['--config', brokenPath, '--dry-run'])
-    check('缺少 pipeline 时非零退出并给出可读原因', () => {
+    await check('缺少 pipeline 时非零退出并给出可读原因', () => {
       if (brokenRun.status === 0) throw new Error('应当失败却退出 0')
       if (!/配置缺少 pipeline/.test(brokenRun.stderr)) throw new Error(`未给出原因：\n${brokenRun.stderr}`)
     })
 
-    check('缺少 --config 时非零退出', () => {
+    await check('缺少 --config 时非零退出', () => {
       const noConfig = runTool(['--dry-run'])
       if (noConfig.status === 0) throw new Error('应当失败却退出 0')
       if (!/缺少 --config/.test(noConfig.stderr)) throw new Error(`未提示 --config：\n${noConfig.stderr}`)
     })
 
-    check('payloadConfigOf 只下发验证需要的字段', () => {
+    await check('payloadConfigOf 只下发验证需要的字段', () => {
       const config = payloadConfigOf(validModel())
       for (const key of ['id', 'pipeline', 'size', 'steps', 'cfg', 'negativeHint', 'prompt', 'seed']) {
         if (!(key in config)) throw new Error(`缺少 ${key}`)
@@ -201,7 +149,7 @@ async function main() {
       if (config.pipeline.base !== 'test/model') throw new Error('pipeline 未原样下发')
     })
 
-    check('失败分类：pip 冲突 / OOM / 磁盘 / 超时 / 兜底', () => {
+    await check('失败分类：pip 冲突 / OOM / 磁盘 / 超时 / 兜底', () => {
       const cases = [
         ['pip_conflict', 'ERROR: Could not find a version that satisfies the requirement transformers<5'],
         ['cuda_oom', 'torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 72.00 MiB'],
@@ -219,8 +167,7 @@ async function main() {
     await rm(dir, { recursive: true, force: true }).catch(() => {})
   }
 
-  console.log(`\n${passed}/${passed + failures.length} 通过`)
-  if (failures.length > 0) process.exitCode = 1
+  summary()
 }
 
 main().catch((error) => {

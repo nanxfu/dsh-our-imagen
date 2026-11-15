@@ -464,7 +464,7 @@ export const PRESETS = [
         "timestepSpacing": "trailing"
       },
       "variant": "fp16",
-      "downloadGb": 6.78,
+      "downloadGb": 7.35,
       "allowPatterns": [
         "model_index.json",
         "**/config.json",
@@ -574,7 +574,7 @@ export const PRESETS = [
       "lora": null,
       "scheduler": null,
       "variant": "fp16",
-      "downloadGb": 6.6,
+      "downloadGb": 6.46,
       "allowPatterns": [
         "model_index.json",
         "**/config.json",
@@ -696,7 +696,7 @@ export const PRESETS = [
         "type": "dpmpp-2m-sde-karras"
       },
       "variant": "fp16",
-      "downloadGb": 6.6,
+      "downloadGb": 6.46,
       "allowPatterns": [
         "model_index.json",
         "**/config.json",
@@ -802,7 +802,7 @@ export const PRESETS = [
       "lora": null,
       "scheduler": null,
       "variant": null,
-      "downloadGb": 6.5,
+      "downloadGb": 6.46,
       "allowPatterns": [
         "model_index.json",
         "**/config.json",
@@ -876,7 +876,7 @@ export const PRESETS = [
       },
       "dtype": "auto",
       "shift": 3,
-      "downloadGb": 5.6,
+      "downloadGb": 5.25,
       "allowPatterns": null,
       "deviceMap": null,
       "variant": null,

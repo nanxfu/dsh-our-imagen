@@ -17,7 +17,6 @@
  */
 
 import assert from 'node:assert/strict'
-import { createServer } from 'node:http'
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -33,18 +32,10 @@ import {
   publicSettingsView,
   settingsPath,
 } from '../lib/settings.js'
+import { createCheckRunner } from './helpers/check.mjs'
+import { createFakeContext, json, makeRes, startHost, workspaceContext } from './helpers/fake-context.mjs'
 
-const results = []
-async function check(name, fn) {
-  try {
-    await fn()
-    results.push({ name, ok: true })
-    console.log(`PASS ${name}`)
-  } catch (error) {
-    results.push({ name, ok: false, error })
-    console.log(`FAIL ${name}\n  ${error?.message ?? error}`)
-  }
-}
+const { check, summary } = createCheckRunner()
 
 const tempDirs = []
 async function makeWorkspace() {
@@ -53,78 +44,7 @@ async function makeWorkspace() {
   return dir
 }
 
-/** 只提供 workingDirectory 的最小宿主上下文。 */
-function workspaceContext(workspace) {
-  return {
-    get(name) {
-      if (name === 'workingDirectory') return { defaultDirectory: workspace }
-      return undefined
-    },
-  }
-}
-
 const silentLog = { debug() {}, info() {}, warn() {}, error() {} }
-
-/** 极简 res 替身（GET 分支不需要请求流）。 */
-function makeRes() {
-  const state = { code: null, headers: null, body: null }
-  return {
-    state,
-    writeHead(code, headers) {
-      state.code = code
-      state.headers = headers
-    },
-    end(body) {
-      state.body = body ? JSON.parse(Buffer.from(body).toString('utf8')) : null
-    },
-  }
-}
-
-function allows(method, allow) {
-  const list = Array.isArray(allow) ? allow : [allow]
-  return list.includes(method)
-}
-
-/** 把 route-kit 形状的路由挂到本机 HTTP 服务上（同路径不同方法要按 method 选择）。 */
-function startHost(routes) {
-  const server = createServer((req, res) => {
-    let pathname = '/'
-    try {
-      pathname = new URL(req.url, 'http://placeholder.local').pathname
-    } catch {}
-    const candidates = routes.filter((item) => item.path === pathname)
-    if (candidates.length === 0) {
-      res.writeHead(404)
-      return res.end()
-    }
-    // 经 route-kit 注册的包装对象没有 method 字段，方法校验在包装 handler 内部完成；
-    // 直接传入的 Route 对象带 method（可能是数组），这里先做一次校验。
-    const route = candidates[0]
-    if (route.method && !allows(req.method, route.method)) {
-      res.writeHead(405, { allow: [].concat(route.method).join(', ') })
-      return res.end()
-    }
-    Promise.resolve(route.handler(req, res)).catch((error) => {
-      if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' })
-      res.end(String(error?.stack ?? error))
-    })
-  })
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve({ server, origin: `http://127.0.0.1:${server.address().port}` }))
-  })
-}
-
-async function json(base, path, options) {
-  const res = await fetch(new URL(path, base), options)
-  const text = await res.text()
-  let body = null
-  try {
-    body = text ? JSON.parse(text) : null
-  } catch {
-    body = text
-  }
-  return { status: res.status, body, text }
-}
 
 function postBody(origin, value) {
   return json(origin, '/imagen-api/settings', {
@@ -690,57 +610,6 @@ async function scenarioHealthFields(workspace) {
 
 // ── index.js 装配 ─────────────────────────────────────────
 
-/** 假 cordis Context：只为 index.js 装配路由 / 工具用，不执行外部命令。 */
-function createFakeContext(workspace) {
-  const routes = []
-  const tools = []
-  const cleanups = []
-  const ctx = {
-    get(name) {
-      if (name === 'workingDirectory') return { defaultDirectory: workspace }
-      return undefined
-    },
-    effect(fn) {
-      const disposer = fn()
-      if (typeof disposer === 'function') cleanups.push(disposer)
-      return disposer
-    },
-    webServer: {
-      register(route) {
-        routes.push(route)
-        return () => {
-          const index = routes.indexOf(route)
-          if (index >= 0) routes.splice(index, 1)
-        }
-      },
-      getOrigin: () => '',
-    },
-    subprocess: {
-      async resolveExecutable(name) {
-        throw new Error(`测试环境不执行外部命令：${name}`)
-      },
-    },
-    tools: {
-      register(tool) {
-        tools.push(tool)
-        return () => {}
-      },
-    },
-  }
-  return {
-    ctx,
-    routes,
-    tools,
-    dispose() {
-      for (const cleanup of cleanups.reverse()) {
-        try {
-          cleanup()
-        } catch {}
-      }
-    },
-  }
-}
-
 async function scenarioIndexAssembly() {
   console.log('\n── index.js 装配（真实插件入口）')
   const workspace = await makeWorkspace()
@@ -804,9 +673,7 @@ async function main() {
   await scenarioHealthFields(workspace)
   await scenarioIndexAssembly()
 
-  const failed = results.filter((item) => !item.ok)
-  console.log(`\n${results.length - failed.length}/${results.length} 通过`)
-  if (failed.length > 0) process.exitCode = 1
+  summary()
 }
 
 try {

@@ -44,10 +44,14 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 import hmac
+import importlib.metadata
 import io
 import json
+import math
 import os
+import platform
 import re
 import struct
 import sys
@@ -71,6 +75,8 @@ except Exception:  # pragma: no cover - 只在极简环境触发
 VERSION = "0.10.0-mock"
 LOG_MAX_LINES = 400
 SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2", "anima")
+SUPPORTED_IMG2IMG_LOADERS = ("sdxl", "sdxl-lora")
+REFERENCE_IMAGE_FORMATS = ("PNG", "JPEG")
 FAIL_CHOICES = ("none", "oom", "load_failed", "invalid_request", "generation_failed")
 FAIL_GENERATE_CHOICES = ("none", "400", "500")
 # --fail-job：入队成功、worker 执行阶段失败（用于 Host 的 job 失败分支回归）。
@@ -80,7 +86,7 @@ PHASE_CHOICES = ("auto", "ready", "installing", "loading", "error")
 
 CONTRACT_PATH = Path(__file__).resolve().parent.parent / "remote" / "contract.json"
 
-# 契约文件缺失/损坏时的兜底：故意与 remote/daemon.py 的 _FALLBACK_LIMITS 保持一致（旧边界），
+# 契约文件缺失/损坏时的兜底：故意与 remote/daemon.py 的 _FALLBACK_LIMITS 保持一致，
 # 保证"没有 contract.json"时 mock 与 daemon 的退化行为相同。
 FALLBACK_CONTRACT = {
     "version": "0.4.1",
@@ -92,8 +98,12 @@ FALLBACK_CONTRACT = {
         "count": {"max": 8, "min": 1},
         "seed": {"max": 2**31 - 1},
         "prompt": {"maxChars": 2000},
+        "negativePrompt": {"maxChars": 1000},
+        "reference": {"maxBytes": 8 * 1024 * 1024, "maxEdge": 1536, "minEdge": 128},
+        "strength": {"min": 0.2, "max": 0.9, "step": 0.05, "default": 0.6},
     },
 }
+_LIMIT_NUMERIC_KEYS = ("min", "max", "step", "maxChars", "default", "maxBytes", "maxEdge", "minEdge")
 
 CONTRACT: dict = {}
 # HTTP 路由路径是 daemon 协议的一部分（与 remote/daemon.py 一致），不从契约文件读取。
@@ -182,11 +192,24 @@ def _limit(name: str) -> dict:
     if not isinstance(item, dict):
         return fallback
     merged = dict(fallback)
-    for key in ("min", "max", "step", "maxChars"):
+    for key in _LIMIT_NUMERIC_KEYS:
         value = item.get(key)
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             merged[key] = value
     return merged
+
+
+def _request_body_limit() -> int:
+    """请求体字节上限：默认 8MB；契约下发参考图边界后按 base64 膨胀放宽。"""
+    base = 8 * 1024 * 1024
+    limits = CONTRACT.get("limits") if isinstance(CONTRACT, dict) else None
+    reference = limits.get("reference") if isinstance(limits, dict) else None
+    if not isinstance(reference, dict):
+        return base
+    max_bytes = reference.get("maxBytes")
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, (int, float)) or max_bytes <= 0:
+        return base
+    return max(base, 4 * ((int(max_bytes) + 2) // 3) + 1024 * 1024)
 
 
 def _max_tasks() -> int:
@@ -328,12 +351,76 @@ def _phase() -> str:
     return "ready"
 
 
+HEALTH_VERSION_MODULES = (
+    ("torch", "torch", "torch"),
+    ("diffusers", "diffusers", "diffusers"),
+    ("transformers", "transformers", "transformers"),
+    ("accelerate", "accelerate", "accelerate"),
+    ("peft", "peft", "peft"),
+    ("huggingface_hub", "huggingface_hub", "huggingface-hub"),
+    ("safetensors", "safetensors", "safetensors"),
+    ("pillow", "PIL", "pillow"),
+)
+_VERSION_RE = re.compile(r"^[0-9][0-9A-Za-z.+!_-]{0,63}$")
+
+
+def _clean_version(value) -> str | None:  # noqa: ANN001
+    """只接受纯版本号字符串（数字开头）；其他形态丢弃，避免把路径带进 /health。"""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text or not _VERSION_RE.match(text):
+        return None
+    return text
+
+
+def dependency_versions() -> dict:
+    """python + 可选依赖的纯版本号快照；取不到就省略该键。"""
+    versions: dict = {}
+    python_version = _clean_version(platform.python_version())
+    if python_version:
+        versions["python"] = python_version
+    for key, module_name, dist_name in HEALTH_VERSION_MODULES:
+        version = None
+        module = sys.modules.get(module_name)
+        if module is not None:
+            version = _clean_version(getattr(module, "__version__", None))
+        if version is None:
+            try:
+                version = _clean_version(importlib.metadata.version(dist_name))
+            except Exception:
+                version = None
+        if version is not None:
+            versions[key] = version
+    return versions
+
+
+def gpu_memory_payload() -> dict | None:
+    """与 remote/daemon.py 对齐的显存快照；mock 未加载 torch/CUDA 时返回 None。"""
+    torch = sys.modules.get("torch")
+    if torch is None:
+        return None
+    try:
+        cuda = torch.cuda
+        if not cuda.is_available():
+            return None
+        mib = 1024 * 1024
+        return {
+            "allocated_mb": int(cuda.memory_allocated() // mib),
+            "reserved_mb": int(cuda.memory_reserved() // mib),
+            "max_allocated_mb": int(cuda.max_memory_allocated() // mib),
+        }
+    except Exception:
+        return None
+
+
 def health_payload(extra: dict | None = None) -> dict:
     phase = _phase()
     payload = {
         "status": "error" if phase == "error" else "ok",
         "phase": phase,
         "version": VERSION,
+        "versions": dependency_versions(),
         "model_id": "mock/mock-model",
         "loaded": ["mock:mock-model"],
         "device": "Mock GPU",
@@ -351,6 +438,7 @@ def health_payload(extra: dict | None = None) -> dict:
         "tunnel_provider": "cloudflare",
         "tunnel_state": "up",
         "tunnel_restarts": 0,
+        "gpu_memory": gpu_memory_payload(),
         "mock": True,
     }
     return payload
@@ -413,7 +501,7 @@ def prune_jobs(now: float | None = None) -> None:
         _JOB_TABLE.pop(job_id, None)
 
 
-def submit_job(pipeline: dict, model_id: str, tasks: list[dict], job_id=None):  # noqa: ANN001, ANN201
+def submit_job(pipeline: dict, model_id: str, tasks: list[dict], job_id=None, reference=None):  # noqa: ANN001, ANN201
     with _JOB_LOCK:
         prune_jobs()
         if job_id:
@@ -425,6 +513,7 @@ def submit_job(pipeline: dict, model_id: str, tasks: list[dict], job_id=None):  
             "model_id": str(model_id),
             "pipeline": dict(pipeline),
             "tasks": list(tasks),
+            "reference": dict(reference) if reference is not None else None,
             "status": "queued",
             "results": [],
             "error": None,
@@ -437,7 +526,10 @@ def submit_job(pipeline: dict, model_id: str, tasks: list[dict], job_id=None):  
         _JOB_QUEUE.append(job)
         queue_len = len(_JOB_QUEUE)
         _JOB_WAKE.set()
-        log(f"[job] 入队 {job['job_id']}（tasks={len(job['tasks'])}，排队 {queue_len}）")
+        log(
+            f"[job] 入队 {job['job_id']}（tasks={len(job['tasks'])}，排队 {queue_len}"
+            f"{'，带参考图' if job['reference'] is not None else ''}）"
+        )
         return job, True
 
 
@@ -488,29 +580,39 @@ def _execute_job(job: dict) -> None:
     try:
         if fail_job != "none":
             raise RuntimeError(f"mock 按 --fail-job 注入的错误：{fail_job}")
+        ref = job.get("reference")
+        ref_size = None
+        ref_strength = None
+        if ref is not None:
+            ref_size = _scaled_reference_size(ref["width"], ref["height"])
+            ref_strength = _coerce_strength(ref.get("strength"))
         with _GEN_LOCK:
             results = []
             for task in job["tasks"]:
                 delay = max(0.0, float(_ARGS.delay or 0.0))
                 if delay:
                     time.sleep(delay)
-                png = render_png(task["width"], task["height"], task["seed"])
-                results.append(
-                    {
-                        "name": task["name"],
-                        "seed": task["seed"],
-                        "seconds": round(max(delay, 0.001), 2),
-                        "width": task["width"],
-                        "height": task["height"],
-                        "steps": task["steps"],
-                        "cfg": task["cfg"],
-                        "png_bytes": len(png),
-                        "image_b64": base64.b64encode(png).decode("ascii"),
-                    }
-                )
+                out_w, out_h = ref_size if ref_size is not None else (task["width"], task["height"])
+                png = render_png(out_w, out_h, task["seed"])
+                item = {
+                    "name": task["name"],
+                    "seed": task["seed"],
+                    "seconds": round(max(delay, 0.001), 2),
+                    "width": int(out_w),
+                    "height": int(out_h),
+                    "steps": task["steps"],
+                    "cfg": task["cfg"],
+                    "png_bytes": len(png),
+                    "image_b64": base64.b64encode(png).decode("ascii"),
+                }
+                if ref_size is not None:
+                    item["strength"] = ref_strength
+                    item["referenceWidth"] = int(ref_size[0])
+                    item["referenceHeight"] = int(ref_size[1])
+                results.append(item)
                 log(
-                    f"[mock] 生成 {task['name']} seed={task['seed']} "
-                    f"{task['width']}x{task['height']} {len(png)} 字节"
+                    f"[mock] {'img2img ' if ref_size is not None else ''}生成 {task['name']} "
+                    f"seed={task['seed']} {out_w}x{out_h} {len(png)} 字节"
                 )
                 with _JOB_LOCK:
                     job["results"] = list(results)
@@ -544,6 +646,8 @@ def _job_worker_loop() -> None:
 
 
 def _int_param(value, field: str, low: int, high: int) -> int:  # noqa: ANN001
+    if isinstance(value, bool):
+        raise ValueError(f"{field} 必须是整数")
     try:
         number = int(value)
     except (TypeError, ValueError):
@@ -551,6 +655,130 @@ def _int_param(value, field: str, low: int, high: int) -> int:  # noqa: ANN001
     if number < low or number > high:
         raise ValueError(f"{field} 必须在 {low}..{high} 之间，收到 {number}")
     return number
+
+
+def _coerce_strength(value) -> float:  # noqa: ANN001
+    """重绘强度归一到 ``contract.limits.strength``：非法/缺失回退默认值，越界钳制。"""
+    limits = _limit("strength")
+    low = float(limits.get("min", 0.0))
+    high = float(limits.get("max", 1.0))
+    default = float(limits.get("default", 0.6))
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(number):
+        return default
+    return round(min(max(number, low), high), 4)
+
+
+def _probe_image_header_fallback(image_bytes: bytes) -> tuple[str, int, int]:
+    """不依赖 Pillow 时从 PNG/JPEG 头部解析尺寸。"""
+    if image_bytes.startswith(b"\x89PNG\r\n\x1a\n") and len(image_bytes) >= 24 and image_bytes[12:16] == b"IHDR":
+        width, height = struct.unpack(">II", image_bytes[16:24])
+        return "PNG", int(width), int(height)
+    if image_bytes.startswith(b"\xff\xd8"):
+        idx = 2
+        size = len(image_bytes)
+        while idx + 1 < size:
+            while idx < size and image_bytes[idx] == 0xFF:
+                idx += 1
+            if idx >= size:
+                break
+            marker = image_bytes[idx]
+            idx += 1
+            if marker in (0x00, 0x01) or 0xD0 <= marker <= 0xD9:
+                continue
+            if idx + 2 > size:
+                break
+            seg_len = struct.unpack(">H", image_bytes[idx : idx + 2])[0]
+            if seg_len < 2 or idx + seg_len > size:
+                break
+            if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+                if seg_len < 7:
+                    break
+                height, width = struct.unpack(">HH", image_bytes[idx + 3 : idx + 7])
+                return "JPEG", int(width), int(height)
+            idx += seg_len
+        raise ValueError("参考图 JPEG 头部不完整或已损坏")
+    raise ValueError("参考图必须是 PNG 或 JPEG 图片")
+
+
+def _probe_reference_image(image_bytes: bytes) -> tuple[str, int, int]:
+    """校验参考图格式（PNG/JPEG）与最小长边，返回 (format, width, height)。"""
+    min_edge = int(_limit("reference").get("minEdge") or 0)
+    if _HAS_PILLOW:
+        from PIL import UnidentifiedImageError
+
+        bomb_error = getattr(Image, "DecompressionBombError", None)
+        try:
+            image = Image.open(io.BytesIO(image_bytes))
+        except UnidentifiedImageError:
+            raise ValueError("参考图必须是 PNG 或 JPEG 图片") from None
+        except Exception as exc:  # noqa: BLE001
+            if bomb_error is not None and isinstance(exc, bomb_error):
+                raise ValueError("参考图分辨率过大，无法处理") from None
+            raise ValueError(f"参考图无法解析：{type(exc).__name__}") from None
+        try:
+            image_format = str(getattr(image, "format", "") or "").upper()
+            if image_format not in REFERENCE_IMAGE_FORMATS:
+                raise ValueError(f"参考图必须是 PNG 或 JPEG（收到 {image_format or '未知格式'}）")
+            width, height = image.size
+        finally:
+            try:
+                image.close()
+            except Exception:
+                pass
+    else:
+        image_format, width, height = _probe_image_header_fallback(image_bytes)
+    if width <= 0 or height <= 0:
+        raise ValueError("参考图尺寸非法")
+    if min_edge > 0 and max(width, height) < min_edge:
+        raise ValueError(f"参考图长边至少 {min_edge}px（收到 {width}x{height}）")
+    return image_format, int(width), int(height)
+
+
+def _scaled_reference_size(width: int, height: int) -> tuple[int, int]:
+    max_edge = int(_limit("reference").get("maxEdge") or 0)
+    long_edge = max(width, height)
+    if max_edge > 0 and long_edge > max_edge:
+        scale = max_edge / float(long_edge)
+        return (max(1, round(width * scale)), max(1, round(height * scale)))
+    return (int(width), int(height))
+
+
+def parse_reference_spec(raw, pipeline_spec: dict) -> dict | None:  # noqa: ANN001
+    """与 remote/daemon.py 对齐的图生图参考图校验，失败抛 ValueError（-> 400 invalid_request）。"""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("reference 必须是对象")
+    loader = str(pipeline_spec.get("loader") or "").strip()
+    if loader not in SUPPORTED_IMG2IMG_LOADERS:
+        raise ValueError(
+            f"该模型不支持垫图重绘（首期仅开放 SDXL 家族，当前 loader={loader or '未知'}）"
+        )
+    encoded = raw.get("image_b64")
+    if not isinstance(encoded, str) or not encoded.strip():
+        raise ValueError("reference.image_b64 必须是非空字符串")
+    max_bytes = int(_limit("reference").get("maxBytes") or 0)
+    try:
+        data = base64.b64decode(encoded.strip(), validate=True)
+    except (binascii.Error, ValueError):
+        raise ValueError("reference.image_b64 不是合法 base64") from None
+    if not data:
+        raise ValueError("reference.image_b64 解码后为空")
+    if max_bytes > 0 and len(data) > max_bytes:
+        raise ValueError(f"参考图体积 {len(data)} 字节，超过上限 {max_bytes} 字节")
+    _fmt, width, height = _probe_reference_image(data)
+    return {
+        "image_bytes": data,
+        "strength": _coerce_strength(raw.get("strength")),
+        "width": int(width),
+        "height": int(height),
+    }
 
 
 def validate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
@@ -579,6 +807,7 @@ def validate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
     cfg_limit = _limit("cfg")
     seed_limit = _limit("seed")
     prompt_max = int(_limit("prompt").get("maxChars") or 0)
+    neg_max = int(_limit("negativePrompt").get("maxChars") or 0)
     width_min, width_max = int(width_limit["min"]), int(width_limit["max"])
     height_min, height_max = int(height_limit["min"]), int(height_limit["max"])
     width_step = int(width_limit.get("step") or 8)
@@ -598,17 +827,34 @@ def validate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
         prompt = prompt.strip()
         if prompt_max > 0 and len(prompt) > prompt_max:
             raise ValueError(f"tasks[{index}].prompt 最长 {prompt_max} 个字符")
+        neg_raw = raw.get("negative_prompt")
+        if neg_raw is None:
+            neg_prompt = ""
+        elif not isinstance(neg_raw, str):
+            raise ValueError(f"tasks[{index}].negative_prompt 必须是字符串")
+        else:
+            neg_prompt = neg_raw.strip()
+        if neg_max > 0 and len(neg_prompt) > neg_max:
+            raise ValueError(f"tasks[{index}].negative_prompt 最长 {neg_max} 个字符")
         width = _int_param(raw.get("width", 1024), f"tasks[{index}].width", width_min, width_max)
         height = _int_param(raw.get("height", 1024), f"tasks[{index}].height", height_min, height_max)
         steps = _int_param(raw.get("steps", 4), f"tasks[{index}].steps", steps_min, steps_max)
+        raw_cfg = raw.get("cfg", 0.0)
+        if isinstance(raw_cfg, bool):
+            raise ValueError(f"tasks[{index}].cfg 必须是数字")
         try:
-            cfg = float(raw.get("cfg", 0.0))
+            cfg = float(raw_cfg)
         except (TypeError, ValueError):
             raise ValueError(f"tasks[{index}].cfg 必须是数字") from None
+        if not math.isfinite(cfg):
+            raise ValueError(f"tasks[{index}].cfg 必须是有限数字")
         if cfg < cfg_min or cfg > cfg_max:
             raise ValueError(f"tasks[{index}].cfg 必须在 {cfg_min}..{cfg_max} 之间")
+        raw_seed = raw.get("seed", -1)
+        if isinstance(raw_seed, bool):
+            raise ValueError(f"tasks[{index}].seed 必须是整数")
         try:
-            seed = int(raw.get("seed", -1))
+            seed = int(raw_seed)
         except (TypeError, ValueError):
             raise ValueError(f"tasks[{index}].seed 必须是整数") from None
         if seed < 0:
@@ -619,7 +865,7 @@ def validate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
             {
                 "name": str(raw.get("name") or f"{index + 1:02d}"),
                 "prompt": prompt,
-                "negative_prompt": str(raw.get("negative_prompt") or "").strip(),
+                "negative_prompt": neg_prompt,
                 "seed": seed,
                 "width": width - width % width_step,
                 "height": height - height % height_step,
@@ -679,6 +925,9 @@ class MockHandler(BaseHTTPRequestHandler):
             length = 0
         if length <= 0:
             return {}
+        limit = _request_body_limit()
+        if length > limit:
+            raise ValueError(f"请求体超过上限（{round(limit / 1024 / 1024, 1)}MB）")
         raw = self.rfile.read(length)
         try:
             return json.loads(raw.decode("utf-8"))
@@ -764,6 +1013,7 @@ class MockHandler(BaseHTTPRequestHandler):
         try:
             spec = self._read_json()
             pipeline, model_id, tasks = validate_spec(spec)
+            reference = parse_reference_spec(spec.get("reference"), pipeline)
             job_id = normalize_job_id(spec.get("jobId"))
         except ValueError as exc:
             log(f"[http] 400 /generate 校验失败：{exc}")
@@ -791,7 +1041,7 @@ class MockHandler(BaseHTTPRequestHandler):
             self._send_error(status, code, message)
             return
 
-        job, created = submit_job(pipeline, model_id, tasks, job_id)
+        job, created = submit_job(pipeline, model_id, tasks, job_id, reference)
         if not created:
             log(f"[http] 202 /generate 幂等命中 {job['job_id']}（status={job['status']}）")
         self._send_json(

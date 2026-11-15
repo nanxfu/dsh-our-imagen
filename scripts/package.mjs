@@ -41,11 +41,11 @@ async function pathExists(path) {
   return Boolean(await stat(path).catch(() => null))
 }
 
-/** 递归复制目录，只保留给定扩展名（不传则全量），跳过缓存与系统垃圾文件。 */
+/** 递归复制目录，只保留给定扩展名（不传则全量），跳过缓存、隐藏文件与系统垃圾文件。 */
 async function copyFiltered(from, to, extensions) {
   await mkdir(to, { recursive: true })
   for (const entry of await readdir(from, { withFileTypes: true })) {
-    if (SKIP_NAMES.has(entry.name)) continue
+    if (SKIP_NAMES.has(entry.name) || entry.name.startsWith('.')) continue
     const source = join(from, entry.name)
     const target = join(to, entry.name)
     if (entry.isDirectory()) {
@@ -65,7 +65,9 @@ async function main() {
 
   console.log('[package] 1/3 构建 client.js …')
   const build = run(process.execPath, ['build.mjs'])
-  if (build.status !== 0) fail('node build.mjs 执行失败')
+  if (build.error || build.status !== 0) {
+    fail(`node build.mjs 执行失败${build.error ? `（${build.error.message}）` : ''}`)
+  }
 
   console.log('[package] 2/3 复制运行文件 …')
   const target = join(DIST, `${pkg.name}-${pkg.version}`)
@@ -85,7 +87,20 @@ async function main() {
     if (listed) await cp(join(ROOT, entry.name), join(target, entry.name))
   }
 
-  const required = ['index.js', 'client.js', 'package.json', 'cordis.patch.yml', 'lib/route-kit.js', 'shared/contract.js', 'remote/daemon.py', 'remote/anima_runtime.py']
+  const required = [
+    'index.js',
+    'client.js',
+    'package.json',
+    'cordis.patch.yml',
+    'lib/route-kit.js',
+    'shared/contract.js',
+    'remote/daemon.py',
+    'remote/log_ring.py',
+    'remote/pipeline_loader.py',
+    'remote/cache_ops.py',
+    'remote/anima_runtime.py',
+    'remote/tunnel.py',
+  ]
   const missing = []
   for (const file of required) {
     if (!(await pathExists(join(target, ...file.split('/'))))) missing.push(file)
@@ -96,25 +111,27 @@ async function main() {
 
   console.log('[package] 3/3 尝试压缩 zip …')
   const zipPath = `${target}.zip`
-  const powershell =
-    process.platform === 'win32'
-      ? spawnSync(
-          'pwsh',
-          [
-            '-NoProfile',
-            '-Command',
-            `Compress-Archive -Path "${join(target, '*')}" -DestinationPath "${zipPath}" -Force`,
-          ],
-          { cwd: ROOT, stdio: 'inherit' },
-        )
-      : null
-  const zipped = powershell
-    ? powershell.status === 0
+  const archiveCommand = `Compress-Archive -Path "${join(target, '*')}" -DestinationPath "${zipPath}" -Force`
+  const tryShell = (bin) =>
+    spawnSync(bin, ['-NoProfile', '-Command', archiveCommand], { cwd: ROOT, stdio: 'inherit' })
+  let zipped = false
+  if (process.platform === 'win32') {
+    for (const bin of ['pwsh', 'powershell.exe']) {
+      const result = tryShell(bin)
+      if (!result.error && result.status === 0) {
+        zipped = true
+        break
+      }
+    }
+  } else {
     // POSIX：在 dist/ 内用相对目录名压缩，避免 zip 在仓库根目录找不到目标目录。
-    : spawnSync('zip', ['-qr', `${pkg.name}-${pkg.version}.zip`, `${pkg.name}-${pkg.version}`], {
-        cwd: DIST,
-        stdio: 'inherit',
-      }).status === 0
+    const result = spawnSync(
+      'zip',
+      ['-qr', `${pkg.name}-${pkg.version}.zip`, `${pkg.name}-${pkg.version}`],
+      { cwd: DIST, stdio: 'inherit' },
+    )
+    zipped = !result.error && result.status === 0
+  }
 
   console.log('')
   console.log(`版本 ${pkg.version} 打包完成。`)

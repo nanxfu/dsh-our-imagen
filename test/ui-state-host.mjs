@@ -14,7 +14,6 @@
  */
 
 import assert from 'node:assert/strict'
-import { createServer } from 'node:http'
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -30,36 +29,18 @@ import {
   uiStatePath,
   writeUiState,
 } from '../lib/ui-state.js'
+import { createCheckRunner } from './helpers/check.mjs'
+import { closeServer, createFakeContext, json, startHost, workspaceContext } from './helpers/fake-context.mjs'
 
 const UI_STATE_ROUTE = '/imagen-api/ui-state'
 
-const results = []
-async function check(name, fn) {
-  try {
-    await fn()
-    results.push({ name, ok: true })
-    console.log(`PASS ${name}`)
-  } catch (error) {
-    results.push({ name, ok: false, error })
-    console.log(`FAIL ${name}\n  ${error?.message ?? error}`)
-  }
-}
+const { check, summary } = createCheckRunner()
 
 const tempDirs = []
 async function makeWorkspace() {
   const dir = await mkdtemp(join(tmpdir(), 'imagen-ui-state-test-'))
   tempDirs.push(dir)
   return dir
-}
-
-/** 只提供 workingDirectory 的最小宿主上下文。 */
-function workspaceContext(workspace) {
-  return {
-    get(name) {
-      if (name === 'workingDirectory') return { defaultDirectory: workspace }
-      return undefined
-    },
-  }
 }
 
 const silentLog = { debug() {}, info() {}, warn() {}, error() {} }
@@ -100,44 +81,6 @@ function registerWithRouteKit(routes) {
   }
   registerRoutes(ctx, routes)
   return { registered, dispose: () => disposers.forEach((fn) => fn()) }
-}
-
-function startHost(routes) {
-  const server = createServer((req, res) => {
-    let pathname = '/'
-    try {
-      pathname = new URL(req.url, 'http://placeholder.local').pathname
-    } catch {}
-    const route = routes.find((item) => item.path === pathname)
-    if (!route) {
-      res.writeHead(404)
-      return res.end()
-    }
-    Promise.resolve(route.handler(req, res)).catch((error) => {
-      if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' })
-      res.end(String(error?.stack ?? error))
-    })
-  })
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve({ server, origin: `http://127.0.0.1:${server.address().port}` }))
-  })
-}
-
-async function closeServer(server) {
-  server.closeAllConnections?.()
-  await new Promise((resolve) => server.close(() => resolve()))
-}
-
-async function json(base, path, options) {
-  const res = await fetch(new URL(path, base), options)
-  const text = await res.text()
-  let body = null
-  try {
-    body = text ? JSON.parse(text) : null
-  } catch {
-    body = text
-  }
-  return { status: res.status, body, text, headers: res.headers }
 }
 
 function postUiState(origin, value) {
@@ -397,56 +340,6 @@ async function scenarioRoutes() {
 // ── index.js 真实装配 ─────────────────────────────────────
 
 /** 假 cordis Context：只为 index.js 装配路由 / 工具用，不执行外部命令。 */
-function createFakeContext(workspace) {
-  const routes = []
-  const tools = []
-  const cleanups = []
-  const ctx = {
-    get(name) {
-      if (name === 'workingDirectory') return { defaultDirectory: workspace }
-      return undefined
-    },
-    effect(fn) {
-      const disposer = fn()
-      if (typeof disposer === 'function') cleanups.push(disposer)
-      return disposer
-    },
-    webServer: {
-      register(route) {
-        routes.push(route)
-        return () => {
-          const index = routes.indexOf(route)
-          if (index >= 0) routes.splice(index, 1)
-        }
-      },
-      getOrigin: () => '',
-    },
-    subprocess: {
-      async resolveExecutable(name) {
-        throw new Error(`测试环境不执行外部命令：${name}`)
-      },
-    },
-    tools: {
-      register(tool) {
-        tools.push(tool)
-        return () => {}
-      },
-    },
-  }
-  return {
-    ctx,
-    routes,
-    tools,
-    dispose() {
-      for (const cleanup of cleanups.reverse()) {
-        try {
-          cleanup()
-        } catch {}
-      }
-    },
-  }
-}
-
 async function scenarioIndexAssembly() {
   console.log('\n── index.js 真实装配')
   const workspace = await makeWorkspace()
@@ -491,9 +384,7 @@ async function main() {
   await scenarioRoutes()
   await scenarioIndexAssembly()
 
-  const failed = results.filter((item) => !item.ok)
-  console.log(`\n${results.length - failed.length}/${results.length} 通过`)
-  if (failed.length > 0) process.exitCode = 1
+  summary()
 }
 
 try {

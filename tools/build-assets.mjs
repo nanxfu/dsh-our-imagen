@@ -138,6 +138,16 @@ export async function loadModels(modelsDir = MODELS_DIR) {
         fail(`${where} 的 measured.${field} 必须是数字或 null`)
       }
     }
+    if (
+      model.measured.downloadGb !== null &&
+      model.pipeline.downloadGb !== undefined &&
+      model.pipeline.downloadGb !== null &&
+      model.measured.downloadGb !== model.pipeline.downloadGb
+    ) {
+      fail(
+        `${where} 的 pipeline.downloadGb (${model.pipeline.downloadGb}) 与 measured.downloadGb (${model.measured.downloadGb}) 不一致`,
+      )
+    }
     if (!Array.isArray(model.sizeOptions) || model.sizeOptions.length === 0) {
       fail(`${where} 的 sizeOptions 必须是非空数组`)
     }

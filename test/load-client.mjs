@@ -44,35 +44,60 @@ const sameDeps = (previous, next) => {
 /** 假 React 已实现的 hook / API 清单；报错信息复用它，避免两处漂移。 */
 const SUPPORTED_HOOKS = 'useState/useReducer/useRef/useMemo/useCallback/useEffect/useLayoutEffect/memo'
 
-/** 最小 React 替身 + 状态循环。 */
+/**
+ * 最小 React 替身 + 状态循环。
+ *
+ * 按树路径（path + key + 组件类型）为每个函数组件实例分配独立的 hook 槽位与 effect 列表；
+ * 每次 pass 展开整棵组件树并返回纯宿主元素树，卸载的实例会自动触发清理。
+ */
 function createRenderer(now) {
-  const slots = []
-  let slotIndex = 0
+  let instances = new Map()
+  let activeInstance = null
   let pendingEffects = []
-  let effectDeps = []
-  let effectCleanups = []
   let dirty = false
   let unmounted = false
 
-  const createElement = (type, props, ...children) => ({
-    type,
-    props: props ?? {},
-    children: children.flat(Infinity).filter((child) => child !== null && child !== undefined && child !== false),
-  })
+  const createElement = (type, props, ...children) => {
+    const rawProps = props ?? {}
+    const key = rawProps.key !== undefined && rawProps.key !== null ? String(rawProps.key) : null
+    const cleanProps = 'key' in rawProps ? (() => {
+      const copy = { ...rawProps }
+      delete copy.key
+      return copy
+    })() : rawProps
+    return {
+      type,
+      key,
+      props: cleanProps,
+      children: children.flat(Infinity).filter((child) => child !== null && child !== undefined && child !== false && child !== true),
+    }
+  }
 
-  // JSX 自动运行时：jsx/jsxs 把 children 放在 props 里，这里转成 createElement 调用。
-  // Fragment 用一个把 children 原样吐出的函数组件表示。
+  // JSX 自动运行时：jsx(type, props, key) 第三参数是 key；Fragment 展开为子节点。
   const Fragment = (props) => (props && props.children) || null
-  const jsx = (type, props) => {
+  const jsx = (type, props, key) => {
     const { children, ...rest } = props ?? {}
-    if (children === undefined) return createElement(type, rest)
-    return createElement(type, rest, ...(Array.isArray(children) ? children : [children]))
+    const nextProps = key !== undefined ? { ...rest, key } : rest
+    if (children === undefined) return createElement(type, nextProps)
+    return createElement(type, nextProps, ...(Array.isArray(children) ? children : [children]))
   }
   const jsxRuntime = { jsx, jsxs: jsx, jsxDEV: jsx, Fragment }
 
   /** useEffect / useLayoutEffect 共用：本轮渲染后按 deps 决定是否执行。 */
   const registerEffect = (effect, deps) => {
-    pendingEffects.push({ effect, deps })
+    if (!activeInstance) {
+      throw new Error('hook 只能在组件渲染期间调用（useEffect / useLayoutEffect）')
+    }
+    const inst = activeInstance
+    const effectIndex = inst.effectIndex++
+    pendingEffects.push({ inst, effectIndex, effect, deps })
+  }
+
+  function currentHookSlot() {
+    if (!activeInstance) {
+      throw new Error('hook 只能在组件渲染期间调用')
+    }
+    return { inst: activeInstance, index: activeInstance.slotIndex++ }
   }
 
   /** memo：套一层函数组件并保留 displayName；假渲染器不做 props 比较。 */
@@ -89,10 +114,11 @@ function createRenderer(now) {
     createElement,
     Fragment,
     useState(init) {
-      const index = slotIndex++
+      const { inst, index } = currentHookSlot()
+      const slots = inst.slots
       if (!(index in slots)) slots[index] = typeof init === 'function' ? init() : init
       const setState = (next) => {
-        if (unmounted) return
+        if (unmounted || inst.unmounted) return
         const value = typeof next === 'function' ? next(slots[index]) : next
         if (Object.is(value, slots[index])) return
         slots[index] = value
@@ -101,13 +127,14 @@ function createRenderer(now) {
       return [slots[index], setState]
     },
     useReducer(reducer, initialArg, init) {
-      const index = slotIndex++
+      const { inst, index } = currentHookSlot()
+      const slots = inst.slots
       if (!(index in slots)) {
         slots[index] = typeof init === 'function' ? init(initialArg) : initialArg
       }
       // dispatch 立即计算并标脏，交给 mount 循环重跑到收敛（React 会批处理，这里不模拟）。
       const dispatch = (action) => {
-        if (unmounted) return
+        if (unmounted || inst.unmounted) return
         const next = reducer(slots[index], action)
         if (Object.is(next, slots[index])) return
         slots[index] = next
@@ -116,12 +143,14 @@ function createRenderer(now) {
       return [slots[index], dispatch]
     },
     useRef(init) {
-      const index = slotIndex++
+      const { inst, index } = currentHookSlot()
+      const slots = inst.slots
       if (!(index in slots)) slots[index] = { current: init }
       return slots[index]
     },
     useMemo(factory, deps) {
-      const index = slotIndex++
+      const { inst, index } = currentHookSlot()
+      const slots = inst.slots
       const prev = slots[index]
       const hasDeps = Array.isArray(deps)
       if (prev && hasDeps && sameDeps(prev.deps, deps)) return prev.value
@@ -133,7 +162,8 @@ function createRenderer(now) {
     useEffect: registerEffect,
     useLayoutEffect: registerEffect,
     useCallback(fn, deps) {
-      const index = slotIndex++
+      const { inst, index } = currentHookSlot()
+      const slots = inst.slots
       const prev = slots[index]
       if (prev && sameDeps(prev.deps, deps)) return prev.fn
       slots[index] = { fn, deps }
@@ -170,40 +200,129 @@ function createRenderer(now) {
     }
   }
 
+  function cleanupInstance(inst) {
+    inst.unmounted = true
+    inst.effectCleanups.forEach((cleanup) => {
+      if (typeof cleanup === 'function') cleanup()
+    })
+    inst.effectCleanups = []
+  }
+
+  function acquireInstance(path, type) {
+    const existing = instances.get(path)
+    if (existing && existing.type === type) {
+      existing.slotIndex = 0
+      existing.effectIndex = 0
+      return existing
+    }
+    if (existing) cleanupInstance(existing)
+    const created = {
+      type,
+      slots: [],
+      slotIndex: 0,
+      effectIndex: 0,
+      effectDeps: [],
+      effectCleanups: [],
+      unmounted: false,
+    }
+    instances.set(path, created)
+    return created
+  }
+
+  function expandChildList(children, parentPath, visited) {
+    const out = []
+    const seenKeys = new Map()
+    for (let i = 0; i < children.length; i += 1) {
+      const child = children[i]
+      let seg = String(i)
+      if (child && typeof child === 'object' && !Array.isArray(child) && child.key !== null && child.key !== undefined) {
+        const rawKey = `k:${child.key}`
+        const dup = seenKeys.get(rawKey) || 0
+        seenKeys.set(rawKey, dup + 1)
+        seg = dup === 0 ? rawKey : `${rawKey}#${dup}`
+      }
+      const expanded = expandNode(child, `${parentPath}.${seg}`, visited)
+      if (expanded === null || expanded === undefined || expanded === false || expanded === true) continue
+      if (Array.isArray(expanded)) {
+        for (const flat of expanded) {
+          if (flat !== null && flat !== undefined && flat !== false && flat !== true) out.push(flat)
+        }
+      } else {
+        out.push(expanded)
+      }
+    }
+    return out
+  }
+
+  function expandNode(node, path, visited) {
+    if (node === null || node === undefined || node === false || node === true) return null
+    if (typeof node === 'string' || typeof node === 'number') return node
+    if (Array.isArray(node)) return expandChildList(node, path, visited)
+    if (node.type === Fragment) {
+      const fragChildren = node.children && node.children.length > 0
+        ? node.children
+        : (Array.isArray(node.props?.children) ? node.props.children : [node.props?.children])
+      return expandChildList(fragChildren, `${path}.F`, visited)
+    }
+    if (typeof node.type === 'function') {
+      const inst = acquireInstance(path, node.type)
+      visited.add(path)
+      const prevActive = activeInstance
+      activeInstance = inst
+      let rendered
+      try {
+        const childProp = node.children.length === 0
+          ? node.props.children
+          : (node.children.length === 1 ? node.children[0] : node.children)
+        rendered = node.type({ ...node.props, children: childProp })
+      } finally {
+        activeInstance = prevActive
+      }
+      return expandNode(rendered, `${path}>`, visited)
+    }
+    return {
+      ...node,
+      children: expandChildList(node.children || [], path, visited),
+    }
+  }
+
   let mountedComponent = null
   let mountedProps = null
 
-  /** 连续渲染到状态收敛；mount 与 rerender 共用，hook 槽位与 effect 依赖由调用方维护。 */
+  /** 连续渲染到状态收敛；mount 与 rerender 共用，每个组件实例拥有独立的 hook 槽位与清理表。 */
   async function runPasses(maxPasses) {
     for (let pass = 0; pass < maxPasses; pass += 1) {
       dirty = false
-      slotIndex = 0
       pendingEffects = []
-      const tree = mountedComponent(mountedProps)
+      const visited = new Set()
+      const tree = expandNode(createElement(mountedComponent, mountedProps), '0', visited)
 
-      let ranEffect = false
-      pendingEffects.forEach((item, index) => {
-        if (sameDeps(effectDeps[index], item.deps)) return
-        effectDeps[index] = item.deps
-        if (typeof effectCleanups[index] === 'function') effectCleanups[index]()
-        const cleanup = item.effect()
-        effectCleanups[index] = typeof cleanup === 'function' ? cleanup : null
-        ranEffect = true
-      })
+      for (const [path, inst] of [...instances.entries()]) {
+        if (!visited.has(path)) {
+          cleanupInstance(inst)
+          instances.delete(path)
+        }
+      }
+
+      for (const { inst, effectIndex, effect, deps } of pendingEffects) {
+        if (inst.unmounted) continue
+        if (sameDeps(inst.effectDeps[effectIndex], deps)) continue
+        inst.effectDeps[effectIndex] = deps
+        if (typeof inst.effectCleanups[effectIndex] === 'function') inst.effectCleanups[effectIndex]()
+        const cleanup = effect()
+        inst.effectCleanups[effectIndex] = typeof cleanup === 'function' ? cleanup : null
+      }
       await settle()
-      if (!ranEffect && !dirty) return tree
+      if (!dirty) return tree
     }
     throw new Error('渲染未在预期轮次内收敛')
   }
 
   async function mount(component, props, maxPasses = 40) {
-    effectCleanups.forEach((cleanup) => {
-      if (typeof cleanup === 'function') cleanup()
-    })
-    slots.length = 0
-    effectDeps = []
-    effectCleanups = []
+    for (const inst of instances.values()) cleanupInstance(inst)
+    instances = new Map()
     dirty = false
+    unmounted = false
     mountedComponent = component
     mountedProps = props
     return runPasses(maxPasses)
@@ -220,10 +339,8 @@ function createRenderer(now) {
 
   function unmount() {
     unmounted = true
-    effectCleanups.forEach((cleanup) => {
-      if (typeof cleanup === 'function') cleanup()
-    })
-    effectCleanups = []
+    for (const inst of instances.values()) cleanupInstance(inst)
+    instances.clear()
     mountedComponent = null
     mountedProps = null
   }

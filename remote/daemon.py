@@ -97,40 +97,7 @@ EMBEDDED_CONFIG_B64 = ""
 
 VERSION = "0.10.0"
 
-# 日志环容量：Host 侧按 docs/SPEC.md 实现，最多 400 行。
-LOG_MAX_LINES = 400
-LOG_LINE_MAX_CHARS = 2000
-
 DEFAULT_PORT = 7860
-CLOUDFLARED_PATH = "/tmp/cloudflared"
-# 0.8.1（v0.9 M1）起固定 cloudflared 版本并校验 SHA256。此前用 /releases/latest/download/
-# 滚动地址：上游一发版、或网络只传了半截文件，冷启动就会随机失败，而且从
-# BOOT.tunnel_error 里看不出是哪一环。固定 tag 后同一份二进制可复现，校验不匹配
-# 能明确报出「期望/实际」并重试一次。
-CLOUDFLARED_VERSION = "2026.11.0"
-CLOUDFLARED_DOWNLOAD_URL = (
-    "https://github.com/cloudflare/cloudflared/releases/download/2026.11.0/cloudflared-linux-amd64"
-)
-# 校验和来源：cloudflared 2026.11.0 官方 Release 说明里的 SHA256 Checksums
-# （GitHub Releases 页面 / releases.atom），并已用本机实际下载的
-# cloudflared-linux-amd64（40,283,099 字节）复算 SHA256，与官方值逐位一致。
-CLOUDFLARED_SHA256 = "51f7c68b57ed7269164075d7e789efce5b59355982f06392deeb037d982a51fd"
-# 下载大小上限：官方 linux-amd64 约 38.4 MiB；120 MB 足以容纳异常响应，又不会把
-# Kaggle 容器磁盘写满。单次下载超时 120s，下载异常或校验不匹配时共尝试 2 次。
-CLOUDFLARED_MAX_DOWNLOAD_BYTES = 120 * 2**20
-CLOUDFLARED_DOWNLOAD_TIMEOUT_SEC = 120
-CLOUDFLARED_DOWNLOAD_ATTEMPTS = 2
-CLOUDFLARED_URL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
-# 备用通道（自建 FRP / bore 等）默认从进程输出里抓 https 地址；Host 可用
-# fallback_tunnel_url_regex 覆盖（例如自签名域名或带路径的地址）。
-DEFAULT_CUSTOM_URL_RE = re.compile(r"https://[^\s\"'<>]+")
-TUNNEL_WAIT_SEC = 120.0
-# P0.2 隧道自愈：进程异常退出后按指数退避重拉（2s 起、60s 封顶），
-# 并每 TUNNEL_ANNOUNCE_SEC 秒重播一次 ready，帮助 Host 在心跳丢失后重新会合。
-TUNNEL_RESTART_BASE_SEC = 2.0
-TUNNEL_RESTART_MAX_SEC = 60.0
-TUNNEL_ANNOUNCE_SEC = 300.0
-TUNNEL_PROVIDERS = ("cloudflare", "custom")
 
 # 依赖约束默认留空（0.4.1 修正）。0.4.0 曾内置「版本上限」做固化
 # （diffusers<1.0 / transformers<5 / accelerate<2 / peft<1），实测与当前 diffusers
@@ -141,8 +108,6 @@ TUNNEL_PROVIDERS = ("cloudflare", "custom")
 # 最新兼容组合，再用导入自检兜底。
 PIP_CONSTRAINTS: dict[str, str] = {}
 IMPORT_CHECK_MODULES = ("torch", "diffusers", "transformers", "accelerate", "peft")
-# 磁盘预检在估算值上留 15% 余量：下载缓存、解压临时文件也会占空间。
-DISK_HEADROOM = 1.15
 
 SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2", "anima")
 # 图生图（垫图重绘）首期只开放能整管复用 AutoPipelineForImage2Image 的 SDXL 家族。
@@ -174,121 +139,10 @@ JOB_STATUS_DONE = "done"
 JOB_STATUS_FAILED = "failed"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 日志环
+# 日志环（单份源码在 remote/log_ring.py，打包时由 lib/kernel.js 内联）
 # ─────────────────────────────────────────────────────────────────────────────
 
-_START_TS = time.time()
-_ORIG_STDOUT = sys.stdout
-_ORIG_STDERR = sys.stderr
-
-_LOG_LOCK = threading.Lock()
-_LOG_LINES: deque[str] = deque(maxlen=LOG_MAX_LINES)
-_LOG_SEQ = 0  # 已写入的总行数；它同时就是 /logs 返回的 next
-
-# tqdm / pip 的进度条用 \r 反复覆盖同一行，入环没有意义且会把有效信息挤掉。
-_NOISE_RE = re.compile(r"(\d+%\|)|(\d+\.\d+\s*(?:it|s|B|KB|MB)/s)|(━{4,})|(B/s\])")
-
-
-def _elapsed() -> float:
-    return time.time() - _START_TS
-
-
-def _ring_append(text: str) -> None:
-    global _LOG_SEQ
-    if not text:
-        return
-    if len(text) > LOG_LINE_MAX_CHARS:
-        text = text[:LOG_LINE_MAX_CHARS] + " …(已截断)"
-    with _LOG_LOCK:
-        _LOG_LINES.append(text)
-        _LOG_SEQ += 1
-
-
-def _console(text: str) -> None:
-    """只写 Kernel 控制台，不进日志环。"""
-    try:
-        _ORIG_STDOUT.write(text + "\n")
-        _ORIG_STDOUT.flush()
-    except Exception:
-        pass
-
-
-def log(*args) -> None:
-    """同时进日志环与控制台。所有进度都要走这里，Host 才看得到。"""
-    text = " ".join(str(a) for a in args)
-    for piece in re.split(r"[\r\n]+", text):
-        piece = piece.strip()
-        if not piece or _NOISE_RE.search(piece):
-            continue
-        line = f"[{_elapsed():8.1f}s] {piece}"
-        _ring_append(line)
-        _console(line)
-
-
-class _StreamTee:
-    """把第三方库（tqdm、transformers、diffusers、huggingface_hub）的输出抄送到日志环。
-
-    pip 是子进程，单独按行读取；这里处理的是同进程内库直接 print 的情况。
-    """
-
-    def __init__(self, original, name: str):
-        self._original = original
-        self._name = name
-
-    def write(self, data):  # noqa: ANN001 - 兼容任意 file-like
-        try:
-            self._original.write(data)
-            self._original.flush()
-        except Exception:
-            pass
-        if data:
-            for piece in re.split(r"[\r\n]+", str(data)):
-                piece = piece.strip()
-                if piece and not _NOISE_RE.search(piece):
-                    _ring_append(f"[{_elapsed():8.1f}s] {piece}")
-        return len(data) if data else 0
-
-    def flush(self):
-        try:
-            self._original.flush()
-        except Exception:
-            pass
-
-    def isatty(self) -> bool:
-        try:
-            return bool(self._original.isatty())
-        except Exception:
-            return False
-
-    def writelines(self, lines):  # noqa: ANN001
-        for line in lines:
-            self.write(line)
-
-    def __getattr__(self, name):
-        return getattr(self._original, name)
-
-
-def install_stream_tee() -> None:
-    if not isinstance(sys.stdout, _StreamTee):
-        sys.stdout = _StreamTee(_ORIG_STDOUT, "stdout")  # type: ignore[assignment]
-    if not isinstance(sys.stderr, _StreamTee):
-        sys.stderr = _StreamTee(_ORIG_STDERR, "stderr")  # type: ignore[assignment]
-
-
-def log_since(since: int) -> tuple[list[str], int]:
-    """返回序号 > since 的日志行与最新的 next。
-
-    行序号从 1 开始；环形缓冲只保留最近 LOG_MAX_LINES 行。since 早于缓冲起点时
-    直接返回当前全部内容（Host 侧按 next 继续拉即可，不会重复也不会丢尾）。
-    """
-    with _LOG_LOCK:
-        total = _LOG_SEQ
-        snapshot = list(_LOG_LINES)
-    if not snapshot:
-        return [], total
-    first_seq = total - len(snapshot) + 1
-    lines = [line for offset, line in enumerate(snapshot) if first_seq + offset > since]
-    return lines, total
+from log_ring import LOG_LINE_MAX_CHARS, LOG_MAX_LINES, _LOG_LINES, _LOG_LOCK, _LOG_SEQ, _NOISE_RE, _ORIG_STDERR, _ORIG_STDOUT, _START_TS, _StreamTee, _console, _elapsed, _ring_append, install_stream_tee, log, log_since, reset_log_ring  # noqa: E402  # @@INLINE:log_ring.py@@
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1104,259 +958,49 @@ def free_cuda_cache() -> None:
         log(f"[cuda] empty_cache 失败：{short(exc)}")
 
 
-def resolve_local_model(repo: str) -> str | None:
-    """repo 命中 local_models 且目录含 model_index.json 时返回本地目录。
+from cache_ops import CACHE_PROBE_WORK_DIR, DISK_HEADROOM, HF_CACHE_ENV_NAMES, HF_CACHE_REPO_PREFIX, HF_REPO_RE, HF_TOKEN_ENV_NAMES, _SECRET_MIN_CHARS, _cache_free_gib, _cache_path_protected, _decode_mount_path, _dir_size_gib, _existing_ancestor, _redact_secrets, _repo_key, _with_headroom, anima_local_assets_from, build_cache_probe_lines, cache_keep_repos_from, cache_model_dirs, cache_repo_candidates, disk_usage_root, disk_usage_target, disk_usage_text, ensure_cache_capacity_with, ensure_disk_capacity_with, evict_cache_dirs, hf_hub_cache_dir, local_model_dir_from, longest_mount_prefix, mount_point_of_path, pipeline_repos, prefetch_weights, probe_free_gib, read_mount_points, repo_from_cache_dir_name, required_download_gb, resolve_local_model_from, resolve_local_weight_from, run_disk_precheck  # noqa: E402  # @@INLINE:cache_ops.py@@
 
-    预挂载目录可能因为 Dataset 版本切换而缺少关键文件，此时不能硬用本地路径，
-    必须回退在线加载，否则会把「权重没挂对」变成一次难排查的加载失败。
-    """
-    key = str(repo or "").strip()
-    path = CONFIG.local_models.get(key)
-    if not path:
-        return None
-    if os.path.isfile(os.path.join(path, "model_index.json")):
-        return path
-    log(f"[load] WARN 预挂载目录缺少 model_index.json，回退在线加载：{path}")
-    return None
+_CACHE_PROBE_DONE = False
+
+
+def resolve_local_model(repo: str) -> str | None:
+    """repo 命中 local_models 且目录含 model_index.json 时返回本地目录。"""
+    return resolve_local_model_from(repo, CONFIG.local_models, log=log)
 
 
 def resolve_local_weight(repo: str, weight_name: str) -> str | None:
     """LoRA 仓库命中预挂载且权重文件存在时返回本地文件路径。"""
-    key = str(repo or "").strip()
-    name = str(weight_name or "").strip()
-    path = CONFIG.local_models.get(key)
-    if not path or not name:
-        return None
-    try:
-        base = os.path.normpath(path)
-        candidate = os.path.normpath(os.path.join(path, name))
-        inside = os.path.commonpath([base, candidate]) == base
-    except (ValueError, OSError):
-        inside = False
-    if not inside:
-        log(f"[load] WARN LoRA 权重路径越出预挂载目录，已忽略：{name}")
-        return None
-    if os.path.isfile(candidate):
-        return candidate
-    log(f"[load] 预挂载目录未找到 LoRA 权重 {name}，回退在线下载：{path}")
-    return None
+    return resolve_local_weight_from(repo, weight_name, CONFIG.local_models, log=log)
 
 
 def local_model_dir(repo: str) -> str | None:
-    """repo 命中 local_models 且目录存在时返回该目录（不要求 model_index.json）。
-
-    anima 这类「单文件权重 + 独立组件」的仓库在预挂载目录里没有 model_index.json，
-    resolve_local_model 会判定未命中，这里补一个只看目录是否存在的判定。
-    """
-    path = CONFIG.local_models.get(str(repo or "").strip())
-    if path and os.path.isdir(path):
-        return path
-    return None
+    """repo 命中 local_models 且目录存在时返回该目录（不要求 model_index.json）。"""
+    return local_model_dir_from(repo, CONFIG.local_models)
 
 
 def anima_local_assets(pipeline_spec: dict) -> dict[str, str]:
-    """把 anima 的四个资产解析成预挂载路径；未命中的键留给在线下载。
-
-    键：``dit`` / ``te`` 是单文件权重路径，``vae`` / ``tokenizers`` 是仓库根目录。
-    """
-    assets: dict[str, str] = {}
-    dit_weight = resolve_local_weight(
-        str(pipeline_spec.get("base") or ""), str(pipeline_spec.get("weight") or "")
+    """把 anima 的四个资产解析成预挂载路径；未命中的键留给在线下载。"""
+    return anima_local_assets_from(
+        pipeline_spec,
+        CONFIG.local_models,
+        resolve_weight_fn=resolve_local_weight,
+        local_dir_fn=local_model_dir,
+        log=log,
     )
-    if dit_weight:
-        assets["dit"] = dit_weight
-    text_encoder = pipeline_spec.get("textEncoder") or {}
-    te_weight = resolve_local_weight(
-        str(text_encoder.get("repo") or ""), str(text_encoder.get("weight") or "")
-    )
-    if te_weight:
-        assets["te"] = te_weight
-    vae = pipeline_spec.get("vae") or {}
-    raw_subfolder = str(vae.get("subfolder") or "").strip()
-    vae_subfolder = raw_subfolder.strip("/")
-    vae_parts = vae_subfolder.split("/") if vae_subfolder else []
-    if raw_subfolder and (
-        os.path.isabs(raw_subfolder)
-        or "\\" in raw_subfolder
-        or any(part in ("", ".", "..") for part in vae_parts)
-    ):
-        log(f"[load] WARN 非法 vae.subfolder 已忽略：{raw_subfolder!r}")
-    else:
-        vae_root = local_model_dir(str(vae.get("repo") or ""))
-        if vae_root and os.path.isfile(os.path.join(vae_root, vae_subfolder or ".", "config.json")):
-            assets["vae"] = vae_root
-    tokenizers = pipeline_spec.get("tokenizers") or {}
-    tokenizer_root = local_model_dir(str(tokenizers.get("repo") or ""))
-    if tokenizer_root and os.path.isdir(os.path.join(tokenizer_root, "qwen25_tokenizer")):
-        assets["tokenizers"] = tokenizer_root
-    return assets
-
-
-def _with_headroom(gb: float) -> float:
-    """下载/清理判定统一叠加 DISK_HEADROOM 余量：缓存与解压临时文件也会占空间。"""
-    return round(float(gb) * DISK_HEADROOM, 2)
-
-
-def required_download_gb(pipeline_spec: dict) -> float | None:
-    """按 pipeline spec 的 downloadGb 估算下载需求（含 15% 余量）；缺失/非法返回 None。"""
-    raw = pipeline_spec.get("downloadGb")
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
-        return None
-    return _with_headroom(raw)
-
-
-def disk_usage_root() -> str:
-    """Kaggle 容器里权重落在 /kaggle/working；其他环境（本地调试）退回当前目录。"""
-    return "/kaggle/working" if os.path.isdir("/kaggle/working") else os.getcwd()
-
-
-def disk_usage_target() -> str:
-    """磁盘测量目标：HF 实际缓存目录（不存在时取最近存在祖先）。
-
-    权重走 ``snapshot_download()`` 落在 HF 缓存目录，它与 ``/kaggle/working`` 未必
-    同一文件系统（见 docs/WORKBENCH_AUDIT_AND_RELIABILITY_PLAN.md §5.1），只量
-    ``/kaggle/working`` 可能把「缓存盘已满」误判成「空间充足」。
-    """
-    try:
-        return _existing_ancestor(hf_hub_cache_dir())
-    except Exception:
-        return disk_usage_root()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# HF 缓存探针（只读诊断，不参与清理与调度）
-#
-# 目的：真机上确认 HF 缓存目录与 /kaggle/working 各自落在哪个挂载点、还剩多少空间，
-# 为「要不要做缓存清理、清理哪个盘」提供实测依据。本探针只写日志，不删任何文件。
-#
-# 安全约束：
-#   1. 只打印路径 / 挂载点 / 剩余空间，绝不打印环境变量值本身（token 值额外脱敏）；
-#   2. 所有异常在探针内部吞掉——读不到就写 unknown，不能影响模型加载；
-#   3. 不为了探针 import huggingface_hub 重库：只在它已加载时读常量。
-# ─────────────────────────────────────────────────────────────────────────────
-
-HF_CACHE_ENV_NAMES = ("HF_HUB_CACHE", "HUGGINGFACE_HUB_CACHE")
-HF_TOKEN_ENV_NAMES = ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN")
-CACHE_PROBE_WORK_DIR = "/kaggle/working"
-# 短于该长度的环境变量值不参与脱敏替换，避免误抹普通路径片段（真实 token 远长于此）。
-_SECRET_MIN_CHARS = 4
-_CACHE_PROBE_DONE = False
-
-
-def hf_hub_cache_dir() -> str:
-    """HF 实际缓存目录。
-
-    顺序与 huggingface_hub 一致：HF_HUB_CACHE → HUGGINGFACE_HUB_CACHE → 已加载模块的
-    constants.HF_HUB_CACHE → $HF_HOME/hub → ~/.cache/huggingface/hub。
-    """
-    for name in HF_CACHE_ENV_NAMES:
-        value = (os.environ.get(name) or "").strip()
-        if value:
-            return os.path.abspath(os.path.expanduser(value))
-    for module_name in ("huggingface_hub.constants", "huggingface_hub"):
-        module = sys.modules.get(module_name)
-        value = getattr(module, "HF_HUB_CACHE", "") if module is not None else ""
-        if isinstance(value, str) and value.strip():
-            return os.path.abspath(os.path.expanduser(value.strip()))
-    hf_home = (os.environ.get("HF_HOME") or "").strip()
-    if hf_home:
-        return os.path.abspath(os.path.expanduser(os.path.join(hf_home, "hub")))
-    return os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub")
-
-
-def _decode_mount_path(raw: str) -> str:
-    """还原 /proc/mounts 路径字段里的八进制转义（\\040 空格等）。"""
-    return re.sub(r"\\([0-7]{3})", lambda match: chr(int(match.group(1), 8)), raw)
-
-
-def read_mount_points() -> list[str] | None:
-    """读 /proc/mounts 得到挂载点列表（供最长前缀匹配）；没有该文件时返回 None。"""
-    points: list[str] = []
-    try:
-        with open("/proc/mounts", encoding="utf-8", errors="replace") as handle:
-            for line in handle:
-                fields = line.split()
-                if len(fields) < 2:
-                    continue
-                mount = _decode_mount_path(fields[1])
-                if mount.startswith("/"):
-                    points.append(mount)
-    except Exception:
-        return None
-    return points or None
-
-
-def longest_mount_prefix(real_path: str, points: list[str]) -> str:
-    """从挂载点列表里取 real_path 的最长前缀挂载点；没有匹配返回空串。"""
-    best = ""
-    for point in points:
-        if real_path == point or real_path.startswith(point.rstrip("/") + "/"):
-            if len(point) > len(best):
-                best = point
-    return best
-
-
-def _existing_ancestor(path: str) -> str:
-    """disk_usage / os.stat 只接受已存在的路径：向上找最近的存在祖先。"""
-    current = os.path.abspath(os.path.expanduser(path))
-    while not os.path.exists(current):
-        parent = os.path.dirname(current)
-        if parent == current:
-            raise FileNotFoundError(path)
-        current = parent
-    return current
 
 
 def mount_point_of(path: str) -> str:
     """path 所在挂载点：优先 /proc/mounts 最长前缀匹配，无该文件时降级到 st_dev。"""
-    real = os.path.realpath(os.path.abspath(os.path.expanduser(path)))
-    points = read_mount_points()
-    if points:
-        best = longest_mount_prefix(real, points)
-        if best:
-            return best
-    try:
-        return f"dev={os.stat(_existing_ancestor(path)).st_dev}"
-    except Exception:
-        return "unknown"
-
-
-def probe_free_gib(path: str) -> str:
-    """剩余空间（GiB，一位小数）；目录尚不存在时按最近存在祖先的磁盘统计。"""
-    try:
-        return f"{shutil.disk_usage(_existing_ancestor(path)).free / 2**30:.1f}"
-    except Exception:
-        return "unknown"
-
-
-def _redact_secrets(text: str) -> str:
-    """把 token 环境变量的值从输出里替换掉（只做替换，不读取打印）。"""
-    for name in HF_TOKEN_ENV_NAMES:
-        value = (os.environ.get(name) or "").strip()
-        if len(value) >= _SECRET_MIN_CHARS and value in text:
-            text = text.replace(value, "***")
-    return text
+    return mount_point_of_path(path, mount_reader=read_mount_points)
 
 
 def cache_probe_lines() -> list[str]:
     """缓存 / 挂载点 / 剩余空间诊断行；任何失败都降级为 unknown，绝不抛异常。"""
-    try:
-        cache_dir = hf_hub_cache_dir()
-        parts = [
-            f"HF_HUB_CACHE={cache_dir}",
-            f"mount={mount_point_of(cache_dir)}",
-            f"free={probe_free_gib(cache_dir)}GiB",
-        ]
-        if os.path.isdir(CACHE_PROBE_WORK_DIR):
-            work_mount = mount_point_of(CACHE_PROBE_WORK_DIR)
-            work_free = probe_free_gib(CACHE_PROBE_WORK_DIR)
-            parts.append(f"{CACHE_PROBE_WORK_DIR} mount={work_mount} free={work_free}GiB")
-        else:
-            parts.append(f"{CACHE_PROBE_WORK_DIR} 不存在")
-        return [_redact_secrets("[cache] " + " | ".join(parts))]
-    except Exception as exc:
-        # 探针只提供排障线索：失败也要安全返回，不能影响加载。
-        return [f"[cache] 缓存探针失败：{type(exc).__name__}"]
+    return build_cache_probe_lines(
+        mount_fn=mount_point_of,
+        free_fn=probe_free_gib,
+        cache_dir_fn=hf_hub_cache_dir,
+    )
 
 
 def _log_cache_probe() -> None:
@@ -1373,309 +1017,59 @@ def _log_cache_probe() -> None:
 
 
 def disk_precheck(pipeline_spec: dict, root: str | None = None, usage=None) -> dict | None:  # noqa: ANN001
-    """磁盘预检：返回 ``{required_gb, free_gb, path, enough}``；没有体积信息时返回 None。
-
-    默认测量 ``disk_usage_target()``（HF 缓存目录），而不是只看 ``/kaggle/working``。
-    """
-    required = required_download_gb(pipeline_spec)
-    if required is None:
-        return None
-    target = root or disk_usage_target()
-    read_usage = usage or shutil.disk_usage
-    try:
-        info = read_usage(target)
-    except Exception as exc:
-        # 读不到剩余空间不应该拦住加载，只留排障线索。
-        log(f"[load] WARN 无法读取磁盘剩余空间（跳过预检）：{short(exc)}")
-        return None
-    free_gb = round(float(getattr(info, "free", 0)) / 2**30, 2)
-    return {"required_gb": required, "free_gb": free_gb, "path": target, "enough": free_gb >= required}
-
-
-def disk_usage_text(result: dict) -> str:
-    return f"需 {result['required_gb']:.1f} GiB / 可用 {result['free_gb']:.1f} GiB"
+    """磁盘预检：返回 ``{required_gb, free_gb, path, enough}``；没有体积信息时返回 None。"""
+    return run_disk_precheck(
+        pipeline_spec,
+        root=root,
+        usage=usage,
+        target_fn=disk_usage_target,
+        log=log,
+    )
 
 
 def ensure_disk_capacity(pipeline_spec: dict) -> None:
     """下载前磁盘预检：Flux.2 全量权重会撑爆 Kaggle 20GB 空间；预挂载时跳过。"""
-    if resolve_local_model(str(pipeline_spec.get("base") or "")):
-        log("[load] 底座已预挂载本地权重，跳过磁盘预检")
-        return
-    result = disk_precheck(pipeline_spec)
-    if result is None:
-        return
-    if result["enough"]:
-        log(f"[load] 磁盘预检通过：{disk_usage_text(result)}（{result['path']}）")
-        return
-    raise LoadError(
-        f"磁盘空间不足（{pipeline_spec.get('base')}）：{disk_usage_text(result)}（{result['path']}）"
+    ensure_disk_capacity_with(
+        pipeline_spec,
+        resolve_model_fn=resolve_local_model,
+        precheck_fn=disk_precheck,
+        log=log,
+        error_cls=LoadError,
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# M4.1 切模型 LRU 缓存清理
-#
-# Kaggle 容器磁盘约 20GB，权重走 snapshot_download() 落在 HF 缓存目录，旧权重不会随
-# 切模型自动释放，连续切换两个大模型就会爆盘（见
-# docs/WORKBENCH_AUDIT_AND_RELIABILITY_PLAN.md §5.1）。策略：
-#   1. keep_set = 目标 pipeline 递归收集的全部仓库 + local_models 预挂载仓库，绝不删除；
-#   2. 只扫 hf_hub_cache_dir() 下的 models--*，按 mtime 从旧到新逐个大清；
-#   3. 每删一个就重新读盘，够了立即停；清完仍不足才抛 LoadError。
-# 只读挂载目录（/kaggle/input/...）永远不在扫描范围内，且会做路径重叠二次保护。
-# ─────────────────────────────────────────────────────────────────────────────
-
-HF_CACHE_REPO_PREFIX = "models--"
-_HF_REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
-
-
-def _repo_key(repo: str) -> str:
-    """仓库 id 归一化（大小写与首尾斜杠无关），仅用于 keep_set 比较。"""
-    return str(repo or "").strip().strip("/").lower()
-
-
-def pipeline_repos(pipeline_spec) -> list[str]:  # noqa: ANN001
-    """递归收集 pipeline 描述依赖的全部 HF repo id（去重、去空、保持出现顺序）。
-
-    覆盖 ``base`` / ``vae`` / ``textEncoder`` / ``tokenizers`` / ``lora`` / ``refiner``
-    / ``adapter`` 等全部嵌套字段。判定规则是「值形如 ``org/name``」，只认结构不认
-    具体 loader，新增 loader 不必回来改这里；多收集只会多保留缓存，是安全方向。
-    """
-    found: list[str] = []
-    seen: set[str] = set()
-
-    def visit(value) -> None:  # noqa: ANN001
-        if isinstance(value, str):
-            text = value.strip()
-            if _HF_REPO_RE.match(text):
-                key = _repo_key(text)
-                if key not in seen:
-                    seen.add(key)
-                    found.append(text)
-            return
-        if isinstance(value, dict):
-            for item in value.values():
-                visit(item)
-            return
-        if isinstance(value, (list, tuple)):
-            for item in value:
-                visit(item)
-
-    visit(pipeline_spec)
-    return found
-
-
 def cache_keep_repos(pipeline_spec) -> set[str]:  # noqa: ANN001
-    """切模型清理的不可删仓库集合：目标 pipeline 全部依赖 + 所有预挂载仓库。
-
-    预挂载仓库即使不在本次 pipeline 里也保留：用户明确配置了本地权重映射，对应
-    缓存可能是同一份权重的历史下载，删掉只会让回退在线加载时重新下载。
-    """
-    keep = {repo for repo in pipeline_repos(pipeline_spec) if repo}
-    keep.update(str(repo).strip() for repo in (CONFIG.local_models or {}) if str(repo).strip())
-    return keep
-
-
-def cache_repo_candidates(dir_name: str) -> set[str]:
-    """缓存目录名 → 可能的 repo id 集合（``models--org--name`` → ``org/name``）。
-
-    HF 只把 repo id 里的 ``/`` 编码成 ``--``，但仓库名本身也可能含 ``--``，所以
-    同时尝试「第一个 ``--`` 分隔」「最后一个 ``--`` 分隔」「全部替换」三种还原，
-    只保留形如 ``org/name`` 的候选；命中任意一个即视为不可删（宁可少删）。
-    """
-    if not dir_name.startswith(HF_CACHE_REPO_PREFIX):
-        return set()
-    body = dir_name[len(HF_CACHE_REPO_PREFIX) :]
-    if not body:
-        return set()
-    candidates = {body.replace("--", "/")}
-    first, sep, rest = body.partition("--")
-    if sep and first and rest:
-        candidates.add(f"{first}/{rest}")
-    head, sep, tail = body.rpartition("--")
-    if sep and head and tail:
-        candidates.add(f"{head}/{tail}")
-    return {item for item in candidates if _HF_REPO_RE.match(item)}
-
-
-def repo_from_cache_dir_name(dir_name: str) -> str | None:
-    """缓存目录名还原 repo id（供日志展示）；无法还原返回 None。"""
-    body = dir_name[len(HF_CACHE_REPO_PREFIX) :] if dir_name.startswith(HF_CACHE_REPO_PREFIX) else ""
-    first, sep, rest = body.partition("--")
-    preferred = f"{first}/{rest}" if sep and first and rest else ""
-    candidates = cache_repo_candidates(dir_name)
-    if not candidates:
-        return None
-    return preferred if preferred in candidates else sorted(candidates)[0]
-
-
-def cache_model_dirs(root: str | None = None) -> list[dict]:
-    """枚举 HF 缓存目录下的 ``models--*`` 项，按最近修改时间从旧到新排序。
-
-    mtime 是主依据；atime 只做同 mtime 时的次序参考（部分挂载点 atime 不可靠）。
-    """
-    target = root or hf_hub_cache_dir()
-    try:
-        names = os.listdir(target)
-    except OSError:
-        return []
-    entries: list[dict] = []
-    for name in names:
-        if not name.startswith(HF_CACHE_REPO_PREFIX):
-            continue
-        repos = cache_repo_candidates(name)
-        if not repos:
-            # 结构不认识的目录不参与清理：无法判断是否在用，删错代价远大于收益。
-            continue
-        path = os.path.join(target, name)
-        try:
-            if not os.path.isdir(path):
-                continue
-            info = os.stat(path)
-        except OSError:
-            continue
-        entries.append(
-            {
-                "name": name,
-                "path": path,
-                "repos": repos,
-                "mtime": float(getattr(info, "st_mtime", 0.0) or 0.0),
-                "atime": float(getattr(info, "st_atime", 0.0) or 0.0),
-            }
-        )
-    entries.sort(key=lambda item: (item["mtime"], item["atime"], item["name"]))
-    return entries
-
-
-def _cache_path_protected(path: str) -> bool:
-    """path 与任何 local_models 预挂载目录重叠时视为受保护（二次防线）。"""
-    try:
-        base = os.path.abspath(os.path.expanduser(path))
-    except Exception:
-        return True
-    for mapped in (CONFIG.local_models or {}).values():
-        try:
-            other = os.path.abspath(os.path.expanduser(str(mapped)))
-        except Exception:
-            continue
-        if not other:
-            continue
-        try:
-            common = os.path.commonpath([base, other])
-        except (ValueError, OSError):
-            continue
-        if common in (base, other):
-            return True
-    return False
-
-
-def _cache_free_gib(path: str, usage=None) -> float | None:  # noqa: ANN001
-    """读 path（不存在时取最近存在祖先）所在磁盘的剩余 GiB；失败返回 None。"""
-    read_usage = usage or shutil.disk_usage
-    try:
-        info = read_usage(_existing_ancestor(path))
-    except Exception as exc:
-        log(f"[cache] WARN 无法读取磁盘剩余空间（跳过清理判定）：{short(exc)}")
-        return None
-    return round(float(getattr(info, "free", 0)) / 2**30, 2)
-
-
-def _dir_size_gib(path: str) -> float:
-    """目录占用 GiB（删除前统计，仅用于日志里的 freed=<X>GiB）。"""
-    total = 0
-    for base, _dirs, files in os.walk(path):
-        for name in files:
-            try:
-                total += os.path.getsize(os.path.join(base, name))
-            except OSError:
-                continue
-    return round(total / 2**30, 2)
+    """切模型清理的不可删仓库集合：目标 pipeline 全部依赖 + 所有预挂载仓库。"""
+    return cache_keep_repos_from(pipeline_spec, CONFIG.local_models)
 
 
 def evict_cache_for(required_gb, keep_repos=None, *, root: str | None = None, usage=None) -> dict:  # noqa: ANN001
-    """按需清理 HF 缓存（LRU），返回 ``{required_gb, free_gb, path, evicted, enough}``。
-
-    ``required_gb`` 是未经余量放大的下载估算，内部按 ``DISK_HEADROOM`` 放大后再与
-    可用空间比较；``keep_repos`` 与 ``CONFIG.local_models`` 里的仓库永不删除。
-    空间足够时不扫描目录；把可删项清完仍不足时抛 ``LoadError``（需/可用两位小数）。
-    """
-    required = _with_headroom(required_gb)
-    target = root or hf_hub_cache_dir()
-    result: dict = {"required_gb": required, "free_gb": None, "path": target, "evicted": [], "enough": True}
-    free = _cache_free_gib(target, usage)
-    if free is None:
-        return result
-    result["free_gb"] = free
-    if free >= required:
-        return result
-
-    keep = {_repo_key(repo) for repo in (keep_repos or ()) if _repo_key(repo)}
-    keep.update(_repo_key(repo) for repo in (CONFIG.local_models or {}) if _repo_key(repo))
-    log(f"[cache] 可用空间不足：需 {required:.2f} GiB / 可用 {free:.2f} GiB，按 LRU 清理 {target}")
-    for entry in cache_model_dirs(target):
-        if free >= required:
-            break
-        if _cache_path_protected(entry["path"]):
-            log(f"[cache] 跳过预挂载目录：{entry['name']}")
-            continue
-        if {_repo_key(repo) for repo in entry["repos"]} & keep:
-            log(f"[cache] 保留当前模型/预挂载缓存：{repo_from_cache_dir_name(entry['name'])}")
-            continue
-        repo = repo_from_cache_dir_name(entry["name"]) or entry["name"]
-        freed = _dir_size_gib(entry["path"])
-        try:
-            shutil.rmtree(entry["path"])
-        except OSError as exc:
-            log(f"[cache] WARN 删除缓存失败（{repo}）：{short(exc)}")
-            continue
-        result["evicted"].append({"repo": repo, "path": entry["path"], "freed_gib": freed})
-        log(f"[cache] evicted {repo} freed={freed:.2f}GiB")
-        measured = _cache_free_gib(target, usage)
-        if measured is None:
-            # 删完读不到盘就不再判定：与其误报失败，不如让后续下载自己暴露问题。
-            result["free_gb"] = None
-            return result
-        free = measured
-        result["free_gb"] = free
-
-    if free < required:
-        result["enough"] = False
-        raise LoadError(f"磁盘空间不足：需 {required:.2f} GiB / 可用 {free:.2f} GiB")
-    log(f"[cache] 清理完成：需 {required:.2f} GiB / 可用 {free:.2f} GiB")
-    return result
+    """按需清理 HF 缓存（LRU），返回 ``{required_gb, free_gb, path, evicted, enough}``。"""
+    return evict_cache_dirs(
+        required_gb,
+        keep_repos,
+        root=root,
+        usage=usage,
+        local_models=CONFIG.local_models,
+        log=log,
+        error_cls=LoadError,
+    )
 
 
 def ensure_cache_capacity(pipeline_spec: dict) -> None:
-    """切模型前的缓存清理闸门：空间足够时不扫目录、不删文件，清完仍不足才报错。
-
-    与 ``ensure_disk_capacity`` 的分工：后者在下载前直接预检报错，这里先尝试 LRU
-    清理旧模型缓存再决定是否失败。预挂载模型不下载、不占 HF 缓存，直接跳过。
-    """
-    base = str(pipeline_spec.get("base") or "")
-    if resolve_local_model(base):
-        return
-    if str(pipeline_spec.get("loader") or "") == "anima" and anima_local_assets(pipeline_spec).get("dit"):
-        return
-    raw = pipeline_spec.get("downloadGb")
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
-        return
-    evict_cache_for(raw, cache_keep_repos(pipeline_spec))
+    """切模型前的缓存清理闸门：空间足够时不扫目录、不删文件，清完仍不足才报错。"""
+    ensure_cache_capacity_with(
+        pipeline_spec,
+        resolve_model_fn=resolve_local_model,
+        anima_assets_fn=anima_local_assets,
+        keep_repos_fn=cache_keep_repos,
+        evict_fn=evict_cache_for,
+    )
 
 
 def _prefetch_weights(base: str, allow_patterns) -> None:  # noqa: ANN001
     """按白名单预拉取，避免整仓下载把 /kaggle/working 的 20GB 配额写爆。"""
-    if not allow_patterns:
-        log(f"[load] 未配置 allowPatterns，跳过预下载：{base}")
-        return
-    try:
-        from huggingface_hub import snapshot_download
-
-        started = time.time()
-        log(f"[load] 预下载 {base}（白名单 {len(allow_patterns)} 条）…")
-        snapshot_download(base, allow_patterns=list(allow_patterns))
-        log(f"[load] 预下载完成，用时 {round(time.time() - started, 1)}s")
-    except Exception as exc:
-        # 预下载只是加速与控盘手段，失败后继续尝试直接 from_pretrained。
-        log(f"[load] 预下载失败（继续直接加载）：{short(exc)}")
+    prefetch_weights(base, allow_patterns, log=log)
 
 
 def _from_pretrained(factory, base: str, kwargs: dict, loader: str):  # noqa: ANN001
@@ -1878,7 +1272,7 @@ def _int_param(value, field: str, low: int, high: int) -> int:  # noqa: ANN001
     return number
 
 
-_HF_REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,199}$")
+_VALID_HF_REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,199}$")
 
 
 def _valid_pipeline_base(base: str) -> bool:
@@ -1890,7 +1284,7 @@ def _valid_pipeline_base(base: str) -> bool:
         return any(parts[1:]) and not any(part in (".", "..") for part in parts[1:])
     if ".." in text:
         return False
-    return bool(_HF_REPO_RE.match(text))
+    return bool(_VALID_HF_REPO_RE.match(text))
 
 
 # 契约缺失时的兜底边界（兼容旧 Host / 本地调试）：保持 0.3.0 之前的 daemon 行为。
@@ -2828,180 +2222,49 @@ def start_http_server(port: int) -> ThreadingHTTPServer:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class _CloudflaredDownloadTooLarge(RuntimeError):
-    """响应体超过大小上限：不是瞬时故障，重试没有意义，直接中止。"""
-
-
-def _remove_file_quietly(path: str) -> None:
-    """删除临时文件，失败只忽略（清理动作不能掩盖真正要抛的错误）。"""
-    try:
-        os.remove(path)
-    except OSError:
-        pass
+from tunnel import CLOUDFLARED_DOWNLOAD_ATTEMPTS, CLOUDFLARED_DOWNLOAD_TIMEOUT_SEC, CLOUDFLARED_DOWNLOAD_URL, CLOUDFLARED_MAX_DOWNLOAD_BYTES, CLOUDFLARED_PATH, CLOUDFLARED_SHA256, CLOUDFLARED_URL_RE, CLOUDFLARED_VERSION, DEFAULT_CUSTOM_URL_RE, TUNNEL_ANNOUNCE_SEC, TUNNEL_PROVIDERS, TUNNEL_RESTART_BASE_SEC, TUNNEL_RESTART_MAX_SEC, TUNNEL_WAIT_SEC, _CloudflaredDownloadTooLarge, _file_sha256, _remove_file_quietly, build_tunnel_plan_for, download_cloudflared_once_from, drain_tunnel_output_for, extract_tunnel_url, normalize_tunnel_command, run_announce_tunnel_ready, run_recover_tunnel_error, run_start_tunnel, run_tunnel_attempt, run_tunnel_monitor, spawn_tunnel_process_for, terminate_tunnel_process, tunnel_restart_delay, tunnel_url_regex_for, verify_or_download_cloudflared, wait_tunnel_exit  # noqa: E402  # @@INLINE:tunnel.py@@
 
 
 def _download_cloudflared_once(partial: str) -> tuple[int, str]:
-    """流式下载一次 cloudflared 到 ``partial``，边写边算 SHA256。
-
-    返回 ``(字节数, sha256 十六进制小写)``。任何异常（网络、写盘、超大小上限）都先
-    删掉半截文件再向上抛，保证重试时不会读到上一次的残留。
-    """
-    total = 0
-    digest = hashlib.sha256()
-    try:
-        with urllib.request.urlopen(
-            CLOUDFLARED_DOWNLOAD_URL, timeout=CLOUDFLARED_DOWNLOAD_TIMEOUT_SEC
-        ) as response, open(partial, "wb") as handle:
-            while True:
-                chunk = response.read(1 << 16)
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > CLOUDFLARED_MAX_DOWNLOAD_BYTES:
-                    raise _CloudflaredDownloadTooLarge(
-                        f"响应超过大小上限 {CLOUDFLARED_MAX_DOWNLOAD_BYTES} 字节，已中止"
-                    )
-                handle.write(chunk)
-                digest.update(chunk)
-    except BaseException:
-        _remove_file_quietly(partial)
-        raise
-    return total, digest.hexdigest()
-
-
-def _file_sha256(path: str) -> str:
-    """计算本地文件 SHA256（小写十六进制）；读取失败返回空串触发重下。"""
-    digest = hashlib.sha256()
-    try:
-        with open(path, "rb") as handle:
-            while True:
-                chunk = handle.read(1 << 16)
-                if not chunk:
-                    break
-                digest.update(chunk)
-    except OSError:
-        return ""
-    return digest.hexdigest()
-
-
-def ensure_cloudflared() -> str:
-    """确保 ``CLOUDFLARED_PATH`` 可用：已就绪且 SHA256 一致则复用，否则按固定版本下载。
-
-    0.8.1（v0.9 M1）起下载地址固定到 ``CLOUDFLARED_VERSION``：滚动 latest 时上游发版或传输
-    半截文件都会让冷启动随机失败。下载异常与校验不匹配各重试一次，仍失败才抛错；
-    ``start_tunnel`` 会把它收敛进 ``BOOT.tunnel_error`` 并回退备用通道。日志只打
-    版本、大小与校验和（公开信息），绝不打印配置里的 token。
-    """
-    expected = CLOUDFLARED_SHA256.strip().lower()
-    if os.path.exists(CLOUDFLARED_PATH) and os.access(CLOUDFLARED_PATH, os.X_OK):
-        existing_sha = _file_sha256(CLOUDFLARED_PATH)
-        if existing_sha == expected:
-            log("[tunnel] 复用已存在的 /tmp/cloudflared")
-            return CLOUDFLARED_PATH
-        log(
-            f"[tunnel] WARN 已存在的 /tmp/cloudflared SHA256 校验失败"
-            f"（期望 {expected[:16]}…，实际 {existing_sha[:16]}…），删除重下"
-        )
-        _remove_file_quietly(CLOUDFLARED_PATH)
-
-    partial = CLOUDFLARED_PATH + ".part"
-    last_reason = "未知原因"
-    for attempt in range(1, CLOUDFLARED_DOWNLOAD_ATTEMPTS + 1):
-        log(f"[tunnel] 下载 cloudflared {CLOUDFLARED_VERSION}（第 {attempt}/{CLOUDFLARED_DOWNLOAD_ATTEMPTS} 次）…")
-        try:
-            total, actual = _download_cloudflared_once(partial)
-        except _CloudflaredDownloadTooLarge as exc:
-            raise RuntimeError(f"cloudflared {CLOUDFLARED_VERSION} 下载失败：{exc}") from exc
-        except Exception as exc:
-            last_reason = f"下载异常：{short(exc)}"
-            log(f"[tunnel] WARN cloudflared {last_reason}（第 {attempt}/{CLOUDFLARED_DOWNLOAD_ATTEMPTS} 次）")
-            continue
-        if actual == expected:
-            os.replace(partial, CLOUDFLARED_PATH)
-            os.chmod(CLOUDFLARED_PATH, 0o755)
-            log(
-                f"[tunnel] cloudflared {CLOUDFLARED_VERSION} 就绪"
-                f"（{round(total / 2**20, 1)} MB，SHA256 {actual[:12]}… 校验通过）"
-            )
-            return CLOUDFLARED_PATH
-        _remove_file_quietly(partial)
-        last_reason = f"SHA256 校验失败：期望 {expected[:16]}…，实际 {actual[:16]}…"
-        log(f"[tunnel] WARN cloudflared {last_reason}（第 {attempt}/{CLOUDFLARED_DOWNLOAD_ATTEMPTS} 次）")
-    raise RuntimeError(
-        f"cloudflared {CLOUDFLARED_VERSION} 下载失败"
-        f"（{CLOUDFLARED_DOWNLOAD_ATTEMPTS} 次尝试均未成功）：{last_reason}"
+    """流式下载一次 cloudflared 到 ``partial``，边写边算 SHA256。"""
+    return download_cloudflared_once_from(
+        partial,
+        download_url=CLOUDFLARED_DOWNLOAD_URL,
+        timeout_sec=CLOUDFLARED_DOWNLOAD_TIMEOUT_SEC,
+        max_bytes=CLOUDFLARED_MAX_DOWNLOAD_BYTES,
     )
 
 
-def normalize_tunnel_command(command, port: int) -> list[str]:  # noqa: ANN001
-    """argv 模板规整：过滤空项、替换 ``{port}``；没有任何占位符时把端口追加到末尾。"""
-    if not isinstance(command, (list, tuple)):
-        return []
-    argv: list[str] = []
-    has_placeholder = False
-    for item in command:
-        if not isinstance(item, str) or not item.strip():
-            continue
-        if "{port}" in item:
-            has_placeholder = True
-            argv.append(item.replace("{port}", str(port)))
-        else:
-            argv.append(item)
-    if argv and not has_placeholder:
-        argv.append(str(port))
-    return argv
-
-
-def extract_tunnel_url(line, pattern) -> str | None:  # noqa: ANN001
-    """从一行输出里提取隧道地址（去掉句末标点）；匹配不到返回 None。"""
-    if not isinstance(line, str) or not line:
-        return None
-    try:
-        match = pattern.search(line)
-    except Exception:
-        return None
-    if not match:
-        return None
-    return match.group(0).rstrip(".,;)")
+def ensure_cloudflared() -> str:
+    """确保 ``CLOUDFLARED_PATH`` 可用：已就绪且 SHA256 一致则复用，否则按固定版本下载。"""
+    return verify_or_download_cloudflared(
+        path=CLOUDFLARED_PATH,
+        download_url=CLOUDFLARED_DOWNLOAD_URL,
+        sha256=CLOUDFLARED_SHA256,
+        version=CLOUDFLARED_VERSION,
+        max_bytes=CLOUDFLARED_MAX_DOWNLOAD_BYTES,
+        timeout_sec=CLOUDFLARED_DOWNLOAD_TIMEOUT_SEC,
+        attempts=CLOUDFLARED_DOWNLOAD_ATTEMPTS,
+        download_once_fn=_download_cloudflared_once,
+        log=log,
+    )
 
 
 def tunnel_url_regex(pattern: str | None = None):  # noqa: ANN202 - 返回编译后的正则
     """备用通道的地址提取规则：配置优先，非法或缺省时回退内置 https 规则。"""
-    if isinstance(pattern, str) and pattern.strip():
-        try:
-            return re.compile(pattern)
-        except re.error as exc:
-            log(f"[tunnel] WARN fallback_tunnel_url_regex 非法（{exc}），改用默认规则")
-    return DEFAULT_CUSTOM_URL_RE
+    return tunnel_url_regex_for(pattern, log=log)
 
 
 def build_tunnel_plan(port: int) -> list[dict]:
     """按尝试顺序给出通道计划：cloudflare 优先，配置了备用命令再追加 custom。"""
-    plan = [
-        {
-            "provider": "cloudflare",
-            "argv": [CLOUDFLARED_PATH, "tunnel", "--url", f"http://127.0.0.1:{port}", "--no-autoupdate"],
-            "url_re": CLOUDFLARED_URL_RE,
-            "wait_sec": TUNNEL_WAIT_SEC,
-        }
-    ]
-    custom = normalize_tunnel_command(CONFIG.fallback_tunnel_command, port)
-    if custom:
-        plan.append(
-            {
-                "provider": "custom",
-                "argv": custom,
-                "url_re": tunnel_url_regex(CONFIG.fallback_tunnel_url_regex),
-                "wait_sec": TUNNEL_WAIT_SEC,
-            }
-        )
-    return plan
-
-
-def tunnel_restart_delay(attempt: int) -> float:
-    """指数退避：2、4、8、16、32、60（封顶）；attempt 从 1 开始。"""
-    exponent = max(0, int(attempt) - 1)
-    return min(TUNNEL_RESTART_MAX_SEC, TUNNEL_RESTART_BASE_SEC * (2**exponent))
+    return build_tunnel_plan_for(
+        port,
+        cloudflared_path=CLOUDFLARED_PATH,
+        fallback_command=CONFIG.fallback_tunnel_command,
+        fallback_regex=CONFIG.fallback_tunnel_url_regex,
+        url_regex_fn=tunnel_url_regex,
+        log=log,
+    )
 
 
 def tunnel_should_stop() -> bool:
@@ -3012,34 +2275,8 @@ def tunnel_should_stop() -> bool:
 
 
 def _spawn_tunnel_process(argv: list[str], provider: str = "cloudflare"):  # noqa: ANN202 - 返回 Popen 或 None
-    """启动隧道子进程；失败只记录原因，交给下一个通道或下一轮重试。
-
-    cloudflared 把地址打在 stderr；自建通道（bore / frpc 等）通常打在 stdout，
-    因此对 custom 合并两个流，避免「进程活着但永远读不到地址」。
-    """
-    log(f"[tunnel] 启动隧道进程：{' '.join(argv)}")
-    try:
-        if provider == "cloudflare":
-            return subprocess.Popen(
-                argv,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-            )
-        return subprocess.Popen(
-            argv,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-        )
-    except Exception as exc:
-        err = f"隧道命令启动失败：{short(exc)}"
-        with BOOT_LOCK:
-            BOOT.tunnel_error = err
-        log(f"[tunnel] {err}")
-        return None
+    """启动隧道子进程；失败只记录原因，交给下一个通道或下一轮重试。"""
+    return spawn_tunnel_process_for(argv, provider, boot=BOOT, boot_lock=BOOT_LOCK, log=log)
 
 
 def _drain_tunnel_output(
@@ -3049,255 +2286,94 @@ def _drain_tunnel_output(
     url_event: threading.Event,
     attempt: _TunnelAttempt | None = None,
 ) -> None:  # noqa: ANN001
-    """持续读取隧道输出，首个地址写入 BOOT 并置位事件；必须读到进程退出为止。
-
-    拿到地址后停止读取会让管道写满、隧道卡死（实测过的故障），所以这里不提前返回。
-    传入 ``attempt`` 令牌时，仅当本轮尝试仍处于激活状态才允许写 BOOT，防止超时后的
-    旧 drain 线程覆盖新一轮尝试的 ``tunnel_url`` / ``tunnel_error``。
-    """
-    prefix = "cloudflared" if provider == "cloudflare" else f"tunnel:{provider or 'custom'}"
-    found_url: str | None = None
-    try:
-        # cloudflared 用 stderr，自建通道合并到 stdout；两者取其一即可。
-        stream = getattr(proc, "stderr", None)
-        if stream is None:
-            stream = getattr(proc, "stdout", None)
-        if stream is not None:
-            for raw_line in stream:
-                line = str(raw_line).rstrip()
-                if not line:
-                    continue
-                log(f"[{prefix}] {line}")
-                if found_url is None:
-                    candidate = extract_tunnel_url(line, url_re)
-                    if candidate:
-                        found_url = candidate
-                        with BOOT_LOCK:
-                            if attempt is None or (attempt.active and BOOT.current_attempt is attempt):
-                                BOOT.tunnel_url = candidate
-                                BOOT.tunnel_provider = provider
-                        url_event.set()
-    except Exception as exc:
-        log(f"[tunnel] 读取 {prefix} 输出出错：{short(exc)}")
-    finally:
-        try:
-            code = proc.poll()
-        except Exception:
-            code = None
-        log(f"[tunnel] {prefix} 输出结束（退出码 {code}，地址={found_url}）")
-        if found_url is None:
-            with BOOT_LOCK:
-                if attempt is None or (attempt.active and BOOT.current_attempt is attempt):
-                    BOOT.tunnel_error = f"{prefix} 未给出隧道地址（退出码 {code}）"
-            url_event.set()
-
-
-def terminate_tunnel_process(proc) -> None:  # noqa: ANN001
-    """尽力结束隧道子进程（超时/退出后换通道或停机时调用）。"""
-    if proc is None:
-        return
-    try:
-        proc.terminate()
-    except Exception:
-        pass
-    try:
-        proc.wait(timeout=5)
-        return
-    except Exception:
-        pass
-    try:
-        proc.kill()
-    except Exception:
-        pass
+    """持续读取隧道输出，首个地址写入 BOOT 并置位事件；必须读到进程退出为止。"""
+    drain_tunnel_output_for(
+        proc,
+        provider,
+        url_re,
+        url_event,
+        attempt,
+        boot=BOOT,
+        boot_lock=BOOT_LOCK,
+        log=log,
+    )
 
 
 def tunnel_attempt(item: dict) -> tuple[str, object] | None:
     """启动一个通道并等待地址：成功返回 (provider, proc)，失败返回 None。"""
-    provider = str(item.get("provider") or "")
-    argv = list(item.get("argv") or [])
-    if not argv:
-        err = f"{provider or '隧道'} 通道命令为空"
-        with BOOT_LOCK:
-            BOOT.tunnel_error = err
-        log(f"[tunnel] {err}")
-        return None
-    attempt = _TunnelAttempt(provider=provider, active=True)
-    with BOOT_LOCK:
-        if BOOT.current_attempt is not None:
-            BOOT.current_attempt.active = False
-        BOOT.current_attempt = attempt
-        BOOT.tunnel_url = None
-        BOOT.tunnel_error = None
-    proc = _spawn_tunnel_process(argv, provider)
-    if proc is None:
-        with BOOT_LOCK:
-            attempt.active = False
-            if BOOT.current_attempt is attempt:
-                BOOT.current_attempt = None
-        return None
-    with BOOT_LOCK:
-        BOOT.cloudflared = proc
-    url_event = threading.Event()
-    threading.Thread(
-        target=_drain_tunnel_output,
-        args=(proc, provider, item.get("url_re") or DEFAULT_CUSTOM_URL_RE, url_event, attempt),
-        name=f"tunnel-drain-{provider or 'custom'}",
-        daemon=True,
-    ).start()
-    wait_sec = float(item.get("wait_sec") or TUNNEL_WAIT_SEC)
-    signaled = url_event.wait(wait_sec)
-    with BOOT_LOCK:
-        if signaled and BOOT.tunnel_url:
-            return provider, proc
-        if BOOT.tunnel_url and attempt.active and BOOT.current_attempt is attempt:
-            return provider, proc
-        attempt.active = False
-        if BOOT.current_attempt is attempt:
-            BOOT.current_attempt = None
-        if BOOT.cloudflared is proc:
-            BOOT.cloudflared = None
-        if BOOT.tunnel_error is None:
-            BOOT.tunnel_error = f"{provider or '隧道'} 在 {int(wait_sec)}s 内未给出隧道地址"
-        err_msg = BOOT.tunnel_error
-    log(f"[tunnel] WARN 通道 {provider or 'unknown'} 未建立：{err_msg}")
-    terminate_tunnel_process(proc)
-    return None
+    return run_tunnel_attempt(
+        item,
+        boot=BOOT,
+        boot_lock=BOOT_LOCK,
+        attempt_cls=_TunnelAttempt,
+        spawn_fn=_spawn_tunnel_process,
+        drain_fn=_drain_tunnel_output,
+        terminate_fn=terminate_tunnel_process,
+        log=log,
+    )
 
 
 def start_tunnel(port: int) -> tuple[str, object] | None:
     """按 provider 计划依次尝试；cloudflared 下载失败时仍会尝试备用通道。"""
-    for item in build_tunnel_plan(port):
-        if tunnel_should_stop():
-            return None
-        if item["provider"] == "cloudflare":
-            try:
-                binary = ensure_cloudflared()
-            except Exception as exc:
-                err = f"cloudflared 下载失败：{short(exc)}"
-                with BOOT_LOCK:
-                    BOOT.tunnel_error = err
-                log(f"[tunnel] WARN {err}，尝试下一个通道")
-                continue
-            item["argv"] = [binary, *item["argv"][1:]]
-        result = tunnel_attempt(item)
-        if result is not None:
-            return result
-    return None
+    return run_start_tunnel(
+        port,
+        plan_fn=build_tunnel_plan,
+        should_stop_fn=tunnel_should_stop,
+        ensure_binary_fn=ensure_cloudflared,
+        attempt_fn=tunnel_attempt,
+        boot=BOOT,
+        boot_lock=BOOT_LOCK,
+        log=log,
+    )
 
 
 def recover_tunnel_error() -> None:
-    """隧道恢复后清掉 tunnel_failed 错误态，避免 Host 把 /health 当成致命错误。
-
-    即使错误被运行时的 phase 覆盖过（runtime_boot 末尾会写 ready），last_error
-    也会残留给 Host 拼 UI，所以这里一并清掉。
-    """
-    with STATE_LOCK:
-        if STATE.last_error_code != "tunnel_failed":
-            return
-        STATE.last_error = None
-        STATE.last_error_code = None
-        current_phase = STATE.phase
-    if current_phase == "error":
-        with BOOT_LOCK:
-            prior = BOOT.phase_before_error
-        phase = prior if prior not in (None, "error") else "booting"
-        set_phase(phase, "隧道已恢复")
-    else:
-        log(f"[tunnel] 隧道恢复，清除残留错误记录（phase={current_phase}）")
+    """隧道恢复后清掉 tunnel_failed 错误态，避免 Host 把 /health 当成致命错误。"""
+    run_recover_tunnel_error(
+        state=STATE,
+        state_lock=STATE_LOCK,
+        boot=BOOT,
+        boot_lock=BOOT_LOCK,
+        set_phase_fn=set_phase,
+        log=log,
+    )
 
 
 def announce_tunnel_ready(provider: str, *, restarted: bool = False) -> None:
     """隧道（重新）建立：记录通道类型、清隧道错误并重播 ready。"""
-    with BOOT_LOCK:
-        BOOT.tunnel_provider = provider
-        BOOT.tunnel_state = "up"
-        BOOT.tunnel_error = None
-        tunnel_url = BOOT.tunnel_url
-    suffix = "（重连后重播 ready）" if restarted else ""
-    log(f"[tunnel] 通道 {provider} 就绪：{tunnel_url}{suffix}")
-    recover_tunnel_error()
-    should_publish = False
-    with BOOT_LOCK:
-        if not BOOT.published_ready:
-            BOOT.published_ready = True
-            should_publish = True
-    if should_publish:
-        publish_ready()
+    run_announce_tunnel_ready(
+        provider,
+        restarted=restarted,
+        boot=BOOT,
+        boot_lock=BOOT_LOCK,
+        recover_fn=recover_tunnel_error,
+        publish_fn=publish_ready,
+        log=log,
+    )
 
 
 def tunnel_wait_exit(proc, poll_interval: float = 1.0):  # noqa: ANN001, ANN202
     """常驻等待隧道进程退出；收到停机信号时返回 None。"""
-    while not tunnel_should_stop():
-        try:
-            code = proc.poll()
-        except Exception:
-            return None
-        if code is not None:
-            return code
-        time.sleep(max(0.01, float(poll_interval)))
-    return None
+    return wait_tunnel_exit(proc, tunnel_should_stop, poll_interval=poll_interval)
 
 
 def tunnel_monitor(port: int) -> None:
-    """常驻监管：拉起隧道 → 等进程退出 / 失败退避重拉；直到收到停机信号。
-
-    语义：
-      - 首次就失败：保留旧行为 ``fail_boot('tunnel_failed')`` 并继续在后台重试；
-      - 已就绪后进程中途退出：只记录 warn 并重拉（不把整个 daemon 判成 error）；
-      - 任何一次成功都重播 ready，让 Host 在心跳丢失后重新会合。
-    """
-    attempt = 0
-    ever_ready = False
-    failure_reported = False
-    while not tunnel_should_stop():
-        if attempt > 0:
-            with BOOT_LOCK:
-                BOOT.tunnel_restarts += 1
-                restarts = BOOT.tunnel_restarts
-            delay = tunnel_restart_delay(attempt)
-            log(f"[tunnel] {delay:.0f}s 后重拉隧道（累计重启 {restarts} 次）")
-            if BOOT.stop_event.wait(delay):
-                break
-        with BOOT_LOCK:
-            BOOT.tunnel_state = "starting"
-        result = start_tunnel(port)
-        if result is None:
-            if tunnel_should_stop():
-                break
-            with BOOT_LOCK:
-                BOOT.tunnel_state = "down"
-                message = BOOT.tunnel_error or "隧道未建立（所有通道均失败）"
-            attempt += 1
-            if not ever_ready and not failure_reported:
-                with STATE_LOCK:
-                    phase_before = STATE.phase
-                with BOOT_LOCK:
-                    BOOT.phase_before_error = phase_before
-                fail_boot("tunnel_failed", message, tunnel=True)
-                failure_reported = True
-            else:
-                log(f"[tunnel] 重试仍失败：{message}")
-            continue
-        provider, proc = result
-        attempt = 0
-        ever_ready = True
-        with BOOT_LOCK:
-            restarted = BOOT.tunnel_restarts > 0
-        announce_tunnel_ready(provider, restarted=restarted)
-        code = tunnel_wait_exit(proc)
-        if tunnel_should_stop():
-            log("[tunnel] 收到停机信号，结束隧道监管")
-            terminate_tunnel_process(proc)
-            break
-        log(f"[tunnel] WARN 通道 {provider} 进程退出（退出码 {code}），准备重拉")
-        with BOOT_LOCK:
-            BOOT.tunnel_state = "down"
-            BOOT.tunnel_url = None
-            BOOT.published_ready = False
-            BOOT.tunnel_error = f"{provider} 进程异常退出（退出码 {code}）"
-            if BOOT.cloudflared is proc:
-                BOOT.cloudflared = None
-        attempt = 1
+    """常驻监管：拉起隧道 → 等进程退出 / 失败退避重拉；直到收到停机信号。"""
+    run_tunnel_monitor(
+        port,
+        should_stop_fn=tunnel_should_stop,
+        start_tunnel_fn=start_tunnel,
+        restart_delay_fn=tunnel_restart_delay,
+        announce_fn=announce_tunnel_ready,
+        wait_exit_fn=tunnel_wait_exit,
+        terminate_fn=terminate_tunnel_process,
+        fail_boot_fn=fail_boot,
+        state=STATE,
+        state_lock=STATE_LOCK,
+        boot=BOOT,
+        boot_lock=BOOT_LOCK,
+        log=log,
+    )
 
 
 def tunnel_boot(port: int) -> None:

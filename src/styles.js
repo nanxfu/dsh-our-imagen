@@ -7,6 +7,9 @@
 import tokens from './styles/tokens.css'
 import base from './styles/base.css'
 import shell from './styles/shell.css'
+import modelPicker from './styles/model-picker.css'
+import guidance from './styles/guidance.css'
+import drawers from './styles/drawers.css'
 import panel from './styles/panel.css'
 import stage from './styles/stage.css'
 import filmstrip from './styles/filmstrip.css'
@@ -14,4 +17,17 @@ import gallery from './styles/gallery.css'
 import chat from './styles/chat.css'
 import responsive from './styles/responsive.css'
 
-export const CSS = [tokens, base, shell, panel, stage, filmstrip, gallery, chat, responsive].join('\n')
+export const CSS = [
+  tokens,
+  base,
+  shell,
+  modelPicker,
+  guidance,
+  drawers,
+  panel,
+  stage,
+  filmstrip,
+  gallery,
+  chat,
+  responsive,
+].join('\n')

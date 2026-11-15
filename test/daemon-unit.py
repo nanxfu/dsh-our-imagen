@@ -378,13 +378,11 @@ class DaemonUnitTest(unittest.TestCase):
     """公共夹具：每个用例一份独立 CONFIG/STATE/BOOT，并把日志导出到内存。"""
 
     def setUp(self) -> None:
-        self._saved = (d.CONFIG, d.STATE, d.BOOT, d._ORIG_STDOUT)
+        prev_stdout = d.reset_log_ring(io.StringIO())
+        self._saved = (d.CONFIG, d.STATE, d.BOOT, prev_stdout)
         d.CONFIG = d.DaemonConfig()
         d.STATE = d.RuntimeState()
         d.BOOT = d.BootState()
-        d._ORIG_STDOUT = io.StringIO()
-        d._LOG_LINES.clear()
-        d._LOG_SEQ = 0
         # 异步 job registry 是模块级可变状态，用例之间必须清干净。
         with d.JOB_LOCK:
             d.JOB_QUEUE.clear()
@@ -393,7 +391,8 @@ class DaemonUnitTest(unittest.TestCase):
         d.JOB_WAKE.clear()
 
     def tearDown(self) -> None:
-        d.CONFIG, d.STATE, d.BOOT, d._ORIG_STDOUT = self._saved
+        d.CONFIG, d.STATE, d.BOOT, prev_stdout = self._saved
+        d.reset_log_ring(prev_stdout)
 
     # ---- 断言辅助 ----
 

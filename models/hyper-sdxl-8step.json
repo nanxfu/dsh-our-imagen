@@ -41,7 +41,7 @@
       "timestepSpacing": "trailing"
     },
     "variant": "fp16",
-    "downloadGb": 6.78,
+    "downloadGb": 7.35,
     "allowPatterns": [
       "model_index.json",
       "**/config.json",

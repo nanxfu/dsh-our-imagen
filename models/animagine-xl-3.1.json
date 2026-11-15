@@ -43,7 +43,7 @@
     "lora": null,
     "scheduler": null,
     "variant": null,
-    "downloadGb": 6.5,
+    "downloadGb": 6.46,
     "allowPatterns": [
       "model_index.json",
       "**/config.json",

@@ -45,7 +45,7 @@
       "type": "dpmpp-2m-sde-karras"
     },
     "variant": "fp16",
-    "downloadGb": 6.6,
+    "downloadGb": 6.46,
     "allowPatterns": [
       "model_index.json",
       "**/config.json",

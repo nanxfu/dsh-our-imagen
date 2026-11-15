@@ -12,22 +12,15 @@
 
 import React from 'react'
 
-import { SETTINGS } from '../../shared/contract.js'
-
 import { Icon } from './icons.jsx'
 import { fetchSettings, saveSettings } from '../api/resources.js'
-import { formatText } from '../logic/format.js'
-import { KAGGLE_CREDENTIAL_PATH } from '../logic/guidance.js'
 import { useFocusTrap } from './hooks/useFocusTrap.js'
+import { SettingsForm } from './settings/SettingsForm.jsx'
 import {
-  IDLE_MAX_MINUTES,
-  IDLE_MIN_MINUTES,
   buildSettingsPayload,
   formFromSettings,
   hasSettingsChanges,
   hfTokenSourceKey,
-  kaggleTransportLabelKey,
-  quickIdleMinutes,
   settingsErrorText,
   settingsViewOf,
   validateSettingsForm,
@@ -119,232 +112,6 @@ export function SettingsDrawer(props) {
     )
   }
 
-  function renderForm() {
-    const activeQuick = quickIdleMinutes(form.idleMinutes)
-    return (
-      <div className="ofs-settings-form">
-        {view && view.effectiveOnNextSession === true ? (
-          <p className="ofs-settings-effective" role="status">{t('studio.settings.effectiveNext')}</p>
-        ) : null}
-
-        <section className="ofs-settings-section">
-          <h3 className="ofs-settings-section-title">{t('studio.settings.section.runtime')}</h3>
-
-          <div className="ofs-settings-row">
-            <span className="ofs-settings-label">{t('studio.settings.idle.label')}</span>
-            <div className="ofs-settings-quick" role="group" aria-label={t('studio.settings.idle.label')}>
-              {SETTINGS.idleTimeoutSec.quickMinutes.map((minutes) => (
-                <button
-                  key={minutes}
-                  type="button"
-                  className={`ofs-chip ofs-settings-quick-item${activeQuick === minutes ? ' is-on' : ''}`}
-                  aria-pressed={activeQuick === minutes}
-                  onClick={() => patchForm({ idleMinutes: String(minutes) })}
-                >
-                  {formatText(t('studio.settings.idle.quick'), { minutes })}
-                </button>
-              ))}
-            </div>
-          </div>
-          <label className="ofs-settings-field">
-            <span className="ofs-settings-label">
-              {formatText(t('studio.settings.idle.custom'), { min: IDLE_MIN_MINUTES, max: IDLE_MAX_MINUTES })}
-            </span>
-            <input
-              className="ofs-settings-input"
-              type="number"
-              inputMode="numeric"
-              min={IDLE_MIN_MINUTES}
-              max={IDLE_MAX_MINUTES}
-              step={1}
-              value={form.idleMinutes}
-              onChange={(event) => patchForm({ idleMinutes: event.target.value })}
-            />
-          </label>
-
-          <div className="ofs-settings-row">
-            <span className="ofs-settings-label">{t('studio.settings.accelerator.label')}</span>
-            <div className="ofs-settings-options" role="radiogroup" aria-label={t('studio.settings.accelerator.label')}>
-              {SETTINGS.accelerators.map((id) => (
-                <label
-                  key={id}
-                  className={`ofs-settings-option${form.accelerator === id ? ' is-on' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="ofs-accelerator"
-                    value={id}
-                    checked={form.accelerator === id}
-                    onChange={() => patchForm({ accelerator: id })}
-                  />
-                  <span>{t(`studio.settings.accelerator.${id}`)}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="ofs-settings-section">
-          <h3 className="ofs-settings-section-title">{t('studio.settings.section.download')}</h3>
-          <label className="ofs-settings-field">
-            <span className="ofs-settings-label">{t('studio.settings.hfToken.label')}</span>
-            <input
-              className="ofs-settings-input"
-              type="password"
-              autoComplete="off"
-              value={form.hfToken}
-              placeholder={view && view.hasHfToken === true
-                ? t('studio.settings.hfToken.placeholderSet')
-                : t('studio.settings.hfToken.placeholder')}
-              onChange={(event) => patchForm({ hfToken: event.target.value, clearHfToken: false })}
-            />
-          </label>
-          {view && view.hasHfToken === true ? (
-            <div className="ofs-settings-inline">
-              <span className="ofs-settings-muted">
-                {formatText(t('studio.settings.hfToken.source'), { source: tokenSource })}
-              </span>
-              {form.clearHfToken ? (
-                <span className="ofs-settings-muted">{t('studio.settings.hfToken.clearPending')}</span>
-              ) : (
-                <button
-                  type="button"
-                  className="ofs-chip ofs-settings-clear"
-                  onClick={() => patchForm({ hfToken: '', clearHfToken: true })}
-                >
-                  {t('studio.settings.hfToken.clear')}
-                </button>
-              )}
-            </div>
-          ) : null}
-        </section>
-
-        <section className="ofs-settings-section">
-          <button
-            type="button"
-            className="ofs-settings-advanced-toggle"
-            aria-expanded={advancedOpen}
-            onClick={() => setAdvancedOpen((value) => !value)}
-          >
-            <span>{t('studio.settings.advanced.toggle')}</span>
-            <span className={`ofs-chevron${advancedOpen ? ' is-open' : ''}`}>
-              <Icon name="chevronDown" size={13} />
-            </span>
-          </button>
-
-          {advancedOpen ? (
-            <div className="ofs-settings-advanced">
-              {/* Kaggle 访问方式：cli（默认，调用本机 CLI）/ direct（Node 直连，试验特性）。
-                  切换在下次唤醒或下次环境检查时生效，与「下次会话生效」提示同一口径。 */}
-              <div className="ofs-settings-row">
-                <span className="ofs-settings-label">{t('studio.settings.kaggleTransport.label')}</span>
-                <div
-                  className="ofs-settings-options"
-                  role="radiogroup"
-                  aria-label={t('studio.settings.kaggleTransport.label')}
-                >
-                  {SETTINGS.kaggleTransports.map((transport) => (
-                    <label
-                      key={transport}
-                      className={`ofs-settings-option${form.kaggleTransport === transport ? ' is-on' : ''}`}
-                    >
-                      <input
-                        type="radio"
-                        name="ofs-kaggle-transport"
-                        value={transport}
-                        checked={form.kaggleTransport === transport}
-                        onChange={() => patchForm({ kaggleTransport: transport })}
-                      />
-                      <span>{t(kaggleTransportLabelKey(transport))}</span>
-                    </label>
-                  ))}
-                </div>
-                {form.kaggleTransport === 'direct' ? (
-                  <small className="ofs-settings-hint">
-                    {formatText(t('studio.settings.kaggleTransport.directHint'), {
-                      path: KAGGLE_CREDENTIAL_PATH,
-                    })}
-                  </small>
-                ) : null}
-              </div>
-
-              <label className="ofs-settings-field">
-                <span className="ofs-settings-label">{t('studio.settings.dataset.label')}</span>
-                <textarea
-                  className="ofs-settings-textarea"
-                  rows={3}
-                  value={form.datasetSourcesText}
-                  placeholder={t('studio.settings.dataset.placeholder')}
-                  onChange={(event) => patchForm({ datasetSourcesText: event.target.value })}
-                />
-                <small className="ofs-settings-hint">
-                  {formatText(t('studio.settings.dataset.hint'), { max: SETTINGS.maxItems })}
-                </small>
-              </label>
-
-              <label className="ofs-settings-field">
-                <span className="ofs-settings-label">{t('studio.settings.localModels.label')}</span>
-                <textarea
-                  className="ofs-settings-textarea"
-                  rows={3}
-                  value={form.localModelsText}
-                  placeholder={t('studio.settings.localModels.placeholder')}
-                  onChange={(event) => patchForm({ localModelsText: event.target.value })}
-                />
-                <small className="ofs-settings-hint">{t('studio.settings.localModels.hint')}</small>
-              </label>
-              {validation.errors.length > 0 ? (
-                <ul className="ofs-settings-errors">
-                  {validation.errors.map((error) => (
-                    <li key={`${error.line}-${error.message}`} className="ofs-settings-error-item">
-                      {formatText(t(error.message), { line: error.line, ...(error.params || {}) })}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-
-              <label className="ofs-settings-field">
-                <span className="ofs-settings-label">{t('studio.settings.pip.label')}</span>
-                <textarea
-                  className="ofs-settings-textarea"
-                  rows={3}
-                  value={form.pipConstraintsText}
-                  placeholder={t('studio.settings.pip.placeholder')}
-                  onChange={(event) => patchForm({ pipConstraintsText: event.target.value })}
-                />
-                <small className="ofs-settings-hint">{t('studio.settings.pip.hint')}</small>
-              </label>
-            </div>
-          ) : null}
-        </section>
-
-        <footer className="ofs-settings-foot">
-          {!validation.ok ? (
-            <p className="ofs-settings-error" role="alert">
-              {formatText(t('studio.settings.invalid'), { count: validation.errors.length })}
-            </p>
-          ) : null}
-          {saveError ? (
-            <p className="ofs-settings-error" role="alert">{settingsErrorText(t, saveError)}</p>
-          ) : null}
-          <span className="ofs-grow" />
-          <button type="button" className="ofs-chip" onClick={() => onCloseRef.current && onCloseRef.current()}>
-            {t('studio.settings.cancel')}
-          </button>
-          <button
-            type="button"
-            className="ofs-btn is-primary ofs-settings-save"
-            disabled={!canSave}
-            aria-busy={saving}
-            onClick={submit}
-          >
-            {saving ? t('studio.settings.saving') : t('studio.settings.save')}
-          </button>
-        </footer>
-      </div>
-    )
-  }
-
   return (
     <div className="ofs-settings" role="presentation" onClick={() => onCloseRef.current && onCloseRef.current()}>
       <div
@@ -373,7 +140,23 @@ export function SettingsDrawer(props) {
         <div className="ofs-settings-body">
           {status === 'loading' ? <p className="ofs-settings-note">{t('studio.settings.loading')}</p> : null}
           {status === 'error' ? renderLoadError() : null}
-          {status === 'ready' && form ? renderForm() : null}
+          {status === 'ready' && form ? (
+            <SettingsForm
+              t={t}
+              view={view}
+              form={form}
+              patchForm={patchForm}
+              validation={validation}
+              tokenSource={tokenSource}
+              advancedOpen={advancedOpen}
+              onToggleAdvanced={() => setAdvancedOpen((value) => !value)}
+              saveError={saveError}
+              saving={saving}
+              canSave={canSave}
+              onCancel={() => onCloseRef.current && onCloseRef.current()}
+              onSubmit={submit}
+            />
+          ) : null}
         </div>
       </div>
     </div>

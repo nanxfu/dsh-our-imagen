@@ -7,7 +7,7 @@
  *     只以小圆点或窄条出现，不参与大面积装饰。
  *  3. 深色是同一套明度关系反相：深灰底、浅灰字、浅色主操作。
  *
- * 预览工具（tools/preview.mjs）用同一组值注入深色，改这里要同步那边。
+ * 预览工具（tools/preview/render.mjs）与宿主页面直接读取这里的深色变量（支持系统 prefers-color-scheme 与显式 [data-theme="dark"]）。
  */
 
 .ofs-root {
@@ -101,7 +101,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  .ofs-root {
+  :root:not([data-theme="light"]) .ofs-root:not([data-theme="light"]) {
     --ofs-ground-1: #232326;
     --ofs-ground-2: #17171a;
     --ofs-ground-3: #26262a;
@@ -153,4 +153,58 @@
     --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);
     --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(255 255 255 / 40%);
   }
+}
+
+/* 显式深色主题（预览脚本 / 宿主切换 `data-theme="dark"` 时生效），与上面同源。 */
+[data-theme="dark"] .ofs-root,
+.ofs-root[data-theme="dark"] {
+  --ofs-ground-1: #232326;
+  --ofs-ground-2: #17171a;
+  --ofs-ground-3: #26262a;
+  --ofs-ground-base: #101012;
+
+  --ofs-window: rgb(24 24 27 / 88%);
+  --ofs-window-border: rgb(255 255 255 / 9%);
+  --ofs-card: #18181b;
+  --ofs-card-solid: #1c1c20;
+  --ofs-card-border: rgb(255 255 255 / 9%);
+  --ofs-hairline: rgb(255 255 255 / 8%);
+  --ofs-sunken: rgb(255 255 255 / 5%);
+  --ofs-sunken-border: rgb(255 255 255 / 9%);
+
+  --ofs-ink: #f2f2f4;
+  --ofs-ink-2: #a4a4ac;
+  --ofs-ink-3: #8d8d95;
+  --ofs-ink-4: #5c5c63;
+
+  --ofs-accent: #f2f2f4;
+  --ofs-accent-2: #c8c8cf;
+  --ofs-accent-ink: #161618;
+  --ofs-accent-soft: rgb(255 255 255 / 8%);
+  --ofs-accent-soft-border: rgb(255 255 255 / 14%);
+  --ofs-accent-grad: linear-gradient(180deg, #fafafa 0%, #dcdce1 100%);
+
+  --ofs-ok: #58c08a;
+  --ofs-ok-soft: rgb(88 192 138 / 14%);
+  --ofs-warn: #d8a55c;
+  --ofs-warn-soft: rgb(216 165 92 / 14%);
+  --ofs-error: #e07a7a;
+  --ofs-error-soft: rgb(224 122 122 / 14%);
+  --ofs-idle: #8a8a92;
+  --ofs-idle-soft: rgb(255 255 255 / 6%);
+
+  --ofs-mat: #1e1e22;
+  --ofs-mat-lit: rgb(255 255 255 / 7%);
+  --ofs-mat-inner: inset 0 1px 3px rgb(0 0 0 / 36%);
+  --ofs-print-paper: #2b2b31;
+  --ofs-print-edge: rgb(255 255 255 / 13%);
+  --ofs-print-shadow: 0 22px 44px -24px rgb(0 0 0 / 78%), 0 4px 12px -6px rgb(0 0 0 / 50%);
+  --ofs-print-shadow-hover: 0 28px 54px -24px rgb(0 0 0 / 82%), 0 6px 16px -6px rgb(0 0 0 / 54%);
+  --ofs-mark: rgb(255 255 255 / 28%);
+
+  --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 28px -18px rgb(0 0 0 / 70%);
+  --ofs-shadow-lift: 0 2px 6px rgb(0 0 0 / 44%), 0 20px 44px -22px rgb(0 0 0 / 76%);
+  --ofs-shadow-window: 0 1px 3px rgb(0 0 0 / 40%), 0 40px 88px -48px rgb(0 0 0 / 88%);
+  --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);
+  --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(255 255 255 / 40%);
 }

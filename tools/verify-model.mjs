@@ -338,7 +338,11 @@ function printMetrics(model, report, samplePath, sampleBytes) {
 }
 
 async function writeMeasured(absolutePath, model, measured) {
-  const updated = { ...model, measured }
+  const nextPipeline =
+    Number.isFinite(measured?.downloadGb) && model.pipeline && typeof model.pipeline === 'object'
+      ? { ...model.pipeline, downloadGb: measured.downloadGb }
+      : model.pipeline
+  const updated = { ...model, pipeline: nextPipeline, measured }
   await writeFile(absolutePath, `${JSON.stringify(updated, null, 2)}\n`, 'utf8')
   console.log(`\n已把 measured 写回：${relative(ROOT, absolutePath).replace(/\\/g, '/')}`)
   if (absolutePath.startsWith(join(ROOT, 'models'))) {

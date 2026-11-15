@@ -18,6 +18,7 @@ import { COUNT_OPTIONS, INSPIRE_KEYS } from '../constants.js'
 import { formatText } from '../logic/format.js'
 import { intentCount } from '../logic/intent.js'
 import { Icon } from './icons.jsx'
+import { PanelModeTabs } from './PanelModeTabs.jsx'
 
 // 任务型气泡左上角的状态点：完成绿点，排队/生成是呼吸琥珀点，失败红点。
 const WORKING_STAGES = ['pending', 'queued', 'running']
@@ -269,29 +270,7 @@ export function ChatPanel(props) {
 
   return (
     <aside className="ofs-panel ofs-panel--chat">
-      <header className="ofs-panel-head">
-        <h2>{t('studio.rail.title')}</h2>
-        <div className="ofs-seg" role="tablist" aria-label={t('studio.rail.title')}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'form'}
-            className={mode === 'form' ? 'is-on' : ''}
-            onClick={() => setMode('form')}
-          >
-            {t('studio.rail.modeForm')}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'chat'}
-            className={mode === 'chat' ? 'is-on' : ''}
-            onClick={() => setMode('chat')}
-          >
-            {t('studio.rail.modeChat')}
-          </button>
-        </div>
-      </header>
+      <PanelModeTabs t={t} mode={mode} setMode={setMode} />
 
       <div
         className={messages.length === 0 && !interpreting ? 'ofs-thread is-empty' : 'ofs-thread'}
