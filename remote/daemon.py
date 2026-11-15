@@ -78,8 +78,6 @@ import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections import deque
-from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # 1024² 的 VAE 解码单次申请约 5 GiB 连续显存：必须在任何 torch / CUDA 初始化之前设置，
@@ -136,19 +134,28 @@ SUPPORTED_IMG2IMG_LOADERS = ("sdxl", "sdxl-lora")
 # 本地代理链路上会被判成「响应空闲」中途掐断（cloudflared context canceled），
 # 一张图 80s 以上的模型必中。拆成短请求 + 轮询后，任何一层都不会被长连接拖住。
 #
-# 保留策略：已结束的 job 按结束时间 FIFO 最多留 JOB_MAX_FINISHED 个、且 TTL
-# JOB_TTL_SEC 秒；排队中/运行中的 job 不淘汰。结果里是 base64 图片，所以
-# 数量上限同时也是内存上限。
+# 保留策略（留多少个、TTL 多长）在 remote/jobs/models.py 的常量里，淘汰实现在
+# remote/jobs/store.py；这里不再重复数字，避免改一处漏一处。
 # ─────────────────────────────────────────────────────────────────────────────
-JOB_MAX_FINISHED = 8
-JOB_MAX_QUEUE_DEPTH = 16
-JOB_TTL_SEC = 600.0
-JOB_ID_MAX_CHARS = 64
-JOB_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
-JOB_STATUS_QUEUED = "queued"
-JOB_STATUS_RUNNING = "running"
-JOB_STATUS_DONE = "done"
-JOB_STATUS_FAILED = "failed"
+# job 领域常量、实体与失败分类已搬到 remote/jobs/models.py；这里同名导入，
+# `d.Job` / `d.JOB_STATUS_DONE` / `d.JOB_MAX_FINISHED` / `d.normalize_job_id` 等引用不变。
+from remote.jobs.models import (  # noqa: E402
+    JOB_ID_MAX_CHARS,
+    JOB_ID_RE,
+    JOB_MAX_FINISHED,
+    JOB_STATUS_DONE,
+    JOB_STATUS_FAILED,
+    JOB_STATUS_QUEUED,
+    JOB_STATUS_RUNNING,
+    JOB_TTL_SEC,
+    Job,
+    classify_failure,
+    iso_time,
+    new_job_id,
+    normalize_job_id,
+)
+from remote.jobs.runner import JobRunner  # noqa: E402
+from remote.jobs.store import JOB_MAX_QUEUE_DEPTH, JobStore  # noqa: E402
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 日志环（单份源码在 remote/log_ring.py，随源码包一起推送到 Kaggle）
@@ -205,59 +212,54 @@ from remote.state import (  # noqa: E402, F401
 )
 
 
-@dataclass
-class Job:
-    """一次 /generate 提交（异步执行）。所有字段读写都在 JOB_LOCK 保护下。"""
-
-    job_id: str
-    model_id: str
-    pipeline: dict
-    tasks: list
-    # job 级参考图（M3 图生图）：提交期校验后归一成
-    # ``{image_bytes, strength, width, height}``；None 表示文生图，路径与行为完全不变。
-    reference: dict | None = None
-    status: str = JOB_STATUS_QUEUED
-    results: list = field(default_factory=list)
-    error: dict | None = None
-    load_seconds: float | None = None
-    created_at: float = field(default_factory=time.time)
-    updated_at: float = field(default_factory=time.time)
-    finished_at: float | None = None
-
-    @property
-    def total(self) -> int:
-        return len(self.tasks)
-
-
 # 生成串行锁与清理闸门：只属于本进程，不塞进状态对象（状态复制时不该连带复制锁）。
 GEN_LOCK = threading.Lock()
 _CLEANUP_LOCK = threading.Lock()
 _CLEANUP_DONE = False
 
-# 异步 job 表：队列（待执行）/ 全表（含运行中与已结束）/ 结束顺序（淘汰用）。
-JOB_LOCK = threading.RLock()
-JOB_QUEUE: deque = deque()
-JOB_TABLE: dict[str, Job] = {}
-JOB_FINISHED_ORDER: deque = deque()
-JOB_COND = threading.Condition(JOB_LOCK)
+
+def _max_queue_depth() -> int:
+    """允许排队的最大待执行 job 数（防止内存 DoS）；契约下发 limits.queue.maxPending 时以契约为准。
+
+    用回调交给 JobStore 而不是传一个数字：契约在 ``load_config()`` 里被原地填充，队列上限
+    必须每次取最新值（启动期构造 store 时契约还是空的）。
+    """
+    limits = _contract_limits()
+    queue_cfg = limits.get("queue") if limits else None
+    raw = queue_cfg.get("maxPending") if isinstance(queue_cfg, dict) else None
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool) and int(raw) > 0:
+        return int(raw)
+    return JOB_MAX_QUEUE_DEPTH
+
+
+# 异步 job 的唯一存储：表、待执行队列、结束顺序与它们的两把锁都在 JobStore 内部
+# （remote/jobs/store.py）。这里只保留一个实例 + 兼容旧调用面的薄包装。
+JOB_STORE = JobStore(capacity=_max_queue_depth)
 
 
 class _JobWakeCompat:
-    """兼容旧调用与单测里的 JOB_WAKE.set()/clear()，底层委托给 JOB_COND。"""
+    """兼容旧调用与单测里的 JOB_WAKE.set()/clear()，底层委托给 JobStore 的条件变量。"""
 
     def set(self) -> None:
-        with JOB_COND:
-            JOB_COND.notify_all()
+        JOB_STORE.notify()
 
     def clear(self) -> None:
         pass
 
     def wait(self, timeout: float | None = None) -> bool:
-        with JOB_COND:
-            return JOB_COND.wait(timeout=timeout)
+        return JOB_STORE.wait_for_change(timeout)
 
 
 JOB_WAKE = _JobWakeCompat()
+
+# worker 循环本身在 remote/jobs/runner.py；这里把三个协作者以 lambda 注入：
+# 每次调用才解析模块属性，单测替换 d.execute_job / 关停 BOOT.stop_event 才能生效。
+job_runner = JobRunner(
+    JOB_STORE,
+    execute=lambda job: execute_job(job),
+    should_stop=lambda: BOOT.stop_event.is_set(),
+    finish_job=lambda job, status, error=None: _finish_job(job, status, error),
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -280,56 +282,11 @@ from remote.text import short  # noqa: E402
 
 
 # ── 异步 job：表、队列与轮询视图（协议 0.5.0） ────────────────────────────────
-
-
-def iso_time(ts: float) -> str:
-    """UTC ISO8601（带 Z）。Host 只做展示与排序，不解析时区。"""
-    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
-
-
-def new_job_id() -> str:
-    return f"job-{int(time.time() * 1000):x}-{os.urandom(4).hex()}"
-
-
-def normalize_job_id(value) -> str | None:  # noqa: ANN001
-    """请求体里的可选幂等键：缺省/空串返回 None，格式非法抛 RequestError（→400）。"""
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise RequestError("jobId 必须是字符串")
-    text = value.strip()
-    if not text:
-        return None
-    if len(text) > JOB_ID_MAX_CHARS or not JOB_ID_RE.match(text):
-        raise RequestError("jobId 只能是 1~64 位的字母、数字、点、下划线或短横线")
-    return text
-
-
-def prune_jobs(now: float | None = None) -> None:
-    """淘汰已结束 job：先 TTL，再数量上限 FIFO。调用方必须持有 JOB_LOCK。"""
-    current = time.time() if now is None else now
-    while JOB_FINISHED_ORDER:
-        job_id = JOB_FINISHED_ORDER[0]
-        job = JOB_TABLE.get(job_id)
-        if job is None:
-            JOB_FINISHED_ORDER.popleft()
-            continue
-        expired = job.finished_at is not None and current - job.finished_at >= JOB_TTL_SEC
-        overflow = len(JOB_FINISHED_ORDER) > JOB_MAX_FINISHED
-        if not expired and not overflow:
-            break
-        JOB_FINISHED_ORDER.popleft()
-        JOB_TABLE.pop(job_id, None)
-
-
-def _max_queue_depth() -> int:
-    """允许排队的最大待执行 job 数（防止内存 DoS）。"""
-    limits = _contract_limits()
-    queue_cfg = limits.get("queue") if limits else None
-    raw = queue_cfg.get("maxPending") if isinstance(queue_cfg, dict) else None
-    if isinstance(raw, (int, float)) and not isinstance(raw, bool) and int(raw) > 0:
-        return int(raw)
-    return JOB_MAX_QUEUE_DEPTH
+#
+# 实体与状态常量在 remote/jobs/models.py，表 / 队列 / 淘汰策略在 remote/jobs/store.py，
+# 两把锁与条件变量都是 JobStore 的私有成员。本文件只保留同名薄包装：HTTP 层与单测都按
+# `d.submit_job` / `d.get_job` / `d.queue_depth` 这类模块属性调用，包装让「实现搬家 +
+# 调用面不变」共存。`iso_time` / `new_job_id` / `normalize_job_id` 直接 re-export。
 
 
 def submit_job(
@@ -344,67 +301,31 @@ def submit_job(
     ``reference`` 是提交期校验并归一过的参考图（见 ``parse_reference_spec``），
     文生图请求传 None。返回 ``(job, created)``：created=False 表示命中了幂等键。
     """
-    with JOB_LOCK:
-        prune_jobs()
-        if job_id:
-            existing = JOB_TABLE.get(job_id)
-            if existing is not None:
-                return existing, False
-        max_depth = _max_queue_depth()
-        if len(JOB_QUEUE) >= max_depth:
-            raise QueueFullError(f"远端任务队列已满（最多 {max_depth} 个排队任务），请稍后重试")
-        job = Job(
-            job_id=job_id or new_job_id(),
-            model_id=str(model_id),
-            pipeline=dict(pipeline_spec),
-            tasks=list(tasks),
-            reference=dict(reference) if reference is not None else None,
-        )
-        JOB_TABLE[job.job_id] = job
-        JOB_QUEUE.append(job)
-        queue_len = len(JOB_QUEUE)
-        JOB_COND.notify_all()
-        log(
-            f"[job] 入队 {job.job_id}（tasks={job.total}，排队 {queue_len}"
-            f"{'，带参考图' if job.reference is not None else ''}）"
-        )
-        return job, True
+    return JOB_STORE.submit(pipeline_spec, model_id, tasks, job_id, reference)
 
 
 def get_job(job_id: str) -> Job | None:
-    with JOB_LOCK:
-        prune_jobs()
-        return JOB_TABLE.get(job_id)
+    return JOB_STORE.get(job_id)
 
 
 def queue_depth() -> int:
-    """``/health.queue_depth``：尚未开始执行的 job 数。"""
-    with JOB_LOCK:
-        return len(JOB_QUEUE)
+    """``/health.queue_depth``：尚未开始执行的 job 数（来自 JobStore，不是状态对象）。"""
+    return JOB_STORE.queue_depth()
 
 
 def active_job_count() -> int:
     """排队 + 运行中的 job 数（空闲看门狗用它判断是否忙碌）。"""
-    with JOB_LOCK:
-        running = sum(1 for job in JOB_TABLE.values() if job.status == JOB_STATUS_RUNNING)
-        return len(JOB_QUEUE) + running
+    return JOB_STORE.active_count()
 
 
 def job_payload(job: Job) -> dict:
     """``GET /job`` 的响应体；results 只在 done 时给，其它状态为 null。"""
-    with JOB_LOCK:
-        done = len(job.results)
-        return {
-            "status": job.status,
-            "job_id": job.job_id,
-            "model_id": job.model_id,
-            "progress": {"done": done, "total": job.total},
-            "created_at": iso_time(job.created_at),
-            "updated_at": iso_time(job.updated_at),
-            "load_seconds": job.load_seconds,
-            "results": list(job.results) if job.status == JOB_STATUS_DONE else None,
-            "error": dict(job.error) if job.error else None,
-        }
+    return JOB_STORE.payload(job)
+
+
+def prune_jobs(now: float | None = None) -> None:
+    """淘汰已结束 job（先 TTL、再数量上限 FIFO）；锁由 JobStore 自己持有。"""
+    JOB_STORE.prune(now)
 
 
 def fail_boot(code: str, message: str, *, tunnel: bool = False) -> None:
@@ -1203,36 +1124,25 @@ def run_tasks(
     return results
 
 
-def classify_failure(exc: BaseException, default: str = "generation_failed") -> tuple[str, str]:
-    message = short(exc, 800)
-    if _is_oom(exc):
-        return "oom", f"显存不足：{message}"
-    if isinstance(exc, RequestError):
-        return "invalid_request", message
-    if isinstance(exc, LoadError):
-        return "load_failed", message
-    return default, message
+# `classify_failure` 已随 job 领域模型搬到 remote/jobs/models.py（错误码/文案表与 job.error
+# 同源）；这里按名字 re-export，`d.classify_failure(...)` 的调用面不变。
 
 
 # ── 异步 job：worker 与执行 ──────────────────────────────────────────────────
 
 
 def _update_job_progress(job: Job, partial: list[dict]) -> None:
-    with JOB_LOCK:
-        job.results = list(partial)
-        job.updated_at = time.time()
+    """每张出图后刷新进度（锁在 JobStore 内部）。"""
+    JOB_STORE.update_progress(job, partial)
 
 
 def _finish_job(job: Job, status: str, error: dict | None = None) -> None:
-    """收尾：置终态、记结束时间、进淘汰队列，并刷新 last_active。"""
-    now = time.time()
-    with JOB_LOCK:
-        job.status = status
-        job.error = error
-        job.updated_at = now
-        job.finished_at = now
-        JOB_FINISHED_ORDER.append(job.job_id)
-        prune_jobs(now)
+    """收尾：置终态、记结束时间、进淘汰队列，并刷新 last_active。
+
+    锁顺序（§5.8）：``JOB_STORE.finish()`` 返回时 JOB_LOCK 已释放，之后才取 STATE_LOCK。
+    反过来（持 JOB_LOCK 去取 STATE_LOCK 的同时，/health 持 STATE_LOCK 取队列深度）就会死锁。
+    """
+    now = JOB_STORE.finish(job, status, error)
     with STATE_LOCK:
         STATE.last_active = now
 
@@ -1242,9 +1152,7 @@ def execute_job(job: Job) -> None:
 
     异常一律收在内部转成 job.error，绝不让 worker 线程退出。
     """
-    with JOB_LOCK:
-        job.status = JOB_STATUS_RUNNING
-        job.updated_at = time.time()
+    JOB_STORE.mark_running(job)
     with STATE_LOCK:
         STATE.last_active = time.time()
     GEN_LOCK.acquire()
@@ -1257,13 +1165,10 @@ def execute_job(job: Job) -> None:
             # 图片本身损坏/截断时不必先下载、加载几十 GB 权重。
             reference_image = decode_reference_image(job.reference)
             reference_strength = _coerce_strength(job.reference.get("strength"))
-            with JOB_LOCK:
-                # 解码完成后释放队列里保留的原始字节（job 公开视图不含参考图）。
-                job.reference = None
+            # 解码完成后释放队列里保留的原始字节（job 公开视图不含参考图）。
+            JOB_STORE.clear_reference(job)
         pipe, load_seconds = ensure_pipeline(job.pipeline)
-        with JOB_LOCK:
-            job.load_seconds = load_seconds
-            job.updated_at = time.time()
+        JOB_STORE.record_loaded(job, load_seconds)
         with STATE_LOCK:
             STATE.last_active = time.time()
         if reference_image is None:
@@ -1280,8 +1185,7 @@ def execute_job(job: Job) -> None:
                 reference_image=reference_image,
                 reference_strength=reference_strength,
             )
-        with JOB_LOCK:
-            job.results = list(results)
+        JOB_STORE.set_results(job, results)
         with STATE_LOCK:
             STATE.jobs_done += len(results)
         total = round(time.time() - started, 2)
@@ -1315,33 +1219,12 @@ def execute_job(job: Job) -> None:
 
 
 def job_worker_loop() -> None:
-    """常驻 worker：串行消费 JOB_QUEUE。"""
-    log("[job] worker 启动，等待队列")
-    while not BOOT.stop_event.is_set():
-        with JOB_LOCK:
-            while not BOOT.stop_event.is_set() and not JOB_QUEUE:
-                JOB_COND.wait(timeout=0.5)
-            if BOOT.stop_event.is_set():
-                break
-            job = JOB_QUEUE.popleft() if JOB_QUEUE else None
-        if job is None:
-            continue
-        job_started = time.time()
-        try:
-            execute_job(job)
-        except Exception as exc:  # pragma: no cover - execute_job 自身已兜底
-            log(f"[job] worker 捕获异常：{short(exc)}")
-            with JOB_LOCK:
-                unfinished = job.status not in (JOB_STATUS_DONE, JOB_STATUS_FAILED)
-            if unfinished:
-                _finish_job(job, JOB_STATUS_FAILED, {"code": "generation_failed", "message": short(exc)})
-        log(f"[job] {job.job_id} 处理结束（{round(time.time() - job_started, 1)}s）")
+    """常驻 worker：串行消费 JobStore 的队列（循环实现在 remote/jobs/runner.py）。"""
+    job_runner.run_forever()
 
 
 def start_job_worker() -> threading.Thread:
-    thread = threading.Thread(target=job_worker_loop, name="job-worker", daemon=True)
-    thread.start()
-    return thread
+    return job_runner.start()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

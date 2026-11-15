@@ -54,6 +54,8 @@
  27. 基础设施与观测层的模块边界：pip 环境只由 pipeline_loader.pip_env() 构造、
      IMPORT_CHECK_CODE 由模块清单生成、/health 的 queue_depth 必须在释放 STATE_LOCK
      之后取（§5.8 锁顺序，反向嵌套会与 _finish_job 死锁）
+ 28. job 存储边界：JOB_* 表/队列/锁只存在于 JobStore（daemon 不再暴露裸状态）、
+     排队上限每次读注入契约、`_finish_job` 先释放 JOB_LOCK 再取 STATE_LOCK
 
 运行：python test/daemon-unit.py
 """
@@ -128,6 +130,8 @@ d = _load_daemon()
 # 单例与常量的真实宿主：daemon 只是 re-export，断言"两边是同一个对象"必须直接看这些模块。
 import remote.config as remote_config  # noqa: E402
 import remote.infra.process as remote_process  # noqa: E402
+import remote.jobs.models as remote_job_models  # noqa: E402
+import remote.jobs.store as remote_job_store  # noqa: E402
 import remote.observability.health as remote_health  # noqa: E402
 import remote.state as remote_state  # noqa: E402
 import remote.text as remote_text  # noqa: E402
@@ -423,11 +427,8 @@ class DaemonUnitTest(unittest.TestCase):
     def setUp(self) -> None:
         self._prev_stdout = d.reset_log_ring(io.StringIO())
         reset_stateful_singletons()
-        # 异步 job registry 是模块级可变状态，用例之间必须清干净。
-        with d.JOB_LOCK:
-            d.JOB_QUEUE.clear()
-            d.JOB_TABLE.clear()
-            d.JOB_FINISHED_ORDER.clear()
+        # job 表是进程级状态（JobStore 单例），用例之间必须清干净。
+        d.JOB_STORE.clear()
         d.JOB_WAKE.clear()
 
     def tearDown(self) -> None:
@@ -550,6 +551,11 @@ class SharedModuleSurfaceTest(DaemonUnitTest):
         self.assertIs(d.run_streaming_tail, remote_process.run_streaming_tail)
         self.assertIs(d.write_constraints_file, remote_process.write_constraints_file)
         self.assertIs(d.short, remote_text.short)
+        self.assertIs(d.Job, remote_job_models.Job)
+        self.assertIs(d.iso_time, remote_job_models.iso_time)
+        self.assertIs(d.normalize_job_id, remote_job_models.normalize_job_id)
+        self.assertIs(d.classify_failure, remote_job_models.classify_failure)
+        self.assertIs(d.JOB_STATUS_FAILED, remote_job_models.JOB_STATUS_FAILED)
 
     def test_import_check_code_is_generated_from_the_module_list(self) -> None:
         """清单与自检脚本不能各写一遍：脚本里的元组必须由 IMPORT_CHECK_MODULES 生成。"""
@@ -563,6 +569,60 @@ class SharedModuleSurfaceTest(DaemonUnitTest):
         self.assertEqual(source.count("env=pip_env(),"), 2, "两处启动子进程都应走 pip_env()")
         self.assertNotIn("PIP_DISABLE_PIP_VERSION_CHECK", source, "环境变量只在 pipeline_loader 构造")
         self.assertNotIn("setdefault(", source, "process.py 不应自己补环境变量")
+
+
+class JobStoreBoundaryTest(DaemonUnitTest):
+    """任务表只归 JobStore：daemon 不再暴露 JOB_* 裸状态，容量/锁顺序由 store 保证。"""
+
+    def test_store_is_the_only_owner_of_the_table(self) -> None:
+        self.assertIsInstance(d.JOB_STORE, remote_job_store.JobStore)
+        for leaked in ("JOB_LOCK", "JOB_COND", "JOB_QUEUE", "JOB_TABLE", "JOB_FINISHED_ORDER"):
+            self.assertFalse(hasattr(d, leaked), f"daemon 不应再暴露 {leaked}")
+
+    def test_queue_capacity_follows_the_injected_contract(self) -> None:
+        """容量必须每次读契约：store 在启动期构造，那时 contract 还是空的。"""
+        d.CONFIG.contract = {"limits": {"queue": {"maxPending": 2}}}
+        self.assertEqual(d.JOB_STORE.max_queue_depth(), 2)
+        for index in range(2):
+            d.submit_job(make_pipeline(), "org/base", [dict(TASKS[0])], job_id=f"cap-{index}")
+        with self.assertRaises(d.QueueFullError):
+            d.submit_job(make_pipeline(), "org/base", [dict(TASKS[0])], job_id="cap-overflow")
+
+    def test_pop_next_without_jobs_does_not_spin(self) -> None:
+        """空队列 + timeout=0 只探一次；停止信号也立即返回 None（worker 靠它退出）。"""
+        started = time.time()
+        self.assertIsNone(d.JOB_STORE.pop_next(timeout=0))
+        self.assertLess(time.time() - started, 0.5, "timeout=0 不能空转")
+        self.assertIsNone(d.JOB_STORE.pop_next(timeout=0.05, should_stop=lambda: True))
+
+    def test_finish_releases_job_lock_before_touching_state(self) -> None:
+        """§5.8：store.finish() 先放掉 JOB_LOCK，_finish_job 才去取 STATE_LOCK（反向会死锁）。"""
+        job, _ = d.submit_job(make_pipeline(), "org/base", [dict(TASKS[0])], job_id="finish-order")
+        events: list[str] = []
+
+        class TrackingLock:
+            def __enter__(self):
+                events.append("state-lock")
+                return self
+
+            def __exit__(self, *exc):
+                events.append("state-unlock")
+                return False
+
+        real_finish = d.JOB_STORE.finish
+
+        def spy_finish(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+            result = real_finish(*args, **kwargs)
+            events.append("store-finished")
+            return result
+
+        with mock.patch.object(d, "STATE_LOCK", TrackingLock()), mock.patch.object(
+            d.JOB_STORE, "finish", side_effect=spy_finish
+        ):
+            d._finish_job(job, d.JOB_STATUS_DONE)
+
+        self.assertEqual(events[:2], ["store-finished", "state-lock"], "取 STATE_LOCK 前必须已释放 JOB_LOCK")
+        self.assertEqual(job.status, d.JOB_STATUS_DONE)
 
 
 class BuildConfigTest(DaemonUnitTest):
@@ -1409,27 +1469,24 @@ class JobProtocolTest(DaemonUnitTest):
         for index in range(d.JOB_MAX_FINISHED + 3):
             job, _ = self.submit(job_id=f"job-{index}")
             d._finish_job(job, d.JOB_STATUS_DONE)
-        with d.JOB_LOCK:
-            d.prune_jobs()
-            self.assertEqual(len(d.JOB_TABLE), d.JOB_MAX_FINISHED)
+        d.prune_jobs()
+        self.assertEqual(d.JOB_STORE.count(), d.JOB_MAX_FINISHED)
         self.assertIsNone(d.get_job("job-0"))
         self.assertIsNotNone(d.get_job(f"job-{d.JOB_MAX_FINISHED + 2}"))
 
     def test_prunes_ttl_expired_finished(self) -> None:
         job, _ = self.submit(job_id="ttl-job")
         d._finish_job(job, d.JOB_STATUS_DONE)
-        with d.JOB_LOCK:
-            job.finished_at = time.time() - d.JOB_TTL_SEC - 1
-            d.prune_jobs()
+        job.finished_at = time.time() - d.JOB_TTL_SEC - 1
+        d.prune_jobs()
         self.assertIsNone(d.get_job("ttl-job"))
 
     def test_active_jobs_are_never_pruned(self) -> None:
         self.submit(job_id="queued-job")
         running, _ = self.submit(job_id="running-job")
-        with d.JOB_LOCK:
-            running.status = d.JOB_STATUS_RUNNING
-            d.prune_jobs(time.time() + d.JOB_TTL_SEC * 10)
-            self.assertEqual(len(d.JOB_TABLE), 2)
+        d.JOB_STORE.mark_running(running)
+        d.prune_jobs(time.time() + d.JOB_TTL_SEC * 10)
+        self.assertEqual(d.JOB_STORE.count(), 2)
         self.assertIsNotNone(d.get_job("queued-job"))
 
     # ---- worker 执行 ----
@@ -1467,9 +1524,9 @@ class JobProtocolTest(DaemonUnitTest):
 
     def test_queue_depth_ignores_running_job(self) -> None:
         job, _ = self.submit(job_id="running-only")
-        with d.JOB_LOCK:
-            d.JOB_QUEUE.clear()
-            job.status = d.JOB_STATUS_RUNNING
+        # 真实时序：worker 先出队再置 running，此时它既不在队列里也不再计入 queue_depth。
+        self.assertIs(d.JOB_STORE.pop_next(timeout=0), job)
+        d.JOB_STORE.mark_running(job)
         self.assertEqual(d.queue_depth(), 0)
         self.assertEqual(d.active_job_count(), 1)
 
