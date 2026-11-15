@@ -120,12 +120,15 @@ DEFAULT_PORT = 7860
 PIP_CONSTRAINTS: dict[str, str] = {}
 IMPORT_CHECK_MODULES = ("torch", "diffusers", "transformers", "accelerate", "peft")
 
-SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2", "anima")
+# 请求校验（remote/transport/validator.py）与参考图编解码（remote/inference/reference_codec.py）
+# 的常量随子模块一起走；这里同名再导出，`d.SUPPORTED_LOADERS` / `d.REFERENCE_IMAGE_FORMATS`
+# 这类外部引用保持不变。
+from remote.inference.reference_codec import REFERENCE_IMAGE_FORMATS  # noqa: E402
+from remote.transport.validator import SUPPORTED_LOADERS  # noqa: E402
+
 # 图生图（垫图重绘）首期只开放能整管复用 AutoPipelineForImage2Image 的 SDXL 家族。
 # 这是提交期的最后一道兜底：模型资产里的 supportsImg2Img 由 Host/客户端使用，daemon 不信它。
 SUPPORTED_IMG2IMG_LOADERS = ("sdxl", "sdxl-lora")
-# 参考图允许的容器格式（PIL ``img.format``）：只接受无损 PNG 与常见照片 JPEG。
-REFERENCE_IMAGE_FORMATS = ("PNG", "JPEG")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 异步 job 协议（0.5.0）
@@ -312,16 +315,14 @@ class _JobWakeCompat:
 JOB_WAKE = _JobWakeCompat()
 
 
-class RequestError(ValueError):
-    """请求本身不合法 → HTTP 400 invalid_request。"""
+# ─────────────────────────────────────────────────────────────────────────────
+# 领域异常（单份源码在 remote/errors.py，随源码包一起推送到 Kaggle）
+#
+# 搬家的原因：请求校验与参考图编解码两个子模块都要抛这三种异常，定义留在 daemon.py
+# 会让子模块反向依赖入口文件。这里同名导入，`d.RequestError` 等引用保持不变。
+# ─────────────────────────────────────────────────────────────────────────────
 
-
-class LoadError(RuntimeError):
-    """模型加载失败 → HTTP 500 load_failed。"""
-
-
-class QueueFullError(RuntimeError):
-    """任务队列达到上限 → HTTP 429 queue_full。"""
+from remote.errors import LoadError, QueueFullError, RequestError  # noqa: E402
 
 
 def short(exc: BaseException, limit: int = 600) -> str:
@@ -1270,31 +1271,8 @@ def ensure_img2img_pipeline():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _int_param(value, field: str, low: int, high: int) -> int:  # noqa: ANN001
-    if isinstance(value, bool):
-        raise RequestError(f"{field} 必须是整数")
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
-        raise RequestError(f"{field} 必须是整数") from None
-    if number < low or number > high:
-        raise RequestError(f"{field} 必须在 {low}..{high} 之间，收到 {number}")
-    return number
-
-
-_VALID_HF_REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,199}$")
-
-
-def _valid_pipeline_base(base: str) -> bool:
-    text = base.strip()
-    if not text or len(text) > 512 or any(ord(ch) < 32 for ch in text) or "\\" in text:
-        return False
-    if text.startswith("/"):
-        parts = text.split("/")
-        return any(parts[1:]) and not any(part in (".", "..") for part in parts[1:])
-    if ".." in text:
-        return False
-    return bool(_VALID_HF_REPO_RE.match(text))
+# `_int_param` / `_VALID_HF_REPO_RE` / `_valid_pipeline_base` 已随请求校验搬到
+# remote/transport/validator.py（纯函数，参数边界由 limits_for 注入，无 daemon 全局依赖）。
 
 
 # 契约缺失时的兜底边界（兼容旧 Host / 本地调试）：保持 0.3.0 之前的 daemon 行为。
@@ -1361,252 +1339,51 @@ def _request_body_limit() -> int:
     return max(base, 4 * ((int(max_bytes) + 2) // 3) + 1024 * 1024)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 薄包装：实现在 remote/inference/reference_codec.py 与 remote/transport/validator.py
+#
+# 为什么留同名包装而不是让调用方直接 import 子模块：`run_task` / `execute_job` 与单测都
+# 按 daemon 的模块属性调用（`d.parse_reference_spec`、`mock.patch.object(d, …)`），包装让
+# 「实现搬家 + 调用面不变」共存；边界来源仍由 daemon 掌握，用关键字参数注入给纯函数。
+# ─────────────────────────────────────────────────────────────────────────────
+
+from remote.inference.reference_codec import (  # noqa: E402
+    _coerce_strength as _coerce_strength_impl,
+    _open_reference_image as _open_reference_image_impl,
+    decode_reference_image as decode_reference_image_impl,
+    parse_reference_spec as parse_reference_spec_impl,
+)
+from remote.transport.validator import validate_generate_spec as validate_generate_spec_impl  # noqa: E402
+
+
 def _coerce_strength(value) -> float:  # noqa: ANN001
     """重绘强度归一到 ``contract.limits.strength``：非法/缺失回退默认值，越界钳制。"""
-    limits = _limit_spec("strength")
-    low = float(limits.get("min", 0.0))
-    high = float(limits.get("max", 1.0))
-    default = float(limits.get("default", 0.6))
-    if value is None or isinstance(value, bool):
-        return default
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    if not math.isfinite(number):
-        return default
-    # 契约 step 目前是 0.05：保留 4 位小数，避免 0.6000000000000001 这类浮点噪声。
-    return round(min(max(number, low), high), 4)
+    return _coerce_strength_impl(value, limits_for=_limit_spec)
 
 
 def _open_reference_image(image_bytes: bytes):  # noqa: ANN202
-    """只读参考图头部：校验 PNG/JPEG 与最小长边，返回未 load 的 PIL Image。
-
-    调用方负责 ``close()``。这里不解码像素，因此提交期就能把「看头部即可发现」的问题
-    全部收敛成 400；真正的完整解码只在 execute_job 的 ``decode_reference_image`` 做一次。
-    """
-    from PIL import Image, UnidentifiedImageError
-
-    min_edge = int(_limit_spec("reference").get("minEdge") or 0)
-    bomb_error = getattr(Image, "DecompressionBombError", None)
-    try:
-        image = Image.open(io.BytesIO(image_bytes))
-    except UnidentifiedImageError:
-        raise RequestError("参考图必须是 PNG 或 JPEG 图片") from None
-    except Exception as exc:  # noqa: BLE001 - 任意解码库异常都收敛为请求非法
-        if bomb_error is not None and isinstance(exc, bomb_error):
-            raise RequestError("参考图分辨率过大，无法处理") from None
-        raise RequestError(f"参考图无法解析：{type(exc).__name__}") from None
-    image_format = str(getattr(image, "format", "") or "").upper()
-    if image_format not in REFERENCE_IMAGE_FORMATS:
-        image.close()
-        raise RequestError(f"参考图必须是 PNG 或 JPEG（收到 {image_format or '未知格式'}）")
-    width, height = image.size
-    if min_edge > 0 and max(width, height) < min_edge:
-        image.close()
-        raise RequestError(f"参考图长边至少 {min_edge}px（收到 {width}x{height}）")
-    return image
+    """只读参考图头部：校验 PNG/JPEG 与最小长边，返回未 load 的 PIL Image。"""
+    return _open_reference_image_impl(image_bytes, limits_for=_limit_spec)
 
 
 def parse_reference_spec(raw, pipeline_spec: dict) -> dict | None:  # noqa: ANN001
-    """提交期校验 job 级参考图，归一成 ``{image_bytes, strength, width, height}``。
-
-    只做「不需要完整解码」的检查：loader 白名单、base64 合法性、原始字节上限、
-    PNG/JPEG、最小长边与 strength 钳制。返回 None 表示文生图请求（行为与改造前一致）。
-    """
-    if raw is None:
-        return None
-    if not isinstance(raw, dict):
-        raise RequestError("reference 必须是对象")
-    loader = str(pipeline_spec.get("loader") or "").strip()
-    if loader not in SUPPORTED_IMG2IMG_LOADERS:
-        raise RequestError(
-            f"该模型不支持垫图重绘（首期仅开放 SDXL 家族，当前 loader={loader or '未知'}）"
-        )
-    encoded = raw.get("image_b64")
-    if not isinstance(encoded, str) or not encoded.strip():
-        raise RequestError("reference.image_b64 必须是非空字符串")
-    max_bytes = int(_limit_spec("reference").get("maxBytes") or 0)
-    try:
-        data = base64.b64decode(encoded.strip(), validate=True)
-    except (binascii.Error, ValueError):
-        raise RequestError("reference.image_b64 不是合法 base64") from None
-    if not data:
-        raise RequestError("reference.image_b64 解码后为空")
-    if max_bytes > 0 and len(data) > max_bytes:
-        raise RequestError(f"参考图体积 {len(data)} 字节，超过上限 {max_bytes} 字节")
-    image = _open_reference_image(data)
-    try:
-        width, height = image.size
-    finally:
-        try:
-            image.close()
-        except Exception:  # pragma: no cover - close 失败不影响请求结果
-            pass
-    return {
-        "image_bytes": data,
-        "strength": _coerce_strength(raw.get("strength")),
-        "width": int(width),
-        "height": int(height),
-    }
+    """提交期校验 job 级参考图，归一成 ``{image_bytes, strength, width, height}``。"""
+    return parse_reference_spec_impl(
+        raw,
+        pipeline_spec,
+        limits_for=_limit_spec,
+        img2img_loaders=SUPPORTED_IMG2IMG_LOADERS,
+    )
 
 
 def decode_reference_image(reference: dict) -> object:
-    """执行期完整解码参考图一次：转 RGB，长边超过 ``maxEdge`` 时等比 LANCZOS 缩小。
-
-    返回可直接喂给图生图管线的 PIL Image；解码失败抛 ``RequestError``（job 收敛为
-    invalid_request）。原始尺寸挂在 ``_imagen_source_size`` 上，供 run_task 打日志。
-    """
-    if not isinstance(reference, dict):
-        raise RequestError("reference 必须是对象")
-    data = reference.get("image_bytes")
-    if not isinstance(data, (bytes, bytearray)) or not data:
-        raise RequestError("参考图数据缺失，无法解码")
-    max_edge = int(_limit_spec("reference").get("maxEdge") or 0)
-    image = _open_reference_image(bytes(data))
-    source_size = image.size
-    try:
-        try:
-            image.load()
-        except Exception as exc:  # noqa: BLE001 - 截断/损坏图片按请求非法收敛
-            raise RequestError(f"参考图无法解码：{type(exc).__name__}") from None
-        if image.mode != "RGB":
-            converted = image.convert("RGB")
-            try:
-                image.close()
-            except Exception:  # pragma: no cover
-                pass
-            image = converted
-        width, height = image.size
-        long_edge = max(width, height)
-        if max_edge > 0 and long_edge > max_edge:
-            from PIL import Image
-
-            scale = max_edge / float(long_edge)
-            target = (max(1, round(width * scale)), max(1, round(height * scale)))
-            resampling = getattr(Image, "Resampling", None)
-            resample = getattr(resampling, "LANCZOS", None)
-            if resample is None:  # pragma: no cover - Pillow < 9.1 的旧常量
-                resample = getattr(Image, "LANCZOS")
-            resized = image.resize(target, resample)
-            try:
-                image.close()
-            except Exception:  # pragma: no cover
-                pass
-            image = resized
-    except Exception:
-        close_fn = getattr(image, "close", None)
-        if callable(close_fn):
-            try:
-                close_fn()
-            except Exception:  # pragma: no cover
-                pass
-        raise
-    # 「参考图 WxH → 缩放后 WxH」的日志放在 run_task：原尺寸挂在图像对象上，
-    # 这样 run_tasks / run_task 只需要多收一个 reference_image，不必再加元参数。
-    try:
-        image._imagen_source_size = source_size
-    except Exception:  # pragma: no cover - PIL Image 允许挂属性，仅作防御
-        pass
-    return image
+    """执行期完整解码参考图一次：转 RGB，长边超过 ``maxEdge`` 时等比 LANCZOS 缩小。"""
+    return decode_reference_image_impl(reference, limits_for=_limit_spec)
 
 
 def validate_generate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
-    if not isinstance(spec, dict):
-        raise RequestError("请求体必须是 JSON 对象")
-
-    pipeline_spec = spec.get("pipeline")
-    if not isinstance(pipeline_spec, dict):
-        raise RequestError("缺少 pipeline 对象")
-    loader = str(pipeline_spec.get("loader") or "").strip()
-    if loader not in SUPPORTED_LOADERS:
-        raise RequestError(f"未知 loader：{loader!r}（支持 {', '.join(SUPPORTED_LOADERS)}）")
-    base = pipeline_spec.get("base")
-    if not isinstance(base, str) or not base.strip():
-        raise RequestError("pipeline.base 必须是非空字符串")
-    if not _valid_pipeline_base(base):
-        raise RequestError("pipeline.base 必须是 owner/name 仓库标识或绝对路径")
-
-    tasks_raw = spec.get("tasks")
-    if not isinstance(tasks_raw, list) or not tasks_raw:
-        raise RequestError("tasks 必须是非空数组")
-    max_tasks = _max_tasks()
-    if len(tasks_raw) > max_tasks:
-        raise RequestError(f"单次请求最多 {max_tasks} 个任务")
-
-    width_limit = _limit_spec("width")
-    height_limit = _limit_spec("height")
-    steps_limit = _limit_spec("steps")
-    cfg_limit = _limit_spec("cfg")
-    seed_limit = _limit_spec("seed")
-    prompt_max = int(_limit_spec("prompt").get("maxChars") or 0)
-    neg_max = int(_limit_spec("negativePrompt").get("maxChars") or 0)
-    width_min, width_max = int(width_limit["min"]), int(width_limit["max"])
-    height_min, height_max = int(height_limit["min"]), int(height_limit["max"])
-    width_step = int(width_limit.get("step") or 8)
-    height_step = int(height_limit.get("step") or 8)
-    steps_min, steps_max = int(steps_limit["min"]), int(steps_limit["max"])
-    cfg_min, cfg_max = cfg_limit["min"], cfg_limit["max"]
-    seed_max = int(seed_limit.get("max") or 2**31 - 1)
-
-    model_id = spec.get("modelId") or spec.get("model_id") or base
-    tasks: list[dict] = []
-    for index, raw in enumerate(tasks_raw):
-        if not isinstance(raw, dict):
-            raise RequestError(f"tasks[{index}] 必须是对象")
-        prompt = raw.get("prompt")
-        if not isinstance(prompt, str) or not prompt.strip():
-            raise RequestError(f"tasks[{index}].prompt 必填")
-        prompt = prompt.strip()
-        if prompt_max > 0 and len(prompt) > prompt_max:
-            raise RequestError(f"tasks[{index}].prompt 最长 {prompt_max} 个字符")
-        neg_raw = raw.get("negative_prompt")
-        if neg_raw is None:
-            neg_prompt = ""
-        elif not isinstance(neg_raw, str):
-            raise RequestError(f"tasks[{index}].negative_prompt 必须是字符串")
-        else:
-            neg_prompt = neg_raw.strip()
-        if neg_max > 0 and len(neg_prompt) > neg_max:
-            raise RequestError(f"tasks[{index}].negative_prompt 最长 {neg_max} 个字符")
-        width = _int_param(raw.get("width", 1024), f"tasks[{index}].width", width_min, width_max)
-        height = _int_param(raw.get("height", 1024), f"tasks[{index}].height", height_min, height_max)
-        steps = _int_param(raw.get("steps", 4), f"tasks[{index}].steps", steps_min, steps_max)
-        raw_cfg = raw.get("cfg", 0.0)
-        if isinstance(raw_cfg, bool):
-            raise RequestError(f"tasks[{index}].cfg 必须是数字")
-        try:
-            cfg = float(raw_cfg)
-        except (TypeError, ValueError):
-            raise RequestError(f"tasks[{index}].cfg 必须是数字") from None
-        if not math.isfinite(cfg):
-            raise RequestError(f"tasks[{index}].cfg 必须是有限数字")
-        if cfg < cfg_min or cfg > cfg_max:
-            raise RequestError(f"tasks[{index}].cfg 必须在 {cfg_min}..{cfg_max} 之间")
-        raw_seed = raw.get("seed", -1)
-        if isinstance(raw_seed, bool):
-            raise RequestError(f"tasks[{index}].seed 必须是整数")
-        try:
-            seed = int(raw_seed)
-        except (TypeError, ValueError):
-            raise RequestError(f"tasks[{index}].seed 必须是整数") from None
-        if seed < 0:
-            seed = random.randint(0, seed_max)
-        elif seed > seed_max:
-            raise RequestError(f"tasks[{index}].seed 必须不超过 {seed_max}")
-        tasks.append(
-            {
-                "name": str(raw.get("name") or f"{index + 1:02d}"),
-                "prompt": prompt,
-                "negative_prompt": neg_prompt,
-                "seed": seed,
-                "width": width - width % width_step,
-                "height": height - height % height_step,
-                "steps": steps,
-                "cfg": cfg,
-            }
-        )
-    return pipeline_spec, str(model_id), tasks
+    """把请求体归一成 ``(pipeline_spec, model_id, tasks)``。"""
+    return validate_generate_spec_impl(spec, limits_for=_limit_spec, max_tasks=_max_tasks())
 
 
 def _encode_png(image) -> bytes:  # noqa: ANN001

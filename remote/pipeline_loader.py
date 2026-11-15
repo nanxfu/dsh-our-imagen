@@ -59,8 +59,58 @@ def is_oom_error(exc: BaseException) -> bool:
     )
 
 
-def apply_scheduler(pipe, pipeline_spec: dict, default_type: str = "", *, log=print) -> None:  # noqa: ANN001
-    """按 pipeline.scheduler 配置（或 default_type）替换管线调度器。"""
+# ── 调度器配方表 ───────────────────────────────────────────────────────
+#
+# 每种 `pipeline.scheduler.type` 一条配方：diffusers 类名 + 由 spec 生成 kwargs 与日志正文。
+# 改成表驱动是为了符合开闭原则：新增调度器只加一行，不用在五个分支后面继续 elif。
+# 注意 `dpmpp-sde-karras` 映射的是 **Singlestep**（历史行为，与 2m 的 Multistep 不同），
+# 这不是笔误，改动会让出图结果变化。
+
+def _euler_recipe(spec: dict) -> tuple[dict, str]:
+    spacing = str(spec.get("timestepSpacing") or "trailing")
+    return {"timestep_spacing": spacing}, f"EulerDiscreteScheduler(timestep_spacing={spacing})"
+
+
+def _constant_recipe(message: str, **kwargs):  # noqa: ANN003 - 参数即 from_config 的 kwargs
+    """固定 kwargs 的配方：绝大多数调度器只会换类名，不读 spec。"""
+
+    def build(_spec: dict) -> tuple[dict, str]:
+        return dict(kwargs), message
+
+    return build
+
+
+_SCHEDULER_RECIPES = {
+    "euler": ("EulerDiscreteScheduler", _euler_recipe),
+    "euler-a": ("EulerAncestralDiscreteScheduler", _constant_recipe("EulerAncestralDiscreteScheduler")),
+    "dpmpp-sde-karras": (
+        "DPMSolverSinglestepScheduler",
+        _constant_recipe(
+            "DPMSolverSinglestepScheduler(use_karras_sigmas=True, algorithm_type=sde-dpmsolver++)",
+            use_karras_sigmas=True,
+            algorithm_type="sde-dpmsolver++",
+        ),
+    ),
+    "dpmpp-2m-karras": (
+        "DPMSolverMultistepScheduler",
+        _constant_recipe(
+            "DPMSolverMultistepScheduler(use_karras_sigmas=True)",
+            use_karras_sigmas=True,
+        ),
+    ),
+    "dpmpp-2m-sde-karras": (
+        "DPMSolverMultistepScheduler",
+        _constant_recipe(
+            "DPMSolverMultistepScheduler(use_karras_sigmas=True, algorithm_type=sde-dpmsolver++)",
+            use_karras_sigmas=True,
+            algorithm_type="sde-dpmsolver++",
+        ),
+    ),
+}
+
+
+def _scheduler_class(name: str):  # noqa: ANN202 - 返回 diffusers 的调度器类
+    """按名字取 diffusers 类；diffusers 仍是函数内延迟导入（Kernel 启动时先装依赖）。"""
     from diffusers import (
         DPMSolverMultistepScheduler,
         DPMSolverSinglestepScheduler,
@@ -68,6 +118,17 @@ def apply_scheduler(pipe, pipeline_spec: dict, default_type: str = "", *, log=pr
         EulerDiscreteScheduler,
     )
 
+    mapping = {
+        "EulerDiscreteScheduler": EulerDiscreteScheduler,
+        "EulerAncestralDiscreteScheduler": EulerAncestralDiscreteScheduler,
+        "DPMSolverSinglestepScheduler": DPMSolverSinglestepScheduler,
+        "DPMSolverMultistepScheduler": DPMSolverMultistepScheduler,
+    }
+    return mapping[name]
+
+
+def apply_scheduler(pipe, pipeline_spec: dict, default_type: str = "", *, log=print) -> None:  # noqa: ANN001
+    """按 pipeline.scheduler 配置（或 default_type）替换管线调度器。"""
     scheduler_spec = pipeline_spec.get("scheduler")
     if not scheduler_spec and not default_type:
         return
@@ -75,34 +136,14 @@ def apply_scheduler(pipe, pipeline_spec: dict, default_type: str = "", *, log=pr
     scheduler_type = str(spec.get("type") or default_type).strip().lower()
     if not scheduler_type:
         return
-    if scheduler_type == "euler":
-        spacing = str(spec.get("timestepSpacing") or "trailing")
-        pipe.scheduler = EulerDiscreteScheduler.from_config(
-            pipe.scheduler.config, timestep_spacing=spacing
-        )
-        log(f"[load] 调度器 EulerDiscreteScheduler(timestep_spacing={spacing})")
-    elif scheduler_type == "euler-a":
-        pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(
-            pipe.scheduler.config
-        )
-        log("[load] 调度器 EulerAncestralDiscreteScheduler")
-    elif scheduler_type == "dpmpp-sde-karras":
-        pipe.scheduler = DPMSolverSinglestepScheduler.from_config(
-            pipe.scheduler.config, use_karras_sigmas=True, algorithm_type="sde-dpmsolver++"
-        )
-        log("[load] 调度器 DPMSolverSinglestepScheduler(use_karras_sigmas=True, algorithm_type=sde-dpmsolver++)")
-    elif scheduler_type == "dpmpp-2m-karras":
-        pipe.scheduler = DPMSolverMultistepScheduler.from_config(
-            pipe.scheduler.config, use_karras_sigmas=True
-        )
-        log("[load] 调度器 DPMSolverMultistepScheduler(use_karras_sigmas=True)")
-    elif scheduler_type == "dpmpp-2m-sde-karras":
-        pipe.scheduler = DPMSolverMultistepScheduler.from_config(
-            pipe.scheduler.config, use_karras_sigmas=True, algorithm_type="sde-dpmsolver++"
-        )
-        log("[load] 调度器 DPMSolverMultistepScheduler(use_karras_sigmas=True, algorithm_type=sde-dpmsolver++)")
-    else:
+    recipe = _SCHEDULER_RECIPES.get(scheduler_type)
+    if recipe is None:
         log(f"[load] 未识别的 scheduler.type={scheduler_type}，沿用底座默认调度器")
+        return
+    class_name, build = recipe
+    kwargs, message = build(spec)
+    pipe.scheduler = _scheduler_class(class_name).from_config(pipe.scheduler.config, **kwargs)
+    log(f"[load] 调度器 {message}")
 
 
 def from_pretrained_with_variant_fallback(

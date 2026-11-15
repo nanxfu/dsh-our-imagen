@@ -94,13 +94,17 @@ def _load_daemon():
     必须先把自己注册进 sys.modules：dataclass 在 class 创建时要按 ``cls.__module__``
     回查模块命名空间，模块不在 sys.modules 里会抛 AttributeError。
 
-    另外要把 remote/ 放进 sys.path：daemon.py 用 ``from anima_runtime import ...`` 取
-    同目录的 anima 运行时，而按路径加载时 sys.path 里没有这个目录；推 Kaggle 时启动器
-    会解包源码包并把同样的两个目录挂进 sys.path，行为一致。
+    另外要把 remote/ 与仓库根一起放进 sys.path：daemon.py 用 ``from anima_runtime import ...``
+    取同目录的 anima 运行时，拆出去的子模块用绝对包导入（``from remote.errors import ...``）
+    取仓库根下的 ``remote`` 包；按路径加载时 sys.path 里两个都没有。推 Kaggle 时启动器
+    会解包源码包并把同样的两个目录挂进 sys.path（见 remote/_entry.py 的 unpack），行为一致。
     """
     remote_dir = str(ROOT / "remote")
     if remote_dir not in sys.path:
         sys.path.insert(0, remote_dir)
+    root_dir = str(ROOT)
+    if root_dir not in sys.path:
+        sys.path.insert(0, root_dir)
     spec = importlib.util.spec_from_file_location("imagen_daemon_under_test", DAEMON_PATH)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"无法加载 {DAEMON_PATH}")
