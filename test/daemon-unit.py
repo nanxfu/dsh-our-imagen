@@ -28,7 +28,7 @@
  17. 异步 job（0.5.0）：POST /generate 202 入队、jobId 幂等与格式校验、
      GET /job 的 queued/running/done/failed 视图、未知 id 404、保留/淘汰、
      worker 执行成功与失败、/health.queue_depth
-  18. anima 运行时单份源码（remote/anima_runtime.py，daemon 只 import 一次）与
+  18. anima 运行时单份源码（remote/anima_runtime.py，加载器只 import 不复制）与
       run_task 回传实际出图尺寸（PIL image.size，而不是请求宽高）
   19. 缓存探针：[cache] 日志含 HF 缓存目录/挂载点/剩余空间，token 值不落日志（含路径
       里夹带 token 时的脱敏），读盘失败降级为 unknown，进程内只打一次
@@ -66,6 +66,11 @@
 31. 切片⑥d 的隧道域边界：`TUNNEL` 是唯一持有者、`TunnelBinary` 字段在调用时读取（替换
      `TUNNEL.binary.path` 要影响真实下载/计划路径）、退避函数走实例（否则 monitor 用例
      会退化成真等 2s 而不报错）、daemon 不再定义这些包装
+32. 切片⑥e 的加载器注册表边界：`LOADERS` 与 `default_registry()` 同一实例，且是白名单 /
+     img2img 能力的唯一真源；daemon 不再按 loader 名分支；`build_pipeline` 传的是活协作者
+     （`ctx.cache is CACHE`、`ctx.release_gpu is free_cuda_cache`）；提交期与加载期的未知
+     loader 文案一致；diffusers 入口拒绝 anima；每个 loader 的 keep_set 不窄于通用扫描；
+     加载失败只释放一次显存（RequestError 不清）、anima OOM 不被包装
 
 运行：python test/daemon-unit.py
 """
@@ -139,8 +144,12 @@ def _load_daemon():
 d = _load_daemon()
 
 # 单例与常量的真实宿主：daemon 只是 re-export，断言"两边是同一个对象"必须直接看这些模块。
+import pipeline_loader as remote_pipeline_loader  # noqa: E402  # 扁平模块：verify payload 共用的构建入口
 import remote.app as remote_app  # noqa: E402
 import remote.config as remote_config  # noqa: E402
+import remote.inference.loaders.anima as remote_anima_loader  # noqa: E402
+import remote.inference.loaders.base as remote_loader_base  # noqa: E402
+import remote.inference.registry as remote_registry  # noqa: E402
 import remote.infra.cache as remote_cache  # noqa: E402
 import remote.infra.process as remote_process  # noqa: E402
 import remote.infra.tunnel as remote_tunnel  # noqa: E402
@@ -490,17 +499,22 @@ class ImportSideEffectTest(unittest.TestCase):
         self.assertEqual(d._max_tasks(), 8)
 
     def test_anima_runtime_comes_from_single_source_module(self) -> None:
-        """anima 运行时只有 remote/anima_runtime.py 一份；daemon 只 import 不复制实现。"""
-        self.assertEqual(d.load_anima_runtime.__module__, "anima_runtime")
+        """anima 运行时只有 remote/anima_runtime.py 一份；加载器只 import 不复制实现。
+
+        切片⑥e 之后 import 点在 remote/inference/loaders/anima.py（daemon 只经注册表分派），
+        断言的仍是同一条不变式：运行时实现落在 anima_runtime 模块里，谁都不许抄一份。
+        """
+        self.assertEqual(remote_anima_loader.load_anima_runtime.__module__, "anima_runtime")
         runtime_module = sys.modules.get("anima_runtime")
-        self.assertIsNotNone(runtime_module, "daemon 应从同目录 anima_runtime 导入运行时")
+        self.assertIsNotNone(runtime_module, "anima 加载器应从同目录 anima_runtime 导入运行时")
         self.assertTrue(hasattr(runtime_module, "_anima_toolkit"))
         self.assertEqual(Path(runtime_module.__file__).resolve(), ANIMA_RUNTIME_PATH)
         source = DAEMON_PATH.read_text(encoding="utf-8")
         self.assertNotIn("def _anima_toolkit", source)
         self.assertNotIn("def load_anima_runtime", source)
         self.assertNotIn("@@INLINE", source, "内联标记已随源码包打包移除")
-        self.assertIn("from anima_runtime import load_anima_runtime", source)
+        loader_source = (ROOT / "remote" / "inference" / "loaders" / "anima.py").read_text(encoding="utf-8")
+        self.assertIn("from anima_runtime import load_anima_runtime", loader_source)
 
 
 class StateSingletonTest(DaemonUnitTest):
@@ -892,6 +906,153 @@ class TunnelSupervisorBoundaryTest(DaemonUnitTest):
         self.assertEqual(d.TUNNEL.restart_delay(1), 2.0)
         self.assertEqual(d.TUNNEL.restart_delay(100), d.TUNNEL_RESTART_MAX_SEC)
         self.assertEqual(d.tunnel_restart_delay(0), 2.0)
+
+
+class LoaderRegistryBoundaryTest(DaemonUnitTest):
+    """切片⑥e：loader 分支收进 LOADERS，白名单 / 垫图 / keep_set / 构建共用同一个入口。"""
+
+    def test_registry_is_the_single_owner_of_the_loader_surface(self) -> None:
+        self.assertIsInstance(d.LOADERS, remote_registry.LoaderRegistry)
+        self.assertIs(
+            d.LOADERS,
+            remote_registry.default_registry(),
+            "daemon 与 pipeline_loader 必须是同一份注册表，否则白名单会出现两个版本",
+        )
+        # 白名单与垫图能力是注册表的只读投影，不是第二份常量。
+        self.assertEqual(d.SUPPORTED_LOADERS, d.LOADERS.names())
+        self.assertEqual(d.SUPPORTED_IMG2IMG_LOADERS, d.LOADERS.img2img_names())
+        self.assertEqual(d.SUPPORTED_LOADERS, ("sdxl", "sdxl-lora", "flux2", "anima"))
+        self.assertEqual(d.SUPPORTED_IMG2IMG_LOADERS, ("sdxl", "sdxl-lora"))
+
+    def test_daemon_no_longer_branches_on_loader_names(self) -> None:
+        source = DAEMON_PATH.read_text(encoding="utf-8")
+        for pattern in ('== "anima"', '== "sdxl"', '== "sdxl-lora"', '== "flux2"'):
+            self.assertNotIn(pattern, source, f"daemon.py 不应再按 loader 名分支：{pattern}")
+        self.assertIsNone(
+            re.search(r"(?m)^from pipeline_loader import .*load_diffusers_pipeline", source),
+            "构建入口已归注册表，daemon 不再直接引用",
+        )
+        self.assertIsNone(re.search(r"(?m)^def _from_pretrained\(", source), "死包装已删")
+
+    def test_build_pipeline_delegates_with_the_live_collaborators(self) -> None:
+        seen: list[tuple] = []
+
+        def fake_build(spec, ctx):  # noqa: ANN001, ANN202
+            seen.append((spec, ctx))
+            return object(), f"{spec['loader']}:{spec['base']}"
+
+        with mock.patch.object(d.LOADERS, "build", side_effect=fake_build):
+            _pipe, identity = d.build_pipeline({"loader": "sdxl", "base": "org/base"})
+        self.assertEqual(identity, "sdxl:org/base")
+        spec, ctx = seen[0]
+        self.assertEqual(spec["loader"], "sdxl")
+        self.assertIsInstance(ctx, remote_loader_base.LoadContext)
+        # 上下文必须握同一份活对象：否则单测替换 CACHE / free_cuda_cache 会打在影子对象上。
+        self.assertIs(ctx.cache, d.CACHE)
+        self.assertIs(ctx.error_cls, d.LoadError)
+        self.assertIs(ctx.request_error_cls, d.RequestError)
+        self.assertIs(ctx.release_gpu, d.free_cuda_cache)
+
+    def test_unknown_loader_wording_is_shared_by_submit_and_load(self) -> None:
+        """行为变更：加载期不再只说"未知 loader：x"，与提交期用同一句（带 repr 与白名单）。"""
+        spec = {"loader": "nope", "base": "org/base"}
+        with self.assertRaises(d.RequestError) as load_ctx:
+            d.build_pipeline(spec)
+        with self.assertRaises(d.RequestError) as submit_ctx:
+            d.validate_generate_spec(make_spec(pipeline=spec))
+        expected = "未知 loader：'nope'（支持 sdxl, sdxl-lora, flux2, anima）"
+        self.assertEqual(str(load_ctx.exception), expected)
+        self.assertEqual(str(submit_ctx.exception), expected)
+
+    def test_diffusers_entry_rejects_anima_with_a_readable_reason(self) -> None:
+        """verify payload 的构建入口只处理 diffusers 家族；anima 要指出正确路径。"""
+        with self.assertRaises(ValueError) as ctx:
+            remote_pipeline_loader.load_diffusers_pipeline({"loader": "anima", "base": "org/anima"})
+        self.assertIn("不是 diffusers 加载器", str(ctx.exception))
+        self.assertIn("sdxl, sdxl-lora, flux2", str(ctx.exception))
+        with self.assertRaises(ValueError) as unknown:
+            remote_pipeline_loader.load_diffusers_pipeline({"loader": "nope", "base": "org/x"})
+        self.assertIn("未知 loader：'nope'", str(unknown.exception))
+
+    def test_registry_rejects_duplicate_and_nameless_loaders(self) -> None:
+        class Dummy(remote_loader_base.ModelLoader):
+            name = "dummy"
+
+        registry = remote_registry.LoaderRegistry([Dummy()])
+        with self.assertRaises(ValueError):
+            registry.register(Dummy())
+        # ModelLoader 基类的 name 是空串：注册表必须当场拒绝，而不是塞进白名单里。
+        with self.assertRaises(ValueError):
+            remote_registry.LoaderRegistry([remote_loader_base.ModelLoader()])
+        self.assertEqual(registry.names(), ("dummy",))
+
+    def test_every_registered_loader_keeps_the_generic_scan_as_its_floor(self) -> None:
+        """keep_set 只许多不许少：任何 loader 的 required_repos 都不能窄于通用扫描。"""
+        spec = {
+            "loader": "sdxl",
+            "base": "org/base",
+            "vae": {"repo": "Qwen/Qwen-Image"},
+            "lora": {"repo": "ByteDance/SDXL-Lightning", "weight": "w.safetensors"},
+        }
+        generic = d.pipeline_repos(spec)
+        for name in d.SUPPORTED_LOADERS:
+            spec["loader"] = name
+            self.assertEqual(d.LOADERS.required_repos(spec), generic, name)
+
+    def test_keep_set_reads_the_registry_not_the_daemon_alias(self) -> None:
+        """缓存闸门必须消费注册表的推导结果，否则新 loader 声明的额外仓库会被删掉。"""
+
+        class ExtraRepoLoader(remote_loader_base.ModelLoader):
+            name = "extra"
+            supports_img2img = False
+
+            def required_repos(self, spec):  # noqa: ANN001, ANN201
+                return ["org/base", "org/extra"]
+
+        with mock.patch.dict(d.LOADERS._loaders, {"extra": ExtraRepoLoader()}):
+            keep = d.cache_keep_repos({"loader": "extra", "base": "org/base"})
+        self.assertEqual(keep, {"org/base", "org/extra"})
+
+    def test_failed_load_releases_gpu_except_for_request_errors(self) -> None:
+        released: list[bool] = []
+        ctx = remote_loader_base.LoadContext(
+            cache=d.CACHE,
+            log=d.log,
+            error_cls=d.LoadError,
+            request_error_cls=d.RequestError,
+            release_gpu=lambda: released.append(True),
+        )
+        loader = d.LOADERS.get("sdxl")
+        with mock.patch.object(loader, "prepare_base", return_value="/local/base"), mock.patch.object(
+            loader, "construct", side_effect=d.LoadError("boom")
+        ):
+            with self.assertRaises(d.LoadError):
+                loader.load({"loader": "sdxl", "base": "org/base"}, ctx)
+        self.assertEqual(released, [True])
+        # 请求非法发生在加载之前：不清显存，免得掩盖真正的 400 原因。
+        with mock.patch.object(loader, "prepare_base", return_value="/local/base"), mock.patch.object(
+            loader, "construct", side_effect=d.RequestError("缺 lora")
+        ):
+            with self.assertRaises(d.RequestError):
+                loader.load({"loader": "sdxl", "base": "org/base"}, ctx)
+        self.assertEqual(released, [True])
+
+    def test_anima_oom_passes_through_unchanged(self) -> None:
+        released: list[bool] = []
+        ctx = remote_loader_base.LoadContext(
+            cache=d.CACHE,
+            log=d.log,
+            error_cls=d.LoadError,
+            request_error_cls=d.RequestError,
+            release_gpu=lambda: released.append(True),
+        )
+        with mock.patch.object(
+            remote_anima_loader, "load_anima_runtime", side_effect=RuntimeError("CUDA out of memory")
+        ):
+            with self.assertRaises(RuntimeError) as caught:
+                d.LOADERS.get("anima").load({"loader": "anima", "base": "org/anima"}, ctx)
+        self.assertNotIsInstance(caught.exception, d.LoadError)
+        self.assertEqual(released, [True])
 
 
 class BuildConfigTest(DaemonUnitTest):
@@ -3819,6 +3980,78 @@ class SchedulerSpecTest(DaemonUnitTest):
         self.assertEqual(loaded, "sdxl-lora:stabilityai/stable-diffusion-xl-base-1.0")
         self.assertEqual(calls, [("euler", {"timestep_spacing": "trailing"})])
         self.assertEqual(pipe.scheduler.name, "euler")
+
+
+class LoaderFamilyBuildTest(DaemonUnitTest):
+    """切片⑥e 搬迁前的空档：flux2 与 anima 的两条分支此前没有走 build_pipeline 的用例。"""
+
+    def test_flux2_uses_device_map_and_does_not_move_to_cuda(self) -> None:
+        seen: dict = {}
+
+        class FakePipe:
+            def __init__(self) -> None:
+                self.device = None
+
+            def to(self, device: str):
+                self.device = device
+                return self
+
+        class FakeFactory:
+            @staticmethod
+            def from_pretrained(source, **kwargs):  # noqa: ANN001
+                seen["source"] = source
+                seen["kwargs"] = kwargs
+                return FakePipe()
+
+        fake_torch = types.ModuleType("torch")
+        fake_torch.float16 = "float16"
+        fake_diffusers = types.ModuleType("diffusers")
+        fake_diffusers.AutoPipelineForText2Image = FakeFactory
+
+        with (
+            mock.patch.dict(sys.modules, {"torch": fake_torch, "diffusers": fake_diffusers}),
+            mock.patch.object(d.CACHE, "resolve_local_model", return_value=None),
+            mock.patch.object(d.CACHE, "ensure_disk_capacity"),
+            mock.patch.object(d.CACHE, "prefetch_weights") as prefetch,
+        ):
+            pipe, loaded = d.build_pipeline(
+                {
+                    "loader": "flux2",
+                    "base": "black-forest-labs/FLUX.2-dev",
+                    "deviceMap": "balanced",
+                    "variant": "fp16",
+                }
+            )
+
+        self.assertEqual(loaded, "flux2:black-forest-labs/FLUX.2-dev")
+        self.assertEqual(seen["kwargs"]["device_map"], "balanced")
+        self.assertEqual(seen["kwargs"]["variant"], "fp16")
+        self.assertTrue(prefetch.called, "未命中预挂载时要按 allowPatterns 预下载")
+        self.assertIsNone(pipe.device, "flux2 由 device_map 分层装载，不该再 .to('cuda')")
+
+    def test_anima_dit_mount_skips_disk_capacity(self) -> None:
+        with (
+            mock.patch.object(d.CACHE, "anima_local_assets", return_value={"dit": "/mnt/anima.safetensors"}),
+            mock.patch.object(
+                d.CACHE, "ensure_disk_capacity", side_effect=AssertionError("DiT 命中时不应做磁盘预检")
+            ),
+            mock.patch.object(remote_anima_loader, "load_anima_runtime", return_value=(object(), 0, 0.1)),
+        ):
+            _pipe, identity = d.build_pipeline({"loader": "anima", "base": "org/anima"})
+        self.assertEqual(identity, "anima:org/anima")
+        self.assertLogContains("使用预挂载 anima DiT 权重")
+
+    def test_anima_without_dit_runs_capacity_and_prefetch(self) -> None:
+        calls: list[str] = []
+        with (
+            mock.patch.object(d.CACHE, "anima_local_assets", return_value={}),
+            mock.patch.object(d.CACHE, "resolve_local_model", return_value=None),
+            mock.patch.object(d.CACHE, "ensure_disk_capacity", side_effect=lambda spec: calls.append("capacity")),
+            mock.patch.object(d.CACHE, "prefetch_weights", side_effect=lambda base, patterns: calls.append("prefetch")),
+            mock.patch.object(remote_anima_loader, "load_anima_runtime", return_value=(object(), 0, 0.1)),
+        ):
+            d.build_pipeline({"loader": "anima", "base": "org/anima", "allowPatterns": ["*.safetensors"]})
+        self.assertEqual(calls, ["capacity", "prefetch"])
 
 
 class HardeningRegressionTest(DaemonUnitTest):

@@ -86,7 +86,7 @@ remote/
 
 > 与初版相比新增 `text.py` 与 `inference/executor.py`：审计发现 `short()` 有 4 份实现、`run_task`/`run_tasks` 在目标结构里无处安放，硬塞进 `pipeline_manager` 会把"管线生命周期"和"单次推理"混在一起。
 >
-> 落地进度（Batch 2 切片⑥ 之后）：`config` / `state` / `observability/health` / `infra/{process,cache,tunnel}` / `transport/{validator,http_server}` / `inference/reference_codec` / `jobs/*` / `app` 已就位；`observability/log_ring.py`（现为 `remote/log_ring.py`）、`infra/ntfy.py`、`inference/{registry,scheduler,pipeline_manager,executor}.py`、`inference/loaders/`、`inference/anima/`、`verify_cli.py` 仍待推进，顺序与理由见 §4.1。
+> 落地进度（Batch 2 切片⑥e 之后）：`config` / `state` / `observability/health` / `infra/{process,cache,tunnel}` / `transport/{validator,http_server}` / `inference/{reference_codec,registry}` + `inference/loaders/{base,diffusers,anima}` / `jobs/*` / `app` 已就位；`observability/log_ring.py`（现为 `remote/log_ring.py`）、`infra/ntfy.py`、`inference/{scheduler,pipeline_manager,executor}.py`、`inference/anima/`、`verify_cli.py` 仍待推进，顺序与理由见 §4.1。
 
 ### 2.2 模块导入约定（审计结论）
 远端包内**统一用绝对包导入**（`from remote.state import ...`），不用相对导入。原因：`test/daemon-unit.py` 用 `spec_from_file_location` 以任意模块名按路径加载 `daemon.py`，模块没有父包，`from .x import y` 会直接 `ImportError: no known parent package`；绝对导入只要求仓库根在 `sys.path`（启动器与测试都已满足），搬家后不需要再改加载方式。Batch 3 若把加载方式改成 `import remote.daemon`，可再统一转相对导入（非必须）。
@@ -151,7 +151,7 @@ remote/
 | :--- | :--- | :--- |
 | **Batch 0**<br/>打包器升级 | `lib/kernel.js` 改为内嵌 Base64 ZIP 自引导；配置注入改为 `set_embedded_config()` 函数调用；`remote/contract.json` 随包分发；`verify-model` 复用同一打包器；`package.json` `files` 与 `scripts/package.mjs` 同步 | ✅ **已完成**。`test/kernel-package.mjs` 16 项（含 Python `zipfile` 校验与解包后 `import remote.daemon`）、`test/check-verify-model.mjs` 7 项；`@@INLINE` 已从源码移除 |
 | **Batch 1**<br/>Host 侧收口 | `lib/jobs.js`（948 行）→ `lib/jobs/`；`lib/kaggle-oauth.js`（674 行）→ `lib/kaggle/oauth/`；原路径保留聚合门面 | ✅ **已完成**。门面 16 / 23 行，实现分散到 5 + 5 个模块；`jobs-wait` 23 项、`kaggle-oauth` 14 项、`host-e2e` 46 项、`host-log(-events)` 20 项全绿 |
-| **Batch 2**<br/>远端包化 + 测试领域化<br/>（原 Batch 1 + 3） | 按 §2.1 建包：`config` / `state` / `observability` / `infra` / `inference` / `jobs` / `transport` / `app`；删掉 25 个胶水转发；`LoaderRegistry` + 表驱动调度器；`JobStore` 封装锁；同步把 `test/daemon-unit.py` 按领域拆到 `test/remote/test_*.py`，改用实例化隔离 | ⏳ **进行中**，按域切片推进（每片独立可回归）：<br/>① `errors.py` + `transport/validator.py` + `inference/reference_codec.py` ✅（纯逻辑三模块，边界由 `limits_for` 注入，daemon 只留同名薄包装）；<br/>② `pipeline_loader` 调度器表驱动 ✅（5 条配方收成 `_SCHEDULER_RECIPES`，新增调度器只加一行）；<br/>③ `config.py` / `state.py`（单例对象原地更新，不重新绑定，避免测试静默测到旧对象） ✅（`DaemonConfig` + 注入解析 + 契约边界进 `remote/config.py`，`RuntimeState` / `BootState` / 两把状态锁 + `set_phase` / `record_error` 进 `remote/state.py`；daemon 只 re-export，2366 → 2121 行（−245），单测 248 → 252 项并新增单例身份守卫）；<br/>④ `infra/process.py` + `observability/health.py` ✅（流式执行与一次性命令共用 `pipeline_loader.pip_env()`，`IMPORT_CHECK_CODE` 由模块清单生成；`/health` 拆成「持锁取样 → 释放 → 取队列深度」，`build_payload` 签名里没有任何锁，锁顺序由结构保证）；<br/>⑤ `jobs/`（store + runner，`JOB_*` 全局收进 JobStore）✅（`models.py` 放实体与失败分类，`store.py` 独占 `JOB_LOCK`/`JOB_COND` 并提供语义方法，`runner.py` 只做「取单 → 调注入的执行函数 → 收尾」；daemon 只剩薄包装与 `execute_job`，锁顺序以 `JOB_STORE.finish()` 返回后再取 `STATE_LOCK` 固定）；<br/>⑥ `transport/http_server.py` + `app.py`（Composition Root），最后删门面并把 `test/daemon-unit.py` 按域拆分 ✅（本片按 §4.1 拆成 ⑥a–⑥f 六小片推进：⑥a / ⑥b 已落地，⑥c–⑥f 待做） |
+| **Batch 2**<br/>远端包化 + 测试领域化<br/>（原 Batch 1 + 3） | 按 §2.1 建包：`config` / `state` / `observability` / `infra` / `inference` / `jobs` / `transport` / `app`；删掉 25 个胶水转发；`LoaderRegistry` + 表驱动调度器；`JobStore` 封装锁；同步把 `test/daemon-unit.py` 按领域拆到 `test/remote/test_*.py`，改用实例化隔离 | ⏳ **进行中**，按域切片推进（每片独立可回归）：<br/>① `errors.py` + `transport/validator.py` + `inference/reference_codec.py` ✅（纯逻辑三模块，边界由 `limits_for` 注入，daemon 只留同名薄包装）；<br/>② `pipeline_loader` 调度器表驱动 ✅（5 条配方收成 `_SCHEDULER_RECIPES`，新增调度器只加一行）；<br/>③ `config.py` / `state.py`（单例对象原地更新，不重新绑定，避免测试静默测到旧对象） ✅（`DaemonConfig` + 注入解析 + 契约边界进 `remote/config.py`，`RuntimeState` / `BootState` / 两把状态锁 + `set_phase` / `record_error` 进 `remote/state.py`；daemon 只 re-export，2366 → 2121 行（−245），单测 248 → 252 项并新增单例身份守卫）；<br/>④ `infra/process.py` + `observability/health.py` ✅（流式执行与一次性命令共用 `pipeline_loader.pip_env()`，`IMPORT_CHECK_CODE` 由模块清单生成；`/health` 拆成「持锁取样 → 释放 → 取队列深度」，`build_payload` 签名里没有任何锁，锁顺序由结构保证）；<br/>⑤ `jobs/`（store + runner，`JOB_*` 全局收进 JobStore）✅（`models.py` 放实体与失败分类，`store.py` 独占 `JOB_LOCK`/`JOB_COND` 并提供语义方法，`runner.py` 只做「取单 → 调注入的执行函数 → 收尾」；daemon 只剩薄包装与 `execute_job`，锁顺序以 `JOB_STORE.finish()` 返回后再取 `STATE_LOCK` 固定）；<br/>⑥ `transport/http_server.py` + `app.py`（Composition Root），最后删门面并把 `test/daemon-unit.py` 按域拆分 ✅（本片按 §4.1 拆成 ⑥a–⑥f 六小片推进：⑥a–⑥e 已落地，⑥f 待做） |
 | **Batch 3**<br/>契约收口与真机验证 | 删除 `_FALLBACK_LIMITS`，让无注入契约时消费内置 `contract.json`（行为变更：默认边界从 64–2048 收紧到 256–1536）；移除 `daemon.py` 门面；回填文档与 `CHANGELOG` | ⏳ 待开始。**必带项**：`test/mock-daemon.py` 的 limits 夹具当前与 `_FALLBACK_LIMITS` 同值（64–2048），删兜底后要同步改成契约值（256–1536），否则 mock 与真 daemon 的边界会静默漂移；建议同时加一条守卫测试。验收：`npm test` + `contract:check` 全绿，且**必须**跑一次真机 `kaggle-live` 与 `gpu-live`（这是唯一能验证启动器解包链路的关口） |
 
 ---
@@ -169,7 +169,7 @@ remote/
 | ⑥b | `app.py`：`DaemonApp`（启动顺序 / 信号 / 退出清理 / 空闲看门狗） | ✅ 已落地 |
 | ⑥c | `infra/cache.py`：`CacheManager`（磁盘预检、LRU 驱逐、预挂载目录解析） | ✅ 已落地 |
 | ⑥d | `infra/tunnel.py`：`TunnelSupervisor`（注入 `phase_setter` / `ready_publisher`） | ✅ 已落地 |
-| ⑥e | `inference/registry.py`：`LoaderRegistry`（Strategy + 注册表，替代 loader 分支） | ⏳ 待做 |
+| ⑥e | `inference/registry.py`：`LoaderRegistry`（Strategy + 注册表，替代 loader 分支） | ✅ 已落地 |
 | ⑥f | 删 `daemon.py` 门面 + `test/daemon-unit.py` 按域拆到 `test/remote/` | ⏳ 与 Batch 3 合并 |
 
 **⑥c / ⑥d / ⑥e 不是 ⑥a / ⑥b 的前置**：HTTP 与生命周期只通过语义入口
@@ -190,10 +190,9 @@ evict_cache_for` 与 `tunnel_monitor → announce → recover → set_phase/publ
 ⑥c 已按此口径把 4 个缓存替换点改成 `d.CACHE.<方法>`（共 14 处调用/替换），⑥d 的 4 个
 隧道替换点同样处理。
 
-**⑥e 与 §5.7 的关系**：`LoaderRegistry` 要合并 `SUPPORTED_LOADERS` /
-`SUPPORTED_IMG2IMG_LOADERS` / `build_pipeline` / `load_diffusers_pipeline` /
-`cache_ops.pipeline_repos` 五处分支，会改 `LoadError` 文案（直接进 UI 与 Host 分支），
-属行为变更，必须单独一片并连带改断言。
+**⑥e 单独成片的理由**：它要合并 `SUPPORTED_LOADERS` / `SUPPORTED_IMG2IMG_LOADERS` /
+`build_pipeline` / `load_diffusers_pipeline` / `cache_ops.pipeline_repos` 五处分支，且会改
+"未知 loader" 的文案（直接进 UI 与 Host 分支），属行为变更，必须连带改断言。落地记见下。
 
 **⑥c 落地记（2026-11-15）**：`CacheManager` 建在 `remote/infra/cache.py`（180 行），把
 daemon 的 13 个包装收成实例方法，daemon 只留同名别名（Batch 3 删）。三处细节留档：
@@ -233,6 +232,49 @@ daemon 的 13 个包装收成实例方法，daemon 只留同名别名（Batch 3 
 `start` ×3、`wait_exit` ×2、`restart_delay` ×2）全部改指 `d.TUNNEL.*`；新增 4 项守卫
 （`TUNNEL` 是唯一持有者且 binary 与常量同值、daemon 不再定义这些包装、binary 字段在调用时
 读取、退避函数走实例），单测 276 → 280。
+
+**⑥e 落地记（2026-11-15）**：`LoaderRegistry` 建在 `remote/inference/registry.py`（104 行），
+家族策略在 `remote/inference/loaders/`（`base` 75 + `diffusers` 179 + `anima` 42 + 包说明 11，
+共 307 行）。五处分支的归位方式：
+
+1. **白名单与垫图能力**：`SUPPORTED_LOADERS` / `SUPPORTED_IMG2IMG_LOADERS` 不再是常量而是
+   注册表的只读投影（`names()` / `img2img_names()`）；`transport/validator.py` 的
+   `validate_generate_spec` 多一个必填注入 `supported_loaders`（与 `limits_for` / `max_tasks`
+   同口径），daemon 传 `LOADERS.names()`。校验器因此不认识注册表，只消费一份名字元组。
+2. **构建路径**：`build_pipeline` 只剩 `LOADERS.build(spec, _load_context())`；预挂载解析、
+   磁盘预检、预下载收进 `ModelLoader.prepare_base()`，anima 只在 DiT 命中时跳过它。
+   `load_diffusers_pipeline` 的三分支搬进 `SdxlLoader` / `SdxlLoraLoader` / `Flux2Loader` 的
+   `construct()`；`pipeline_loader` 保留同名兼容入口做分派——`test/check-verify-model.mjs`
+   与打包清单按文件名钉住了它，payload 也从这里导入。
+3. **keep_set 推导**：`CacheManager` 新增 `required_repos_fn` 注入，daemon 传
+   `LOADERS.required_repos`；`cache_ops.cache_keep_repos_from` 多一个 `repos_fn` 参数（默认仍是
+   通用扫描）。方向只允许"多留"：未知 loader 回退通用扫描，任何 loader 的 `required_repos`
+   都不许窄于它（守卫用例逐个 loader 比对）。
+
+两个必须记下的取舍：
+
+- **`LoadContext` 每次 build 现取，不做模块级单例**：`cache` / `release_gpu` 指向 daemon 的
+  模块全局，`mock.patch.object(d, "free_cuda_cache")` 或 `d.CACHE.*` 之后必须立刻生效。守卫
+  用例直接断言 `ctx.cache is d.CACHE`、`ctx.release_gpu is d.free_cuda_cache`。
+- **`construct()` 与 `load()` 分开**：`construct` 只吃"已解析的 source"，验证 payload 自己
+  下载完权重后直接调它；`load` 才做前置与错误分类（`RequestError` 不清显存、其它异常先
+  `release_gpu()` 再上抛、anima 的 OOM 原样穿透）。两条路径共用同一份构建实现，又不会让
+  payload 意外触发磁盘预检。
+
+**行为变更（连带改断言）**：加载期"未知 loader"的文案从 `未知 loader：x` 改成与提交期同一句
+`未知 loader：'x'（支持 sdxl, sdxl-lora, flux2, anima）`——原来两处说法不同，前端只能按
+提交期那句做匹配。开工前预期会改的 `LoadError` 文案**实际没变**：注册表把 `loader.name`
+原样传给 `from_pretrained_with_variant_fallback`，`{loader} 加载 {base} 失败` 与
+`anima 加载失败` 都保持原文。另有两处纯日志/引用面差异：anima 不再顺手做 `model_index.json`
+探测（它的 base 是单文件权重，旧代码会给已正确预挂载的用户打一条"缺少 model_index.json"的
+误导 WARN）；`d.load_anima_runtime` 这个 re-export 随 import 点消失，单测的单一真源断言改指
+`remote/inference/loaders/anima.py`。
+
+**⑥e 的测试面**：新增 `LoaderRegistryBoundaryTest` 10 项（注册表与 `default_registry()` 同
+实例且是白名单唯一持有者、daemon 不再按 loader 名分支、`build_pipeline` 传的是活协作者、
+两条路径的未知 loader 文案一致、diffusers 入口拒绝 anima、重复/空名字注册报错、每个 loader
+的 keep_set 不窄于通用扫描、keep_set 真读注册表、失败只释放一次显存、anima OOM 不被包装），
+单测 280 → 293（另补 3 项 flux2 / anima 家族分支用例，此前这两条分支没有走 `build_pipeline` 的覆盖）；`daemon.py` 1344 → 1294 行。
 
 **切片⑥ 落地时的两处权衡（留档）**：
 

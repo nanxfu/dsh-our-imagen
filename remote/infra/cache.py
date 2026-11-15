@@ -40,6 +40,7 @@ from cache_ops import (
     hf_hub_cache_dir,
     local_model_dir_from,
     mount_point_of_path,
+    pipeline_repos,
     prefetch_weights,
     probe_free_gib,
     read_mount_points,
@@ -53,11 +54,14 @@ from log_ring import log
 class CacheManager:
     """磁盘与权重缓存的门面：构造一次，进程内各协作者共用。"""
 
-    def __init__(self, *, config, log_fn=log, error_cls):  # noqa: ANN001
+    def __init__(self, *, config, log_fn=log, error_cls, required_repos_fn=None):  # noqa: ANN001
         self._config = config
         self._log = log_fn
         self._error_cls = error_cls
         self._probe_done = False
+        # keep_set 的推导入口：daemon 注入 LoaderRegistry.required_repos，让模型家族能声明
+        # 通用扫描发现不了的仓库；不注入时保持通用扫描（单测与独立使用都不受影响）。
+        self._required_repos = required_repos_fn or pipeline_repos
 
     @property
     def config(self):  # noqa: ANN201
@@ -149,7 +153,9 @@ class CacheManager:
 
     def cache_keep_repos(self, pipeline_spec) -> set[str]:  # noqa: ANN001
         """切模型清理的不可删仓库集合：目标 pipeline 全部依赖 + 所有预挂载仓库。"""
-        return cache_keep_repos_from(pipeline_spec, self._config.local_models)
+        return cache_keep_repos_from(
+            pipeline_spec, self._config.local_models, repos_fn=self._required_repos
+        )
 
     def evict_cache_for(self, required_gb, keep_repos=None, *, root: str | None = None, usage=None) -> dict:  # noqa: ANN001
         """按需清理 HF 缓存（LRU），返回 ``{required_gb, free_gb, path, evicted, enough}``。"""

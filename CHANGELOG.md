@@ -23,7 +23,11 @@
   - **⑥b 生命周期**：启动顺序、信号、退出清理与空闲看门狗搬进 `remote/app.py` 的 `DaemonApp`；daemon 末尾以 lambda 装配实例并 re-export `main` / `runtime_boot` / `tunnel_boot`，`mock.patch.object(daemon, "install_dependencies")` 这类替换仍在调用点生效。
   - **⑥c 缓存域**：`remote/infra/cache.py` 的 `CacheManager` 接管 13 个缓存包装（预挂载解析、探针、磁盘预检、LRU 驱逐、预下载），daemon 只留同名别名。交叉调用改走 `self.*`（`ensure_cache_capacity → evict_cache_for` 等），单测因此能把"闸门是否真的去清理"替换到实例上观察；探针"只打一次"的 `_CACHE_PROBE_DONE` 影子全局删除，改为 `CACHE.log_probe_once()` / `reset_probe()`。纯函数仍留在 `remote/cache_ops.py`——打包清单按文件名钉住了它，折叠要与 `log_ring → observability/` 同批改。
   - **⑥d 隧道域**：`remote/infra/tunnel.py` 的 `TunnelSupervisor` 接管 11 个隧道包装（二进制校验下载、通道计划、单次尝试、恢复重播、常驻监管），daemon 只留同名别名。二进制参数收成 `TunnelBinary` 设置对象（测试替换 `TUNNEL.binary.path` 即命中真实下载路径，而不是 patch 模块常量的只读副本）；`publish_fn` / `set_phase_fn` / `fail_boot_fn` 三个回调注入，ready 发布与 ntfy 重试仍留在会合通知侧。退避函数也挂在实例上——最初直接引用模块级函数时，测试的 `restart_delay` 替换静默失效，单测从 0.45s 变成 4.4s（真等 2s 退避）却仍然全绿。
-  - 剩余切片 ⑥e（`LoaderRegistry`）与 ⑥f（删门面 + 测试按域拆分）的施工顺序、以及"为什么不能一次做完"记在 `docs/REFACTOR_ARCHITECTURE_SPEC.md` §4.1。
+  - **⑥e 加载器注册表**：新增 `remote/inference/registry.py`（`LoaderRegistry`）与 `remote/inference/loaders/`（`base` / `diffusers` / `anima`），把原先散在五处的 loader 分支收成一个注册表——提交期白名单（`SUPPORTED_LOADERS`）、垫图能力（`SUPPORTED_IMG2IMG_LOADERS`）、`build_pipeline` 的家族分派、`load_diffusers_pipeline` 的 sdxl / sdxl-lora / flux2 三条分支、`cache_ops.pipeline_repos` 的 keep_set 推导。daemon 只剩 `LOADERS.build(spec, _load_context())`，两个白名单常量改为注册表的只读投影；`CacheManager` 通过 `required_repos_fn` 注入注册表的推导结果，新增家族只需实现一个 `ModelLoader` 并注册一行。
+    - **行为变更**：加载期的"未知 loader"文案从 `未知 loader：x` 改为与提交期同一句 `未知 loader：'x'（支持 sdxl, sdxl-lora, flux2, anima）`（带 repr 与白名单）。`LoadError` 文案（`{loader} 加载 {base} 失败` / `anima 加载失败`）保持原文——注册表把 loader 名原样透传。
+    - **日志差异**：anima 不再顺手做 `model_index.json` 探测（它的 base 是单文件权重），已正确预挂载的用户不会再看到一条误导性的"回退在线加载"WARN；`d.load_anima_runtime` 这个 re-export 随 import 点移到 `remote/inference/loaders/anima.py`。
+    - **兼容入口**：`pipeline_loader.load_diffusers_pipeline` 保留同名签名，改为按名字分派到策略的 `construct()`——`tools/payload/verify-model.py` 与 `test/check-verify-model.mjs` 按文件名依赖它；`construct` 只构建、不做预挂载与磁盘预检，避免验证 payload 意外触发清理闸门。
+  - 剩余切片 ⑥f（删 `daemon.py` 门面 + `test/daemon-unit.py` 按域拆分到 `test/remote/`）与 Batch 3 合并；施工顺序与"为什么不能一次做完"记在 `docs/REFACTOR_ARCHITECTURE_SPEC.md` §4.1。
 - **修复 Windows 原子写入抖动**：`lib/fs-atomic.js` 的 `rename` 遇到杀毒软件 / 索引服务瞬时占用会抛 `EPERM`，此前会让 Kaggle 直连登录静默失败（`/state` 只显示「账号接入失败：unknown」）。现对 `EPERM` / `EACCES` / `EBUSY` 做 5 次有界重试（累计约 150ms），`test/kaggle-direct.mjs` 由「3 次跑 2 次失败」变为连跑 4 次全过。
 
 ### 测试
@@ -31,10 +35,10 @@
 - `test/kernel-package.mjs` 重写为源码包口径（15 项）：CRC 标准向量、归档确定性、Python `zipfile.testzip()` 校验、条目与 `remote/` 一致、解包后 `import remote.daemon` 且 `set_embedded_config()` 生效、模板占位符唯一性、`extraFiles`、脚本模式（探针）。
 - `test/check-verify-model.mjs` 同步为「payload 从源码包导入 + 归档含 payload 模块」（7 项）。
 - `test/daemon-unit.py` 的内联标记断言改为「源码不再含内联标记」，并新增 `set_embedded_config` 注入用例。
-- `test/daemon-unit.py` 增至 280 项（切片⑥ 新增 18 项边界用例）：`HttpApi` 的装配身份与「lambda 延迟解析」（patch `daemon.submit_job` 后必须命中）、队列满 → 429、未装配时 handler 立即报错、`Server` 头版本；`DaemonApp` 的启动顺序（HTTP 早于隧道与运行时）、无鉴权 / 端口占用两条退出路径、daemon 暴露的 `APP` 绑定，以及「`app.py` 不得反向 import daemon」——用 AST 看 import 语句，不按字符串匹配（模块头说明文字里就写着这句话）。
+- `test/daemon-unit.py` 增至 293 项（切片⑥ 按片累加边界用例）：`HttpApi` 的装配身份与「lambda 延迟解析」（patch `daemon.submit_job` 后必须命中）、队列满 → 429、未装配时 handler 立即报错、`Server` 头版本；`DaemonApp` 的启动顺序（HTTP 早于隧道与运行时）、无鉴权 / 端口占用两条退出路径、daemon 暴露的 `APP` 绑定，以及「`app.py` 不得反向 import daemon」——用 AST 看 import 语句，不按字符串匹配（模块头说明文字里就写着这句话）；切片⑥e 再加 `LoaderRegistryBoundaryTest` 10 项（注册表唯一持有者、daemon 不再按 loader 名分支、`build_pipeline` 传活协作者、提交期与加载期文案一致、diffusers 入口拒绝 anima、重复/空名字注册报错、keep_set 不窄于通用扫描、keep_set 真读注册表、失败只释放一次显存、anima OOM 不被包装）与 3 项家族分支用例（flux2 的 `device_map`、anima DiT 命中跳过磁盘预检、anima 常规路径先预检再预下载）。
 - **缓存域与隧道域的测试替换点同批迁移**（缓存 14 处 + 隧道 16 处）：缓存侧的 `disk_precheck` / `mount_point_of` / `probe_free_gib` / `read_mount_points` / `evict_cache_for` / `resolve_local_model` / `resolve_local_weight` / `ensure_disk_capacity` / `ensure_cache_capacity` 改为 `d.CACHE.<同名方法>`；隧道侧的 `binary` 字段 ×4、`ensure_cloudflared` / `spawn` / `start` / `wait_exit` / `restart_delay` 改为 `d.TUNNEL.*`。不迁移的话断言仍会绿，只是测到 daemon 上的影子属性——正是规格 §1.3.6 的静默假绿；其中 `restart_delay` 漏改时表现为单测从 0.45s 变 4.4s（真等 2s 退避）却依然全绿，比报错更难发现。
 - `test/check-contract.mjs` 的 daemon 协议校验改为扫描 `daemon.py` + `transport/http_server.py` + `app.py`：路由搬到传输层、phase 取值搬到生命周期之后，校验仍指向真实实现位置，不因搬家静默空过。
-- 全量 `npm test` 通过（含 280 项 Python 单测、契约 11/11）；`npm run package` 产物含 `remote/contract.json` 与 `lib/jobs/`、`lib/kaggle/oauth/`。
+- 全量 `npm test` 通过（含 293 项 Python 单测、契约 11/11）；`npm run package` 产物含 `remote/contract.json` 与 `lib/jobs/`、`lib/kaggle/oauth/`。
 
 ## 0.10.0 — 2026-11-14
 

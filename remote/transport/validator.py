@@ -3,8 +3,9 @@
 为什么从 daemon.py 拆出来：这段逻辑只依赖「参数边界表」与常量，不碰 HTTP、状态对象与
 模型，是纯函数，拆成模块后可以单独导入与测试（daemon 只保留同名薄包装） 。
 
-依赖注入：参数边界 ``limits_for(name) -> dict`` 与单批任务上限 ``max_tasks`` 全部由调用方
-传入，本模块不读 daemon 的全局 ``CONFIG``，避免子模块反向依赖入口文件。
+依赖注入：参数边界 ``limits_for(name) -> dict``、单批任务上限 ``max_tasks`` 与 loader 白名单
+``supported_loaders`` 全部由调用方传入，本模块不读 daemon 的全局 ``CONFIG``，也不认识
+``remote.inference.registry``——白名单的唯一真源在注册表，校验器只是消费一份名字元组。
 """
 
 from __future__ import annotations
@@ -14,8 +15,6 @@ import random
 import re
 
 from remote.errors import RequestError
-
-SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2", "anima")
 
 
 def _int_param(value, field: str, low: int, high: int) -> int:  # noqa: ANN001
@@ -45,7 +44,7 @@ def _valid_pipeline_base(base: str) -> bool:
     return bool(_VALID_HF_REPO_RE.match(text))
 
 
-def validate_generate_spec(spec, *, limits_for, max_tasks):  # noqa: ANN001
+def validate_generate_spec(spec, *, limits_for, max_tasks, supported_loaders):  # noqa: ANN001
     if not isinstance(spec, dict):
         raise RequestError("请求体必须是 JSON 对象")
 
@@ -53,8 +52,9 @@ def validate_generate_spec(spec, *, limits_for, max_tasks):  # noqa: ANN001
     if not isinstance(pipeline_spec, dict):
         raise RequestError("缺少 pipeline 对象")
     loader = str(pipeline_spec.get("loader") or "").strip()
-    if loader not in SUPPORTED_LOADERS:
-        raise RequestError(f"未知 loader：{loader!r}（支持 {', '.join(SUPPORTED_LOADERS)}）")
+    allowed = tuple(supported_loaders)
+    if loader not in allowed:
+        raise RequestError(f"未知 loader：{loader!r}（支持 {', '.join(allowed)}）")
     base = pipeline_spec.get("base")
     if not isinstance(base, str) or not base.strip():
         raise RequestError("pipeline.base 必须是非空字符串")

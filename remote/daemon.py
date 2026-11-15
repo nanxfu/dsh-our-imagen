@@ -53,10 +53,11 @@
     ``AutoPipelineForImage2Image.from_pipe`` 复用已加载的 txt2img 底座，不重复加载、
     不额外占显存，随 ``STATE.pipeline_key`` 切换与 ``release_pipeline()`` 一起清理。
 
-文件边界（Batch 2 切片⑥ 之后）：本文件只留**配置注入点、ntfy 会合、模型加载与出图执行、
-job 执行，以及各域的薄包装**。HTTP 传输层在 ``remote/transport/http_server.py``，进程
-生命周期（启动顺序 / 信号 / 退出清理 / 空闲看门狗）在 ``remote/app.py``，两者都由本文件
-末尾的装配块接起来——本文件仍是入口模块，因为启动器按 ``daemon.main`` 与
+文件边界（Batch 2 切片⑥e 之后）：本文件只留**配置注入点、ntfy 会合、模型加载的装配与出图
+执行、job 执行，以及各域的薄包装**。HTTP 传输层在 ``remote/transport/http_server.py``，进程
+生命周期（启动顺序 / 信号 / 退出清理 / 空闲看门狗）在 ``remote/app.py``，模型家族的加载策略
+（白名单、垫图能力、keep_set 推导、构建）在 ``remote/inference/{registry.py,loaders/}``——三者
+都由本文件末尾的装配块接起来。本文件仍是入口模块，因为启动器按 ``daemon.main`` 与
 ``daemon.set_embedded_config`` 取符号。
 """
 
@@ -122,15 +123,10 @@ VERSION = "0.10.0"
 PIP_CONSTRAINTS: dict[str, str] = {}
 IMPORT_CHECK_MODULES = ("torch", "diffusers", "transformers", "accelerate", "peft")
 
-# 请求校验（remote/transport/validator.py）与参考图编解码（remote/inference/reference_codec.py）
-# 的常量随子模块一起走；这里同名再导出，`d.SUPPORTED_LOADERS` / `d.REFERENCE_IMAGE_FORMATS`
-# 这类外部引用保持不变。
+# 参考图格式常量随 remote/inference/reference_codec.py 一起走，这里同名再导出
+# （`d.REFERENCE_IMAGE_FORMATS` 这类外部引用保持不变）。loader 白名单与垫图能力不在这里
+# 维护：唯一真源是 `remote/inference/registry.py`，见下面的 `LOADERS`。
 from remote.inference.reference_codec import REFERENCE_IMAGE_FORMATS  # noqa: E402
-from remote.transport.validator import SUPPORTED_LOADERS  # noqa: E402
-
-# 图生图（垫图重绘）首期只开放能整管复用 AutoPipelineForImage2Image 的 SDXL 家族。
-# 这是提交期的最后一道兜底：模型资产里的 supportsImg2Img 由 Host/客户端使用，daemon 不信它。
-SUPPORTED_IMG2IMG_LOADERS = ("sdxl", "sdxl-lora")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 异步 job 协议（0.5.0）
@@ -526,7 +522,7 @@ def _cleanup_before_exit() -> None:
 # 原处才能继续被替换。等切片⑥的 app.py 落地再连同 phase 一起搬。
 # ─────────────────────────────────────────────────────────────────────────────
 
-from pipeline_loader import PIP_INSTALL, PIP_UNINSTALL, filter_call_kwargs, from_pretrained_with_variant_fallback, is_oom_error, load_diffusers_pipeline, pip_install_argv, pip_uninstall_argv, pipe_signature_params  # noqa: E402
+from pipeline_loader import filter_call_kwargs, is_oom_error, pip_install_argv, pip_uninstall_argv, pipe_signature_params  # noqa: E402
 from remote.infra.process import (  # noqa: E402
     IMPORT_CHECK_CODE,
     IMPORT_CHECK_MODULES,
@@ -620,10 +616,22 @@ def free_cuda_cache() -> None:
 
 from cache_ops import CACHE_PROBE_WORK_DIR, DISK_HEADROOM, HF_CACHE_ENV_NAMES, HF_CACHE_REPO_PREFIX, HF_REPO_RE, HF_TOKEN_ENV_NAMES, _SECRET_MIN_CHARS, _cache_free_gib, _cache_path_protected, _decode_mount_path, _dir_size_gib, _existing_ancestor, _redact_secrets, _repo_key, _with_headroom, anima_local_assets_from, build_cache_probe_lines, cache_keep_repos_from, cache_model_dirs, cache_repo_candidates, disk_usage_root, disk_usage_target, disk_usage_text, ensure_cache_capacity_with, ensure_disk_capacity_with, evict_cache_dirs, hf_hub_cache_dir, local_model_dir_from, longest_mount_prefix, mount_point_of_path, pipeline_repos, prefetch_weights, probe_free_gib, read_mount_points, repo_from_cache_dir_name, required_download_gb, resolve_local_model_from, resolve_local_weight_from, run_disk_precheck  # noqa: E402
 
+from remote.inference.registry import LoadContext, default_registry  # noqa: E402
 from remote.infra.cache import CacheManager  # noqa: E402
 
+# 模型加载注册表：白名单、垫图能力、keep_set 推导与管线构建的唯一入口。
+# 先于 CACHE 构造——缓存闸门要用它的 required_repos 推导"切模型时哪些仓库不能删"。
+LOADERS = default_registry()
+
+# `d.SUPPORTED_LOADERS` / `d.SUPPORTED_IMG2IMG_LOADERS` 是注册表的只读投影（旧引用面）：
+# 白名单与垫图能力不再在本文件维护，新增 loader 只改 remote/inference/registry.py。
+SUPPORTED_LOADERS = LOADERS.names()
+SUPPORTED_IMG2IMG_LOADERS = LOADERS.img2img_names()
+
 # 磁盘与缓存的门面：构造一次；config 传活对象（注入契约在启动期原地回填，见 config.py）。
-CACHE = CacheManager(config=CONFIG, log_fn=log, error_cls=LoadError)
+CACHE = CacheManager(
+    config=CONFIG, log_fn=log, error_cls=LoadError, required_repos_fn=LOADERS.required_repos
+)
 
 # ── 门面别名（Batch 3 随 daemon 门面一起删） ──────────────────────────────────
 #
@@ -644,84 +652,24 @@ evict_cache_for = CACHE.evict_cache_for
 ensure_cache_capacity = CACHE.ensure_cache_capacity
 
 
-def _from_pretrained(factory, base: str, kwargs: dict, loader: str):  # noqa: ANN001
-    """fp16 变体缺失时回退到默认权重；OOM 不重试，直接抛给上层分类。"""
-    return from_pretrained_with_variant_fallback(
-        factory, base, kwargs, loader, log=log, error_cls=LoadError
+def _load_context() -> LoadContext:
+    """每次加载现取协作者：`CACHE` / `free_cuda_cache` 都是模块全局，替换后要立刻生效。"""
+    return LoadContext(
+        cache=CACHE,
+        log=log,
+        error_cls=LoadError,
+        request_error_cls=RequestError,
+        release_gpu=free_cuda_cache,
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# anima：Johnny-Z/Anima-Light-Lavender 运行时（单份源码在 remote/anima_runtime.py）
-#
-# 历史背景：本文件与 tools/payload/verify-model.py 曾各自维护一份约 1000 行、注释要求
-# 「逐字同步」的运行时——那是对 Kaggle「只接受单个 code_file」的误解。现在运行时只有
-# remote/anima_runtime.py 一份：本地直接同目录 import；推送时 lib/kernel.js 把整个 remote/
-# 压成源码包内嵌进启动器，业务代码保持普通包结构。不要再往本文件复制实现。
-# 模型结构、上游直译来源与日志注入约定见 remote/anima_runtime.py 顶部说明。
-# ─────────────────────────────────────────────────────────────────────────────
-
-from anima_runtime import load_anima_runtime  # noqa: E402
-
-
 def build_pipeline(pipeline_spec: dict):
-    """按 loader 分支加载；返回 (pipe, 人类可读的 loaded 标识)。"""
-    loader = str(pipeline_spec["loader"])
-    base = str(pipeline_spec["base"])
-    allow_patterns = pipeline_spec.get("allowPatterns")
+    """按 loader 分派到注册表里的策略；返回 (pipe, 人类可读的 loaded 标识)。
 
-    # P2.1：命中预挂载目录时直接用本地权重（跳过下载与磁盘预检）。
-    local_base = CACHE.resolve_local_model(base)
-    # anima 是「单文件 DiT + 独立文本编码器 / VAE / 分词器」，预挂载时按文件与子目录判断；
-    # DiT 命中本地时跳过整仓预下载与磁盘预检（其余资产按需下载）。
-    anima_assets = CACHE.anima_local_assets(pipeline_spec) if loader == "anima" else {}
-    if anima_assets.get("dit"):
-        log(f"[load] 使用预挂载 anima DiT 权重：{anima_assets['dit']}")
-    else:
-        CACHE.ensure_disk_capacity(pipeline_spec)
-        if local_base:
-            log(f"[load] 使用预挂载权重加载底座：{base} → {local_base}")
-        else:
-            CACHE.prefetch_weights(base, allow_patterns)
-    base_source = local_base or base
-
-    if loader == "anima":
-        # 单文件 ComfyUI checkpoint：DiT + Qwen3-0.6B + Qwen-Image VAE + 双分词器。
-        # 运行时实现只在 remote/anima_runtime.py（打包时由 lib/kernel.js 内联）。
-        try:
-            runtime, _downloaded_bytes, _load_seconds = load_anima_runtime(
-                pipeline_spec, log, local_paths=anima_assets
-            )
-        except Exception as exc:
-            free_cuda_cache()
-            if _is_oom(exc):
-                raise
-            raise LoadError(f"anima 加载失败：{short(exc)}") from exc
-        return runtime, f"anima:{base}"
-
-    local_lora_weight = None
-    if loader == "sdxl-lora":
-        lora = pipeline_spec.get("lora") or {}
-        lora_repo = str(lora.get("repo") or "").strip()
-        lora_weight = str(lora.get("weight") or "").strip()
-        if lora_repo and lora_weight:
-            local_lora_weight = CACHE.resolve_local_weight(lora_repo, lora_weight)
-
-    try:
-        pipe = load_diffusers_pipeline(
-            pipeline_spec,
-            base_source=base_source,
-            local_lora_weight=local_lora_weight,
-            log=log,
-            error_cls=LoadError,
-            request_error_cls=RequestError,
-        )
-    except RequestError:
-        raise
-    except Exception:
-        free_cuda_cache()
-        raise
-    return pipe, f"{loader}:{base}"
+    具体家族（预挂载解析、磁盘预检、预下载、构建与错误分类）见
+    ``remote/inference/loaders/``；本函数只保留"装配"这一件事，Batch 3 随门面一起删。
+    """
+    return LOADERS.build(pipeline_spec, _load_context())
 
 
 def release_pipeline() -> None:
@@ -887,7 +835,9 @@ def decode_reference_image(reference: dict) -> object:
 
 def validate_generate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
     """把请求体归一成 ``(pipeline_spec, model_id, tasks)``。"""
-    return validate_generate_spec_impl(spec, limits_for=_limit_spec, max_tasks=_max_tasks())
+    return validate_generate_spec_impl(
+        spec, limits_for=_limit_spec, max_tasks=_max_tasks(), supported_loaders=SUPPORTED_LOADERS
+    )
 
 
 def _encode_png(image) -> bytes:  # noqa: ANN001

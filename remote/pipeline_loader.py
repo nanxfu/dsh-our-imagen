@@ -1,13 +1,16 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# pipeline_loader：共享依赖安装、调度器、Diffusers 加载与签名过滤（单份源码）
+# pipeline_loader：共享依赖安装、调度器、Diffusers 构建入口与签名过滤（单份源码）
 #
 # 维护约定：
-# 1. remote/daemon.py 与 tools/payload/verify-model.py 通过一行带 @@INLINE 标记的
-#    import 共用本模块：本地测试直接 import，推送 Kaggle 前由 lib/kernel.js 的
-#    inlineMarkedModules 整行替换为本文件全文（保持单文件自包含）。
-# 2. 模块顶层只 import 标准库（inspect / os / sys），不在模块加载期触发 torch /
+# 1. 本模块随 remote/ 整包进 Kernel 源码包（Batch 0 起不再有 @@INLINE 拼接）；
+#    daemon 与 tools/payload/verify-model.py 都以扁平导入 `from pipeline_loader import …`
+#    取同一份实现——两条 sys.path（仓库根 + remote/）由启动器与单测共同满足。
+# 2. 具体的 sdxl / sdxl-lora / flux2 分支在 `remote/inference/loaders/diffusers.py`；
+#    本模块的 `load_diffusers_pipeline` 只是按名字分派的兼容入口（打包清单与验证脚本
+#    按文件名钉住了它，见 test/check-verify-model.mjs）。
+# 3. 模块顶层只 import 标准库（inspect / os / sys），不在模块加载期触发 torch /
 #    diffusers 等重库，保证 daemon 与 payload 隔离导入自检可通过。
-# 3. 禁止与 daemon.py / verify-model.py / anima_runtime.py 顶层符号冲突。
+# 4. 禁止与 daemon.py / verify-model.py / anima_runtime.py 顶层符号冲突。
 # ─────────────────────────────────────────────────────────────────────────────
 
 import inspect
@@ -185,64 +188,29 @@ def load_diffusers_pipeline(
     error_cls=RuntimeError,  # noqa: ANN001
     request_error_cls=ValueError,  # noqa: ANN001
 ):
-    """按 sdxl / sdxl-lora / flux2 分支加载 Diffusers pipeline。"""
-    import torch
-    from diffusers import AutoPipelineForText2Image, StableDiffusionXLPipeline
+    """按 loader 名分派到 ``remote/inference/loaders/`` 的策略实现（兼容入口）。
 
-    loader = str(pipeline_spec.get("loader") or "")
-    base = str(pipeline_spec.get("base") or "")
-    source = base_source or base
-    variant = pipeline_spec.get("variant")
-    device_map = pipeline_spec.get("deviceMap")
+    只做"构建"、不做"准备"：调用方（``tools/payload/verify-model.py``）已自行下载权重，
+    预挂载解析 / 磁盘预检 / 预下载属于 daemon 的完整加载路径（``ModelLoader.load``）。
 
-    kwargs: dict = {"torch_dtype": torch.float16, "use_safetensors": True}
-    if variant:
-        kwargs["variant"] = str(variant)
+    为什么保留本函数而不是让调用方直接 import 注册表：打包清单（``scripts/package.mjs``）
+    与 ``test/check-verify-model.mjs`` 都按文件名钉住了它，payload 也从这里导入；换入口要
+    同批改打包器与验证脚本，不混在加载器搬迁里做。
+    """
+    from remote.inference.registry import default_registry
 
-    if loader == "sdxl":
-        pipe = from_pretrained_with_variant_fallback(
-            AutoPipelineForText2Image, source, kwargs, loader, log=log, error_cls=error_cls
-        )
-        apply_scheduler(pipe, pipeline_spec, log=log)
-        return pipe.to("cuda")
-
-    if loader == "sdxl-lora":
-        lora = pipeline_spec.get("lora") or {}
-        lora_repo = str(lora.get("repo") or "").strip()
-        lora_weight = str(lora.get("weight") or "").strip()
-        if not lora_repo or not lora_weight:
-            raise request_error_cls("sdxl-lora 需要 lora.repo 与 lora.weight")
-
-        pipe = from_pretrained_with_variant_fallback(
-            StableDiffusionXLPipeline, source, kwargs, loader, log=log, error_cls=error_cls
-        )
-        apply_scheduler(pipe, pipeline_spec, default_type="euler", log=log)
-        if local_lora_weight:
-            log(f"[load] 使用预挂载 LoRA 权重：{local_lora_weight}")
-            pipe.load_lora_weights(
-                os.path.dirname(local_lora_weight) or ".",
-                weight_name=os.path.basename(local_lora_weight),
-            )
-        else:
-            from huggingface_hub import hf_hub_download
-
-            downloaded = hf_hub_download(lora_repo, lora_weight)
-            log(f"[load] LoRA 权重就绪：{downloaded}")
-            if on_lora_download is not None:
-                on_lora_download(downloaded)
-            pipe.load_lora_weights(lora_repo, weight_name=lora_weight)
-        log(f"[load] LoRA 已挂载：{lora_repo}/{lora_weight}")
-        return pipe.to("cuda")
-
-    if loader == "flux2":
-        balanced = str(device_map or "balanced")
-        kwargs["device_map"] = balanced
-        log(f"[load] flux2 使用 device_map={balanced}")
-        return from_pretrained_with_variant_fallback(
-            AutoPipelineForText2Image, source, kwargs, loader, log=log, error_cls=error_cls
-        )
-
-    raise request_error_cls(f"未知 loader：{loader}")
+    loader = default_registry().require_diffusers(
+        pipeline_spec.get("loader"), error_cls=request_error_cls
+    )
+    return loader.construct(
+        pipeline_spec,
+        source=base_source or str(pipeline_spec.get("base") or ""),
+        local_lora_weight=local_lora_weight,
+        on_lora_download=on_lora_download,
+        log=log,
+        error_cls=error_cls,
+        request_error_cls=request_error_cls,
+    )
 
 
 def pipe_signature_params(pipe) -> set[str]:  # noqa: ANN001

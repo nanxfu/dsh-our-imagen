@@ -356,9 +356,14 @@ def pipeline_repos(pipeline_spec) -> list[str]:  # noqa: ANN001
     return found
 
 
-def cache_keep_repos_from(pipeline_spec, local_models: dict | None) -> set[str]:  # noqa: ANN001
-    """切模型清理的不可删仓库集合：目标 pipeline 全部依赖 + 所有预挂载仓库。"""
-    keep = {repo for repo in pipeline_repos(pipeline_spec) if repo}
+def cache_keep_repos_from(pipeline_spec, local_models: dict | None, *, repos_fn=pipeline_repos) -> set[str]:  # noqa: ANN001
+    """切模型清理的不可删仓库集合：目标 pipeline 全部依赖 + 所有预挂载仓库。
+
+    ``repos_fn`` 默认是通用字段扫描；daemon 注入 ``LoaderRegistry.required_repos``，让具体
+    loader 能声明扫描不到的额外仓库。方向只允许"多留"：未知 loader 仍回退到通用扫描，
+    漏一个仓库会让清理闸门把还要用的权重删掉。
+    """
+    keep = {repo for repo in repos_fn(pipeline_spec) if repo}
     keep.update(str(repo).strip() for repo in (local_models or {}) if str(repo).strip())
     return keep
 
