@@ -25,7 +25,7 @@ const DIST = join(ROOT, 'dist')
 // 运行期必需文件：package.json.files 之外的入口与说明文件。
 const EXTRA_FILES = ['package.json', 'README.md', 'LICENSE', 'cordis.patch.yml']
 // 这些目录按扩展名过滤复制，避免把 __pycache__ 等运行残留打进分发目录。
-const FILTERED_DIRS = { lib: ['.js'], shared: ['.js'], locale: ['.json'], remote: ['.py'] }
+const FILTERED_DIRS = { lib: ['.js'], shared: ['.js'], locale: ['.json'], remote: ['.py', '.json'] }
 const SKIP_NAMES = new Set(['__pycache__', '.DS_Store', 'Thumbs.db'])
 
 function fail(message) {
@@ -95,6 +95,9 @@ async function main() {
     'lib/route-kit.js',
     'shared/contract.js',
     'remote/daemon.py',
+    'remote/_entry.py',
+    'remote/__init__.py',
+    'remote/contract.json',
     'remote/log_ring.py',
     'remote/pipeline_loader.py',
     'remote/cache_ops.py',

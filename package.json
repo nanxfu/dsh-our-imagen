@@ -43,7 +43,9 @@
     "locale/*.json",
     "icon.svg",
     "cordis.patch.yml",
-    "remote/*.py"
+    "remote/*.py",
+    "remote/**/*.py",
+    "remote/contract.json"
   ],
   "scripts": {
     "build": "node build.mjs",

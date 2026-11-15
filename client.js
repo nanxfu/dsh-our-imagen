@@ -282,8 +282,8 @@ var zh = {
   "studio.settings.accelerator.NvidiaTeslaT4": "2× Tesla T4（默认推荐）",
   "studio.settings.accelerator.NvidiaTeslaP100": "Tesla P100",
   "studio.settings.kaggleTransport.label": "Kaggle 访问方式",
-  "studio.settings.kaggleTransport.option.cli": "本机 kaggle CLI（默认）",
-  "studio.settings.kaggleTransport.option.direct": "直连 Kaggle（试验特性）",
+  "studio.settings.kaggleTransport.option.direct": "直连 Kaggle（默认，免安装 CLI）",
+  "studio.settings.kaggleTransport.option.cli": "本机 kaggle CLI（兼容）",
   "studio.settings.kaggleTransport.directHint": "直连模式不需要安装 kaggle CLI；登录凭据写入 {path}。切换在下次唤醒或下次环境检查时生效。",
   "studio.settings.section.download": "模型下载与限流防护",
   "studio.settings.hfToken.label": "HuggingFace Token",
@@ -716,8 +716,8 @@ var en = {
   "studio.settings.accelerator.NvidiaTeslaT4": "2× Tesla T4 (recommended)",
   "studio.settings.accelerator.NvidiaTeslaP100": "Tesla P100",
   "studio.settings.kaggleTransport.label": "Kaggle access method",
-  "studio.settings.kaggleTransport.option.cli": "Local kaggle CLI (default)",
-  "studio.settings.kaggleTransport.option.direct": "Direct Kaggle (experimental)",
+  "studio.settings.kaggleTransport.option.direct": "Direct Kaggle (default, no CLI)",
+  "studio.settings.kaggleTransport.option.cli": "Local kaggle CLI (compatibility)",
   "studio.settings.kaggleTransport.directHint": "Direct mode does not require the kaggle CLI; sign-in credentials are written to {path}. The change takes effect at the next wake-up or environment check.",
   "studio.settings.section.download": "Model downloads and rate limits",
   "studio.settings.hfToken.label": "HuggingFace token",
@@ -1684,10 +1684,11 @@ var SETTINGS = {
   maxItemChars: 256,
   // `publicSettingsView()` 的脱敏字段取值域：settings=用户在抽屉里设置的，config=宿主插件配置。
   hfTokenSources: ["settings", "config", "none"],
-  // Kaggle 访问方式：cli = 调用本机 `kaggle` CLI（默认、稳定）；direct = Node 直连 Kaggle
-  // JSON API（试验特性，设置抽屉高级区开关）。切换在下次操作/唤醒时生效，不需要重载插件。
-  kaggleTransports: ["cli", "direct"],
-  defaultKaggleTransport: "cli"
+  // Kaggle 访问方式：direct = Node 直连 Kaggle JSON API + 内置 OAuth 登录（默认，无需本机
+  // kaggle CLI）；cli = 调用本机 `kaggle` CLI（兼容退路，排障或直连不可用时手动切回）。
+  // 切换在下次操作/唤醒时生效，不需要重载插件。数组顺序即设置抽屉里的选项顺序。
+  kaggleTransports: ["direct", "cli"],
+  defaultKaggleTransport: "direct"
 };
 var KAGGLE_LOGIN = {
   actions: ["start", "cancel", "submit-code"],
@@ -3548,6 +3549,10 @@ function Gallery(props) {
 var import_react9 = __toESM(require("react"), 1);
 
 // src/logic/probe.js
+function transportOf(source) {
+  const value = source && typeof source === "object" ? source.kaggleTransport : void 0;
+  return value === void 0 ? "cli" : normalizeKaggleTransport(value);
+}
 function cliStatus(cli) {
   if (cli === true) return "ok";
   if (cli === false) return "failed";
@@ -5664,8 +5669,8 @@ function formFromSettings(view) {
   return {
     idleMinutes: String(idleMinutesOf(source.idleTimeoutSec)),
     accelerator,
-    // 旧宿主缺 kaggleTransport 时按 cli 处理：直连是试验特性，不能默认打开。
-    kaggleTransport: normalizeKaggleTransport(source.kaggleTransport),
+    // 旧宿主缺 kaggleTransport 时按 cli 处理（不是契约默认的 direct）。
+    kaggleTransport: transportOf(source),
     hfToken: "",
     clearHfToken: false,
     datasetSourcesText: formatLineList(source.datasetSources),
@@ -5697,7 +5702,7 @@ function buildSettingsPayload(form, view) {
   const baseAccelerator = SETTINGS.accelerators.includes(base.accelerator) ? base.accelerator : SETTINGS.defaultAccelerator;
   if (accelerator !== baseAccelerator) payload.accelerator = accelerator;
   const transport = normalizeKaggleTransport(source.kaggleTransport);
-  if (transport !== normalizeKaggleTransport(base.kaggleTransport)) payload.kaggleTransport = transport;
+  if (transport !== transportOf(base)) payload.kaggleTransport = transport;
   const token2 = typeof source.hfToken === "string" ? source.hfToken.trim() : "";
   if (source.clearHfToken === true) payload.clearHfToken = true;
   else if (token2) payload.hfToken = token2;
@@ -7531,7 +7536,7 @@ function useSessionControl({ t, host, ui, alive }) {
   const cancellingRef = import_react31.default.useRef(/* @__PURE__ */ new Set());
   const state = host.state;
   const session = state && state.session || null;
-  const kaggleTransport = normalizeKaggleTransport(state && state.kaggleTransport);
+  const kaggleTransport = transportOf(state);
   const sessionState = session && session.state || "absent";
   const pendingJobs = pendingJobsOf(state);
   const activeJob = pendingJobs[0] ?? null;

@@ -5,6 +5,25 @@
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 
+/**
+ * 用 Python 的 zipfile 校验归档完整性并列出条目。
+ *
+ * @param {string} zipPath
+ * @returns {{ bad: string | null, names: string[] } | null} 本机没有 python 时返回 null
+ */
+export function inspectZip(zipPath) {
+  const python = pythonCommand()
+  if (!python) return null
+  const script = [
+    'import json, sys, zipfile',
+    'archive = zipfile.ZipFile(sys.argv[1])',
+    'print(json.dumps({"bad": archive.testzip(), "names": archive.namelist()}))',
+  ].join('\n')
+  const result = spawnSync(python, ['-c', script, zipPath], { encoding: 'utf8', windowsHide: true })
+  if (result.status !== 0) throw new Error(`zipfile 校验失败：${result.stderr || result.stdout}`)
+  return JSON.parse(result.stdout)
+}
+
 /** 本机可用的 python 命令；没有就返回 null（语法编译按任务约定跳过并注明）。 */
 export function pythonCommand() {
   for (const name of ['python', 'python3']) {

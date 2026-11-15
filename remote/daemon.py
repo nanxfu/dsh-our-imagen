@@ -89,11 +89,22 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Host 注入点：推送 Kernel 前，Host 会按 "EMBEDDED_CONFIG_B64" 这个变量名的整行赋值做一次
-# 精确字符串替换。这一行必须保持「变量名 = 空字符串」的原始形态，不要加类型注解、
-# 不要换引号、不要拆行；本文件里只出现一次。
+# Host 注入点：推 Kaggle 时由启动器（remote/_entry.py）在 import 之后调用下面的
+# set_embedded_config()；本地直接跑本文件时保持空串，走"无注入配置"的兜底路径。
+# 不要改成环境变量或文件读取：配置里有 auth_token，只允许存在于内存与临时目录里。
 # ─────────────────────────────────────────────────────────────────────────────
 EMBEDDED_CONFIG_B64 = ""
+
+
+def set_embedded_config(value: str) -> None:
+    """写入本次会话的注入配置（启动器唯一的注入入口）。
+
+    为什么是函数而不是让启动器直接改 `EMBEDDED_CONFIG_B64`：后续把配置相关代码搬进
+    `remote/config.py` 时，只要入口模块继续 re-export 本函数，注入链路就自动跟着走；
+    而直接赋值模块属性只改"名字"，搬家后会静默丢配置（表现为启动即 unauthorized 退出）。
+    """
+    global EMBEDDED_CONFIG_B64
+    EMBEDDED_CONFIG_B64 = value or ""
 
 VERSION = "0.10.0"
 
@@ -139,10 +150,10 @@ JOB_STATUS_DONE = "done"
 JOB_STATUS_FAILED = "failed"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 日志环（单份源码在 remote/log_ring.py，打包时由 lib/kernel.js 内联）
+# 日志环（单份源码在 remote/log_ring.py，随源码包一起推送到 Kaggle）
 # ─────────────────────────────────────────────────────────────────────────────
 
-from log_ring import LOG_LINE_MAX_CHARS, LOG_MAX_LINES, _LOG_LINES, _LOG_LOCK, _LOG_SEQ, _NOISE_RE, _ORIG_STDERR, _ORIG_STDOUT, _START_TS, _StreamTee, _console, _elapsed, _ring_append, install_stream_tee, log, log_since, reset_log_ring  # noqa: E402  # @@INLINE:log_ring.py@@
+from log_ring import LOG_LINE_MAX_CHARS, LOG_MAX_LINES, _LOG_LINES, _LOG_LOCK, _LOG_SEQ, _NOISE_RE, _ORIG_STDERR, _ORIG_STDOUT, _START_TS, _StreamTee, _console, _elapsed, _ring_append, install_stream_tee, log, log_since, reset_log_ring  # noqa: E402
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -762,11 +773,11 @@ def _cleanup_before_exit() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 依赖安装与模型加载共享辅助（单份源码在 remote/pipeline_loader.py，打包时由
-# lib/kernel.js 内联；本地测试直接同目录 import）
+# 依赖安装与模型加载共享辅助（单份源码在 remote/pipeline_loader.py；
+# 本地测试直接同目录 import，推 Kaggle 时随源码包一起内嵌）
 # ─────────────────────────────────────────────────────────────────────────────
 
-from pipeline_loader import PIP_INSTALL, PIP_UNINSTALL, filter_call_kwargs, from_pretrained_with_variant_fallback, is_oom_error, load_diffusers_pipeline, pip_install_argv, pip_uninstall_argv, pipe_signature_params  # noqa: E402  # @@INLINE:pipeline_loader.py@@
+from pipeline_loader import PIP_INSTALL, PIP_UNINSTALL, filter_call_kwargs, from_pretrained_with_variant_fallback, is_oom_error, load_diffusers_pipeline, pip_install_argv, pip_uninstall_argv, pipe_signature_params  # noqa: E402
 
 
 def _stream_process(argv: list[str], prefix: str, tail_lines: int = 0) -> tuple[int, list[str]]:
@@ -958,7 +969,7 @@ def free_cuda_cache() -> None:
         log(f"[cuda] empty_cache 失败：{short(exc)}")
 
 
-from cache_ops import CACHE_PROBE_WORK_DIR, DISK_HEADROOM, HF_CACHE_ENV_NAMES, HF_CACHE_REPO_PREFIX, HF_REPO_RE, HF_TOKEN_ENV_NAMES, _SECRET_MIN_CHARS, _cache_free_gib, _cache_path_protected, _decode_mount_path, _dir_size_gib, _existing_ancestor, _redact_secrets, _repo_key, _with_headroom, anima_local_assets_from, build_cache_probe_lines, cache_keep_repos_from, cache_model_dirs, cache_repo_candidates, disk_usage_root, disk_usage_target, disk_usage_text, ensure_cache_capacity_with, ensure_disk_capacity_with, evict_cache_dirs, hf_hub_cache_dir, local_model_dir_from, longest_mount_prefix, mount_point_of_path, pipeline_repos, prefetch_weights, probe_free_gib, read_mount_points, repo_from_cache_dir_name, required_download_gb, resolve_local_model_from, resolve_local_weight_from, run_disk_precheck  # noqa: E402  # @@INLINE:cache_ops.py@@
+from cache_ops import CACHE_PROBE_WORK_DIR, DISK_HEADROOM, HF_CACHE_ENV_NAMES, HF_CACHE_REPO_PREFIX, HF_REPO_RE, HF_TOKEN_ENV_NAMES, _SECRET_MIN_CHARS, _cache_free_gib, _cache_path_protected, _decode_mount_path, _dir_size_gib, _existing_ancestor, _redact_secrets, _repo_key, _with_headroom, anima_local_assets_from, build_cache_probe_lines, cache_keep_repos_from, cache_model_dirs, cache_repo_candidates, disk_usage_root, disk_usage_target, disk_usage_text, ensure_cache_capacity_with, ensure_disk_capacity_with, evict_cache_dirs, hf_hub_cache_dir, local_model_dir_from, longest_mount_prefix, mount_point_of_path, pipeline_repos, prefetch_weights, probe_free_gib, read_mount_points, repo_from_cache_dir_name, required_download_gb, resolve_local_model_from, resolve_local_weight_from, run_disk_precheck  # noqa: E402
 
 _CACHE_PROBE_DONE = False
 
@@ -1084,13 +1095,12 @@ def _from_pretrained(factory, base: str, kwargs: dict, loader: str):  # noqa: AN
 #
 # 历史背景：本文件与 tools/payload/verify-model.py 曾各自维护一份约 1000 行、注释要求
 # 「逐字同步」的运行时——那是对 Kaggle「只接受单个 code_file」的误解。现在运行时只有
-# remote/anima_runtime.py 一份：本地直接同目录 import；推送前 lib/kernel.js 的
-# buildKernelFolder 会把下面带 @@INLINE 标记的 import 行整行替换为该文件全文，产物仍是
-# 单文件、自包含。不要再往本文件复制实现。
+# remote/anima_runtime.py 一份：本地直接同目录 import；推送时 lib/kernel.js 把整个 remote/
+# 压成源码包内嵌进启动器，业务代码保持普通包结构。不要再往本文件复制实现。
 # 模型结构、上游直译来源与日志注入约定见 remote/anima_runtime.py 顶部说明。
 # ─────────────────────────────────────────────────────────────────────────────
 
-from anima_runtime import load_anima_runtime  # noqa: E402  # @@INLINE:anima_runtime.py@@
+from anima_runtime import load_anima_runtime  # noqa: E402
 
 
 def build_pipeline(pipeline_spec: dict):
@@ -2222,7 +2232,7 @@ def start_http_server(port: int) -> ThreadingHTTPServer:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-from tunnel import CLOUDFLARED_DOWNLOAD_ATTEMPTS, CLOUDFLARED_DOWNLOAD_TIMEOUT_SEC, CLOUDFLARED_DOWNLOAD_URL, CLOUDFLARED_MAX_DOWNLOAD_BYTES, CLOUDFLARED_PATH, CLOUDFLARED_SHA256, CLOUDFLARED_URL_RE, CLOUDFLARED_VERSION, DEFAULT_CUSTOM_URL_RE, TUNNEL_ANNOUNCE_SEC, TUNNEL_PROVIDERS, TUNNEL_RESTART_BASE_SEC, TUNNEL_RESTART_MAX_SEC, TUNNEL_WAIT_SEC, _CloudflaredDownloadTooLarge, _file_sha256, _remove_file_quietly, build_tunnel_plan_for, download_cloudflared_once_from, drain_tunnel_output_for, extract_tunnel_url, normalize_tunnel_command, run_announce_tunnel_ready, run_recover_tunnel_error, run_start_tunnel, run_tunnel_attempt, run_tunnel_monitor, spawn_tunnel_process_for, terminate_tunnel_process, tunnel_restart_delay, tunnel_url_regex_for, verify_or_download_cloudflared, wait_tunnel_exit  # noqa: E402  # @@INLINE:tunnel.py@@
+from tunnel import CLOUDFLARED_DOWNLOAD_ATTEMPTS, CLOUDFLARED_DOWNLOAD_TIMEOUT_SEC, CLOUDFLARED_DOWNLOAD_URL, CLOUDFLARED_MAX_DOWNLOAD_BYTES, CLOUDFLARED_PATH, CLOUDFLARED_SHA256, CLOUDFLARED_URL_RE, CLOUDFLARED_VERSION, DEFAULT_CUSTOM_URL_RE, TUNNEL_ANNOUNCE_SEC, TUNNEL_PROVIDERS, TUNNEL_RESTART_BASE_SEC, TUNNEL_RESTART_MAX_SEC, TUNNEL_WAIT_SEC, _CloudflaredDownloadTooLarge, _file_sha256, _remove_file_quietly, build_tunnel_plan_for, download_cloudflared_once_from, drain_tunnel_output_for, extract_tunnel_url, normalize_tunnel_command, run_announce_tunnel_ready, run_recover_tunnel_error, run_start_tunnel, run_tunnel_attempt, run_tunnel_monitor, spawn_tunnel_process_for, terminate_tunnel_process, tunnel_restart_delay, tunnel_url_regex_for, verify_or_download_cloudflared, wait_tunnel_exit  # noqa: E402
 
 
 def _download_cloudflared_once(partial: str) -> tuple[int, str]:

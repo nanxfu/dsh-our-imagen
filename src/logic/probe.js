@@ -6,7 +6,19 @@
  * - payload.probe.notes：给用户看的说明（含安装命令等）
  */
 
+import { normalizeKaggleTransport } from '../../shared/validation.js'
 import { shortText } from './guidance.js'
+
+/**
+ * 访问方式归一：**字段缺失**（旧宿主 / 旧视图）按 CLI 处理，**非法值**按契约默认值处理。
+ *
+ * 两者必须分开：契约默认值是 direct，但 0.8.x 宿主既没有 `kaggleTransport` 也没有登录路由，
+ * 把界面画成直连会给出一个点了没反应的主操作。
+ */
+export function transportOf(source) {
+  const value = source && typeof source === 'object' ? source.kaggleTransport : undefined
+  return value === undefined ? 'cli' : normalizeKaggleTransport(value)
+}
 
 function cliStatus(cli) {
   if (cli === true) return 'ok'

@@ -12,6 +12,7 @@ import {
   isValidHfRepoId,
   normalizeKaggleTransport,
 } from '../../shared/validation.js'
+import { transportOf } from './probe.js'
 
 import { clampInt } from './clamp.js'
 import { errorText } from './error.js'
@@ -159,8 +160,8 @@ export function formFromSettings(view) {
   return {
     idleMinutes: String(idleMinutesOf(source.idleTimeoutSec)),
     accelerator,
-    // 旧宿主缺 kaggleTransport 时按 cli 处理：直连是试验特性，不能默认打开。
-    kaggleTransport: normalizeKaggleTransport(source.kaggleTransport),
+    // 旧宿主缺 kaggleTransport 时按 cli 处理（不是契约默认的 direct）。
+    kaggleTransport: transportOf(source),
     hfToken: '',
     clearHfToken: false,
     datasetSourcesText: formatLineList(source.datasetSources),
@@ -212,7 +213,7 @@ export function buildSettingsPayload(form, view) {
 
   // Kaggle 访问方式：只有真正切换时才补丁，旧视图缺字段按 cli 比较。
   const transport = normalizeKaggleTransport(source.kaggleTransport)
-  if (transport !== normalizeKaggleTransport(base.kaggleTransport)) payload.kaggleTransport = transport
+  if (transport !== transportOf(base)) payload.kaggleTransport = transport
 
   const token = typeof source.hfToken === 'string' ? source.hfToken.trim() : ''
   if (source.clearHfToken === true) payload.clearHfToken = true

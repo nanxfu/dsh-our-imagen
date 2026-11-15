@@ -4450,30 +4450,29 @@ await check('渲染：直连模式指引卡（登录 / 等待 / manual 粘贴码
 })
 
 await check('渲染：设置抽屉 Kaggle 访问方式开关与保存请求体', async () => {
-  const transportView = { ...settingsView, kaggleTransport: 'cli' }
+  const transportView = { ...settingsView, kaggleTransport: 'direct' }
   const mounted = await mountSettingsDrawer(
     { defaultAdvancedOpen: true },
-    { view: transportView, savedView: { ...transportView, kaggleTransport: 'direct' } },
+    { view: transportView, savedView: { ...transportView, kaggleTransport: 'cli' } },
   )
   try {
     let text = collectText(mounted.tree).join(' | ')
-    for (const needle of ['Kaggle 访问方式', '本机 kaggle CLI（默认）', '直连 Kaggle（试验特性）']) {
+    for (const needle of ['Kaggle 访问方式', '直连 Kaggle（默认，免安装 CLI）', '本机 kaggle CLI（兼容）']) {
       assert.ok(text.includes(needle), `[settings-transport] 缺少文案：${needle}（实际：${text}）`)
     }
-    assert.ok(!text.includes('直连模式不需要安装 kaggle CLI'), '选中 CLI 时不显示直连说明')
+    assert.ok(text.includes('直连模式不需要安装 kaggle CLI'), '默认选中直连时显示免安装说明')
     let radios = findNodes(
       mounted.tree,
       (node) => node.type === 'input' && node.props?.name === 'ofs-kaggle-transport',
     )
-    assert.deepEqual(radios.map((node) => node.props.value), ['cli', 'direct'], '访问方式取值来自契约白名单')
-    assert.deepEqual(radios.map((node) => node.props.checked), [true, false], '默认选中 CLI')
+    assert.deepEqual(radios.map((node) => node.props.value), ['direct', 'cli'], '访问方式取值来自契约白名单')
+    assert.deepEqual(radios.map((node) => node.props.checked), [true, false], '默认选中直连')
 
-    // 切到直连：出现凭据路径说明，保存按钮可用。
+    // 切到兼容的 CLI 模式：免安装说明消失，保存按钮可用。
     radios[1].props.onChange()
     const tree = await mounted.client.rerenderRaw()
     text = collectText(tree).join(' | ')
-    assert.ok(text.includes('直连模式不需要安装 kaggle CLI'), '直连应出现说明')
-    assert.ok(text.includes('%USERPROFILE%\\.kaggle\\credentials.json'), '直连说明应带凭据路径')
+    assert.ok(!text.includes('直连模式不需要安装 kaggle CLI'), '切到 CLI 后不再显示直连说明')
     const saveButton = findNodes(
       tree,
       (node) => node.type === 'button' && String(node.props?.className).includes('ofs-settings-save'),
@@ -4486,19 +4485,19 @@ await check('渲染：设置抽屉 Kaggle 访问方式开关与保存请求体',
     }
     const posted = mounted.calls.filter((call) => call.method === 'POST')
     assert.equal(posted.length, 1, '只发一次保存请求')
-    assert.deepEqual(posted[0].body, { kaggleTransport: 'direct' }, '只提交访问方式补丁')
+    assert.deepEqual(posted[0].body, { kaggleTransport: 'cli' }, '只提交访问方式补丁')
   } finally {
     mounted.client.unmount()
   }
 
-  // 旧宿主视图缺 kaggleTransport：按 CLI 渲染，没有改动时保存禁用。
+  // 旧宿主视图缺 kaggleTransport：仍按 CLI 渲染（老宿主没有登录路由），没有改动时保存禁用。
   const legacy = await mountSettingsDrawer({ defaultAdvancedOpen: true })
   try {
     const radios = findNodes(
       legacy.tree,
       (node) => node.type === 'input' && node.props?.name === 'ofs-kaggle-transport',
     )
-    assert.deepEqual(radios.map((node) => node.props.checked), [true, false], '旧宿主缺字段时按 CLI 选中')
+    assert.deepEqual(radios.map((node) => node.props.checked), [false, true], '旧宿主缺字段时按 CLI 选中')
     assert.ok(!collectText(legacy.tree).join(' | ').includes('直连模式不需要安装 kaggle CLI'))
     const saveButton = findNodes(
       legacy.tree,

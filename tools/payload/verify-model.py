@@ -2,7 +2,9 @@
 """模型验证采样 payload（由 tools/verify-model.mjs 打包推到 Kaggle 一次性执行）。
 
 设计约束：
-- 单文件、只依赖标准库启动：先装依赖，再 import torch/diffusers；
+- 与 daemon 共用同一份源码包：打包时本文件被放进 `payload/verify_model.py`，
+  与 `remote/` 一起内嵌进启动器 ZIP，所以导入 Loader 与运行时不需要再复制实现；
+- 只依赖标准库启动：先装依赖，再 import torch/diffusers；
 - 采样逻辑继承 bench/lightning/run.py：测量加载耗时、首图耗时、3 次出图（丢弃首张取中位数）、
   峰值显存与实际下载体积；
 - 无论成功失败都写 verify-report.json 并退出 0：让编排端总能下载到结构化结果，
@@ -22,8 +24,14 @@ import traceback
 # 让分配器用可扩展段减少碎片（T4 14.56GiB 首跑正是在 VAE conv3d 处 OOM）。
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
-# Host 注入点：lib/kernel.js 按行首赋值做精确替换。
+# Host 注入点：启动器 remote/_entry.py 在 import 之后调用 set_embedded_config()。
 EMBEDDED_CONFIG_B64 = ""
+
+
+def set_embedded_config(value: str) -> None:
+    """写入本次会话的注入配置（与 remote/daemon.py 同名同语义，供启动器统一调用）。"""
+    global EMBEDDED_CONFIG_B64
+    EMBEDDED_CONFIG_B64 = value or ""
 
 OUT_DIR = "/kaggle/working" if os.path.isdir("/kaggle/working") else "."
 REPORT_NAME = "verify-report.json"
@@ -51,8 +59,8 @@ def dir_bytes(path: str) -> int:
     return total
 
 
-from anima_runtime import load_anima_runtime  # noqa: E402  # @@INLINE:anima_runtime.py@@
-from pipeline_loader import PIP_INSTALL, PIP_UNINSTALL, filter_call_kwargs, load_diffusers_pipeline, pip_env, pip_install_argv, pip_uninstall_argv, pipe_signature_params  # noqa: E402  # @@INLINE:pipeline_loader.py@@
+from anima_runtime import load_anima_runtime  # noqa: E402
+from pipeline_loader import PIP_INSTALL, PIP_UNINSTALL, filter_call_kwargs, load_diffusers_pipeline, pip_env, pip_install_argv, pip_uninstall_argv, pipe_signature_params  # noqa: E402
 
 
 def install_dependencies() -> None:

@@ -272,8 +272,9 @@ async function scenarioStoreAndRoutes(workspace) {
       assert.equal(body.settings.kaggleTransport, 'direct')
 
       const disk = JSON.parse(await readFile(filePath, 'utf8'))
-      // settings.json 只保存用户显式修改过的覆盖项，不做全量快照。
+      // settings.json 只保存用户显式修改过的覆盖项，不做全量快照；schema 由存储层写入。
       assert.deepEqual(disk, {
+        schema: 2,
         idleTimeoutSec: 900,
         accelerator: 'NvidiaTeslaP100',
         kaggleTransport: 'direct',
@@ -286,6 +287,38 @@ async function scenarioStoreAndRoutes(workspace) {
         !entries.some((name) => name.startsWith('settings.json.tmp-')),
         `不应残留临时文件：${entries.join(', ')}`,
       )
+    })
+
+    await check('v1 → v2 迁移：老文件里的默认 cli 丢弃一次，之后手选的 cli 保留', async () => {
+      const legacyWorkspace = await makeWorkspace()
+      await mkdir(join(legacyWorkspace, '.imagen'), { recursive: true })
+      const legacyPath = join(legacyWorkspace, '.imagen', 'settings.json')
+      await writeFile(
+        legacyPath,
+        JSON.stringify({ idleTimeoutSec: 900, kaggleTransport: 'cli' }, null, 2),
+        'utf8',
+      )
+
+      const store = createSettingsStore({ ctx: workspaceContext(legacyWorkspace), config: {} })
+      await store.whenReady()
+      assert.equal(store.current().kaggleTransport, 'direct', 'v1 里当时的默认值 cli 应被丢弃')
+      assert.equal(store.current().idleTimeoutSec, 900, '其它覆盖项必须保留')
+
+      const migrated = JSON.parse(await readFile(legacyPath, 'utf8'))
+      assert.equal(migrated.schema, 2)
+      assert.equal(
+        Object.prototype.hasOwnProperty.call(migrated, 'kaggleTransport'),
+        false,
+        '迁移后不应保留 cli',
+      )
+
+      // v2 之后用户手动切回 cli 是主动选择，重启不能又被迁走。
+      const second = createSettingsStore({ ctx: workspaceContext(legacyWorkspace), config: {} })
+      await second.whenReady()
+      assert.equal((await second.save({ kaggleTransport: 'cli' })).ok, true)
+      const reopened = createSettingsStore({ ctx: workspaceContext(legacyWorkspace), config: {} })
+      await reopened.whenReady()
+      assert.equal(reopened.current().kaggleTransport, 'cli', 'schema=2 的 cli 必须保留')
     })
 
     await check('重建 store 后读回一致（磁盘是唯一持久化来源）', async () => {

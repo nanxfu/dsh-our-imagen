@@ -166,10 +166,11 @@ export const SETTINGS = {
   maxItemChars: 256,
   // `publicSettingsView()` 的脱敏字段取值域：settings=用户在抽屉里设置的，config=宿主插件配置。
   hfTokenSources: ['settings', 'config', 'none'],
-  // Kaggle 访问方式：cli = 调用本机 `kaggle` CLI（默认、稳定）；direct = Node 直连 Kaggle
-  // JSON API（试验特性，设置抽屉高级区开关）。切换在下次操作/唤醒时生效，不需要重载插件。
-  kaggleTransports: ['cli', 'direct'],
-  defaultKaggleTransport: 'cli',
+  // Kaggle 访问方式：direct = Node 直连 Kaggle JSON API + 内置 OAuth 登录（默认，无需本机
+  // kaggle CLI）；cli = 调用本机 `kaggle` CLI（兼容退路，排障或直连不可用时手动切回）。
+  // 切换在下次操作/唤醒时生效，不需要重载插件。数组顺序即设置抽屉里的选项顺序。
+  kaggleTransports: ['direct', 'cli'],
+  defaultKaggleTransport: 'direct',
 }
 
 /**

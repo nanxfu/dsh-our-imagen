@@ -1469,23 +1469,24 @@ async function main() {
   await check('Kaggle 访问方式：/state 暴露当前传输，运行设置可切换并即时生效', async () => {
     const before = await json(host.origin, '/imagen-api/state')
     assert.equal(before.status, 200)
-    assert.equal(before.body.kaggleTransport, 'cli', '默认必须是稳定的 CLI 传输')
+    assert.equal(before.body.kaggleTransport, 'direct', '默认走直连，免装 kaggle CLI')
 
     const settings = await json(host.origin, '/imagen-api/settings')
     assert.equal(settings.status, 200)
-    assert.equal(settings.body.settings.kaggleTransport, 'cli')
+    assert.equal(settings.body.settings.kaggleTransport, 'direct')
 
+    // 兼容退路仍可手动切回 CLI（排障 / 直连不可用时）。
     const saved = await json(host.origin, '/imagen-api/settings', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ kaggleTransport: 'direct' }),
+      body: JSON.stringify({ kaggleTransport: 'cli' }),
     })
     assert.equal(saved.status, 200)
-    assert.equal(saved.body.settings.kaggleTransport, 'direct')
+    assert.equal(saved.body.settings.kaggleTransport, 'cli')
 
-    // 传输层每次调用都读最新设置：不需要重载插件，下一次 /state 就应该是 direct。
+    // 传输层每次调用都读最新设置：不需要重载插件，下一次 /state 就应该是 cli。
     const after = await json(host.origin, '/imagen-api/state')
-    assert.equal(after.body.kaggleTransport, 'direct')
+    assert.equal(after.body.kaggleTransport, 'cli')
 
     const invalid = await json(host.origin, '/imagen-api/settings', {
       method: 'POST',
@@ -1499,7 +1500,7 @@ async function main() {
     await json(host.origin, '/imagen-api/settings', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ kaggleTransport: 'cli' }),
+      body: JSON.stringify({ kaggleTransport: 'direct' }),
     })
   })
 

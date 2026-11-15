@@ -28,7 +28,7 @@
  17. 异步 job（0.5.0）：POST /generate 202 入队、jobId 幂等与格式校验、
      GET /job 的 queued/running/done/failed 视图、未知 id 404、保留/淘汰、
      worker 执行成功与失败、/health.queue_depth
-  18. anima 运行时单份源码（remote/anima_runtime.py，daemon 只留 @@INLINE 标记）与
+  18. anima 运行时单份源码（remote/anima_runtime.py，daemon 只 import 一次）与
       run_task 回传实际出图尺寸（PIL image.size，而不是请求宽高）
   19. 缓存探针：[cache] 日志含 HF 缓存目录/挂载点/剩余空间，token 值不落日志（含路径
       里夹带 token 时的脱敏），读盘失败降级为 unknown，进程内只打一次
@@ -95,8 +95,8 @@ def _load_daemon():
     回查模块命名空间，模块不在 sys.modules 里会抛 AttributeError。
 
     另外要把 remote/ 放进 sys.path：daemon.py 用 ``from anima_runtime import ...`` 取
-    同目录的 anima 运行时，而按路径加载时 sys.path 里没有这个目录；推 Kaggle 的产物
-    已被打包器内联成单文件，不依赖这一步。
+    同目录的 anima 运行时，而按路径加载时 sys.path 里没有这个目录；推 Kaggle 时启动器
+    会解包源码包并把同样的两个目录挂进 sys.path，行为一致。
     """
     remote_dir = str(ROOT / "remote")
     if remote_dir not in sys.path:
@@ -429,7 +429,7 @@ class ImportSideEffectTest(unittest.TestCase):
         self.assertEqual(d._max_tasks(), 8)
 
     def test_anima_runtime_comes_from_single_source_module(self) -> None:
-        """anima 运行时只有 remote/anima_runtime.py 一份；daemon 里只留带标记的 import 行。"""
+        """anima 运行时只有 remote/anima_runtime.py 一份；daemon 只 import 不复制实现。"""
         self.assertEqual(d.load_anima_runtime.__module__, "anima_runtime")
         runtime_module = sys.modules.get("anima_runtime")
         self.assertIsNotNone(runtime_module, "daemon 应从同目录 anima_runtime 导入运行时")
@@ -438,7 +438,7 @@ class ImportSideEffectTest(unittest.TestCase):
         source = DAEMON_PATH.read_text(encoding="utf-8")
         self.assertNotIn("def _anima_toolkit", source)
         self.assertNotIn("def load_anima_runtime", source)
-        self.assertEqual(source.count("# @@INLINE:anima_runtime.py@@"), 1)
+        self.assertNotIn("@@INLINE", source, "内联标记已随源码包打包移除")
         self.assertIn("from anima_runtime import load_anima_runtime", source)
 
 
@@ -452,6 +452,14 @@ class BuildConfigTest(DaemonUnitTest):
         self.assertIsNone(config.preload)
         self.assertEqual(config.contract, {})
         self.assertFalse(config.allow_no_auth)
+
+    def test_set_embedded_config_is_the_injection_hook(self) -> None:
+        """启动器通过函数注入配置：搬家后仍指向真正的实现，不能变成只改模块属性。"""
+        with mock.patch.object(d, "EMBEDDED_CONFIG_B64", ""):
+            d.set_embedded_config("abc")
+            self.assertEqual(d.EMBEDDED_CONFIG_B64, "abc")
+            d.set_embedded_config("")
+            self.assertEqual(d.EMBEDDED_CONFIG_B64, "")
 
     def test_full_snake_case_config(self) -> None:
         config = d._build_config(

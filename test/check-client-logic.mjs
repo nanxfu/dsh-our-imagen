@@ -551,7 +551,7 @@ await check('运行设置：脱敏视图 → 表单', () => {
   assert.deepEqual(form, {
     idleMinutes: '30',
     accelerator: 'NvidiaTeslaP100',
-    // 视图缺 kaggleTransport（旧宿主）：按契约默认的 cli 处理，不默认打开直连。
+    // 视图缺 kaggleTransport（旧宿主）：按兼容口径 cli 处理，不指向不存在的登录路由。
     kaggleTransport: 'cli',
     // 视图本来就不回传 hfToken 原文：表单永远从空串开始。
     hfToken: '',
@@ -702,14 +702,14 @@ await check('工作台界面态：归一化、响应解析与保存补丁', () =
 })
 
 await check('运行设置：Kaggle 访问方式白名单与保存补丁', () => {
-  // 取值域只来自契约；默认仍是 cli（直连是试验特性，不能因字段缺失默认打开）。
-  assert.deepEqual(SETTINGS.kaggleTransports, ['cli', 'direct'])
-  assert.equal(SETTINGS.defaultKaggleTransport, 'cli')
+  // 取值域只来自契约；默认是直连（免装 kaggle CLI），cli 作为兼容退路保留。
+  assert.deepEqual(SETTINGS.kaggleTransports, ['direct', 'cli'])
+  assert.equal(SETTINGS.defaultKaggleTransport, 'direct')
   for (const transport of SETTINGS.kaggleTransports) {
     assert.equal(logic.normalizeKaggleTransport(transport), transport)
   }
   for (const invalid of [undefined, null, '', 'bogus', 'DIRECT', 1, true, {}]) {
-    assert.equal(logic.normalizeKaggleTransport(invalid), SETTINGS.defaultKaggleTransport, `非法值应按 cli：${invalid}`)
+    assert.equal(logic.normalizeKaggleTransport(invalid), SETTINGS.defaultKaggleTransport, `非法值应按默认值：${invalid}`)
   }
   // 展示名键按契约取值域派发，中英文案两侧都要有。
   for (const transport of SETTINGS.kaggleTransports) {
@@ -718,11 +718,12 @@ await check('运行设置：Kaggle 访问方式白名单与保存补丁', () => 
     assert.ok(DICT.zh[key], `${key} 缺少中文文案`)
     assert.ok(DICT.en[key], `${key} 缺少英文文案`)
   }
-  assert.equal(logic.kaggleTransportLabelKey('bogus'), 'studio.settings.kaggleTransport.option.cli')
+  assert.equal(logic.kaggleTransportLabelKey('bogus'), 'studio.settings.kaggleTransport.option.direct')
 
-  // 表单：视图里的直连值原样带出，非法值回落 cli。
-  assert.equal(logic.formFromSettings({ kaggleTransport: 'direct' }).kaggleTransport, 'direct')
-  assert.equal(logic.formFromSettings({ kaggleTransport: 'auto' }).kaggleTransport, 'cli')
+  // 表单：视图里的值原样带出；非法值回落契约默认值，字段缺失按旧宿主 cli。
+  assert.equal(logic.formFromSettings({ kaggleTransport: 'cli' }).kaggleTransport, 'cli')
+  assert.equal(logic.formFromSettings({ kaggleTransport: 'auto' }).kaggleTransport, 'direct')
+  assert.equal(logic.formFromSettings({}).kaggleTransport, 'cli')
   // 请求体：只有真正切换时才补丁；旧视图缺字段按 cli 比较。
   const legacyView = { idleTimeoutSec: 1800, accelerator: 'NvidiaTeslaT4' }
   const legacyForm = logic.formFromSettings(legacyView)

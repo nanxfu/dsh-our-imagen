@@ -194,7 +194,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | `lastJob` | 最近一条完成/失败的任务，或 `null` |
 | `queue` | `{ running: id \| null, pending: number }` |
 | `devMode` | 是否通过 `devEndpoint` 走本地联调 |
-| `kaggleTransport` | 当前生效的 Kaggle 访问方式：`cli`（本机 `kaggle` CLI，默认）或 `direct`（Node 直连 Kaggle API，试验特性） |
+| `kaggleTransport` | 当前生效的 Kaggle 访问方式：`direct`（Node 直连 Kaggle API + 内置 OAuth 登录，**默认**）或 `cli`（调用本机 `kaggle` CLI，兼容退路） |
 
 - **响应示例**：
 
@@ -689,7 +689,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | `datasetSources` | string[] | 预挂载 Kaggle Dataset（`owner/dataset`），去空去重、最多 32 项 |
 | `pipConstraints` | string[] | pip 依赖约束（如 `diffusers==0.31.0`），去空去重、最多 32 项 |
 | `localModels` | object | 本地权重映射 `repo → 容器内目录`（值必须以 `/` 开头），最多 32 项 |
-| `kaggleTransport` | string | Kaggle 访问方式：`cli`（默认）或 `direct`（试验特性），取值域 `SETTINGS.kaggleTransports`；下次唤醒/探测生效 |
+| `kaggleTransport` | string | Kaggle 访问方式：`direct`（默认，免装 CLI）或 `cli`（兼容），取值域 `SETTINGS.kaggleTransports`；下次唤醒/探测生效 |
 
 - **响应**：`{ "ok": true, "settings": SettingsView }`（与保存后的生效值一致）。
 - **错误**：`400 invalid_body`（请求体不是合法 JSON 或不是对象）、`400 invalid_request`（字段值不合法）。
@@ -704,7 +704,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | `localModels` | 当前生效的本地权重映射 |
 | `hasHfToken` | 是否已配置 HuggingFace Token（布尔） |
 | `hfTokenSource` | `settings`（抽屉里设置的）/ `config`（宿主插件配置）/ `none` |
-| `kaggleTransport` | 当前生效的 Kaggle 访问方式（`cli` / `direct`） |
+| `kaggleTransport` | 当前生效的 Kaggle 访问方式（`direct` / `cli`） |
 | `effectiveOnNextSession` | 当前远端实例正在运行、改动要到下次唤醒才生效时为 `true` |
 
 > 设置改动对**下一次** `session.start()` 生效：宿主要在构造下发配置前读取合并后的最新设置，
@@ -747,9 +747,9 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 > 以 path 为键、同一 path 不允许注册两次，因此只注册一条路由、用 `method: [GET, POST]` 在 handler
 > 内按方法分发；方法不匹配时返回 `405` 且 `Allow: GET, POST`。
 
-### 2.6 Kaggle 直连登录（试验特性，kaggle/login）
+### 2.6 Kaggle 直连登录（kaggle/login）
 
-直连模式（`kaggleTransport = direct`）下不需要本机安装 `kaggle` CLI：宿主用标准 OAuth 2.0 + PKCE
+直连模式（`kaggleTransport = direct`，**自本版起为默认**）不需要本机安装 `kaggle` CLI：宿主用标准 OAuth 2.0 + PKCE
 （`client_id=kagglesdk`、`S256`、`scope=resources.admin:*`）完成授权。浏览器模式由宿主拉起系统浏览器，
 并在本机回环端口监听回调；无法打开浏览器（无头环境等）时降级为「复制授权链接 + 粘贴授权码」。
 成功后凭据写入 `%USERPROFILE%\.kaggle\credentials.json`（OAuth 凭据，含 `refresh_token`；目录 0700 /
@@ -1000,9 +1000,11 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 
 ### 5.8 第五批交互补充（直连开关 / 内置 OAuth 登录）
 
-1. **Kaggle 访问方式开关**：运行设置抽屉「高级」区新增「Kaggle 访问方式」：`cli`（调用本机 kaggle CLI，
-   默认、稳定）与 `direct`（直连 Kaggle，试验特性）。切到直连时提示无需安装 kaggle CLI、登录凭据写入
-   `%USERPROFILE%\.kaggle\credentials.json`；改动在下次唤醒 / 探测时生效，可随时切回 CLI。
+1. **Kaggle 访问方式开关**：运行设置抽屉「高级」区「Kaggle 访问方式」：`direct`（直连 Kaggle + 内置 OAuth，
+   **自本版起为默认**）与 `cli`（调用本机 kaggle CLI，兼容退路）。直连模式提示无需安装 kaggle CLI、登录凭据
+   写入 `%USERPROFILE%\.kaggle\credentials.json`；改动在下次唤醒 / 探测时生效，可随时切回 CLI。
+   设置文件带 `schema` 版本：v1 里存的 `cli` 视为当时的默认值，升级时丢弃一次；之后手动切回 `cli` 会以
+   `schema=2` 落盘并被保留。
 2. **内置 OAuth 登录**：直连模式下 `cli_missing` / `auth_required` 指引卡主操作改为「在浏览器中登录 Kaggle」：
    点击后显示「正在等待浏览器完成授权…」与「取消」；无法打开浏览器时切换为 manual 模式，展示可复制的
    授权链接与授权码输入框。成功后轻提示并自动重跑环境探测；失败给出可读原因可重试；整段流程受

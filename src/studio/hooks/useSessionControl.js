@@ -20,7 +20,7 @@ import {
 import { formatText } from '../../logic/format.js'
 import { pendingJobsOf, stateJobs } from '../../logic/jobs.js'
 import { probeOutcomeOf } from '../../logic/probe.js'
-import { normalizeKaggleTransport } from '../../logic/settings.js'
+import { transportOf } from '../../logic/probe.js'
 import { computeStatusOf } from '../../logic/status.js'
 
 /** 已发出取消请求、还没在宿主快照里收敛的任务 id；同一个 id 只保留一次。 */
@@ -40,7 +40,7 @@ export function useSessionControl({ t, host, ui, alive }) {
   const state = host.state
   const session = (state && state.session) || null
   // 访问方式只影响展示与失败归类：旧宿主 / 旧快照缺字段时按契约默认的 cli 处理。
-  const kaggleTransport = normalizeKaggleTransport(state && state.kaggleTransport)
+  const kaggleTransport = transportOf(state)
   const sessionState = (session && session.state) || 'absent'
   // 待执行队列：第 1 个是真正在跑（或等云端）的任务，其余按提交顺序排队。
   // 进度文案、舞台与底部胶片条都按这个顺序取「当前任务」，排队任务才不会被误当成进行中。

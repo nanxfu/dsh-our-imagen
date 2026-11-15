@@ -1,5 +1,32 @@
 # 变更记录
 
+## 未发布（架构重构 Batch 0 / Batch 1）
+
+> 对应 [docs/REFACTOR_ARCHITECTURE_SPEC.md](docs/REFACTOR_ARCHITECTURE_SPEC.md)。两批都只改内部模块边界与打包形态，`docs/SPEC.md` 定义的 HTTP 路由、报文、错误码与配置注入契约保持向后兼容。
+
+### 改进
+
+- **Kaggle 访问方式默认改为直连**：`SETTINGS.kaggleTransports` 顺序改为 `['direct','cli']`，`defaultKaggleTransport` 改为 `direct`——新用户装完插件即可用内置 OAuth 登录出图，不再需要 `pip install kaggle` 与本机 Python 环境。`kaggle` CLI 保留为设置抽屉里的「兼容」选项（排障或直连不可用时手动切回），传输层仍是每次调用读设置、切换即时生效。
+- **设置文件加 schema 版本并迁移**：`settings.json` 写入 `schema: 2`；加载 v1 文件时，`kaggleTransport: 'cli'` 视为当时的默认值丢弃一次（否则老用户升级后永远走不到新默认），其它覆盖项原样保留；用户之后手动切回 `cli` 会以 `schema=2` 落盘并被保留。
+- **旧宿主兼容口径与契约默认值解耦**：`/state` 里没有 `kaggleTransport` 字段时（0.8.x 宿主）仍按 CLI 渲染，不指向不存在的登录路由；非法值才回落契约默认值。判定统一收在 `src/logic/probe.js` 的 `transportOf()`，设置抽屉与会话控制共用。
+- **文案**：设置抽屉选项改为「直连 Kaggle（默认，免安装 CLI）」/「本机 kaggle CLI（兼容）」；`docs/SPEC.md`、`docs/ROADMAP.md` 同步口径。
+
+### 工程
+
+- **打包器升级（Batch 0）**：`lib/kernel.js` 从 `# @@INLINE` 行替换改为**内嵌 Base64 ZIP 自引导**——新增 `lib/bundle.js`（零依赖 ZIP 写入器，`node:zlib` deflateRaw + 手写头部，路径排序与固定时间戳保证产物逐字节可复现），`remote/_entry.py` 作为启动器模板，启动时解压到临时目录再把包根挂进 `sys.path`。`remote/` 恢复为普通 Python 包（新增 `__init__.py`），五处 `@@INLINE` 标记从源码移除。
+- **配置注入改为函数调用**：启动器不再替换源码里的 `EMBEDDED_CONFIG_B64` 赋值行，而是调用入口模块的 `set_embedded_config()`。这样后续把 `load_config` 搬进 `config.py` 时，只要入口模块 re-export 该函数，注入链路自动跟随（直接赋值模块属性在搬家后会静默丢配置，表现为启动即 `unauthorized`）。
+- **契约随包分发**：`remote/contract.json` 现在打进 Kernel 源码包；`package.json` 的 `files` 扩到 `remote/**/*.py` 与 `remote/contract.json`，`scripts/package.mjs` 的 `remote` 目录放行 `.json` 并把 `_entry.py` / `__init__.py` / `contract.json` 列入必需文件。硬编码 `_FALLBACK_LIMITS` 本轮**未删**（会收紧无注入契约时的默认边界，安排到下一批与校验器单测同批做）。
+- **验证 payload 复用同一打包器**：`tools/verify-model.mjs` 用 `entryModule: 'payload.verify_model'` + `extraFiles` 把 `tools/payload/verify-model.py` 作为包内模块打进归档，不再各自内联 anima 运行时与 Loader。
+- **Host 侧收口（Batch 1）**：`lib/jobs.js`（948 行）拆为 `lib/jobs/{validator,errors,reference-loader,queue}.js`，`lib/kaggle-oauth.js`（674 行）拆为 `lib/kaggle/oauth/{pkce,browser,callback-server,session,text}.js`；两个原文件保留 16 / 23 行的聚合门面，导出名、函数签名与日志 scope 均未变，调用方零改动。
+- **修复 Windows 原子写入抖动**：`lib/fs-atomic.js` 的 `rename` 遇到杀毒软件 / 索引服务瞬时占用会抛 `EPERM`，此前会让 Kaggle 直连登录静默失败（`/state` 只显示「账号接入失败：unknown」）。现对 `EPERM` / `EACCES` / `EBUSY` 做 5 次有界重试（累计约 150ms），`test/kaggle-direct.mjs` 由「3 次跑 2 次失败」变为连跑 4 次全过。
+
+### 测试
+
+- `test/kernel-package.mjs` 重写为源码包口径（15 项）：CRC 标准向量、归档确定性、Python `zipfile.testzip()` 校验、条目与 `remote/` 一致、解包后 `import remote.daemon` 且 `set_embedded_config()` 生效、模板占位符唯一性、`extraFiles`、脚本模式（探针）。
+- `test/check-verify-model.mjs` 同步为「payload 从源码包导入 + 归档含 payload 模块」（7 项）。
+- `test/daemon-unit.py` 的内联标记断言改为「源码不再含内联标记」，并新增 `set_embedded_config` 注入用例（248 项）。
+- 全量 `npm test` 通过；`npm run package` 产物含 `remote/contract.json` 与 `lib/jobs/`、`lib/kaggle/oauth/`。
+
 ## 0.10.0 — 2026-11-14
 
 > v0.10 首个版本：创作参数面板做减法（去风格预设、按模型真实能力显隐排除项、画面设置与参考图互斥、生成张数提权），AI 助手做加法（模型知识单一来源、意图 JSON v2、多轮上下文、通用澄清、确认卡带入参数面板），并把契约、测试、文档与版本收口到 0.10.0。

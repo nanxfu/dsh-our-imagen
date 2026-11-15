@@ -4,7 +4,7 @@
  *
  * 流程：
  *   1. 读取并校验模型配置（支持 .tmp 草稿与 models/ 下的正式文件）；
- *   2. buildKernelFolder 把 tools/payload/verify-model.py 与配置注入打包；
+ *   2. buildKernelFolder 把 remote/ 源码包与 payload 一起内嵌进启动器；
  *   3. pushKernel 推送，轮询 kernelStatus 直到结束；
  *   4. 下载产物，校验 PNG 文件头，打印体检数据；
  *   5. --write 时把 measured 就地写回配置。
@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url'
 
 import { TIMEOUTS } from '../shared/contract.js'
 import { downloadKernelOutput, kaggleUsername, kernelLogs, kernelStatus, pushKernel } from '../lib/kaggle.js'
-import { buildKernelFolder, hasInlineMarkerLine, randomSlug, removeKernelFolder } from '../lib/kernel.js'
+import { buildKernelFolder, randomSlug, removeKernelFolder } from '../lib/kernel.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const PAYLOAD_SOURCE = join(ROOT, 'tools', 'payload', 'verify-model.py')
@@ -238,27 +238,29 @@ async function packageKernel(model, username) {
     username,
     slug: randomSlug(),
     config,
-    sourcePath: PAYLOAD_SOURCE,
+    // 验证 payload 与 daemon 共用同一个源码包：remote/ 提供 Loader 与运行时，
+    // payload 作为包内模块一起打进归档，入口换成它自己的 main。
+    entryModule: 'payload.verify_model',
+    extraFiles: [{ from: PAYLOAD_SOURCE, to: 'payload/verify_model.py' }],
     enableGpu: true,
   })
   return { folder, config }
 }
 
-/** 校验打包结果：注入配置能解码且与预期一致；payload 已内联成单文件（Kaggle 只收单个 code_file）。 */
+/** 校验打包结果：注入配置能解码且与预期一致；源码包完整内嵌（Kaggle 只收单个 code_file）。 */
 async function inspectPackage(folder, config) {
   const source = await readFile(join(folder.dir, 'daemon.py'), 'utf8')
   const match = source.match(/^EMBEDDED_CONFIG_B64 = "([^"]*)"$/m)
   if (!match) throw new Error('打包后的脚本缺少 EMBEDDED_CONFIG_B64 注入行')
   const injected = JSON.parse(Buffer.from(match[1], 'base64').toString('utf8'))
   if (JSON.stringify(injected) !== JSON.stringify(config)) throw new Error('注入配置与预期不一致')
-  if (/^[ \t]*from anima_runtime import /m.test(source)) {
-    throw new Error('打包后的 payload 仍含未内联的 anima_runtime import 行')
-  }
-  if (hasInlineMarkerLine(source)) throw new Error('打包后的 payload 仍有未处理的 @@INLINE 标记')
-  const runtimeDefs = source.match(/^def load_anima_runtime\(/gm) ?? []
-  if (runtimeDefs.length !== 1) {
-    throw new Error(`打包后的 payload 中 load_anima_runtime 定义 ${runtimeDefs.length} 份，应为 1 份`)
-  }
+  if (source.includes('@@INLINE')) throw new Error('打包后的 payload 仍含 @@INLINE 标记')
+  if (!source.includes('"payload.verify_model"')) throw new Error('入口模块不是 payload.verify_model')
+  const bundleMatch = source.match(/^BUNDLE_B64 = "([^"]*)"$/m)
+  if (!bundleMatch) throw new Error('打包后的脚本缺少 BUNDLE_B64 源码包')
+  const bundle = Buffer.from(bundleMatch[1], 'base64')
+  if (bundle.subarray(0, 4).toString('latin1') !== 'PK\u0003\u0004') throw new Error('源码包不是 ZIP 容器')
+  if (!folder.bundle || folder.bundle.files < 3) throw new Error('源码包条目过少，疑似打包不完整')
   const metadata = JSON.parse(await readFile(join(folder.dir, 'kernel-metadata.json'), 'utf8'))
   if (metadata.code_file !== 'daemon.py') throw new Error('kernel-metadata.code_file 不是 daemon.py')
   if (metadata.enable_gpu !== true) throw new Error('kernel-metadata.enable_gpu 不是 true')
