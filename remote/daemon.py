@@ -618,116 +618,28 @@ def free_cuda_cache() -> None:
 
 from cache_ops import CACHE_PROBE_WORK_DIR, DISK_HEADROOM, HF_CACHE_ENV_NAMES, HF_CACHE_REPO_PREFIX, HF_REPO_RE, HF_TOKEN_ENV_NAMES, _SECRET_MIN_CHARS, _cache_free_gib, _cache_path_protected, _decode_mount_path, _dir_size_gib, _existing_ancestor, _redact_secrets, _repo_key, _with_headroom, anima_local_assets_from, build_cache_probe_lines, cache_keep_repos_from, cache_model_dirs, cache_repo_candidates, disk_usage_root, disk_usage_target, disk_usage_text, ensure_cache_capacity_with, ensure_disk_capacity_with, evict_cache_dirs, hf_hub_cache_dir, local_model_dir_from, longest_mount_prefix, mount_point_of_path, pipeline_repos, prefetch_weights, probe_free_gib, read_mount_points, repo_from_cache_dir_name, required_download_gb, resolve_local_model_from, resolve_local_weight_from, run_disk_precheck  # noqa: E402
 
-_CACHE_PROBE_DONE = False
+from remote.infra.cache import CacheManager  # noqa: E402
 
+# 磁盘与缓存的门面：构造一次；config 传活对象（注入契约在启动期原地回填，见 config.py）。
+CACHE = CacheManager(config=CONFIG, log_fn=log, error_cls=LoadError)
 
-def resolve_local_model(repo: str) -> str | None:
-    """repo 命中 local_models 且目录含 model_index.json 时返回本地目录。"""
-    return resolve_local_model_from(repo, CONFIG.local_models, log=log)
-
-
-def resolve_local_weight(repo: str, weight_name: str) -> str | None:
-    """LoRA 仓库命中预挂载且权重文件存在时返回本地文件路径。"""
-    return resolve_local_weight_from(repo, weight_name, CONFIG.local_models, log=log)
-
-
-def local_model_dir(repo: str) -> str | None:
-    """repo 命中 local_models 且目录存在时返回该目录（不要求 model_index.json）。"""
-    return local_model_dir_from(repo, CONFIG.local_models)
-
-
-def anima_local_assets(pipeline_spec: dict) -> dict[str, str]:
-    """把 anima 的四个资产解析成预挂载路径；未命中的键留给在线下载。"""
-    return anima_local_assets_from(
-        pipeline_spec,
-        CONFIG.local_models,
-        resolve_weight_fn=resolve_local_weight,
-        local_dir_fn=local_model_dir,
-        log=log,
-    )
-
-
-def mount_point_of(path: str) -> str:
-    """path 所在挂载点：优先 /proc/mounts 最长前缀匹配，无该文件时降级到 st_dev。"""
-    return mount_point_of_path(path, mount_reader=read_mount_points)
-
-
-def cache_probe_lines() -> list[str]:
-    """缓存 / 挂载点 / 剩余空间诊断行；任何失败都降级为 unknown，绝不抛异常。"""
-    return build_cache_probe_lines(
-        mount_fn=mount_point_of,
-        free_fn=probe_free_gib,
-        cache_dir_fn=hf_hub_cache_dir,
-    )
-
-
-def _log_cache_probe() -> None:
-    """模型加载前打印一次缓存探针（进程内只打一次，避免刷屏）。"""
-    global _CACHE_PROBE_DONE
-    if _CACHE_PROBE_DONE:
-        return
-    _CACHE_PROBE_DONE = True
-    try:
-        for line in cache_probe_lines():
-            log(line)
-    except Exception:
-        pass
-
-
-def disk_precheck(pipeline_spec: dict, root: str | None = None, usage=None) -> dict | None:  # noqa: ANN001
-    """磁盘预检：返回 ``{required_gb, free_gb, path, enough}``；没有体积信息时返回 None。"""
-    return run_disk_precheck(
-        pipeline_spec,
-        root=root,
-        usage=usage,
-        target_fn=disk_usage_target,
-        log=log,
-    )
-
-
-def ensure_disk_capacity(pipeline_spec: dict) -> None:
-    """下载前磁盘预检：Flux.2 全量权重会撑爆 Kaggle 20GB 空间；预挂载时跳过。"""
-    ensure_disk_capacity_with(
-        pipeline_spec,
-        resolve_model_fn=resolve_local_model,
-        precheck_fn=disk_precheck,
-        log=log,
-        error_cls=LoadError,
-    )
-
-
-def cache_keep_repos(pipeline_spec) -> set[str]:  # noqa: ANN001
-    """切模型清理的不可删仓库集合：目标 pipeline 全部依赖 + 所有预挂载仓库。"""
-    return cache_keep_repos_from(pipeline_spec, CONFIG.local_models)
-
-
-def evict_cache_for(required_gb, keep_repos=None, *, root: str | None = None, usage=None) -> dict:  # noqa: ANN001
-    """按需清理 HF 缓存（LRU），返回 ``{required_gb, free_gb, path, evicted, enough}``。"""
-    return evict_cache_dirs(
-        required_gb,
-        keep_repos,
-        root=root,
-        usage=usage,
-        local_models=CONFIG.local_models,
-        log=log,
-        error_cls=LoadError,
-    )
-
-
-def ensure_cache_capacity(pipeline_spec: dict) -> None:
-    """切模型前的缓存清理闸门：空间足够时不扫目录、不删文件，清完仍不足才报错。"""
-    ensure_cache_capacity_with(
-        pipeline_spec,
-        resolve_model_fn=resolve_local_model,
-        anima_assets_fn=anima_local_assets,
-        keep_repos_fn=cache_keep_repos,
-        evict_fn=evict_cache_for,
-    )
-
-
-def _prefetch_weights(base: str, allow_patterns) -> None:  # noqa: ANN001
-    """按白名单预拉取，避免整仓下载把 /kaggle/working 的 20GB 配额写爆。"""
-    prefetch_weights(base, allow_patterns, log=log)
+# ── 门面别名（Batch 3 随 daemon 门面一起删） ──────────────────────────────────
+#
+# 实现已不在本文件：下面这些名字只是 `CACHE` 上同名方法的别名，供旧调用点与单测按模块
+# 属性取值。**替换这里的名字不会改变内部行为**——内部调用一律走 `CACHE.*`。要观察或改变
+# 内部行为（例如"闸门是否真的去清理缓存"），请替换 `CACHE` 上的同名方法；若哪天有人把实现
+# 写回本文件，两处替换会分别命中不同对象，那就是 §1.3.6 的假绿形态。
+resolve_local_model = CACHE.resolve_local_model
+resolve_local_weight = CACHE.resolve_local_weight
+local_model_dir = CACHE.local_model_dir
+anima_local_assets = CACHE.anima_local_assets
+mount_point_of = CACHE.mount_point_of
+cache_probe_lines = CACHE.cache_probe_lines
+disk_precheck = CACHE.disk_precheck
+ensure_disk_capacity = CACHE.ensure_disk_capacity
+cache_keep_repos = CACHE.cache_keep_repos
+evict_cache_for = CACHE.evict_cache_for
+ensure_cache_capacity = CACHE.ensure_cache_capacity
 
 
 def _from_pretrained(factory, base: str, kwargs: dict, loader: str):  # noqa: ANN001
@@ -757,18 +669,18 @@ def build_pipeline(pipeline_spec: dict):
     allow_patterns = pipeline_spec.get("allowPatterns")
 
     # P2.1：命中预挂载目录时直接用本地权重（跳过下载与磁盘预检）。
-    local_base = resolve_local_model(base)
+    local_base = CACHE.resolve_local_model(base)
     # anima 是「单文件 DiT + 独立文本编码器 / VAE / 分词器」，预挂载时按文件与子目录判断；
     # DiT 命中本地时跳过整仓预下载与磁盘预检（其余资产按需下载）。
-    anima_assets = anima_local_assets(pipeline_spec) if loader == "anima" else {}
+    anima_assets = CACHE.anima_local_assets(pipeline_spec) if loader == "anima" else {}
     if anima_assets.get("dit"):
         log(f"[load] 使用预挂载 anima DiT 权重：{anima_assets['dit']}")
     else:
-        ensure_disk_capacity(pipeline_spec)
+        CACHE.ensure_disk_capacity(pipeline_spec)
         if local_base:
             log(f"[load] 使用预挂载权重加载底座：{base} → {local_base}")
         else:
-            _prefetch_weights(base, allow_patterns)
+            CACHE.prefetch_weights(base, allow_patterns)
     base_source = local_base or base
 
     if loader == "anima":
@@ -791,7 +703,7 @@ def build_pipeline(pipeline_spec: dict):
         lora_repo = str(lora.get("repo") or "").strip()
         lora_weight = str(lora.get("weight") or "").strip()
         if lora_repo and lora_weight:
-            local_lora_weight = resolve_local_weight(lora_repo, lora_weight)
+            local_lora_weight = CACHE.resolve_local_weight(lora_repo, lora_weight)
 
     try:
         pipe = load_diffusers_pipeline(
@@ -853,12 +765,12 @@ def ensure_pipeline(pipeline_spec: dict) -> tuple[object, float]:
 
     set_phase("loading", f"加载 {pipeline_spec.get('base')}")
     # 只读诊断：首次加载前记下 HF 缓存与 /kaggle/working 的挂载点/剩余空间（进程内只打一次）。
-    _log_cache_probe()
+    CACHE.log_probe_once()
     started = time.time()
     try:
         # M4.1：真正下载/加载前按需清理旧模型缓存。切模型时 release_pipeline 已先执行
         # （其中含 gc.collect() 与 torch.cuda.empty_cache()），这里只删磁盘上的旧权重。
-        ensure_cache_capacity(pipeline_spec)
+        CACHE.ensure_cache_capacity(pipeline_spec)
         pipe, identity = build_pipeline(pipeline_spec)
     except RequestError:
         set_phase(previous_phase)

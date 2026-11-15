@@ -86,7 +86,7 @@ remote/
 
 > 与初版相比新增 `text.py` 与 `inference/executor.py`：审计发现 `short()` 有 4 份实现、`run_task`/`run_tasks` 在目标结构里无处安放，硬塞进 `pipeline_manager` 会把"管线生命周期"和"单次推理"混在一起。
 >
-> 落地进度（Batch 2 切片⑥ 之后）：`config` / `state` / `observability/health` / `infra/process` / `transport/{validator,http_server}` / `inference/reference_codec` / `jobs/*` / `app` 已就位；`observability/log_ring.py`（现为 `remote/log_ring.py`）、`infra/{cache,tunnel,ntfy}.py`、`inference/{registry,scheduler,pipeline_manager,executor}.py`、`inference/loaders/`、`inference/anima/`、`verify_cli.py` 仍待推进，顺序与理由见 §4.1。
+> 落地进度（Batch 2 切片⑥ 之后）：`config` / `state` / `observability/health` / `infra/process` / `infra/cache` / `transport/{validator,http_server}` / `inference/reference_codec` / `jobs/*` / `app` 已就位；`observability/log_ring.py`（现为 `remote/log_ring.py`）、`infra/{tunnel,ntfy}.py`、`inference/{registry,scheduler,pipeline_manager,executor}.py`、`inference/loaders/`、`inference/anima/`、`verify_cli.py` 仍待推进，顺序与理由见 §4.1。
 
 ### 2.2 模块导入约定（审计结论）
 远端包内**统一用绝对包导入**（`from remote.state import ...`），不用相对导入。原因：`test/daemon-unit.py` 用 `spec_from_file_location` 以任意模块名按路径加载 `daemon.py`，模块没有父包，`from .x import y` 会直接 `ImportError: no known parent package`；绝对导入只要求仓库根在 `sys.path`（启动器与测试都已满足），搬家后不需要再改加载方式。Batch 3 若把加载方式改成 `import remote.daemon`，可再统一转相对导入（非必须）。
@@ -167,7 +167,7 @@ remote/
 | :--- | :--- | :--- |
 | ⑥a | `transport/http_server.py`：`DaemonHandler` + `HttpApi` + `start_server` | ✅ 已落地 |
 | ⑥b | `app.py`：`DaemonApp`（启动顺序 / 信号 / 退出清理 / 空闲看门狗） | ✅ 已落地 |
-| ⑥c | `infra/cache.py`：`CacheManager`（磁盘预检、LRU 驱逐、预挂载目录解析） | ⏳ 待做 |
+| ⑥c | `infra/cache.py`：`CacheManager`（磁盘预检、LRU 驱逐、预挂载目录解析） | ✅ 已落地 |
 | ⑥d | `infra/tunnel.py`：`TunnelSupervisor`（注入 `phase_setter` / `ready_publisher`） | ⏳ 待做 |
 | ⑥e | `inference/registry.py`：`LoaderRegistry`（Strategy + 注册表，替代 loader 分支） | ⏳ 待做 |
 | ⑥f | 删 `daemon.py` 门面 + `test/daemon-unit.py` 按域拆到 `test/remote/` | ⏳ 与 Batch 3 合并 |
@@ -187,11 +187,29 @@ evict_cache_for` 与 `tunnel_monitor → announce → recover → set_phase/publ
 `_spawn_tunnel_process` / `tunnel_wait_exit` 这 8 个名字都被 `mock.patch.object(d, ...)`
 替换后断言"内部调用命中了替换"。收成实例方法后，替换只会改到 daemon 的同名影子属性，
 内部调用走 `self.xxx` —— 断言仍在跑、仍绿，但测的是旧实现（§1.3.6 的静默假绿）。
+⑥c 已按此口径把 4 个缓存替换点改成 `d.CACHE.<方法>`（共 14 处调用/替换），⑥d 的 4 个
+隧道替换点同样处理。
 
 **⑥e 与 §5.7 的关系**：`LoaderRegistry` 要合并 `SUPPORTED_LOADERS` /
 `SUPPORTED_IMG2IMG_LOADERS` / `build_pipeline` / `load_diffusers_pipeline` /
 `cache_ops.pipeline_repos` 五处分支，会改 `LoadError` 文案（直接进 UI 与 Host 分支），
 属行为变更，必须单独一片并连带改断言。
+
+**⑥c 落地记（2026-11-15）**：`CacheManager` 建在 `remote/infra/cache.py`（180 行），把
+daemon 的 13 个包装收成实例方法，daemon 只留同名别名（Batch 3 删）。三处细节留档：
+
+1. **纯函数仍留在 `remote/cache_ops.py`**：`scripts/package.mjs` 与
+   `test/kernel-package.mjs` 按文件名把 `remote/cache_ops.py` 列入必需项，折进
+   `infra/cache.py` 必须同批改打包清单（与 `log_ring → observability/` 一起做）；
+   本切片只解决"谁持有配置与错误类型"。
+2. **探针标志从模块级 global 收进实例**：删掉 `_CACHE_PROBE_DONE`，改为
+   `CACHE.log_probe_once()` / `CACHE.reset_probe()`。影子全局被重绑定后行为不变，属
+   §1.3.6 的假绿形态；现在"只打一次"只有一个入口。
+3. **14 处测试替换点同批迁移**：`disk_precheck` / `mount_point_of` / `probe_free_gib` /
+   `read_mount_points` / `evict_cache_for` / `resolve_local_model` /
+   `resolve_local_weight` / `ensure_disk_capacity` / `ensure_cache_capacity` 的替换目标
+   全部改为 `d.CACHE.<同名方法>`；新增 4 项边界用例（`CACHE` 是唯一持有者、daemon 不再
+   定义这些包装、闸门替换命中实例、探针只打一次），单测 272 → 276。
 
 **切片⑥ 落地时的两处权衡（留档）**：
 

@@ -18,10 +18,11 @@
 - **契约随包分发**：`remote/contract.json` 现在打进 Kernel 源码包；`package.json` 的 `files` 扩到 `remote/**/*.py` 与 `remote/contract.json`，`scripts/package.mjs` 的 `remote` 目录放行 `.json` 并把 `_entry.py` / `__init__.py` / `contract.json` 列入必需文件。硬编码 `_FALLBACK_LIMITS` 本轮**未删**（会收紧无注入契约时的默认边界，安排到下一批与校验器单测同批做）。
 - **验证 payload 复用同一打包器**：`tools/verify-model.mjs` 用 `entryModule: 'payload.verify_model'` + `extraFiles` 把 `tools/payload/verify-model.py` 作为包内模块打进归档，不再各自内联 anima 运行时与 Loader。
 - **Host 侧收口（Batch 1）**：`lib/jobs.js`（948 行）拆为 `lib/jobs/{validator,errors,reference-loader,queue}.js`，`lib/kaggle-oauth.js`（674 行）拆为 `lib/kaggle/oauth/{pkce,browser,callback-server,session,text}.js`；两个原文件保留 16 / 23 行的聚合门面，导出名、函数签名与日志 scope 均未变，调用方零改动。
-- **远端包化推进到切片⑥（Batch 2）**：`remote/` 已按目标分层落地 `config` / `state` / `observability/health` / `infra/process` / `transport/{validator,http_server}` / `inference/reference_codec` / `jobs/{models,store,runner}` / `app`；`remote/daemon.py` 从 2579 行降到 1533 行，只留配置注入点、ntfy 会合、模型加载与出图执行，以及各域的薄包装。
+- **远端包化推进到切片⑥（Batch 2）**：`remote/` 已按目标分层落地 `config` / `state` / `observability/health` / `infra/{process,cache}` / `transport/{validator,http_server}` / `inference/reference_codec` / `jobs/{models,store,runner}` / `app`；`remote/daemon.py` 从 2579 行降到 1445 行，只留配置注入点、ntfy 会合、模型加载与出图执行，以及各域的薄包装。
   - **⑥a 传输层**：`DaemonHandler` 与 `start_http_server` 搬进 `remote/transport/http_server.py`，依赖由 `HttpApi` 显式注入——`config` / `state` 传活对象，其余传 lambda 延迟解析，handler 不再 import daemon。`/health` 的取样顺序（持 `STATE_LOCK` 取快照 → 释放 → 取 `queue_depth`）仍留在 daemon，单测的锁序观察点不变。
   - **⑥b 生命周期**：启动顺序、信号、退出清理与空闲看门狗搬进 `remote/app.py` 的 `DaemonApp`；daemon 末尾以 lambda 装配实例并 re-export `main` / `runtime_boot` / `tunnel_boot`，`mock.patch.object(daemon, "install_dependencies")` 这类替换仍在调用点生效。
-  - 剩余切片 ⑥c / ⑥d / ⑥e（`CacheManager` / `TunnelSupervisor` / `LoaderRegistry`）与 ⑥f（删门面 + 测试按域拆分）的施工顺序、以及"为什么不能一次做完"记在 `docs/REFACTOR_ARCHITECTURE_SPEC.md` §4.1。
+  - **⑥c 缓存域**：`remote/infra/cache.py` 的 `CacheManager` 接管 13 个缓存包装（预挂载解析、探针、磁盘预检、LRU 驱逐、预下载），daemon 只留同名别名。交叉调用改走 `self.*`（`ensure_cache_capacity → evict_cache_for` 等），单测因此能把"闸门是否真的去清理"替换到实例上观察；探针"只打一次"的 `_CACHE_PROBE_DONE` 影子全局删除，改为 `CACHE.log_probe_once()` / `reset_probe()`。纯函数仍留在 `remote/cache_ops.py`——打包清单按文件名钉住了它，折叠要与 `log_ring → observability/` 同批改。
+  - 剩余切片 ⑥d / ⑥e（`TunnelSupervisor` / `LoaderRegistry`）与 ⑥f（删门面 + 测试按域拆分）的施工顺序、以及"为什么不能一次做完"记在 `docs/REFACTOR_ARCHITECTURE_SPEC.md` §4.1。
 - **修复 Windows 原子写入抖动**：`lib/fs-atomic.js` 的 `rename` 遇到杀毒软件 / 索引服务瞬时占用会抛 `EPERM`，此前会让 Kaggle 直连登录静默失败（`/state` 只显示「账号接入失败：unknown」）。现对 `EPERM` / `EACCES` / `EBUSY` 做 5 次有界重试（累计约 150ms），`test/kaggle-direct.mjs` 由「3 次跑 2 次失败」变为连跑 4 次全过。
 
 ### 测试
@@ -29,7 +30,8 @@
 - `test/kernel-package.mjs` 重写为源码包口径（15 项）：CRC 标准向量、归档确定性、Python `zipfile.testzip()` 校验、条目与 `remote/` 一致、解包后 `import remote.daemon` 且 `set_embedded_config()` 生效、模板占位符唯一性、`extraFiles`、脚本模式（探针）。
 - `test/check-verify-model.mjs` 同步为「payload 从源码包导入 + 归档含 payload 模块」（7 项）。
 - `test/daemon-unit.py` 的内联标记断言改为「源码不再含内联标记」，并新增 `set_embedded_config` 注入用例。
-- `test/daemon-unit.py` 增至 272 项（切片⑥ 新增 10 项边界用例）：`HttpApi` 的装配身份与「lambda 延迟解析」（patch `daemon.submit_job` 后必须命中）、队列满 → 429、未装配时 handler 立即报错、`Server` 头版本；`DaemonApp` 的启动顺序（HTTP 早于隧道与运行时）、无鉴权 / 端口占用两条退出路径、daemon 暴露的 `APP` 绑定，以及「`app.py` 不得反向 import daemon」——用 AST 看 import 语句，不按字符串匹配（模块头说明文字里就写着这句话）。
+- `test/daemon-unit.py` 增至 276 项（切片⑥ 新增 14 项边界用例）：`HttpApi` 的装配身份与「lambda 延迟解析」（patch `daemon.submit_job` 后必须命中）、队列满 → 429、未装配时 handler 立即报错、`Server` 头版本；`DaemonApp` 的启动顺序（HTTP 早于隧道与运行时）、无鉴权 / 端口占用两条退出路径、daemon 暴露的 `APP` 绑定，以及「`app.py` 不得反向 import daemon」——用 AST 看 import 语句，不按字符串匹配（模块头说明文字里就写着这句话）。
+- **缓存域的 14 处测试替换点同批迁移**：`disk_precheck` / `mount_point_of` / `probe_free_gib` / `read_mount_points` / `evict_cache_for` / `resolve_local_model` / `resolve_local_weight` / `ensure_disk_capacity` / `ensure_cache_capacity` 的 patch 目标全部改为 `d.CACHE.<同名方法>`；新增 4 项守卫（`CACHE` 是唯一持有者、daemon 不再定义这些包装、闸门替换命中实例、探针只打一次）。不迁移的话断言仍会绿，只是测到 daemon 上的影子属性——正是规格 §1.3.6 的静默假绿。
 - `test/check-contract.mjs` 的 daemon 协议校验改为扫描 `daemon.py` + `transport/http_server.py` + `app.py`：路由搬到传输层、phase 取值搬到生命周期之后，校验仍指向真实实现位置，不因搬家静默空过。
 - 全量 `npm test` 通过（含 272 项 Python 单测、契约 11/11）；`npm run package` 产物含 `remote/contract.json` 与 `lib/jobs/`、`lib/kaggle/oauth/`。
 

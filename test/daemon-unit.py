@@ -60,6 +60,9 @@
      活对象、其余 lambda 延迟解析，patch 后必须命中）、队列满 → 429、未装配立即报错；
      `DaemonApp` 的启动顺序（HTTP 早于隧道与运行时）、两条退出路径（无鉴权 / 端口占用）、
      daemon 暴露的 `APP` 绑定，以及 app.py 不反向 import 入口模块
+30. 切片⑥c 的缓存域边界：`CACHE` 是唯一持有者（config 传活对象而非快照）、daemon 不再
+     定义这些包装、闸门与探针的替换点必须命中实例（替换 daemon 上的同名别名不会改变
+     内部行为）、探针"只打一次"收在实例里
 
 运行：python test/daemon-unit.py
 """
@@ -135,6 +138,7 @@ d = _load_daemon()
 # 单例与常量的真实宿主：daemon 只是 re-export，断言"两边是同一个对象"必须直接看这些模块。
 import remote.app as remote_app  # noqa: E402
 import remote.config as remote_config  # noqa: E402
+import remote.infra.cache as remote_cache  # noqa: E402
 import remote.infra.process as remote_process  # noqa: E402
 import remote.jobs.models as remote_job_models  # noqa: E402
 import remote.jobs.store as remote_job_store  # noqa: E402
@@ -785,6 +789,51 @@ class AppLifecycleBoundaryTest(DaemonUnitTest):
             elif isinstance(node, ast.ImportFrom):
                 modules.append(node.module or "")
         self.assertFalse([name for name in modules if "daemon" in name], modules)
+
+
+class CacheManagerBoundaryTest(DaemonUnitTest):
+    """切片⑥c：缓存域收进 CACHE，daemon 只留别名；内部交叉调用必须走实例。"""
+
+    def test_cache_is_the_single_owner_of_the_domain(self) -> None:
+        self.assertIsInstance(d.CACHE, remote_cache.CacheManager)
+        self.assertIs(d.CACHE.config, d.CONFIG, "CacheManager 必须读同一份活配置，不能吃快照")
+        # 别名指向同一个方法对象，不是第二份实现。
+        self.assertEqual(d.evict_cache_for, d.CACHE.evict_cache_for)
+        self.assertEqual(d.ensure_cache_capacity, d.CACHE.ensure_cache_capacity)
+
+    def test_daemon_no_longer_defines_the_wrappers(self) -> None:
+        source = DAEMON_PATH.read_text(encoding="utf-8")
+        for name in ("evict_cache_for", "ensure_cache_capacity", "disk_precheck", "resolve_local_model"):
+            self.assertIsNone(
+                re.search(rf"(?m)^def {name}\(", source),
+                f"daemon.py 不应再定义 {name}（实现已归 CacheManager）",
+            )
+        # 探针"只打一次"的标志也收进实例：留影子全局的话，重绑定它不会改变行为。
+        self.assertNotIn("_CACHE_PROBE_DONE", source)
+
+    def test_gate_and_probe_replacements_hit_the_instance(self) -> None:
+        """闸门内部必须走 self.*：替换 CACHE 上的方法要真的改变行为。"""
+        d.CONFIG.local_models = {}
+        calls: list[tuple] = []
+        with mock.patch.object(
+            d.CACHE, "evict_cache_for", side_effect=lambda required, keep: calls.append((required, keep)) or {}
+        ):
+            d.ensure_cache_capacity({"loader": "sdxl", "base": "org/base", "downloadGb": 2.0})
+        self.assertEqual(calls[0][0], 2.0)
+
+    def test_probe_only_logs_once_until_reset(self) -> None:
+        d.CACHE.reset_probe()
+        try:
+            with mock.patch.object(d.CACHE, "cache_probe_lines", return_value=["[cache] stub-once"]):
+                d.CACHE.log_probe_once()
+                d.CACHE.log_probe_once()
+            self.assertEqual(self.logs().count("[cache] stub-once"), 1)
+            d.CACHE.reset_probe()
+            with mock.patch.object(d.CACHE, "cache_probe_lines", return_value=["[cache] stub-again"]):
+                d.CACHE.log_probe_once()
+            self.assertIn("[cache] stub-again", self.logs())
+        finally:
+            d.CACHE.reset_probe()
 
 
 class BuildConfigTest(DaemonUnitTest):
@@ -2003,7 +2052,7 @@ class DiskPrecheckTest(DaemonUnitTest):
     def test_insufficient_space_raises_readable_error(self) -> None:
         spec = {"base": "black-forest-labs/FLUX.2-klein-4B", "downloadGb": 15.2}
         result = d.disk_precheck(spec, root="/kaggle/working", usage=fake_usage(10.0))
-        with mock.patch.object(d, "disk_precheck", return_value=result):
+        with mock.patch.object(d.CACHE, "disk_precheck", return_value=result):
             with self.assertRaises(d.LoadError) as ctx:
                 d.ensure_disk_capacity(spec)
         message = str(ctx.exception)
@@ -2013,7 +2062,7 @@ class DiskPrecheckTest(DaemonUnitTest):
 
     def test_sufficient_space_logs_and_passes(self) -> None:
         result = {"required_gb": 17.48, "free_gb": 19.0, "path": "/kaggle/working", "enough": True}
-        with mock.patch.object(d, "disk_precheck", return_value=result):
+        with mock.patch.object(d.CACHE, "disk_precheck", return_value=result):
             d.ensure_disk_capacity({"base": "org/model", "downloadGb": 15.2})
         self.assertLogContains("磁盘预检通过")
 
@@ -2028,7 +2077,7 @@ class DiskPrecheckTest(DaemonUnitTest):
         with tempfile.TemporaryDirectory() as directory:
             Path(directory, "model_index.json").write_text("{}", encoding="utf-8")
             d.CONFIG.local_models = {"org/base": directory}
-            with mock.patch.object(d, "disk_precheck", side_effect=AssertionError("预挂载时不应做磁盘预检")):
+            with mock.patch.object(d.CACHE, "disk_precheck", side_effect=AssertionError("预挂载时不应做磁盘预检")):
                 d.ensure_disk_capacity({"base": "org/base", "downloadGb": 15.2})
         self.assertLogContains("跳过磁盘预检")
 
@@ -2042,10 +2091,10 @@ class CacheProbeTest(DaemonUnitTest):
 
     def setUp(self) -> None:
         super().setUp()
-        d._CACHE_PROBE_DONE = False
+        d.CACHE.reset_probe()
 
     def tearDown(self) -> None:
-        d._CACHE_PROBE_DONE = False
+        d.CACHE.reset_probe()
         super().tearDown()
 
     def test_cache_dir_env_priority(self) -> None:
@@ -2080,8 +2129,8 @@ class CacheProbeTest(DaemonUnitTest):
         with tempfile.TemporaryDirectory() as directory:
             with mock.patch.dict(os.environ, {"HF_HUB_CACHE": directory}, clear=False):
                 with mock.patch.object(d.os.path, "isdir", return_value=True):
-                    with mock.patch.object(d, "mount_point_of", return_value="/kaggle/working"):
-                        with mock.patch.object(d, "probe_free_gib", return_value="12.3"):
+                    with mock.patch.object(d.CACHE, "mount_point_of", return_value="/kaggle/working"):
+                        with mock.patch.object(d.CACHE, "probe_free_gib", return_value="12.3"):
                             line = d.cache_probe_lines()[0]
         self.assertIn("/kaggle/working mount=/kaggle/working free=12.3GiB", line)
 
@@ -2110,7 +2159,7 @@ class CacheProbeTest(DaemonUnitTest):
         with tempfile.TemporaryDirectory() as directory:
             env["HF_HUB_CACHE"] = directory
             with mock.patch.dict(os.environ, env, clear=False):
-                d._log_cache_probe()
+                d.CACHE.log_probe_once()
         logs = self.logs()
         self.assertIn("[cache]", logs)
         self.assertIn("HF_HUB_CACHE=", logs)
@@ -2128,7 +2177,7 @@ class CacheProbeTest(DaemonUnitTest):
 
     def test_probe_degrades_on_usage_error(self) -> None:
         with mock.patch.object(d.shutil, "disk_usage", side_effect=OSError("denied")):
-            with mock.patch.object(d, "read_mount_points", return_value=None):
+            with mock.patch.object(d.CACHE, "read_mount_points", return_value=None):
                 with mock.patch.object(d.os, "stat", side_effect=OSError("denied")):
                     lines = d.cache_probe_lines()
         self.assertEqual(len(lines), 1)
@@ -2136,7 +2185,7 @@ class CacheProbeTest(DaemonUnitTest):
         self.assertIn("free=unknown", lines[0])
 
     def test_mount_point_never_raises(self) -> None:
-        with mock.patch.object(d, "read_mount_points", return_value=None):
+        with mock.patch.object(d.CACHE, "read_mount_points", return_value=None):
             with mock.patch.object(d.os, "stat", side_effect=OSError("denied")):
                 self.assertEqual(d.mount_point_of("no/such/dir"), "unknown")
 
@@ -2364,11 +2413,11 @@ class CacheCapacityTest(DaemonUnitTest):
         with tempfile.TemporaryDirectory() as directory:
             Path(directory, "model_index.json").write_text("{}", encoding="utf-8")
             d.CONFIG.local_models = {"org/base": directory}
-            with mock.patch.object(d, "evict_cache_for", side_effect=AssertionError("预挂载时不应清理缓存")):
+            with mock.patch.object(d.CACHE, "evict_cache_for", side_effect=AssertionError("预挂载时不应清理缓存")):
                 d.ensure_cache_capacity({"loader": "sdxl", "base": "org/base", "downloadGb": 15.2})
 
     def test_missing_download_gb_skips_eviction(self) -> None:
-        with mock.patch.object(d, "evict_cache_for", side_effect=AssertionError("没有体积信息时不应清理")):
+        with mock.patch.object(d.CACHE, "evict_cache_for", side_effect=AssertionError("没有体积信息时不应清理")):
             d.ensure_cache_capacity({"loader": "sdxl", "base": "org/base"})
 
     def test_anima_local_dit_skips_eviction(self) -> None:
@@ -2381,12 +2430,12 @@ class CacheCapacityTest(DaemonUnitTest):
                 "weight": "anima.safetensors",
                 "downloadGb": 5.6,
             }
-            with mock.patch.object(d, "evict_cache_for", side_effect=AssertionError("预挂载 DiT 时不应清理")):
+            with mock.patch.object(d.CACHE, "evict_cache_for", side_effect=AssertionError("预挂载 DiT 时不应清理")):
                 d.ensure_cache_capacity(spec)
 
     def test_calls_evict_with_pipeline_keep_set(self) -> None:
         calls: list[tuple] = []
-        with mock.patch.object(d, "evict_cache_for", side_effect=lambda required, keep: calls.append((required, keep)) or {}):
+        with mock.patch.object(d.CACHE, "evict_cache_for", side_effect=lambda required, keep: calls.append((required, keep)) or {}):
             d.ensure_cache_capacity(
                 {
                     "loader": "sdxl-lora",
@@ -2411,7 +2460,7 @@ class CacheCapacityTest(DaemonUnitTest):
                 return object(), "sdxl:org/base"
 
             with mock.patch.dict(os.environ, {"HF_HUB_CACHE": root}, clear=False):
-                with mock.patch.object(d, "_log_cache_probe"), mock.patch.object(
+                with mock.patch.object(d.CACHE, "log_probe_once"), mock.patch.object(
                     d, "build_pipeline", side_effect=fake_build
                 ), mock.patch.object(d.shutil, "disk_usage", dir_count_usage(root, 0.0)):
                     d.ensure_pipeline(spec)
@@ -3653,9 +3702,9 @@ class SchedulerSpecTest(DaemonUnitTest):
 
         with (
             mock.patch.dict(sys.modules, {"torch": fake_torch, "diffusers": fake_diffusers}),
-            mock.patch.object(d, "resolve_local_model", return_value="/local/base"),
-            mock.patch.object(d, "resolve_local_weight", return_value="/local/lora/w.safetensors"),
-            mock.patch.object(d, "ensure_disk_capacity"),
+            mock.patch.object(d.CACHE, "resolve_local_model", return_value="/local/base"),
+            mock.patch.object(d.CACHE, "resolve_local_weight", return_value="/local/lora/w.safetensors"),
+            mock.patch.object(d.CACHE, "ensure_disk_capacity"),
         ):
             pipe, loaded = d.build_pipeline(pipeline_spec)
         return pipe, loaded, scheduler_calls
@@ -3788,7 +3837,7 @@ class HardeningRegressionTest(DaemonUnitTest):
         d.STATE.sig_params = {"prompt"}
         d.STATE.phase = "ready"
         freed: list[bool] = []
-        with mock.patch.object(d, "ensure_cache_capacity"), mock.patch.object(
+        with mock.patch.object(d.CACHE, "ensure_cache_capacity"), mock.patch.object(
             d, "build_pipeline", side_effect=d.LoadError("boom")
         ), mock.patch.object(d, "free_cuda_cache", side_effect=lambda: freed.append(True)):
             with self.assertRaises(d.LoadError):
