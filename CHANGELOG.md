@@ -59,6 +59,7 @@
 - **Batch 3 的契约测试面**：`test/remote/test_config.py` 的 `LimitSpecTest` 改为「无注入契约即内置 `contract.json`」口径（并断言 `config.py` 不再定义 `FALLBACK_LIMITS` / `MAX_TASKS_FALLBACK`、`BUILTIN_CONTRACT` 与生成物逐键相等）；`test_validation.py` 的兜底用例改为钉住收紧后的边界（旧表合法、内置契约越界的值必须 400）；`test_reference.py` 的请求体上限用例改为按内置 `reference.maxBytes` 推导。单测 294 → 296。
 - `test/check-contract.mjs` 的 daemon 协议校验改为扫描 `daemon.py` + `transport/http_server.py` + `app.py`：路由搬到传输层、phase 取值搬到生命周期之后，校验仍指向真实实现位置，不因搬家静默空过。
 - `test/check-client-render.mjs` 的结构锚点改为一卡五个悬停动作，并新增「单张删除需二次确认」用例：确认前不发请求、取消 / 移出卡片收起、确认后只提交该路径。
+- **修复 Linux CI 上的 `kagglePaths` 断言**：原用例把 `KAGGLE_CONFIG_DIR` / `credentialsPath` 写成盘符路径并与 Windows 形式比较，POSIX 下会被 `path.resolve` 解析成「工作目录 + 盘符路径」而失败；改为临时目录构造绝对路径、两侧都过 `resolve()` 比较，Windows / Linux 行为一致。
 - 全量 `npm test` 通过（含 296 项 Python 单测、契约 11/11）；`npm run package` 产物含 `remote/contract.json` 与 `lib/jobs/`、`lib/kaggle/oauth/`。
 
 ## 0.10.0 — 2026-11-14

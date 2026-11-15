@@ -20,7 +20,7 @@
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import {
   buildSaveKernelBody,
@@ -112,11 +112,15 @@ async function checkPureFunctions() {
     assert.ok(base.accessToken.endsWith('access_token'))
     assert.ok(base.kaggleJson.endsWith('kaggle.json'))
 
-    const custom = kagglePaths({ homeDir: 'C:/home/tester', env: { KAGGLE_CONFIG_DIR: 'C:/cfg' } })
-    assert.equal(custom.baseDir, 'C:\\cfg')
+    // 用临时目录构造绝对路径：盘符路径在 POSIX 上会被 path.resolve 当成相对路径，
+    // 原断言只在 Windows 成立（Linux CI 因此变红）。比较两侧都过 resolve()。
+    const customDir = join(tmpdir(), 'kaggle-cfg')
+    const custom = kagglePaths({ homeDir: 'C:/home/tester', env: { KAGGLE_CONFIG_DIR: customDir } })
+    assert.equal(custom.baseDir, resolve(customDir))
 
-    const explicit = kagglePaths({ homeDir: 'C:/home/tester', env: {}, credentialsPath: 'C:/tmp/creds.json' })
-    assert.equal(explicit.credentials, 'C:\\tmp\\creds.json')
+    const explicitPath = join(tmpdir(), 'creds.json')
+    const explicit = kagglePaths({ homeDir: 'C:/home/tester', env: {}, credentialsPath: explicitPath })
+    assert.equal(explicit.credentials, resolve(explicitPath))
   })
 
   await check('parseTimeDeltaSeconds：<seconds>.<nanos>s 与无单位/数字兼容', () => {
