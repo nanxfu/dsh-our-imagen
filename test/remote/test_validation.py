@@ -7,7 +7,7 @@ validate_generate_spec 的契约边界、默认值与非法输入归一。
 
 from __future__ import annotations
 
-from support import DaemonUnitTest, d, make_pipeline, make_spec
+from support import CONTRACT_DOC, DaemonUnitTest, d, make_pipeline, make_spec
 
 
 class ValidateSpecTest(DaemonUnitTest):
@@ -107,20 +107,44 @@ class ValidateSpecTest(DaemonUnitTest):
         self.assertLessEqual(tasks[0]["width"], 1536)
         self.assertGreaterEqual(tasks[0]["height"], 256)
 
-    def test_falls_back_without_contract(self) -> None:
-        # 契约缺失 = 旧 Host / 本地调试：沿用 0.3.0 之前的边界。
-        self.assertEqual(d._max_tasks(), 8)
-        eight = [{"prompt": f"p{i}"} for i in range(8)]
-        self.assertEqual(len(d.validate_generate_spec(make_spec(eight))[2]), 8)
+    def test_falls_back_to_builtin_contract(self) -> None:
+        """无注入契约 = 旧 Host / 本地调试：边界取自内置 contract.json（Batch 3 起）。
+
+        此前这里兜的是 0.3.0 的旧表（宽高 64–2048 / steps≤80 / cfg≤30 / 每批 8），
+        删掉硬编码后同一份请求会被内置契约拒掉——这是本批的行为变更，用例钉住新边界。
+        """
+        limits = CONTRACT_DOC["limits"]
+        self.assertEqual(d._max_tasks(), limits["count"]["max"])
+        batch = [{"prompt": f"p{i}"} for i in range(limits["count"]["max"])]
+        self.assertEqual(len(d.validate_generate_spec(make_spec(batch))[2]), len(batch))
         with self.assertRaises(d.RequestError):
-            d.validate_generate_spec(make_spec([{"prompt": "p"}] * 9))
+            d.validate_generate_spec(make_spec([{"prompt": "p"}] * (limits["count"]["max"] + 1)))
+        # 旧表里合法、内置契约里越界的值必须被拒（收紧的方向）。
+        for bad in (
+            {"width": limits["width"]["min"] - 8},
+            {"height": limits["height"]["max"] + 8},
+            {"steps": limits["steps"]["max"] + 1},
+            {"cfg": limits["cfg"]["max"] + 1},
+        ):
+            with self.assertRaises(d.RequestError):
+                d.validate_generate_spec(make_spec([{"prompt": "p", **bad}]))
         _, _, tasks = d.validate_generate_spec(
-            make_spec([{"prompt": "p", "width": 64, "height": 2048, "steps": 80, "cfg": 30}])
+            make_spec(
+                [
+                    {
+                        "prompt": "p",
+                        "width": limits["width"]["min"],
+                        "height": limits["height"]["max"],
+                        "steps": limits["steps"]["max"],
+                        "cfg": limits["cfg"]["max"],
+                    }
+                ]
+            )
         )
-        self.assertEqual(tasks[0]["width"], 64)
-        self.assertEqual(tasks[0]["height"], 2048)
-        self.assertEqual(tasks[0]["steps"], 80)
-        self.assertEqual(tasks[0]["cfg"], 30.0)
+        self.assertEqual(tasks[0]["width"], limits["width"]["min"])
+        self.assertEqual(tasks[0]["height"], limits["height"]["max"])
+        self.assertEqual(tasks[0]["steps"], limits["steps"]["max"])
+        self.assertEqual(tasks[0]["cfg"], float(limits["cfg"]["max"]))
 
 
 if __name__ == "__main__":

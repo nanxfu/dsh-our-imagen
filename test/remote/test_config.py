@@ -8,12 +8,13 @@
 from __future__ import annotations
 
 import base64
+import importlib.util
 import json
 import os
 import tempfile
 from unittest import mock
 
-from support import CONTRACT, CONTRACT_VERSION, DaemonUnitTest, d
+from support import CONTRACT, CONTRACT_DOC, CONTRACT_VERSION, ROOT, DaemonUnitTest, d
 
 
 class BuildConfigTest(DaemonUnitTest):
@@ -162,32 +163,44 @@ class ProtocolVersionTest(DaemonUnitTest):
 
 
 class LimitSpecTest(DaemonUnitTest):
-    def test_partial_contract_is_merged_with_fallback(self) -> None:
+    """契约合并与兜底：兜底一律是内置 remote/contract.json，没有第二份硬编码表。"""
+
+    def test_partial_contract_is_merged_with_builtin(self) -> None:
+        builtin = CONTRACT_DOC["limits"]["width"]
         d.CONFIG.contract = {"limits": {"width": {"max": 1024}}}
         spec = d._limit_spec("width")
-        self.assertEqual(spec["min"], 64)
+        self.assertEqual(spec["min"], builtin["min"])
         self.assertEqual(spec["max"], 1024)
-        self.assertEqual(spec["step"], 8)
+        self.assertEqual(spec["step"], builtin["step"])
 
     def test_ignores_non_numeric_contract_values(self) -> None:
+        builtin = CONTRACT_DOC["limits"]["steps"]
         d.CONFIG.contract = {"limits": {"steps": {"min": "x", "max": None, "step": True}}}
         spec = d._limit_spec("steps")
-        self.assertEqual(spec["min"], 1)
-        self.assertEqual(spec["max"], 80)
+        self.assertEqual(spec["min"], builtin["min"])
+        self.assertEqual(spec["max"], builtin["max"])
         # True 是 bool，不应被当成数字覆盖 step；steps 本身也没有 step 兜底键
         self.assertNotIn("step", spec)
 
-    def test_empty_contract_uses_fallback(self) -> None:
+    def test_no_contract_reads_builtin_contract_json(self) -> None:
+        """无注入契约（本地调试 / 旧 Host）时，边界就是随包分发的 contract.json。"""
         d.CONFIG.contract = {}
-        self.assertEqual(d._limit_spec("steps")["max"], 80)
-        self.assertEqual(d._limit_spec("cfg")["max"], 30)
-        self.assertEqual(d._max_tasks(), 8)
+        self.assertEqual(d._limit_spec("width"), CONTRACT_DOC["limits"]["width"])
+        self.assertEqual(d._limit_spec("steps"), CONTRACT_DOC["limits"]["steps"])
+        self.assertEqual(d._limit_spec("cfg"), CONTRACT_DOC["limits"]["cfg"])
+        self.assertEqual(d._max_tasks(), CONTRACT_DOC["limits"]["count"]["max"])
+        # Batch 3 的行为变更：不再是 0.3.0 时代的 64–2048 / steps≤80 / cfg≤30 / 每批 8。
+        self.assertEqual(d._limit_spec("width")["min"], 256)
+        self.assertEqual(d._max_tasks(), 4)
 
     def test_count_limit_drives_max_tasks(self) -> None:
-        d.CONFIG.contract = {"limits": {"count": {"min": 1, "max": 4}}}
-        self.assertEqual(d._max_tasks(), 4)
+        d.CONFIG.contract = {"limits": {"count": {"min": 1, "max": 2}}}
+        self.assertEqual(d._max_tasks(), 2)
+        # max=0 / 非数字一律回退内置契约的张数上限（不是另一份常量）。
         d.CONFIG.contract = {"limits": {"count": {"max": 0}}}
-        self.assertEqual(d._max_tasks(), d._MAX_TASKS_FALLBACK)
+        self.assertEqual(d._max_tasks(), CONTRACT_DOC["limits"]["count"]["max"])
+        d.CONFIG.contract = {"limits": {"count": {"max": "many"}}}
+        self.assertEqual(d._max_tasks(), CONTRACT_DOC["limits"]["count"]["max"])
 
 
 class OptionalConfigTest(DaemonUnitTest):
@@ -406,6 +419,45 @@ class PipConstraintsTest(DaemonUnitTest):
         with mock.patch.object(d, "run_command_tail", return_value=(0, ["torch==2.4.0", "diffusers==0.35.0"])):
             d.verify_dependencies()
         self.assertLogContains("依赖导入自检通过")
+
+
+class MockDaemonContractTest(DaemonUnitTest):
+    """`test/mock-daemon.py` 的兜底边界必须与内置契约同值（Batch 3 的必带项）。
+
+    为什么单独守：mock 是 host-e2e / jobs-wait 里的"远端"，它放行的请求真 daemon 不能拒、
+    它拒的真 daemon 也不能放。此前 mock 的夹具抄的是 daemon 的 `_FALLBACK_LIMITS`（64–2048），
+    daemon 改读 contract.json（256–1536）后两边就会静默漂移——测试全绿，真机 400。
+    """
+
+    def load_mock(self):  # noqa: ANN201
+        mock_path = ROOT / "test" / "mock-daemon.py"
+        spec = importlib.util.spec_from_file_location("mock_daemon_under_test", mock_path)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_fallback_copy_matches_contract_json(self) -> None:
+        mock_module = self.load_mock()
+        self.assertEqual(mock_module.FALLBACK_CONTRACT, CONTRACT_DOC)
+        # 收紧后的默认边界（行为变更）：256–1536 / steps≤60 / cfg≤20 / 每批 ≤4。
+        limits = mock_module.FALLBACK_CONTRACT["limits"]
+        self.assertEqual(limits["width"]["min"], 256)
+        self.assertEqual(limits["width"]["max"], 1536)
+        self.assertEqual(limits["steps"]["max"], 60)
+        self.assertEqual(limits["cfg"]["max"], 20)
+        self.assertEqual(limits["count"]["max"], 4)
+
+    def test_limit_merge_and_body_limit_match_daemon(self) -> None:
+        """同一份注入契约下，mock 与 daemon 的取数结果逐键相等。"""
+        mock_module = self.load_mock()
+        for injected in ({}, {"limits": {"width": {"max": 1024}}}, {"limits": {"count": {"max": 2}}}):
+            mock_module.CONTRACT = json.loads(json.dumps(injected))
+            d.CONFIG.contract = json.loads(json.dumps(injected))
+            for name in ("width", "height", "steps", "cfg", "count", "reference", "strength"):
+                self.assertEqual(mock_module._limit(name), d._limit_spec(name), f"{injected} / {name}")
+            self.assertEqual(mock_module._max_tasks(), d._max_tasks(), str(injected))
+            self.assertEqual(mock_module._request_body_limit(), d._request_body_limit(), str(injected))
 
 
 if __name__ == "__main__":

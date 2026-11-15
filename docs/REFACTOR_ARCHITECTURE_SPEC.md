@@ -39,7 +39,7 @@ Kaggle Kernel 的 `kernel-metadata.json` 只接受**单个 `code_file`**（`daem
    - `_stream_process` 与 `run_command_tail` 重复构造 pip 环境变量（`pipeline_loader.py` 已有 `pip_env()`）；
    - `short` / `_tunnel_short` / `_loader_short` 因全局命名空间冲突重复实现 3 份。
 4. **`# @@INLINE` 文本拼接限制（已解除，留档）**：所有内联文件共享同一顶层命名空间，禁止 `from __future__ import annotations`，且无法支持子目录包与模块间自由相互导入。Batch 0 之后不再有此约束，`remote/` 可正常分层。
-5. **契约边界仍有最后一份双写**：[`shared/contract.js`](../shared/contract.js) 已通过 [`tools/gen-contract-json.mjs`](../tools/gen-contract-json.mjs) 生成 `remote/contract.json`，但 `daemon.py` 仍维护了一份硬编码的 `_FALLBACK_LIMITS`。该文件现在已随源码包一起打进 Kernel（Batch 0），但**尚未被读取**——删除 `_FALLBACK_LIMITS` 会收紧"无注入契约"时的默认边界（64–2048 → 256–1536），属行为变更，安排在 Batch 2 与校验器单测一起改。
+5. **契约边界的最后一份双写（✅ Batch 3 已消除）**：[`shared/contract.js`](../shared/contract.js) → [`tools/gen-contract-json.mjs`](../tools/gen-contract-json.mjs) → `remote/contract.json` 是唯一真源；Batch 3 之前 `daemon.py` / `config.py` 还维护了一份硬编码的 `_FALLBACK_LIMITS`（64–2048）与它长期双写。现在 `remote/config.py` 在导入时读 `contract.json`（`BUILTIN_CONTRACT` / `BUILTIN_LIMITS`），读不到直接抛（打包漏文件要在启动期炸，而不是让远端按另一套边界跑）。行为变更：无注入契约时宽高 64–2048 → 256–1536、steps 80 → 60、cfg 30 → 20、每批 8 → 4；`request_body_limit()` 也随之从固定 8MB 变成按内置 `reference.maxBytes` 推导的 11.7MB（否则校验器认 8MiB 参考图、读请求体时却先按 8MB 拒掉）。
 6. **测试用「替换模块级对象」模拟隔离（✅ 已收口）**：原 `test/daemon-unit.py` 的基类在 `setUp` 里整体替换 `d.CONFIG` / `d.STATE` / `d.BOOT`（37 个测试类继承），另有 55 处 `mock.patch.object(d, <被内部调用的模块级函数>)`。这类断言对"函数改成持有实例"是**静默失效**而非报错（测到旧对象 → 假绿），所以测试迁移与模块搬迁必须同批完成。三批做完后的现状：`d.CONFIG/STATE/BOOT` 改为**原地重置**（对象身份不变），30 个转发名的替换点全部改指 `d.CACHE.*` / `d.TUNNEL.*` / `d.JOB_STORE.*`，仍在打 daemon 模块属性的位置只剩 31 处，且都打在**真被内部调用**的函数上（`install_dependencies` / `ensure_pipeline` / `run_task` / `health_payload` 的取样顺序等）。
 
 ---
@@ -115,7 +115,7 @@ remote/
 - **落地形态**：`lib/bundle.js` 用 `node:zlib` 的 `deflateRaw` + 手写 ZIP 头产出**确定性归档**（路径排序、时间戳固定为 2020-01-01、权限 0644），`lib/kernel.js` 把它 Base64 内嵌进 `remote/_entry.py` 模板；启动器解压到临时目录、把包根与 `remote/` 挂进 `sys.path`，再调用包内入口。
 - **为什么不用 `zipimport`**：解压后 `__file__` 指向真实文件，Kaggle 日志里的栈可以直接对应源码行，`contract.json` 也能按普通文件读；解压 30 个文件的开销可忽略。
 - **配置注入改为函数调用**：启动器不再做源码文本替换，而是调 `入口模块.set_embedded_config(b64)`。这样 `load_config` 后续搬进 `config.py` 时，只要入口模块 re-export 这个函数，注入链路自动跟着走（直接赋值模块属性会在搬家后静默丢配置）。**Batch 2 切片③ 落地时的实际口径**：注入串 `EMBEDDED_CONFIG_B64` 与 `set_embedded_config()` 留在 `daemon.py`，只把「解析 → 原地回填 `CONFIG`」搬进 `config.py`——因为 `test/kernel-package.mjs` 用 `daemon.EMBEDDED_CONFIG_B64` 验证注入是否落到底层，变量若跟着实现搬走会让这条观测链断掉。
-- **契约入包**：`remote/contract.json` 已随源码包打进 Kernel。但 `_FALLBACK_LIMITS` **尚未删除**，见 §1.3 第 5 条（改动会收紧无注入契约时的默认边界，安排到 Batch 2 与校验器单测同批做）。
+- **契约入包**：`remote/contract.json` 随源码包打进 Kernel，并且从 Batch 3 起**被真正读取**——`remote/config.py` 的 `BUILTIN_CONTRACT` 就是它（见 §1.3 第 5 条）。`scripts/package.mjs` 与 `test/kernel-package.mjs` 把它列为必需文件，缺失会在导入期直接报错。
 - **两种打包模式**：默认归档模式；传 `sourcePath` 时退化为"单文件脚本 + 只注入配置"，供真机探针（`test/tunnel-probe.py`）使用。
 - **共用打包器**：`tools/verify-model.mjs` 用 `entryModule: 'payload.verify_model'` + `extraFiles` 把验证 payload 作为包内模块一起打进归档，与 `lib/session/provisioner.js` 共用 `buildKernelFolder`。
 - **包发布清单**：`package.json` 的 `files` 已扩到 `remote/**/*.py` 与 `remote/contract.json`；`scripts/package.mjs` 的 `remote` 目录过滤同步放行 `.json`，并把 `_entry.py` / `__init__.py` / `contract.json` 列入必需文件。
@@ -157,8 +157,26 @@ remote/
 | **Batch 0**<br/>打包器升级 | `lib/kernel.js` 改为内嵌 Base64 ZIP 自引导；配置注入改为 `set_embedded_config()` 函数调用；`remote/contract.json` 随包分发；`verify-model` 复用同一打包器；`package.json` `files` 与 `scripts/package.mjs` 同步 | ✅ **已完成**。`test/kernel-package.mjs` 16 项（含 Python `zipfile` 校验与解包后 `import remote.daemon`）、`test/check-verify-model.mjs` 7 项；`@@INLINE` 已从源码移除 |
 | **Batch 1**<br/>Host 侧收口 | `lib/jobs.js`（948 行）→ `lib/jobs/`；`lib/kaggle-oauth.js`（674 行）→ `lib/kaggle/oauth/`；原路径保留聚合门面 | ✅ **已完成**。门面 16 / 23 行，实现分散到 5 + 5 个模块；`jobs-wait` 23 项、`kaggle-oauth` 14 项、`host-e2e` 46 项、`host-log(-events)` 20 项全绿 |
 | **Batch 2**<br/>远端包化 + 测试领域化<br/>（原 Batch 1 + 3） | 按 §2.1 建包：`config` / `state` / `observability` / `infra` / `inference` / `jobs` / `transport` / `app`；删掉 25 个胶水转发；`LoaderRegistry` + 表驱动调度器；`JobStore` 封装锁；同步把 `test/daemon-unit.py` 按领域拆到 `test/remote/test_*.py`，改用实例化隔离 | ✅ **六片全部落地**（每片独立可回归；剩余逻辑下沉见 §2.1 的「仍待推进」）：<br/>① `errors.py` + `transport/validator.py` + `inference/reference_codec.py` ✅（纯逻辑三模块，边界由 `limits_for` 注入，daemon 只留同名薄包装）；<br/>② `pipeline_loader` 调度器表驱动 ✅（5 条配方收成 `_SCHEDULER_RECIPES`，新增调度器只加一行）；<br/>③ `config.py` / `state.py`（单例对象原地更新，不重新绑定，避免测试静默测到旧对象） ✅（`DaemonConfig` + 注入解析 + 契约边界进 `remote/config.py`，`RuntimeState` / `BootState` / 两把状态锁 + `set_phase` / `record_error` 进 `remote/state.py`；daemon 只 re-export，2366 → 2121 行（−245），单测 248 → 252 项并新增单例身份守卫）；<br/>④ `infra/process.py` + `observability/health.py` ✅（流式执行与一次性命令共用 `pipeline_loader.pip_env()`，`IMPORT_CHECK_CODE` 由模块清单生成；`/health` 拆成「持锁取样 → 释放 → 取队列深度」，`build_payload` 签名里没有任何锁，锁顺序由结构保证）；<br/>⑤ `jobs/`（store + runner，`JOB_*` 全局收进 JobStore）✅（`models.py` 放实体与失败分类，`store.py` 独占 `JOB_LOCK`/`JOB_COND` 并提供语义方法，`runner.py` 只做「取单 → 调注入的执行函数 → 收尾」；daemon 只剩薄包装与 `execute_job`，锁顺序以 `JOB_STORE.finish()` 返回后再取 `STATE_LOCK` 固定）；<br/>⑥ `transport/http_server.py` + `app.py`（Composition Root），最后删门面并把 `test/daemon-unit.py` 按域拆分 ✅（按 §4.1 拆成 ⑥a–⑥f 六小片：**全部落地**；⑥f 删掉 daemon 上 30 个转发名与 `JOB_WAKE`，单测拆成 `test/remote/` 下 15 个域模块 + 夹具） |
-| **Batch 3**<br/>契约收口与真机验证 | 删除 `_FALLBACK_LIMITS`，让无注入契约时消费内置 `contract.json`（行为变更：默认边界从 64–2048 收紧到 256–1536）；移除 `daemon.py` 门面；回填文档与 `CHANGELOG` | ⏳ 待开始。**必带项**：`test/mock-daemon.py` 的 limits 夹具当前与 `_FALLBACK_LIMITS` 同值（64–2048），删兜底后要同步改成契约值（256–1536），否则 mock 与真 daemon 的边界会静默漂移；建议同时加一条守卫测试。验收：`npm test` + `contract:check` 全绿，且**必须**跑一次真机 `kaggle-live` 与 `gpu-live`（这是唯一能验证启动器解包链路的关口） |
+| **Batch 3**<br/>契约收口与真机验证 | 删除 `_FALLBACK_LIMITS`，让无注入契约时消费内置 `contract.json`（行为变更：宽高 64–2048 → 256–1536、steps 80 → 60、cfg 30 → 20、每批 8 → 4，请求体上限 8MB → 11.7MB）；移除 `daemon.py` 门面；回填文档与 `CHANGELOG` | 🚧 **离线部分已落地**：`config.py` 导入期读 `contract.json`（`BUILTIN_CONTRACT` / `BUILTIN_LIMITS`，读不到直接抛）、`max_tasks()` / `request_body_limit()` 改走同一份契约；`test/mock-daemon.py` 的兜底夹具同步到契约值并把 `_request_body_limit()` 对齐同一条公式；新增 `MockDaemonContractTest` 3 项逐键比对 mock 与 daemon 的取数结果。验收：`python test/remote/run.py` 296 项、`check-contract` 11/11、`host-e2e` 46/46、`jobs-wait` 23/23 全绿。**待人工**：真机 `kaggle-live` 与 `gpu-live`（唯一能验证启动器解包链路的关口，需要 Kaggle 额度） |
 
+
+**Batch 3 落地记（2026-11-15，离线部分）**：`_FALLBACK_LIMITS` / `MAX_TASKS_FALLBACK` 已删除，
+`remote/config.py` 在导入期读 `contract.json`（`BUILTIN_CONTRACT` / `BUILTIN_LIMITS`），三处取数
+（`limit_spec` / `max_tasks` / `request_body_limit`）全部走同一份文件。四个决策留档：
+
+1. **读文件而不是把 JSON 内联成 Python 字典**：内联等于换个地方再写一份双写表，`contract:check`
+   管不到它；文件形态还能让"打包漏文件"在导入期暴露。代价是每次 import 多一次 2KB 读取，可忽略。
+2. **读不到直接抛 `RuntimeError`，不退回硬编码**：静默降级的后果是"远端按另一套边界跑"——请求被
+   400 拒、日志里只看到参数越界，看不出根因。启动期炸掉反而立刻指向打包问题。
+3. **`limit_spec` 的合并粒度保持"单键"**：注入契约只给 `max` 时，`min` / `step` 取内置值。若改成
+   "整段替换"，早于某个参数出现的旧 Host 会拿到半张表（缺 `min` → `KeyError` 或放开下界）。
+4. **`request_body_limit()` 一并改口径**：它原来在"没有 reference 段"时固定 8MB，而删除兜底后校验器
+   会按内置 `maxBytes` 接受 8MiB 参考图——两条路径打架。现在统一按 `reference.maxBytes` 推导
+   （11,233,388 字节），代价是无契约时的请求体上限从 8MB 涨到 11.7MB（仅影响本地调试 / 旧 Host）。
+
+**未完成项（需真机）**：`npm run test:live`（kaggle-live）与 `npm run test:gpu`（gpu-live）尚未在本批
+复跑。离线侧只能证明"源码包内容正确、解包后能 import"，不能证明 Kaggle 侧启动器解包 + 配置注入
+在真实 Kernel 上仍然成立，发布前必须补跑。
 ---
 
 ### 4.1 Batch 2 切片⑥ 的拆分与剩余施工顺序（2026-11-15 实测结论）
@@ -323,7 +341,7 @@ daemon 的 13 个包装收成实例方法，daemon 只留同名别名（Batch 3 
 
 1. **打包后顶层仍不早引重库**：`remote/app.py` 入口在完成引导解压/加载及配置读取、启动 HTTP 服务与安装依赖之前，不得在模块顶层 `import torch / diffusers / PIL`。
 2. **敏感信息零泄露**：任何拆分后的模块日志器均不得打印 `auth_token`、`hf_token` 或带 token 的文件路径；错误上报维持 `redact` / `short()` 脱敏口径。
-3. **契约单一真源**：禁止在拆分过程中重新引入硬编码的尺寸/步数/强度边界；远端默认兜底统一消费生成的 `remote/contract.json`。
+3. **契约单一真源**：禁止在拆分过程中重新引入硬编码的尺寸/步数/强度边界；远端默认兜底统一消费生成的 `remote/contract.json`——唯一读取点是 `remote/config.py` 的 `BUILTIN_CONTRACT`，读不到**直接抛**（`scripts/package.mjs` 与 `test/kernel-package.mjs` 已把它列为必需文件）。`test/mock-daemon.py` 保留一份同值副本供"文件都没了"的极端情况使用，由 `MockDaemonContractTest` 逐键比对守卫。
 4. **每次 Batch 结束必须完整验证**：任一批次均需保证 `npm test` 与 `npm run contract:check` 全绿后方可封板进入下一批；涉及远端引导链路的批次须在发布前完成一次真机 `kaggle-live` / `gpu-live` 验证。
 5. **配置注入只能走函数**：启动器调用 `set_embedded_config()`，禁止改回"赋值模块属性"。搬迁 `load_config` 时必须让入口模块继续 re-export 该函数，否则 Kernel 会以空配置启动并 `fail_boot('unauthorized')`（不会报错，只会"莫名连不上"）。
 6. **远端包内统一绝对包导入**（`from remote.state import ...`），不用相对导入：`test/remote/support.py` 以任意模块名按路径加载 `daemon.py`，模块无父包，`from .x import y` 会 `ImportError: no known parent package`。

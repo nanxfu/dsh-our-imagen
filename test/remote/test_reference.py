@@ -14,6 +14,7 @@ import sys
 from unittest import mock
 
 from support import (
+    CONTRACT_DOC,
     CONTRACT,
     CONTRACT_VERSION,
     DaemonUnitTest,
@@ -108,9 +109,17 @@ class ReferenceLimitsTest(DaemonUnitTest):
         self.assertGreater(limit, base64_size)
         self.assertEqual(limit, max(8 * 1024 * 1024, base64_size + 1024 * 1024))
 
-    def test_request_body_limit_keeps_8mb_without_reference_contract(self) -> None:
+    def test_request_body_limit_follows_builtin_reference_without_contract(self) -> None:
+        """Batch 3：注入契约没给 reference 时，边界来自内置 contract.json。
+
+        因此请求体上限也按内置 maxBytes 推导（约 11.7MB），不再固定 8MB——否则校验器
+        认了 8MiB 的参考图、`_read_json` 却先按 8MB 把请求拒掉。
+        """
         d.CONFIG.contract = {"version": CONTRACT_VERSION, "limits": {"prompt": {"maxChars": 2000}}}
-        self.assertEqual(d._request_body_limit(), 8 * 1024 * 1024)
+        max_bytes = CONTRACT_DOC["limits"]["reference"]["maxBytes"]
+        expected = max(8 * 1024 * 1024, 4 * ((max_bytes + 2) // 3) + 1024 * 1024)
+        self.assertEqual(d._request_body_limit(), expected)
+        self.assertGreater(d._request_body_limit(), 8 * 1024 * 1024)
 
     def test_read_json_rejects_body_over_limit(self) -> None:
         self.contract_config()

@@ -19,9 +19,10 @@
    属 daemon.py。启动器（``remote/_entry.py``）与打包测试都按
    ``daemon.EMBEDDED_CONFIG_B64`` 观测注入是否落地，搬到本模块会切断这条观测链路；
    本模块只负责"怎么把那段 Base64 变成 DaemonConfig"。
-3. **契约兜底表 ``FALLBACK_LIMITS`` 是临时件**：Batch 3 会删掉它、改为消费内置
-   ``remote/contract.json``（默认边界会从 64–2048 收紧到 256–1536，属行为变更）。
-   在那之前，缺 ``contract`` 时保持旧 Host 的 64–2048 边界不变。
+3. **契约兜底是内置 ``remote/contract.json``**（Batch 3 起）：没有注入契约（旧 Host / 本地调试）
+   时，边界取自随源码包分发的 ``contract.json``，不再有硬编码的第二份表。默认边界因此比
+   0.3.0 时代收紧（宽高 64–2048 → 256–1536、steps 80 → 60、cfg 30 → 20、每批张数 8 → 4），
+   属**行为变更**；详见 docs/REFACTOR_ARCHITECTURE_SPEC.md §4 的 Batch 3。
 4. **日志用扁平导入 ``from log_ring import log``**（理由见 ``remote/state.py`` 第 3 条）。
 """
 
@@ -31,6 +32,7 @@ import base64
 import json
 import os
 from dataclasses import dataclass, field, fields
+from pathlib import Path
 
 from log_ring import log
 
@@ -169,7 +171,10 @@ def build_config(cfg: dict) -> DaemonConfig:
     if contract is not None and not config.contract:
         log("[config] contract 不是 JSON 对象，已忽略")
     if not config.contract:
-        log("[config] WARN 未收到 contract，参数边界回退到内置默认值（兼容旧 Host）")
+        log(
+            "[config] WARN 未收到 contract，参数边界回退到内置 remote/contract.json"
+            f"（version={BUILTIN_CONTRACT.get('version')}，兼容旧 Host）"
+        )
     config.allow_no_auth = bool(cfg.get("allow_no_auth", False))
     if config.allow_no_auth:
         log("[config] WARN allow_no_auth=true：无 auth_token 也放行请求，仅限本地调试")
@@ -234,24 +239,37 @@ def load_config(raw_b64: str = "", *, target: DaemonConfig | None = None) -> Dae
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 契约边界：全部参数上下限的唯一取数点
+#
+# 内置契约就是随源码包分发的 ``remote/contract.json``（由 tools/gen-contract-json.mjs 从
+# shared/contract.js 生成，``npm run contract:check`` 校验它与源码一致）。Batch 3 之前这里
+# 有一份硬编码的 ``FALLBACK_LIMITS``，与注入契约长期双写：改契约忘了改兜底，本地/旧 Host
+# 就会按另一套边界运行，且不报错。现在没有第二份表。
 # ─────────────────────────────────────────────────────────────────────────────
 
-# 契约缺失时的兜底边界（兼容旧 Host / 本地调试）：保持 0.3.0 之前的 daemon 行为。
-# 图生图（reference / strength）是新增能力：旧 Host 不会下发这两组边界，这里与当前契约
-# 同值兜底，仅供契约缺项的本地调试；正常运行一律以注入契约的 limits 为准。
-FALLBACK_LIMITS: dict[str, dict] = {
-    "width": {"min": 64, "max": 2048, "step": 8},
-    "height": {"min": 64, "max": 2048, "step": 8},
-    "steps": {"min": 1, "max": 80},
-    "cfg": {"min": 0, "max": 30},
-    "count": {"min": 1, "max": 8},
-    "seed": {"max": 2**31 - 1},
-    "prompt": {"maxChars": 2000},
-    "negativePrompt": {"maxChars": 1000},
-    "reference": {"maxBytes": 8 * 1024 * 1024, "maxEdge": 1536, "minEdge": 128},
-    "strength": {"min": 0.2, "max": 0.9, "step": 0.05, "default": 0.6},
-}
-MAX_TASKS_FALLBACK = 8
+CONTRACT_PATH = Path(__file__).resolve().with_name("contract.json")
+
+
+def _read_builtin_contract() -> dict:
+    """读取内置契约（模块导入时一次）。
+
+    读不到**直接抛**而不是退回硬编码：``scripts/package.mjs`` 把它列为必需文件、
+    ``test/kernel-package.mjs`` 断言它进了 ZIP；这里静默降级只会把"打包漏文件"变成
+    "远端按另一套边界跑"的线上怪象（错误码 400 满天飞，日志里却看不出原因）。
+    """
+    try:
+        data = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001 - 缺文件 / 坏 JSON 都是打包问题
+        raise RuntimeError(
+            f"内置契约 {CONTRACT_PATH.name} 不可读（{type(exc).__name__}: {exc}）；"
+            "它应随远程源码包一起分发，请检查打包与 files 清单"
+        ) from None
+    if not isinstance(data, dict) or not isinstance(data.get("limits"), dict):
+        raise RuntimeError(f"内置契约 {CONTRACT_PATH.name} 缺少 limits 段")
+    return data
+
+
+BUILTIN_CONTRACT = _read_builtin_contract()
+BUILTIN_LIMITS: dict[str, dict] = BUILTIN_CONTRACT["limits"]
 # 契约 limits 里可能出现的数值型键：合并兜底值时只认数字（bool 不算数字）。
 LIMIT_NUMERIC_KEYS = ("min", "max", "step", "maxChars", "default", "maxBytes", "maxEdge", "minEdge")
 
@@ -264,8 +282,12 @@ def contract_limits() -> dict | None:
 
 
 def limit_spec(name: str) -> dict:
-    """取参数边界：优先注入契约 ``CONFIG.contract["limits"]``，缺失时退回内置兜底。"""
-    fallback = dict(FALLBACK_LIMITS[name])
+    """取参数边界：注入契约优先，缺项 / 无注入时回退内置 ``contract.json`` 的同名项。
+
+    合并粒度是**单个键**：注入契约只给了 ``max`` 时，``min`` / ``step`` 仍取内置值，
+    这样早于某个参数出现的旧 Host 不会因为"少发一个键"而拿到半张表。
+    """
+    fallback = dict(BUILTIN_LIMITS[name])
     limits = contract_limits()
     if limits is None:
         return fallback
@@ -285,22 +307,18 @@ def max_tasks() -> int:
     try:
         value = int(limit_spec("count").get("max"))
     except (TypeError, ValueError):
-        return MAX_TASKS_FALLBACK
-    return value if value > 0 else MAX_TASKS_FALLBACK
+        return int(BUILTIN_LIMITS["count"]["max"])
+    return value if value > 0 else int(BUILTIN_LIMITS["count"]["max"])
 
 
 def request_body_limit() -> int:
-    """请求体字节上限：默认 8MB；契约下发参考图边界后按 base64 膨胀放宽。
+    """请求体字节上限：按参考图边界的 base64 膨胀推导，下限 8MB。
 
-    8MiB 原图 base64 后约 10.7MB，不下发 reference 的旧 Host 仍按 8MB 处理，
-    保证文生图路径的请求体上限与改造前完全一致。
+    8MiB 原图 base64 后约 10.7MB：不下发 ``reference`` 的旧 Host 走内置契约的同一条公式，
+    因此也能通过；文生图请求（结构上远小于 1MB）不受影响。
     """
     base = 8 * 1024 * 1024
-    limits = contract_limits()
-    reference = limits.get("reference") if limits else None
-    if not isinstance(reference, dict):
-        return base
-    max_bytes = reference.get("maxBytes")
+    max_bytes = limit_spec("reference").get("maxBytes")
     if isinstance(max_bytes, bool) or not isinstance(max_bytes, (int, float)) or max_bytes <= 0:
         return base
     # base64 每 3 字节膨胀成 4 字符；再留 1MB 给 tasks / prompt / jobId 等 JSON 字段。

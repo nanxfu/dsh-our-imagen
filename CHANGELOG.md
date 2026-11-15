@@ -1,6 +1,6 @@
 # 变更记录
 
-## 未发布（架构重构 Batch 0 / 1 / 2）
+## 未发布（架构重构 Batch 0 / 1 / 2 / 3）
 
 > 对应 [docs/REFACTOR_ARCHITECTURE_SPEC.md](docs/REFACTOR_ARCHITECTURE_SPEC.md)。各批都只改内部模块边界、依赖方向与打包形态，`docs/SPEC.md` 定义的 HTTP 路由、报文、错误码与配置注入契约保持向后兼容。
 
@@ -15,7 +15,7 @@
 
 - **打包器升级（Batch 0）**：`lib/kernel.js` 从 `# @@INLINE` 行替换改为**内嵌 Base64 ZIP 自引导**——新增 `lib/bundle.js`（零依赖 ZIP 写入器，`node:zlib` deflateRaw + 手写头部，路径排序与固定时间戳保证产物逐字节可复现），`remote/_entry.py` 作为启动器模板，启动时解压到临时目录再把包根挂进 `sys.path`。`remote/` 恢复为普通 Python 包（新增 `__init__.py`），五处 `@@INLINE` 标记从源码移除。
 - **配置注入改为函数调用**：启动器不再替换源码里的 `EMBEDDED_CONFIG_B64` 赋值行，而是调用入口模块的 `set_embedded_config()`。这样后续把 `load_config` 搬进 `config.py` 时，只要入口模块 re-export 该函数，注入链路自动跟随（直接赋值模块属性在搬家后会静默丢配置，表现为启动即 `unauthorized`）。
-- **契约随包分发**：`remote/contract.json` 现在打进 Kernel 源码包；`package.json` 的 `files` 扩到 `remote/**/*.py` 与 `remote/contract.json`，`scripts/package.mjs` 的 `remote` 目录放行 `.json` 并把 `_entry.py` / `__init__.py` / `contract.json` 列入必需文件。硬编码 `_FALLBACK_LIMITS` 本轮**未删**（会收紧无注入契约时的默认边界，安排到下一批与校验器单测同批做）。
+- **契约随包分发**：`remote/contract.json` 现在打进 Kernel 源码包；`package.json` 的 `files` 扩到 `remote/**/*.py` 与 `remote/contract.json`，`scripts/package.mjs` 的 `remote` 目录放行 `.json` 并把 `_entry.py` / `__init__.py` / `contract.json` 列入必需文件。硬编码 `_FALLBACK_LIMITS` 当时未删（会收紧无注入契约时的默认边界），已在 Batch 3 删除，见下。
 - **验证 payload 复用同一打包器**：`tools/verify-model.mjs` 用 `entryModule: 'payload.verify_model'` + `extraFiles` 把 `tools/payload/verify-model.py` 作为包内模块打进归档，不再各自内联 anima 运行时与 Loader。
 - **Host 侧收口（Batch 1）**：`lib/jobs.js`（948 行）拆为 `lib/jobs/{validator,errors,reference-loader,queue}.js`，`lib/kaggle-oauth.js`（674 行）拆为 `lib/kaggle/oauth/{pkce,browser,callback-server,session,text}.js`；两个原文件保留 16 / 23 行的聚合门面，导出名、函数签名与日志 scope 均未变，调用方零改动。
 - **远端包化推进到切片⑥（Batch 2）**：`remote/` 已按目标分层落地 `config` / `state` / `observability/health` / `infra/{process,cache,tunnel}` / `transport/{validator,http_server}` / `inference/reference_codec` / `jobs/{models,store,runner}` / `app`；`remote/daemon.py` 从 2579 行降到 1344 行，只留配置注入点、ntfy 会合、模型加载与出图执行，以及各域的薄包装。
@@ -27,16 +27,24 @@
     - **行为变更**：加载期的"未知 loader"文案从 `未知 loader：x` 改为与提交期同一句 `未知 loader：'x'（支持 sdxl, sdxl-lora, flux2, anima）`（带 repr 与白名单）。`LoadError` 文案（`{loader} 加载 {base} 失败` / `anima 加载失败`）保持原文——注册表把 loader 名原样透传。
     - **日志差异**：anima 不再顺手做 `model_index.json` 探测（它的 base 是单文件权重），已正确预挂载的用户不会再看到一条误导性的"回退在线加载"WARN；`d.load_anima_runtime` 这个 re-export 随 import 点移到 `remote/inference/loaders/anima.py`。
     - **兼容入口**：`pipeline_loader.load_diffusers_pipeline` 保留同名签名，改为按名字分派到策略的 `construct()`——`tools/payload/verify-model.py` 与 `test/check-verify-model.mjs` 按文件名依赖它；`construct` 只构建、不做预挂载与磁盘预检，避免验证 payload 意外触发清理闸门。
-  - 剩余切片 ⑥f（删 `daemon.py` 门面 + `test/daemon-unit.py` 按域拆分到 `test/remote/`）与 Batch 3 合并；施工顺序与"为什么不能一次做完"记在 `docs/REFACTOR_ARCHITECTURE_SPEC.md` §4.1。
+  - **⑥f 删门面 + 测试领域化**（两笔提交）：先按域拆测试、再删转发层，两件事的回滚边界分开。
+    - **测试拆分**：`test/daemon-unit.py`（4218 行 / 41 个测试类）拆成 `test/remote/` 下 15 个域模块 + `support.py`（按路径加载 daemon、`DaemonUnitTest` 原地重置单例、假 Popen/urlopen/PIL/torch）+ `run.py`（`unittest discover`，也支持 `-k tunnel` 只跑一域）。用例正文与断言逐字保留，总数仍是 293 → 拆分后 294。`package.json` 的 `test` / `test:host` / `test:daemon` 改指 `python test/remote/run.py`。
+    - **删转发层**：`daemon.py` 上的 30 个"只是转手"的名字全部删除——job 视图 6 个（`submit_job` / `get_job` / `queue_depth` / `active_job_count` / `job_payload` / `prune_jobs`）、缓存 11 个别名、隧道 13 个别名，外加 `JOB_WAKE` 兼容对象；内部调用改指 `JOB_STORE.*` / `CACHE.*` / `TUNNEL.*`，`daemon.py` 1294 → 1223 行。判断标准是"内部调用是否经过它"：`ensure_pipeline` / `run_task` / `install_dependencies` 这些内部真会走到的函数保留（它们属下一批的逻辑下沉），而别名替换只会改到影子入口、让断言静默测到旧实现（§1.3.6）。
+    - **测试面的坑**：`mock.patch.object(d, "X")` 与 `d.X` 两种形态共 99 行替换点；批量替换会把 `assertEqual(d.evict_cache_for, d.CACHE.evict_cache_for)` 这类"别名与实现同一对象"的断言改写成恒真的 `assertEqual(x, x)`——删掉别名反而更绿。因此 cache / tunnel / job 三处边界用例改成反向守卫（`assertFalse(hasattr(d, name))`）加源码级禁止别名赋值回潮。
+  - Batch 2 六片（⑥a–⑥f）**全部落地**；`pipeline_manager` / `executor` / `ntfy` 等逻辑下沉与入口符号搬迁列入 §2.1 的待推进项，不属本批。
+- **契约兜底改读内置 `contract.json`（Batch 3）**：`remote/config.py` 删掉硬编码的 `FALLBACK_LIMITS` 与 `MAX_TASKS_FALLBACK`，改为导入期读随源码包分发的 `remote/contract.json`（`BUILTIN_CONTRACT` / `BUILTIN_LIMITS`）；读不到**直接抛 RuntimeError**——打包漏文件要在启动期炸，而不是让远端按另一套边界跑（`scripts/package.mjs` 与 `test/kernel-package.mjs` 已把它列为必需文件）。
+  - **行为变更（无注入契约时）**：宽高 64–2048 → 256–1536、steps ≤80 → ≤60、cfg ≤30 → ≤20、每批 8 → 4；`request_body_limit()` 从固定 8MB 改为按内置 `reference.maxBytes` 推导的 11,233,388 字节（约 11.7MB）——否则校验器认 8MiB 参考图、读请求体时却先按 8MB 拒掉。`limit_spec()` 的合并粒度仍是单个键：注入契约只给了 `max` 时，`min` / `step` 取内置值。
+  - **`test/mock-daemon.py` 同步**：兜底夹具改成契约值（256–1536 / steps≤60 / cfg≤20 / 每批≤4），`_request_body_limit()` 与 daemon 用同一条公式；新增 `MockDaemonContractTest` 3 项——mock 的兜底副本与 `contract.json` 逐键相等、同一份注入契约下 mock 与 daemon 的 `_limit` / `_max_tasks` / `_request_body_limit` 结果完全一致。此前 mock 抄的是 daemon 的旧表，两边漂移时测试全绿、真机 400。
 - **修复 Windows 原子写入抖动**：`lib/fs-atomic.js` 的 `rename` 遇到杀毒软件 / 索引服务瞬时占用会抛 `EPERM`，此前会让 Kaggle 直连登录静默失败（`/state` 只显示「账号接入失败：unknown」）。现对 `EPERM` / `EACCES` / `EBUSY` 做 5 次有界重试（累计约 150ms），`test/kaggle-direct.mjs` 由「3 次跑 2 次失败」变为连跑 4 次全过。
 
 ### 测试
 
 - `test/kernel-package.mjs` 重写为源码包口径（15 项）：CRC 标准向量、归档确定性、Python `zipfile.testzip()` 校验、条目与 `remote/` 一致、解包后 `import remote.daemon` 且 `set_embedded_config()` 生效、模板占位符唯一性、`extraFiles`、脚本模式（探针）。
 - `test/check-verify-model.mjs` 同步为「payload 从源码包导入 + 归档含 payload 模块」（7 项）。
-- `test/daemon-unit.py` 的内联标记断言改为「源码不再含内联标记」，并新增 `set_embedded_config` 注入用例。
-- `test/daemon-unit.py` 增至 293 项（切片⑥ 按片累加边界用例）：`HttpApi` 的装配身份与「lambda 延迟解析」（patch `daemon.submit_job` 后必须命中）、队列满 → 429、未装配时 handler 立即报错、`Server` 头版本；`DaemonApp` 的启动顺序（HTTP 早于隧道与运行时）、无鉴权 / 端口占用两条退出路径、daemon 暴露的 `APP` 绑定，以及「`app.py` 不得反向 import daemon」——用 AST 看 import 语句，不按字符串匹配（模块头说明文字里就写着这句话）；切片⑥e 再加 `LoaderRegistryBoundaryTest` 10 项（注册表唯一持有者、daemon 不再按 loader 名分支、`build_pipeline` 传活协作者、提交期与加载期文案一致、diffusers 入口拒绝 anima、重复/空名字注册报错、keep_set 不窄于通用扫描、keep_set 真读注册表、失败只释放一次显存、anima OOM 不被包装）与 3 项家族分支用例（flux2 的 `device_map`、anima DiT 命中跳过磁盘预检、anima 常规路径先预检再预下载）。
+- `test/remote/support.py` 保留「源码不再含内联标记」的断言与 `set_embedded_config` 注入用例（原 `test/daemon-unit.py`）。
+- `test/remote/` 增至 294 项（切片⑥ 按片累加边界用例；拆分前 293 项）（切片⑥ 按片累加边界用例）：`HttpApi` 的装配身份与「lambda 延迟解析」（patch `daemon.submit_job` 后必须命中）、队列满 → 429、未装配时 handler 立即报错、`Server` 头版本；`DaemonApp` 的启动顺序（HTTP 早于隧道与运行时）、无鉴权 / 端口占用两条退出路径、daemon 暴露的 `APP` 绑定，以及「`app.py` 不得反向 import daemon」——用 AST 看 import 语句，不按字符串匹配（模块头说明文字里就写着这句话）；切片⑥e 再加 `LoaderRegistryBoundaryTest` 10 项（注册表唯一持有者、daemon 不再按 loader 名分支、`build_pipeline` 传活协作者、提交期与加载期文案一致、diffusers 入口拒绝 anima、重复/空名字注册报错、keep_set 不窄于通用扫描、keep_set 真读注册表、失败只释放一次显存、anima OOM 不被包装）与 3 项家族分支用例（flux2 的 `device_map`、anima DiT 命中跳过磁盘预检、anima 常规路径先预检再预下载）。
 - **缓存域与隧道域的测试替换点同批迁移**（缓存 14 处 + 隧道 16 处）：缓存侧的 `disk_precheck` / `mount_point_of` / `probe_free_gib` / `read_mount_points` / `evict_cache_for` / `resolve_local_model` / `resolve_local_weight` / `ensure_disk_capacity` / `ensure_cache_capacity` 改为 `d.CACHE.<同名方法>`；隧道侧的 `binary` 字段 ×4、`ensure_cloudflared` / `spawn` / `start` / `wait_exit` / `restart_delay` 改为 `d.TUNNEL.*`。不迁移的话断言仍会绿，只是测到 daemon 上的影子属性——正是规格 §1.3.6 的静默假绿；其中 `restart_delay` 漏改时表现为单测从 0.45s 变 4.4s（真等 2s 退避）却依然全绿，比报错更难发现。
+- **Batch 3 的契约测试面**：`test/remote/test_config.py` 的 `LimitSpecTest` 改为「无注入契约即内置 `contract.json`」口径（并断言 `config.py` 不再定义 `FALLBACK_LIMITS` / `MAX_TASKS_FALLBACK`、`BUILTIN_CONTRACT` 与生成物逐键相等）；`test_validation.py` 的兜底用例改为钉住收紧后的边界（旧表合法、内置契约越界的值必须 400）；`test_reference.py` 的请求体上限用例改为按内置 `reference.maxBytes` 推导。单测 294 → 296。
 - `test/check-contract.mjs` 的 daemon 协议校验改为扫描 `daemon.py` + `transport/http_server.py` + `app.py`：路由搬到传输层、phase 取值搬到生命周期之后，校验仍指向真实实现位置，不因搬家静默空过。
 - 全量 `npm test` 通过（含 293 项 Python 单测、契约 11/11）；`npm run package` 产物含 `remote/contract.json` 与 `lib/jobs/`、`lib/kaggle/oauth/`。
 

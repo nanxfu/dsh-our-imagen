@@ -86,16 +86,18 @@ PHASE_CHOICES = ("auto", "ready", "installing", "loading", "error")
 
 CONTRACT_PATH = Path(__file__).resolve().parent.parent / "remote" / "contract.json"
 
-# 契约文件缺失/损坏时的兜底：故意与 remote/daemon.py 的 _FALLBACK_LIMITS 保持一致，
-# 保证"没有 contract.json"时 mock 与 daemon 的退化行为相同。
+# 契约文件缺失/损坏时的兜底：**数值必须与 remote/contract.json 同值**，否则 mock 与真 daemon
+# 的边界会静默漂移（host-e2e 里 mock 放行的请求，真 daemon 会 400，反之亦然）。
+# 真 daemon 侧已改为直接读 contract.json（Batch 3，见 remote/config.py），这份副本是给
+# "文件都没了"的极端情况用的；`test/remote/test_config.py::MockDaemonContractTest` 逐键比对。
 FALLBACK_CONTRACT = {
-    "version": "0.4.1",
+    "version": "0.10.0",
     "limits": {
-        "width": {"max": 2048, "min": 64, "step": 8},
-        "height": {"max": 2048, "min": 64, "step": 8},
-        "steps": {"max": 80, "min": 1},
-        "cfg": {"max": 30, "min": 0},
-        "count": {"max": 8, "min": 1},
+        "width": {"max": 1536, "min": 256, "step": 8},
+        "height": {"max": 1536, "min": 256, "step": 8},
+        "steps": {"max": 60, "min": 1},
+        "cfg": {"max": 20, "min": 0},
+        "count": {"max": 4, "min": 1},
         "seed": {"max": 2**31 - 1},
         "prompt": {"maxChars": 2000},
         "negativePrompt": {"maxChars": 1000},
@@ -200,13 +202,13 @@ def _limit(name: str) -> dict:
 
 
 def _request_body_limit() -> int:
-    """请求体字节上限：默认 8MB；契约下发参考图边界后按 base64 膨胀放宽。"""
+    """请求体字节上限：按参考图边界的 base64 膨胀推导，下限 8MB。
+
+    与 remote/config.py 的 `request_body_limit()` 同一条公式：reference 缺失时用兜底契约的
+    同名字段（Batch 3 之前这里直接返回 8MB，真 daemon 却是 11.7MB，两边的拒绝点不同）。
+    """
     base = 8 * 1024 * 1024
-    limits = CONTRACT.get("limits") if isinstance(CONTRACT, dict) else None
-    reference = limits.get("reference") if isinstance(limits, dict) else None
-    if not isinstance(reference, dict):
-        return base
-    max_bytes = reference.get("maxBytes")
+    max_bytes = _limit("reference").get("maxBytes")
     if isinstance(max_bytes, bool) or not isinstance(max_bytes, (int, float)) or max_bytes <= 0:
         return base
     return max(base, 4 * ((int(max_bytes) + 2) // 3) + 1024 * 1024)

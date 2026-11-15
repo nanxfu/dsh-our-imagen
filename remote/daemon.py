@@ -196,9 +196,7 @@ from log_ring import LOG_LINE_MAX_CHARS, LOG_MAX_LINES, _LOG_LINES, _LOG_LOCK, _
 from remote.config import (  # noqa: E402
     CONFIG,
     DEFAULT_PORT,
-    FALLBACK_LIMITS as _FALLBACK_LIMITS,
     KNOWN_CONFIG_KEYS as _KNOWN_CONFIG_KEYS,
-    MAX_TASKS_FALLBACK as _MAX_TASKS_FALLBACK,
     DaemonConfig,
     build_config as _build_config,
     contract_limits as _contract_limits,
@@ -725,12 +723,14 @@ def ensure_img2img_pipeline():
 # remote/transport/validator.py（纯函数，参数边界由 limits_for 注入，无 daemon 全局依赖）。
 
 
-# `_FALLBACK_LIMITS` / `_LIMIT_NUMERIC_KEYS` / `_limit_spec` / `_max_tasks` /
-# `_request_body_limit` 已随契约边界解析搬到 remote/config.py（那里是 `CONFIG.contract`
-# 的唯一取数点）。本文件只按导入块保留 `_limit_spec` / `_max_tasks` /
-# `_request_body_limit` / `_MAX_TASKS_FALLBACK` / `_FALLBACK_LIMITS` 这些同名引用，
+# `_limit_spec` / `_max_tasks` / `_request_body_limit` 已随契约边界解析搬到
+# remote/config.py（那里是 `CONFIG.contract` 的唯一取数点）。本文件按导入块保留同名引用，
 # 供 `validate_generate_spec` 等薄包装以 `limits_for=` 注入给纯函数，以及单测按
 # `d._limit_spec(...)` 调用。
+#
+# Batch 3 起没有硬编码兜底表：`_BUILTIN_LIMITS` 就是随源码包分发的 `remote/contract.json`
+# 的 limits 段（`_BUILTIN_CONTRACT` 为其全文）。无注入契约时按它取边界，因此默认边界从
+# 64–2048 收紧到 256–1536（steps 80→60、cfg 30→20、每批 8→4），属行为变更。
 
 
 # ─────────────────────────────────────────────────────────────────────────────

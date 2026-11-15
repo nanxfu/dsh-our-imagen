@@ -18,6 +18,7 @@ from pathlib import Path
 from support import (
     ANIMA_RUNTIME_PATH,
     CONTRACT,
+    CONTRACT_DOC,
     CONTRACT_VERSION,
     DAEMON_PATH,
     DaemonUnitTest,
@@ -49,11 +50,20 @@ class ImportSideEffectTest(unittest.TestCase):
         self.assertFalse(hasattr(d.BOOT, "keys"))
         self.assertFalse(hasattr(d.CONFIG, "get"))
 
-    def test_default_limits_match_contract_shape(self) -> None:
-        # 契约入口存在且可调用；默认值应与 0.3.0 之前的 daemon 行为一致（兜底）。
-        self.assertEqual(d._limit_spec("width")["min"], 64)
-        self.assertEqual(d._limit_spec("width")["max"], 2048)
-        self.assertEqual(d._max_tasks(), 8)
+    def test_default_limits_come_from_builtin_contract_json(self) -> None:
+        """Batch 3：无注入契约时的边界就是随包分发的 contract.json，没有第二张表。"""
+        self.assertEqual(d._limit_spec("width"), CONTRACT_DOC["limits"]["width"])
+        self.assertEqual(d._limit_spec("steps"), CONTRACT_DOC["limits"]["steps"])
+        self.assertEqual(d._max_tasks(), CONTRACT_DOC["limits"]["count"]["max"])
+        # 单一真源守卫：配置模块不再维护硬编码兜底表（注释里提到历史名字是允许的，
+        # 断言的是没有定义 / 没有旧数值字面量）。
+        self.assertFalse(hasattr(remote_config, "FALLBACK_LIMITS"))
+        source = (ROOT / "remote" / "config.py").read_text(encoding="utf-8")
+        self.assertIsNone(re.search(r"(?m)^FALLBACK_LIMITS", source))
+        self.assertIsNone(re.search(r"(?m)^MAX_TASKS_FALLBACK", source))
+        # 兜底读的就是同一份文件（不是抄一份数值）：内容与生成物逐键相等。
+        self.assertEqual(remote_config.BUILTIN_CONTRACT, CONTRACT_DOC)
+        self.assertIs(remote_config.BUILTIN_LIMITS, remote_config.BUILTIN_CONTRACT["limits"])
 
     def test_anima_runtime_comes_from_single_source_module(self) -> None:
         """anima 运行时只有 remote/anima_runtime.py 一份；加载器只 import 不复制实现。
