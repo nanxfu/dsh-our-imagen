@@ -51,7 +51,7 @@
 - **实施方案**：
   - 在 `daemon.py` 内对 `cloudflared` 进程建立常驻守护线程，监控到子进程退出时立即重新拉起；
   - 获取新分配的 trycloudflare 域名后，周期性向 ntfy 重新广播 `ready` 事件，完成端到端隧道自愈。
-- **实现**：`tunnel_monitor()` 常驻监管，异常退出后 2→60 秒指数退避重拉并重播 ready；主循环每 300 秒重播一次；`/health` 上报 `tunnel_provider` / `tunnel_state` / `tunnel_restarts`，ready 事件带 `provider`。纯函数与假 Popen 覆盖见 `test/daemon-unit.py`。
+- **实现**：`tunnel_monitor()` 常驻监管，异常退出后 2→60 秒指数退避重拉并重播 ready；主循环每 300 秒重播一次；`/health` 上报 `tunnel_provider` / `tunnel_state` / `tunnel_restarts`，ready 事件带 `provider`。纯函数与假 Popen 覆盖见 `test/remote/test_tunnel.py`。
 
 ---
 

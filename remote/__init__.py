@@ -3,7 +3,7 @@
 `remote/` 在仓库里按标准 Python 包维护，推 Kaggle 时由 `lib/kernel.js` 把整包压成 ZIP
 内嵌进启动器，部署形态对业务代码完全透明。
 
-**sys.path 需要两条路径**（启动器 `remote/_entry.py` 与 `test/daemon-unit.py` 都已满足）：
+**sys.path 需要两条路径**（启动器 `remote/_entry.py` 与 `test/remote/support.py` 都已满足）：
 
 - 仓库根：供包内绝对导入 `from remote.config import ...` / `from remote.state import ...`；
 - `remote/` 本身：供过渡期的扁平导入 `from log_ring import log` / `from tunnel import ...`

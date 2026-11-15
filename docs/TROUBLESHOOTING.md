@@ -113,8 +113,8 @@ Kaggle 容器的 `/kaggle/working` 通常只有 20 GB，写入层满了会转只
 `HF_HUB_CACHE=/root/.cache/huggingface/hub | mount=/ | free=966.6GiB | /kaggle/working mount=/kaggle/working free=19.5GiB`。
 也就是说当前镜像的权重缓存落在根卷 `/`（约 966 GiB 可用），不在 20 GB 的 `/kaggle/working` 上；
 同一会话内连续切换 sdxl-lightning → flux2-klein-4b → anima-light-lavender（合计约 27 GB 权重）未触发逐出
-（`evictedCount=0`）、磁盘未爆。逐出逻辑是**小容量镜像 / 未来镜像变更时的兜底**，由 `test/daemon-unit.py`
-的 8 项缓存清理用例覆盖；判断依据始终是缓存目录自己所在盘的余量（`disk_usage_target()`），而不是写死 `/kaggle/working`。
+（`evictedCount=0`）、磁盘未爆。逐出逻辑是**小容量镜像 / 未来镜像变更时的兜底**，由 `test/remote/test_cache.py`
+的缓存清理用例覆盖；判断依据始终是缓存目录自己所在盘的余量（`disk_usage_target()`），而不是写死 `/kaggle/working`。
 
 处理：
 - 优先用权重预挂载（`datasetSources` + `localModels`），跳过下载；

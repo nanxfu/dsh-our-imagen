@@ -15,7 +15,7 @@
 # 1. 这是唯一一份实现。remote/daemon.py 与 tools/payload/verify-model.py 只保留一行
 #    ``from anima_runtime import load_anima_runtime  # @@INLINE:anima_runtime.py@@``；
 #    历史上的两份复制实现（旧注释写着「必须逐字同步」）已删除，不要再复制回来。
-# 2. 本地运行走普通模块 import（daemon.py 由 test/daemon-unit.py 把 remote/ 放进
+# 2. 本地运行走普通模块 import（daemon.py 由 test/remote/support.py 把 remote/ 放进
 #    sys.path）；推 Kaggle 前，打包器（lib/kernel.js 的 inlineMarkedModules）会把标记行
 #    整行替换为本文件全文，因此最终产物仍是自包含单文件（Kaggle 只接受单个 code_file）。
 # 3. 日志由调用方注入：load_anima_runtime(spec, log=...)。daemon 传「日志环 + print」版，
