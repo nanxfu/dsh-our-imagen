@@ -442,6 +442,9 @@
     const notice = document.getElementById('motion-notice');
     if (notice) notice.hidden = on;
 
+    if (on) queueScrollMotion();
+    else resetScrollMotion();
+
     syncHeroCycle();
   }
 
@@ -556,6 +559,109 @@
   function syncHeroCycle() {
     stopHeroCycle();
     startHeroCycle();
+  }
+
+  /* ── 滚动驱动引擎（不依赖 animation-timeline，所有浏览器一致） ── */
+
+  const scrollMotion = {
+    queued: false,
+    lite: false,
+    heroPrint: null,
+    heroCopy: null,
+    roomPhoto: null,
+    wall: null,
+    wallSweep: null,
+    sections: [],
+  };
+
+  function clamp01(value) {
+    return value < 0 ? 0 : value > 1 ? 1 : value;
+  }
+
+  function initScrollMotion() {
+    scrollMotion.heroPrint = document.querySelector('.hero-print');
+    scrollMotion.heroCopy = document.querySelector('.hero-copy');
+    scrollMotion.roomPhoto = document.querySelector('.room-photo');
+    scrollMotion.wall = document.querySelector('.wall');
+    scrollMotion.wallSweep = document.querySelector('.wall-sweep');
+    scrollMotion.sections = Array.from(document.querySelectorAll('main > section'));
+
+    scrollMotion.lite =
+      window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 780;
+
+    window.addEventListener('scroll', queueScrollMotion, { passive: true });
+    window.addEventListener(
+      'resize',
+      () => {
+        scrollMotion.lite =
+          window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 780;
+        queueScrollMotion();
+      },
+      { passive: true }
+    );
+    queueScrollMotion();
+  }
+
+  function queueScrollMotion() {
+    if (scrollMotion.queued) return;
+    scrollMotion.queued = true;
+    requestAnimationFrame(applyScrollMotion);
+  }
+
+  function setMotionVar(el, name, value) {
+    if (!el) return;
+    el.style.setProperty(name, value.toFixed(4));
+  }
+
+  function applyScrollMotion() {
+    scrollMotion.queued = false;
+    if (!motionEnabled()) return;
+
+    const vh = window.innerHeight;
+    const y = window.scrollY;
+    const heroP = clamp01(y / (vh * 0.86));
+
+    const scrollable = document.documentElement.scrollHeight - vh;
+    root.style.setProperty(
+      '--scroll-progress',
+      (scrollable > 0 ? clamp01(y / scrollable) : 0).toFixed(4)
+    );
+
+    setMotionVar(scrollMotion.heroPrint, '--p', heroP);
+    setMotionVar(scrollMotion.heroCopy, '--p', heroP);
+
+    if (!scrollMotion.lite) {
+      setMotionVar(scrollMotion.roomPhoto, '--p', clamp01(y / 2200));
+
+      if (scrollMotion.wall && scrollMotion.wallSweep) {
+        const rect = scrollMotion.wall.getBoundingClientRect();
+        setMotionVar(
+          scrollMotion.wallSweep,
+          '--p',
+          clamp01((vh - rect.top) / (vh + rect.height))
+        );
+      }
+    }
+
+    for (const section of scrollMotion.sections) {
+      const rect = section.getBoundingClientRect();
+      setMotionVar(section, '--rule-p', clamp01((vh - rect.top) / (vh * 0.55)));
+    }
+  }
+
+  function resetScrollMotion() {
+    root.style.removeProperty('--scroll-progress');
+    [
+      scrollMotion.heroPrint,
+      scrollMotion.heroCopy,
+      scrollMotion.roomPhoto,
+      scrollMotion.wallSweep,
+      ...scrollMotion.sections,
+    ].forEach((el) => {
+      if (!el) return;
+      el.style.removeProperty('--p');
+      el.style.removeProperty('--rule-p');
+    });
   }
 
   function applyTheme(theme) {
@@ -1383,6 +1489,7 @@
   applyMotion(false);
   renderHero(true);
   startHeroCycle();
+  initScrollMotion();
   initAmbientLight();
   initWallSafelight();
 })();

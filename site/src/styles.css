@@ -392,26 +392,10 @@ html[data-theme="light"] .grain {
 .chrome-progress span {
   display: block;
   height: 100%;
-  transform: scaleX(0);
+  transform: scaleX(var(--scroll-progress, 0));
   transform-origin: 0 50%;
   background: var(--lamp);
   opacity: 0.55;
-}
-
-@supports (animation-timeline: scroll()) {
-  .chrome-progress span {
-    animation: chrome-progress linear both;
-    animation-timeline: scroll(root block);
-  }
-
-  @keyframes chrome-progress {
-    from {
-      transform: scaleX(0);
-    }
-    to {
-      transform: scaleX(1);
-    }
-  }
 }
 
 .brand {
@@ -2844,10 +2828,6 @@ html[data-motion="off"] .wall .print .print-color,
 html[data-motion="off"] .wall .print .print-meta {
   filter: none;
   opacity: 1;
-  transform: none;
-}
-
-html[data-motion="off"] .chrome-progress span {
   transform: none;
 }
 
