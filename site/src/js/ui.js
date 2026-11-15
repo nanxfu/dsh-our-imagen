@@ -1,4 +1,4 @@
-import { $, $$ } from './dom.js';
+import { $$ } from './dom.js';
 import { t } from './i18n.js';
 
 let toastTimer = null;
@@ -53,11 +53,17 @@ export function bindChoiceGroup(root, { attr, onChange }) {
     for (const button of buttons) {
       const active = button.dataset[attr] === value;
       button.classList.toggle('is-active', active);
-      if (button.hasAttribute('aria-pressed')) button.setAttribute('aria-pressed', String(active));
+      button.setAttribute('aria-pressed', String(active));
     }
   };
   for (const button of buttons) {
-    button.addEventListener('click', () => onChange(button.dataset[attr]));
+    button.addEventListener('click', () => {
+      const value = button.dataset[attr];
+      // 选中样式必须由这里同步：调用方的 onChange 只改业务状态，
+      // 不保证每次点击都回头调用 sync（此前筛选/安装/Profile 组因此不跟随点击）。
+      sync(value);
+      onChange(value);
+    });
   }
   return { sync, buttons };
 }
@@ -80,5 +86,3 @@ export function syncToggleState(id, pressed, label) {
   button.setAttribute('aria-label', label);
   button.setAttribute('title', label);
 }
-
-export { $, $$ };

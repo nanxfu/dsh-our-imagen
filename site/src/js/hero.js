@@ -5,7 +5,7 @@ import {
   playIntroTween,
   registerMotionSetup,
 } from './motion.js';
-import { $, $$, h } from './dom.js';
+import { $, h } from './dom.js';
 import { heroItems, showcaseItems } from './data.js';
 import { fill, itemTitle, t } from './i18n.js';
 import { developFrame } from './effects.js';
@@ -223,7 +223,11 @@ export function initHero({ api }) {
         });
         timeline
           .to('.hero-print', { y: '-4vh', scale: 0.955, opacity: 0.55, ease: 'none' }, 0)
-          .to('.hero-copy', { y: '3vh', opacity: 0.62, ease: 'none' }, 0);
+          .to('.hero-copy', { y: '3vh', opacity: 0.62, ease: 'none' }, 0)
+          // 主相纸后退的同时，背后的那团光跟着收远；曝光单与缩略图比文案退得更快。
+          .to('.hero-aura', { yPercent: 4, scale: 1.06, opacity: 0.55, ease: 'none' }, 0)
+          .to('.exposure, .hero-thumbs', { y: '-1.8vh', opacity: 0.44, ease: 'none' }, 0)
+          .to('.hero-scroll', { autoAlpha: 0, ease: 'none' }, 0);
 
         // 背景大幅模糊层只在精细指针对的小屏以上做视差。
         if (!context.conditions.lite) {
@@ -248,9 +252,16 @@ export function initHero({ api }) {
     el.print?.addEventListener('pointerenter', () => setPaused('hover', true));
     el.print?.addEventListener('pointerleave', () => setPaused('hover', false));
 
-    el.hero?.addEventListener('focusin', () => setPaused('focus', true));
+    el.hero?.addEventListener('focusin', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target && !target.matches(':focus-visible')) return;
+      setPaused('focus', true);
+    });
     el.hero?.addEventListener('focusout', (event) => {
-      if (event.relatedTarget && el.hero.contains(event.relatedTarget)) return;
+      if (event.relatedTarget && el.hero.contains(event.relatedTarget)) {
+        const next = event.relatedTarget instanceof Element ? event.relatedTarget : null;
+        if (next && next.matches(':focus-visible')) return;
+      }
       setPaused('focus', false);
     });
 
@@ -284,9 +295,5 @@ export function initHero({ api }) {
   return {
     render,
     setPaused,
-    playIntro,
-    get currentItem() {
-      return activeItem();
-    },
   };
 }

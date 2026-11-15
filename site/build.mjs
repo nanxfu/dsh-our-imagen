@@ -209,8 +209,8 @@ async function main() {
 
   const safeJson = JSON.stringify(siteData).replace(/</g, '\\u003c');
   const html = htmlTemplate
-    .replace('__SITE_DATA_JSON__', safeJson)
-    .replace(/__VERSION__/g, pkg.version);
+    .replace('__SITE_DATA_JSON__', () => safeJson)
+    .replace(/__VERSION__/g, () => pkg.version);
   fs.writeFileSync(path.join(distDir, 'index.html'), html, 'utf8');
   fs.writeFileSync(path.join(distDir, '.nojekyll'), '', 'utf8');
 

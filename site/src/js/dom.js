@@ -56,8 +56,3 @@ export function rafThrottle(fn) {
     });
   };
 }
-
-export function clamp01(value) {
-  if (!Number.isFinite(value)) return 0;
-  return value < 0 ? 0 : value > 1 ? 1 : value;
-}

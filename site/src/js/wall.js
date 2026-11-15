@@ -23,10 +23,21 @@ export function initWall({ api }) {
     wall: $('#wall'),
     items: $('#wall-items'),
     count: $('#wall-count'),
+    barFill: $('#wall-bar-fill'),
+    developed: $('#wall-developed'),
+    total: $('#wall-total'),
   };
 
   let lastWidth = 0;
   let layoutQueued = false;
+
+  const pad2 = (value) => String(value).padStart(2, '0');
+
+  /** 显影计数条：只统计已经过 ScrollTrigger 的成片，是墙面进度的真实读数。 */
+  function syncDeveloped() {
+    if (!el.developed || !el.items) return;
+    el.developed.textContent = pad2(el.items.querySelectorAll('.print.is-developed').length);
+  }
 
   function buildItem(item, index) {
     const color = h('img', {
@@ -80,6 +91,7 @@ export function initWall({ api }) {
   }
 
   function updateCount() {
+    if (el.total) el.total.textContent = pad2(showcaseItems.length);
     if (!el.count) return;
     el.count.textContent = fill(t('wallCountTpl'), {
       frames: showcaseItems.length,
@@ -137,6 +149,7 @@ export function initWall({ api }) {
     showcaseItems.forEach((item, index) => fragment.append(buildItem(item, index)));
     wrap.append(fragment);
     updateCount();
+    syncDeveloped();
     layout();
   }
 
@@ -167,17 +180,46 @@ export function initWall({ api }) {
               if (node.classList.contains('is-developed')) return;
               if (isLiteDevice() || !isMotionEnabled()) {
                 node.classList.add('is-developed');
+                syncDeveloped();
                 return;
               }
               // 错峰显影上限 320ms，和 DESIGN.md 的节奏声明保持一致。
-              window.setTimeout(
-                () => node.classList.add('is-developed'),
-                Math.min(order * 70, 320)
-              );
+              window.setTimeout(() => {
+                node.classList.add('is-developed');
+                syncDeveloped();
+              }, Math.min(order * 70, 320));
             });
           },
         });
         return () => triggers.forEach((trigger) => trigger.kill());
+      });
+    });
+  }
+
+  /** 计数条上的细进度线与墙面滚动同步：读到哪里，线画到哪里。 */
+  function setupProgress() {
+    registerMotionSetup((mm) => {
+      mm.add('(min-width: 0px)', () => {
+        if (!el.barFill) return undefined;
+        const tween = gsap.fromTo(
+          el.barFill,
+          { scaleX: 0 },
+          {
+            scaleX: 1,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: '.wall',
+              start: 'top bottom',
+              end: 'bottom bottom',
+              scrub: 0.5,
+              invalidateOnRefresh: true,
+            },
+          }
+        );
+        return () => {
+          tween.scrollTrigger?.kill();
+          tween.kill();
+        };
       });
     });
   }
@@ -191,9 +233,9 @@ export function initWall({ api }) {
         if (!sweep) return undefined;
         const tween = gsap.fromTo(
           sweep,
-          { yPercent: -10 },
+          { yPercent: 0 },
           {
-            yPercent: 190,
+            yPercent: 115,
             ease: 'none',
             scrollTrigger: {
               trigger: '.wall',
@@ -245,9 +287,10 @@ export function initWall({ api }) {
 
   render();
   setupDevelop();
+  setupProgress();
   setupSweep();
   setupSafelight();
   bindResize();
 
-  return { refreshLabels, layout };
+  return { refreshLabels };
 }

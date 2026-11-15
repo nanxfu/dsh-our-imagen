@@ -2,6 +2,7 @@ import { $, $$, h } from './dom.js';
 import { maxSteady, models, showcaseItems } from './data.js';
 import { I18N, fill, itemTitle, t } from './i18n.js';
 import { developFrame } from './effects.js';
+import { MEDIA, ScrollTrigger, gsap, refreshMotion, registerMotionSetup } from './motion.js';
 import { state } from './state.js';
 
 const SPEED_FLOOR = 1.6;
@@ -48,9 +49,20 @@ export function initLab({ api }) {
   };
 
   let filmstripKey = '';
+  let calibratedProgress = 0;
 
   function visibleModels() {
     return filteredModels();
+  }
+
+  /** 速度刻度按光带扫过的进度逐行「打点」；只前进不倒退，回滚时保持已校准。 */
+  function markCalibrated(progress) {
+    if (!el.list) return;
+    const distance = progress * el.list.offsetHeight;
+    for (const row of $$('.model-item', el.list)) {
+      const center = row.offsetTop + row.offsetHeight / 2;
+      row.classList.toggle('is-calibrated', distance >= center);
+    }
   }
 
   function ensureSelection(visible) {
@@ -114,6 +126,8 @@ export function initLab({ api }) {
     const fragment = document.createDocumentFragment();
     for (const model of visible) fragment.append(buildModelButton(model));
     el.list.append(fragment);
+    // 筛选会重建按钮：把已经扫过的校准状态补回去，避免刻度又退回灰点。
+    markCalibrated(calibratedProgress);
   }
 
   function syncModelSelection() {
@@ -137,6 +151,7 @@ export function initLab({ api }) {
     state.filter = filter;
     renderModelList();
     renderStage(true);
+    refreshMotion();
   }
 
   function sampleFor(model) {
@@ -199,18 +214,18 @@ export function initLab({ api }) {
       [labels.size, sample ? `${sample.width}×${sample.height}` : `${model.size}px`],
       [labels.seed, sample ? String(sample.seed) : '—'],
       [labels.img2img, model.supportsImg2Img ? labels.yes : labels.no],
-      [labels.repo, model.repo.split(' + ')[0]],
+      [labels.repo, model.repo.split(' + ')[0], 'spec-cell-repo'],
     ];
 
     el.ledger.innerHTML = '';
     const fragment = document.createDocumentFragment();
-    for (const [label, value] of cells) {
+    for (const [label, value, extraClass] of cells) {
       fragment.append(
         h(
           'div',
-          { class: 'spec-cell' },
+          { class: extraClass ? `spec-cell ${extraClass}` : 'spec-cell' },
           h('dt', { text: label }),
-          h('dd', { text: value })
+          h('dd', { text: value, attrs: { title: value } })
         )
       );
     }
@@ -225,8 +240,23 @@ export function initLab({ api }) {
     if (sample && el.printImg) {
       el.printImg.alt = `${model.label} · ${itemTitle(sample)}`;
       el.printImg.dataset.printFile = sample.file;
-      if (el.printImg.getAttribute('src') !== sample.src) el.printImg.src = sample.src;
-      if (replay) developFrame(el.printBtn);
+      el.printImg.width = sample.width;
+      el.printImg.height = sample.height;
+      const changed = el.printImg.getAttribute('src') !== sample.src;
+      if (changed) {
+        el.printImg.src = sample.src;
+        if (replay) {
+          const targetSrc = sample.src;
+          const run = () => {
+            if (el.printImg.getAttribute('src') === targetSrc) developFrame(el.printBtn);
+          };
+          if (el.printImg.complete) run();
+          else if (el.printImg.decode) el.printImg.decode().then(run, run);
+          else el.printImg.addEventListener('load', run, { once: true });
+        }
+      } else if (replay) {
+        developFrame(el.printBtn);
+      }
     }
 
     renderFilmstrip(model, samples, sample);
@@ -259,11 +289,65 @@ export function initLab({ api }) {
   renderModelList();
   renderStage(false);
   bindEvents();
+  setupCalibration();
+  setupStageReveal();
+
+  function setupCalibration() {
+    registerMotionSetup((mm) => {
+      mm.add(MEDIA.desktop, () => {
+        const rail = $('.model-rail');
+        const beam = $('#rail-beam');
+        if (!rail || !beam || !el.list) return undefined;
+
+        const trigger = ScrollTrigger.create({
+          trigger: rail,
+          start: 'top 78%',
+          end: 'top 24%',
+          invalidateOnRefresh: true,
+          onUpdate: (self) => {
+            calibratedProgress = Math.max(calibratedProgress, self.progress);
+            markCalibrated(calibratedProgress);
+            rail.classList.toggle('is-calibrating', self.isActive);
+            gsap.set(beam, {
+              y: self.progress * el.list.offsetHeight,
+              opacity: self.isActive ? 0.9 : 0,
+            });
+          },
+          onToggle: (self) => {
+            if (!self.isActive) {
+              rail.classList.remove('is-calibrating');
+              gsap.set(beam, { opacity: 0 });
+            }
+          },
+        });
+
+        return () => {
+          trigger.kill();
+          rail.classList.remove('is-calibrating');
+          gsap.set(beam, { opacity: 0, y: 0 });
+          markCalibrated(calibratedProgress);
+        };
+      });
+    });
+  }
+
+  /** 标尺扫到底时，右侧样张同步显影一次，作为这一节的落点。 */
+  function setupStageReveal() {
+    registerMotionSetup((mm) => {
+      mm.add('(min-width: 0px)', () => {
+        const trigger = ScrollTrigger.create({
+          trigger: '.lab-stage',
+          start: 'top 82%',
+          once: true,
+          onEnter: () => developFrame(el.printBtn),
+        });
+        return () => trigger.kill();
+      });
+    });
+  }
 
   return {
     setFilter,
-    selectModel,
-    renderStage,
     applyLanguage() {
       renderModelList();
       renderStage(false);

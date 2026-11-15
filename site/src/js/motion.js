@@ -4,7 +4,7 @@ import { Flip } from 'gsap/Flip';
 
 import { t } from './i18n.js';
 import { persistMotionMode } from './prefs.js';
-import { isMotionEnabled, state } from './state.js';
+import { isMotionEnabled } from './state.js';
 import { syncToggleState } from './ui.js';
 
 gsap.registerPlugin(ScrollTrigger, Flip);
@@ -15,7 +15,6 @@ export { gsap, ScrollTrigger, Flip };
 /** 站点用到的断点；和 CSS 媒体查询保持同一套阈值。 */
 export const MEDIA = {
   desktop: '(min-width: 981px)',
-  compact: '(max-width: 980px)',
   lite: '(max-width: 780px), (pointer: coarse)',
 };
 
@@ -29,10 +28,6 @@ const listeners = new Set();
 let media = null;
 let fxContext = null;
 let refreshFrame = 0;
-
-export function isCompactViewport() {
-  return window.matchMedia(MEDIA.compact).matches;
-}
 
 export function isLiteDevice() {
   return window.matchMedia(MEDIA.lite).matches;
@@ -49,7 +44,7 @@ export function onMotionChange(listener) {
   return () => listeners.delete(listener);
 }
 
-export function applyMotionMode({ initial = false, persist = false } = {}) {
+export function applyMotionMode({ persist = false } = {}) {
   const enabled = isMotionEnabled();
   document.documentElement.setAttribute('data-motion', enabled ? 'on' : 'off');
   if (persist) persistMotionMode();
@@ -61,14 +56,14 @@ export function applyMotionMode({ initial = false, persist = false } = {}) {
   if (enabled) activate();
   else deactivate();
 
-  for (const listener of listeners) listener(enabled, { initial });
+  for (const listener of listeners) listener(enabled);
 }
 
 function activate() {
   if (media) return;
   media = gsap.matchMedia();
   for (const setup of setups) setup(media);
-  scheduleRefresh();
+  refreshMotion();
 }
 
 function deactivate() {
@@ -106,28 +101,11 @@ export function refreshMotion() {
   });
 }
 
-function scheduleRefresh() {
-  refreshFrame = requestAnimationFrame(() => {
-    refreshFrame = 0;
-    ScrollTrigger.refresh();
-  });
-}
-
-/** 动效状态变化后交给模块重建；language/theme 切换用得到。 */
-export function rebuildMotion() {
-  if (!isMotionEnabled()) return;
-  deactivate();
-  activate();
-}
-
+/** 页面加载时的一次性入场时间线：同样挂在动效开关下。 */
 export function playIntroTween(builder, delay = 0) {
   return fxTween(() => {
     const timeline = gsap.timeline({ delay, defaults: { ease: 'power3.out' } });
     builder(timeline);
     return timeline;
   });
-}
-
-export function motionState() {
-  return { state, enabled: isMotionEnabled() };
 }

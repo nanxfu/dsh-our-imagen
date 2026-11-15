@@ -37,17 +37,19 @@ export function boot() {
   const wall = initWall({ api });
   const lab = initLab({ api });
   const workflow = initWorkflow();
-  initInstall();
   const lightbox = initLightbox({
     onToggle: (open) => hero.setPaused('lightbox', open),
   });
   api.openLightbox = (file, source) => lightbox.open(file, source);
 
+  // 动效装置按文档顺序注册：ScrollTrigger 的钉屏留白会改变其后元素的位置，
+  // 先注册的装置必须先于文档里更靠后的装置，否则后者的锚点会算在留白之前。
   initFlow();
+  initInstall();
   initScrollEffects();
 
   bindGlobalEvents({ hero, wall, lab, workflow, lightbox });
-  applyMotionMode({ initial: true });
+  applyMotionMode();
 
   // 字体与图片落定后重新量一次滚动位置；失败也不影响首屏。
   document.fonts?.ready.then(() => refreshMotion()).catch(() => {});
@@ -92,10 +94,11 @@ function bindGlobalEvents({ hero, wall, lab, workflow, lightbox }) {
     onChange: (value) => changeLanguage(value, { hero, wall, lab, workflow, lightbox }),
   });
 
-  bindChoiceGroup($('#model-filter'), {
+  const filterGroup = bindChoiceGroup($('#model-filter'), {
     attr: 'filter',
     onChange: (value) => lab.setFilter(value),
   });
+  filterGroup.sync(state.filter);
 
   bindCopyDelegation();
 }

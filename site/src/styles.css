@@ -20,8 +20,9 @@
   --ink: #f3f1ec;
   --ink-2: #b3aea4;
   --ink-3: #8f8a81;
-  --ink-4: #7b766d;
-  --ink-inverse: #121214;
+  --ink-4: #8a857c;
+  /* 相纸上的墨色：深浅两套都是深色，因为相纸在两种主题里都是最亮的表面 */
+  --ink-on-paper: #121214;
 
   --solid-bg: #f2efe8;
   --solid-ink: #121214;
@@ -84,7 +85,7 @@ html[data-theme="light"] {
   --ink-2: #4d4942;
   --ink-3: #5f5a52;
   --ink-4: #6a655c;
-  --ink-inverse: #f7f4ee;
+  --ink-on-paper: #151517;
 
   --solid-bg: #151517;
   --solid-ink: #f7f4ee;
@@ -104,8 +105,8 @@ html[data-theme="light"] {
   --warn-soft: rgb(154 91 12 / 10%);
   --err: #b3403f;
   --err-soft: rgb(179 64 63 / 10%);
-  --idle: #757067;
-  --idle-soft: rgb(117 112 103 / 10%);
+  --idle: #6b665e;
+  --idle-soft: rgb(107 102 94 / 10%);
 
   --shadow-print: 0 40px 80px -52px rgb(35 28 18 / 34%), 0 12px 26px -20px rgb(35 28 18 / 20%);
   --shadow-lift: 0 30px 60px -44px rgb(35 28 18 / 30%);
@@ -232,7 +233,7 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb {
   padding: 10px 16px;
   border-radius: var(--r-sm);
   background: var(--paper);
-  color: var(--ink-inverse);
+  color: var(--ink-on-paper);
   font-size: 13px;
   font-weight: 650;
   text-decoration: none;
@@ -834,7 +835,7 @@ html[data-theme="light"] .icon-moon {
   height: 28px;
   border-radius: 50%;
   background: var(--paper);
-  color: var(--ink-inverse);
+  color: var(--ink-on-paper);
   opacity: 0;
   transform: translateY(4px);
   transition: opacity 0.3s var(--ease), transform 0.3s var(--ease);
@@ -916,7 +917,7 @@ html[data-theme="light"] .hero-aura-layer.is-active {
   font-weight: 700;
   line-height: 1.08;
   letter-spacing: -0.032em;
-  text-wrap: balance;
+  text-wrap: pretty;
 }
 
 .hero-lead {
@@ -1209,7 +1210,7 @@ html[data-theme="light"] .hero-aura-layer.is-active {
   font-weight: 700;
   line-height: 1.14;
   letter-spacing: -0.03em;
-  text-wrap: balance;
+  text-wrap: pretty;
 }
 
 .section-aside {
@@ -1245,11 +1246,12 @@ html[data-theme="light"] .hero-aura-layer.is-active {
   position: relative;
 }
 
-/* 安全灯扫过成片墙：JS 把墙面进度写进 --p，扫光跟着移动 */
+/* 安全灯扫过成片墙：JS 把墙面进度写进 --p，扫光跟着移动。
+   left/right 取 0 而不是负值：模糊光晕本身会向外扩散，负值只会让页面横向溢出。 */
 .wall-sweep {
   position: absolute;
-  left: -8%;
-  right: -8%;
+  left: 0;
+  right: 0;
   top: 0;
   height: 46%;
   z-index: 2;
@@ -1528,17 +1530,22 @@ html[data-motion="on"] .wall-sweep {
 
 .model-speed i {
   position: absolute;
-  top: -2px;
+  top: -2.5px;
   left: calc(var(--t) * 100%);
-  width: 1px;
-  height: 5px;
+  width: 2px;
+  height: 6px;
+  border-radius: 1px;
   background: var(--ink-4);
-  transition: background-color 0.22s, height 0.22s;
+  transition: background-color 0.22s, height 0.22s, top 0.22s;
+}
+
+.model-item.is-calibrated .model-speed i {
+  background: var(--ink-2);
 }
 
 .model-item.is-active .model-speed i {
-  top: -3px;
-  height: 7px;
+  top: -3.5px;
+  height: 8px;
   background: var(--lamp);
 }
 
@@ -1675,6 +1682,12 @@ html[data-motion="on"] .wall-sweep {
   white-space: nowrap;
 }
 
+.spec-cell-repo dd {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
 .prompt-well {
   margin-top: 18px;
   padding: 14px 16px;
@@ -1766,13 +1779,17 @@ html[data-motion="on"] .wall-sweep {
   padding-top: 4px;
 }
 
+.wf-copy #workflow-tabs {
+  margin-bottom: 18px;
+}
+
 .wf-side-title {
   margin: 0 0 22px;
   font-size: clamp(18px, 1.5vw, 20px);
   font-weight: 650;
   line-height: 1.45;
   letter-spacing: -0.015em;
-  text-wrap: balance;
+  text-wrap: pretty;
 }
 
 .wf-points {
@@ -1841,8 +1858,8 @@ html[data-motion="on"] .wall-sweep {
   position: relative;
   display: grid;
   grid-template-columns:
-    minmax(0, 1fr) 128px minmax(0, 1fr) 128px minmax(0, 1fr) 128px
-    minmax(0, 1fr);
+    minmax(0, 1fr) minmax(112px, 148px) minmax(0, 1fr) minmax(112px, 148px)
+    minmax(0, 1fr) minmax(112px, 148px) minmax(0, 1fr);
   align-items: stretch;
   gap: 0;
   margin: 0;
@@ -1948,17 +1965,18 @@ html[data-motion="on"] .wall-sweep {
   width: 100%;
   max-width: 100%;
   color: var(--ink-3);
-  font-size: 12px;
-  letter-spacing: 0.02em;
+  font-size: 11.5px;
+  letter-spacing: 0.01em;
   line-height: 1.45;
   text-align: center;
   white-space: normal;
+  text-wrap: balance;
 }
 
-/* 安全灯光点：JS 在连接线空隙里推进 x，CSS 只负责形状与光晕 */
+/* 安全灯光点：JS 在连接线空隙里推进 x/y，CSS 只负责形状与光晕 */
 .flow-spark {
   position: absolute;
-  top: 50%;
+  top: 0;
   left: 0;
   z-index: 3;
   width: 10px;
@@ -2053,12 +2071,23 @@ html[data-motion="on"] .wall-sweep {
   transform: rotate(-1.4deg);
 }
 
+.flow-print-mat {
+  display: block;
+  overflow: hidden;
+  border-radius: 1px;
+  background: radial-gradient(75% 75% at 50% 45%, #17171a, #0d0d0e);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 6%);
+}
+
+html[data-theme="light"] .flow-print-mat {
+  background: radial-gradient(75% 75% at 50% 45%, #e6e0d4, #dad3c4);
+  box-shadow: inset 0 0 0 1px rgb(21 21 23 / 8%);
+}
+
 .flow-print img {
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 1px;
-  background: #0d0d0e;
 }
 
 .truths {
@@ -2599,7 +2628,7 @@ html.lightbox-open {
   padding: 10px 18px;
   border-radius: var(--r-pill);
   background: var(--paper);
-  color: var(--ink-inverse);
+  color: var(--ink-on-paper);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -2616,6 +2645,14 @@ html.lightbox-open {
 }
 
 /* ── 响应式 ───────────────────────────────────────────────── */
+
+@media (max-width: 1320px) and (min-width: 981px) {
+  .hero-thumb-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+  }
+}
 
 @media (max-width: 1180px) {
   .hero-title {
@@ -2697,6 +2734,10 @@ html.lightbox-open {
     margin-top: 0;
   }
 
+  .print-frame-stage img {
+    max-height: clamp(220px, 42vh, 380px);
+  }
+
   .workflow-body {
     grid-template-columns: minmax(0, 1fr);
     gap: 32px;
@@ -2720,6 +2761,7 @@ html.lightbox-open {
     width: auto;
     max-width: none;
     text-align: left;
+    white-space: normal;
   }
 
   .pipeline-line {
@@ -2736,18 +2778,6 @@ html.lightbox-open {
     display: none;
   }
 
-  .flow-captions {
-    min-height: 0;
-    display: grid;
-    gap: 20px;
-  }
-
-  .flow-caption {
-    position: static;
-    opacity: 1;
-    transform: none;
-  }
-
   .flow-foot {
     grid-template-columns: minmax(0, 1fr);
     gap: clamp(22px, 4vw, 32px);
@@ -2755,14 +2785,6 @@ html.lightbox-open {
 
   .flow-print {
     width: min(320px, 68vw);
-  }
-
-  .pipeline-tag {
-    position: static;
-    transform: none;
-    max-width: none;
-    text-align: left;
-    white-space: normal;
   }
 
   .truth {
@@ -2912,6 +2934,19 @@ html.lightbox-open {
   }
 }
 
+@media (max-height: 560px) {
+  .lightbox-paper img {
+    max-height: calc(100vh - 132px);
+  }
+
+  .lightbox-close {
+    top: 12px;
+    right: 12px;
+    background: rgb(12 12 14 / 74%);
+    border-color: rgb(243 241 236 / 32%);
+  }
+}
+
 /* ── 滚动驱动（GSAP ScrollTrigger 逐帧写入） ─────────────── */
 
 /* Hero 视差、背景照片、墙面光扫的 transform 由 GSAP 直接管理；
@@ -2966,19 +3001,7 @@ html[data-motion="off"] .wall .print .print-meta {
   transform: none;
 }
 
-/* 关掉钉屏后，四段说明还原成可顺序阅读的静态列表 */
-html[data-motion="off"] .flow-captions {
-  min-height: 0;
-  display: grid;
-  gap: 20px;
-}
-
-html[data-motion="off"] .flow-caption {
-  position: static;
-  opacity: 1;
-  transform: none;
-}
-
+/* 关掉钉屏后，四段说明自然回到静态列表；错误兜底时也保持可读 */
 html[data-motion="off"] .flow-spark {
   display: none;
 }
@@ -3015,7 +3038,342 @@ html[data-motion="off"] .flow-spark {
   }
 }
 
+/* ── 滚动叙事（粘性场景 / 滚动驱动展示） ─────────────────── */
+
+/* 1. 成片墙的显影计数条：贴在顶栏下方，随墙面滚动推进 */
+.wall-bar {
+  position: sticky;
+  top: 64px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 18px;
+  padding: 11px 0 12px;
+  background: rgb(var(--bg-rgb) / 86%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--hair);
+  color: var(--ink-3);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.wall-bar-label {
+  flex: none;
+}
+
+.wall-bar-track {
+  flex: 1 1 auto;
+  height: 1px;
+  overflow: hidden;
+  background: var(--hair-2);
+}
+
+.wall-bar-track i {
+  display: block;
+  height: 100%;
+  background: var(--lamp);
+  opacity: 0.8;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+}
+
+.wall-bar-count {
+  flex: none;
+  color: var(--ink-2);
+  letter-spacing: 0.06em;
+}
+
+.wall-bar-count b {
+  color: var(--lamp);
+  font-weight: 650;
+}
+
+/* 2. 模型暗房：安全灯光带扫过速度标尺，逐行把耗时刻度打上去 */
+.model-list-wrap {
+  position: relative;
+}
+
+.rail-beam {
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 0;
+  z-index: 2;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--lamp-line) 10%,
+    var(--lamp) 50%,
+    var(--lamp-line) 90%,
+    transparent
+  );
+  box-shadow: 0 0 22px 6px rgb(var(--lamp-rgb) / 24%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0);
+}
+
+/* 刻度默认就是实点：只有光带正在扫过时，还没扫到的行才退回灰点 */
+.model-rail.is-calibrating .model-item:not(.is-calibrated) .model-speed i {
+  opacity: 0.3;
+  transform: scaleY(0.5);
+}
+
+.model-speed i {
+  opacity: 1;
+  transform: none;
+  transform-origin: 50% 100%;
+  transition: opacity 0.3s var(--ease), transform 0.3s var(--ease),
+    background-color 0.22s, height 0.22s, top 0.22s;
+}
+
+.model-item.is-calibrated .model-sec {
+  color: var(--ink);
+}
+
+/* 3. 两种用法：钉住的光桌，安全灯放大镜依次停在三个界面的关键区域 */
+.workflow-body {
+  align-items: center;
+}
+
+@media (min-width: 981px) {
+  /* 钉屏时这一幕铺满一屏：视口高度减去顶栏与钉屏起点偏移，内容垂直居中 */
+  html[data-motion="on"] .workflow-body {
+    min-height: calc(100svh - 84px);
+  }
+}
+
+.shot-plate {
+  --sx: 12.9;
+  --sy: 42;
+  --plate-w: 100%;
+  --plate-h: 100%;
+  --loupe-zoom: 1.5;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 1px;
+  background: #0d0d0e;
+}
+
+.shot-plate .shot-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: filter 0.5s var(--ease), opacity 0.35s var(--ease);
+}
+
+/* 被钉住时：整张截图退回银盐，只有放大镜下的一圈保留原色 */
+.shot.is-armed .shot-img {
+  filter: saturate(0.36) brightness(0.5) contrast(1.05);
+}
+
+html[data-theme="light"] .shot.is-armed .shot-img {
+  filter: saturate(0.55) brightness(0.76) contrast(0.98);
+}
+
+.shot-loupe {
+  position: absolute;
+  top: calc(var(--sy) * var(--plate-h) / 100);
+  left: calc(var(--sx) * var(--plate-w) / 100);
+  z-index: 2;
+  width: 26%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  box-shadow: 0 0 0 1px rgb(var(--lamp-rgb) / 60%), 0 0 46px 8px rgb(var(--lamp-rgb) / 13%),
+    0 34px 64px -34px rgb(0 0 0 / 84%);
+  pointer-events: none;
+  transition: opacity 0.45s var(--ease);
+}
+
+.shot-loupe img {
+  position: absolute;
+  top: calc(50% - var(--sy) * var(--plate-h) / 100);
+  left: calc(50% - var(--sx) * var(--plate-w) / 100);
+  width: var(--plate-w);
+  height: var(--plate-h);
+  max-width: none;
+  object-fit: cover;
+  transform: scale(var(--loupe-zoom));
+  transform-origin: calc(var(--sx) * 1%) calc(var(--sy) * 1%);
+}
+
+.shot.is-armed .shot-loupe {
+  opacity: 1;
+}
+
+.shot-progress {
+  display: none;
+  flex: none;
+  color: var(--ink-3);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.shot.is-armed .shot-progress {
+  display: inline;
+}
+
+/* 钉住时右侧说明按幕点亮；不钉屏时三句一直保持可读 */
+.wf-copy.is-armed .wf-points li {
+  color: var(--ink-3);
+  transition: color 0.34s var(--ease);
+}
+
+.wf-copy.is-armed .wf-points li::before {
+  width: 7px;
+  background: var(--hair-3);
+  transition: width 0.34s var(--ease), background-color 0.34s var(--ease);
+}
+
+.wf-copy.is-armed .wf-points li.is-active {
+  color: var(--ink);
+}
+
+.wf-copy.is-armed .wf-points li.is-active::before {
+  width: 13px;
+  background: var(--lamp);
+}
+
+/* 4. 三步上手：一条纵向光路跟着阅读进度往下走，步骤标题粘在光路上 */
+.steps-wrap {
+  --step-gutter: clamp(18px, 2.2vw, 30px);
+  position: relative;
+  padding-left: var(--step-gutter);
+}
+
+.install-track {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--hair-2);
+}
+
+.install-track-fill {
+  position: absolute;
+  inset: 0;
+  display: block;
+  background: var(--lamp);
+  opacity: 0.55;
+  transform: scaleY(0);
+  transform-origin: 50% 0;
+}
+
+.install-track-spark {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: var(--lamp);
+  box-shadow: 0 0 0 1px rgb(var(--lamp-rgb) / 40%), 0 0 20px 6px rgb(var(--lamp-rgb) / 24%);
+  opacity: 0;
+}
+
+.steps-wrap.is-armed .install-track-spark {
+  opacity: 1;
+}
+
+.step {
+  position: relative;
+}
+
+/* 把每一步的分隔发丝线接到左侧光路上 */
+.step::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: calc(-1 * var(--step-gutter));
+  height: 1px;
+  background: var(--hair);
+}
+
+.step-aside {
+  position: sticky;
+  top: 96px;
+  align-self: start;
+}
+
+.step-index {
+  transition: color 0.35s var(--ease), letter-spacing 0.35s var(--ease);
+}
+
+.step.is-current .step-index {
+  color: var(--lamp);
+  letter-spacing: 0.26em;
+}
+
+.steps-wrap.is-armed .step:not(.is-current) .step-aside h3 {
+  color: var(--ink-2);
+}
+
+.steps-wrap.is-armed .step.is-current .step-aside h3 {
+  color: var(--ink);
+}
+
+html[data-motion="off"] .wall-bar,
+html[data-motion="off"] .rail-beam,
+html[data-motion="off"] .install-track {
+  display: none;
+}
+
+html[data-motion="off"] .shot.is-armed .shot-img {
+  filter: none;
+}
+
+html[data-motion="off"] .shot-loupe {
+  display: none;
+}
+
+@media (max-width: 980px) {
+  .wall-bar {
+    top: 58px;
+  }
+
+  .rail-beam,
+  .install-track,
+  .shot-loupe {
+    display: none;
+  }
+
+  .steps-wrap {
+    padding-left: 0;
+  }
+
+  .step::before {
+    left: 0;
+  }
+
+  .step-aside {
+    position: static;
+  }
+
+  .workflow-body {
+    align-items: start;
+  }
+}
+
 @media print {
+  .wall-bar,
+  .rail-beam,
+  .install-track,
+  .shot-loupe,
   .ambient,
   .chrome,
   .lightbox,

@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>生图工作台 · Imagen Studio — 零显卡免费开源生图工作台</title>
+  <title>生图工作台 · Imagen Studio — 开源免显卡生图工作台</title>
   <meta
     name="description"
-    content="DeepSeek Harness 的开源文生图工作台与对话工具。白嫖 Kaggle 每周 30 小时免费 2×T4 显卡，无需配置本地环境，图片直接写回本地硬盘。"
+    content="DeepSeek Harness 的开源图像生成插件。利用 Kaggle 每周 30 小时免费 2×T4 GPU 算力运行推理，免去本地环境配置，生成图像直接保存至本地。"
   />
-  <meta id="theme-color" name="theme-color" content="#0b0b0c" />
+  <meta id="theme-color" name="theme-color" content="#0a0a0b" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="生图工作台 · Imagen Studio — 零显卡免费开源生图工作台" />
+  <meta property="og:title" content="生图工作台 · Imagen Studio — 开源免显卡生图工作台" />
   <meta
     property="og:description"
-    content="Kaggle 双卡 T4 免费算力接入 DeepSeek Harness：9 款开源模型、22 张实测成片，图片直接写回本地工作区。"
+    content="Kaggle 2×T4 免费 GPU 算力直连 DeepSeek Harness：预置 9 款开源模型、22 张实测样张，生成图像直接落盘本地工作区。"
   />
   <meta name="twitter:card" content="summary_large_image" />
   <script>
@@ -61,7 +61,7 @@
 
   <header class="chrome" id="chrome">
     <div class="chrome-inner">
-      <a class="brand" href="#top" aria-label="生图工作台，回到顶部">
+      <a class="brand" href="#top" aria-label="生图工作台，返回顶部">
         <span class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 64 64" width="22" height="22" fill="none" stroke="currentColor" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round">
             <path d="M14 44c6-2 10-2 15 0s10 2 21-1" stroke-opacity=".45" />
@@ -76,11 +76,11 @@
       </a>
 
       <nav class="nav" aria-label="页面导航" data-t-aria="navAria">
-        <a href="#works" data-t="navWorks">成片墙</a>
-        <a href="#lab" data-t="navLab">模型暗房</a>
-        <a href="#workflow" data-t="navWorkflow">两种用法</a>
-        <a href="#architecture" data-t="navArch">原理与边界</a>
-        <a href="#install" data-t="navInstall">上手指南</a>
+        <a href="#works" data-t="navWorks">生成样张</a>
+        <a href="#lab" data-t="navLab">模型评测</a>
+        <a href="#workflow" data-t="navWorkflow">操作模式</a>
+        <a href="#architecture" data-t="navArch">架构与特性</a>
+        <a href="#install" data-t="navInstall">安装部署</a>
       </nav>
 
       <div class="chrome-actions">
@@ -143,14 +143,14 @@
           <circle cx="12" cy="12" r="9" />
           <path d="M12 8v4M12 16h.01" />
         </svg>
-        <span data-t="motionNotice">动效已关闭：轮播、滚动显影与背景动画已暂停。</span>
+        <span data-t="motionNotice">动效已关闭：已暂停轮播、滚动淡入及背景动画。</span>
       </p>
       <button type="button" class="btn btn-quiet btn-sm" id="motion-enable" data-t="motionEnable">开启动效</button>
     </div>
   </div>
 
   <main id="main">
-    <!-- Hero：暗房里的第一张相纸 -->
+    <!-- Hero：主视图样张与核心特性 -->
     <section class="hero" id="top">
       <div class="hero-aura" aria-hidden="true">
         <div
@@ -162,30 +162,30 @@
       </div>
       <div class="hero-inner">
         <div class="hero-copy">
-          <h1 class="hero-title" data-t="heroTitle">不用买显卡，也能用开源模型画图。</h1>
+          <h1 class="hero-title" data-t="heroTitle">无需本地 GPU，流畅运行主流开源生图模型。</h1>
 
           <p class="hero-lead" data-t="heroLead">
-            DeepSeek Harness 的免费生图插件。把推理放到 Kaggle 云端双卡 T4 上跑，不用在本地折腾几十 G 的 PyTorch 与 CUDA，画完的图直接存进你电脑的 imagen-output/ 文件夹。
+            面向 DeepSeek Harness 的开源图像生成插件。利用 Kaggle 免费提供的 2×T4 GPU 运行推理，免去本地部署 PyTorch 与 CUDA 环境的复杂流程，生成图像实时回传并保存至本地 imagen-output/ 目录。
           </p>
 
           <div class="hero-actions">
-            <a class="btn btn-primary" href="#install" data-t="heroCtaPrimary">三步装好开始画</a>
-            <a class="btn btn-quiet" href="#works" data-t="heroCtaSecondary">看 22 张真实成片</a>
+            <a class="btn btn-primary" href="#install" data-t="heroCtaPrimary">快速安装上手</a>
+            <a class="btn btn-quiet" href="#works" data-t="heroCtaSecondary">浏览 22 张实测样张</a>
           </div>
 
           <p class="hero-facts">
-            <span data-t="factModels">9 款开源模型实测</span>
+            <span data-t="factModels">9 款开源模型预置</span>
             <span class="fact-dot" aria-hidden="true"></span>
-            <span data-t="factSpeed">快档 1.9 秒 / 张</span>
+            <span data-t="factSpeed">最快 1.9 秒 / 张</span>
             <span class="fact-dot" aria-hidden="true"></span>
-            <span data-t="factLocal">成片只写本地工作区</span>
+            <span data-t="factLocal">图像仅留存于本地</span>
           </p>
         </div>
 
         <figure class="hero-print">
           <div class="print-glow" aria-hidden="true"></div>
           <div class="hero-stage">
-            <button type="button" class="print-frame print-frame-hero" id="hero-print-btn" aria-label="打开大图预览" data-t-aria="heroPrintAria">
+            <button type="button" class="print-frame print-frame-hero" id="hero-print-btn" aria-label="查看大图预览" data-t-aria="heroPrintAria">
               <img
                 id="hero-print-img"
                 src="./assets/showcase/flux2-klein-4b-kyoto-poster.webp"
@@ -219,20 +219,26 @@
 
       <div class="hero-scroll" aria-hidden="true">
         <span class="hero-scroll-line"></span>
-        <span data-t="heroScroll">向下滚动，相纸显影</span>
+        <span data-t="heroScroll">向下滚动查看更多</span>
       </div>
     </section>
 
-    <!-- 成片墙：滚动显影 + 安全灯显色 -->
+    <!-- 样张展区：实测生成效果 -->
     <section class="works" id="works">
       <div class="section-head">
-        <h2 class="section-title" data-t="wallTitle">22 张成片，全部在这台机器上跑出。</h2>
+        <h2 class="section-title" data-t="wallTitle">22 张实测样张，均由 Kaggle 云端环境直接渲染。</h2>
         <div class="section-aside">
           <p class="section-desc" data-t="wallDesc">
-            每一张都在 Kaggle 双卡 T4 上由这个插件实际生成，只转存 WebP，没有后期修图。滚动时相纸逐张显影；把光标移到成片上，安全灯会重新点亮它的颜色。
+            样张均在 Kaggle 2×T4 环境下通过本插件实际生成，仅转存为 WebP 格式，无任何后期修饰。滚动页面可浏览生成详情。
           </p>
-          <p class="wall-count tabular" id="wall-count">22 FRAMES · 9 MODELS · KAGGLE 2×T4</p>
+          <p class="wall-count tabular" id="wall-count">22 SAMPLES · 9 MODELS · KAGGLE 2×T4</p>
         </div>
+      </div>
+
+      <div class="wall-bar" id="wall-bar">
+        <span class="wall-bar-label" data-t="wallDeveloped">显影进度</span>
+        <span class="wall-bar-track" aria-hidden="true"><i id="wall-bar-fill"></i></span>
+        <span class="wall-bar-count tabular"><b id="wall-developed">00</b> / <span id="wall-total">22</span></span>
       </div>
 
       <div class="wall" id="wall">
@@ -241,25 +247,25 @@
       </div>
 
       <p class="wall-hint">
-        <span data-t="wallHint">点开任意一张，看它的完整曝光单</span>
+        <span data-t="wallHint">点击任意样张查看生成参数与硬件开销</span>
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M7 17 17 7M9 7h8v8" />
         </svg>
       </p>
     </section>
 
-    <!-- 模型暗房：九款模型的底细与成片 -->
+    <!-- 模型评测：实测基准数据与提示词一览 -->
     <section class="lab" id="lab">
       <div class="section-head">
-        <h2 class="section-title" data-t="labTitle">把 9 个模型的底细和成片摊开看。</h2>
+        <h2 class="section-title" data-t="labTitle">9 款模型实测数据与生图效果一览。</h2>
         <div class="section-aside">
           <p class="section-desc" data-t="labDesc">
-            以下样张均在 Kaggle 2×T4 上由本插件实际跑出，仅转存 WebP，无后期修图。选择左侧模型查看成片、显存占用与完整提示词。
+            所有样张均基于 Kaggle 2×T4 硬件实测生成，保持原始输出并转换为 WebP 格式。在左侧切换模型，查看单张耗时、显存占用及完整 Prompt。
           </p>
-          <div class="seg" id="model-filter" role="tablist" aria-label="按模型速度筛选" data-t-aria="modelFilterAria">
+          <div class="seg" id="model-filter" role="group" aria-label="按模型速度筛选" data-t-aria="modelFilterAria">
             <button type="button" class="seg-btn is-active" data-filter="all" data-t="filterAll">全部 9 款</button>
-            <button type="button" class="seg-btn" data-filter="fast" data-t="filterFast">极速 (≤11s)</button>
-            <button type="button" class="seg-btn" data-filter="usable" data-t="filterUsable">精绘与二次元</button>
+            <button type="button" class="seg-btn" data-filter="fast" data-t="filterFast">极速档 (≤11s)</button>
+            <button type="button" class="seg-btn" data-filter="usable" data-t="filterUsable">高精度与二次元</button>
           </div>
         </div>
       </div>
@@ -267,10 +273,13 @@
       <div class="lab-grid">
         <aside class="model-rail" aria-label="模型预设列表" data-t-aria="modelListAria">
           <div class="model-rail-head">
-            <span data-t="railHeadModel">内置模型</span>
-            <span data-t="railHeadSpeed">稳态单张耗时</span>
+            <span data-t="railHeadModel">预置模型</span>
+            <span data-t="railHeadSpeed">单张稳态耗时</span>
           </div>
-          <div class="model-list" id="model-list" role="group" aria-label="选择模型"></div>
+          <div class="model-list-wrap">
+            <div class="model-list" id="model-list" role="group" aria-label="选择模型"></div>
+            <span class="rail-beam" id="rail-beam" aria-hidden="true"></span>
+          </div>
           <div class="rail-scale tabular" aria-hidden="true">
             <span data-t="railFast">快 2s</span>
             <span data-t="railSlow">慢 90s</span>
@@ -279,7 +288,7 @@
 
         <div class="lab-stage">
           <div class="stage-print">
-            <button type="button" class="print-frame print-frame-stage" id="lab-print-btn" aria-label="放大查看成片" data-t-aria="labPrintAria">
+            <button type="button" class="print-frame print-frame-stage" id="lab-print-btn" aria-label="放大查看样张" data-t-aria="labPrintAria">
               <img id="lab-print-img" src="./assets/showcase/sdxl-lightning-cyberpunk-street.webp" alt="" width="1152" height="648" />
               <span class="print-zoom" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -288,7 +297,7 @@
                 </svg>
               </span>
             </button>
-            <div class="lab-filmstrip" id="lab-filmstrip" aria-label="该模型的更多成片"></div>
+            <div class="lab-filmstrip" id="lab-filmstrip" aria-label="该模型的更多样张"></div>
           </div>
 
           <div class="lab-note">
@@ -301,7 +310,7 @@
                 </p>
               </div>
               <div class="lab-note-actions">
-                <button type="button" class="btn btn-quiet btn-sm" id="replay-develop-btn" data-t="replayDevelop">重播显影</button>
+                <button type="button" class="btn btn-quiet btn-sm" id="replay-develop-btn" data-t="replayDevelop">重播动效</button>
                 <button type="button" class="btn btn-quiet btn-sm" id="copy-prompt-btn" data-t="copyPrompt">复制提示词</button>
               </div>
             </div>
@@ -312,7 +321,7 @@
 
             <div class="prompt-well">
               <div class="prompt-well-head">
-                <span data-t="promptLabel">本次生成提示词</span>
+                <span data-t="promptLabel">生成提示词 (Prompt)</span>
                 <span class="tabular" id="lab-prompt-meta">—</span>
               </div>
               <p class="prompt-text" id="lab-prompt-text">—</p>
@@ -322,52 +331,58 @@
       </div>
     </section>
 
-    <!-- 两种用法：工作台与对话 -->
+    <!-- 操作模式：工作台与对话快捷调用 -->
     <section class="workflow" id="workflow">
       <div class="section-head">
-        <h2 class="section-title" data-t="wfTitle">想精调进工作台，懒得写词直接在聊天里说。</h2>
+        <h2 class="section-title" data-t="wfTitle">支持独立工作台与对话交互双入口。</h2>
         <div class="section-aside">
           <p class="section-desc" data-t="wfDesc">
-            两种入口共用同一个云端实例，不需要开两个后台。在聊天框画完的图，随时能点进整页工作台继续重绘或微调参数。
+            两种使用场景共享同一底层云端实例，无需单独启动。在对话中生成的图像，可随时导入独立工作台做二次重绘或参数精调。
           </p>
-          <div class="seg" id="workflow-tabs" role="tablist" aria-label="工作模式切换" data-t-aria="wfTabsAria">
-            <button type="button" class="seg-btn is-active" data-wf="studio" data-t="wfTabStudio">独立工作台</button>
-            <button type="button" class="seg-btn" data-wf="chat" data-t="wfTabChat">对话里直接画</button>
-          </div>
         </div>
       </div>
 
-      <div class="workflow-body">
-        <div class="shot">
+      <div class="workflow-body" id="workflow-body">
+        <div class="shot" id="wf-shot">
           <div class="shot-frame">
-            <img class="shot-img" id="wf-shot-img" src="./assets/studio-light.png" alt="生图工作台独立界面截图" />
+            <div class="shot-plate" id="wf-plate">
+              <img class="shot-img" id="wf-shot-img" src="./assets/studio-light.png" alt="生图工作台界面截图" width="1440" height="900" />
+              <span class="shot-loupe" id="wf-loupe" aria-hidden="true">
+                <img id="wf-loupe-img" src="./assets/studio-light.png" alt="" />
+              </span>
+            </div>
           </div>
           <div class="shot-caption">
             <span class="shot-label" id="wf-window-title">—</span>
+            <span class="shot-progress tabular" id="wf-progress" aria-hidden="true">01 / 03</span>
           </div>
-          <div class="shot-chips" id="wf-sub-switch" aria-label="界面截图" data-t-aria="wfShotsAria">
-            <button type="button" class="chip is-active" data-shot="studio-light" data-t="shotMain">工作台主视图</button>
-            <button type="button" class="chip" data-shot="model-picker-dark" data-t="shotPicker">深色模型选卡</button>
-            <button type="button" class="chip" data-shot="gallery" data-t="shotGallery">本地作品画廊</button>
+          <div class="shot-chips" id="wf-sub-switch" role="group" aria-label="界面截图" data-t-aria="wfShotsAria">
+            <button type="button" class="chip is-active" data-act="0" data-t="shotMain">工作台主视图</button>
+            <button type="button" class="chip" data-act="1" data-t="shotPicker">模型选择界面</button>
+            <button type="button" class="chip" data-act="2" data-t="shotGallery">本地历史画廊</button>
           </div>
         </div>
 
         <div class="wf-copy">
+          <div class="seg" id="workflow-tabs" role="group" aria-label="工作模式切换" data-t-aria="wfTabsAria">
+            <button type="button" class="seg-btn is-active" data-wf="studio" data-t="wfTabStudio">独立工作台</button>
+            <button type="button" class="seg-btn" data-wf="chat" data-t="wfTabChat">对话快捷生成</button>
+          </div>
           <h3 class="wf-side-title" id="wf-side-title">—</h3>
-          <ul class="wf-points" id="wf-points"></ul>
+          <ol class="wf-points" id="wf-points"></ol>
           <p class="wf-note" id="wf-note"></p>
         </div>
       </div>
     </section>
 
-    <!-- 原理与边界：一条光路，滚动时依次点亮四个环节 -->
+    <!-- 架构与特性：端到端数据流与安全边界 -->
     <section class="architecture" id="architecture">
       <div class="flow" id="flow">
         <div class="flow-stage" id="flow-stage">
           <div class="section-head section-head-single">
-            <h2 class="section-title" data-t="archTitle">算力白用，图片自留，限制也摊在明面上。</h2>
+            <h2 class="section-title" data-t="archTitle">免费算力直连，数据本地自留，边界清晰透明。</h2>
             <p class="section-desc" data-t="archDesc">
-              没有中间服务器抽成，也没有公共图床留存。插件只做一件事：把你本机的操作指令安全地递给 Kaggle，再把算完的图接回本地硬盘。
+              无需经由第三方中转服务，不托管至任何公共图床。插件仅负责安全传输调度指令至 Kaggle 实例，推理完成后将图片直接流式回传并落盘至本地。
             </p>
           </div>
 
@@ -375,26 +390,26 @@
             <ol class="pipeline" aria-label="数据与算力流向">
               <li class="pipeline-node" data-flow-step="0">
                 <span class="pipeline-step tabular">01</span>
-                <strong data-t="topo1Title">你的电脑 · DSH 界面</strong>
-                <span class="pipeline-sub" data-t="topo1Sub">独立工作台 / 聊天工具</span>
+                <strong data-t="topo1Title">本机 · DSH 界面</strong>
+                <span class="pipeline-sub" data-t="topo1Sub">独立工作台 / 聊天工具卡片</span>
               </li>
               <li class="pipeline-link" aria-hidden="true">
                 <span class="pipeline-line"><i class="pipeline-fill"></i></span>
-                <span class="pipeline-tag" data-t="topoTunnel">单次 Token 加密隧道</span>
+                <span class="pipeline-tag" data-t="topoTunnel">一次性 Token 加密隧道</span>
               </li>
               <li class="pipeline-node" data-flow-step="1">
                 <span class="pipeline-step tabular">02</span>
                 <strong data-t="topo2Title">本地 Node.js Host</strong>
-                <span class="pipeline-sub" data-t="topo2Sub">管状态、发任务、写硬盘</span>
+                <span class="pipeline-sub" data-t="topo2Sub">状态维护、任务分发与本地存储</span>
               </li>
               <li class="pipeline-link" aria-hidden="true">
                 <span class="pipeline-line"><i class="pipeline-fill"></i></span>
-                <span class="pipeline-tag" data-t="topoTunnel">单次 Token 加密隧道</span>
+                <span class="pipeline-tag" data-t="topoTunnel">一次性 Token 加密隧道</span>
               </li>
               <li class="pipeline-node" data-flow-step="2">
                 <span class="pipeline-step tabular">03</span>
                 <strong data-t="topo3Title">Kaggle 2×Tesla T4</strong>
-                <span class="pipeline-sub" data-t="topo3Sub">daemon.py · 30G 显存</span>
+                <span class="pipeline-sub" data-t="topo3Sub">daemon.py · 30GB 共享显存</span>
               </li>
               <li class="pipeline-link" aria-hidden="true">
                 <span class="pipeline-line"><i class="pipeline-fill"></i></span>
@@ -403,40 +418,42 @@
               <li class="pipeline-node is-terminal" data-flow-step="3">
                 <span class="pipeline-step tabular">04</span>
                 <strong>imagen-output/</strong>
-                <span class="pipeline-sub" data-t="topo4Sub">100% 留存你自己的工作区</span>
+                <span class="pipeline-sub" data-t="topo4Sub">100% 保存在本地工作区</span>
               </li>
               <li class="flow-spark" aria-hidden="true"></li>
             </ol>
 
             <div class="flow-foot">
-              <ol class="flow-captions" aria-label="光路指引" data-t-aria="flowStepLabel">
+              <ol class="flow-captions" aria-label="数据流向说明" data-t-aria="flowStepLabel">
                 <li class="flow-caption" data-flow-step="0">
                   <span class="flow-caption-index tabular">01</span>
-                  <p data-t="flow1">提示词、画幅与种子留在本机，只有这一次任务的参数被递出去。</p>
+                  <p data-t="flow1">提示词、画幅比例与随机种子均保存在本地，仅单次生成任务参数对外传输。</p>
                 </li>
                 <li class="flow-caption" data-flow-step="1">
                   <span class="flow-caption-index tabular">02</span>
-                  <p data-t="flow2">Host 排队、记录会话状态与落盘路径；中途刷新或重启，任务也不会丢。</p>
+                  <p data-t="flow2">本地 Host 负责任务排队、记录会话状态与文件落盘路径；重启后任务状态不丢失。</p>
                 </li>
                 <li class="flow-caption" data-flow-step="2">
                   <span class="flow-caption-index tabular">03</span>
-                  <p data-t="flow3">云端容器只做一件事：把权重装进 30G 显存，按参数出图，不做任何留存。</p>
+                  <p data-t="flow3">云端容器负责加载权重至 30GB 显存并执行推理生成，不留存任何用户图像或数据。</p>
                 </li>
                 <li class="flow-caption" data-flow-step="3">
                   <span class="flow-caption-index tabular">04</span>
-                  <p data-t="flow4">图片以流式回传直接写进你本地的 imagen-output/，不经过任何图床。</p>
+                  <p data-t="flow4">生成结果通过加密流式传输直接写入本地 imagen-output/ 目录，不经过任何外部图床。</p>
                 </li>
               </ol>
 
               <figure class="flow-print" aria-hidden="true">
-                <img
-                  src="./assets/showcase/flux2-klein-4b-kyoto-poster.webp"
-                  width="1152"
-                  height="640"
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
+                <span class="flow-print-mat">
+                  <img
+                    src="./assets/showcase/flux2-klein-4b-kyoto-poster.webp"
+                    width="1152"
+                    height="640"
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </span>
               </figure>
             </div>
           </div>
@@ -445,21 +462,21 @@
 
       <ul class="truths">
         <li class="truth">
-          <h3 data-t="truth1Title">每周 30 小时，实际够画多少？</h3>
+          <h3 data-t="truth1Title">每周 30 小时额度，实际产出能力如何？</h3>
           <p data-t="truth1Body">
-            Kaggle 给每位手机认证用户每周提供 30 小时免费 2×T4 额度。按主力 SDXL Lightning（1024px，实测 6.2 秒/张）计算，理论上限一周可出 17,000+ 张图。日常每天画几十张，一周只消耗 1~2 小时。
+            Kaggle 为已完成手机号认证的用户提供每周 30 小时的免费 2×T4 GPU 算力。以主力模型 SDXL Lightning（1024px，实测约 6.2 秒/张）估算，理论极限每周可达 17,000+ 张。日常按需生成，每周通常仅消耗 1~2 小时。
           </p>
         </li>
         <li class="truth">
-          <h3 data-t="truth2Title">忘关机怎么办？重启会丢机器吗？</h3>
+          <h3 data-t="truth2Title">忘记关闭实例会怎样？重启会重复启动吗？</h3>
           <p data-t="truth2Body">
-            云端实例连续空闲满 30 分钟会自动关机，避免空耗额度；也能在顶栏随时手动关。本地 .imagen/session.json 会实时记下会话状态，DSH 刷新或重启后自动探活接管旧机器，不重复开机。
+            远端实例闲置满 30 分钟会自动终止运行，避免浪费算力配额；界面顶栏也支持随时手动关机。本地通过 .imagen/session.json 维护会话状态，重启或刷新 DSH 后会自动探测并复用运行中的实例，避免重复创建。
           </p>
         </li>
         <li class="truth">
-          <h3 data-t="truth3Title">先把局限说清楚</h3>
+          <h3 data-t="truth3Title">使用前需了解的限制与注意事项</h3>
           <p data-t="truth3Body">
-            1) Kaggle 账号必须先完成手机号绑定，否则会被平台静默降级为 CPU；2) 每次冷启动要等 3~10 分钟分配机器与加载权重（开机后出图才稳定在数秒）；3) 目前处于 Preview，Colab 与本地显卡后端仍在接入。
+            1) Kaggle 账号须完成手机号验证，否则平台不会分配 GPU 资源；2) 首次冷启动需要 3~10 分钟用于分配云端实例及拉取模型权重，就绪后单张生成时间稳定在数秒级；3) 当前处于预览阶段，Colab 与本地 GPU 后端驱动正在适配中。
           </p>
         </li>
       </ul>
@@ -524,105 +541,112 @@
         </p>
       </div>
 
-      <ol class="steps">
-        <li class="step">
-          <div class="step-aside">
-            <span class="step-index tabular">01</span>
-            <h3 data-t="step1Title">准备好 Kaggle 账号</h3>
-          </div>
-          <div class="step-body">
-            <p>
-              <span data-t="step1BodyA">注册或登录 Kaggle，在 Account 设置里完成</span>
-              <strong data-t="step1BodyEm">手机号认证（Phone Verification）</strong>
-              <span data-t="step1BodyB">——这是启用免费 GPU 的硬性前提。</span>
-            </p>
+      <div class="steps-wrap" id="steps-wrap">
+        <div class="install-track" aria-hidden="true">
+          <i class="install-track-fill" id="install-track-fill"></i>
+          <span class="install-track-spark" id="install-track-spark"></span>
+        </div>
 
-            <div class="choices">
-              <div class="choice">
-                <strong data-t="step1OptA">方式 A · 不装 CLI（推荐新手）</strong>
-                <p data-t="step1OptADesc">先把插件装进 DSH，随后打开「GPU 状态 → 运行设置 → 高级 → Kaggle 访问方式选直连」，在浏览器点一下授权登录即可。</p>
-              </div>
-              <div class="choice">
-                <strong data-t="step1OptB">方式 B · 命令行配置</strong>
-                <div class="code-line">
-                  <code>pip install kaggle &amp;&amp; kaggle auth login</code>
-                  <button type="button" class="copy-mini" data-copy="pip install kaggle && kaggle auth login" data-t="copyBtn">复制</button>
+        <ol class="steps">
+          <li class="step">
+            <div class="step-aside">
+              <span class="step-index tabular">01</span>
+              <h3 data-t="step1Title">准备好 Kaggle 账号</h3>
+            </div>
+            <div class="step-body">
+              <p>
+                <span data-t="step1BodyA">注册或登录 Kaggle，在 Account 设置里完成</span>
+                <strong data-t="step1BodyEm">手机号认证（Phone Verification）</strong>
+                <span data-t="step1BodyB">——这是启用免费 GPU 的硬性前提。</span>
+              </p>
+  
+              <div class="choices">
+                <div class="choice">
+                  <strong data-t="step1OptA">方式 A · 不装 CLI（推荐新手）</strong>
+                  <p data-t="step1OptADesc">先把插件装进 DSH，随后打开「GPU 状态 → 运行设置 → 高级 → Kaggle 访问方式选直连」，在浏览器点一下授权登录即可。</p>
+                </div>
+                <div class="choice">
+                  <strong data-t="step1OptB">方式 B · 命令行配置</strong>
+                  <div class="code-line">
+                    <code>pip install kaggle &amp;&amp; kaggle auth login</code>
+                    <button type="button" class="copy-mini" data-copy="pip install kaggle && kaggle auth login" data-t="copyBtn">复制</button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </li>
-
-        <li class="step">
-          <div class="step-aside">
-            <span class="step-index tabular">02</span>
-            <h3 data-t="step2Title">把插件装进 DSH</h3>
-          </div>
-          <div class="step-body">
-            <div class="seg seg-sm" id="install-tabs" role="tablist" aria-label="安装方式">
-              <button type="button" class="seg-btn is-active" data-inst="gui" data-t="instTabGui">图形界面</button>
-              <button type="button" class="seg-btn" data-inst="cli" data-t="instTabCli">一行命令</button>
-              <button type="button" class="seg-btn" data-inst="offline" data-t="instTabOffline">离线 / 源码</button>
+          </li>
+  
+          <li class="step">
+            <div class="step-aside">
+              <span class="step-index tabular">02</span>
+              <h3 data-t="step2Title">把插件装进 DSH</h3>
             </div>
-
-            <div class="inst-pane" id="inst-pane-gui">
-              <ol class="clean-list">
-                <li>
-                  <span data-t="guiStep1A">打开 DeepSeek Harness，进入</span>
-                  <strong data-t="guiStep1Em">设置 → 插件管理 → 安装插件</strong>
-                  <span data-t="guiStep1B">；</span>
-                </li>
-                <li data-t="guiStep2">粘贴下面的仓库地址并确认，完成后重启 DSH：</li>
-              </ol>
-              <div class="code-line">
-                <code>github:nanxfu/dsh-our-imagen</code>
-                <button type="button" class="copy-mini" data-copy="github:nanxfu/dsh-our-imagen" data-t="copyBtn">复制</button>
+            <div class="step-body">
+              <div class="seg seg-sm" id="install-tabs" role="group" aria-label="安装方式">
+                <button type="button" class="seg-btn is-active" data-inst="gui" data-t="instTabGui">图形界面</button>
+                <button type="button" class="seg-btn" data-inst="cli" data-t="instTabCli">一行命令</button>
+                <button type="button" class="seg-btn" data-inst="offline" data-t="instTabOffline">离线 / 源码</button>
+              </div>
+  
+              <div class="inst-pane" id="inst-pane-gui">
+                <ol class="clean-list">
+                  <li>
+                    <span data-t="guiStep1A">打开 DeepSeek Harness，进入</span>
+                    <strong data-t="guiStep1Em">设置 → 插件管理 → 安装插件</strong>
+                    <span data-t="guiStep1B">；</span>
+                  </li>
+                  <li data-t="guiStep2">粘贴下面的仓库地址并确认，完成后重启 DSH：</li>
+                </ol>
+                <div class="code-line">
+                  <code>github:nanxfu/dsh-our-imagen</code>
+                  <button type="button" class="copy-mini" data-copy="github:nanxfu/dsh-our-imagen" data-t="copyBtn">复制</button>
+                </div>
+              </div>
+  
+              <div class="inst-pane is-hidden" id="inst-pane-cli">
+                <div class="profile-row">
+                  <span class="profile-label" data-t="profileLabel">Profile：</span>
+                  <button type="button" class="chip is-active" data-profile="desktop">desktop（桌面端）</button>
+                  <button type="button" class="chip" data-profile="web">web</button>
+                </div>
+                <div class="code-line">
+                  <code id="cli-install-cmd">dsh plugin --profile desktop add github:nanxfu/dsh-our-imagen</code>
+                  <button type="button" class="copy-mini" id="cli-copy-btn" data-copy="dsh plugin --profile desktop add github:nanxfu/dsh-our-imagen" data-t="copyBtn">复制</button>
+                </div>
+                <p class="step-hint" data-t="cliHint">安装或升级后重启 DSH，左侧工具栏会出现「生图工作台」图标。</p>
+              </div>
+  
+              <div class="inst-pane is-hidden" id="inst-pane-offline">
+                <p class="step-hint" data-t="offlineDesc">
+                  网络受限可从 GitHub Releases 下载 zip 解压后，在 DSH 插件管理里选「本地加载（Load Bundle）」；开发者调试可直接：
+                </p>
+                <div class="code-line">
+                  <code>dsh plugin --profile desktop add D:\path\to\our-free-imagen</code>
+                  <button type="button" class="copy-mini" data-copy="dsh plugin --profile desktop add D:\path\to\our-free-imagen" data-t="copyBtn">复制</button>
+                </div>
               </div>
             </div>
-
-            <div class="inst-pane is-hidden" id="inst-pane-cli">
-              <div class="profile-row">
-                <span class="profile-label" data-t="profileLabel">Profile：</span>
-                <button type="button" class="chip is-active" data-profile="desktop">desktop（桌面端）</button>
-                <button type="button" class="chip" data-profile="web">web</button>
-              </div>
-              <div class="code-line">
-                <code id="cli-install-cmd">dsh plugin --profile desktop add github:nanxfu/dsh-our-imagen</code>
-                <button type="button" class="copy-mini" id="cli-copy-btn" data-copy="dsh plugin --profile desktop add github:nanxfu/dsh-our-imagen" data-t="copyBtn">复制</button>
-              </div>
-              <p class="step-hint" data-t="cliHint">安装或升级后重启 DSH，左侧工具栏会出现「生图工作台」图标。</p>
+          </li>
+  
+          <li class="step">
+            <div class="step-aside">
+              <span class="step-index tabular">03</span>
+              <h3 data-t="step3Title">点开机，等几分钟，开始画</h3>
             </div>
-
-            <div class="inst-pane is-hidden" id="inst-pane-offline">
-              <p class="step-hint" data-t="offlineDesc">
-                网络受限可从 GitHub Releases 下载 zip 解压后，在 DSH 插件管理里选「本地加载（Load Bundle）」；开发者调试可直接：
+            <div class="step-body">
+              <p>
+                <span data-t="step3BodyA">进入工作台点击顶部</span>
+                <strong data-t="step3BodyEm">「开机 / 唤醒云端」</strong>
+                <span data-t="step3BodyB">。首次启动 Kaggle 约需 3~10 分钟分配机器与拉取模型权重；状态变绿（Online）后，之后每张图通常 2~10 秒直接落入本地 imagen-output/。</span>
               </p>
-              <div class="code-line">
-                <code>dsh plugin --profile desktop add D:\path\to\our-free-imagen</code>
-                <button type="button" class="copy-mini" data-copy="dsh plugin --profile desktop add D:\path\to\our-free-imagen" data-t="copyBtn">复制</button>
+              <div class="step-links">
+                <a class="btn btn-primary btn-sm" href="https://github.com/nanxfu/dsh-our-imagen" target="_blank" rel="noopener noreferrer" data-t="goGithub">去 GitHub 看完整文档</a>
+                <a class="btn btn-quiet btn-sm" href="https://github.com/nanxfu/dsh-our-imagen/releases" target="_blank" rel="noopener noreferrer" data-t="goReleases">下载 Releases</a>
               </div>
             </div>
-          </div>
-        </li>
-
-        <li class="step">
-          <div class="step-aside">
-            <span class="step-index tabular">03</span>
-            <h3 data-t="step3Title">点开机，等几分钟，开始画</h3>
-          </div>
-          <div class="step-body">
-            <p>
-              <span data-t="step3BodyA">进入工作台点击顶部</span>
-              <strong data-t="step3BodyEm">「开机 / 唤醒云端」</strong>
-              <span data-t="step3BodyB">。首次启动 Kaggle 约需 3~10 分钟分配机器与拉取模型权重；状态变绿（Online）后，之后每张图通常 2~10 秒直接落入本地 imagen-output/。</span>
-            </p>
-            <div class="step-links">
-              <a class="btn btn-primary btn-sm" href="https://github.com/nanxfu/dsh-our-imagen" target="_blank" rel="noopener noreferrer" data-t="goGithub">去 GitHub 看完整文档</a>
-              <a class="btn btn-quiet btn-sm" href="https://github.com/nanxfu/dsh-our-imagen/releases" target="_blank" rel="noopener noreferrer" data-t="goReleases">下载 Releases</a>
-            </div>
-          </div>
-        </li>
-      </ol>
+          </li>
+        </ol>
+      </div>
     </section>
   </main>
 

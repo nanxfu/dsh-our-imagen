@@ -40,7 +40,9 @@ export function initLightbox({ onToggle }) {
   };
 
   let isOpen = false;
+  let isOpening = false;
   let isClosing = false;
+  let openTween = null;
   let sourceEl = null;
   let returnFocus = null;
 
@@ -76,7 +78,7 @@ export function initLightbox({ onToggle }) {
         state.lightboxIdx + 1
       }/${showcaseItems.length})`;
     }
-    if (resolve || !sourceEl || !sourceEl.isConnected) sourceEl = resolveSource(item.file);
+    if (resolve) sourceEl = resolveSource(item.file);
     preloadNeighbors();
   }
 
@@ -89,7 +91,7 @@ export function initLightbox({ onToggle }) {
       const timeline = gsap.timeline();
       timeline
         .to(el.image, { opacity: 0, duration: 0.14, ease: 'power1.in' })
-        .call(() => paintContent({ resolve: true }))
+        .call(() => paintContent())
         .fromTo(
           el.image,
           { opacity: 0, scale: 0.985 },
@@ -102,8 +104,14 @@ export function initLightbox({ onToggle }) {
   function animateOpen() {
     if (!isMotionEnabled()) return;
     const target = sourceEl;
-    fxTween(() => {
-      const timeline = gsap.timeline();
+    isOpening = true;
+    openTween = fxTween(() => {
+      const timeline = gsap.timeline({
+        onComplete: () => {
+          isOpening = false;
+          openTween = null;
+        },
+      });
       if (el.backdrop) {
         timeline.fromTo(el.backdrop, { opacity: 0 }, { opacity: 1, duration: 0.42, ease: 'power1.out' }, 0);
       }
@@ -128,8 +136,21 @@ export function initLightbox({ onToggle }) {
     });
   }
 
+  /** 关闭动画开始前，把还在播的打开动画收尾到自然状态，避免两条时间线争抢同一张相纸。 */
+  function settleOpen() {
+    if (!isOpening) return;
+    openTween?.kill();
+    openTween = null;
+    isOpening = false;
+    if (el.paper) gsap.set(el.paper, { clearProps: 'transform,width,height' });
+    if (el.backdrop) gsap.set(el.backdrop, { clearProps: 'opacity' });
+    if (el.dialog) gsap.set(el.dialog, { clearProps: 'opacity' });
+  }
+
   function finalizeClose() {
     isClosing = false;
+    isOpening = false;
+    openTween = null;
     isOpen = false;
     state.lightboxIdx = -1;
     if (el.root) el.root.hidden = true;
@@ -139,6 +160,7 @@ export function initLightbox({ onToggle }) {
     if (el.paper) gsap.set(el.paper, { clearProps: 'transform,width,height' });
     if (el.backdrop) gsap.set(el.backdrop, { clearProps: 'opacity' });
     if (el.dialog) gsap.set(el.dialog, { clearProps: 'opacity' });
+    if (el.root) gsap.set(el.root, { clearProps: 'opacity' });
     if (returnFocus && returnFocus.focus) returnFocus.focus({ preventScroll: true });
     returnFocus = null;
     sourceEl = null;
@@ -166,10 +188,26 @@ export function initLightbox({ onToggle }) {
   function close() {
     if (!isOpen || isClosing) return;
     isClosing = true;
+    settleOpen();
     const target = sourceEl && sourceEl.isConnected ? sourceEl : null;
 
-    if (!isMotionEnabled() || !target || !el.paper) {
+    if (!isMotionEnabled()) {
       finalizeClose();
+      return;
+    }
+
+    if (!target || !el.paper) {
+      // 翻过页或源相纸已不在 DOM：不强行飞回去，用一段短淡出收尾。
+      fxTween(() =>
+        gsap
+          .timeline({ onComplete: finalizeClose })
+          .to([el.dialog, el.backdrop].filter(Boolean), {
+            opacity: 0,
+            duration: 0.28,
+            ease: 'power1.in',
+          })
+          .to(el.root, { opacity: 0, duration: 0.18, ease: 'power1.in' }, 0.1)
+      );
       return;
     }
 
@@ -190,8 +228,9 @@ export function initLightbox({ onToggle }) {
     if (!isOpen || isClosing || showcaseItems.length === 0) return;
     const total = showcaseItems.length;
     state.lightboxIdx = (state.lightboxIdx + direction + total) % total;
+    // 翻页后不再把「另一张图」FLIP 回原相纸的位置，关闭时改用淡出收尾。
+    sourceEl = null;
     updateContent({ animate: true });
-    el.close?.focus({ preventScroll: true });
   }
 
   function trapTab(event) {
@@ -241,7 +280,6 @@ export function initLightbox({ onToggle }) {
   return {
     open,
     close,
-    step,
     /** 语言切换后重画标题与题注（图片不变）。 */
     refresh() {
       if (isOpen) paintContent();
