@@ -51,6 +51,9 @@
  26. 状态与配置的模块边界（架构规格 §5.10）：CONFIG / STATE / BOOT 与 remote/config.py、
      remote/state.py 里的单例是**同一对象**，load_config() 原地回填，daemon 不得重新绑定；
      log_ring 只有一份（config / state 必须扁平导入，否则 /logs 会变空）
+ 27. 基础设施与观测层的模块边界：pip 环境只由 pipeline_loader.pip_env() 构造、
+     IMPORT_CHECK_CODE 由模块清单生成、/health 的 queue_depth 必须在释放 STATE_LOCK
+     之后取（§5.8 锁顺序，反向嵌套会与 _finish_job 死锁）
 
 运行：python test/daemon-unit.py
 """
@@ -62,6 +65,7 @@ import contextlib
 import dataclasses
 import hashlib
 import importlib.util
+import inspect
 import io
 import json
 import os
@@ -121,9 +125,12 @@ def _load_daemon():
 
 d = _load_daemon()
 
-# 单例的真实宿主：daemon 只是 re-export，断言"两边是同一个对象"必须直接看这两个模块。
+# 单例与常量的真实宿主：daemon 只是 re-export，断言"两边是同一个对象"必须直接看这些模块。
 import remote.config as remote_config  # noqa: E402
+import remote.infra.process as remote_process  # noqa: E402
+import remote.observability.health as remote_health  # noqa: E402
 import remote.state as remote_state  # noqa: E402
+import remote.text as remote_text  # noqa: E402
 
 AUTH_TOKEN = "test-token-0123456789"
 
@@ -527,6 +534,35 @@ class StateSingletonTest(DaemonUnitTest):
         # 声明字段仍然按默认值恢复，对象身份不变。
         self.assertEqual(d.STATE.phase, "booting")
         self.assertIsNone(d.BOOT.tunnel_url)
+
+
+class SharedModuleSurfaceTest(DaemonUnitTest):
+    """跨模块共享的常量/函数必须是**同一对象**：否则打桩会打到影子变量上（假绿）。"""
+
+    def test_daemon_reexports_the_owning_objects(self) -> None:
+        self.assertIs(d.HEALTH_VERSION_MODULES, remote_health.HEALTH_VERSION_MODULES)
+        self.assertIs(d.dependency_versions, remote_health.dependency_versions)
+        self.assertIs(d.gpu_memory_payload, remote_health.gpu_memory_payload)
+        self.assertIs(d.IMPORT_CHECK_CODE, remote_process.IMPORT_CHECK_CODE)
+        self.assertIs(d.IMPORT_CHECK_MODULES, remote_process.IMPORT_CHECK_MODULES)
+        self.assertIs(d.PIP_CONSTRAINTS, remote_process.PIP_CONSTRAINTS)
+        self.assertIs(d.run_command_tail, remote_process.run_command_tail)
+        self.assertIs(d.run_streaming_tail, remote_process.run_streaming_tail)
+        self.assertIs(d.write_constraints_file, remote_process.write_constraints_file)
+        self.assertIs(d.short, remote_text.short)
+
+    def test_import_check_code_is_generated_from_the_module_list(self) -> None:
+        """清单与自检脚本不能各写一遍：脚本里的元组必须由 IMPORT_CHECK_MODULES 生成。"""
+        self.assertIn(repr(remote_process.IMPORT_CHECK_MODULES), remote_process.IMPORT_CHECK_CODE)
+        for name in remote_process.IMPORT_CHECK_MODULES:
+            self.assertIn(name, remote_process.IMPORT_CHECK_CODE)
+
+    def test_pip_env_reuses_the_single_environment_builder(self) -> None:
+        """流式执行与一次性命令必须共用 pipeline_loader.pip_env()（§1.3 点名的重复）。"""
+        source = (ROOT / "remote" / "infra" / "process.py").read_text(encoding="utf-8")
+        self.assertEqual(source.count("env=pip_env(),"), 2, "两处启动子进程都应走 pip_env()")
+        self.assertNotIn("PIP_DISABLE_PIP_VERSION_CHECK", source, "环境变量只在 pipeline_loader 构造")
+        self.assertNotIn("setdefault(", source, "process.py 不应自己补环境变量")
 
 
 class BuildConfigTest(DaemonUnitTest):
@@ -1149,6 +1185,48 @@ class HealthPayloadTest(DaemonUnitTest):
         self.assertIsNot(payload["loaded"], d.STATE.loaded)
 
 
+class HealthLockOrderTest(DaemonUnitTest):
+    """规格 §5.8：锁顺序唯一方向 JOB_LOCK → STATE_LOCK，/health 不能反着取。"""
+
+    def test_queue_depth_is_read_after_releasing_state_lock(self) -> None:
+        events: list[str] = []
+
+        class TrackingLock:
+            """记录进出临界区：RLock 可重入，只有换掉锁才能观察到"仍在锁内"。"""
+
+            inside = False
+            def __enter__(self):
+                self.inside = True
+                events.append("enter")
+                return self
+
+            def __exit__(self, *exc):
+                self.inside = False
+                events.append("exit")
+                return False
+
+        lock = TrackingLock()
+
+        def fake_queue_depth() -> int:
+            events.append("queue")
+            assert lock.inside is False, "取队列深度时不能仍持有 STATE_LOCK（会与 _finish_job 反向嵌套）"
+            return 3
+
+        with mock.patch.object(d, "STATE_LOCK", lock), mock.patch.object(d, "queue_depth", fake_queue_depth):
+            payload = d.health_payload()
+
+        self.assertEqual(payload["queue_depth"], 3)
+        self.assertEqual(events[:2], ["enter", "exit"], "取样必须整段包在 STATE_LOCK 内")
+        self.assertLess(events.index("exit"), events.index("queue"))
+
+    def test_payload_builder_cannot_reach_locks(self) -> None:
+        """组装层只接受快照与标量：没有任何参数能把锁或状态对象带进去（结构上无法反序）。"""
+        params = inspect.signature(remote_health.build_payload).parameters
+        self.assertEqual(
+            set(params), {"snapshot", "version", "idle_timeout_sec", "queue_depth", "now"}
+        )
+
+
 class HealthVersionsTest(DaemonUnitTest):
     """M4.2：/health.versions 依赖快照只含纯版本号，不含 token / 路径。"""
 
@@ -1173,21 +1251,37 @@ class HealthVersionsTest(DaemonUnitTest):
         self.assertNotIn(secret, json.dumps(versions, ensure_ascii=False))
 
     def test_invalid_versions_are_dropped_without_raising(self) -> None:
-        fake = types.SimpleNamespace(__version__="/home/kaggle/secret/path")
-        with mock.patch.dict(sys.modules, {"fake_weird_module": fake}):
+        # 同时放一条合法版本：否则"weird 不在结果里"在打桩失效时也会成立（假绿）。
+        bad = types.SimpleNamespace(__version__="/home/kaggle/secret/path")
+        good = types.SimpleNamespace(__version__="2.4.0")
+        with mock.patch.dict(sys.modules, {"fake_weird_module": bad, "fake_good_module": good}):
             with mock.patch.object(
-                d, "HEALTH_VERSION_MODULES", (("weird", "fake_weird_module", "nonexistent-dist-xyz"),)
+                remote_health,
+                "HEALTH_VERSION_MODULES",
+                (
+                    ("weird", "fake_weird_module", "nonexistent-dist-xyz"),
+                    ("good", "fake_good_module", "nonexistent-dist-xyz"),
+                ),
             ):
                 versions = d.dependency_versions()
         self.assertIn("python", versions)
+        self.assertEqual(versions.get("good"), "2.4.0", "打桩的版本表必须真的被读到")
         self.assertNotIn("weird", versions)
         self.assertNotIn("secret", json.dumps(versions, ensure_ascii=False))
 
     def test_missing_packages_are_omitted(self) -> None:
-        with mock.patch.object(
-            d, "HEALTH_VERSION_MODULES", (("missing", "definitely_missing_module_xyz", "definitely-missing-dist-xyz"),)
-        ):
-            versions = d.dependency_versions()
+        present = types.SimpleNamespace(__version__="1.2.3")
+        with mock.patch.dict(sys.modules, {"fake_present_module": present}):
+            with mock.patch.object(
+                remote_health,
+                "HEALTH_VERSION_MODULES",
+                (
+                    ("present", "fake_present_module", "nonexistent-dist-xyz"),
+                    ("missing", "definitely_missing_module_xyz", "definitely-missing-dist-xyz"),
+                ),
+            ):
+                versions = d.dependency_versions()
+        self.assertEqual(versions.get("present"), "1.2.3", "打桩的版本表必须真的被读到")
         self.assertIsInstance(versions, dict)
         self.assertNotIn("missing", versions)
         self.assertIsInstance(d.health_payload()["versions"], dict)

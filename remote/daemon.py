@@ -61,8 +61,6 @@ import binascii
 import gc
 import hashlib
 import hmac
-import importlib.metadata
-import inspect
 import io
 import json
 import math
@@ -272,10 +270,9 @@ JOB_WAKE = _JobWakeCompat()
 from remote.errors import LoadError, QueueFullError, RequestError  # noqa: E402
 
 
-def short(exc: BaseException, limit: int = 600) -> str:
-    text = f"{type(exc).__name__}: {exc}"
-    text = " ".join(text.split())
-    return text[:limit]
+# `short()` 的单份实现在 remote/text.py（infra.process 也要用同一份，避免第 6 份副本）。
+# 其余三处（tunnel / pipeline_loader / cache_ops）按规格 §5.7 单列一批合并。
+from remote.text import short  # noqa: E402
 
 
 # `set_phase` / `record_error` 已随状态对象搬到 remote/state.py（锁与数据同笼），
@@ -587,128 +584,37 @@ def _cleanup_before_exit() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 依赖安装与模型加载共享辅助（单份源码在 remote/pipeline_loader.py；
-# 本地测试直接同目录 import，推 Kaggle 时随源码包一起内嵌）
+# 依赖安装（pip plumbing 在 remote/infra/process.py）
+#
+# `stream_process`（原 `_stream_process`）/ `run_streaming*` / `run_command_tail` /
+# `tail_summary` / `package_name` / `merge_pip_constraints` / `write_constraints_file` 与
+# `IMPORT_CHECK_CODE` 已搬进 remote/infra/process.py：流式读行与 pip 环境只有一份实现
+# （复用 pipeline_loader.pip_env()，不再各抄一遍环境变量），约束合并/包名归一也只有一处。
+#
+# 留在这里的是**启动编排**而不是 plumbing：install_dependencies 要按 phase 切换、带约束
+# 失败后去掉重试、清理临时目录；verify_dependencies 要把自检失败映射成 LoadError 文案。
+# 两者都按模块属性被单测打桩（`d.run_streaming_tail` / `d.run_command_tail`），编排留在
+# 原处才能继续被替换。等切片⑥的 app.py 落地再连同 phase 一起搬。
 # ─────────────────────────────────────────────────────────────────────────────
 
 from pipeline_loader import PIP_INSTALL, PIP_UNINSTALL, filter_call_kwargs, from_pretrained_with_variant_fallback, is_oom_error, load_diffusers_pipeline, pip_install_argv, pip_uninstall_argv, pipe_signature_params  # noqa: E402
-
-
-def _stream_process(argv: list[str], prefix: str, tail_lines: int = 0) -> tuple[int, list[str]]:
-    """跑子进程并把每一行输出写进日志环；可选返回尾部若干行供错误文案使用。"""
-    log(f"{prefix} $ {' '.join(argv)}")
-    env = dict(os.environ)
-    env.setdefault("PIP_DISABLE_PIP_VERSION_CHECK", "1")
-    env.setdefault("PIP_NO_INPUT", "1")
-    try:
-        proc = subprocess.Popen(
-            argv,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            env=env,
-        )
-    except Exception as exc:
-        log(f"{prefix} 启动失败：{short(exc)}")
-        return -1, []
-    assert proc.stdout is not None
-    tail: deque[str] = deque(maxlen=tail_lines) if tail_lines > 0 else deque(maxlen=0)
-    for line in proc.stdout:
-        line = line.rstrip()
-        if not line:
-            continue
-        log(f"{prefix} {line}")
-        if tail_lines > 0:
-            tail.append(line)
-    code = proc.wait()
-    log(f"{prefix} 退出码 {code}")
-    return code, list(tail)
-
-
-def run_streaming(argv: list[str], prefix: str) -> int:
-    """跑子进程并把每一行输出写进日志环（pip 必须可见，否则用户以为卡死）。"""
-    return _stream_process(argv, prefix)[0]
-
-
-def run_streaming_tail(argv: list[str], prefix: str, tail_lines: int = 12) -> tuple[int, list[str]]:
-    """同 run_streaming，但额外返回末尾若干行输出，用于把失败原因带进错误文案。"""
-    return _stream_process(argv, prefix, tail_lines)
-
-
-def tail_summary(lines: list[str], limit: int = 560) -> str:
-    """把子进程尾部输出压成一行，供 LoadError 文案；保留最后几条最有用的行。"""
-    meaningful = [line.strip() for line in lines if isinstance(line, str) and line.strip()]
-    if not meaningful:
-        return "无输出"
-    text = " | ".join(meaningful[-6:])
-    return text if len(text) <= limit else "…" + text[-(limit - 1) :]
-
-
-def package_name(spec: str) -> str:
-    """从 pip 约束表达式取包名（``diffusers<1.0`` → ``diffusers``），按 PEP 503 归一化。"""
-    match = re.match(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)", str(spec or ""))
-    if not match:
-        return ""
-    return re.sub(r"[-_.]+", "-", match.group(1)).lower()
+from remote.infra.process import (  # noqa: E402
+    IMPORT_CHECK_CODE,
+    IMPORT_CHECK_MODULES,
+    PIP_CONSTRAINTS,
+    merge_pip_constraints as merge_pip_constraints_impl,
+    package_name,
+    run_command_tail,
+    run_streaming,
+    run_streaming_tail,
+    tail_summary,
+    write_constraints_file,
+)
 
 
 def merge_pip_constraints(injected) -> list[str]:  # noqa: ANN001
     """默认约束按包名合并 Host 注入项：同名覆盖（保持原位置），新包追加。"""
-    specs = dict(PIP_CONSTRAINTS)
-    for item in normalize_pip_constraints(injected):
-        name = package_name(item)
-        if name:
-            specs[name] = item
-        else:
-            log(f"[pip] WARN 无法识别包名的约束已忽略：{item}")
-    return list(specs.values())
-
-
-def write_constraints_file(constraints: list[str], directory: str | None = None) -> str:
-    """把最终约束写成 pip ``-c`` 文件；目录缺省时用系统临时目录。"""
-    directory = directory or tempfile.mkdtemp(prefix="imagen-constraints-")
-    path = os.path.join(directory, "constraints.txt")
-    with open(path, "w", encoding="utf-8") as handle:
-        handle.write("\n".join(constraints))
-        handle.write("\n")
-    return path
-
-
-# 独立进程做 import 自检：pip 显示安装成功 ≠ 能 import（ABI 不匹配、依赖冲突都在这暴露）。
-# 除模块本身外再导入一次 DiffusionPipeline：版本组合不兼容时，它往往在模块级就抛错。
-IMPORT_CHECK_CODE = (
-    "import importlib\n"
-    "for name in ('torch', 'diffusers', 'transformers', 'accelerate', 'peft'):\n"
-    "    module = importlib.import_module(name)\n"
-    "    print(name + '==' + str(getattr(module, '__version__', 'unknown')))\n"
-    "from diffusers import DiffusionPipeline\n"
-    "print('DiffusionPipeline ok')\n"
-)
-
-
-def run_command_tail(argv: list[str], prefix: str, tail_lines: int = 20) -> tuple[int, list[str]]:
-    """跑一次性子进程并把输出写进日志环，返回退出码与尾部若干行（供错误文案）。"""
-    log(f"{prefix} $ {' '.join(argv)}")
-    env = dict(os.environ)
-    env.setdefault("PIP_DISABLE_PIP_VERSION_CHECK", "1")
-    env.setdefault("PIP_NO_INPUT", "1")
-    try:
-        proc = subprocess.run(
-            argv,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            timeout=600,
-            env=env,
-        )
-    except Exception as exc:
-        log(f"{prefix} 启动失败：{short(exc)}")
-        return -1, [short(exc)]
-    lines = [line.strip() for line in (proc.stdout or "").splitlines() if line.strip()]
-    for line in lines:
-        log(f"{prefix} {line}")
-    return proc.returncode, lines[-tail_lines:]
+    return merge_pip_constraints_impl(injected, PIP_CONSTRAINTS)
 
 
 def verify_dependencies() -> None:
@@ -1442,123 +1348,32 @@ def start_job_worker() -> threading.Thread:
 # HTTP 服务
 # ─────────────────────────────────────────────────────────────────────────────
 
-# M4.2：/health 的依赖版本快照。三项依次为「输出键名 / 已加载模块名 / PyPI 发行名」。
-# 只输出纯版本号，绝不包含 token、路径或安装位置；取不到的键直接省略。
-HEALTH_VERSION_MODULES = (
-    ("torch", "torch", "torch"),
-    ("diffusers", "diffusers", "diffusers"),
-    ("transformers", "transformers", "transformers"),
-    ("accelerate", "accelerate", "accelerate"),
-    ("peft", "peft", "peft"),
-    ("huggingface_hub", "huggingface_hub", "huggingface-hub"),
-    ("safetensors", "safetensors", "safetensors"),
-    ("pillow", "PIL", "pillow"),
+# ── /health 快照（组装逻辑在 remote/observability/health.py） ─────────────────
+#
+# 字段组装、依赖版本快照与显存读取都搬进 observability/health.py；本文件只保留取样顺序：
+# 先持 STATE_LOCK / BOOT_LOCK 取一份不可变快照（函数返回即释放），**再**取 queue_depth()。
+# 顺序不能反：`_finish_job` 的方向是 JOB_LOCK → STATE_LOCK，/health 若在持 STATE_LOCK 时
+# 去拿 JOB_LOCK 就是反向嵌套（架构规格 §5.8，会死锁）。
+
+from remote.observability.health import (  # noqa: E402
+    HEALTH_VERSION_MODULES,
+    build_payload as health_build_payload,
+    clean_version as _clean_version,
+    dependency_versions,
+    gpu_memory_payload,
+    snapshot_from as health_snapshot_from,
 )
-_VERSION_RE = re.compile(r"^[0-9][0-9A-Za-z.+!_-]{0,63}$")
-
-
-def _clean_version(value) -> str | None:  # noqa: ANN001
-    """只接受纯版本号字符串（数字开头）；其他形态丢弃，避免把路径带进 /health。"""
-    if not isinstance(value, str):
-        return None
-    text = value.strip()
-    if not text or not _VERSION_RE.match(text):
-        return None
-    return text
-
-
-def dependency_versions() -> dict:
-    """python + torch/diffusers/... 的版本快照；取不到就省略该键，绝不抛异常。
-
-    优先读已加载模块的 ``__version__``（不额外 import 重库），回退到
-    importlib.metadata；两种来源都做纯版本号校验。
-    """
-    versions: dict = {}
-    python_version = _clean_version(platform.python_version())
-    if python_version:
-        versions["python"] = python_version
-    for key, module_name, dist_name in HEALTH_VERSION_MODULES:
-        version = None
-        module = sys.modules.get(module_name)
-        if module is not None:
-            version = _clean_version(getattr(module, "__version__", None))
-        if version is None:
-            try:
-                version = _clean_version(importlib.metadata.version(dist_name))
-            except Exception:
-                version = None
-        if version is not None:
-            versions[key] = version
-    return versions
-
-
-def gpu_memory_payload() -> dict | None:
-    """只读显存快照（MiB 取整）；用于 M3 真机验收对比 txt2img → img2img 是否额外占显存。
-
-    只读已加载的 torch 模块（``sys.modules``），不在 /health 里触发重库 import：
-    torch 尚未加载、CUDA 不可用或读取异常时一律返回 None，且不影响 status / phase 判定。
-    """
-    torch = sys.modules.get("torch")
-    if torch is None:
-        return None
-    try:
-        cuda = torch.cuda
-        if not cuda.is_available():
-            return None
-        mib = 1024 * 1024
-        return {
-            "allocated_mb": int(cuda.memory_allocated() // mib),
-            "reserved_mb": int(cuda.memory_reserved() // mib),
-            "max_allocated_mb": int(cuda.max_memory_allocated() // mib),
-        }
-    except Exception:
-        return None
 
 
 def health_payload() -> dict:
-    with STATE_LOCK:
-        phase = STATE.phase
-        model_id = STATE.model_id
-        loaded = list(STATE.loaded)
-        device = STATE.device
-        device_count = STATE.device_count
-        last_active = STATE.last_active
-        jobs_done = STATE.jobs_done
-        last_error = STATE.last_error
-        last_error_code = STATE.last_error_code
-        detail = STATE.detail
-        started_at = STATE.started_at
-    with BOOT_LOCK:
-        tunnel_provider = BOOT.tunnel_provider
-        tunnel_state = BOOT.tunnel_state
-        tunnel_restarts = BOOT.tunnel_restarts
-    now = time.time()
-    return {
-        "status": "error" if phase == "error" else "ok",
-        "phase": phase,
-        "version": protocol_version(),
-        # M4.2：依赖版本快照（纯版本号，不含 token / 路径），用于 LKGR 基线与故障归因。
-        "versions": dependency_versions(),
-        "model_id": model_id,
-        "loaded": loaded,
-        "device": device,
-        "device_count": device_count,
-        "idle_seconds": round(now - last_active, 1),
-        "idle_timeout_sec": CONFIG.idle_timeout_sec,
-        "jobs_done": jobs_done,
-        # 0.5.0：排队中（尚未开始执行）的 job 数；运行中的不算。
-        "queue_depth": queue_depth(),
-        "last_error": last_error,
-        "last_error_code": last_error_code,
-        "detail": detail,
-        "uptime_seconds": round(now - started_at, 1),
-        # P0.2 / P2.2：隧道监管状态，Host 用于「重连中 / 通道类型」展示与故障归因。
-        "tunnel_provider": tunnel_provider,
-        "tunnel_state": tunnel_state,
-        "tunnel_restarts": tunnel_restarts,
-        # M3 图生图验收：显存只读诊断（torch 未加载 / CUDA 不可用时为 null）。
-        "gpu_memory": gpu_memory_payload(),
-    }
+    """``/health`` 响应体：先取样（锁即取即放），再取队列深度（见上面的锁顺序）。"""
+    snapshot = health_snapshot_from(STATE, BOOT, state_lock=STATE_LOCK, boot_lock=BOOT_LOCK)
+    return health_build_payload(
+        snapshot,
+        version=protocol_version(),
+        idle_timeout_sec=CONFIG.idle_timeout_sec,
+        queue_depth=queue_depth(),
+    )
 
 
 class DaemonHandler(BaseHTTPRequestHandler):

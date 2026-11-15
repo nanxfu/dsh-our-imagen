@@ -172,13 +172,13 @@
 
 ## 七、 工程架构解耦与代码组织重构（进行中）
 
-> **状态：🚧 Batch 0 与 Batch 1 已完成（2026-11-15），Batch 2 进行中（切片 ①②③ 已落地），Batch 3 待推进**。完整模块边界、设计模式与验收关口见 [REFACTOR_ARCHITECTURE_SPEC.md](REFACTOR_ARCHITECTURE_SPEC.md)。
+> **状态：🚧 Batch 0 与 Batch 1 已完成（2026-11-15），Batch 2 进行中（切片 ①②③④ 已落地），Batch 3 待推进**。完整模块边界、设计模式与验收关口见 [REFACTOR_ARCHITECTURE_SPEC.md](REFACTOR_ARCHITECTURE_SPEC.md)。
 
 针对 `remote/daemon.py`（2579 行）的全局状态耦合、~25 个胶水转发函数、`if/elif` Loader 分支散落，以及 Host 侧 `lib/jobs.js`（948 行）/ `lib/kaggle-oauth.js`（674 行）体量偏大问题，按 4 个可独立回归的批次演进（**初版顺序已修正**：打包器必须先于远端包化，否则子目录包无法用 `@@INLINE` 拼接表达）：
 
 1. **Batch 0 — 打包器升级（已完成）**：`lib/kernel.js` 从 `@@INLINE` 行替换改为**内嵌 Base64 ZIP 自引导**，`lib/bundle.js` 产出确定性归档；配置注入改为 `set_embedded_config()` 函数调用（避免搬家后静默丢配置）；`remote/contract.json` 随包分发；`verify-model` 复用同一打包器；`package.json` `files` 与 `scripts/package.mjs` 同步放行 `.json`。
 2. **Batch 1 — Host 侧收口（已完成）**：`lib/jobs.js` → `lib/jobs/{validator,errors,reference-loader,queue}.js`，`lib/kaggle-oauth.js` → `lib/kaggle/oauth/{pkce,browser,callback-server,session}.js`，原路径保留 16 / 23 行的聚合门面，调用方零改动。
-3. **Batch 2 — 远端包化 + 测试领域化（进行中）**：按目标结构建 `remote/{config,state,observability,infra,inference,jobs,transport}` 与 `app.py` 组装根，删掉胶水转发、引入 `LoaderRegistry` 与表驱动调度器；**同批**把 `test/daemon-unit.py` 按领域拆到 `test/remote/test_*.py` 并改用实例化隔离测试——单测通过替换 `d.STATE` 模拟隔离，若只留门面不改测试，会静默测到旧对象（假绿）。按域分批推进，每搬一域就改对应单测并跑绿。已落地：① 领域异常 + 请求校验 + 参考图编解码；② 调度器表驱动；③ `remote/config.py` + `remote/state.py`（单例原地更新、daemon 只 re-export，单测改原地重置并加身份守卫，`daemon.py` 2366 → 2121 行）。
+3. **Batch 2 — 远端包化 + 测试领域化（进行中）**：按目标结构建 `remote/{config,state,observability,infra,inference,jobs,transport}` 与 `app.py` 组装根，删掉胶水转发、引入 `LoaderRegistry` 与表驱动调度器；**同批**把 `test/daemon-unit.py` 按领域拆到 `test/remote/test_*.py` 并改用实例化隔离测试——单测通过替换 `d.STATE` 模拟隔离，若只留门面不改测试，会静默测到旧对象（假绿）。按域分批推进，每搬一域就改对应单测并跑绿。已落地：① 领域异常 + 请求校验 + 参考图编解码；② 调度器表驱动；③ `remote/config.py` + `remote/state.py`（单例原地更新、daemon 只 re-export，单测改原地重置并加身份守卫，`daemon.py` 2366 → 2121 行）；④ `remote/infra/process.py` + `remote/observability/health.py`（pip 环境与 import 自检单一实现；`/health` 取样与组装分离，`queue_depth` 在释放 `STATE_LOCK` 之后取）。
 4. **Batch 3 — 契约收口与真机验证（待开始）**：删除 `_FALLBACK_LIMITS`（无注入契约时改用内置 `contract.json`，默认边界由 64–2048 收紧到 256–1536）、移除 `daemon.py` 门面、回填文档与 CHANGELOG；**必须**跑一次真机 `kaggle-live` / `gpu-live`，这是唯一能验证启动器解包链路的关口。
 
 > **已顺带修掉的隐患**：`lib/fs-atomic.js` 的原子替换在 Windows 上遇到杀毒软件/索引服务瞬时占用 `rename` 会抛 `EPERM`，表现为 Kaggle 直连登录静默失败（`/state` 只显示"账号接入失败：unknown"）。现对 `rename` 做 5 次有界重试（累计约 150ms），`test/kaggle-direct.mjs` 从 3 次跑 1 次过变为连跑 4 次全过。
