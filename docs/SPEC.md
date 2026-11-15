@@ -4,7 +4,7 @@
 > 本文档只描述语义、请求/响应形状与使用约束，不重复维护数值。`node test/check-contract.mjs` 会校验
 > 宿主注册的路由、宿主错误码、客户端文案与本文档是否跟随契约。
 >
-> **版本**：0.10.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
+> **版本**：0.11.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
 
 ---
 
@@ -200,7 +200,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 
 ```json
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "defaultPreset": "sdxl-lightning",
   "presets": [
     {

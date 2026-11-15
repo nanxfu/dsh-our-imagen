@@ -1552,7 +1552,7 @@ var PUBLIC_PRESETS = [
 ];
 
 // shared/contract.js
-var VERSION = "0.10.0";
+var VERSION = "0.11.0";
 var ROUTES = {
   state: { method: "GET", path: "/imagen-api/state" },
   probe: { method: "POST", path: "/imagen-api/probe" },

@@ -1,13 +1,18 @@
 # 变更记录
 
-## 未发布（架构重构 Batch 0 / 1 / 2 / 3）
+## 0.11.0 — 2026-11-15
 
-> 对应 [docs/REFACTOR_ARCHITECTURE_SPEC.md](docs/REFACTOR_ARCHITECTURE_SPEC.md)。各批都只改内部模块边界、依赖方向与打包形态，`docs/SPEC.md` 定义的 HTTP 路由、报文、错误码与配置注入契约保持向后兼容。
+> 本版完成架构重构 Batch 0–3（打包器、Host 模块边界、远端包化与测试领域化），新增画廊单张删除，切换 npm 包名并打通 Trusted Publishing 发布链，同时更新官网与成片资产。各批都只改内部模块边界、依赖方向与打包形态，`docs/SPEC.md` 定义的 HTTP 路由、报文、错误码与配置注入契约保持向后兼容（详见 [docs/REFACTOR_ARCHITECTURE_SPEC.md](docs/REFACTOR_ARCHITECTURE_SPEC.md)）。
+
+### 破坏性变更
+
+- **npm 包名切换**：`dsh-our-free-imagen` → `dsh-our-imagen`，旧包名停更。安装命令改为 `dsh plugin --profile web add dsh-our-imagen`（GitHub 方式仍为 `github:nanxfu/dsh-our-imagen`）；升级需先 `dsh plugin --profile <profile> remove dsh-our-free-imagen` 再装新包。GitHub Releases 资产名同步改为 `dsh-our-imagen-<version>.zip` / `.tgz`。
+- **契约版本升到 `0.11.0`**：`shared/contract.js` 的 `VERSION`、`package.json`、`remote/daemon.py`、`remote/contract.json` 与文档同步；HTTP 路由、报文与错误码不变。
 
 ### 功能
 
 - **画廊支持单张删除**：卡片悬停操作条新增「删除」（此前只能先进「批量选择」再删）。首次点击只进入确认态——按钮变实心红「确认删除」、其余动作收起，再点一次才真正删除；移出卡片或点「取消」即收起确认态。请求在途时忽略重复点击，删除失败保留确认态可原地重试，成功后同步从批量选择集合里移除该路径。删除别的图不再清空画面预览的当前选择（只有被删掉的那张才清空）。
-- **测试**：`test/check-client-render.mjs` 的结构锚点改为一卡五个悬停动作，并新增「单张删除需二次确认」用例（确认前不发请求、取消 / 移出卡片收起、确认后只提交该路径）。
+- **官网（site/）与成片资产同步**：按当前工作台源码重做 4 张界面截图；新收录 8 张 Kaggle 实测成片（22→30 张），Hero 轮播、模型暗房胶片栏、灯箱与中英文案一并更新，两处粘性叙事的取景与落点同步调校。
 
 ### 改进
 
@@ -41,6 +46,8 @@
   - **行为变更（无注入契约时）**：宽高 64–2048 → 256–1536、steps ≤80 → ≤60、cfg ≤30 → ≤20、每批 8 → 4；`request_body_limit()` 从固定 8MB 改为按内置 `reference.maxBytes` 推导的 11,233,388 字节（约 11.7MB）——否则校验器认 8MiB 参考图、读请求体时却先按 8MB 拒掉。`limit_spec()` 的合并粒度仍是单个键：注入契约只给了 `max` 时，`min` / `step` 取内置值。
   - **`test/mock-daemon.py` 同步**：兜底夹具改成契约值（256–1536 / steps≤60 / cfg≤20 / 每批≤4），`_request_body_limit()` 与 daemon 用同一条公式；新增 `MockDaemonContractTest` 3 项——mock 的兜底副本与 `contract.json` 逐键相等、同一份注入契约下 mock 与 daemon 的 `_limit` / `_max_tasks` / `_request_body_limit` 结果完全一致。此前 mock 抄的是 daemon 的旧表，两边漂移时测试全绿、真机 400。
 - **修复 Windows 原子写入抖动**：`lib/fs-atomic.js` 的 `rename` 遇到杀毒软件 / 索引服务瞬时占用会抛 `EPERM`，此前会让 Kaggle 直连登录静默失败（`/state` 只显示「账号接入失败：unknown」）。现对 `EPERM` / `EACCES` / `EBUSY` 做 5 次有界重试（累计约 150ms），`test/kaggle-direct.mjs` 由「3 次跑 2 次失败」变为连跑 4 次全过。
+- **发布工程**：release 工作流在 GitHub Release 之后追加 npm Trusted Publishing（OIDC，无需长期 token）；`publish-npm.yml` 保留手动补发与 dry-run 入口；新增 `wrangler.jsonc`（Cloudflare 静态站指向 `site/dist`）；README / README.en / CONTRIBUTING / docs 同步新包名与安装方式。
+- **版本同步**：`package.json` / `package-lock.json` / `shared/contract.js` / `remote/daemon.py` / `test/mock-daemon.py` / `test/tunnel-probe.py` / `remote/contract.json` / `client.js` / `docs/SPEC.md` 均为 `0.11.0`。
 
 ### 测试
 
@@ -51,7 +58,8 @@
 - **缓存域与隧道域的测试替换点同批迁移**（缓存 14 处 + 隧道 16 处）：缓存侧的 `disk_precheck` / `mount_point_of` / `probe_free_gib` / `read_mount_points` / `evict_cache_for` / `resolve_local_model` / `resolve_local_weight` / `ensure_disk_capacity` / `ensure_cache_capacity` 改为 `d.CACHE.<同名方法>`；隧道侧的 `binary` 字段 ×4、`ensure_cloudflared` / `spawn` / `start` / `wait_exit` / `restart_delay` 改为 `d.TUNNEL.*`。不迁移的话断言仍会绿，只是测到 daemon 上的影子属性——正是规格 §1.3.6 的静默假绿；其中 `restart_delay` 漏改时表现为单测从 0.45s 变 4.4s（真等 2s 退避）却依然全绿，比报错更难发现。
 - **Batch 3 的契约测试面**：`test/remote/test_config.py` 的 `LimitSpecTest` 改为「无注入契约即内置 `contract.json`」口径（并断言 `config.py` 不再定义 `FALLBACK_LIMITS` / `MAX_TASKS_FALLBACK`、`BUILTIN_CONTRACT` 与生成物逐键相等）；`test_validation.py` 的兜底用例改为钉住收紧后的边界（旧表合法、内置契约越界的值必须 400）；`test_reference.py` 的请求体上限用例改为按内置 `reference.maxBytes` 推导。单测 294 → 296。
 - `test/check-contract.mjs` 的 daemon 协议校验改为扫描 `daemon.py` + `transport/http_server.py` + `app.py`：路由搬到传输层、phase 取值搬到生命周期之后，校验仍指向真实实现位置，不因搬家静默空过。
-- 全量 `npm test` 通过（含 293 项 Python 单测、契约 11/11）；`npm run package` 产物含 `remote/contract.json` 与 `lib/jobs/`、`lib/kaggle/oauth/`。
+- `test/check-client-render.mjs` 的结构锚点改为一卡五个悬停动作，并新增「单张删除需二次确认」用例：确认前不发请求、取消 / 移出卡片收起、确认后只提交该路径。
+- 全量 `npm test` 通过（含 296 项 Python 单测、契约 11/11）；`npm run package` 产物含 `remote/contract.json` 与 `lib/jobs/`、`lib/kaggle/oauth/`。
 
 ## 0.10.0 — 2026-11-14
 

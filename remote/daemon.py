@@ -120,7 +120,7 @@ def set_embedded_config(value: str) -> None:
     global EMBEDDED_CONFIG_B64
     EMBEDDED_CONFIG_B64 = value or ""
 
-VERSION = "0.10.0"
+VERSION = "0.11.0"
 
 # 依赖约束默认留空（0.4.1 修正）。0.4.0 曾内置「版本上限」做固化
 # （diffusers<1.0 / transformers<5 / accelerate<2 / peft<1），实测与当前 diffusers

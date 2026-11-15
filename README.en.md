@@ -275,7 +275,7 @@ For restricted networks or offline machines:
 
 * **Method C: pinned Release tarball** (HTTPS only, handy when GitHub git access is unstable)
   ```bash
-  dsh plugin --profile web add https://github.com/nanxfu/dsh-our-imagen/releases/download/v0.10.0/dsh-our-imagen-0.10.0.tgz
+  dsh plugin --profile web add https://github.com/nanxfu/dsh-our-imagen/releases/download/v0.11.0/dsh-our-imagen-0.11.0.tgz
   ```
 
 * **Method D: offline zip + Load Bundle** (fully offline)
