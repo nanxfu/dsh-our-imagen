@@ -168,7 +168,7 @@ remote/
 | ⑥a | `transport/http_server.py`：`DaemonHandler` + `HttpApi` + `start_server` | ✅ 已落地 |
 | ⑥b | `app.py`：`DaemonApp`（启动顺序 / 信号 / 退出清理 / 空闲看门狗） | ✅ 已落地 |
 | ⑥c | `infra/cache.py`：`CacheManager`（磁盘预检、LRU 驱逐、预挂载目录解析） | ✅ 已落地 |
-| ⑥d | `infra/tunnel.py`：`TunnelSupervisor`（注入 `phase_setter` / `ready_publisher`） | ⏳ 待做 |
+| ⑥d | `infra/tunnel.py`：`TunnelSupervisor`（注入 `phase_setter` / `ready_publisher`） | ⏳ 待做（施工提示见下） |
 | ⑥e | `inference/registry.py`：`LoaderRegistry`（Strategy + 注册表，替代 loader 分支） | ⏳ 待做 |
 | ⑥f | 删 `daemon.py` 门面 + `test/daemon-unit.py` 按域拆到 `test/remote/` | ⏳ 与 Batch 3 合并 |
 
@@ -210,6 +210,18 @@ daemon 的 13 个包装收成实例方法，daemon 只留同名别名（Batch 3 
    `resolve_local_weight` / `ensure_disk_capacity` / `ensure_cache_capacity` 的替换目标
    全部改为 `d.CACHE.<同名方法>`；新增 4 项边界用例（`CACHE` 是唯一持有者、daemon 不再
    定义这些包装、闸门替换命中实例、探针只打一次），单测 272 → 276。
+
+**⑥d 施工提示（尚未开工，先定这两件事）**：
+
+1. **二进制常量要收成设置对象**：`CloudflaredDownloadTest` 现在是 patch
+   `d.CLOUDFLARED_PATH` / `_DOWNLOAD_URL` / `_SHA256` / `_MAX_DOWNLOAD_BYTES`，再调
+   `d.ensure_cloudflared()`。如果 `TunnelSupervisor` 在构造时把常量**拷贝**成实例字段，
+   这 4 个替换点会失效（测试会红，但连带要改 8 处）。建议构造时传一个
+   `TunnelBinary(path=…, url=…, sha256=…, max_bytes=…, timeout_sec=…, attempts=…)`，
+   测试替换 `d.TUNNEL.binary`（或其中的字段），语义比 patch 模块常量清楚得多。
+2. **ready 发布留在类外**：`publish_ready` / `ntfy_publish` 属会合通知（目标结构里的
+   `infra/ntfy.py`），`TunnelSupervisor` 只接收 `publish_fn` / `set_phase_fn` /
+   `fail_boot_fn` 三个回调，别把 ntfy 的重试策略混进隧道生命周期。
 
 **切片⑥ 落地时的两处权衡（留档）**：
 
