@@ -233,7 +233,7 @@ class JobStore:
             self._jobs.pop(job_id, None)
 
     def notify(self) -> None:
-        """唤醒等待中的 worker（兼容旧 ``JOB_WAKE.set()``）。"""
+        """唤醒等待中的 worker（入队与关停各调一次；条件变量是本类私有成员）。"""
         with self._cond:
             self._cond.notify_all()
 

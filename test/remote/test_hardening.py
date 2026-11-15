@@ -110,7 +110,7 @@ class HardeningRegressionTest(DaemonUnitTest):
             (root / "secret").mkdir(parents=True)
             (root / "secret" / "config.json").write_text("{}", encoding="utf-8")
             d.CONFIG.local_models = {"Qwen/Qwen-Image": str(root)}
-            assets = d.anima_local_assets(
+            assets = d.CACHE.anima_local_assets(
                 {
                     "loader": "anima",
                     "base": "org/anima",
@@ -133,7 +133,7 @@ class HardeningRegressionTest(DaemonUnitTest):
             poll=lambda: 0,
         )
         ev = threading.Event()
-        d._drain_tunnel_output(proc, "cloudflare", d.CLOUDFLARED_URL_RE, ev, stale)
+        d.TUNNEL.drain(proc, "cloudflare", d.CLOUDFLARED_URL_RE, ev, stale)
         self.assertEqual(d.BOOT.tunnel_url, "https://new-tunnel.example")
         self.assertEqual(d.BOOT.tunnel_provider, "custom")
         self.assertIsNone(d.BOOT.tunnel_error)

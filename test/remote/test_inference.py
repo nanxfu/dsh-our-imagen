@@ -341,7 +341,7 @@ class ExecuteJobReferenceTest(DaemonUnitTest):
 
     def submit_job_with(self, reference=None, task_count=1):  # noqa: ANN001, ANN202
         tasks = [dict(TASKS[0], name=f"{index + 1:02d}") for index in range(task_count)]
-        return d.submit_job(
+        return d.JOB_STORE.submit(
             make_pipeline(), "org/base-model", tasks, None, reference=reference
         )
 

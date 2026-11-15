@@ -111,7 +111,7 @@ class HealthPayloadTest(DaemonUnitTest):
     def test_queue_depth_follows_job_queue(self) -> None:
         d.STATE.waiting = 3  # 0.4.x 的旧字段不再参与统计
         self.assertEqual(d.health_payload()["queue_depth"], 0)
-        d.submit_job(make_pipeline(), "org/base-model", [{"prompt": "x"}])
+        d.JOB_STORE.submit(make_pipeline(), "org/base-model", [{"prompt": "x"}])
         self.assertEqual(d.health_payload()["queue_depth"], 1)
 
     def test_loaded_list_is_a_copy(self) -> None:
@@ -148,7 +148,7 @@ class HealthLockOrderTest(DaemonUnitTest):
             assert lock.inside is False, "取队列深度时不能仍持有 STATE_LOCK（会与 _finish_job 反向嵌套）"
             return 3
 
-        with mock.patch.object(d, "STATE_LOCK", lock), mock.patch.object(d, "queue_depth", fake_queue_depth):
+        with mock.patch.object(d, "STATE_LOCK", lock), mock.patch.object(d.JOB_STORE, "queue_depth", fake_queue_depth):
             payload = d.health_payload()
 
         self.assertEqual(payload["queue_depth"], 3)

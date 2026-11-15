@@ -126,7 +126,7 @@ class LoaderRegistryBoundaryTest(DaemonUnitTest):
                 return ["org/base", "org/extra"]
 
         with mock.patch.dict(d.LOADERS._loaders, {"extra": ExtraRepoLoader()}):
-            keep = d.cache_keep_repos({"loader": "extra", "base": "org/base"})
+            keep = d.CACHE.cache_keep_repos({"loader": "extra", "base": "org/base"})
         self.assertEqual(keep, {"org/base", "org/extra"})
 
     def test_failed_load_releases_gpu_except_for_request_errors(self) -> None:

@@ -22,13 +22,16 @@ Kaggle Kernel 的 `kernel-metadata.json` 只接受**单个 `code_file`**（`daem
 | `remote/daemon.py` | 2579 | **核心改造对象** | 混杂 7+ 职责、全局可变状态、~25 个胶水转发函数、多处 `if/elif` 分支 |
 | `lib/jobs.js` | 948 | **建议拆分** | 尚未如 `lib/session/` 般模块化，参数校验、错误映射、队列状态机、落盘与长轮询混居 |
 | `lib/kaggle-oauth.js` | 674 | **建议拆分** | `createKaggleLogin` 单函数约 390 行，耦合了 PKCE、本地回调 HTTP 服务、浏览器拉起与状态机 |
-| `test/daemon-unit.py` | 3471 | **随远端重构分批拆解** | 当前直接读写 `daemon.STATE` / `daemon.BOOT` / `daemon.JOB_TABLE` 等全局属性 |
+| `test/daemon-unit.py` | 4218 | ✅ **已按域拆解**（切片⑥f） | 原 41 个测试类 / 55 处 `mock.patch.object(d, …)`；已拆成 `test/remote/` 下 15 个域模块 + 1 份夹具，单文件可独立运行 |
 | `lib/session.js` | 961 | 暂不作为重点 | 核心协作者与纯逻辑已拆至 `lib/session/`（9 个子模块），当前主要是 `SessionManager` 编排层 |
 | `remote/anima_runtime.py` | 1383 | 视节奏拆分 | 主体为 ComfyUI 直译 PyTorch 网络层；若拆分应按「网络模型 / 资产加载 / 运行时」三分，避免破坏上游对照 |
 | `client.js` | 8566 | **无需改造** | 由 `node build.mjs` 从 `src/` 打包生成的构建产物；`src/` 本身已充分模块化 |
 
-### 1.3 `remote/daemon.py` 的核心坏味道
-1. **半模块化产生的胶水转发层**：`cache_ops.py` 与 `tunnel.py` 已抽为纯函数，但因为 `CONFIG` / `STATE` / `BOOT` 及锁仍是 `daemon.py` 顶层全局对象，`daemon.py` 不得不保留约 **25 个单行包装函数**（L966–L1079、L2228–L2376）手动绑定全局状态后转发调用。
+### 1.3 `remote/daemon.py` 的核心坏味道（⑥f 之后的现状）
+
+> 第 1 条已消除、第 6 条已随测试拆分与门面删除收口；下面保留原文并标注现状，便于对照"当初为什么这么拆"。
+
+1. **半模块化产生的胶水转发层（✅ 已消除）**：`cache_ops.py` 与 `tunnel.py` 抽为纯函数后，`daemon.py` 曾保留约 **25 个单行包装函数**手动绑定全局状态再转发。切片⑥c/⑥d/⑥e 把实现收进 `CACHE` / `TUNNEL` / `LOADERS`，⑥f 再删掉 daemon 上的 **30 个转发名**（job 视图 6 + 缓存 11 + 隧道 13）与 `JOB_WAKE` 兼容对象——现在这些名字只能打到持有者实例上，不再有第二份入口。
 2. **隐式全局状态与多锁混用**：`CONFIG`、`STATE`、`BOOT`、`JOB_QUEUE`、`JOB_TABLE`、`JOB_FINISHED_ORDER` 与 `STATE_LOCK`、`BOOT_LOCK`、`JOB_LOCK`、`GEN_LOCK` 分散在模块顶层，任何函数均可绕过边界直接读写状态。
 3. **违反开闭原则（OCP）与局部重复**：
    - 模型 Loader 分支散落在 `SUPPORTED_LOADERS`、`SUPPORTED_IMG2IMG_LOADERS`、`build_pipeline`、`load_diffusers_pipeline`、`cache_ops.pipeline_repos`；
@@ -37,7 +40,7 @@ Kaggle Kernel 的 `kernel-metadata.json` 只接受**单个 `code_file`**（`daem
    - `short` / `_tunnel_short` / `_loader_short` 因全局命名空间冲突重复实现 3 份。
 4. **`# @@INLINE` 文本拼接限制（已解除，留档）**：所有内联文件共享同一顶层命名空间，禁止 `from __future__ import annotations`，且无法支持子目录包与模块间自由相互导入。Batch 0 之后不再有此约束，`remote/` 可正常分层。
 5. **契约边界仍有最后一份双写**：[`shared/contract.js`](../shared/contract.js) 已通过 [`tools/gen-contract-json.mjs`](../tools/gen-contract-json.mjs) 生成 `remote/contract.json`，但 `daemon.py` 仍维护了一份硬编码的 `_FALLBACK_LIMITS`。该文件现在已随源码包一起打进 Kernel（Batch 0），但**尚未被读取**——删除 `_FALLBACK_LIMITS` 会收紧"无注入契约"时的默认边界（64–2048 → 256–1536），属行为变更，安排在 Batch 2 与校验器单测一起改。
-6. **测试用「替换模块级对象」模拟隔离**：`test/daemon-unit.py` 的基类在 `setUp` 里整体替换 `d.CONFIG` / `d.STATE` / `d.BOOT`（37 个测试类继承），另有 55 处 `mock.patch.object(d, <被内部调用的模块级函数>)`。这类断言对"函数改成持有实例"是**静默失效**而非报错（测到旧对象 → 假绿），所以测试迁移必须与模块搬迁同一批完成，不能靠兼容门面拖到下一批。
+6. **测试用「替换模块级对象」模拟隔离（✅ 已收口）**：原 `test/daemon-unit.py` 的基类在 `setUp` 里整体替换 `d.CONFIG` / `d.STATE` / `d.BOOT`（37 个测试类继承），另有 55 处 `mock.patch.object(d, <被内部调用的模块级函数>)`。这类断言对"函数改成持有实例"是**静默失效**而非报错（测到旧对象 → 假绿），所以测试迁移与模块搬迁必须同批完成。三批做完后的现状：`d.CONFIG/STATE/BOOT` 改为**原地重置**（对象身份不变），30 个转发名的替换点全部改指 `d.CACHE.*` / `d.TUNNEL.*` / `d.JOB_STORE.*`，仍在打 daemon 模块属性的位置只剩 31 处，且都打在**真被内部调用**的函数上（`install_dependencies` / `ensure_pipeline` / `run_task` / `health_payload` 的取样顺序等）。
 
 ---
 
@@ -86,10 +89,12 @@ remote/
 
 > 与初版相比新增 `text.py` 与 `inference/executor.py`：审计发现 `short()` 有 4 份实现、`run_task`/`run_tasks` 在目标结构里无处安放，硬塞进 `pipeline_manager` 会把"管线生命周期"和"单次推理"混在一起。
 >
-> 落地进度（Batch 2 切片⑥e 之后）：`config` / `state` / `observability/health` / `infra/{process,cache,tunnel}` / `transport/{validator,http_server}` / `inference/{reference_codec,registry}` + `inference/loaders/{base,diffusers,anima}` / `jobs/*` / `app` 已就位；`observability/log_ring.py`（现为 `remote/log_ring.py`）、`infra/ntfy.py`、`inference/{scheduler,pipeline_manager,executor}.py`、`inference/anima/`、`verify_cli.py` 仍待推进，顺序与理由见 §4.1。
+> 落地进度（Batch 2 切片⑥f 之后）：`config` / `state` / `observability/health` / `infra/{process,cache,tunnel}` / `transport/{validator,http_server}` / `inference/{reference_codec,registry}` + `inference/loaders/{base,diffusers,anima}` / `jobs/*` / `app` 已就位；**daemon 上的转发层已清空**（30 个转发名 + `JOB_WAKE`），测试已按域拆到 `test/remote/`。
+>
+> 仍待推进（都不阻塞功能，按收益排序）：`inference/{pipeline_manager,executor}.py`（把 `ensure_pipeline` / `release_pipeline` / `ensure_img2img_pipeline` / `run_task` / `run_tasks` 从 daemon 搬走）、`infra/ntfy.py`（`ntfy_publish` / `publish_ready` / `publish_error`）、`observability/log_ring.py`（现为扁平 `remote/log_ring.py`，迁移要同批改打包清单）、`inference/scheduler.py`（`pipeline_loader` 的配方表）、`inference/anima/`（只做目录归位）、`verify_cli.py`。**入口符号**（`main` / `set_embedded_config` / `EMBEDDED_CONFIG_B64` / `APP` 装配）搬进 `app.py` 需要同批改 `remote/_entry.py` 与 `test/kernel-package.mjs`，单列。
 
 ### 2.2 模块导入约定（审计结论）
-远端包内**统一用绝对包导入**（`from remote.state import ...`），不用相对导入。原因：`test/daemon-unit.py` 用 `spec_from_file_location` 以任意模块名按路径加载 `daemon.py`，模块没有父包，`from .x import y` 会直接 `ImportError: no known parent package`；绝对导入只要求仓库根在 `sys.path`（启动器与测试都已满足），搬家后不需要再改加载方式。Batch 3 若把加载方式改成 `import remote.daemon`，可再统一转相对导入（非必须）。
+远端包内**统一用绝对包导入**（`from remote.state import ...`），不用相对导入。原因：`test/remote/support.py` 用 `spec_from_file_location` 以任意模块名按路径加载 `daemon.py`，模块没有父包，`from .x import y` 会直接 `ImportError: no known parent package`；绝对导入只要求仓库根在 `sys.path`（启动器与测试都已满足），搬家后不需要再改加载方式。Batch 3 若把加载方式改成 `import remote.daemon`，可再统一转相对导入（非必须）。
 
 ### 2.3 核心设计模式与约束
 
@@ -151,7 +156,7 @@ remote/
 | :--- | :--- | :--- |
 | **Batch 0**<br/>打包器升级 | `lib/kernel.js` 改为内嵌 Base64 ZIP 自引导；配置注入改为 `set_embedded_config()` 函数调用；`remote/contract.json` 随包分发；`verify-model` 复用同一打包器；`package.json` `files` 与 `scripts/package.mjs` 同步 | ✅ **已完成**。`test/kernel-package.mjs` 16 项（含 Python `zipfile` 校验与解包后 `import remote.daemon`）、`test/check-verify-model.mjs` 7 项；`@@INLINE` 已从源码移除 |
 | **Batch 1**<br/>Host 侧收口 | `lib/jobs.js`（948 行）→ `lib/jobs/`；`lib/kaggle-oauth.js`（674 行）→ `lib/kaggle/oauth/`；原路径保留聚合门面 | ✅ **已完成**。门面 16 / 23 行，实现分散到 5 + 5 个模块；`jobs-wait` 23 项、`kaggle-oauth` 14 项、`host-e2e` 46 项、`host-log(-events)` 20 项全绿 |
-| **Batch 2**<br/>远端包化 + 测试领域化<br/>（原 Batch 1 + 3） | 按 §2.1 建包：`config` / `state` / `observability` / `infra` / `inference` / `jobs` / `transport` / `app`；删掉 25 个胶水转发；`LoaderRegistry` + 表驱动调度器；`JobStore` 封装锁；同步把 `test/daemon-unit.py` 按领域拆到 `test/remote/test_*.py`，改用实例化隔离 | ⏳ **进行中**，按域切片推进（每片独立可回归）：<br/>① `errors.py` + `transport/validator.py` + `inference/reference_codec.py` ✅（纯逻辑三模块，边界由 `limits_for` 注入，daemon 只留同名薄包装）；<br/>② `pipeline_loader` 调度器表驱动 ✅（5 条配方收成 `_SCHEDULER_RECIPES`，新增调度器只加一行）；<br/>③ `config.py` / `state.py`（单例对象原地更新，不重新绑定，避免测试静默测到旧对象） ✅（`DaemonConfig` + 注入解析 + 契约边界进 `remote/config.py`，`RuntimeState` / `BootState` / 两把状态锁 + `set_phase` / `record_error` 进 `remote/state.py`；daemon 只 re-export，2366 → 2121 行（−245），单测 248 → 252 项并新增单例身份守卫）；<br/>④ `infra/process.py` + `observability/health.py` ✅（流式执行与一次性命令共用 `pipeline_loader.pip_env()`，`IMPORT_CHECK_CODE` 由模块清单生成；`/health` 拆成「持锁取样 → 释放 → 取队列深度」，`build_payload` 签名里没有任何锁，锁顺序由结构保证）；<br/>⑤ `jobs/`（store + runner，`JOB_*` 全局收进 JobStore）✅（`models.py` 放实体与失败分类，`store.py` 独占 `JOB_LOCK`/`JOB_COND` 并提供语义方法，`runner.py` 只做「取单 → 调注入的执行函数 → 收尾」；daemon 只剩薄包装与 `execute_job`，锁顺序以 `JOB_STORE.finish()` 返回后再取 `STATE_LOCK` 固定）；<br/>⑥ `transport/http_server.py` + `app.py`（Composition Root），最后删门面并把 `test/daemon-unit.py` 按域拆分 ✅（本片按 §4.1 拆成 ⑥a–⑥f 六小片推进：⑥a–⑥e 已落地，⑥f 待做） |
+| **Batch 2**<br/>远端包化 + 测试领域化<br/>（原 Batch 1 + 3） | 按 §2.1 建包：`config` / `state` / `observability` / `infra` / `inference` / `jobs` / `transport` / `app`；删掉 25 个胶水转发；`LoaderRegistry` + 表驱动调度器；`JobStore` 封装锁；同步把 `test/daemon-unit.py` 按领域拆到 `test/remote/test_*.py`，改用实例化隔离 | ✅ **六片全部落地**（每片独立可回归；剩余逻辑下沉见 §2.1 的「仍待推进」）：<br/>① `errors.py` + `transport/validator.py` + `inference/reference_codec.py` ✅（纯逻辑三模块，边界由 `limits_for` 注入，daemon 只留同名薄包装）；<br/>② `pipeline_loader` 调度器表驱动 ✅（5 条配方收成 `_SCHEDULER_RECIPES`，新增调度器只加一行）；<br/>③ `config.py` / `state.py`（单例对象原地更新，不重新绑定，避免测试静默测到旧对象） ✅（`DaemonConfig` + 注入解析 + 契约边界进 `remote/config.py`，`RuntimeState` / `BootState` / 两把状态锁 + `set_phase` / `record_error` 进 `remote/state.py`；daemon 只 re-export，2366 → 2121 行（−245），单测 248 → 252 项并新增单例身份守卫）；<br/>④ `infra/process.py` + `observability/health.py` ✅（流式执行与一次性命令共用 `pipeline_loader.pip_env()`，`IMPORT_CHECK_CODE` 由模块清单生成；`/health` 拆成「持锁取样 → 释放 → 取队列深度」，`build_payload` 签名里没有任何锁，锁顺序由结构保证）；<br/>⑤ `jobs/`（store + runner，`JOB_*` 全局收进 JobStore）✅（`models.py` 放实体与失败分类，`store.py` 独占 `JOB_LOCK`/`JOB_COND` 并提供语义方法，`runner.py` 只做「取单 → 调注入的执行函数 → 收尾」；daemon 只剩薄包装与 `execute_job`，锁顺序以 `JOB_STORE.finish()` 返回后再取 `STATE_LOCK` 固定）；<br/>⑥ `transport/http_server.py` + `app.py`（Composition Root），最后删门面并把 `test/daemon-unit.py` 按域拆分 ✅（按 §4.1 拆成 ⑥a–⑥f 六小片：**全部落地**；⑥f 删掉 daemon 上 30 个转发名与 `JOB_WAKE`，单测拆成 `test/remote/` 下 15 个域模块 + 夹具） |
 | **Batch 3**<br/>契约收口与真机验证 | 删除 `_FALLBACK_LIMITS`，让无注入契约时消费内置 `contract.json`（行为变更：默认边界从 64–2048 收紧到 256–1536）；移除 `daemon.py` 门面；回填文档与 `CHANGELOG` | ⏳ 待开始。**必带项**：`test/mock-daemon.py` 的 limits 夹具当前与 `_FALLBACK_LIMITS` 同值（64–2048），删兜底后要同步改成契约值（256–1536），否则 mock 与真 daemon 的边界会静默漂移；建议同时加一条守卫测试。验收：`npm test` + `contract:check` 全绿，且**必须**跑一次真机 `kaggle-live` 与 `gpu-live`（这是唯一能验证启动器解包链路的关口） |
 
 ---
@@ -170,7 +175,7 @@ remote/
 | ⑥c | `infra/cache.py`：`CacheManager`（磁盘预检、LRU 驱逐、预挂载目录解析） | ✅ 已落地 |
 | ⑥d | `infra/tunnel.py`：`TunnelSupervisor`（注入 `phase_setter` / `ready_publisher`） | ✅ 已落地 |
 | ⑥e | `inference/registry.py`：`LoaderRegistry`（Strategy + 注册表，替代 loader 分支） | ✅ 已落地 |
-| ⑥f | 删 `daemon.py` 门面 + `test/daemon-unit.py` 按域拆到 `test/remote/` | ⏳ 与 Batch 3 合并 |
+| ⑥f | 删 `daemon.py` 门面 + `test/daemon-unit.py` 按域拆到 `test/remote/` | ✅ 已落地（两笔：拆分测试 / 删转发层，见下方落地记） |
 
 **⑥c / ⑥d / ⑥e 不是 ⑥a / ⑥b 的前置**：HTTP 与生命周期只通过语义入口
 （`get_job` / `submit_job` / `queue_depth` / `tunnel_monitor` / `ensure_pipeline`）与领域对象
@@ -276,17 +281,41 @@ daemon 的 13 个包装收成实例方法，daemon 只留同名别名（Batch 3 
 的 keep_set 不窄于通用扫描、keep_set 真读注册表、失败只释放一次显存、anima OOM 不被包装），
 单测 280 → 293（另补 3 项 flux2 / anima 家族分支用例，此前这两条分支没有走 `build_pipeline` 的覆盖）；`daemon.py` 1344 → 1294 行。
 
+**⑥f 落地记（2026-11-15，两笔提交）**：第一笔只拆测试、第二笔才删转发层，这样"搬家"与
+"改语义"的回滚边界分开。`daemon.py` 1294 → 1223 行，单测 293 → 294 项。
+
+1. **删的是"转手"，留的是"被内部调用"**。删掉的 30 个名字分三类：job 视图 6 个（`submit_job`
+   / `get_job` / `queue_depth` / `active_job_count` / `job_payload` / `prune_jobs`）、缓存 11
+   个别名、隧道 13 个别名，外加 `JOB_WAKE` 兼容对象。判断标准不是"像不像包装"，而是**内部
+   调用是否经过它**：`ensure_pipeline` / `run_task` / `install_dependencies` / `health_payload`
+   这些名字内部确实会走到，删了就得把调用点全改成参数传递（属下一批的逻辑下沉），所以留着；
+   而 `d.evict_cache_for` 这类内部一律走 `self.*`，替换它只会骗过断言。
+2. **调用点改指实例**：`health_payload` → `JOB_STORE.queue_depth()`；`HTTP_API` 的四个
+   lambda → `JOB_STORE.submit / get / payload`；`APP` → `JOB_STORE.active_count()` 与
+   `TUNNEL.monitor(port)`。lambda 仍然保留——直接传绑定方法会把构造时刻的实现绑死。
+3. **测试面 99 行替换 + 3 条断言重写**：`mock.patch.object(d, "X")` 与 `d.X` 两种形态都
+   改指 `d.CACHE.*` / `d.TUNNEL.*` / `d.JOB_STORE.*`（缓存 32、隧道 34、job 20、其余 13 行）。
+   特别注意：批量替换会把 `assertEqual(d.evict_cache_for, d.CACHE.evict_cache_for)` 这类
+   "别名与实现同一对象"的断言改写成**恒真**的 `assertEqual(x, x)`——本轮把 5 条这类断言
+   改成反向守卫（`assertFalse(hasattr(d, name))` + 源码里不许再出现 `^X = CACHE\.Y$` 形式的
+   别名赋值），否则删掉别名反而"更绿"。
+4. **测试拆分的形态**：`test/remote/support.py`（按路径加载 daemon、`DaemonUnitTest` 原地重置
+   单例、假 Popen / urlopen / PIL / torch）+ 15 个域模块 + `run.py`（`unittest discover`）。
+   每个文件都能单独 `python test/remote/test_x.py`，也能 `run.py -k tunnel` 只跑一域；`npm test`
+   改指 `python test/remote/run.py`。
+
 **切片⑥ 落地时的两处权衡（留档）**：
 
 1. **`/health` 的取样留在 `daemon.py`**：它拥有锁顺序（持 `STATE_LOCK` 取快照 → 释放 →
-   取 `queue_depth`），而 `test/daemon-unit.py` 的 `HealthLockOrderTest` 是按
-   `mock.patch.object(d, "STATE_LOCK")` + `mock.patch.object(d, "queue_depth")` 观察
-   顺序的。搬进 `transport/` 后这两个替换点会静默失效，所以只有路由搬走、取样留原处，
+   取队列深度），而 `test/remote/test_health.py` 的 `HealthLockOrderTest` 是按
+   `mock.patch.object(d, "STATE_LOCK")` + `mock.patch.object(d.JOB_STORE, "queue_depth")`
+   观察顺序的。搬进 `transport/` 后这两个替换点会静默失效，所以只有路由搬走、取样留原处，
    由 `HttpApi.health_payload` 作为回调注入。
 2. **装配点暂留 `daemon.py` 末尾**：`DaemonApp` 的构造函数（依赖清单）在 `app.py`，
    实例化在入口模块——因为启动器按 `daemon.main` / `daemon.set_embedded_config` 取符号，
    `test/kernel-package.mjs` 又按 `daemon.EMBEDDED_CONFIG_B64` 验证注入落地（§5.5）。
-   Batch 3 移除门面时这三件事一起搬，`app.py` 才能真正成为唯一的 Composition Root。
+   ⑥f 只删转发层、不动入口符号：搬这三件事要同批改 `remote/_entry.py` 与打包测试，
+   已列入 §2.1 的待推进项，`app.py` 成为唯一 Composition Root 留到那一批。
 
 ---
 
@@ -297,7 +326,7 @@ daemon 的 13 个包装收成实例方法，daemon 只留同名别名（Batch 3 
 3. **契约单一真源**：禁止在拆分过程中重新引入硬编码的尺寸/步数/强度边界；远端默认兜底统一消费生成的 `remote/contract.json`。
 4. **每次 Batch 结束必须完整验证**：任一批次均需保证 `npm test` 与 `npm run contract:check` 全绿后方可封板进入下一批；涉及远端引导链路的批次须在发布前完成一次真机 `kaggle-live` / `gpu-live` 验证。
 5. **配置注入只能走函数**：启动器调用 `set_embedded_config()`，禁止改回"赋值模块属性"。搬迁 `load_config` 时必须让入口模块继续 re-export 该函数，否则 Kernel 会以空配置启动并 `fail_boot('unauthorized')`（不会报错，只会"莫名连不上"）。
-6. **远端包内统一绝对包导入**（`from remote.state import ...`），不用相对导入：`test/daemon-unit.py` 以任意模块名按路径加载 `daemon.py`，模块无父包，`from .x import y` 会 `ImportError: no known parent package`。
+6. **远端包内统一绝对包导入**（`from remote.state import ...`），不用相对导入：`test/remote/support.py` 以任意模块名按路径加载 `daemon.py`，模块无父包，`from .x import y` 会 `ImportError: no known parent package`。
 7. **搬迁不等于顺手合并**：`short()` 现有 4 份实现、`HF_REPO_RE` 与 `_VALID_HF_REPO_RE` 各一份、`pip_env()` 已存在但被绕过。合并会改错误文案（`LoadError` 的消息直接进 UI 与 Host 分支），属行为变更，必须单独一批并连带改断言。
 8. **锁顺序唯一方向**：`JOB_LOCK → STATE_LOCK`。`_finish_job` / `execute_job` 已按此顺序取锁；`health_payload` 必须在释放 `STATE_LOCK` 之后再调 `queue_depth()`，否则反向嵌套会死锁。
 9. **状态对象保持可动态挂属性**：现有单测会写 `STATE.waiting` / `STATE.loaded`，`RuntimeState` / `BootState` 不要加 `__slots__`；`/health` 的 `queue_depth` 必须来自 JobStore 而不是状态对象。

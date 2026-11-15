@@ -405,30 +405,30 @@ class GenerateWithReferenceTest(DaemonUnitTest):
             self.assertEqual(sent[0][0], 400)
             self.assertEqual(sent[0][1]["error"]["code"], "invalid_request")
             self.assertIn("该模型不支持垫图重绘", sent[0][1]["error"]["message"])
-        self.assertEqual(d.queue_depth(), 0)
+        self.assertEqual(d.JOB_STORE.queue_depth(), 0)
 
     def test_invalid_base64_returns_400(self) -> None:
         sent = self.generate(self.spec_with({"image_b64": "not base64!!"}))
         self.assertEqual(sent[0][0], 400)
         self.assertEqual(sent[0][1]["error"]["code"], "invalid_request")
         self.assertIn("合法 base64", sent[0][1]["error"]["message"])
-        self.assertEqual(d.queue_depth(), 0)
+        self.assertEqual(d.JOB_STORE.queue_depth(), 0)
 
     def test_valid_reference_is_enqueued_with_normalized_strength(self) -> None:
         with mock.patch.dict(sys.modules, fake_pil_for(FakePILImage((1024, 768)))):
             sent = self.generate(self.spec_with(make_reference(strength=9)))
         self.assertEqual(sent[0][0], 202)
-        job = d.get_job(sent[0][1]["job_id"])
+        job = d.JOB_STORE.get(sent[0][1]["job_id"])
         self.assertIsNotNone(job.reference)
         self.assertEqual(job.reference["strength"], CONTRACT["limits"]["strength"]["max"])
         self.assertEqual((job.reference["width"], job.reference["height"]), (1024, 768))
-        self.assertEqual(d.queue_depth(), 1)
+        self.assertEqual(d.JOB_STORE.queue_depth(), 1)
         self.assertLogContains("带参考图")
 
     def test_text2img_spec_has_no_reference(self) -> None:
         sent = self.generate(self.spec_with(None))
         self.assertEqual(sent[0][0], 202)
-        job = d.get_job(sent[0][1]["job_id"])
+        job = d.JOB_STORE.get(sent[0][1]["job_id"])
         self.assertIsNone(job.reference)
         self.assertNotIn("带参考图", self.logs())
 

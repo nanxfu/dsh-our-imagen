@@ -27,14 +27,29 @@ from support import (
 
 
 class CacheManagerBoundaryTest(DaemonUnitTest):
-    """切片⑥c：缓存域收进 CACHE，daemon 只留别名；内部交叉调用必须走实例。"""
+    """切片⑥c/⑥f：缓存域只有 CACHE 一个入口，daemon 连别名也不再保留。"""
+
+    # 切片⑥f 从 daemon 删掉的 11 个别名（曾用于旧调用面）。
+    ALIASES = (
+        "resolve_local_model",
+        "resolve_local_weight",
+        "local_model_dir",
+        "anima_local_assets",
+        "mount_point_of",
+        "cache_probe_lines",
+        "disk_precheck",
+        "ensure_disk_capacity",
+        "cache_keep_repos",
+        "evict_cache_for",
+        "ensure_cache_capacity",
+    )
 
     def test_cache_is_the_single_owner_of_the_domain(self) -> None:
         self.assertIsInstance(d.CACHE, remote_cache.CacheManager)
         self.assertIs(d.CACHE.config, d.CONFIG, "CacheManager 必须读同一份活配置，不能吃快照")
-        # 别名指向同一个方法对象，不是第二份实现。
-        self.assertEqual(d.evict_cache_for, d.CACHE.evict_cache_for)
-        self.assertEqual(d.ensure_cache_capacity, d.CACHE.ensure_cache_capacity)
+        # 别名已删：要观测或打桩就打实例方法，打 daemon 上的影子属性不会改变内部行为。
+        for name in self.ALIASES:
+            self.assertFalse(hasattr(d, name), f"daemon 不应再暴露缓存别名 {name}（已归 CACHE）")
 
     def test_daemon_no_longer_defines_the_wrappers(self) -> None:
         source = DAEMON_PATH.read_text(encoding="utf-8")
@@ -43,6 +58,10 @@ class CacheManagerBoundaryTest(DaemonUnitTest):
                 re.search(rf"(?m)^def {name}\(", source),
                 f"daemon.py 不应再定义 {name}（实现已归 CacheManager）",
             )
+        # 也不许以"别名赋值"的形式回来：`X = CACHE.Y` 与 `def X()` 一样，patch d.X 会变成空操作。
+        self.assertIsNone(
+            re.search(r"(?m)^\w+ = CACHE\.\w+$", source), "daemon.py 不应再有 CACHE 别名赋值"
+        )
         # 探针"只打一次"的标志也收进实例：留影子全局的话，重绑定它不会改变行为。
         self.assertNotIn("_CACHE_PROBE_DONE", source)
 
@@ -53,7 +72,7 @@ class CacheManagerBoundaryTest(DaemonUnitTest):
         with mock.patch.object(
             d.CACHE, "evict_cache_for", side_effect=lambda required, keep: calls.append((required, keep)) or {}
         ):
-            d.ensure_cache_capacity({"loader": "sdxl", "base": "org/base", "downloadGb": 2.0})
+            d.CACHE.ensure_cache_capacity({"loader": "sdxl", "base": "org/base", "downloadGb": 2.0})
         self.assertEqual(calls[0][0], 2.0)
 
     def test_probe_only_logs_once_until_reset(self) -> None:
@@ -82,7 +101,7 @@ class DiskPrecheckTest(DaemonUnitTest):
 
     def test_precheck_reports_gap(self) -> None:
         spec = {"base": "black-forest-labs/FLUX.2-klein-4B", "downloadGb": 15.2}
-        result = d.disk_precheck(spec, root="/kaggle/working", usage=fake_usage(10.0))
+        result = d.CACHE.disk_precheck(spec, root="/kaggle/working", usage=fake_usage(10.0))
         self.assertEqual(result["required_gb"], 17.48)
         self.assertEqual(result["free_gb"], 10.0)
         self.assertFalse(result["enough"])
@@ -93,17 +112,17 @@ class DiskPrecheckTest(DaemonUnitTest):
         with tempfile.TemporaryDirectory() as directory:
             expected = os.path.abspath(directory)
             with mock.patch.dict(os.environ, {"HF_HUB_CACHE": directory}, clear=False):
-                result = d.disk_precheck({"base": "org/model", "downloadGb": 1.0}, usage=fake_usage(10.0))
+                result = d.CACHE.disk_precheck({"base": "org/model", "downloadGb": 1.0}, usage=fake_usage(10.0))
         self.assertEqual(result["path"], expected)
         self.assertEqual(result["free_gb"], 10.0)
         self.assertTrue(result["enough"])
 
     def test_insufficient_space_raises_readable_error(self) -> None:
         spec = {"base": "black-forest-labs/FLUX.2-klein-4B", "downloadGb": 15.2}
-        result = d.disk_precheck(spec, root="/kaggle/working", usage=fake_usage(10.0))
+        result = d.CACHE.disk_precheck(spec, root="/kaggle/working", usage=fake_usage(10.0))
         with mock.patch.object(d.CACHE, "disk_precheck", return_value=result):
             with self.assertRaises(d.LoadError) as ctx:
-                d.ensure_disk_capacity(spec)
+                d.CACHE.ensure_disk_capacity(spec)
         message = str(ctx.exception)
         self.assertIn("磁盘空间不足", message)
         self.assertIn("需 17.5 GiB", message)
@@ -112,14 +131,14 @@ class DiskPrecheckTest(DaemonUnitTest):
     def test_sufficient_space_logs_and_passes(self) -> None:
         result = {"required_gb": 17.48, "free_gb": 19.0, "path": "/kaggle/working", "enough": True}
         with mock.patch.object(d.CACHE, "disk_precheck", return_value=result):
-            d.ensure_disk_capacity({"base": "org/model", "downloadGb": 15.2})
+            d.CACHE.ensure_disk_capacity({"base": "org/model", "downloadGb": 15.2})
         self.assertLogContains("磁盘预检通过")
 
     def test_usage_error_skips_check(self) -> None:
         def broken(_path):
             raise OSError("denied")
 
-        self.assertIsNone(d.disk_precheck({"base": "x", "downloadGb": 1}, root="R", usage=broken))
+        self.assertIsNone(d.CACHE.disk_precheck({"base": "x", "downloadGb": 1}, root="R", usage=broken))
         self.assertLogContains("跳过预检")
 
     def test_mounted_weights_skip_check(self) -> None:
@@ -127,7 +146,7 @@ class DiskPrecheckTest(DaemonUnitTest):
             Path(directory, "model_index.json").write_text("{}", encoding="utf-8")
             d.CONFIG.local_models = {"org/base": directory}
             with mock.patch.object(d.CACHE, "disk_precheck", side_effect=AssertionError("预挂载时不应做磁盘预检")):
-                d.ensure_disk_capacity({"base": "org/base", "downloadGb": 15.2})
+                d.CACHE.ensure_disk_capacity({"base": "org/base", "downloadGb": 15.2})
         self.assertLogContains("跳过磁盘预检")
 
     def test_usage_root_falls_back_to_cwd(self) -> None:
@@ -160,7 +179,7 @@ class CacheProbeTest(DaemonUnitTest):
         with tempfile.TemporaryDirectory() as directory:
             expected = os.path.abspath(directory)
             with mock.patch.dict(os.environ, {"HF_HUB_CACHE": directory}, clear=False):
-                lines = d.cache_probe_lines()
+                lines = d.CACHE.cache_probe_lines()
         self.assertEqual(len(lines), 1)
         line = lines[0]
         self.assertTrue(line.startswith("[cache] "), line)
@@ -175,7 +194,7 @@ class CacheProbeTest(DaemonUnitTest):
                 with mock.patch.object(d.os.path, "isdir", return_value=True):
                     with mock.patch.object(d.CACHE, "mount_point_of", return_value="/kaggle/working"):
                         with mock.patch.object(d.CACHE, "probe_free_gib", return_value="12.3"):
-                            line = d.cache_probe_lines()[0]
+                            line = d.CACHE.cache_probe_lines()[0]
         self.assertIn("/kaggle/working mount=/kaggle/working free=12.3GiB", line)
 
     def test_mount_point_uses_longest_prefix(self) -> None:
@@ -215,7 +234,7 @@ class CacheProbeTest(DaemonUnitTest):
             cache_dir = os.path.join(directory, secret, "hub")
             env = {"HF_HUB_CACHE": cache_dir, "HF_TOKEN": secret}
             with mock.patch.dict(os.environ, env, clear=False):
-                line = d.cache_probe_lines()[0]
+                line = d.CACHE.cache_probe_lines()[0]
         self.assertNotIn(secret, line)
         self.assertIn("***", line)
 
@@ -223,7 +242,7 @@ class CacheProbeTest(DaemonUnitTest):
         with mock.patch.object(d.shutil, "disk_usage", side_effect=OSError("denied")):
             with mock.patch.object(d.CACHE, "read_mount_points", return_value=None):
                 with mock.patch.object(d.os, "stat", side_effect=OSError("denied")):
-                    lines = d.cache_probe_lines()
+                    lines = d.CACHE.cache_probe_lines()
         self.assertEqual(len(lines), 1)
         self.assertIn("mount=unknown", lines[0])
         self.assertIn("free=unknown", lines[0])
@@ -231,7 +250,7 @@ class CacheProbeTest(DaemonUnitTest):
     def test_mount_point_never_raises(self) -> None:
         with mock.patch.object(d.CACHE, "read_mount_points", return_value=None):
             with mock.patch.object(d.os, "stat", side_effect=OSError("denied")):
-                self.assertEqual(d.mount_point_of("no/such/dir"), "unknown")
+                self.assertEqual(d.CACHE.mount_point_of("no/such/dir"), "unknown")
 
     def test_first_load_logs_probe_only_once(self) -> None:
         with mock.patch.object(d, "build_pipeline", return_value=(object(), "sdxl:org/base")):
@@ -294,7 +313,7 @@ class PipelineReposTest(DaemonUnitTest):
 
     def test_keep_set_adds_mounted_repos(self) -> None:
         d.CONFIG.local_models = {"Qwen/Qwen-Image": "/kaggle/input/qwen-image", "org/extra": "/kaggle/input/x"}
-        keep = d.cache_keep_repos({"loader": "anima", "base": "org/base", "vae": {"repo": "Qwen/Qwen-Image"}})
+        keep = d.CACHE.cache_keep_repos({"loader": "anima", "base": "org/base", "vae": {"repo": "Qwen/Qwen-Image"}})
         self.assertIn("org/base", keep)
         self.assertIn("Qwen/Qwen-Image", keep)
         self.assertIn("org/extra", keep)
@@ -344,7 +363,7 @@ class CacheEvictTest(DaemonUnitTest):
         super().tearDown()
 
     def evict(self, required_gb, keep_repos=None, usage=None, root=None):  # noqa: ANN001, ANN201
-        return d.evict_cache_for(
+        return d.CACHE.evict_cache_for(
             required_gb,
             keep_repos or (),
             root=self.root if root is None else root,
@@ -380,7 +399,7 @@ class CacheEvictTest(DaemonUnitTest):
         make_cache_dir(self.root, "models--org--lora", mtime=1001)
         make_cache_dir(self.root, "models--org--vae", mtime=1002)
         make_cache_dir(self.root, "models--org--stale", mtime=1003)
-        result = self.evict(1.0, keep_repos=d.cache_keep_repos(spec), usage=dir_count_usage(self.root, 0.2))
+        result = self.evict(1.0, keep_repos=d.CACHE.cache_keep_repos(spec), usage=dir_count_usage(self.root, 0.2))
         # 需 1.15 GiB：删掉 stale 后 1.2 GiB 即达标。
         self.assertEqual([item["repo"] for item in result["evicted"]], ["org/stale"])
         for name in ("models--org--base", "models--org--lora", "models--org--vae"):
@@ -425,7 +444,7 @@ class CacheEvictTest(DaemonUnitTest):
         make_cache_dir(self.root, "models--org--old", mtime=1000)
         make_cache_dir(self.root, "models--org--new", mtime=2000)
         with mock.patch.dict(os.environ, {"HF_HUB_CACHE": self.root}, clear=False):
-            result = d.evict_cache_for(0.5, (), usage=dir_count_usage(self.root, 0.0))
+            result = d.CACHE.evict_cache_for(0.5, (), usage=dir_count_usage(self.root, 0.0))
         self.assertEqual(result["path"], os.path.abspath(self.root))
         self.assertEqual([item["repo"] for item in result["evicted"]], ["org/old"])
 
@@ -458,11 +477,11 @@ class CacheCapacityTest(DaemonUnitTest):
             Path(directory, "model_index.json").write_text("{}", encoding="utf-8")
             d.CONFIG.local_models = {"org/base": directory}
             with mock.patch.object(d.CACHE, "evict_cache_for", side_effect=AssertionError("预挂载时不应清理缓存")):
-                d.ensure_cache_capacity({"loader": "sdxl", "base": "org/base", "downloadGb": 15.2})
+                d.CACHE.ensure_cache_capacity({"loader": "sdxl", "base": "org/base", "downloadGb": 15.2})
 
     def test_missing_download_gb_skips_eviction(self) -> None:
         with mock.patch.object(d.CACHE, "evict_cache_for", side_effect=AssertionError("没有体积信息时不应清理")):
-            d.ensure_cache_capacity({"loader": "sdxl", "base": "org/base"})
+            d.CACHE.ensure_cache_capacity({"loader": "sdxl", "base": "org/base"})
 
     def test_anima_local_dit_skips_eviction(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -475,12 +494,12 @@ class CacheCapacityTest(DaemonUnitTest):
                 "downloadGb": 5.6,
             }
             with mock.patch.object(d.CACHE, "evict_cache_for", side_effect=AssertionError("预挂载 DiT 时不应清理")):
-                d.ensure_cache_capacity(spec)
+                d.CACHE.ensure_cache_capacity(spec)
 
     def test_calls_evict_with_pipeline_keep_set(self) -> None:
         calls: list[tuple] = []
         with mock.patch.object(d.CACHE, "evict_cache_for", side_effect=lambda required, keep: calls.append((required, keep)) or {}):
-            d.ensure_cache_capacity(
+            d.CACHE.ensure_cache_capacity(
                 {
                     "loader": "sdxl-lora",
                     "base": "org/base",
@@ -520,28 +539,28 @@ class LocalModelTest(DaemonUnitTest):
     def test_resolve_local_model_requires_model_index(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             d.CONFIG.local_models = {"org/base": directory}
-            self.assertIsNone(d.resolve_local_model("org/base"))
+            self.assertIsNone(d.CACHE.resolve_local_model("org/base"))
             self.assertLogContains("缺少 model_index.json")
             Path(directory, "model_index.json").write_text("{}", encoding="utf-8")
-            self.assertEqual(d.resolve_local_model("org/base"), directory)
-            self.assertIsNone(d.resolve_local_model("org/other"))
-            self.assertIsNone(d.resolve_local_model(""))
+            self.assertEqual(d.CACHE.resolve_local_model("org/base"), directory)
+            self.assertIsNone(d.CACHE.resolve_local_model("org/other"))
+            self.assertIsNone(d.CACHE.resolve_local_model(""))
 
     def test_resolve_local_weight_prefers_mounted_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             weight = Path(directory, "lora.safetensors")
             weight.write_bytes(b"stub")
             d.CONFIG.local_models = {"org/lora": directory}
-            self.assertEqual(d.resolve_local_weight("org/lora", "lora.safetensors"), str(weight))
-            self.assertIsNone(d.resolve_local_weight("org/lora", "missing.safetensors"))
+            self.assertEqual(d.CACHE.resolve_local_weight("org/lora", "lora.safetensors"), str(weight))
+            self.assertIsNone(d.CACHE.resolve_local_weight("org/lora", "missing.safetensors"))
             self.assertLogContains("回退在线下载")
-            self.assertIsNone(d.resolve_local_weight("org/other", "lora.safetensors"))
-            self.assertIsNone(d.resolve_local_weight("org/lora", ""))
+            self.assertIsNone(d.CACHE.resolve_local_weight("org/other", "lora.safetensors"))
+            self.assertIsNone(d.CACHE.resolve_local_weight("org/lora", ""))
 
     def test_resolve_local_weight_rejects_escape(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             d.CONFIG.local_models = {"org/lora": directory}
-            self.assertIsNone(d.resolve_local_weight("org/lora", os.path.join("..", "evil.safetensors")))
+            self.assertIsNone(d.CACHE.resolve_local_weight("org/lora", os.path.join("..", "evil.safetensors")))
         self.assertLogContains("越出预挂载目录")
 
 

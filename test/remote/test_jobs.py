@@ -1,4 +1,4 @@
-"""job 领域（协议 / 存储 / 失败分类）（原 test/daemon-unit.py 的 job 领域（协议 / 存储 / 失败分类） 段）。
+"""job 领域：协议、存储与失败分类。
 
 异步 job 协议（202 入队、幂等、四态视图、淘汰）、JobStore 的锁与容量边界、失败分类表。
 
@@ -7,11 +7,13 @@
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 from unittest import mock
 
 from support import (
+    DAEMON_PATH,
     DaemonUnitTest,
     TASKS,
     d,
@@ -26,19 +28,32 @@ from support import (
 class JobStoreBoundaryTest(DaemonUnitTest):
     """任务表只归 JobStore：daemon 不再暴露 JOB_* 裸状态，容量/锁顺序由 store 保证。"""
 
+    # 切片⑥f 删掉的 6 个转发包装：视图与淘汰一律直接调 JOB_STORE。
+    WRAPPERS = ("submit_job", "get_job", "queue_depth", "active_job_count", "job_payload", "prune_jobs")
+
     def test_store_is_the_only_owner_of_the_table(self) -> None:
         self.assertIsInstance(d.JOB_STORE, remote_job_store.JobStore)
         for leaked in ("JOB_LOCK", "JOB_COND", "JOB_QUEUE", "JOB_TABLE", "JOB_FINISHED_ORDER"):
             self.assertFalse(hasattr(d, leaked), f"daemon 不应再暴露 {leaked}")
+
+    def test_daemon_no_longer_forwards_job_views(self) -> None:
+        """转发包装会让 patch d.get_job 变成空操作：视图必须从 JOB_STORE 取。"""
+        for name in self.WRAPPERS:
+            self.assertFalse(hasattr(d, name), f"daemon 不应再暴露 {name}（已归 JOB_STORE）")
+        self.assertFalse(hasattr(d, "JOB_WAKE"), "JOB_WAKE 兼容对象应随门面一起删除")
+        source = DAEMON_PATH.read_text(encoding="utf-8")
+        self.assertIsNone(
+            re.search(r"(?m)^\w+ = JOB_STORE\.\w+$", source), "daemon.py 不应再有 JOB_STORE 别名赋值"
+        )
 
     def test_queue_capacity_follows_the_injected_contract(self) -> None:
         """容量必须每次读契约：store 在启动期构造，那时 contract 还是空的。"""
         d.CONFIG.contract = {"limits": {"queue": {"maxPending": 2}}}
         self.assertEqual(d.JOB_STORE.max_queue_depth(), 2)
         for index in range(2):
-            d.submit_job(make_pipeline(), "org/base", [dict(TASKS[0])], job_id=f"cap-{index}")
+            d.JOB_STORE.submit(make_pipeline(), "org/base", [dict(TASKS[0])], job_id=f"cap-{index}")
         with self.assertRaises(d.QueueFullError):
-            d.submit_job(make_pipeline(), "org/base", [dict(TASKS[0])], job_id="cap-overflow")
+            d.JOB_STORE.submit(make_pipeline(), "org/base", [dict(TASKS[0])], job_id="cap-overflow")
 
     def test_pop_next_without_jobs_does_not_spin(self) -> None:
         """空队列 + timeout=0 只探一次；停止信号也立即返回 None（worker 靠它退出）。"""
@@ -49,7 +64,7 @@ class JobStoreBoundaryTest(DaemonUnitTest):
 
     def test_finish_releases_job_lock_before_touching_state(self) -> None:
         """§5.8：store.finish() 先放掉 JOB_LOCK，_finish_job 才去取 STATE_LOCK（反向会死锁）。"""
-        job, _ = d.submit_job(make_pipeline(), "org/base", [dict(TASKS[0])], job_id="finish-order")
+        job, _ = d.JOB_STORE.submit(make_pipeline(), "org/base", [dict(TASKS[0])], job_id="finish-order")
         events: list[str] = []
 
         class TrackingLock:
@@ -104,7 +119,7 @@ class JobProtocolTest(DaemonUnitTest):
 
     def submit(self, task_count: int = 1, job_id: str | None = None):
         tasks = [dict(TASKS[0], name=f"{index + 1:02d}") for index in range(task_count)]
-        return d.submit_job(make_pipeline(), "org/base-model", tasks, job_id)
+        return d.JOB_STORE.submit(make_pipeline(), "org/base-model", tasks, job_id)
 
     # ---- POST /generate：入队即返回 ----
 
@@ -118,7 +133,7 @@ class JobProtocolTest(DaemonUnitTest):
         self.assertEqual(payload["model_id"], "org/base-model")
         self.assertTrue(payload["job_id"])
         self.assertTrue(payload["created_at"].endswith("Z"))
-        self.assertEqual(d.queue_depth(), 1)
+        self.assertEqual(d.JOB_STORE.queue_depth(), 1)
 
     def test_generate_honours_job_id_and_is_idempotent(self) -> None:
         self.ready()
@@ -128,7 +143,7 @@ class JobProtocolTest(DaemonUnitTest):
         d.DaemonHandler._handle_generate(handler)
         self.assertEqual([item[0] for item in sent], [202, 202])
         self.assertEqual([item[1]["job_id"] for item in sent], ["host-job-1", "host-job-1"])
-        self.assertEqual(d.queue_depth(), 1)
+        self.assertEqual(d.JOB_STORE.queue_depth(), 1)
         self.assertLogContains("幂等命中")
 
     def test_generate_rejects_invalid_job_id(self) -> None:
@@ -137,7 +152,7 @@ class JobProtocolTest(DaemonUnitTest):
         d.DaemonHandler._handle_generate(handler)
         self.assertEqual(sent[0][0], 400)
         self.assertEqual(sent[0][1]["error"]["code"], "invalid_request")
-        self.assertEqual(d.queue_depth(), 0)
+        self.assertEqual(d.JOB_STORE.queue_depth(), 0)
 
     def test_generate_warms_up_when_not_ready(self) -> None:
         handler, sent = make_generate_handler(make_spec(tasks=TASKS))
@@ -158,7 +173,7 @@ class JobProtocolTest(DaemonUnitTest):
     def test_queued_payload(self) -> None:
         job, created = self.submit(task_count=2)
         self.assertTrue(created)
-        payload = d.job_payload(job)
+        payload = d.JOB_STORE.payload(job)
         self.assertEqual(payload["status"], "queued")
         self.assertEqual(payload["progress"], {"done": 0, "total": 2})
         self.assertIsNone(payload["results"])
@@ -170,7 +185,7 @@ class JobProtocolTest(DaemonUnitTest):
         job, _ = self.submit()
         job.results = [{"name": "01", "image_b64": "x"}]
         d._finish_job(job, d.JOB_STATUS_DONE)
-        payload = d.job_payload(job)
+        payload = d.JOB_STORE.payload(job)
         self.assertEqual(payload["status"], "done")
         self.assertEqual(payload["progress"], {"done": 1, "total": 1})
         self.assertEqual(payload["results"], [{"name": "01", "image_b64": "x"}])
@@ -179,7 +194,7 @@ class JobProtocolTest(DaemonUnitTest):
     def test_failed_payload_carries_error(self) -> None:
         job, _ = self.submit()
         d._finish_job(job, d.JOB_STATUS_FAILED, {"code": "oom", "message": "显存不足"})
-        payload = d.job_payload(job)
+        payload = d.JOB_STORE.payload(job)
         self.assertEqual(payload["status"], "failed")
         self.assertEqual(payload["error"]["code"], "oom")
         self.assertIsNone(payload["results"])
@@ -218,25 +233,25 @@ class JobProtocolTest(DaemonUnitTest):
         for index in range(d.JOB_MAX_FINISHED + 3):
             job, _ = self.submit(job_id=f"job-{index}")
             d._finish_job(job, d.JOB_STATUS_DONE)
-        d.prune_jobs()
+        d.JOB_STORE.prune()
         self.assertEqual(d.JOB_STORE.count(), d.JOB_MAX_FINISHED)
-        self.assertIsNone(d.get_job("job-0"))
-        self.assertIsNotNone(d.get_job(f"job-{d.JOB_MAX_FINISHED + 2}"))
+        self.assertIsNone(d.JOB_STORE.get("job-0"))
+        self.assertIsNotNone(d.JOB_STORE.get(f"job-{d.JOB_MAX_FINISHED + 2}"))
 
     def test_prunes_ttl_expired_finished(self) -> None:
         job, _ = self.submit(job_id="ttl-job")
         d._finish_job(job, d.JOB_STATUS_DONE)
         job.finished_at = time.time() - d.JOB_TTL_SEC - 1
-        d.prune_jobs()
-        self.assertIsNone(d.get_job("ttl-job"))
+        d.JOB_STORE.prune()
+        self.assertIsNone(d.JOB_STORE.get("ttl-job"))
 
     def test_active_jobs_are_never_pruned(self) -> None:
         self.submit(job_id="queued-job")
         running, _ = self.submit(job_id="running-job")
         d.JOB_STORE.mark_running(running)
-        d.prune_jobs(time.time() + d.JOB_TTL_SEC * 10)
+        d.JOB_STORE.prune(time.time() + d.JOB_TTL_SEC * 10)
         self.assertEqual(d.JOB_STORE.count(), 2)
-        self.assertIsNotNone(d.get_job("queued-job"))
+        self.assertIsNotNone(d.JOB_STORE.get("queued-job"))
 
     # ---- worker 执行 ----
 
@@ -276,8 +291,8 @@ class JobProtocolTest(DaemonUnitTest):
         # 真实时序：worker 先出队再置 running，此时它既不在队列里也不再计入 queue_depth。
         self.assertIs(d.JOB_STORE.pop_next(timeout=0), job)
         d.JOB_STORE.mark_running(job)
-        self.assertEqual(d.queue_depth(), 0)
-        self.assertEqual(d.active_job_count(), 1)
+        self.assertEqual(d.JOB_STORE.queue_depth(), 0)
+        self.assertEqual(d.JOB_STORE.active_count(), 1)
 
     def test_worker_drains_queue(self) -> None:
         drained = threading.Event()
@@ -294,14 +309,14 @@ class JobProtocolTest(DaemonUnitTest):
             try:
                 deadline = time.time() + 3
                 while time.time() < deadline:
-                    job = d.get_job("worker-job")
+                    job = d.JOB_STORE.get("worker-job")
                     if job is not None and job.status == d.JOB_STATUS_DONE:
                         drained.set()
                         break
                     time.sleep(0.02)
             finally:
                 d.BOOT.stop_event.set()
-                d.JOB_WAKE.set()
+                d.JOB_STORE.notify()
                 thread.join(timeout=2)
         self.assertTrue(drained.is_set(), "worker 未在 3s 内消费完 job")
 

@@ -28,7 +28,24 @@ from support import (
 
 
 class TunnelSupervisorBoundaryTest(DaemonUnitTest):
-    """切片⑥d：隧道域收进 TUNNEL，二进制参数走 TunnelBinary 设置对象。"""
+    """切片⑥d/⑥f：隧道域只有 TUNNEL 一个入口，二进制参数走 TunnelBinary 设置对象。"""
+
+    # 切片⑥f 从 daemon 删掉的别名（旧调用面），内部一律 self.*，留着只会造成假绿。
+    ALIASES = (
+        "ensure_cloudflared",
+        "tunnel_url_regex",
+        "build_tunnel_plan",
+        "tunnel_should_stop",
+        "_spawn_tunnel_process",
+        "_drain_tunnel_output",
+        "tunnel_attempt",
+        "start_tunnel",
+        "recover_tunnel_error",
+        "announce_tunnel_ready",
+        "tunnel_wait_exit",
+        "tunnel_monitor",
+        "tunnel_restart_delay",
+    )
 
     def test_supervisor_is_the_single_owner(self) -> None:
         self.assertIsInstance(d.TUNNEL, remote_tunnel.TunnelSupervisor)
@@ -37,10 +54,9 @@ class TunnelSupervisorBoundaryTest(DaemonUnitTest):
         self.assertEqual(d.TUNNEL.binary.path, d.CLOUDFLARED_PATH)
         self.assertEqual(d.TUNNEL.binary.url, d.CLOUDFLARED_DOWNLOAD_URL)
         self.assertEqual(d.TUNNEL.binary.sha256, d.CLOUDFLARED_SHA256)
-        # 别名指向同一个方法对象，不是第二份实现。
-        self.assertEqual(d.start_tunnel, d.TUNNEL.start)
-        self.assertEqual(d.tunnel_monitor, d.TUNNEL.monitor)
-        self.assertEqual(d.tunnel_restart_delay, d.TUNNEL.restart_delay)
+        # 别名已删：替换 daemon 上的同名属性不会影响 TUNNEL 的内部调用。
+        for name in self.ALIASES:
+            self.assertFalse(hasattr(d, name), f"daemon 不应再暴露隧道别名 {name}（已归 TUNNEL）")
 
     def test_daemon_no_longer_defines_the_wrappers(self) -> None:
         source = DAEMON_PATH.read_text(encoding="utf-8")
@@ -60,12 +76,16 @@ class TunnelSupervisorBoundaryTest(DaemonUnitTest):
         # 这两个内部步骤也随实现搬走，别留成第二份。
         for name in ("_spawn_tunnel_process", "_download_cloudflared_once", "_drain_tunnel_output"):
             self.assertNotIn(f"def {name}(", source)
+        # 也不许以"别名赋值"的形式回来（`X = TUNNEL.Y` 会让 patch d.X 变成空操作）。
+        self.assertIsNone(
+            re.search(r"(?m)^\w+ = TUNNEL\.\w+$", source), "daemon.py 不应再有 TUNNEL 别名赋值"
+        )
 
     def test_binary_fields_are_read_at_call_time(self) -> None:
         """替换 TUNNEL.binary 的字段必须影响真实路径：构造期拷贝会静默失效。"""
-        self.assertEqual(d.build_tunnel_plan(7860)[0]["argv"][0], d.TUNNEL.binary.path)
+        self.assertEqual(d.TUNNEL.build_plan(7860)[0]["argv"][0], d.TUNNEL.binary.path)
         with mock.patch.object(d.TUNNEL.binary, "path", "/tmp/other-cloudflared"):
-            self.assertEqual(d.build_tunnel_plan(7860)[0]["argv"][0], "/tmp/other-cloudflared")
+            self.assertEqual(d.TUNNEL.build_plan(7860)[0]["argv"][0], "/tmp/other-cloudflared")
 
     def test_restart_backoff_is_exposed_on_the_instance(self) -> None:
         """退避函数也走实例：monitor 内部是 `self.restart_delay`，替换才能压平等待。
@@ -75,7 +95,7 @@ class TunnelSupervisorBoundaryTest(DaemonUnitTest):
         """
         self.assertEqual(d.TUNNEL.restart_delay(1), 2.0)
         self.assertEqual(d.TUNNEL.restart_delay(100), d.TUNNEL_RESTART_MAX_SEC)
-        self.assertEqual(d.tunnel_restart_delay(0), 2.0)
+        self.assertEqual(d.TUNNEL.restart_delay(0), 2.0)
 
 
 class TunnelHelperTest(DaemonUnitTest):
@@ -107,17 +127,17 @@ class TunnelHelperTest(DaemonUnitTest):
         )
 
     def test_tunnel_url_regex_falls_back_to_default(self) -> None:
-        self.assertEqual(d.tunnel_url_regex("").pattern, d.DEFAULT_CUSTOM_URL_RE.pattern)
-        self.assertEqual(d.tunnel_url_regex(r"https://[\w.-]+").pattern, r"https://[\w.-]+")
-        self.assertEqual(d.tunnel_url_regex("([").pattern, d.DEFAULT_CUSTOM_URL_RE.pattern)
+        self.assertEqual(d.TUNNEL.url_regex("").pattern, d.DEFAULT_CUSTOM_URL_RE.pattern)
+        self.assertEqual(d.TUNNEL.url_regex(r"https://[\w.-]+").pattern, r"https://[\w.-]+")
+        self.assertEqual(d.TUNNEL.url_regex("([").pattern, d.DEFAULT_CUSTOM_URL_RE.pattern)
         self.assertLogContains("fallback_tunnel_url_regex 非法")
 
     def test_provider_plan_prefers_cloudflare_then_custom(self) -> None:
-        plan = d.build_tunnel_plan(7860)
+        plan = d.TUNNEL.build_plan(7860)
         self.assertEqual([item["provider"] for item in plan], ["cloudflare"])
         self.assertIn("http://127.0.0.1:7860", plan[0]["argv"])
         d.CONFIG.fallback_tunnel_command = ["bore", "local", "127.0.0.1:{port}"]
-        plan = d.build_tunnel_plan(7860)
+        plan = d.TUNNEL.build_plan(7860)
         self.assertEqual([item["provider"] for item in plan], ["cloudflare", "custom"])
         self.assertEqual(plan[1]["argv"], ["bore", "local", "127.0.0.1:7860"])
         # 与契约 PROTOCOL.daemon.tunnelProviders 保持同序
@@ -125,19 +145,19 @@ class TunnelHelperTest(DaemonUnitTest):
 
     def test_restart_backoff_caps_at_60s(self) -> None:
         self.assertEqual(
-            [d.tunnel_restart_delay(index) for index in range(1, 8)],
+            [d.TUNNEL.restart_delay(index) for index in range(1, 8)],
             [2.0, 4.0, 8.0, 16.0, 32.0, 60.0, 60.0],
         )
-        self.assertEqual(d.tunnel_restart_delay(0), 2.0)
-        self.assertEqual(d.tunnel_restart_delay(100), d.TUNNEL_RESTART_MAX_SEC)
+        self.assertEqual(d.TUNNEL.restart_delay(0), 2.0)
+        self.assertEqual(d.TUNNEL.restart_delay(100), d.TUNNEL_RESTART_MAX_SEC)
 
     def test_should_stop_follows_shutdown(self) -> None:
-        self.assertFalse(d.tunnel_should_stop())
+        self.assertFalse(d.TUNNEL.should_stop())
         d.STATE.shutting_down = True
-        self.assertTrue(d.tunnel_should_stop())
+        self.assertTrue(d.TUNNEL.should_stop())
         d.STATE.shutting_down = False
         d.BOOT.stop_event.set()
-        self.assertTrue(d.tunnel_should_stop())
+        self.assertTrue(d.TUNNEL.should_stop())
 
 
 class CloudflaredDownloadTest(DaemonUnitTest):
@@ -173,7 +193,7 @@ class CloudflaredDownloadTest(DaemonUnitTest):
             if max_bytes is not None:
                 stack.enter_context(mock.patch.object(binary, "max_bytes", max_bytes))
             stack.enter_context(mock.patch.object(d.urllib.request, "urlopen", make_urlopen(responses, self.calls)))
-            return d.ensure_cloudflared()
+            return d.TUNNEL.ensure_cloudflared()
 
     def test_pinned_version_url_and_checksum_are_consistent(self) -> None:
         self.assertRegex(d.CLOUDFLARED_VERSION, r"^\d{4}\.\d{1,2}\.\d+$")
@@ -280,7 +300,7 @@ class CloudflaredDownloadTest(DaemonUnitTest):
     def test_start_tunnel_surfaces_download_error(self) -> None:
         error = "cloudflared 2026.11.0 下载失败（2 次尝试均未成功）：下载异常：boom"
         with mock.patch.object(d.TUNNEL, "ensure_cloudflared", side_effect=RuntimeError(error)):
-            result = d.start_tunnel(7860)
+            result = d.TUNNEL.start(7860)
         self.assertIsNone(result)
         self.assertIn("cloudflared 下载失败：", d.BOOT.tunnel_error or "")
         self.assertIn("boom", d.BOOT.tunnel_error or "")
@@ -292,7 +312,7 @@ class TunnelDrainTest(DaemonUnitTest):
     def test_drain_records_url_and_provider(self) -> None:
         event = threading.Event()
         proc = FakeProc(["[INF] Registered tunnel", "INF | https://abc-def.trycloudflare.com |"], code=0)
-        d._drain_tunnel_output(proc, "cloudflare", d.CLOUDFLARED_URL_RE, event)
+        d.TUNNEL.drain(proc, "cloudflare", d.CLOUDFLARED_URL_RE, event)
         self.assertTrue(event.is_set())
         self.assertEqual(d.BOOT.tunnel_url, "https://abc-def.trycloudflare.com")
         self.assertEqual(d.BOOT.tunnel_provider, "cloudflare")
@@ -302,7 +322,7 @@ class TunnelDrainTest(DaemonUnitTest):
     def test_drain_without_url_records_exit_code(self) -> None:
         event = threading.Event()
         proc = FakeProc(["failed to connect"], code=3)
-        d._drain_tunnel_output(proc, "custom", d.DEFAULT_CUSTOM_URL_RE, event)
+        d.TUNNEL.drain(proc, "custom", d.DEFAULT_CUSTOM_URL_RE, event)
         self.assertTrue(event.is_set())
         self.assertIsNone(d.BOOT.tunnel_url)
         self.assertIn("退出码 3", d.BOOT.tunnel_error or "")
@@ -320,7 +340,7 @@ class TunnelDrainTest(DaemonUnitTest):
                 return 0
 
         event = threading.Event()
-        d._drain_tunnel_output(StdoutOnlyProc(), "custom", d.DEFAULT_CUSTOM_URL_RE, event)
+        d.TUNNEL.drain(StdoutOnlyProc(), "custom", d.DEFAULT_CUSTOM_URL_RE, event)
         self.assertTrue(event.is_set())
         self.assertEqual(d.BOOT.tunnel_url, "https://bore.example.com")
         self.assertEqual(d.BOOT.tunnel_provider, "custom")
@@ -333,7 +353,7 @@ class TunnelDrainTest(DaemonUnitTest):
                 captured.update(kwargs)
 
         with mock.patch.object(d.subprocess, "Popen", PopenRecorder):
-            proc = d._spawn_tunnel_process(["bore"], "custom")
+            proc = d.TUNNEL.spawn(["bore"], "custom")
         self.assertIsInstance(proc, PopenRecorder)
         self.assertIs(captured.get("stdout"), d.subprocess.PIPE)
         self.assertIs(captured.get("stderr"), d.subprocess.STDOUT)
@@ -346,7 +366,7 @@ class TunnelDrainTest(DaemonUnitTest):
                 captured.update(kwargs)
 
         with mock.patch.object(d.subprocess, "Popen", PopenRecorder):
-            d._spawn_tunnel_process(["cloudflared"], "cloudflare")
+            d.TUNNEL.spawn(["cloudflared"], "cloudflare")
         self.assertIs(captured.get("stdout"), d.subprocess.DEVNULL)
         self.assertIs(captured.get("stderr"), d.subprocess.PIPE)
 
@@ -354,7 +374,7 @@ class TunnelDrainTest(DaemonUnitTest):
         proc = FakeProc(["https://x1.trycloudflare.com"], code=0)
         item = {"provider": "cloudflare", "argv": ["cloudflared"], "url_re": d.CLOUDFLARED_URL_RE, "wait_sec": 2.0}
         with mock.patch.object(d.TUNNEL, "spawn", return_value=proc):
-            result = d.tunnel_attempt(item)
+            result = d.TUNNEL.attempt(item)
         self.assertEqual(result, ("cloudflare", proc))
         self.assertEqual(d.BOOT.tunnel_url, "https://x1.trycloudflare.com")
 
@@ -362,13 +382,13 @@ class TunnelDrainTest(DaemonUnitTest):
         proc = FakeProc(["boom"], code=2)
         item = {"provider": "custom", "argv": ["bore"], "url_re": d.DEFAULT_CUSTOM_URL_RE, "wait_sec": 0.2}
         with mock.patch.object(d.TUNNEL, "spawn", return_value=proc):
-            result = d.tunnel_attempt(item)
+            result = d.TUNNEL.attempt(item)
         self.assertIsNone(result)
         self.assertTrue(proc.terminated)
         self.assertIn("未给出隧道地址", d.BOOT.tunnel_error or "")
 
     def test_attempt_empty_command(self) -> None:
-        self.assertIsNone(d.tunnel_attempt({"provider": "custom", "argv": []}))
+        self.assertIsNone(d.TUNNEL.attempt({"provider": "custom", "argv": []}))
         self.assertLogContains("通道命令为空")
 
     def test_terminate_process_tolerates_errors(self) -> None:
@@ -395,7 +415,7 @@ class TunnelDrainTest(DaemonUnitTest):
         with mock.patch.object(d.TUNNEL, "ensure_cloudflared", side_effect=RuntimeError("download blocked")), mock.patch.object(
             d.TUNNEL, "spawn", return_value=proc
         ):
-            result = d.start_tunnel(7860)
+            result = d.TUNNEL.start(7860)
         self.assertEqual(result[0], "custom")
         self.assertEqual(d.BOOT.tunnel_provider, "custom")
         self.assertEqual(d.BOOT.tunnel_url, "https://bore.example.com")
@@ -439,7 +459,7 @@ class TunnelMonitorTest(DaemonUnitTest):
         d.BOOT.phase_before_error = "ready"
         d.BOOT.tunnel_url = "https://new.trycloudflare.com"
         with mock.patch.object(d, "ntfy_publish", side_effect=lambda payload, _label: published.append(payload) or True):
-            d.announce_tunnel_ready("cloudflare", restarted=True)
+            d.TUNNEL.announce_ready("cloudflare", restarted=True)
         self.assertEqual(d.STATE.phase, "ready")
         self.assertIsNone(d.STATE.last_error)
         self.assertIsNone(d.STATE.last_error_code)
@@ -454,7 +474,7 @@ class TunnelMonitorTest(DaemonUnitTest):
         d.STATE.phase = "ready"
         d.STATE.last_error = "tunnel_failed: 超时"
         d.STATE.last_error_code = "tunnel_failed"
-        d.recover_tunnel_error()
+        d.TUNNEL.recover_error()
         self.assertEqual(d.STATE.phase, "ready")
         self.assertIsNone(d.STATE.last_error)
         self.assertIsNone(d.STATE.last_error_code)
@@ -464,7 +484,7 @@ class TunnelMonitorTest(DaemonUnitTest):
         d.request_shutdown()
         self.assertTrue(d.STATE.shutting_down)
         self.assertTrue(d.BOOT.stop_event.is_set())
-        self.assertTrue(d.tunnel_should_stop())
+        self.assertTrue(d.TUNNEL.should_stop())
         self.assertLogContains("收到 /shutdown")
 
     def test_monitor_retries_after_initial_failure_and_recovers(self) -> None:
@@ -482,7 +502,7 @@ class TunnelMonitorTest(DaemonUnitTest):
         ), mock.patch.object(d.TUNNEL, "wait_exit", side_effect=fake_wait), mock.patch.object(
             d, "publish_ready", side_effect=lambda: published.append(True)
         ):
-            d.tunnel_monitor(7860)
+            d.TUNNEL.monitor(7860)
         self.assertEqual(d.BOOT.tunnel_restarts, 1)
         self.assertEqual(published, [True])
         self.assertNotEqual(d.STATE.phase, "error", "隧道恢复后不应停在 error")
@@ -494,7 +514,7 @@ class TunnelMonitorTest(DaemonUnitTest):
     def test_monitor_exits_immediately_when_shutting_down(self) -> None:
         d.STATE.shutting_down = True
         with mock.patch.object(d.TUNNEL, "start", side_effect=AssertionError("不应尝试启动隧道")):
-            d.tunnel_monitor(7860)
+            d.TUNNEL.monitor(7860)
         self.assertEqual(d.BOOT.tunnel_restarts, 0)
 
     def test_monitor_relaunches_after_process_exit(self) -> None:
@@ -516,7 +536,7 @@ class TunnelMonitorTest(DaemonUnitTest):
         ), mock.patch.object(d.TUNNEL, "wait_exit", side_effect=fake_wait), mock.patch.object(
             d, "publish_ready", side_effect=lambda: published.append(True)
         ):
-            d.tunnel_monitor(7860)
+            d.TUNNEL.monitor(7860)
         self.assertEqual(d.STATE.phase, "ready", "隧道中途退出不应把 daemon 判成 error")
         self.assertEqual(len(published), 2, "每次隧道就绪都应重播 ready")
         self.assertEqual(d.BOOT.tunnel_restarts, 1)

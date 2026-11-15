@@ -27,7 +27,7 @@ class HttpTransportBoundaryTest(DaemonUnitTest):
         """装配用 lambda 而不是函数对象：patch.object(d, "submit_job") 必须穿过 api 生效。"""
         job = types.SimpleNamespace(job_id="j-1", model_id="org/base", created_at=0.0, status="queued")
         d.STATE.phase = "ready"
-        with mock.patch.object(d, "submit_job", return_value=(job, True)) as submit:
+        with mock.patch.object(d.JOB_STORE, "submit", return_value=(job, True)) as submit:
             handler, sent = make_generate_handler(make_spec(tasks=TASKS))
             d.DaemonHandler._handle_generate(handler)
         self.assertTrue(submit.called, "api 把函数对象绑死了，替换点会静默失效")
@@ -36,7 +36,7 @@ class HttpTransportBoundaryTest(DaemonUnitTest):
 
     def test_queue_full_maps_to_429(self) -> None:
         d.STATE.phase = "ready"
-        with mock.patch.object(d, "submit_job", side_effect=d.QueueFullError("远端任务队列已满")):
+        with mock.patch.object(d.JOB_STORE, "submit", side_effect=d.QueueFullError("远端任务队列已满")):
             handler, sent = make_generate_handler(make_spec(tasks=TASKS))
             d.DaemonHandler._handle_generate(handler)
         self.assertEqual(sent[0][0], 429)

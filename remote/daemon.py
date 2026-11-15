@@ -53,12 +53,21 @@
     ``AutoPipelineForImage2Image.from_pipe`` 复用已加载的 txt2img 底座，不重复加载、
     不额外占显存，随 ``STATE.pipeline_key`` 切换与 ``release_pipeline()`` 一起清理。
 
-文件边界（Batch 2 切片⑥e 之后）：本文件只留**配置注入点、ntfy 会合、模型加载的装配与出图
-执行、job 执行，以及各域的薄包装**。HTTP 传输层在 ``remote/transport/http_server.py``，进程
-生命周期（启动顺序 / 信号 / 退出清理 / 空闲看门狗）在 ``remote/app.py``，模型家族的加载策略
-（白名单、垫图能力、keep_set 推导、构建）在 ``remote/inference/{registry.py,loaders/}``——三者
-都由本文件末尾的装配块接起来。本文件仍是入口模块，因为启动器按 ``daemon.main`` 与
-``daemon.set_embedded_config`` 取符号。
+文件边界（Batch 2 切片⑥f 之后）：本文件只留**配置注入点、ntfy 会合、模型加载的装配与出图
+执行、job 执行、/health 取样、以及三处装配块**（HTTP_API / TUNNEL / APP）。HTTP 传输层在
+``remote/transport/http_server.py``，进程生命周期（启动顺序 / 信号 / 退出清理 / 空闲看门狗）
+在 ``remote/app.py``，模型家族的加载策略（白名单、垫图能力、keep_set 推导、构建）在
+``remote/inference/{registry.py,loaders/}``，缓存与隧道各由 ``CACHE`` / ``TUNNEL`` 单实例持有。
+
+**不再保留任何转发门面**：切片⑥f 删掉了 25 个「只是转手」的包装与别名（job 视图 6 个、
+缓存 11 个、隧道 13 个中的同名方法别名、``JOB_WAKE`` 兼容对象）。想观测或打桩就打到真正
+的持有者上——``JOB_STORE.*`` / ``CACHE.*`` / ``TUNNEL.*``；留在本文件的函数都是**被内部
+调用**的实现（``ensure_pipeline`` / ``run_task`` / ``install_dependencies`` 等），不是影子。
+
+本文件仍是入口模块，因为启动器按 ``daemon.main`` 与 ``daemon.set_embedded_config`` 取符号、
+``test/kernel-package.mjs`` 按 ``daemon.EMBEDDED_CONFIG_B64`` 观测注入是否落地。把这三件事
+搬进 ``app.py`` 需要同时改启动器与打包测试，与本切片的「删转发层」无关，单列在架构规格
+§2.1 的待推进项里（连同 ntfy / pipeline_manager / executor 的逻辑下沉）。
 """
 
 from __future__ import annotations
@@ -240,22 +249,6 @@ def _max_queue_depth() -> int:
 # （remote/jobs/store.py）。这里只保留一个实例 + 兼容旧调用面的薄包装。
 JOB_STORE = JobStore(capacity=_max_queue_depth)
 
-
-class _JobWakeCompat:
-    """兼容旧调用与单测里的 JOB_WAKE.set()/clear()，底层委托给 JobStore 的条件变量。"""
-
-    def set(self) -> None:
-        JOB_STORE.notify()
-
-    def clear(self) -> None:
-        pass
-
-    def wait(self, timeout: float | None = None) -> bool:
-        return JOB_STORE.wait_for_change(timeout)
-
-
-JOB_WAKE = _JobWakeCompat()
-
 # worker 循环本身在 remote/jobs/runner.py；这里把三个协作者以 lambda 注入：
 # 每次调用才解析模块属性，单测替换 d.execute_job / 关停 BOOT.stop_event 才能生效。
 job_runner = JobRunner(
@@ -287,49 +280,11 @@ from remote.text import short  # noqa: E402
 
 # ── 异步 job：表、队列与轮询视图（协议 0.5.0） ────────────────────────────────
 #
-# 实体与状态常量在 remote/jobs/models.py，表 / 队列 / 淘汰策略在 remote/jobs/store.py，
-# 两把锁与条件变量都是 JobStore 的私有成员。本文件只保留同名薄包装：HTTP 层与单测都按
-# `d.submit_job` / `d.get_job` / `d.queue_depth` 这类模块属性调用，包装让「实现搬家 +
-# 调用面不变」共存。`iso_time` / `new_job_id` / `normalize_job_id` 直接 re-export。
-
-
-def submit_job(
-    pipeline_spec: dict,
-    model_id: str,
-    tasks: list[dict],
-    job_id: str | None = None,
-    reference: dict | None = None,
-):
-    """入队；``job_id`` 命中已有 job 时原样返回（幂等，不重复入队）。
-
-    ``reference`` 是提交期校验并归一过的参考图（见 ``parse_reference_spec``），
-    文生图请求传 None。返回 ``(job, created)``：created=False 表示命中了幂等键。
-    """
-    return JOB_STORE.submit(pipeline_spec, model_id, tasks, job_id, reference)
-
-
-def get_job(job_id: str) -> Job | None:
-    return JOB_STORE.get(job_id)
-
-
-def queue_depth() -> int:
-    """``/health.queue_depth``：尚未开始执行的 job 数（来自 JobStore，不是状态对象）。"""
-    return JOB_STORE.queue_depth()
-
-
-def active_job_count() -> int:
-    """排队 + 运行中的 job 数（空闲看门狗用它判断是否忙碌）。"""
-    return JOB_STORE.active_count()
-
-
-def job_payload(job: Job) -> dict:
-    """``GET /job`` 的响应体；results 只在 done 时给，其它状态为 null。"""
-    return JOB_STORE.payload(job)
-
-
-def prune_jobs(now: float | None = None) -> None:
-    """淘汰已结束 job（先 TTL、再数量上限 FIFO）；锁由 JobStore 自己持有。"""
-    JOB_STORE.prune(now)
+# 实体与状态常量在 remote/jobs/models.py，表 / 队列 / 淘汰策略与两把锁都在
+# remote/jobs/store.py 的 JobStore 里。**本文件不再保留同名薄包装**（切片⑥f 删除）：
+# 入队幂等、轮询视图、队列深度、TTL/FIFO 淘汰一律直接调 ``JOB_STORE.submit / get /
+# payload / queue_depth / active_count / prune``。以前那层包装的害处见架构规格 §1.3.6：
+# 包装只是转手，替换包装名却不会改到 JobStore 内部，断言会静默测到旧对象。
 
 
 def fail_boot(code: str, message: str, *, tunnel: bool = False) -> None:
@@ -633,23 +588,10 @@ CACHE = CacheManager(
     config=CONFIG, log_fn=log, error_cls=LoadError, required_repos_fn=LOADERS.required_repos
 )
 
-# ── 门面别名（Batch 3 随 daemon 门面一起删） ──────────────────────────────────
-#
-# 实现已不在本文件：下面这些名字只是 `CACHE` 上同名方法的别名，供旧调用点与单测按模块
-# 属性取值。**替换这里的名字不会改变内部行为**——内部调用一律走 `CACHE.*`。要观察或改变
-# 内部行为（例如"闸门是否真的去清理缓存"），请替换 `CACHE` 上的同名方法；若哪天有人把实现
-# 写回本文件，两处替换会分别命中不同对象，那就是 §1.3.6 的假绿形态。
-resolve_local_model = CACHE.resolve_local_model
-resolve_local_weight = CACHE.resolve_local_weight
-local_model_dir = CACHE.local_model_dir
-anima_local_assets = CACHE.anima_local_assets
-mount_point_of = CACHE.mount_point_of
-cache_probe_lines = CACHE.cache_probe_lines
-disk_precheck = CACHE.disk_precheck
-ensure_disk_capacity = CACHE.ensure_disk_capacity
-cache_keep_repos = CACHE.cache_keep_repos
-evict_cache_for = CACHE.evict_cache_for
-ensure_cache_capacity = CACHE.ensure_cache_capacity
+# 切片⑥f 删掉了这里原有的 11 个**别名**（resolve_local_model / evict_cache_for /
+# ensure_cache_capacity 等）。它们只是 `CACHE` 上同名方法的转手：替换别名不会改变内部
+# 行为（内部调用一律 `self.*`），断言却在"以为替换生效"的假象里保持绿色——§1.3.6 的
+# 假绿形态。现在缓存域只有 `CACHE` 一个入口，观测与打桩都直接打 `CACHE` 的方法。
 
 
 def _load_context() -> LoadContext:
@@ -1104,7 +1046,7 @@ def start_job_worker() -> threading.Thread:
 # ── /health 快照（组装逻辑在 remote/observability/health.py） ─────────────────
 #
 # 字段组装、依赖版本快照与显存读取都搬进 observability/health.py；本文件只保留取样顺序：
-# 先持 STATE_LOCK / BOOT_LOCK 取一份不可变快照（函数返回即释放），**再**取 queue_depth()。
+# 先持 STATE_LOCK / BOOT_LOCK 取一份不可变快照（函数返回即释放），**再**取队列深度。
 # 顺序不能反：`_finish_job` 的方向是 JOB_LOCK → STATE_LOCK，/health 若在持 STATE_LOCK 时
 # 去拿 JOB_LOCK 就是反向嵌套（架构规格 §5.8，会死锁）。
 
@@ -1125,7 +1067,7 @@ def health_payload() -> dict:
         snapshot,
         version=protocol_version(),
         idle_timeout_sec=CONFIG.idle_timeout_sec,
-        queue_depth=queue_depth(),
+        queue_depth=JOB_STORE.queue_depth(),
     )
 
 
@@ -1133,13 +1075,13 @@ def health_payload() -> dict:
 # HTTP 传输层（实现在 remote/transport/http_server.py）
 #
 # 路由分派、Bearer 鉴权与「异常 → 状态码」映射都搬进 transport/http_server.py；本文件
-# 只保留**装配**：把本模块的符号包成 lambda 交给 HttpApi，调用点才解析实现——这样单测
-# 的 `mock.patch.object(d, "submit_job")` 之类的替换仍然生效（直接传函数对象会把构造
-# 时刻的实现绑死，断言会静默测到旧对象，见架构规格 §1.3.6）。
+# 只保留**装配**：把持有者包成 lambda 交给 HttpApi，调用点才解析实现——这样单测的
+# `mock.patch.object(d.JOB_STORE, "submit")` 之类的替换仍然生效（直接传绑定方法会把
+# 构造时刻的实现绑死，断言会静默测到旧对象，见架构规格 §1.3.6）。
 #
 # 为什么 /health 的取样留在本文件：它拥有锁顺序（先持 STATE_LOCK 取快照，释放后再取
-# queue_depth），是规格 §5.8 唯一方向的守卫点；单测按 `d.STATE_LOCK` / `d.queue_depth`
-# 观察它，搬进 transport 会让这两个替换点静默失效。
+# 队列深度），是规格 §5.8 唯一方向的守卫点；单测按 `d.STATE_LOCK` /
+# `d.JOB_STORE.queue_depth` 观察它，搬进 transport 会让这两个替换点静默失效。
 # ─────────────────────────────────────────────────────────────────────────────
 
 from remote.transport.http_server import (  # noqa: E402
@@ -1156,9 +1098,9 @@ HTTP_API = HttpApi(
     request_body_limit=lambda: _request_body_limit(),
     health_payload=lambda: health_payload(),
     log_since=lambda since: log_since(since),
-    get_job=lambda job_id: get_job(job_id),
-    job_payload=lambda job: job_payload(job),
-    submit_job=lambda *args, **kwargs: submit_job(*args, **kwargs),
+    get_job=lambda job_id: JOB_STORE.get(job_id),
+    job_payload=lambda job: JOB_STORE.payload(job),
+    submit_job=lambda *args, **kwargs: JOB_STORE.submit(*args, **kwargs),
     validate_generate_spec=lambda spec: validate_generate_spec(spec),
     parse_reference_spec=lambda raw, pipeline_spec: parse_reference_spec(raw, pipeline_spec),
     normalize_job_id=lambda raw: normalize_job_id(raw),
@@ -1216,25 +1158,11 @@ TUNNEL = TunnelSupervisor(
     fail_boot_fn=lambda code, message, tunnel=False: fail_boot(code, message, tunnel=tunnel),
 )
 
-# ── 门面别名（Batch 3 随 daemon 门面一起删） ──────────────────────────────────
-#
-# 与缓存域同一口径：实现已在 remote/infra/tunnel.py，下面只是 `TUNNEL` 上同名方法的
-# 别名。**替换这些名字不会改变内部行为**——内部调用一律走 self.*。要替换二进制参数
-# （路径 / URL / SHA256 / 大小上限），改 `TUNNEL.binary` 的字段；patch
-# `daemon.CLOUDFLARED_*` 只是改同一份数值的只读副本，不会影响下载路径。
-ensure_cloudflared = TUNNEL.ensure_cloudflared
-tunnel_url_regex = TUNNEL.url_regex
-build_tunnel_plan = TUNNEL.build_plan
-tunnel_should_stop = TUNNEL.should_stop
-_spawn_tunnel_process = TUNNEL.spawn
-_drain_tunnel_output = TUNNEL.drain
-tunnel_attempt = TUNNEL.attempt
-start_tunnel = TUNNEL.start
-recover_tunnel_error = TUNNEL.recover_error
-announce_tunnel_ready = TUNNEL.announce_ready
-tunnel_wait_exit = TUNNEL.wait_exit
-tunnel_monitor = TUNNEL.monitor
-tunnel_restart_delay = TUNNEL.restart_delay
+# 切片⑥f 删掉了这里原有的 13 个**别名**（ensure_cloudflared / start_tunnel /
+# tunnel_monitor / _spawn_tunnel_process 等）。理由与缓存域相同：它们只是 `TUNNEL` 上
+# 同名方法的转手，内部调用一律 `self.*`，替换别名不会改变行为却会让断言保持绿色。
+# 现在隧道域只有 `TUNNEL` 一个入口；二进制参数（路径 / URL / SHA256 / 大小上限）改
+# `TUNNEL.binary` 的字段，patch `daemon.CLOUDFLARED_*` 只改只读副本、不影响下载路径。
 
 
 # `tunnel_boot`（拉起常驻监管线程）随进程生命周期搬到 remote/app.py 的
@@ -1251,7 +1179,8 @@ tunnel_restart_delay = TUNNEL.restart_delay
 #
 # 装配留在本文件的原因：本文件仍是入口模块——启动器按 `daemon.main` /
 # `daemon.set_embedded_config` 取符号，test/kernel-package.mjs 按
-# `daemon.EMBEDDED_CONFIG_B64` 验证注入落地。Batch 3 移除门面时这两件事一起搬。
+# `daemon.EMBEDDED_CONFIG_B64` 验证注入落地。这三件事搬进 app.py 要同时改启动器与
+# 打包测试，单列在架构规格 §2.1 的待推进项里（⑥f 只删转发层，不动入口符号）。
 # ─────────────────────────────────────────────────────────────────────────────
 
 from remote.app import GPU_UNAVAILABLE_MESSAGE, DaemonApp  # noqa: E402, F401
@@ -1275,11 +1204,11 @@ APP = DaemonApp(
     set_phase=lambda phase, detail=None: set_phase(phase, detail),
     fail_boot=lambda code, message: fail_boot(code, message),
     publish_ready=lambda: publish_ready(),
-    active_job_count=lambda: active_job_count(),
-    queue_depth=lambda: queue_depth(),
+    active_job_count=lambda: JOB_STORE.active_count(),
+    queue_depth=lambda: JOB_STORE.queue_depth(),
     start_http_server=lambda port: start_http_server(port),
     start_job_worker=lambda: start_job_worker(),
-    tunnel_monitor=lambda port: tunnel_monitor(port),
+    tunnel_monitor=lambda port: TUNNEL.monitor(port),
     cleanup_before_exit=lambda: _cleanup_before_exit(),
     announce_interval_sec=TUNNEL_ANNOUNCE_SEC,
 )

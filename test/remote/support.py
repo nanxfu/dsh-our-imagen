@@ -380,7 +380,6 @@ class DaemonUnitTest(unittest.TestCase):
         reset_stateful_singletons()
         # job 表是进程级状态（JobStore 单例），用例之间必须清干净。
         d.JOB_STORE.clear()
-        d.JOB_WAKE.clear()
         # 缓存探针的"进程内只打一次"也是进程级状态：不复位的话，只有第一个用例能看到
         # 探针日志，后面的用例会在"以为打了、其实没打"的假象里做断言。
         d.CACHE.reset_probe()
