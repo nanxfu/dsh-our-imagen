@@ -90,6 +90,22 @@ export function guidanceKindOf(code) {
   return 'generic'
 }
 
+/** 必须留在顶部横幅的全局阻塞/环境前置指引（其余降级为右上角轻量通知）。 */
+const BANNER_KINDS = new Set(['auth', 'cli', 'gpu', 'network', 'session'])
+
+/**
+ * 指引展示通道分流：
+ * - 'banner'：阻塞主流程或需要较长交互（登录授权、命令行配置、GPU 权限、网络中断、会话异常），
+ *   留在顶部横幅；
+ * - 'toast'：局部可恢复/一次性提醒（显存不足、单次生成失败、休眠/关闭提示、通用失败），
+ *   落到右上角通知，不挤压工作区。
+ * - ''：无指引。
+ */
+export function guidanceSurfaceOf(kind) {
+  if (!kind) return ''
+  return BANNER_KINDS.has(kind) ? 'banner' : 'toast'
+}
+
 /** 折叠空白并截断，避免日志尾巴把卡片撑坏。 */
 export function shortText(value, max = 240) {
   if (typeof value !== 'string') return ''

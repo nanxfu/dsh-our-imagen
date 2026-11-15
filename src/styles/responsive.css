@@ -238,9 +238,12 @@
     padding: 10px 13px 12px;
   }
 
-  .ofs-toast {
-    bottom: 24px;
-    max-width: 86%;
+  .ofs-toast-stack {
+    top: 58px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+    align-items: stretch;
   }
 
   .ofs-stage-foot {

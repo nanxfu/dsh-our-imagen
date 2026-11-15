@@ -27,7 +27,7 @@ import {
   sanitizeSession,
 } from '../src/logic/logs.js'
 import { NOTICE_TITLE_PREFIX, completionNotice, isCompletion, stripNoticePrefix } from '../src/logic/notice.js'
-import { negativePromptActive } from '../shared/models-guide.js'
+import { negativePromptActive, safeResetPatch, stepModeOf, stepTierOf } from '../shared/models-guide.js'
 import * as contract from '../shared/contract.js'
 import * as studioPresets from '../src/studio/presets.js'
 import { styles, token } from '../src/theme.js'
@@ -993,6 +993,14 @@ await check('错误码映射到指引类型', () => {
   // 远端没拿到 GPU 单独归到 gpu 卡：不能复用「生成失败重试」，重试只会再耗一次排队。
   assert.equal(logic.guidanceKindOf('gpu_unavailable'), 'gpu')
   assert.notEqual(logic.guidanceKindOf('gpu_unavailable'), 'generate')
+  // 指引展示通道分流：全局阻塞卡留顶部横幅，其余局部/可恢复提示进右上角通知。
+  assert.equal(logic.guidanceSurfaceOf(''), '')
+  for (const kind of ['auth', 'cli', 'gpu', 'network', 'session']) {
+    assert.equal(logic.guidanceSurfaceOf(kind), 'banner', `${kind} 应留在顶部横幅`)
+  }
+  for (const kind of ['oom', 'generate', 'sleep', 'closed', 'generic']) {
+    assert.equal(logic.guidanceSurfaceOf(kind), 'toast', `${kind} 应降级到右上角通知`)
+  }
   assert.equal(logic.KAGGLE_ACCOUNT_URL, 'https://www.kaggle.com/settings')
   assert.equal(logic.KAGGLE_SETTINGS_URL, 'https://www.kaggle.com/settings/api')
   // 凭据口径对齐 kaggle CLI 2.x：kaggle auth login 写 OAuth 凭据 credentials.json
@@ -1255,15 +1263,33 @@ await check('切换预设按负向能力写入模型负向词层', () => {
   assert.equal(off.negative, 'my own', '展示文本不得残留上一个预设的负向词')
   assert.equal(off.cfg, 0, '套用新预设推荐 CFG')
 
-  // 切到真实消费负向词的预设（cfg=7）：模型层整层替换，用户层保留。
+  // 切到真实消费负向词的预设（cfg=7）：模型层整层替换，用户层保留；已有尺寸与比例原样保留。
   const on = logic.presetSelectPatch(animagine, form, all)
   assert.equal(on.negativeLayers.model, 'nsfw, lowres, watermark')
   assert.equal(on.negativeLayers.user, 'my own')
   assert.equal(on.negative, 'nsfw, lowres, watermark, my own')
   assert.equal(on.steps, 28, '套用新预设推荐步数')
   assert.equal(on.cfg, 7, '套用新预设推荐引导强度')
-  assert.equal(on.width, 1024)
-  assert.equal(on.height, 1024)
+  assert.equal(on.width, undefined, '已有合法宽高时切模型不覆盖尺寸')
+  assert.equal(on.height, undefined)
+
+  // 已选 16:9 或自定义尺寸后切到任意模型（含默认 512 的 turbo），保留当前宽高与画幅比例。
+  const keepRatio = logic.presetSelectPatch(
+    { id: 'sdxl-turbo', size: 512, steps: 4, cfg: 0, negativeHint: '' },
+    { ...form, width: 1152, height: 648 },
+    all,
+  )
+  assert.equal(keepRatio.width, undefined, '切模型应保留用户已选 16:9 宽度')
+  assert.equal(keepRatio.height, undefined, '切模型应保留用户已选 16:9 高度')
+
+  // 从极小尺寸（如 Turbo 512×512）切到最低安全尺寸更大的模型时，按原画幅等比放大；不破坏合规大尺寸。
+  const rescued = logic.presetSelectPatch(
+    { id: 'realvis-v5', size: 1024, sizeOptions: [768, 1024], steps: 30, cfg: 5, negativeHint: '' },
+    { ...form, presetId: 'sdxl-turbo', width: 512, height: 288 },
+    all,
+  )
+  assert.equal(rescued.width, 1024, '从 512 切到 minSize>=768 模型应等比升至目标默认边长')
+  assert.equal(rescued.height, 576, '放大时应保持原 16:9 画幅比例')
 
   // 无负向能力的模型永不写模型层。
   const fluxPatch = logic.presetSelectPatch(flux, form, all)
@@ -1282,10 +1308,10 @@ await check('切换预设按负向能力写入模型负向词层', () => {
   assert.equal(legacyUser.negativeLayers.model, '')
   assert.equal(legacyUser.negativeLayers.user, 'my own')
 
-  // 越界推荐值按契约钳制；非法入参不产生补丁。
+  // 首次初始化（presetId 为空）时写入预设默认尺寸，越界推荐值按契约钳制；非法入参不产生补丁。
   const oversized = logic.presetSelectPatch(
     { id: 'x', size: 4096, steps: 999, cfg: 99, negativeHint: '' },
-    form,
+    { ...form, presetId: '' },
     all,
   )
   assert.equal(oversized.width, LIMITS.width.max)
@@ -1359,49 +1385,7 @@ await check('一键英译：只有模型真的翻译了才算成功', () => {
   assert.equal(logic.translateOutcomeOf(undefined).ok, false)
 })
 
-await check('分辨率档位按长边换算，短边对齐契约步长', () => {
-  // 档位是「长边」数组：在「画面设置」里以分辨率档位展示，与画幅比例是不同概念。
-  assert.deepEqual(logic.sizeTiersOf({ sizeOptions: [768, 1024, 1152], size: 1024 }), [768, 1024, 1152])
-  assert.deepEqual(
-    logic.sizeTiersOf({ sizeOptions: [1024, 768, 1024, 'x', -8], size: 1024 }),
-    [768, 1024],
-    '去重、丢弃非法值并排序',
-  )
-  assert.deepEqual(logic.sizeTiersOf({ size: 1024 }), [1024], '缺 sizeOptions 时回退预设 size')
-  assert.deepEqual(logic.sizeTiersOf({ sizeOptions: [], size: 99999 }), [LIMITS.width.max], '回退值同样按契约钳制')
-  assert.deepEqual(logic.sizeTiersOf(null), [], '没有预设时没有档位')
-
-  // tierPatchOf：长边 = 档位，短边按比例四舍五入并对齐 8 的步长。
-  assert.deepEqual(logic.tierPatchOf('1:1', 1024), { width: 1024, height: 1024 })
-  assert.deepEqual(logic.tierPatchOf('16:9', 1024), { width: 1024, height: 576 })
-  assert.deepEqual(logic.tierPatchOf('9:16', 1024), { width: 576, height: 1024 })
-  assert.deepEqual(logic.tierPatchOf('4:3', 768), { width: 768, height: 576 })
-  assert.deepEqual(logic.tierPatchOf('3:4', 768), { width: 576, height: 768 })
-  assert.deepEqual(logic.tierPatchOf('16:9', 1152), { width: 1152, height: 648 })
-  // 任意比例、任意档位：短边都对齐 LIMITS.width.step，且宽高都落在契约边界内。
-  for (const ratio of [...RATIO_IDS, '21:9']) {
-    for (const tier of [512, 768, 1024, 1152, 1536]) {
-      const patch = logic.tierPatchOf(ratio, tier)
-      assert.ok(patch.width >= LIMITS.width.min && patch.width <= LIMITS.width.max, `${ratio}@${tier} 宽度越界：${patch.width}`)
-      assert.ok(patch.height >= LIMITS.height.min && patch.height <= LIMITS.height.max, `${ratio}@${tier} 高度越界：${patch.height}`)
-      assert.equal(patch.width % LIMITS.width.step, 0, `${ratio}@${tier} 宽度未对齐步长：${patch.width}`)
-      assert.equal(patch.height % LIMITS.height.step, 0, `${ratio}@${tier} 高度未对齐步长：${patch.height}`)
-    }
-  }
-  // 档位本身在契约边界内时长边保持不变。
-  assert.equal(Math.max(logic.tierPatchOf('16:9', 1024).width, logic.tierPatchOf('16:9', 1024).height), 1024)
-  // 比例对象（DEFAULT_RATIOS 条目）与 id 字符串等价；非法比例退化为正方形。
-  assert.deepEqual(logic.tierPatchOf(DEFAULT_RATIOS[0], 768), logic.tierPatchOf(DEFAULT_RATIOS[0].id, 768))
-  assert.deepEqual(logic.tierPatchOf('weird', 1024), { width: 1024, height: 1024 })
-
-  // selectedTierOf：长边命中档位才返回该档；手动改过宽高返回 null。
-  const tiers = [768, 1024, 1152]
-  assert.equal(logic.selectedTierOf(1024, 1024, tiers), 1024)
-  assert.equal(logic.selectedTierOf(1152, 648, tiers), 1152, '16:9 的长边 1152 命中 1152 档')
-  assert.equal(logic.selectedTierOf(768, 1024, tiers), 1024, '竖构图按长边命中档位')
-  assert.equal(logic.selectedTierOf(800, 600, tiers), null)
-  assert.equal(logic.selectedTierOf(1024, 1024, null), null)
-
+await check('自定义宽高补丁按契约边界与步长钳制', () => {
   // 自定义宽高：只改传入的一边，按契约边界与 8 的步长钳制。
   assert.deepEqual(logic.customSizePatch({ width: 99999 }), { width: LIMITS.width.max })
   assert.deepEqual(logic.customSizePatch({ height: 1 }), { height: LIMITS.height.min })
@@ -1979,6 +1963,35 @@ await check('完成提醒纯函数', () => {
   assert.equal(isCompletion(running, { id: 'job-1', status: 'failed' }), false)
   assert.equal(stripNoticePrefix(`${NOTICE_TITLE_PREFIX}工作台`), '工作台')
   assert.equal(stripNoticePrefix('工作台'), '工作台')
+})
+
+await check('模型语言能力、步数分治模式与安全重置补丁', () => {
+  assert.equal(logic.presetNeedsEnglish({ id: 'flux2-klein-4b', supportsChinese: true, promptStyle: 'natural' }), false)
+  assert.equal(logic.presetNeedsEnglish({ id: 'realvis-v5', supportsChinese: false, promptStyle: 'natural' }), true)
+  assert.equal(logic.presetNeedsEnglish(null), true)
+
+  const usable = {
+    id: 'realvis-v5',
+    tier: 'usable',
+    size: 1024,
+    steps: 30,
+    cfg: 5,
+    stepRange: { min: 20, max: 45, step: 1, fast: 22, balanced: 30, fine: 40 },
+  }
+  const fast = { id: 'sdxl-turbo', tier: 'fast', size: 512, steps: 4, cfg: 0, stepRange: null }
+
+  assert.equal(stepModeOf(usable), 'range')
+  assert.equal(stepModeOf(fast), 'fixed')
+  assert.equal(stepTierOf(usable, 20), 'fast')
+  assert.equal(stepTierOf(usable, 22), 'fast')
+  assert.equal(stepTierOf(usable, 30), 'balanced')
+  assert.equal(stepTierOf(usable, 40), 'fine')
+  assert.equal(stepTierOf(usable, 45), 'fine')
+  assert.equal(stepTierOf(fast, 4), 'fixed')
+
+  assert.deepEqual(safeResetPatch(usable), { width: 1024, height: 1024, steps: 30, cfg: 5 })
+  assert.deepEqual(safeResetPatch(fast), { width: 512, height: 512, steps: 4, cfg: 0 })
+  assert.deepEqual(safeResetPatch(null), { width: 1024, height: 1024, steps: 4, cfg: 1 })
 })
 
 const failed = results.filter((item) => !item.ok)

@@ -457,6 +457,71 @@
   box-shadow: var(--ofs-focus-ring);
 }
 
+/* 步数按模型分治：连续滑块与档位刻度覆盖通用 .ofs-field input 盒子样式 */
+.ofs-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ofs-step-readout {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ofs-accent);
+}
+
+.ofs-step-readout.is-fixed {
+  color: var(--ofs-ink-3);
+}
+
+.ofs-field input.ofs-step-slider {
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  accent-color: var(--ofs-accent);
+  cursor: pointer;
+}
+
+.ofs-field input.ofs-step-slider:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ofs-step-ticks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.ofs-step-tick {
+  appearance: none;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ofs-ink-3);
+  font-size: 10.5px;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
+}
+
+.ofs-step-tick:hover {
+  color: var(--ofs-ink);
+  background: var(--ofs-card);
+}
+
+.ofs-step-tick.is-on {
+  border-color: var(--ofs-accent-soft-border);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+  font-weight: 600;
+}
+
 /* ── 底部生成：张数分段 / 主按钮 / 规格摘要 ───────────────────── */
 .ofs-qty-row {
   display: flex;
@@ -583,9 +648,14 @@
   gap: 2px;
 }
 
-/* 英译是次级动作：默认用静色，悬停才提到强调色，不和润色抢注意力。 */
+/* 英译是次级动作：默认用静色，悬停或含中文建议翻译时提到强调色，不另占一行说明。 */
 .ofs-translate-action {
   color: var(--ofs-ink-2);
+}
+
+.ofs-translate-action.is-suggested {
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
 }
 
 .ofs-translate-action:hover:not(:disabled) {
@@ -625,11 +695,6 @@
   text-overflow: ellipsis;
 }
 
-/* 有参考图时：画面设置只说明「尺寸跟随参考图」，不再渲染任何尺寸控件 */
-.ofs-follow-reference-hint {
-  text-align: left;
-}
-
 /* 紧凑一行两列：宽 [1024] × 高 [1024]（不复用带卡片内边距的 .ofs-grid2） */
 .ofs-size-custom {
   display: flex;
@@ -663,44 +728,6 @@
   font-size: 11px;
 }
 
-/* ── 方形尺寸档位（1:1 推荐尺寸，点选同时改写宽高） ────────────── */
-.ofs-size-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-}
-
-.ofs-size {
-  appearance: none;
-  height: 26px;
-  padding: 0 10px;
-  border: 1px solid var(--ofs-sunken-border);
-  border-radius: var(--ofs-r-pill);
-  background: var(--ofs-card);
-  color: var(--ofs-ink-2);
-  font-size: 11px;
-  font-weight: 550;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  transition:
-    border-color 150ms ease,
-    background-color 150ms ease,
-    color 150ms ease;
-}
-
-.ofs-size:hover {
-  border-color: var(--ofs-accent-soft-border);
-  color: var(--ofs-ink);
-}
-
-.ofs-size.is-on {
-  border-color: var(--ofs-accent);
-  background: var(--ofs-accent-soft);
-  color: var(--ofs-accent);
-  box-shadow: 0 0 0 1px var(--ofs-accent);
-}
-
 /* ── 自定义宽高（默认折叠，按需展开精调） ────────────────────── */
 .ofs-custom-toggle {
   appearance: none;
@@ -727,11 +754,6 @@
   flex-direction: column;
   gap: 6px;
   padding-top: 2px;
-}
-
-.ofs-size-hint {
-  margin-top: 0;
-  text-align: left;
 }
 
 .ofs-link {

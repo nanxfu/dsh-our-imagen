@@ -1666,9 +1666,49 @@ def build_pipeline(pipeline_spec: dict):
     import torch
     from diffusers import (
         AutoPipelineForText2Image,
+        DPMSolverMultistepScheduler,
+        DPMSolverSinglestepScheduler,
+        EulerAncestralDiscreteScheduler,
         EulerDiscreteScheduler,
         StableDiffusionXLPipeline,
     )
+
+    def _apply_scheduler(pipe, default_type: str = "") -> None:
+        scheduler_spec = pipeline_spec.get("scheduler")
+        if not scheduler_spec and not default_type:
+            return
+        spec = scheduler_spec or {}
+        scheduler_type = str(spec.get("type") or default_type).strip().lower()
+        if not scheduler_type:
+            return
+        if scheduler_type == "euler":
+            spacing = str(spec.get("timestepSpacing") or "trailing")
+            pipe.scheduler = EulerDiscreteScheduler.from_config(
+                pipe.scheduler.config, timestep_spacing=spacing
+            )
+            log(f"[load] 调度器 EulerDiscreteScheduler(timestep_spacing={spacing})")
+        elif scheduler_type == "euler-a":
+            pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(
+                pipe.scheduler.config
+            )
+            log("[load] 调度器 EulerAncestralDiscreteScheduler")
+        elif scheduler_type == "dpmpp-sde-karras":
+            pipe.scheduler = DPMSolverSinglestepScheduler.from_config(
+                pipe.scheduler.config, use_karras_sigmas=True
+            )
+            log("[load] 调度器 DPMSolverSinglestepScheduler(use_karras_sigmas=True)")
+        elif scheduler_type == "dpmpp-2m-karras":
+            pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+                pipe.scheduler.config, use_karras_sigmas=True
+            )
+            log("[load] 调度器 DPMSolverMultistepScheduler(use_karras_sigmas=True)")
+        elif scheduler_type == "dpmpp-2m-sde-karras":
+            pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+                pipe.scheduler.config, use_karras_sigmas=True, algorithm_type="sde-dpmsolver++"
+            )
+            log("[load] 调度器 DPMSolverMultistepScheduler(use_karras_sigmas=True, algorithm_type=sde-dpmsolver++)")
+        else:
+            log(f"[load] 未识别的 scheduler.type={scheduler_type}，沿用底座默认调度器")
 
     kwargs: dict = {"torch_dtype": torch.float16, "use_safetensors": True}
     if variant:
@@ -1688,8 +1728,9 @@ def build_pipeline(pipeline_spec: dict):
         return runtime, f"anima:{base}"
 
     if loader == "sdxl":
-        # 整管直出：turbo / base 都走这里
+        # 整管直出：turbo / base / realvis 都走这里；若配置了 scheduler 则覆盖底座默认调度器
         pipe = _from_pretrained(AutoPipelineForText2Image, base_source, kwargs, loader)
+        _apply_scheduler(pipe)
         pipe = pipe.to("cuda")
         return pipe, f"sdxl:{base}"
 
@@ -1701,17 +1742,7 @@ def build_pipeline(pipeline_spec: dict):
             raise RequestError("sdxl-lora 需要 lora.repo 与 lora.weight")
 
         pipe = _from_pretrained(StableDiffusionXLPipeline, base_source, kwargs, loader)
-
-        scheduler_spec = pipeline_spec.get("scheduler") or {}
-        scheduler_type = str(scheduler_spec.get("type") or "euler").lower()
-        if scheduler_type == "euler":
-            spacing = str(scheduler_spec.get("timestepSpacing") or "trailing")
-            pipe.scheduler = EulerDiscreteScheduler.from_config(
-                pipe.scheduler.config, timestep_spacing=spacing
-            )
-            log(f"[load] 调度器 EulerDiscreteScheduler(timestep_spacing={spacing})")
-        else:
-            log(f"[load] 未识别的 scheduler.type={scheduler_type}，沿用底座默认调度器")
+        _apply_scheduler(pipe, default_type="euler")
 
         # P2.1：LoRA 仓库预挂载时优先用本地权重文件；否则按文件名下载再按 repo+weight_name 载入
         # （与 bench/lightning/run.py 一致）。

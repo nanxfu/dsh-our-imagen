@@ -16,7 +16,15 @@
   "gpus": 1,
   "tier": "usable",
   "size": 1024,
-  "steps": 25,
+  "steps": 30,
+  "stepRange": {
+    "min": 20,
+    "max": 45,
+    "step": 1,
+    "fast": 22,
+    "balanced": 30,
+    "fine": 40
+  },
   "cfg": 5,
   "negativeHint": "blurry, low quality, deformed, extra limbs, ugly, bad anatomy",
   "promptStyle": "natural",
@@ -26,13 +34,16 @@
     1024
   ],
   "runtime": "default",
+  "supportsChinese": false,
   "supportsImg2Img": true,
   "supportsNegative": true,
   "pipeline": {
     "loader": "sdxl",
     "base": "SG161222/RealVisXL_V5.0",
     "lora": null,
-    "scheduler": null,
+    "scheduler": {
+      "type": "dpmpp-sde-karras"
+    },
     "variant": "fp16",
     "downloadGb": 6.6,
     "allowPatterns": [

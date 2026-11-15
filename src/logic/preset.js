@@ -1,9 +1,9 @@
 /**
- * 预设切换、分辨率档位与提示词语言的纯逻辑。
+ * 预设切换与提示词语言的纯逻辑。
  *
- * 切换预设要同时处理三件事：套用推荐尺寸 / 步数 / 引导强度、替换模型负向词层、
- * 判断当前提示词是否需要英文提醒。分辨率档位按「长边」定义，短边跟随当前画幅比例
- * 换算；这些规则不碰 React 与网络，便于离线断言。
+ * 切换预设要同时处理三件事：按需初始化默认尺寸、套用推荐步数 / 引导强度、
+ * 替换模型负向词层，并判断当前提示词是否需要英文提醒；这些规则不碰 React 与网络，
+ * 便于离线断言。
  *
  * 0.10.0 起不再有静态风格预设：这里不处理风格层与风格后缀。
  */
@@ -50,12 +50,13 @@ export function ratioIdOf(width, height) {
 /**
  * 当前预设是否需要英文提示词。
  *
- * 九个预设都按英文提示词训练；保留 `chinese` 作为将来「原生中文模型」的显式豁免值，
- * 目前没有预设使用它，因此含中文的提示词对所有现役预设都会提示（只是软提示，不拦截生成）。
+ * 原生支持中文的模型（`supportsChinese === true`，例如 FLUX.2-klein-4B）免于提示；
+ * 仅按英文语料训练的 SDXL / Playground / Animagine / Anima 模型返回 true，提示用户使用英文或点击英译。
  */
 export function presetNeedsEnglish(preset) {
   if (!preset || typeof preset !== 'object') return true
-  return preset.promptStyle !== 'chinese'
+  if (preset.supportsChinese === true || preset.promptStyle === 'chinese') return false
+  return true
 }
 
 function hintOf(preset) {
@@ -63,71 +64,8 @@ function hintOf(preset) {
 }
 
 /**
- * 预设的分辨率档位（长边）：`sizeOptions` 是「长边像素」数组，与画幅比例是两行不同概念。
- *
- * 读到非法值（非数字 / 非正数）直接丢弃，统一按契约边界钳制并去重、升序排列；
- * 旧预设没有 `sizeOptions` 时回退到预设自身的 `size`，保证总有一档可选。
- */
-export function sizeTiersOf(preset) {
-  const source = preset && typeof preset === 'object' ? preset : {}
-  const raw = Array.isArray(source.sizeOptions) ? source.sizeOptions : []
-  const tiers = []
-  for (const value of raw) {
-    const number = Number(value)
-    if (!Number.isFinite(number) || number <= 0) continue
-    const tier = clampSize(number)
-    if (!tiers.includes(tier)) tiers.push(tier)
-  }
-  if (tiers.length === 0) {
-    const fallback = Number(source.size)
-    if (Number.isFinite(fallback) && fallback > 0) tiers.push(clampSize(fallback))
-  }
-  return tiers.sort((left, right) => left - right)
-}
-
-/** 比例入参归一：接受 `{ width, height }`、`{ id }` 或契约比例字符串。 */
-function ratioSpecOf(ratio) {
-  if (ratio && typeof ratio === 'object') {
-    const width = Number(ratio.width)
-    const height = Number(ratio.height)
-    if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
-      return { width, height }
-    }
-  }
-  const raw = typeof ratio === 'string' ? ratio : String((ratio && ratio.id) || '')
-  const parts = raw.split(':').map((part) => Number(part))
-  if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) return { width: parts[0], height: parts[1] }
-  return null
-}
-
-/**
- * 画幅比例 + 长边档位 → 宽高。
- *
- * 长边取档位值；短边按比例四舍五入并对齐契约步长（`LIMITS.width.step`），
- * 最后统一按契约边界钳制。比例缺失时退化为正方形（长边即宽高）。
- */
-export function tierPatchOf(ratio, tier) {
-  const long = clampSize(tier)
-  const spec = ratioSpecOf(ratio)
-  if (!spec || spec.width === spec.height) return { width: long, height: long }
-  if (spec.width > spec.height) {
-    return { width: long, height: clampSize(Math.round((long * spec.height) / spec.width)) }
-  }
-  return { width: clampSize(Math.round((long * spec.width) / spec.height)), height: long }
-}
-
-/**
- * 当前宽高命中的长边档位；长边不在给定档位里（手动改过宽高）时返回 null。
- */
-export function selectedTierOf(width, height, tiers) {
-  const list = Array.isArray(tiers) ? tiers : []
-  const long = Math.max(clampSize(width), clampSize(height))
-  return list.includes(long) ? long : null
-}
-
-/**
  * 自定义宽高补丁：只处理传入的字段（宽或高单独改），按契约边界与步长钳制。
- * 传给 `patchForm()` 后分别更新宽/高，比例行与档位的选中态由尺寸反推。
+ * 传给 `patchForm()` 后分别更新宽/高，比例高亮由尺寸反推。
  *
  * 空串 / null 交给 `clampSize` 的缺失值约定（回退 1024）；「清空后失焦恢复原值」
  * 属于输入框编辑态，由 Rail 的局部草稿层处理，不在这里兜。
@@ -164,6 +102,11 @@ export function referencePresetOf(presets) {
 /**
  * 切换预设 → 表单补丁。
  *
+ * 尺寸与画幅跟随原则：
+ *  - 用户已经选过预设且当前宽高合法时，切模型保留当前画幅比例与像素尺寸，
+ *    避免刚选好的 16:9 / 3:4 / 自定义宽高被切模型抹回 1:1；
+ *  - 首次初始化（form.presetId 为空）或当前宽高缺失时，才回填预设默认尺寸。
+ *
  * 负向提示词的跟随规则（按层）：
  *  - model 层：新预设在当前 CFG 下「真的会消费负向词」时写入其 negativeHint，
  *    否则清空（默认 CFG=0 的极速模型、无负向能力的模型都不该挂着一串不发出去的词）；
@@ -173,10 +116,28 @@ export function presetSelectPatch(next, current, presets) {
   const target = next && typeof next === 'object' && next.id ? next : null
   if (!target) return {}
   const form = current && typeof current === 'object' ? current : {}
+  const hasActiveSize = Boolean(form.presetId) && Number(form.width) > 0 && Number(form.height) > 0
   const patch = {
     presetId: target.id,
-    width: clampSize(target.size || form.width),
-    height: clampSize(target.size || form.height),
+  }
+  if (!hasActiveSize) {
+    patch.width = clampSize(target.size || form.width)
+    patch.height = clampSize(target.size || form.height)
+  } else {
+    // 若从低分辨率模型（如 512×512 Turbo）切到最低安全尺寸更大的模型，按原画幅等比放大避免畸变。
+    const options = Array.isArray(target.sizeOptions)
+      ? target.sizeOptions.map(Number).filter((n) => Number.isFinite(n) && n > 0)
+      : []
+    const minSafe = options.length > 0 ? Math.min(...options) : 0
+    const curW = Number(form.width)
+    const curH = Number(form.height)
+    const curLong = Math.max(curW, curH)
+    const targetSize = clampSize(target.size || minSafe)
+    if (minSafe > 0 && curLong > 0 && curLong < minSafe && targetSize > curLong) {
+      const scale = targetSize / curLong
+      patch.width = clampSize(curW * scale)
+      patch.height = clampSize(curH * scale)
+    }
   }
   const steps = clampInt(target.steps, LIMITS.steps.min, LIMITS.steps.max, null)
   if (steps !== null) patch.steps = steps

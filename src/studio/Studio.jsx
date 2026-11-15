@@ -13,6 +13,7 @@ import React from 'react'
 
 import { CSS } from '../styles.js'
 import { useNow } from '../hooks/useNow.js'
+import { guidanceSurfaceOf } from '../logic/guidance.js'
 import { sessionElapsedMs } from '../logic/status.js'
 import { ChatPanel } from './ChatPanel.jsx'
 import { Filmstrip } from './Filmstrip.jsx'
@@ -45,6 +46,13 @@ export function Studio(props) {
     ? <ChatPanel t={t} ui={ui} form={form} chat={chat} library={library} actions={actions} />
     : <Rail t={t} ui={ui} form={form} actions={actions} />
 
+  // 指引按严重度分流：全局阻塞/环境前置卡走顶部横幅，局部可恢复/一次性提醒走右上角通知。
+  const guidanceSurface = guidance && guidance.kind
+    ? (guidance.surface || guidanceSurfaceOf(guidance.kind))
+    : ''
+  const bannerGuidance = guidanceSurface === 'banner' ? guidance : null
+  const noticeGuidance = guidanceSurface === 'toast' ? guidance : null
+
   return (
     <div className="ofs-root">
       <style>{CSS}</style>
@@ -54,7 +62,9 @@ export function Studio(props) {
 
         <SessionBar t={t} status={status} elapsedMs={sessionElapsed} />
 
-        <GuidanceCard t={t} guidance={guidance} compute={compute} actions={actions} ui={ui} />
+        {bannerGuidance ? (
+          <GuidanceCard t={t} guidance={bannerGuidance} compute={compute} actions={actions} ui={ui} />
+        ) : null}
 
         <div className={`ofs-body${ui.view === 'gallery' ? ' is-gallery' : ''}`}>
           {ui.view === 'studio' ? panel : null}
@@ -101,7 +111,7 @@ export function Studio(props) {
 
       {ui.settingsOpen ? <SettingsDrawer t={t} ui={ui} onClose={ui.closeSettings} /> : null}
 
-      <Toast toast={ui.toast} />
+      <Toast t={t} toast={ui.toast} guidance={noticeGuidance} compute={compute} actions={actions} ui={ui} />
     </div>
   )
 }

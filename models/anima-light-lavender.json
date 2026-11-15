@@ -17,6 +17,14 @@
   "tier": "usable",
   "size": 1024,
   "steps": 25,
+  "stepRange": {
+    "min": 18,
+    "max": 40,
+    "step": 1,
+    "fast": 20,
+    "balanced": 25,
+    "fine": 35
+  },
   "cfg": 4,
   "negativeHint": "",
   "promptStyle": "natural",
@@ -27,6 +35,7 @@
     1152
   ],
   "runtime": "default",
+  "supportsChinese": false,
   "supportsImg2Img": false,
   "supportsNegative": true,
   "pipeline": {

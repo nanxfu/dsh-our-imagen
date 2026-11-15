@@ -23,6 +23,7 @@
   "qualityPrefix": "",
   "sizeOptions": [768, 1024],
   "runtime": "default",
+  "supportsChinese": true,
   "supportsImg2Img": false,
   "supportsNegative": false,
   "pipeline": {

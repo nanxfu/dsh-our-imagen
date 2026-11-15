@@ -110,7 +110,14 @@ from anima_runtime import load_anima_runtime  # noqa: E402  # @@INLINE:anima_run
 def load_pipe(spec: dict):
     """按 loader 分支加载 pipeline；返回 (pipe, load_seconds, download_gb)。"""
     import torch
-    from diffusers import AutoPipelineForText2Image, EulerDiscreteScheduler, StableDiffusionXLPipeline
+    from diffusers import (
+        AutoPipelineForText2Image,
+        DPMSolverMultistepScheduler,
+        DPMSolverSinglestepScheduler,
+        EulerAncestralDiscreteScheduler,
+        EulerDiscreteScheduler,
+        StableDiffusionXLPipeline,
+    )
     from huggingface_hub import snapshot_download
 
     loader = str(spec.get("loader") or "")
@@ -159,9 +166,40 @@ def load_pipe(spec: dict):
                 log(f"[load] 第 {index} 次加载失败：{short(exc)}")
         raise RuntimeError(f"加载 {base} 失败：{short(last) if last else '未知原因'}")
 
+    def apply_scheduler(pipe, default_type: str = "") -> None:
+        scheduler_spec = spec.get("scheduler")
+        if not scheduler_spec and not default_type:
+            return
+        sched = scheduler_spec or {}
+        scheduler_type = str(sched.get("type") or default_type).strip().lower()
+        if not scheduler_type:
+            return
+        if scheduler_type == "euler":
+            spacing = str(sched.get("timestepSpacing") or "trailing")
+            pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, timestep_spacing=spacing)
+            log(f"[load] 调度器 EulerDiscreteScheduler(timestep_spacing={spacing})")
+        elif scheduler_type == "euler-a":
+            pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
+            log("[load] 调度器 EulerAncestralDiscreteScheduler")
+        elif scheduler_type == "dpmpp-sde-karras":
+            pipe.scheduler = DPMSolverSinglestepScheduler.from_config(pipe.scheduler.config, use_karras_sigmas=True)
+            log("[load] 调度器 DPMSolverSinglestepScheduler(use_karras_sigmas=True)")
+        elif scheduler_type == "dpmpp-2m-karras":
+            pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config, use_karras_sigmas=True)
+            log("[load] 调度器 DPMSolverMultistepScheduler(use_karras_sigmas=True)")
+        elif scheduler_type == "dpmpp-2m-sde-karras":
+            pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+                pipe.scheduler.config, use_karras_sigmas=True, algorithm_type="sde-dpmsolver++"
+            )
+            log("[load] 调度器 DPMSolverMultistepScheduler(use_karras_sigmas=True, algorithm_type=sde-dpmsolver++)")
+        else:
+            log(f"[load] 未识别的 scheduler.type={scheduler_type}，沿用底座默认调度器")
+
     load_started = time.time()
     if loader == "sdxl":
-        pipe = from_pretrained(AutoPipelineForText2Image).to("cuda")
+        pipe = from_pretrained(AutoPipelineForText2Image)
+        apply_scheduler(pipe)
+        pipe = pipe.to("cuda")
     elif loader == "sdxl-lora":
         lora = spec.get("lora") or {}
         lora_repo = str(lora.get("repo") or "").strip()
@@ -169,12 +207,7 @@ def load_pipe(spec: dict):
         if not lora_repo or not lora_weight:
             raise ValueError("sdxl-lora 需要 lora.repo 与 lora.weight")
         pipe = from_pretrained(StableDiffusionXLPipeline)
-        scheduler_spec = spec.get("scheduler") or {}
-        scheduler_type = str(scheduler_spec.get("type") or "euler").lower()
-        if scheduler_type == "euler":
-            spacing = str(scheduler_spec.get("timestepSpacing") or "trailing")
-            pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, timestep_spacing=spacing)
-            log(f"[load] 调度器 EulerDiscreteScheduler(timestep_spacing={spacing})")
+        apply_scheduler(pipe, default_type="euler")
         from huggingface_hub import hf_hub_download
 
         weight_path = hf_hub_download(lora_repo, lora_weight)

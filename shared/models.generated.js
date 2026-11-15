@@ -32,6 +32,7 @@ export const MODELS = [
       1152
     ],
     "runtime": "default",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "pipeline": {
@@ -61,7 +62,8 @@ export const MODELS = [
       "loadSeconds": 7.7,
       "steadySeconds": 6.2,
       "downloadGb": 6.78
-    }
+    },
+    "stepRange": null
   },
   {
     "id": "hyper-sdxl-8step",
@@ -91,6 +93,7 @@ export const MODELS = [
       1024
     ],
     "runtime": "default",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "pipeline": {
@@ -120,7 +123,8 @@ export const MODELS = [
       "loadSeconds": 14.3,
       "steadySeconds": 7.74,
       "downloadGb": 7.35
-    }
+    },
+    "stepRange": null
   },
   {
     "id": "sdxl-turbo",
@@ -151,6 +155,7 @@ export const MODELS = [
       1024
     ],
     "runtime": "default",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "pipeline": {
@@ -174,7 +179,8 @@ export const MODELS = [
       "loadSeconds": 4,
       "steadySeconds": 1.87,
       "downloadGb": 6.62
-    }
+    },
+    "stepRange": null
   },
   {
     "id": "playground-v2.5",
@@ -195,6 +201,14 @@ export const MODELS = [
     "tier": "usable",
     "size": 1024,
     "steps": 30,
+    "stepRange": {
+      "min": 20,
+      "max": 45,
+      "step": 1,
+      "fast": 22,
+      "balanced": 30,
+      "fine": 40
+    },
     "cfg": 3,
     "negativeHint": "ugly, deformed, noisy, blurry, distorted",
     "promptStyle": "natural",
@@ -204,6 +218,7 @@ export const MODELS = [
       1024
     ],
     "runtime": "default",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "pipeline": {
@@ -251,6 +266,14 @@ export const MODELS = [
     "tier": "usable",
     "size": 1024,
     "steps": 25,
+    "stepRange": {
+      "min": 18,
+      "max": 45,
+      "step": 1,
+      "fast": 20,
+      "balanced": 25,
+      "fine": 38
+    },
     "cfg": 7.5,
     "negativeHint": "blurry, low quality, deformed, extra limbs",
     "promptStyle": "natural",
@@ -261,6 +284,7 @@ export const MODELS = [
       1152
     ],
     "runtime": "default",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "pipeline": {
@@ -304,7 +328,15 @@ export const MODELS = [
     "gpus": 1,
     "tier": "usable",
     "size": 1024,
-    "steps": 25,
+    "steps": 30,
+    "stepRange": {
+      "min": 20,
+      "max": 45,
+      "step": 1,
+      "fast": 22,
+      "balanced": 30,
+      "fine": 40
+    },
     "cfg": 5,
     "negativeHint": "blurry, low quality, deformed, extra limbs, ugly, bad anatomy",
     "promptStyle": "natural",
@@ -314,13 +346,16 @@ export const MODELS = [
       1024
     ],
     "runtime": "default",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "pipeline": {
       "loader": "sdxl",
       "base": "SG161222/RealVisXL_V5.0",
       "lora": null,
-      "scheduler": null,
+      "scheduler": {
+        "type": "dpmpp-sde-karras"
+      },
       "variant": "fp16",
       "downloadGb": 6.6,
       "allowPatterns": [
@@ -370,6 +405,7 @@ export const MODELS = [
       1024
     ],
     "runtime": "default",
+    "supportsChinese": true,
     "supportsImg2Img": false,
     "supportsNegative": false,
     "pipeline": {
@@ -387,7 +423,8 @@ export const MODELS = [
       "loadSeconds": 28.2,
       "steadySeconds": 10.24,
       "downloadGb": 15.2
-    }
+    },
+    "stepRange": null
   },
   {
     "id": "animagine-xl-3.1",
@@ -408,6 +445,14 @@ export const MODELS = [
     "tier": "usable",
     "size": 1024,
     "steps": 28,
+    "stepRange": {
+      "min": 20,
+      "max": 45,
+      "step": 1,
+      "fast": 22,
+      "balanced": 28,
+      "fine": 38
+    },
     "cfg": 7,
     "negativeHint": "nsfw, lowres, (bad), text, error, fewer, extra, missing, worst quality, jpeg artifacts, low quality, watermark, unfinished, displeasing, oldest, early, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract]",
     "promptStyle": "danbooru",
@@ -417,6 +462,7 @@ export const MODELS = [
       1024
     ],
     "runtime": "default",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "pipeline": {
@@ -464,6 +510,14 @@ export const MODELS = [
     "tier": "usable",
     "size": 1024,
     "steps": 25,
+    "stepRange": {
+      "min": 18,
+      "max": 40,
+      "step": 1,
+      "fast": 20,
+      "balanced": 25,
+      "fine": 35
+    },
     "cfg": 4,
     "negativeHint": "",
     "promptStyle": "natural",
@@ -474,6 +528,7 @@ export const MODELS = [
       1152
     ],
     "runtime": "default",
+    "supportsChinese": false,
     "supportsImg2Img": false,
     "supportsNegative": true,
     "pipeline": {
@@ -529,6 +584,7 @@ export const PRESETS = [
     "downloadGb": 6.78,
     "size": 1024,
     "steps": 4,
+    "stepRange": null,
     "cfg": 0,
     "peakVramMb": 10347,
     "loadSeconds": 7.7,
@@ -537,6 +593,7 @@ export const PRESETS = [
     "negativeHint": "blurry, low quality, deformed, extra limbs",
     "promptStyle": "concise",
     "qualityPrefix": "",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "sizeOptions": [
@@ -585,6 +642,7 @@ export const PRESETS = [
     "downloadGb": 7.35,
     "size": 1024,
     "steps": 8,
+    "stepRange": null,
     "cfg": 0,
     "peakVramMb": 10347,
     "loadSeconds": 14.3,
@@ -593,6 +651,7 @@ export const PRESETS = [
     "negativeHint": "blurry, low quality, deformed",
     "promptStyle": "concise",
     "qualityPrefix": "",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "sizeOptions": [
@@ -640,6 +699,7 @@ export const PRESETS = [
     "downloadGb": 6.62,
     "size": 512,
     "steps": 4,
+    "stepRange": null,
     "cfg": 0,
     "peakVramMb": 7666,
     "loadSeconds": 4,
@@ -648,6 +708,7 @@ export const PRESETS = [
     "negativeHint": "blurry, low quality",
     "promptStyle": "concise",
     "qualityPrefix": "",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "sizeOptions": [
@@ -690,6 +751,14 @@ export const PRESETS = [
     "downloadGb": 6.46,
     "size": 1024,
     "steps": 30,
+    "stepRange": {
+      "min": 20,
+      "max": 45,
+      "step": 1,
+      "fast": 22,
+      "balanced": 30,
+      "fine": 40
+    },
     "cfg": 3,
     "peakVramMb": 9967,
     "loadSeconds": 5.7,
@@ -698,6 +767,7 @@ export const PRESETS = [
     "negativeHint": "ugly, deformed, noisy, blurry, distorted",
     "promptStyle": "natural",
     "qualityPrefix": "",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "sizeOptions": [
@@ -742,6 +812,14 @@ export const PRESETS = [
     "downloadGb": 6.78,
     "size": 1024,
     "steps": 25,
+    "stepRange": {
+      "min": 18,
+      "max": 45,
+      "step": 1,
+      "fast": 20,
+      "balanced": 25,
+      "fine": 38
+    },
     "cfg": 7.5,
     "peakVramMb": 9966,
     "loadSeconds": 5.8,
@@ -750,6 +828,7 @@ export const PRESETS = [
     "negativeHint": "blurry, low quality, deformed, extra limbs",
     "promptStyle": "natural",
     "qualityPrefix": "",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "sizeOptions": [
@@ -791,7 +870,15 @@ export const PRESETS = [
     "gpus": 1,
     "downloadGb": 6.46,
     "size": 1024,
-    "steps": 25,
+    "steps": 30,
+    "stepRange": {
+      "min": 20,
+      "max": 45,
+      "step": 1,
+      "fast": 22,
+      "balanced": 30,
+      "fine": 40
+    },
     "cfg": 5,
     "peakVramMb": 9967,
     "loadSeconds": 5.2,
@@ -800,6 +887,7 @@ export const PRESETS = [
     "negativeHint": "blurry, low quality, deformed, extra limbs, ugly, bad anatomy",
     "promptStyle": "natural",
     "qualityPrefix": "",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "sizeOptions": [
@@ -810,7 +898,9 @@ export const PRESETS = [
       "loader": "sdxl",
       "base": "SG161222/RealVisXL_V5.0",
       "lora": null,
-      "scheduler": null,
+      "scheduler": {
+        "type": "dpmpp-sde-karras"
+      },
       "variant": "fp16",
       "downloadGb": 6.6,
       "allowPatterns": [
@@ -844,6 +934,7 @@ export const PRESETS = [
     "downloadGb": 15.2,
     "size": 1024,
     "steps": 4,
+    "stepRange": null,
     "cfg": 1,
     "peakVramMb": 7929,
     "loadSeconds": 28.2,
@@ -852,6 +943,7 @@ export const PRESETS = [
     "negativeHint": "",
     "promptStyle": "natural",
     "qualityPrefix": "",
+    "supportsChinese": true,
     "supportsImg2Img": false,
     "supportsNegative": false,
     "sizeOptions": [
@@ -887,6 +979,14 @@ export const PRESETS = [
     "downloadGb": 6.46,
     "size": 1024,
     "steps": 28,
+    "stepRange": {
+      "min": 20,
+      "max": 45,
+      "step": 1,
+      "fast": 22,
+      "balanced": 28,
+      "fine": 38
+    },
     "cfg": 7,
     "peakVramMb": 9176,
     "loadSeconds": 4.8,
@@ -895,6 +995,7 @@ export const PRESETS = [
     "negativeHint": "nsfw, lowres, (bad), text, error, fewer, extra, missing, worst quality, jpeg artifacts, low quality, watermark, unfinished, displeasing, oldest, early, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract]",
     "promptStyle": "danbooru",
     "qualityPrefix": "masterpiece, best quality, highres",
+    "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
     "sizeOptions": [
@@ -939,6 +1040,14 @@ export const PRESETS = [
     "downloadGb": 5.25,
     "size": 1024,
     "steps": 25,
+    "stepRange": {
+      "min": 18,
+      "max": 40,
+      "step": 1,
+      "fast": 20,
+      "balanced": 25,
+      "fine": 35
+    },
     "cfg": 4,
     "peakVramMb": 8470,
     "loadSeconds": 43.5,
@@ -947,6 +1056,7 @@ export const PRESETS = [
     "negativeHint": "",
     "promptStyle": "natural",
     "qualityPrefix": "",
+    "supportsChinese": false,
     "supportsImg2Img": false,
     "supportsNegative": true,
     "sizeOptions": [

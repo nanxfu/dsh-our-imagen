@@ -159,6 +159,25 @@ export async function loadModels(modelsDir = MODELS_DIR) {
     if ('supportsImg2Img' in model && typeof model.supportsImg2Img !== 'boolean') {
       fail(`${where} 的 supportsImg2Img 必须是布尔值（缺省按 false 处理）`)
     }
+    // 中文提示词原生理解能力：可以缺省（缺省按 false 归一），显式给出时必须是布尔值。
+    if ('supportsChinese' in model && typeof model.supportsChinese !== 'boolean') {
+      fail(`${where} 的 supportsChinese 必须是布尔值（缺省按 false 处理）`)
+    }
+    // 可调步数档位范围：fast 模型通常固定步数可省略或为 null；usable 模型提供 { min, max, step, fast, balanced, fine }。
+    if (model.stepRange !== undefined && model.stepRange !== null) {
+      const r = model.stepRange
+      if (typeof r !== 'object' || Array.isArray(r)) fail(`${where} 的 stepRange 必须是对象或 null`)
+      const keys = ['min', 'max', 'step', 'fast', 'balanced', 'fine']
+      for (const k of keys) {
+        if (!Number.isFinite(r[k])) fail(`${where} 的 stepRange.${k} 必须是数字`)
+      }
+      if (!(r.step > 0 && r.min <= r.fast && r.fast <= r.balanced && r.balanced <= r.fine && r.fine <= r.max)) {
+        fail(`${where} 的 stepRange 数值序关系非法（需满足 step>0 且 min<=fast<=balanced<=fine<=max）`)
+      }
+      if (model.steps < r.min || model.steps > r.max) {
+        fail(`${where} 的默认 steps=${model.steps} 超出 stepRange [${r.min}, ${r.max}]`)
+      }
+    }
 
     models.push(model)
   }
@@ -170,9 +189,11 @@ export async function loadModels(modelsDir = MODELS_DIR) {
 function projectModels(models) {
   return models.map((model) => ({
     ...model,
-    // 能力字段落盘前归一成布尔值：旧资产没写该字段时按 false（不支持图生图 / 不消费负向词）。
+    // 能力字段落盘前归一成布尔值：旧资产没写该字段时按 false（不支持图生图 / 不消费负向词 / 仅英文提示词）。
+    supportsChinese: model.supportsChinese === true,
     supportsImg2Img: model.supportsImg2Img === true,
     supportsNegative: model.supportsNegative === true,
+    stepRange: model.stepRange || null,
     measured: Object.fromEntries(MEASURED_FIELDS.map((field) => [field, model.measured[field] ?? null])),
   }))
 }
@@ -194,6 +215,7 @@ function projectPresets(models) {
     downloadGb: model.measured.downloadGb,
     size: model.size,
     steps: model.steps,
+    stepRange: model.stepRange || null,
     cfg: model.cfg,
     peakVramMb: model.measured.peakVramMb,
     loadSeconds: model.measured.loadSeconds,
@@ -202,6 +224,8 @@ function projectPresets(models) {
     negativeHint: model.negativeHint,
     promptStyle: model.promptStyle,
     qualityPrefix: model.qualityPrefix,
+    // 中文提示词原生理解能力：面板据此显示语言能力标记与英文提醒，助手决定是否免翻译。
+    supportsChinese: model.supportsChinese === true,
     // 图生图（垫图重绘）能力：客户端据此决定是否允许放参考图；daemon 侧还会按 loader 兜底。
     supportsImg2Img: model.supportsImg2Img === true,
     // 负向提示词能力：客户端据此显隐「排除项」、助手据此决定是否输出 negative。

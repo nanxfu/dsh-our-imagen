@@ -3185,5 +3185,100 @@ class GenerateWithReferenceTest(DaemonUnitTest):
         self.assertNotIn("带参考图", self.logs())
 
 
+class SchedulerSpecTest(DaemonUnitTest):
+    """sdxl 与 sdxl-lora 对 pipeline.scheduler 的识别与替换。"""
+
+    def _run_build(self, pipeline_spec: dict):
+        scheduler_calls = []
+
+        class FakeScheduler:
+            def __init__(self, name: str, config: dict, kwargs: dict) -> None:
+                self.name = name
+                self.config = config
+                self.kwargs = kwargs
+
+        def make_scheduler_cls(name: str):
+            class _Cls:
+                @staticmethod
+                def from_config(config, **kwargs):
+                    scheduler_calls.append((name, kwargs))
+                    return FakeScheduler(name, config, kwargs)
+
+            return _Cls
+
+        class FakePipe:
+            def __init__(self) -> None:
+                self.scheduler = types.SimpleNamespace(config={"num_train_timesteps": 1000})
+                self.lora_loaded = []
+                self.device = None
+
+            def to(self, device: str):
+                self.device = device
+                return self
+
+            def load_lora_weights(self, folder: str, weight_name: str = "") -> None:
+                self.lora_loaded.append((folder, weight_name))
+
+        class FakeFactory:
+            @staticmethod
+            def from_pretrained(source, **_kwargs):
+                return FakePipe()
+
+        fake_torch = types.ModuleType("torch")
+        fake_torch.float16 = "float16"
+
+        fake_diffusers = types.ModuleType("diffusers")
+        fake_diffusers.AutoPipelineForText2Image = FakeFactory
+        fake_diffusers.StableDiffusionXLPipeline = FakeFactory
+        fake_diffusers.EulerDiscreteScheduler = make_scheduler_cls("euler")
+        fake_diffusers.EulerAncestralDiscreteScheduler = make_scheduler_cls("euler-a")
+        fake_diffusers.DPMSolverSinglestepScheduler = make_scheduler_cls("dpmpp-sde")
+        fake_diffusers.DPMSolverMultistepScheduler = make_scheduler_cls("dpmpp-2m")
+
+        with (
+            mock.patch.dict(sys.modules, {"torch": fake_torch, "diffusers": fake_diffusers}),
+            mock.patch.object(d, "resolve_local_model", return_value="/local/base"),
+            mock.patch.object(d, "resolve_local_weight", return_value="/local/lora/w.safetensors"),
+            mock.patch.object(d, "ensure_disk_capacity"),
+        ):
+            pipe, loaded = d.build_pipeline(pipeline_spec)
+        return pipe, loaded, scheduler_calls
+
+    def test_sdxl_applies_dpmpp_sde_karras(self) -> None:
+        pipe, loaded, calls = self._run_build(
+            {
+                "loader": "sdxl",
+                "base": "SG161222/RealVisXL_V5.0",
+                "scheduler": {"type": "dpmpp-sde-karras"},
+            }
+        )
+        self.assertEqual(loaded, "sdxl:SG161222/RealVisXL_V5.0")
+        self.assertEqual(calls, [("dpmpp-sde", {"use_karras_sigmas": True})])
+        self.assertEqual(pipe.scheduler.name, "dpmpp-sde")
+
+    def test_sdxl_without_scheduler_keeps_base_default(self) -> None:
+        pipe, _loaded, calls = self._run_build(
+            {
+                "loader": "sdxl",
+                "base": "stabilityai/sdxl-turbo",
+                "scheduler": None,
+            }
+        )
+        self.assertEqual(calls, [])
+        self.assertFalse(hasattr(pipe.scheduler, "name"))
+
+    def test_sdxl_lora_defaults_to_euler_trailing(self) -> None:
+        pipe, loaded, calls = self._run_build(
+            {
+                "loader": "sdxl-lora",
+                "base": "stabilityai/stable-diffusion-xl-base-1.0",
+                "lora": {"repo": "ByteDance/SDXL-Lightning", "weight": "sdxl_lightning_4step_lora.safetensors"},
+            }
+        )
+        self.assertEqual(loaded, "sdxl-lora:stabilityai/stable-diffusion-xl-base-1.0")
+        self.assertEqual(calls, [("euler", {"timestep_spacing": "trailing"})])
+        self.assertEqual(pipe.scheduler.name, "euler")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

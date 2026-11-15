@@ -120,8 +120,8 @@ const scenarios = {
     state: readyState,
     history: { items: [historyItem] },
     props: {},
-    expect: ['创作设置', '提示词', '分辨率档位', '画面设置', '高级设置', '立即生成', '带回参数', '云端就绪', '灵感示例', '测试用的荷花池塘'],
-    reject: ['风格预设'],
+    expect: ['创作设置', '提示词', '1024 × 1024', '画面设置', '高级设置', '立即生成', '带回参数', '云端就绪', '灵感示例', '测试用的荷花池塘'],
+    reject: ['风格预设', '分辨率档位'],
     structure: {
       required: {
         'ofs-root': 1,
@@ -298,15 +298,16 @@ const scenarios = {
         'ofs-app': 1,
         'ofs-topbar': 1,
         'ofs-body': 1,
-        'ofs-guidance': 1,
-        'ofs-guidance-title': 1,
-        'ofs-guidance-detail': 1,
-        'ofs-guidance-actions': 1,
+        'ofs-toast-stack': 1,
+        'ofs-toast--notice': 1,
+        'ofs-toast-title': 1,
+        'ofs-toast-detail': 1,
+        'ofs-toast-actions': 1,
         'ofs-stage': 1,
         'ofs-figure--empty': 1,
         'ofs-panel--form': 1,
       },
-      forbidden: ['ofs-guidance-command', 'ofs-toast', 'ofs-panel--chat', 'ofs-gallery', 'ofs-image'],
+      forbidden: ['ofs-guidance', 'ofs-guidance-command', 'ofs-panel--chat', 'ofs-gallery', 'ofs-image'],
     },
   },
   queued: {
@@ -534,13 +535,14 @@ const scenarios = {
       required: {
         'ofs-root': 1,
         'ofs-app': 1,
-        'ofs-guidance': 1,
-        'ofs-guidance-title': 1,
-        'ofs-guidance-detail': 1,
-        'ofs-guidance-actions': 1,
+        'ofs-toast-stack': 1,
+        'ofs-toast--notice': 1,
+        'ofs-toast-title': 1,
+        'ofs-toast-detail': 1,
+        'ofs-toast-actions': 1,
         'ofs-figure--empty': 1,
       },
-      forbidden: ['ofs-guidance-command', 'ofs-panel--chat', 'ofs-image', 'ofs-toast'],
+      forbidden: ['ofs-guidance', 'ofs-guidance-command', 'ofs-panel--chat', 'ofs-image'],
     },
   },
   // 回归：宿主 /state 请求在网络层直接失败时，界面曾经把浏览器原文
@@ -596,13 +598,14 @@ const scenarios = {
       required: {
         'ofs-root': 1,
         'ofs-app': 1,
-        'ofs-guidance': 1,
-        'ofs-guidance-title': 1,
-        'ofs-guidance-detail': 1,
-        'ofs-guidance-actions': 1,
+        'ofs-toast-stack': 1,
+        'ofs-toast--notice': 1,
+        'ofs-toast-title': 1,
+        'ofs-toast-detail': 1,
+        'ofs-toast-actions': 1,
         'ofs-figure--empty': 1,
       },
-      forbidden: ['ofs-guidance-command', 'ofs-panel--chat', 'ofs-image', 'ofs-toast'],
+      forbidden: ['ofs-guidance', 'ofs-guidance-command', 'ofs-panel--chat', 'ofs-image'],
     },
   },
   // 远端容器没拿到 GPU：新卡片给「打开 Kaggle 账户设置 + 唤醒」和两条次级动作，
@@ -1909,7 +1912,6 @@ await check('渲染：gpu / auth / cli 指引卡动作与提示', async () => {
     client.unmount()
   }
 })
-
 
 await check('渲染：模型选择卡展开态', async () => {
   const client = await loadClient({
@@ -3504,10 +3506,11 @@ await check('渲染：画面设置比例 / 档位 / 自定义宽高与页脚规�
     let text = textOf(tree)
     assert.ok(text.includes('转为英文'), '提示词区应有「转为英文」按钮')
     assert.ok(text.includes('润色'), '润色按钮仍在，二者并列')
-    // 画面设置三段：画幅比例 → 分辨率档位 → 自定义宽高折叠；不再有方形推荐尺寸行。
+    // 画面设置：画幅比例 → 自定义宽高折叠；标题栏显示实时像素读数。
     assert.ok(text.includes('画幅比例'), '画面设置应有画幅比例标签')
-    assert.ok(text.includes('分辨率档位'), '画面设置应有分辨率档位标签')
+    assert.ok(text.includes('1024 × 1024'), '画面设置标题栏应有当前像素读数')
     assert.ok(text.includes('自定义宽高'), '画面设置应有自定义宽高折叠入口')
+    assert.ok(!text.includes('分辨率档位'), '不再有分辨率档位行')
     assert.ok(!text.includes('推荐尺寸'), '0.10.0 起不再有方形推荐尺寸行')
     assert.ok(!text.includes('风格'), '参数面板不再有风格预设')
     // 页脚规格摘要：尺寸 · 比例 · 张数。
@@ -3537,19 +3540,6 @@ await check('渲染：画面设置比例 / 档位 / 自定义宽高与页脚规�
     ratioButtons[1].props.onClick()
     assert.deepEqual(calls.ratio, ['16:9'], '点击比例应交给 applyRatio')
 
-    // 分辨率档位（长边）：消费 sizeTiers，当前长边 1024 命中时选中。
-    const tierButtons = findNodes(
-      tree,
-      (node) => node.type === 'button'
-        && typeof node.props?.className === 'string'
-        && node.props.className.split(' ').includes('ofs-size'),
-    )
-    assert.equal(tierButtons.length, 3, '档位行应消费 sizeTiers')
-    assert.deepEqual(tierButtons.map((node) => collectText(node).join('')), ['768', '1024', '1152'])
-    assert.equal(tierButtons[1].props['aria-pressed'], true, '长边 1024 命中 1024 档')
-    tierButtons[0].props.onClick()
-    assert.deepEqual(calls.tier, [768], '点击档位应交给 applyTier')
-
     // 自定义宽高默认折叠；展开后才渲染输入框。
     const toggle = customToggleOf(tree)
     assert.ok(toggle, '缺少自定义宽高折叠入口')
@@ -3565,12 +3555,6 @@ await check('渲染：画面设置比例 / 档位 / 自定义宽高与页脚规�
     assert.equal(widthInputOf(expanded).props.max, LIMITS.width.max)
     assert.equal(widthInputOf(expanded).props.step, LIMITS.width.step)
     assert.equal(heightInputOf(expanded).props.max, LIMITS.height.max)
-    assert.ok(
-      textOf(expanded).includes(`${LIMITS.width.min}–${LIMITS.width.max}`),
-      '宽高说明应写明合法范围（注入自 LIMITS）',
-    )
-    assert.ok(textOf(expanded).includes(`${LIMITS.width.step} 的整数倍`), '宽高说明应写明步长')
-    assert.ok(textOf(expanded).includes('宽高互不联动'), '宽高说明应写明互不联动')
 
     // 输入过程只落在本地草稿，不写表单；失焦才归一化提交，且宽高互不联动。
     widthInputOf(expanded).props.onChange({ target: { value: '720' } })

@@ -14,9 +14,10 @@ import React from 'react'
 import { submitGenerate } from '../api/resources.js'
 import { useHostState } from '../hooks/useHostState.js'
 import { translator } from '../i18n.js'
-import { guidanceDetailOf, guidanceKindOf, isConnectionCode } from '../logic/guidance.js'
+import { guidanceDetailOf, guidanceKindOf, guidanceSurfaceOf, isConnectionCode } from '../logic/guidance.js'
 import { formatText } from '../logic/format.js'
 import { iteratePatch, rerollOverrides, retryOverrides } from '../logic/generate.js'
+import { safeResetPatch } from '../../shared/models-guide.js'
 import { accountStatusOf } from '../logic/probe.js'
 import { useChatThread } from './hooks/useChatThread.js'
 import { useKaggleLogin } from './hooks/useKaggleLogin.js'
@@ -180,16 +181,19 @@ export function useStudio(props) {
     generate(overrides)
   }
 
-  /** OOM 指引卡上的「重置参数」：表单回到安全档，并清掉当前错误。 */
+  /** OOM 指引卡上的「重置参数」：表单回到当前活跃预设的安全默认档，并清掉当前错误。 */
   function resetToSafe() {
-    form.patchForm({ width: 1024, height: 1024, steps: 4, cfg: 1 })
-    ui.setError(null)
-    ui.showToast(t('studio.guidance.oom.reset'))
+    const safe = safeResetPatch(form.activePreset)
+    form.patchForm(safe)
+    if (guidanceKey) ui.dismissGuidance(guidanceKey)
+    else ui.setError(null)
+    ui.showToast(formatText(t('studio.guidance.oom.reset'), { size: safe.width, steps: safe.steps }))
   }
 
   /** 降级指引卡上的「重试」：先收起到期提示，再立刻拉一次宿主状态。 */
   function retryHost() {
-    ui.setError(null)
+    if (guidanceKey) ui.dismissGuidance(guidanceKey)
+    else ui.setError(null)
     host.refresh()
   }
 
@@ -215,6 +219,7 @@ export function useStudio(props) {
     : guidanceDetailOf({ error: ui.error, session: control.session, job: control.focusedJob })
   const guidanceKey = guidanceCode ? `${guidanceCode}|${guidanceDetail}` : ''
   const guidanceKind = guidanceCode && ui.dismissed !== guidanceKey ? guidanceKindOf(guidanceCode) : ''
+  const guidanceSurface = guidanceSurfaceOf(guidanceKind)
 
   return {
     t,
@@ -224,7 +229,7 @@ export function useStudio(props) {
     form,
     chat,
     library,
-    guidance: { kind: guidanceKind, detail: guidanceDetail, dismiss: dismissGuidance },
+    guidance: { kind: guidanceKind, surface: guidanceSurface, detail: guidanceDetail, dismiss: dismissGuidance },
     actions: { sending, generate, reroll, iterate, referenceImage, retryFocusedJob, resetToSafe },
   }
 }

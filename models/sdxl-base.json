@@ -17,12 +17,21 @@
   "tier": "usable",
   "size": 1024,
   "steps": 25,
+  "stepRange": {
+    "min": 18,
+    "max": 45,
+    "step": 1,
+    "fast": 20,
+    "balanced": 25,
+    "fine": 38
+  },
   "cfg": 7.5,
   "negativeHint": "blurry, low quality, deformed, extra limbs",
   "promptStyle": "natural",
   "qualityPrefix": "",
   "sizeOptions": [768, 1024, 1152],
   "runtime": "default",
+  "supportsChinese": false,
   "supportsImg2Img": true,
   "supportsNegative": true,
   "pipeline": {

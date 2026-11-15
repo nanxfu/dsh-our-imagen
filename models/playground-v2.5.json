@@ -17,6 +17,14 @@
   "tier": "usable",
   "size": 1024,
   "steps": 30,
+  "stepRange": {
+    "min": 20,
+    "max": 45,
+    "step": 1,
+    "fast": 22,
+    "balanced": 30,
+    "fine": 40
+  },
   "cfg": 3,
   "negativeHint": "ugly, deformed, noisy, blurry, distorted",
   "promptStyle": "natural",
@@ -26,6 +34,7 @@
     1024
   ],
   "runtime": "default",
+  "supportsChinese": false,
   "supportsImg2Img": true,
   "supportsNegative": true,
   "pipeline": {

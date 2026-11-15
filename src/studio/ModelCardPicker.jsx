@@ -41,6 +41,8 @@ const LABELS = {
   menuTitle: 'studio.preset.menuTitle',
   measured: 'studio.preset.measured',
   default: 'studio.preset.default',
+  langZhEn: 'studio.preset.langZhEn',
+  langEnOnly: 'studio.preset.langEnOnly',
   footer: 'studio.preset.footer',
   steps: 'studio.preset.stepsUnit',
   dualGpu: 'studio.preset.dualGpu',
@@ -211,6 +213,9 @@ export function ModelCardPicker(props) {
                     <span className="ofs-model-line">
                       {preset.family ? <span className="ofs-model-fam">{preset.family}</span> : null}
                       <span className="ofs-model-name">{shortOf(preset)}</span>
+                      <span className={preset.supportsChinese === true ? 'ofs-model-lang is-zh' : 'ofs-model-lang'}>
+                        {t(preset.supportsChinese === true ? LABELS.langZhEn : LABELS.langEnOnly)}
+                      </span>
                       {isDefault ? <span className="ofs-model-default">{t(LABELS.default)}</span> : null}
                     </span>
                     {description ? <span className="ofs-model-desc">{description}</span> : null}

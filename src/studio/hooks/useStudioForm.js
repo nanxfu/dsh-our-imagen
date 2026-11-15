@@ -1,5 +1,5 @@
 /**
- * 表单域：提示词 / 负向 / 预设 / 比例与分辨率档位 / 参考图与重绘强度 / 润色与英译。
+ * 表单域：提示词 / 负向 / 预设 / 画幅比例 / 参考图与重绘强度 / 润色与英译。
  *
  * 负责表单状态、预设同步 effect 与生成请求体拼装。
  * 依赖入参：{ t, isEn, alive, ui, preset, initialPrompt }；preset 是宿主的预设配置
@@ -24,10 +24,7 @@ import {
   presetSelectPatch,
   ratioIdOf,
   referencePresetOf,
-  selectedTierOf,
-  sizeTiersOf,
   supportsImg2Img,
-  tierPatchOf,
 } from '../../logic/preset.js'
 import {
   applyNegativePatch,
@@ -86,16 +83,12 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   // 768×768 与 1024×1024 都算 1:1，800×600 算 4:3；切换预设改变宽高时也不会停在旧值上。
   const ratioId = ratioIdOf(form.width, form.height)
 
-  // 当前预设是负向词能力、尺寸档位与提示词书写口径的唯一来源。
+  // 当前预设是负向词能力与提示词书写口径的唯一来源。
   const activePreset = presets.find((item) => item.id === form.presetId) || null
   const negativeHint = hintOf(activePreset)
   const negativeActive = negativePromptActive(activePreset, form.cfg)
   // 当前预设决定提示词的书写口径；含中文提示时给一条软提示，不拦截生成。
   const englishPromptHint = detectCjk(form.prompt) && presetNeedsEnglish(activePreset)
-
-  // 分辨率档位按「长边」定义：档位来自预设的 sizeOptions，短边跟随当前画幅比例换算。
-  const sizeTiers = sizeTiersOf(activePreset)
-  const selectedTier = selectedTierOf(form.width, form.height, sizeTiers)
 
   // 图生图能力只在有参考图时才起作用：旧宿主缺 supportsImg2Img 按不支持处理，
   // 但没有参考图时不做任何判断，文生图流程与改造前完全一致。
@@ -140,16 +133,6 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     if (!ratio) return
     const size = ratioToSize(ratio)
     patchForm({ width: size.width, height: size.height })
-  }
-
-  /**
-   * 分辨率档位：长边取档位，短边按当前画幅比例换算。
-   * 当前尺寸已是自定义比例（匹配不上契约比例）时按现有宽高比缩放。
-   */
-  function applyTier(tier) {
-    const ratio = DEFAULT_RATIOS.find((item) => item.id === ratioId)
-      || { width: form.width, height: form.height }
-    patchForm(tierPatchOf(ratio, tier))
   }
 
   /**
@@ -357,10 +340,6 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     negativeLayers: form.negativeLayers,
     englishPromptHint,
     applyRatio,
-    // 分辨率档位（长边）与自定义宽高。
-    sizeTiers,
-    selectedTier,
-    applyTier,
     applyCustomSize,
     applyCfg,
     resetSeed,

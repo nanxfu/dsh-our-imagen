@@ -4,11 +4,11 @@
  * 分区按内容分组；接收 { t, ui, form, actions }。
  *
  * 0.10.0 布局（320px 单轨，自上而下）：
- *  1. 提示词：输入框 / 英译与润色 / 英文软提示；灵感示例仅在提示词为空时出现，
+ *  1. 提示词：输入框 / 英译与润色（含中文时微光提示「转为英文」）；灵感示例仅在提示词为空时出现，
  *     润色建议可收起。
  *  2. 参考图槽位（仅已有参考图时）。
- *  3. 画面设置：有参考图时只说明「尺寸跟随参考图」；文生图时是 5 个画幅比例 →
- *     分辨率档位（长边）→「自定义宽高」折叠。
+ *  3. 画面设置：标题栏实时显示当前像素读数；有参考图时随图尺寸；文生图时是 5 个画幅比例 →
+ *     「自定义宽高」折叠。
  *  4. 高级设置（折叠）：排除项仅在当前模型/CFG 可用时出现；步数、CFG、随机种子。
  *  5. 页脚：生成张数 1~4 → 立即生成 → 规格摘要。
  *
@@ -18,6 +18,7 @@
 import React from 'react'
 
 import { LIMITS } from '../../shared/contract.js'
+import { stepModeOf, stepTierOf } from '../../shared/models-guide.js'
 
 import { Tooltip } from '../components/Tooltip.jsx'
 import { clampSize } from '../logic/clamp.js'
@@ -78,11 +79,9 @@ export function Rail(props) {
     form: fields,
     patchForm,
     ratioId,
+    activePreset,
     applyRatio,
     applyCustomSize,
-    sizeTiers,
-    selectedTier,
-    applyTier,
     applyCfg,
     resetSeed,
     negativeActive,
@@ -124,7 +123,6 @@ export function Rail(props) {
   const [refineOpen, setRefineOpen] = React.useState(true)
 
   const onCustomSize = typeof applyCustomSize === 'function' ? applyCustomSize : () => {}
-  const onTier = typeof applyTier === 'function' ? applyTier : () => {}
   const onResetSeed = typeof resetSeed === 'function' ? resetSeed : () => patchForm({ seed: '' })
   const onCfgChange = typeof applyCfg === 'function'
     ? applyCfg
@@ -149,8 +147,9 @@ export function Rail(props) {
 
   const promptLength = fields.prompt.length
   const hasPrompt = fields.prompt.trim().length > 0
-  // 防御式取档位：预览/测试可能只给部分表单字段，缺失时该行整体不渲染。
-  const tiers = Array.isArray(sizeTiers) ? sizeTiers : []
+  const currentWidth = clampSize(fields.width)
+  const currentHeight = clampSize(fields.height)
+  const frameSizeText = `${currentWidth} × ${currentHeight}`
   // 排除项：只有当前模型 + CFG 真的消费负向词时才出现（Host 与 Client 共用同一判定）。
   const showNegative = negativeActive === true
   // 占位提示用模型推荐词，但过长的推荐词（如 Animagine 的 200+ 字符）会撑乱输入框，截断展示。
@@ -181,7 +180,7 @@ export function Rail(props) {
   // 页脚规格摘要：尺寸 · 比例 · 张数；有参考图时补一项「参考图」。
   const countValue = Number.isFinite(Number(fields.count)) ? Math.round(Number(fields.count)) : 1
   const specParts = [
-    `${clampSize(fields.width)} × ${clampSize(fields.height)}`,
+    frameSizeText,
     ratioId || t('studio.rail.custom'),
     `${countValue} ${t('unit.image')}`,
   ]
@@ -235,10 +234,13 @@ export function Rail(props) {
                 {promptLength} / {PROMPT_MAX}
               </span>
               <span className="ofs-composer-actions">
-                {/* 英译只是把当前提示词换成英文，不改写内容；模型不可用时明确提示，不假装成功。 */}
+                {/* 英译只是把当前提示词换成英文，不改写内容；含中文时在按钮本身做轻量高亮提示，不另起一行占高度。 */}
                 <button
                   type="button"
-                  className="ofs-text-action ofs-translate-action"
+                  className={englishPromptHint
+                    ? 'ofs-text-action ofs-translate-action is-suggested'
+                    : 'ofs-text-action ofs-translate-action'}
+                  title={englishPromptHint ? t('studio.prompt.englishHint') : undefined}
                   onClick={translate}
                   disabled={translating || enhancing}
                 >
@@ -252,8 +254,9 @@ export function Rail(props) {
             </div>
           </div>
 
-          {/* 预设都按英文提示词训练：中文输入只提示，不拦截生成。 */}
-          {englishPromptHint ? <p className="ofs-hint ofs-prompt-lang-hint">{t('studio.prompt.englishHint')}</p> : null}
+          {englishPromptHint ? (
+            <p className="ofs-hint ofs-prompt-lang-hint">{t('studio.prompt.englishHint')}</p>
+          ) : null}
 
           {/* 灵感示例只在提示词为空时出现，不长期占据首屏高度。 */}
           {hasPrompt ? null : (
@@ -313,7 +316,6 @@ export function Rail(props) {
                       </div>
                     </div>
                   ))}
-                  <p className="ofs-hint">{t('studio.refine.hint')}</p>
                 </>
               ) : null}
             </div>
@@ -343,7 +345,7 @@ export function Rail(props) {
                 <span className="ofs-reference-name" title={referenceName || undefined}>
                   {referenceName || '—'}
                 </span>
-                <label className="ofs-reference-strength">
+                <label className="ofs-reference-strength" title={t('studio.reference.hint')}>
                   <span className="ofs-reference-strength-head">
                     {t('studio.reference.strength')}
                     <b>{strengthValue.toFixed(2)}</b>
@@ -364,27 +366,22 @@ export function Rail(props) {
             </div>
             {referenceBlocked ? (
               <p className="ofs-hint ofs-reference-warn">{t('studio.reference.unsupported')}</p>
-            ) : (
-              <p className="ofs-hint ofs-reference-hint">{t('studio.reference.hint')}</p>
-            )}
+            ) : null}
           </Fieldset>
         ) : null}
 
-        {/* 画面设置：有参考图时尺寸由参考图决定，后端不再消费宽高，
-            因此收起比例 / 档位 / 宽高控件，只说明事实，避免「可点却无效」。 */}
+        {/* 画面设置：标题栏实时显示当前像素读数；有参考图时尺寸跟随参考图，收起比例/宽高控件。 */}
         <Fieldset
           title={t('studio.rail.frame')}
-          action={referenceImage
-            ? <span className="ofs-frame-readout">{referenceSize || t('studio.rail.followReference')}</span>
-            : null}
+          action={(
+            <span className="ofs-frame-readout">
+              {referenceImage
+                ? (referenceSize ? `${referenceSize} · ${t('studio.rail.followReference')}` : t('studio.rail.followReference'))
+                : frameSizeText}
+            </span>
+          )}
         >
-          {referenceImage ? (
-            referenceSize ? (
-              <p className="ofs-hint ofs-follow-reference-hint">
-                {formatText(t('studio.rail.followReferenceSize'), { size: referenceSize })}
-              </p>
-            ) : null
-          ) : (
+          {referenceImage ? null : (
             <>
               <div className="ofs-frame-group">
                 <span className="ofs-frame-label">{t('studio.rail.ratio')}</span>
@@ -403,27 +400,6 @@ export function Rail(props) {
                   ))}
                 </div>
               </div>
-
-              {/* 分辨率档位按长边定义：长边取档，短边按当前画幅比例换算。 */}
-              {tiers.length > 0 ? (
-                <div className="ofs-frame-group">
-                  <span className="ofs-frame-label">{t('studio.rail.size')}</span>
-                  <div className="ofs-size-options" role="group" aria-label={t('studio.rail.sizeAria')}>
-                    {tiers.map((tier) => (
-                      <button
-                        type="button"
-                        key={tier}
-                        className={selectedTier === tier ? 'ofs-size is-on' : 'ofs-size'}
-                        onClick={() => onTier(tier)}
-                        aria-pressed={selectedTier === tier}
-                        title={`${tier} px`}
-                      >
-                        {tier}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
 
               {/* 自定义宽高：默认折叠，编辑过程走本地草稿，失焦才提交。 */}
               <div className="ofs-frame-group">
@@ -475,13 +451,6 @@ export function Rail(props) {
                         />
                       </label>
                     </div>
-                    <p className="ofs-hint ofs-size-hint">
-                      {formatText(t('studio.rail.sizeHint'), {
-                        min: LIMITS.width.min,
-                        max: LIMITS.width.max,
-                        step: LIMITS.width.step,
-                      })}
-                    </p>
                   </div>
                 ) : null}
               </div>
@@ -538,37 +507,69 @@ export function Rail(props) {
                   </span>
                 </button>
               </div>
-              {advancedOpen ? (
-                <div className="ofs-grid2">
-                  <div className="ofs-field">
-                    <span className="ofs-field-label">
-                      {t('studio.steps')}
-                      <Tooltip text={t('studio.stepsTooltip')} />
-                    </span>
-                    <input
-                      type="number"
-                      min={LIMITS.steps.min}
-                      max={LIMITS.steps.max}
-                      value={fields.steps}
-                      aria-label={t('studio.steps')}
-                      onChange={(event) => patchForm({ steps: Number(event.target.value) })}
-                    />
-                  </div>
-                  <div className="ofs-field">
-                    <span className="ofs-field-label">
-                      {t('studio.cfg')}
-                      <Tooltip text={t('studio.cfgTooltip')} />
-                    </span>
-                    <input
-                      type="number"
-                      min={LIMITS.cfg.min}
-                      max={LIMITS.cfg.max}
-                      step={0.5}
-                      value={fields.cfg}
-                      aria-label={t('studio.cfg')}
-                      onChange={(event) => onCfgChange(Number(event.target.value))}
-                    />
-                  </div>
+              {advancedOpen ? (() => {
+                const stepMode = stepModeOf(activePreset)
+                const stepTier = stepTierOf(activePreset, fields.steps)
+                const stepRange = stepMode === 'range' ? activePreset.stepRange : null
+                const displayedSteps = stepMode === 'fixed' && Number.isFinite(Number(activePreset?.steps))
+                  ? Number(activePreset.steps)
+                  : Number(fields.steps) || 1
+                return (
+                  <div className="ofs-grid2">
+                    <div className="ofs-field ofs-field--wide">
+                      <div className="ofs-step-head">
+                        <span className="ofs-field-label">
+                          {t('studio.steps')}
+                          <Tooltip text={t(stepMode === 'fixed' ? 'studio.stepsFixedTooltip' : 'studio.stepsTooltip')} />
+                        </span>
+                        <span className={stepMode === 'fixed' ? 'ofs-step-readout is-fixed' : 'ofs-step-readout'}>
+                          {formatText(t('studio.stepsReadout'), {
+                            steps: displayedSteps,
+                            tier: t(`studio.stepsTier.${stepTier}`),
+                          })}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        className="ofs-step-slider"
+                        min={stepRange ? stepRange.min : displayedSteps}
+                        max={stepRange ? stepRange.max : displayedSteps}
+                        step={stepRange ? stepRange.step : 1}
+                        value={displayedSteps}
+                        disabled={stepMode === 'fixed'}
+                        aria-label={t('studio.steps')}
+                        onChange={(event) => patchForm({ steps: Number(event.target.value) })}
+                      />
+                      {stepRange ? (
+                        <div className="ofs-step-ticks">
+                          {(['fast', 'balanced', 'fine']).map((key) => (
+                            <button
+                              key={key}
+                              type="button"
+                              className={stepTier === key ? 'ofs-step-tick is-on' : 'ofs-step-tick'}
+                              onClick={() => patchForm({ steps: stepRange[key] })}
+                            >
+                              {`${t(`studio.stepsTier.${key}`)} ${stepRange[key]}`}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="ofs-field ofs-field--wide">
+                      <span className="ofs-field-label">
+                        {t('studio.cfg')}
+                        <Tooltip text={t('studio.cfgTooltip')} />
+                      </span>
+                      <input
+                        type="number"
+                        min={LIMITS.cfg.min}
+                        max={LIMITS.cfg.max}
+                        step={0.5}
+                        value={fields.cfg}
+                        aria-label={t('studio.cfg')}
+                        onChange={(event) => onCfgChange(Number(event.target.value))}
+                      />
+                    </div>
                   <div className="ofs-field ofs-field--wide">
                     <span>{t('studio.seed')}</span>
                     <div className="ofs-seed-row">
@@ -591,7 +592,8 @@ export function Rail(props) {
                     </div>
                   </div>
                 </div>
-              ) : null}
+                )
+              })() : null}
             </div>
           </div>
         </Fieldset>
@@ -625,7 +627,7 @@ export function Rail(props) {
           {sending ? t('studio.generating') : t('studio.generate')}
         </button>
         <p className="ofs-hint ofs-spec-summary">
-          {hasPrompt ? specParts.join(' · ') : t('studio.promptHint')}
+          {specParts.join(' · ')}
         </p>
       </div>
     </aside>

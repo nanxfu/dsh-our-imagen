@@ -140,3 +140,64 @@ export function modelUsageLine(preset) {
 export function modelCatalogText() {
   return PRESETS.map(modelUsageLine).filter(Boolean).join('\n')
 }
+
+/**
+ * 步数控制模式（按模型类型分治）：
+ *  - 'range'：多步可调模型（usable 且声明了完整 stepRange），前端展示连续滑块与三档刻度；
+ *  - 'fixed'：蒸馏 / 极速锁步模型（fast 或未声明 stepRange），前端锁定为模型推荐步数。
+ */
+export function stepModeOf(preset) {
+  const r = preset && typeof preset === 'object' ? preset.stepRange : null
+  if (
+    preset &&
+    preset.tier === 'usable' &&
+    r &&
+    typeof r === 'object' &&
+    Number.isFinite(Number(r.min)) &&
+    Number.isFinite(Number(r.max)) &&
+    Number.isFinite(Number(r.fast)) &&
+    Number.isFinite(Number(r.balanced)) &&
+    Number.isFinite(Number(r.fine)) &&
+    Number(r.min) < Number(r.max)
+  ) {
+    return 'range'
+  }
+  return 'fixed'
+}
+
+/**
+ * 当前步数所属的语义档位（用于滑块实时标签与刻度高亮）：
+ *  - 'fixed'：锁步模型；
+ *  - 'fast' / 'balanced' / 'fine'：较快 / 均衡 / 精绘。
+ */
+export function stepTierOf(preset, steps) {
+  if (stepModeOf(preset) !== 'range') return 'fixed'
+  const r = preset.stepRange
+  const val = Number(steps)
+  if (!Number.isFinite(val)) return 'balanced'
+  const fastMid = (Number(r.fast) + Number(r.balanced)) / 2
+  const fineMid = (Number(r.balanced) + Number(r.fine)) / 2
+  if (val < fastMid) return 'fast'
+  if (val <= fineMid) return 'balanced'
+  return 'fine'
+}
+
+/**
+ * OOM / 显存报错后的安全重置参数补丁：回退到当前选中预设自身的默认安全参数
+ * （而不是硬编码成 1024 / 4 步 / CFG 1，以免把 RealVis 等多步模型打成 4 步半成品噪点图）。
+ */
+export function safeResetPatch(preset) {
+  const rawSize = Number(preset?.size)
+  const size = Number.isFinite(rawSize) && rawSize > 0
+    ? Math.min(Math.max(Math.round(rawSize / LIMITS.width.step) * LIMITS.width.step, LIMITS.width.min), LIMITS.width.max)
+    : 1024
+  const rawSteps = Number(preset?.steps)
+  const steps = Number.isFinite(rawSteps)
+    ? Math.min(Math.max(Math.round(rawSteps), LIMITS.steps.min), LIMITS.steps.max)
+    : 4
+  const rawCfg = Number(preset?.cfg)
+  const cfg = Number.isFinite(rawCfg)
+    ? Math.min(Math.max(rawCfg, LIMITS.cfg.min), LIMITS.cfg.max)
+    : 1
+  return { width: size, height: size, steps, cfg }
+}
