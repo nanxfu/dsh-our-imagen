@@ -159,11 +159,15 @@ class JobStore:
             return job, True
 
     def pop_next(self, *, timeout: float = 0.5, should_stop=None):  # noqa: ANN001
-        """取队首 job；队列空时最多等 ``timeout`` 秒。``should_stop()`` 为真则返回 None。
+        """取队首 job；队列空时循环等待，直到有任务或 ``should_stop()`` 为真（返回 None）。
 
-        置为返回 None 而不是抛异常：worker 的退出信号（``/shutdown`` / SIGTERM）只需
-        让循环条件变假，不必处理和空队列一样的"暂时没活"情形。
-        ``timeout <= 0`` 表示只探一次、不阻塞（单测与"有没有活"的判断用它，避免空转）。
+        返回 None 而不是抛异常：worker 的退出信号（``/shutdown`` / SIGTERM）只需让循环
+        条件变假，不必处理和空队列一样的"暂时没活"情形。
+
+        ``timeout`` 是**单次等待的轮询间隔**，不是总预算：``timeout > 0`` 时每等满一个
+        间隔就重新检查队列与停止信号，因此没有任务也不会返回（worker 靠它常驻，且
+        ``/shutdown`` 最多迟一个间隔生效）；``timeout <= 0`` 只探一次、不阻塞（单测与
+        "有没有活"的判断用它，避免空转）。
         """
         stop = should_stop or (lambda: False)
         with self._cond:
