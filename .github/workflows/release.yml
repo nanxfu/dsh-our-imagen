@@ -69,6 +69,34 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
 
-      # npm 发布拆到独立的 Publish npm workflow（.github/workflows/publish-npm.yml）：
-      # Release 流程不该因为「暂未配置 npm 凭据」而整条运行变红。
+      - name: Upload npm tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarball
+          path: dist/*.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-npm:
+    name: Publish to npm
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # npm Trusted Publishing (OIDC) 需要 Node >= 22.14.0 且 npm >= 11.5.1
+          node-version: "24"
+
+      - name: Ensure npm >= 11.5.1 for OIDC
+        run: npm install -g "npm@^11.5.1"
+
+      - name: Download npm tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-tarball
+          path: dist
+
+      - name: Publish to npm (OIDC Trusted Publishing)
+        run: npm publish dist/*.tgz --provenance --access public
 

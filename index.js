@@ -29,7 +29,7 @@ import { SessionManager } from './lib/session.js'
 import { createSettingsStore } from './lib/settings.js'
 import { registerTools } from './lib/tools.js'
 
-export const name = 'our-free-imagen'
+export const name = 'our-imagen'
 // cordis 的服务访问是严格的：没有在 inject 里声明过的服务，读取属性会直接抛错，
 // 因此 tools 必须显式声明（它同时是 Agent 工具注册的依赖）。
 export const inject = ['webServer', 'subprocess', 'tools']
@@ -40,8 +40,8 @@ export function apply(ctx, config = {}) {
   // 本地滚动日志：尽早安装，保证后续模块（含模块级 createLogger）的日志都能落盘。
   const fileLog = installFileLog(ctx)
   const defaultPreset = presetById(config.defaultPreset ?? DEFAULT_PRESET).id
-  const devEndpoint = config.devEndpoint ?? process.env.OUR_FREE_IMAGEN_ENDPOINT ?? null
-  const devToken = config.devToken ?? process.env.OUR_FREE_IMAGEN_TOKEN ?? 'dev-token'
+  const devEndpoint = config.devEndpoint ?? process.env.OUR_IMAGEN_ENDPOINT ?? null
+  const devToken = config.devToken ?? process.env.OUR_IMAGEN_TOKEN ?? 'dev-token'
 
   // probe：当前探测状态；lastGood：最近一次成功结果（配额不可用时客户端回退展示）。
   const cache = { probe: null, probeAt: 0, probing: null, lastGood: null, lastGoodAt: null }

@@ -953,7 +953,7 @@ await check('文案字典两侧一致且无空值', () => {
 })
 
 await check('样式 token 与命名空间自洽', () => {
-  assert.equal(NS, 'our-free-imagen')
+  assert.equal(NS, 'our-imagen')
   assert.ok(styles.headerChip && styles.headerChipText && typeof styles.dot === 'function', '徽章样式应存在')
   for (const [name, value] of Object.entries(token)) {
     assert.match(value, /^var\(--dsw-alias-[\w-]+\)$/, `token.${name} 必须引用宿主 CSS 变量`)

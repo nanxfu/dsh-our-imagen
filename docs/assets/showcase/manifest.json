@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-12",
+  "generatedAt": "2026-11-15",
   "source": "本插件在 Kaggle 2×T4 实际生成，经 Pillow 转 WebP",
   "items": [
     {
@@ -266,6 +266,102 @@
       "height": 1152,
       "seconds": 14.89,
       "seed": 765729903
+    },
+    {
+      "file": "flux2-klein-4b-dessert-girl.webp",
+      "presetId": "flux2-klein-4b",
+      "modelLabel": "FLUX.2 Klein 4B",
+      "title": "甜品主题少女插画",
+      "titleEn": "Dessert-themed girl illustration",
+      "prompt": "a cute anime-style digital illustration from a close-up camera angle of a soft-hearted character with peach-pink eyes and creamy blonde hair adorned with dessert-themed accessories, set against a pastel pink and ivory background with floating sparkles and whipped cream clouds, the image features a girl with short wavy hair styled like swirled frosting, wearing a ruffled outfit in peach and vanilla tones with cherry motifs, her eyes look directly at the viewer, with her hand gently touching her lips, and her hair decorated with tiny cherries, heart clips, and candy bows, giving the image a sweet and dreamy feel",
+      "width": 1024,
+      "height": 1024,
+      "seconds": 15.15,
+      "seed": 1296807065
+    },
+    {
+      "file": "flux2-klein-4b-film-portrait.webp",
+      "presetId": "flux2-klein-4b",
+      "modelLabel": "FLUX.2 Klein 4B",
+      "title": "室内胶片感人像",
+      "titleEn": "Indoor film-grain portrait",
+      "prompt": "室内柔和自然光人像，35mm 胶片质感，细腻发丝与浅景深",
+      "width": 1024,
+      "height": 576,
+      "seconds": 10.52,
+      "seed": 1547110624
+    },
+    {
+      "file": "sdxl-lightning-film-portrait.webp",
+      "presetId": "sdxl-lightning",
+      "modelLabel": "SDXL Lightning",
+      "title": "自然光室内人像",
+      "titleEn": "Portrait in natural window light",
+      "prompt": "Indoor portrait in soft natural light, 35mm film aesthetic, fine hair details, shallow depth of field",
+      "width": 1152,
+      "height": 648,
+      "seconds": 5.36,
+      "seed": 1773156456
+    },
+    {
+      "file": "sdxl-lightning-blonde-closeup.webp",
+      "presetId": "sdxl-lightning",
+      "modelLabel": "SDXL Lightning",
+      "title": "浅金色近景肖像",
+      "titleEn": "Close-up in soft daylight",
+      "prompt": "Indoor portrait in soft natural light, 35mm film aesthetic, fine hair details, shallow depth of field",
+      "width": 1152,
+      "height": 648,
+      "seconds": 5.38,
+      "seed": 1773156458
+    },
+    {
+      "file": "realvis-v5-window-profile.webp",
+      "presetId": "realvis-v5",
+      "modelLabel": "RealVisXL V5.0",
+      "title": "窗边侧脸肖像",
+      "titleEn": "Profile by the window",
+      "prompt": "Close-up indoor portrait of a young woman in soft natural window light, 35mm film photography aesthetic, fine hair details, shallow depth of field, natural skin texture",
+      "width": 1152,
+      "height": 648,
+      "seconds": 22.09,
+      "seed": 1907878977
+    },
+    {
+      "file": "realvis-v5-window-landscape.webp",
+      "presetId": "realvis-v5",
+      "modelLabel": "RealVisXL V5.0",
+      "title": "窗边回望",
+      "titleEn": "Glance from the window",
+      "prompt": "Close-up indoor portrait of a young woman in soft natural window light, 35mm film photography aesthetic, fine hair details, shallow depth of field, natural skin texture",
+      "width": 1152,
+      "height": 648,
+      "seconds": 19.98,
+      "seed": 1907878978
+    },
+    {
+      "file": "realvis-v5-window-closeup.webp",
+      "presetId": "realvis-v5",
+      "modelLabel": "RealVisXL V5.0",
+      "title": "窗边特写肖像",
+      "titleEn": "Window-light close-up",
+      "prompt": "Medium close-up portrait of a young woman by a window in soft natural daylight, gentle expression, looking slightly off-camera, wearing a cream knit sweater, 85mm portrait lens, shallow depth of field, fine hair strands, natural skin pores",
+      "width": 768,
+      "height": 1024,
+      "seconds": 24.94,
+      "seed": 2031657869
+    },
+    {
+      "file": "realvis-v5-window-medium.webp",
+      "presetId": "realvis-v5",
+      "modelLabel": "RealVisXL V5.0",
+      "title": "窗边半身像",
+      "titleEn": "Window-light medium portrait",
+      "prompt": "Medium close-up portrait of a young woman by a window in soft natural daylight, gentle expression, looking slightly off-camera, wearing a cream knit sweater, 85mm portrait lens, shallow depth of field, fine hair strands, natural skin pores",
+      "width": 768,
+      "height": 1024,
+      "seconds": 20.47,
+      "seed": 2031657870
     }
   ]
 }

@@ -42,7 +42,7 @@ async function main() {
     state = await getJson('/imagen-api/state')
   } catch (error) {
     console.error(`无法读取 ${base}/imagen-api/state：${error?.message ?? error}`)
-    console.error('若返回 404，说明 index.js 没有加载成功；查看 %USERPROFILE%\\.dsh\\logs\\desktop-next.log 中搜索 our-free-imagen。')
+    console.error('若返回 404，说明 index.js 没有加载成功；查看 %USERPROFILE%\\.dsh\\logs\\desktop-next.log 中搜索 our-imagen。')
     process.exitCode = 1
     return
   }

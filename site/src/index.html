@@ -13,7 +13,7 @@
   <meta property="og:title" content="生图工作台 · Imagen Studio — 开源免显卡生图工作台" />
   <meta
     property="og:description"
-    content="Kaggle 2×T4 免费 GPU 算力直连 DeepSeek Harness：预置 9 款开源模型、22 张实测样张，生成图像直接落盘本地工作区。"
+    content="Kaggle 2×T4 免费 GPU 算力直连 DeepSeek Harness：预置 9 款开源模型、30 张实测样张，生成图像直接落盘本地工作区。"
   />
   <meta name="twitter:card" content="summary_large_image" />
   <script>
@@ -170,7 +170,7 @@
 
           <div class="hero-actions">
             <a class="btn btn-primary" href="#install" data-t="heroCtaPrimary">快速安装上手</a>
-            <a class="btn btn-quiet" href="#works" data-t="heroCtaSecondary">浏览 22 张实测样张</a>
+            <a class="btn btn-quiet" href="#works" data-t="heroCtaSecondary">浏览 30 张实测样张</a>
           </div>
 
           <p class="hero-facts">
@@ -226,19 +226,19 @@
     <!-- 样张展区：实测生成效果 -->
     <section class="works" id="works">
       <div class="section-head">
-        <h2 class="section-title" data-t="wallTitle">22 张实测样张，均由 Kaggle 云端环境直接渲染。</h2>
+        <h2 class="section-title" data-t="wallTitle">30 张实测样张，均由 Kaggle 云端环境直接渲染。</h2>
         <div class="section-aside">
           <p class="section-desc" data-t="wallDesc">
             样张均在 Kaggle 2×T4 环境下通过本插件实际生成，仅转存为 WebP 格式，无任何后期修饰。滚动页面可浏览生成详情。
           </p>
-          <p class="wall-count tabular" id="wall-count">22 SAMPLES · 9 MODELS · KAGGLE 2×T4</p>
+          <p class="wall-count tabular" id="wall-count">30 SAMPLES · 9 MODELS · KAGGLE 2×T4</p>
         </div>
       </div>
 
       <div class="wall-bar" id="wall-bar">
         <span class="wall-bar-label" data-t="wallDeveloped">显影进度</span>
         <span class="wall-bar-track" aria-hidden="true"><i id="wall-bar-fill"></i></span>
-        <span class="wall-bar-count tabular"><b id="wall-developed">00</b> / <span id="wall-total">22</span></span>
+        <span class="wall-bar-count tabular"><b id="wall-developed">00</b> / <span id="wall-total">30</span></span>
       </div>
 
       <div class="wall" id="wall">
@@ -621,8 +621,8 @@
                   网络受限可从 GitHub Releases 下载 zip 解压后，在 DSH 插件管理里选「本地加载（Load Bundle）」；开发者调试可直接：
                 </p>
                 <div class="code-line">
-                  <code>dsh plugin --profile desktop add D:\path\to\our-free-imagen</code>
-                  <button type="button" class="copy-mini" data-copy="dsh plugin --profile desktop add D:\path\to\our-free-imagen" data-t="copyBtn">复制</button>
+                  <code>dsh plugin --profile desktop add D:\path\to\dsh-our-imagen</code>
+                  <button type="button" class="copy-mini" data-copy="dsh plugin --profile desktop add D:\path\to\dsh-our-imagen" data-t="copyBtn">复制</button>
                 </div>
               </div>
             </div>

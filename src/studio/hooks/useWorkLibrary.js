@@ -253,7 +253,10 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     if (Array.isArray(result.data.failed) && result.data.failed.length > 0) {
       uiRef.current.fail('delete_failed', tRef.current('studio.error.deleteFailed'))
     }
-    setSelectedPath('')
+    // 只有被删掉的那张才清空预览选择：删别的图不该把画面上正在看的作品一并收走
+    // （selected 会回落到最新一张，看起来像「删 A 却换成了 B」）。
+    const removedSet = new Set(removed)
+    setSelectedPath((prev) => (removedSet.has(prev) ? '' : prev))
     // 删除会改变记录可达性：重新从第 0 页加载，避免 offset 错位。
     await Promise.all([loadHistory(), loadLibrary()])
     return { removed, failed: Array.isArray(result.data.failed) ? result.data.failed : [] }

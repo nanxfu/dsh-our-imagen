@@ -16,7 +16,7 @@ import { Studio } from './studio/Studio.jsx'
 import { StudioIcon } from './studio/StudioIcon.jsx'
 
 // main.key 与 sidebar.panellist.id 必须是同一个值，宿主靠它把侧栏入口关联到整页面板。
-const PANEL_ID = 'our-free-imagen'
+const PANEL_ID = 'our-imagen'
 
 export const inject = ['slots', 'locale']
 
@@ -60,7 +60,7 @@ export function apply(ctx) {
     ctx.slots.register(
       {
         name: 'conversation.session.header.utilities',
-        id: 'our-free-imagen-status',
+        id: 'our-imagen-status',
         order: 30,
         label: studioLabel,
         locale: NS,

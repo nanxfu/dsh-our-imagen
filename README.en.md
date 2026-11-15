@@ -136,7 +136,7 @@ Imagen Studio decouples the visual user experience from the underlying diffusion
 
 <div align="center">
   <img src="docs/assets/gallery.png" alt="Imagen Studio gallery" width="100%" />
-  <p><sub>Gallery: grouped by date, with search, favorites, and batch selection</sub></p>
+  <p><sub>Gallery: grouped by date, with search, favorites, batch selection, and single-image delete</sub></p>
 </div>
 
 </td>
@@ -257,35 +257,36 @@ Verify with `kaggle quota`: if it prints GPU/TPU quota, the setup works.
 
 ### Step 2: Load Plugin in DSH
 
-**Two recommended ways, neither needs an npm account** (replace `web` with your profile name — the DSH Desktop client usually uses `desktop`):
+**Two recommended ways** (replace `web` with your profile name — the DSH Desktop client usually uses `desktop`):
 
-* **Method A (recommended): one command from GitHub**
+* **Method A (recommended): install from npm**
+  ```bash
+  dsh plugin --profile web add dsh-our-imagen
+  ```
+  To upgrade: run `dsh plugin --profile web remove dsh-our-imagen`, then the command above; restart DSH after installing or upgrading. You can also search `dsh-our-imagen` on the **1024 Plugin Store (deepseek1024.com)** for one-click install.
+
+* **Method B: install from GitHub or GUI**
   ```bash
   dsh plugin --profile web add github:nanxfu/dsh-our-imagen
   ```
-  To upgrade: run `dsh plugin --profile web remove dsh-our-free-imagen`, then the command above; restart DSH after installing or upgrading.
-
-* **Method B (recommended): install from the GUI**
-  DSH Settings → **Plugins** → **Install plugin**, paste `github:nanxfu/dsh-our-imagen`, then restart DSH.
+  GUI: DSH Settings → **Plugins** → **Install plugin**, paste `dsh-our-imagen` or `github:nanxfu/dsh-our-imagen`, then restart DSH.
 
 For restricted networks or offline machines:
 
 * **Method C: pinned Release tarball** (HTTPS only, handy when GitHub git access is unstable)
   ```bash
-  dsh plugin --profile web add https://github.com/nanxfu/dsh-our-imagen/releases/download/v0.7.0/dsh-our-free-imagen-0.7.0.tgz
+  dsh plugin --profile web add https://github.com/nanxfu/dsh-our-imagen/releases/download/v0.10.0/dsh-our-imagen-0.10.0.tgz
   ```
 
 * **Method D: offline zip + Load Bundle** (fully offline)
-  1. Download and extract `dsh-our-free-imagen-<version>.zip` from [Releases](https://github.com/nanxfu/dsh-our-imagen/releases);
+  1. Download and extract `dsh-our-imagen-<version>.zip` from [Releases](https://github.com/nanxfu/dsh-our-imagen/releases);
   2. In DSH Settings → **Plugins** → **Load Bundle**, select the extracted folder;
   3. Click the new **Imagen Studio** icon on the sidebar.
 
 * **Method E: local source link** (development, changes take effect immediately)
   ```bash
-  dsh plugin --profile desktop add D:\path\to\our-free-imagen
+  dsh plugin --profile desktop add D:\path\to\dsh-our-imagen
   ```
-
-> The npm package and the 1024 plugin store listing are not available yet; all methods above work without them.
 
 ---
 

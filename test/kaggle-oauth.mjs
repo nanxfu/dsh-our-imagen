@@ -200,10 +200,10 @@ function authorizeParts(url) {
 async function checkPureFunctions() {
   await check('PKCE：与 kagglesdk 一致（sha256 + urlsafe base64 且保留 = 补位）', () => {
     const verifier =
-      'our-free-imagen-pkce-verifier-0123456789abcdefghijklmnopqrstuvwxyz-ABCDEFGHIJKLMNOPQRSTUVWXYZ-1234567890'
+      'our-imagen-pkce-verifier-0123456789abcdefghijklmnopqrstuvwxyz-ABCDEFGHIJKLMNOPQRSTUVWXYZ-1234567890'
     // 参考值由 Python 侧同参计算：
     // base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode()
-    assert.equal(codeChallengeOf(verifier), 'EUm-e-DHZjb48vIIGNG0HA_epMPCa8BLqJCVAEcqft8=')
+    assert.equal(codeChallengeOf(verifier), 'h4JILKzqhQ8mVeHTuMkw30Th4lC9Np5G12Cy9KJbaIE=')
     assert.ok(codeChallengeOf(verifier).endsWith('='), 'kagglesdk 不 rstrip 补位')
 
     const pair = buildPkcePair()

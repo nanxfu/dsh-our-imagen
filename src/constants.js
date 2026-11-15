@@ -1,6 +1,6 @@
 /** 数据形态常量：会话态、任务态与阶段映射。 */
 
-export const NS = 'our-free-imagen'
+export const NS = 'our-imagen'
 
 export const ACTIVE_STATUS = { queued: true, 'waiting-session': true, running: true }
 

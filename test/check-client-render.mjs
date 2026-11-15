@@ -259,7 +259,7 @@ const scenarios = {
         'ofs-gallery': 1,
         'ofs-gallery-group': 1,
         'ofs-gallery-card': 1,
-        'ofs-gallery-action': 4,
+        'ofs-gallery-action': 5,
         // 画廊列由 JS 分桶（行优先）：1280px 视口下 4 列，卡片直接收藏的星标每张一个。
         'ofs-gallery-col': 4,
         'ofs-gallery-star': 1,
@@ -783,13 +783,13 @@ await writeFile(TEST_ARTIFACT, testBundle, 'utf8')
 await check('发布产物是合法 bundle 且不含测试出口', async () => {
   const artifact = await readFile(PROD_ARTIFACT, 'utf8')
   assert.ok(artifact.startsWith('window.__ModuleLoader__.load({'), '必须以模块加载器调用开头')
-  assert.ok(artifact.includes('id: "dsh-our-free-imagen"'), 'bundle id 必须是包名')
+  assert.ok(artifact.includes('id: "dsh-our-imagen"'), 'bundle id 必须是包名')
   assert.ok(!artifact.includes('__test'), '发布产物不应包含测试出口')
   assert.ok(artifact.includes('require("react")'), 'react 必须保持 external')
   assert.ok(!/require\(["']\.\//.test(artifact), '不得相对 require 自己的产物')
 
   const client = await loadClient({ artifact: PROD_ARTIFACT, testBuild: false })
-  assert.equal(client.id, 'dsh-our-free-imagen')
+  assert.equal(client.id, 'dsh-our-imagen')
   assert.deepEqual(client.mod.inject, ['slots', 'locale'])
   assert.equal(typeof client.mod.apply, 'function')
 })
@@ -917,9 +917,11 @@ await check('画廊悬停动作把完整作品条目交给回调', async () => {
 
   const actions = findNodes(
     tree,
-    (node) => node.type === 'button' && node.props && node.props.className === 'ofs-gallery-action',
+    (node) => node.type === 'button'
+      && typeof node.props?.className === 'string'
+      && node.props.className.split(' ').includes('ofs-gallery-action'),
   )
-  assert.equal(actions.length, 4, '每张作品应有带回参数 / 生成变体 / 以此图重绘 / 查看大图四个动作')
+  assert.equal(actions.length, 5, '每张作品应有带回参数 / 生成变体 / 以此图重绘 / 查看大图 / 删除五个动作')
   for (const node of actions) node.props.onClick()
 
   // 回归：曾经把 entry.item 直接传给动作，导致 iteratePatch 拿不到图片而静默失败。
@@ -1036,6 +1038,70 @@ await check('渲染：画廊卡片星标切换收藏，不影响打开大图', a
   selectingMedia[0].props.onClick()
   assert.equal(opened.length, 0, '批量选择时点图片只切换选中，不打开大图')
   assert.deepEqual(favoriteCalls, [entries[1].image.path], '批量选择时不应触发收藏')
+})
+
+// 单张删除：第一次点击只进入确认态，可取消；再点一次才把这一张交给删除动作。
+await check('渲染：画廊卡片单张删除需二次确认', async () => {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const entry = { image: image(31), item: historyItem }
+  const deleted = []
+  let tree = await client.mountRaw(client.components.Gallery, {
+    t,
+    gallery: [entry],
+    now: NOW,
+    presets: [preset],
+    favorites: [],
+    onDelete: async (paths) => {
+      deleted.push(paths)
+      return { removed: paths, failed: [] }
+    },
+    onExport: () => {},
+    onOpen: () => {},
+    onRecall: () => {},
+    onVariant: () => {},
+    onReference: () => {},
+    onZoom: () => {},
+    onToggleFavorite: () => {},
+  })
+
+  const dangerButton = () => findNodes(
+    tree,
+    (node) => node.type === 'button'
+      && typeof node.props?.className === 'string'
+      && node.props.className.split(' ').includes('is-danger'),
+  )[0]
+
+  assert.equal(collectText(dangerButton()).join(''), '删除', '未确认时按钮只写「删除」')
+  dangerButton().props.onClick()
+  tree = await client.rerenderRaw()
+  assert.equal(collectText(dangerButton()).join(''), '确认删除', '第一次点击进入确认态，而不是直接删除')
+  assert.equal(deleted.length, 0, '确认前不得发出删除请求')
+
+  // 取消：回到未确认，不触发删除。
+  const cancel = findNodes(tree, (node) => node.type === 'button' && collectText(node).join('') === '取消')[0]
+  assert.ok(cancel, '确认态应提供「取消」')
+  cancel.props.onClick()
+  tree = await client.rerenderRaw()
+  assert.equal(collectText(dangerButton()).join(''), '删除', '取消后按钮回到未确认态')
+
+  // 指针移出卡片：确认态自动收起，避免下次滑过时误删。
+  dangerButton().props.onClick()
+  tree = await client.rerenderRaw()
+  findNodes(tree, (node) => typeof node.props?.className === 'string'
+    && node.props.className.split(' ').includes('ofs-gallery-card'))[0].props.onMouseLeave()
+  tree = await client.rerenderRaw()
+  assert.equal(collectText(dangerButton()).join(''), '删除', '移出卡片应收起确认态')
+
+  // 二次点击才真正删除，并且只提交这一张的路径。
+  dangerButton().props.onClick()
+  tree = await client.rerenderRaw()
+  await dangerButton().props.onClick()
+  assert.deepEqual(deleted, [[entry.image.path]], '确认后只删除这一张')
+  tree = await client.rerenderRaw()
+  assert.equal(collectText(dangerButton()).join(''), '删除', '删除成功后收起确认态')
+
+  client.unmount()
 })
 
 // 历史首屏按契约页长请求，offset 从 0 开始（分页由「加载更多」推进）。

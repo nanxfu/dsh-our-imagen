@@ -328,7 +328,7 @@
   object-fit: cover;
 }
 
-/* 悬停操作：带回参数 / 生成变体 / 查看大图 */
+/* 悬停操作：带回参数 / 生成变体 / 以此图重绘 / 查看大图 / 删除 */
 .ofs-gallery-hover {
   position: absolute;
   right: 6px;
@@ -369,6 +369,31 @@
 
 .ofs-gallery-action:hover {
   background: rgb(20 20 22 / 82%);
+}
+
+/*
+ * 删除：破坏性动作单独一档。常态只给淡红描边，确认态实心红且其余动作已收起，
+ * 让「已经上膛」这件事一眼可见；红只出现在这一颗小胶囊上，不扩散到大面积。
+ */
+.ofs-gallery-action.is-danger {
+  border-color: rgb(255 138 138 / 34%);
+  color: #ffd6d6;
+}
+
+.ofs-gallery-action.is-danger:hover {
+  border-color: rgb(255 138 138 / 62%);
+  background: rgb(86 18 18 / 78%);
+  color: #fff;
+}
+
+.ofs-gallery-action.is-danger.is-confirming {
+  border-color: rgb(255 138 138 / 72%);
+  background: #9d2b2b;
+  color: #fff;
+}
+
+.ofs-gallery-action.is-danger.is-confirming:hover {
+  background: #b23434;
 }
 
 /* 触屏设备没有 hover：操作条常显，否则手机上无法「带回参数 / 生成变体」。 */

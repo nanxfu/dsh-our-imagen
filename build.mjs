@@ -22,7 +22,7 @@ import { build } from 'esbuild'
 
 const ROOT = dirname(fileURLToPath(import.meta.url))
 
-export const PACKAGE_ID = 'dsh-our-free-imagen'
+export const PACKAGE_ID = 'dsh-our-imagen'
 export const ARTIFACT = join(ROOT, 'client.js')
 export const TEST_ARTIFACT = join(ROOT, 'test/.build/client.test.js')
 

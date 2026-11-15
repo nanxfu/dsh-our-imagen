@@ -136,7 +136,7 @@
 
 <div align="center">
   <img src="docs/assets/gallery.png" alt="生图工作台 作品画廊" width="100%" />
-  <p><sub>作品画廊：按日期归档，支持搜索、收藏与批量选择</sub></p>
+  <p><sub>作品画廊：按日期归档，支持搜索、收藏、批量选择与单张删除</sub></p>
 </div>
 
 </td>
@@ -258,35 +258,36 @@ kaggle auth login
 
 ### 第二步：在 DSH 中加载插件
 
-**推荐用下面两种方式安装**（都无需 npm 账号；把 `web` 换成你的 profile 名，DSH Desktop 客户端通常是 `desktop`）：
+**推荐用下面两种方式安装**（把 `web` 换成你的 profile 名，DSH Desktop 客户端通常是 `desktop`）：
 
-* **方式 A（推荐）：命令行一条命令从 GitHub 安装**
+* **方式 A（推荐）：通过 npm 一键安装**
+  ```bash
+  dsh plugin --profile web add dsh-our-imagen
+  ```
+  升级：先 `dsh plugin --profile web remove dsh-our-imagen`，再重新执行上面的安装命令；安装或升级后重启 DSH。也可在 **1024 插件市场（deepseek1024.com）** 搜索 `dsh-our-imagen` 一键安装。
+
+* **方式 B：从 GitHub 仓库或图形界面安装**
   ```bash
   dsh plugin --profile web add github:nanxfu/dsh-our-imagen
   ```
-  升级：先 `dsh plugin --profile web remove dsh-our-free-imagen`，再执行上面的安装命令；安装或升级后重启 DSH。
-
-* **方式 B（推荐）：图形界面安装**
-  DSH 设置 → **插件管理** → **安装插件**，粘贴 `github:nanxfu/dsh-our-imagen` → 安装完成后重启 DSH。
+  图形界面：DSH 设置 → **插件管理** → **安装插件**，粘贴 `dsh-our-imagen` 或 `github:nanxfu/dsh-our-imagen` → 安装完成后重启 DSH。
 
 网络受限或需要离线时，可改用：
 
 * **方式 C：固定版本的 Release tarball**（只依赖 HTTPS，适合 GitHub 直连不稳定的网络）
   ```bash
-  dsh plugin --profile web add https://github.com/nanxfu/dsh-our-imagen/releases/download/v0.7.0/dsh-our-free-imagen-0.7.0.tgz
+  dsh plugin --profile web add https://github.com/nanxfu/dsh-our-imagen/releases/download/v0.10.0/dsh-our-imagen-0.10.0.tgz
   ```
 
 * **方式 D：离线 zip + 本地加载（Load Bundle）**（完全离线可用）
-  1. 从 [Releases](https://github.com/nanxfu/dsh-our-imagen/releases) 下载 `dsh-our-free-imagen-<version>.zip` 并解压；
+  1. 从 [Releases](https://github.com/nanxfu/dsh-our-imagen/releases) 下载 `dsh-our-imagen-<version>.zip` 并解压；
   2. DSH 设置 → **插件管理** → **本地加载（Load Bundle）**，选中解压后的目录；
   3. 点击左侧工具栏新增的「生图工作台」图标。
 
 * **方式 E：本地源码 link**（开发调试，改代码即时生效）
   ```bash
-  dsh plugin --profile desktop add D:\path\to\our-free-imagen
+  dsh plugin --profile desktop add D:\path\to\dsh-our-imagen
   ```
-
-> npm 包与 1024 插件市场暂未上架，以上方式都可以正常安装与使用。
 
 ---
 

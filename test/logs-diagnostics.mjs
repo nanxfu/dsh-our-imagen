@@ -259,7 +259,7 @@ await check('诊断信息包含环境指纹与阶段耗时', () => {
     'hf_NOT_A_REAL_TOKEN_VALUE',
     'super-secret-token',
     '127.0.0.1:7890',
-    'our-free-imagen',
+    'our-imagen',
     '一只猫',
     'tunnel.example.com',
   ]) {

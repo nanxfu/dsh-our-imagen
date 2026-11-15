@@ -86,6 +86,10 @@ export function Gallery(props) {
   const [selecting, setSelecting] = React.useState(Boolean(defaultSelecting))
   const [picked, setPicked] = React.useState([])
   const [confirming, setConfirming] = React.useState(false)
+  // 单张删除的二次确认：只对一张卡生效，避免多张卡同时「上膛」。
+  const [confirmKey, setConfirmKey] = React.useState('')
+  // 正在删除的路径集合：同一张卡在途时忽略重复点击，不同的卡可以各删各的。
+  const deletingRef = React.useRef(new Set())
   const [keyword, setKeyword] = React.useState('')
   const columns = useColumnCount()
 
@@ -146,18 +150,71 @@ export function Gallery(props) {
     setSelecting(false)
     setPicked([])
     setConfirming(false)
+    setConfirmKey('')
+  }
+
+  function enterSelect() {
+    setConfirmKey('')
+    setSelecting(true)
   }
 
   function clearFilters() {
     setKeyword('')
     setPresetFilter('')
     setFavoriteOnly(false)
+    setConfirmKey('')
+  }
+
+  /** 筛选一换，画面里的卡片就换了一批：收起上膛态，别让确认按钮挂到另一张卡上。 */
+  function changeKeyword(value) {
+    setConfirmKey('')
+    setKeyword(value)
+  }
+
+  function changePresetFilter(value) {
+    setConfirmKey('')
+    setPresetFilter(value)
+  }
+
+  function toggleFavoriteOnly() {
+    setConfirmKey('')
+    setFavoriteOnly((value) => !value)
   }
 
   /** 星标只切换收藏；批量选择时星标整颗收起，避免和「点卡片选中」抢同一次点击。 */
   function toggleFavorite(entry) {
     if (typeof onToggleFavorite !== 'function') return
     onToggleFavorite(keyOf(entry))
+  }
+
+  /** 进入 / 退出某张卡的删除确认态；同一时刻只有一张卡上膛。 */
+  function askDelete(entry) {
+    setConfirmKey(keyOf(entry))
+  }
+
+  function cancelDelete() {
+    setConfirmKey('')
+  }
+
+  /**
+   * 单张删除：卡片上第一次点「删除」只是进入确认态，再点「确认删除」才真删。
+   * 请求在途时忽略重复点击，避免同一张图连发两次（第二次必然 not_found）。
+   */
+  async function deleteEntry(entry) {
+    if (typeof onDelete !== 'function') return
+    const key = keyOf(entry)
+    if (!key || deletingRef.current.has(key)) return
+    deletingRef.current.add(key)
+    try {
+      const result = await onDelete([key])
+      // 失败（含网络中断）时保留确认态：卡片还在，用户可以就地点一次重试。
+      if (!result) return
+      if (Array.isArray(result.failed) && result.failed.length > 0) return
+      setConfirmKey('')
+      setPicked((prev) => prev.filter((item) => item !== key))
+    } finally {
+      deletingRef.current.delete(key)
+    }
   }
 
   async function confirmDelete() {
@@ -177,16 +234,16 @@ export function Gallery(props) {
         t={t}
         visibleCount={visibleCount}
         keyword={keyword}
-        onKeywordChange={setKeyword}
+        onKeywordChange={changeKeyword}
         usedPresets={usedPresets}
         presets={presets}
         presetFilter={presetFilter}
-        onPresetFilterChange={setPresetFilter}
+        onPresetFilterChange={changePresetFilter}
         presetNameOf={presetNameOf}
         favoriteOnly={favoriteOnly}
-        onToggleFavoriteOnly={() => setFavoriteOnly((value) => !value)}
+        onToggleFavoriteOnly={toggleFavoriteOnly}
         selecting={selecting}
-        onEnterSelect={() => setSelecting(true)}
+        onEnterSelect={enterSelect}
         onExitSelect={exitSelect}
         picked={picked}
         confirming={confirming}
@@ -235,6 +292,7 @@ export function Gallery(props) {
                             selecting={selecting}
                             checked={picked.includes(cardKey)}
                             favorite={favoriteSet.has(cardKey)}
+                            confirming={confirmKey === cardKey}
                             onTogglePick={togglePick}
                             onOpen={onOpen}
                             onToggleFavorite={toggleFavorite}
@@ -242,6 +300,9 @@ export function Gallery(props) {
                             onVariant={onVariant}
                             onReference={onReference}
                             onZoom={onZoom}
+                            onAskDelete={askDelete}
+                            onCancelDelete={cancelDelete}
+                            onDelete={deleteEntry}
                           />
                         )
                       })}

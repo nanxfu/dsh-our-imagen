@@ -11,7 +11,7 @@ import { bindChoiceGroup } from './ui.js';
  */
 const ACTS = {
   studio: [
-    { shot: 'studio-light', spot: [14.5, 36], zoom: 1.45 },
+    { shot: 'studio-light', spot: [14, 30], zoom: 1.45 },
     { shot: 'model-picker-dark', spot: [84, 30], zoom: 1.5 },
     { shot: 'gallery', spot: [48, 34], zoom: 1.45 },
   ],

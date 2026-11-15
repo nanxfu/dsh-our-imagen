@@ -1,11 +1,9 @@
 name: Publish npm
 
-# 手动触发的 npm 发布。Release 流程只负责 GitHub Release 与离线包，
-# 这样未配置 npm 凭据时不会让发版运行失败。
-#
-# 首次使用前：仓库 Settings → Secrets and variables → Actions →
-# 新建 repository secret `NPM_TOKEN`（npm granular access token，Read and Publish 权限）。
-# token 权限不足时 npm 会返回 404，按 npm 官方说明检查 token 的包权限。
+# 手动触发的 npm 发布（补发或 dry-run 演练）。
+# 采用 npm Trusted Publishing (OIDC)，无需配置长期 NPM_TOKEN secret。
+# 首次使用前需先在本地发布第一版占坑，再到 npmjs.com 包设置 → Trusted Publisher
+# 绑定本仓库与工作流文件名（release.yml / publish-npm.yml）。
 
 on:
   workflow_dispatch:
@@ -34,25 +32,37 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # npm Trusted Publishing (OIDC) 需要 Node >= 22.14.0 且 npm >= 11.5.1
+          node-version: "24"
           cache: npm
-          registry-url: https://registry.npmjs.org
+
+      - name: Ensure npm >= 11.5.1 for OIDC
+        run: npm install -g "npm@^11.5.1"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Check API contract
+        run: npm run contract:check
+
+      - name: Check model assets
+        run: npm run models:check
+
+      - name: Check client bundle is up to date
+        run: node build.mjs --check
 
       - name: Run tests
         run: npm test
 
       - name: Publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          if [ -z "${NODE_AUTH_TOKEN}" ]; then
-            echo "::error::仓库没有配置 NPM_TOKEN secret，无法发布。请先在 Settings → Secrets 中添加。"
-            exit 1
-          fi
           if [ "${DRY_RUN}" = "true" ]; then
             npm publish --dry-run --access public
           else

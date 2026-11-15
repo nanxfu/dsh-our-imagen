@@ -54,6 +54,8 @@ def unpack() -> str:
 
 
 def run() -> None:
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     root = unpack()
     print(f"[bundle] 源码包已解压：{root}（入口 {ENTRY_MODULE}.{ENTRY_FUNCTION}）", flush=True)
     module = importlib.import_module(ENTRY_MODULE)
