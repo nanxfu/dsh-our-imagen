@@ -1,70 +1,62 @@
 <div align="center">
 
-# Imagen Studio (dsh-our-imagen)
+# Image Studio (dsh-our-imagen)
 
-**Open-source text-to-image studio & agent visual tool for DeepSeek Harness.**<br/>
-Out-of-the-box support for Kaggle free 2×T4 cloud GPUs (30 hrs/week). No local GPU needed, continuous generations, 100% saved locally.
+**An open-source text-to-image workbench and visual agent plugin for DeepSeek Harness.**<br/>
+Runs on Kaggle's free dual-GPU quota (30 hrs/week) by default, with zero local VRAM usage and all generated images saved directly to disk.
 
 [![Status: Preview](https://img.shields.io/badge/Status-Preview-orange?style=flat-square)](#)
 [![DeepSeek Harness](https://img.shields.io/badge/DSH-Plugin-0066FF?style=flat-square)](https://github.com/deepseek-ai/DeepSeek-Harness)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=flat-square)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/nanxfu/dsh-our-imagen?style=flat-square)](https://github.com/nanxfu/dsh-our-imagen)
 
-> 🚧 **Early Preview**: Designed with pluggable backend drivers. Ships with Kaggle 2×T4 free GPU as the default driver; Google Colab, local GPU, and self-hosted worker drivers are actively being integrated. More stable releases and cutting-edge models are on the way!
+> **Preview Release**: Kaggle's free dual-GPU driver is built in by default. Support for Google Colab, local GPUs, and self-hosted workers is in progress.
 
-[Quick Start](#-quick-start-in-3-steps) · [What is it](#-what-is-it) · [Backends](#-backend-drivers) · [FAQ](#-faq) · [Development](#-development--testing) · [简体中文](README.md)
+[Quick Start](#quick-start) · [Backends](#backend-drivers) · [Features](#features) · [FAQ](#faq) · [Development](#development--testing) · [中文](README.md)
 
 </div>
 
 ---
 
-## 💡 What is it
+## Overview
 
-**Imagen Studio** (repo: `dsh-our-imagen`) is an open-source image generation studio & visual agent plugin built for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness).
+**Image Studio** (`dsh-our-imagen`) is an image generation plugin for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness).
 
-It solves a very practical problem: many creators and developers want to use modern open-source text-to-image models, but lack a machine with high VRAM, or don't want to maintain a hefty multi-gigabyte local environment (PyTorch, CUDA, ComfyUI, etc.).
-
-Built with a **decoupled, pluggable backend architecture**:
-1. **You get a full-page visual studio**: wake up cloud GPUs with one click, select a curated model, type your prompt, and generate.
-2. **You get out-of-the-box chat agent tools**: ask your assistant in chat "generate a cyberpunk rain street", and the agent reviews the intent, shows a confirmation card, and invokes the generation.
-3. **Zero-cost computing out of the box**: ships with a default Kaggle 2×T4 driver (30 hrs/week free quota), with Google Colab and custom worker integrations coming soon.
-4. **No quota waste or third-party image hosting**: auto-shuts down after 30 minutes of inactivity, and generated images are streamed directly into your local `imagen-output/` workspace folder over an encrypted one-time tunnel.
+Not every machine has a high-VRAM GPU, and setting up PyTorch, CUDA, and ComfyUI locally takes effort. This plugin separates the **UI** from the **compute backend**: you run a lightweight local workbench, offload inference to free cloud GPUs, and save results directly to `imagen-output/` in your local workspace.
 
 ---
 
-## 🔌 Backend Drivers
+## Backend Drivers
 
-Imagen Studio decouples the visual user experience from the underlying diffusion inference engine:
-
-| Backend Driver | Status | Hardware Tier | Cost / Barrier | Note |
+| Driver | Status | Compute | Cost | Notes |
 | :--- | :---: | :--- | :--- | :--- |
-| **Kaggle GPU Driver** | **Built-in (Default)** | 2×Nvidia Tesla T4 (30G VRAM) | **100% Free** (30 hrs/wk) | Default out-of-the-box driver, zero local GPU requirements, encrypted peer rendezvous |
-| **Google Colab Driver** | **In Progress** | Nvidia T4 / A100 | **Free / Pro** | One-click notebook attach & tunnel link, expanding free compute sources |
-| **Custom Remote Worker** | **Planned** | Self-hosted / AutoDL / RunPod | Pay-per-use / Private | Ideal for creators with existing private GPU servers or 24/7 needs |
-| **Local Direct (ComfyUI)** | **Planned** | Local Dedicated GPU (RTX 3060/4090) | Own Hardware | Ideal for users with local high-VRAM hardware seeking zero latency and offline usage |
+| **Kaggle GPU Driver** | **Built-in (Default)** | 2×Nvidia Tesla T4 (30 GB VRAM) | **Free** (30 hrs/week quota) | Ready out of the box with auto session management and encrypted transfer |
+| **Google Colab Driver** | **In Progress** | Nvidia T4 / A100 | Free / Subscription | Notebook mount with direct tunnel |
+| **Self-hosted Worker** | **Planned** | Private server / AutoDL / RunPod | Pay-as-you-go / Self-hosted | For private GPUs or always-on setups |
+| **Local (Local/ComfyUI)** | **Planned** | Local GPU (RTX 3060/4090, etc.) | Local hardware | For offline, low-latency local inference |
 
 ---
 
-## 🎨 Key Features
+## Features
 
 <table>
 <tr>
 <td width="48%">
 
-### 1. Dedicated Full-Page Studio
-* **Curated Open-Source Models**: From ultra-fast `SDXL Lightning` and `Hyper-SDXL`, to cinematic `SDXL Base` and `RealVisXL`, anime-tailored `Animagine XL 3.1` / `Anima`, and cutting-edge `FLUX.2 Klein 4B`.
-* **Single-Track Creative Rail**: prompt, aspect ratio, resolution tier (long edge), custom size, steps / guidance / seed in one clear view; image count (1–4) sits in the footer so you can swap words, change ratio, and batch-draw without extra expansion.
-* **Only Effective Parameters Shown**: the exclusion field appears only when the selected model really consumes negative prompts and CFG > 0 (hidden by default for CFG=0 fast models and `FLUX.2 Klein 4B`), and is never submitted when unavailable; with a reference image, Frame Settings states that output size follows the reference image.
-* **4-Dimension Prompt Polish**: Lighting, Material, Composition, and Mood in one click — collapsible, non-destructive additions; English fragments go into the prompt while the UI shows localized labels.
-* **Reference-based redraw (img2img)**: Turn any gallery piece into a reference image with one click and iterate with a redraw-strength slider (SDXL family presets first).
-* **Bottom Filmstrip & History Drawer**: Review recent generations instantly, with one-click actions to bring back parameters or generate variants.
+### 1. Standalone Workbench
+* **9 Built-in Models**: Fast models (`SDXL Lightning`, `Hyper-SDXL`, `SDXL Turbo`), general/photorealistic (`SDXL Base`, `RealVisXL`, `Playground v2.5`), anime (`Animagine XL 3.1`, `Anima Light Lavender`), and `FLUX.2 Klein 4B`.
+* **Focused Controls**: Prompt, aspect ratio, resolution, steps, CFG scale, and seed in one panel, with batch count (1–4) pinned in the footer.
+* **Effective Parameters Only**: Unused fields (such as negative prompts on 4-step models or `FLUX.2 Klein 4B`) are hidden and omitted from requests. When a reference image is attached, output dimensions follow the reference image.
+* **Quick Modifiers**: Collapsible one-click English tags for lighting, material, composition, and mood (with localized UI labels).
+* **Image-to-Image**: Send any gallery image back as a reference with a denoising strength slider for iterative edits (SDXL family).
+* **Filmstrip & Gallery**: Review recent outputs in the bottom filmstrip, restore all parameters or generate variations in one click, and manage your date-grouped gallery with search, favorites, batch selection, and single-image deletion.
 
 </td>
 <td width="52%">
 
 <div align="center">
-  <img src="docs/assets/studio-light.png" alt="Imagen Studio View" width="100%" />
-  <p><sub>Dedicated full-page studio: parameters, live canvas, and recent filmstrip</sub></p>
+  <img src="docs/assets/studio-light.png" alt="Image Studio Workbench" width="100%" />
+  <p><sub>Standalone workbench: parameter panel, live canvas, and recent filmstrip</sub></p>
 </div>
 
 </td>
@@ -73,18 +65,18 @@ Imagen Studio decouples the visual user experience from the underlying diffusion
 <tr>
 <td width="48%">
 
-### 2. Creation Assistant & Chat Tools
-* **In-Chat Generation**: The host automatically registers `imagen_generate`, `imagen_session`, and `imagen_history` agent tools.
-* **Natural Language Intent Alignment**: Describe your idea casually; the built-in assistant turns it into a standard English prompt, infers the aspect ratio and decides whether exclusions are available for the current model. It supports general clarifying questions and multi-turn edits, and **always shows a confirmation card before executing**.
-* **Model Knowledge Built In**: The assistant knows the prompt style, negative-prompt capability, and strengths of all 9 models, and suggests a better fit as a soft hint without blocking your current choice.
-* **Seamless Bi-Directional Flow**: Hand the confirmation card off to the parameter form for further tuning and batch draws; images created in chat can be expanded from the right-hand filmstrip and opened in the full studio for further editing.
+### 2. Chat Integration & Assistant
+* **Direct Tool Calls**: Registers `imagen_generate`, `imagen_session`, and `imagen_history` so you can generate images directly from chat.
+* **Confirm Before Running**: Translates natural-language requests into English prompts, infers aspect ratios, checks model constraints, and shows a confirmation card before starting inference.
+* **Model Awareness**: Understands prompt conventions and strengths across all 9 models and suggests a better match when appropriate.
+* **Workbench Sync**: Load confirmation cards into the workbench for fine-tuning, or open chat-generated images in the workbench for further editing.
 
 </td>
 <td width="52%">
 
 <div align="center">
   <img src="docs/assets/chat-tool.png" alt="Chat Confirmation Card and Preview" width="100%" />
-  <p><sub>Chat integration: review card first, confirm to run, saved locally</sub></p>
+  <p><sub>Chat card: confirm parameters first, then generate directly to local disk</sub></p>
 </div>
 
 </td>
@@ -93,25 +85,25 @@ Imagen Studio decouples the visual user experience from the underlying diffusion
 <tr>
 <td width="48%">
 
-### 3. Local Storage & Auto Quota Saver
-* **100% Saved Locally**: Images are transferred via a one-time Bearer token tunnel straight into your workspace's `imagen-output/` directory, without touching any third-party public image hosts.
-* **Anti-Waste Auto Shutdown**: The remote Kaggle kernel shuts down automatically after 30 minutes of idle time (configurable), or can be shut down manually at any time.
-* **Disaster Recovery**: Session states are atomically recorded in `.imagen/session.json`. If DSH restarts or reloads, the plugin checks instance liveness and re-attaches seamlessly.
+### 3. Local Storage & Session Management
+* **Local-Only Storage**: Generated images stream back over a per-session Bearer Token tunnel and are written directly to `imagen-output/`, without third-party image hosts.
+* **Idle Auto-Shutdown**: The remote kernel shuts down automatically after 30 minutes of inactivity (configurable), or anytime from the top-right controls.
+* **Session Recovery**: `.imagen/session.json` tracks the active session so DSH restarts or page refreshes reconnect to the existing instance instead of starting a duplicate one.
 
 </td>
 <td width="52%">
 
 ```text
-[ DSH Studio / Chat Window ]
-          │  /imagen-api/* (Local IPC)
+[ DSH Workbench / Chat ]
+          │  /imagen-api/* (local)
           ▼
-[ Local Host (Node.js) ] ── (Save) ──▶ [ Local imagen-output/ ]
+[ Local Plugin Host (Node.js) ] ── (write) ──▶ [ Local imagen-output/ ]
           │  kaggle kernels push
           ▼
 [ Kaggle Cloud (2×Tesla T4) ]
    daemon.py (diffusers)
-          │  Single-use Bearer Token Tunnel
-          └─────────────────────────────▶ (Secure Local Stream)
+          │  One-time Bearer Token tunnel
+          └─────────────────────────────────▶ (streamed back locally)
 ```
 
 </td>
@@ -120,23 +112,23 @@ Imagen Studio decouples the visual user experience from the underlying diffusion
 
 ---
 
-## 🖼 More Screens
+## Screenshots
 
 <table>
 <tr>
 <td width="50%">
 
 <div align="center">
-  <img src="docs/assets/model-picker-dark.png" alt="Imagen Studio dark-theme model picker" width="100%" />
-  <p><sub>Dark-theme model picker: nine built-in models compared, with measured generation time</sub></p>
+  <img src="docs/assets/model-picker-dark.png" alt="Dark Theme Model Picker" width="100%" />
+  <p><sub>Dark theme model picker: 9 built-in models with measured generation times</sub></p>
 </div>
 
 </td>
 <td width="50%">
 
 <div align="center">
-  <img src="docs/assets/gallery.png" alt="Imagen Studio gallery" width="100%" />
-  <p><sub>Gallery: grouped by date, with search, favorites, batch selection, and single-image delete</sub></p>
+  <img src="docs/assets/gallery.png" alt="Image Gallery" width="100%" />
+  <p><sub>Gallery: grouped by date, with search, favorites, batch selection, and single-image deletion</sub></p>
 </div>
 
 </td>
@@ -145,49 +137,28 @@ Imagen Studio decouples the visual user experience from the underlying diffusion
 
 ---
 
-## 🎨 Model Showcase
+## Model Showcase
 
-The nine samples below cover every built-in model. All were generated by this plugin on Kaggle 2×T4, converted to WebP without retouching; timings come from the same runs.
+All 9 samples below were generated on Kaggle 2×T4 using this plugin and converted to WebP without post-processing.
 
 <table>
 <tr>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/sdxl-lightning-cyberpunk-street.webp" alt="Neon rain street generated with SDXL Lightning" width="100%" />
-  <p><sub>SDXL Lightning · Neon rain street · ~9.8 s</sub></p>
+  <img src="docs/assets/showcase/sdxl-lightning-cyberpunk-street.webp" alt="SDXL Lightning neon street" width="100%" />
+  <p><sub>SDXL Lightning · Rainy Neon Street · ~9.8s</sub></p>
 </div>
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/hyper-sdxl-8step-baroque-still-life.webp" alt="Baroque still life generated with Hyper-SDXL 8-Step" width="100%" />
-  <p><sub>Hyper-SDXL 8-Step · Baroque still life · ~8.0 s</sub></p>
+  <img src="docs/assets/showcase/hyper-sdxl-8step-baroque-still-life.webp" alt="Hyper-SDXL 8-Step baroque still life" width="100%" />
+  <p><sub>Hyper-SDXL 8-Step · Baroque Still Life · ~8.0s</sub></p>
 </div>
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/sdxl-turbo-crimson-moon.webp" alt="Samurai under a crimson moon generated with SDXL Turbo" width="100%" />
-  <p><sub>SDXL Turbo · Samurai under a crimson moon · ~3.9 s</sub></p>
-</div>
-</td>
-</tr>
-
-<tr>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/playground-v2.5-floating-islands.webp" alt="Floating islands dream generated with Playground v2.5" width="100%" />
-  <p><sub>Playground v2.5 · Floating islands dream · ~19.6 s</sub></p>
-</div>
-</td>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/sdxl-base-alpine-lake.webp" alt="Alpine lake at golden hour generated with SDXL Base 1.0" width="100%" />
-  <p><sub>SDXL Base 1.0 · Alpine lake at golden hour · ~17.1 s</sub></p>
-</div>
-</td>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/realvis-v5-fisherman-portrait.webp" alt="Portrait of a fisherman generated with RealVisXL V5.0" width="100%" />
-  <p><sub>RealVisXL V5.0 · Portrait of a fisherman · ~21.1 s</sub></p>
+  <img src="docs/assets/showcase/sdxl-turbo-crimson-moon.webp" alt="SDXL Turbo samurai under crimson moon" width="100%" />
+  <p><sub>SDXL Turbo · Samurai Under Crimson Moon · ~3.9s</sub></p>
 </div>
 </td>
 </tr>
@@ -195,20 +166,41 @@ The nine samples below cover every built-in model. All were generated by this pl
 <tr>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/flux2-klein-4b-kyoto-poster.webp" alt="Kyoto travel poster generated with FLUX.2 Klein 4B" width="100%" />
-  <p><sub>FLUX.2 Klein 4B · Kyoto travel poster · ~6.8 s</sub></p>
+  <img src="docs/assets/showcase/playground-v2.5-floating-islands.webp" alt="Playground v2.5 floating islands" width="100%" />
+  <p><sub>Playground v2.5 · Floating Islands · ~19.6s</sub></p>
 </div>
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/animagine-xl-3.1-sakura-girl.webp" alt="Girl among cherry blossoms generated with Animagine XL 3.1" width="100%" />
-  <p><sub>Animagine XL 3.1 · Girl among cherry blossoms · ~21.1 s</sub></p>
+  <img src="docs/assets/showcase/sdxl-base-alpine-lake.webp" alt="SDXL Base 1.0 alpine lake" width="100%" />
+  <p><sub>SDXL Base 1.0 · Alpine Lake at Dusk · ~17.1s</sub></p>
 </div>
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/anima-light-lavender-lavender-field.webp" alt="Lavender field at dusk generated with Anima Light Lavender" width="100%" />
-  <p><sub>Anima Light Lavender · Lavender field at dusk · ~63.4 s</sub></p>
+  <img src="docs/assets/showcase/realvis-v5-fisherman-portrait.webp" alt="RealVisXL V5.0 fisherman portrait" width="100%" />
+  <p><sub>RealVisXL V5.0 · Fisherman Portrait · ~21.1s</sub></p>
+</div>
+</td>
+</tr>
+
+<tr>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/flux2-klein-4b-kyoto-poster.webp" alt="FLUX.2 Klein 4B Kyoto poster" width="100%" />
+  <p><sub>FLUX.2 Klein 4B · Minimalist Kyoto Poster · ~6.8s</sub></p>
+</div>
+</td>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/animagine-xl-3.1-sakura-girl.webp" alt="Animagine XL 3.1 sakura girl" width="100%" />
+  <p><sub>Animagine XL 3.1 · Girl in Sakura Alley · ~21.1s</sub></p>
+</div>
+</td>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/anima-light-lavender-lavender-field.webp" alt="Anima Light Lavender field" width="100%" />
+  <p><sub>Anima Light Lavender · Lavender Field at Dusk · ~63.4s</sub></p>
 </div>
 </td>
 </tr>
@@ -216,171 +208,152 @@ The nine samples below cover every built-in model. All were generated by this pl
 
 ---
 
-## ⚡ Quick Start in 3 Steps
+## Quick Start
 
-### Step 1: Set Up Kaggle Token
+### Step 1: Set Up Kaggle Credentials
 
-> Note: Your Kaggle account must have completed **Phone Verification** in personal settings to receive free GPU allocations; unverified accounts fall back to CPU only.
+> Note: Your Kaggle account must have **Phone Verification** completed in account settings to receive free GPU quota; unverified accounts fall back to CPU.
 
-**Recommended (kaggle CLI 2.x)**: install the CLI and log in. The command opens your browser for OAuth authorization and writes OAuth credentials (including a `refresh_token`, renewed automatically when it expires) to `%USERPROFILE%\.kaggle\credentials.json` — no manual file needed.
+**Option 1: Browser OAuth without installing `kaggle` CLI**
+Open the workbench → top bar **GPU Status** → **Runtime Settings** → **Advanced** → set **Kaggle Access Mode** to **Direct**, then click **Sign in with Kaggle in Browser** to complete OAuth (credentials are saved to `%USERPROFILE%\.kaggle\credentials.json`). You can also run `node tools/kaggle-login.mjs`.
 
+**Option 2: `kaggle` CLI 2.x**
 ```powershell
 pip install -U kaggle
 kaggle auth login
 ```
+This opens a browser for OAuth and writes credentials to `%USERPROFILE%\.kaggle\credentials.json`.
 
-**Manual (older CLI / API token)**:
+**Option 3: Manual API Token (legacy CLI)**
+1. Go to [Kaggle API Settings](https://www.kaggle.com/settings/api) and click **Create New Token**.
+2. Save the token locally:
+   * **Windows (PowerShell)**:
+     ```powershell
+     New-Item -ItemType Directory -Force "$env:USERPROFILE\.kaggle" | Out-Null
+     Set-Content -NoNewline "$env:USERPROFILE\.kaggle\access_token" "YOUR_KAGGLE_TOKEN"
+     ```
+   * **macOS / Linux (Bash / Zsh)**:
+     ```bash
+     mkdir -p ~/.kaggle
+     printf '%s' 'YOUR_KAGGLE_TOKEN' > ~/.kaggle/access_token
+     chmod 600 ~/.kaggle/access_token
+     ```
 
-1. Open [Kaggle API Settings](https://www.kaggle.com/settings/api) and click **Create New Token**.
-2. Save your token (or `kaggle.json`) locally:
-
-* **Windows (PowerShell)**:
-  ```powershell
-  New-Item -ItemType Directory -Force "$env:USERPROFILE\.kaggle" | Out-Null
-  Set-Content -NoNewline "$env:USERPROFILE\.kaggle\access_token" "YOUR_KAGGLE_TOKEN"
-  ```
-* **macOS / Linux (Bash / Zsh)**:
-  ```bash
-  mkdir -p ~/.kaggle
-  printf '%s' 'YOUR_KAGGLE_TOKEN' > ~/.kaggle/access_token
-  chmod 600 ~/.kaggle/access_token
-  ```
-
-Verify with `kaggle quota`: if it prints GPU/TPU quota, the setup works.
-
-> **Experimental (0.8.2): works without the `kaggle` CLI.** Open the workbench → GPU status → Settings →
-> Advanced → set **Kaggle access** to **direct**, then click "Sign in to Kaggle in browser" on the guidance card
-> (credentials are written to `%USERPROFILE%\.kaggle\credentials.json`, the same format as `kaggle auth login`;
-> you can switch back to the CLI at any time). Prefer a terminal? Run `node tools/kaggle-login.mjs` for the same flow.
+Verify with `kaggle quota` to confirm GPU/TPU quota is visible.
 
 ---
 
-### Step 2: Load Plugin in DSH
+### Step 2: Install the Plugin in DSH
 
-**Two recommended ways** (replace `web` with your profile name — the DSH Desktop client usually uses `desktop`):
+Replace `web` with your DSH profile name (`desktop` for DSH Desktop):
 
-* **Method A (recommended): install from npm**
+* **Option A (Recommended): Install via npm**
   ```bash
   dsh plugin --profile web add dsh-our-imagen
   ```
-  To upgrade: run `dsh plugin --profile web remove dsh-our-imagen`, then the command above; restart DSH after installing or upgrading. You can also search `dsh-our-imagen` on the **1024 Plugin Store (deepseek1024.com)** for one-click install.
+  To upgrade: run `dsh plugin --profile web remove dsh-our-imagen`, reinstall, and restart DSH. You can also search `dsh-our-imagen` in the **1024 Plugin Market (deepseek1024.com)**.
 
-* **Method B: install from GitHub or GUI**
+* **Option B: Install from GitHub or UI**
   ```bash
   dsh plugin --profile web add github:nanxfu/dsh-our-imagen
   ```
-  GUI: DSH Settings → **Plugins** → **Install plugin**, paste `dsh-our-imagen` or `github:nanxfu/dsh-our-imagen`, then restart DSH.
+  Or in DSH: **Settings** → **Plugins** → **Install Plugin**, paste `dsh-our-imagen` or `github:nanxfu/dsh-our-imagen`, then restart DSH.
 
-For restricted networks or offline machines:
-
-* **Method C: pinned Release tarball** (HTTPS only, handy when GitHub git access is unstable)
+* **Option C: Release tarball** (useful if GitHub raw access is unstable)
   ```bash
   dsh plugin --profile web add https://github.com/nanxfu/dsh-our-imagen/releases/download/v0.11.0/dsh-our-imagen-0.11.0.tgz
   ```
 
-* **Method D: offline zip + Load Bundle** (fully offline)
-  1. Download and extract `dsh-our-imagen-<version>.zip` from [Releases](https://github.com/nanxfu/dsh-our-imagen/releases);
-  2. In DSH Settings → **Plugins** → **Load Bundle**, select the extracted folder;
-  3. Click the new **Imagen Studio** icon on the sidebar.
+* **Option D: Offline zip + Load Bundle**
+  1. Download `dsh-our-imagen-<version>.zip` from [Releases](https://github.com/nanxfu/dsh-our-imagen/releases) and extract it;
+  2. In DSH: **Settings** → **Plugins** → **Load Bundle**, select the extracted folder;
+  3. Click the **Image Studio** icon in the left sidebar.
 
-* **Method E: local source link** (development, changes take effect immediately)
+* **Option E: Local source link (development)**
   ```bash
   dsh plugin --profile desktop add D:\path\to\dsh-our-imagen
   ```
 
 ---
 
-### Step 3: Wake Up Cloud & Start Generating
+### Step 3: Start the Cloud Kernel
 
-1. Open the studio, and click **Wake Cloud** at the top bar;
-2. First-time boot on Kaggle takes approximately 3~10 minutes to allocate resources and cache weights;
-3. Once the status shows `Online`, generate continuously with a few seconds per image.
+1. Open the workbench and click **Start / Wake Cloud** in the top bar;
+2. First-time startup takes ~3–10 minutes for Kaggle to allocate resources and load weights;
+3. Once status turns `Online`, you can generate images in seconds.
 
 ---
 
-## ❓ FAQ
+## FAQ
 
 <details>
-<summary><b>Q1: Does this cost anything? Is the 30 hrs/week GPU quota enough?</b></summary>
+<summary><b>Q1: Does it cost anything? Is 30 hours/week enough?</b></summary>
 
-**100% Free, with ample headroom.**
-- The plugin code is open-source under the permissive MIT license.
-- Computation directly leverages the **30 hours/week of free GPU (2×Nvidia T4)** provided by Kaggle to phone-verified users.
-- **How many images can I generate each week?**
-  - Using our daily workhorse 1024px model (`SDXL Lightning` 1024px, measured at ~6.2s per image), the 30-hour weekly quota allows generating up to **17,000+ images per week**.
-  - Even if you generate dozens or hundreds of images daily for creative projects, you typically only consume 1~2 hours of GPU quota per week. The quota is more than enough for daily personal creation.
+It is free. The plugin is MIT-licensed, and compute uses Kaggle's free weekly **30-hour GPU quota (2×Nvidia T4)** for phone-verified accounts, which is plenty for regular personal use.
 </details>
 
 <details>
-<summary><b>Q2: Do I need a dedicated local GPU?</b></summary>
+<summary><b>Q2: Do I need a dedicated GPU on my computer?</b></summary>
 
-**No.**
-All model loading and diffusion inference run on Kaggle's dual T4 cloud GPUs. Your local computer (even an ultra-thin laptop) only renders the UI and saves the resulting image files to disk.
+No. Model loading and inference run on Kaggle's cloud GPUs; your local machine only renders the UI and saves the output files.
 </details>
 
 <details>
-<summary><b>Q3: Why does cold boot take a few minutes?</b></summary>
+<summary><b>Q3: Why does the first startup take a few minutes?</b></summary>
 
-A cold boot involves:
-1. Kaggle scheduling and spinning up the free 2×T4 VM;
-2. Environment check and daemon initialization;
-3. Downloading and loading the selected model weights (unless pre-mounted as a Kaggle Dataset).
-This initial setup takes 3~10 minutes. **Once ready, subsequent generations take only a few seconds per image.** The plugin keeps the kernel alive with a 30-minute idle timer, and you can shut it down anytime.
+Cold start includes allocating the 2×T4 instance, checking the runtime environment, and downloading/loading model weights, which typically takes 3–10 minutes. Once ready, subsequent generations take seconds. The kernel auto-shuts down after 30 minutes of idle time, or you can shut it down manually anytime.
 </details>
 
 <details>
-<summary><b>Q4: Are my images uploaded to third-party hosting?</b></summary>
+<summary><b>Q4: Are my images uploaded to third-party image hosts?</b></summary>
 
-**No.**
-Generated image data is sent directly back over an ephemeral one-time Bearer token tunnel and saved to your local `imagen-output/` folder. There are no intermediary commercial image hosts or public URLs.
+No. Generated images stream back over a per-session temporary Bearer Token tunnel and are saved directly to `imagen-output/` in your local workspace.
 </details>
 
 <details>
-<summary><b>Q5: Which models are supported?</b></summary>
+<summary><b>Q5: Which models are included?</b></summary>
 
-Presets are included out of the box (defined in [`models/*.json`](models/)):
-- `SDXL Lightning` (Default, 4-step ultra-fast, ~2s/img)
-- `Hyper-SDXL 8-Step` (Balanced detail and speed, ~2.5s/img)
-- `SDXL Turbo` (Real-time denoising, rapid drafts)
-- `Playground v2.5` (Rich aesthetic quality and vibrant colors)
-- `SDXL Base 1.0` (Standard base checkpoint)
-- `RealVisXL V5.0` (Photorealistic portraits and textures)
-- `FLUX.2 Klein 4B` (Next-gen lightweight diffusion architecture)
-- `Animagine XL 3.1` (Dedicated anime and illustration style)
-- `Anima Light Lavender` (Dedicated anime style, Cosmos-Predict2 2B base)
+Model configs live in [`models/*.json`](models/):
+- `SDXL Lightning` (default, 4-step fast)
+- `Hyper-SDXL 8-Step` (balanced speed & detail)
+- `SDXL Turbo` (ultra-fast drafts)
+- `Playground v2.5` (rich colors & aesthetics)
+- `SDXL Base 1.0` (standard SDXL base)
+- `RealVisXL V5.0` (photorealistic portraits)
+- `FLUX.2 Klein 4B` (lightweight next-gen architecture)
+- `Animagine XL 3.1` (anime)
+- `Anima Light Lavender` (anime illustration, Cosmos-Predict2 2B base)
 </details>
 
 ---
 
-## 🛠 Development & Testing
+## Development & Testing
 
-If you want to contribute, modify code, or benchmark models:
-
-| Task | Command | Description |
+| Task | Command | Notes |
 | :--- | :--- | :--- |
-| **Install Dependencies** | `npm install` | Install dev and packaging tools |
-| **Run Unit Tests** | `npm test` | Verify state machine and core workflow |
-| **Contract Tests** | `npm run test:contract` | Validate model presets and API contracts |
-| **Mock Daemon Debug** | `node test/mock-daemon.mjs` | Local two-way mock without consuming Kaggle quota |
-| **Build Web Client** | `node build.mjs` | Bundle frontend single file `client.js` |
-| **Preview & Screenshots** | `node tools/preview.mjs --shot` | Build design preview pages (add `--readme` to refresh README screenshots) |
-| **Package Release** | `npm run package` | Generate ready-to-publish `dist/` standalone bundle |
+| **Install dependencies** | `npm install` | Install dev and packaging dependencies |
+| **Run all tests** | `npm test` | Build client and run contract, host, client, and Python remote tests |
+| **Contract tests** | `npm run test:contract` | Validate model configs and API contracts |
+| **Offline mock** | `node test/mock-daemon.mjs` | Simulate remote communication locally without Kaggle |
+| **Build client** | `node build.mjs` | Bundle frontend into `client.js` |
+| **Preview & screenshots** | `node tools/preview.mjs --shot` | Generate preview pages (`--readme` also refreshes README screenshots) |
+| **Package release** | `npm run package` | Build standalone plugin bundle in `dist/` |
 
 ---
 
-## 📱 Follow the Author
+## Author
 
-Douyin (Chinese TikTok): **Lumen流明** (Douyin ID `42906749348`) — "turn ideas into images with AI". Scan the QR code in the Douyin app:
+Follow on Douyin: **Lumen流明** (`42906749348`):
 
 <div align="center">
-  <img src="docs/assets/social/douyin-lumen.webp" alt="Douyin QR code for Lumen流明" width="320" />
+  <img src="docs/assets/social/douyin-lumen.webp" alt="Douyin QR Code" width="320" />
 </div>
 
 ---
 
-## 📄 License & Acknowledgments
+## License & Acknowledgments
 
-- Licensed under [MIT](LICENSE).
-- Thanks to the [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness) team for the powerful plugin ecosystem.
-- Thanks to Kaggle for offering free GPU hours to developers worldwide.
-- Thanks to Hugging Face diffusers and open-source model teams (Stability AI, ByteDance, Playground AI, CagliostroLab, etc.).
+- Licensed under the [MIT License](LICENSE).
+- Thanks to the [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness) team for the plugin architecture and design system.
+- Thanks to Kaggle for providing free GPU compute.
+- Thanks to Hugging Face diffusers and the open-source model teams (Stability AI, ByteDance, Playground AI, CagliostroLab, etc.).
