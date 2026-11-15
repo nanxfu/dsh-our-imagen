@@ -47,6 +47,7 @@
   - **`test/mock-daemon.py` 同步**：兜底夹具改成契约值（256–1536 / steps≤60 / cfg≤20 / 每批≤4），`_request_body_limit()` 与 daemon 用同一条公式；新增 `MockDaemonContractTest` 3 项——mock 的兜底副本与 `contract.json` 逐键相等、同一份注入契约下 mock 与 daemon 的 `_limit` / `_max_tasks` / `_request_body_limit` 结果完全一致。此前 mock 抄的是 daemon 的旧表，两边漂移时测试全绿、真机 400。
 - **修复 Windows 原子写入抖动**：`lib/fs-atomic.js` 的 `rename` 遇到杀毒软件 / 索引服务瞬时占用会抛 `EPERM`，此前会让 Kaggle 直连登录静默失败（`/state` 只显示「账号接入失败：unknown」）。现对 `EPERM` / `EACCES` / `EBUSY` 做 5 次有界重试（累计约 150ms），`test/kaggle-direct.mjs` 由「3 次跑 2 次失败」变为连跑 4 次全过。
 - **发布工程**：release 工作流在 GitHub Release 之后追加 npm Trusted Publishing（OIDC，无需长期 token）；`publish-npm.yml` 保留手动补发与 dry-run 入口；新增 `wrangler.jsonc`（Cloudflare 静态站指向 `site/dist`）；README / README.en / CONTRIBUTING / docs 同步新包名与安装方式。
+  - npm 发布命令用 `./dist/*.tgz` 显式相对路径：裸 `dist/*.tgz` 会被 npm 当作 `owner/repo` 简写去走 git 解析（首次 tag 发布时因此失败，GitHub Release 已正常产出）。
 - **版本同步**：`package.json` / `package-lock.json` / `shared/contract.js` / `remote/daemon.py` / `test/mock-daemon.py` / `test/tunnel-probe.py` / `remote/contract.json` / `client.js` / `docs/SPEC.md` 均为 `0.11.0`。
 
 ### 测试

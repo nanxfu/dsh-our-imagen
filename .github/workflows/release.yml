@@ -98,5 +98,5 @@ jobs:
           path: dist
 
       - name: Publish to npm (OIDC Trusted Publishing)
-        run: npm publish dist/*.tgz --provenance --access public
+        run: npm publish ./dist/*.tgz --provenance --access public
 
