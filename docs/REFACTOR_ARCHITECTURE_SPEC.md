@@ -107,12 +107,12 @@ remote/
 ### 2.4 打包器升级（Batch 0，已完成）
 - **落地形态**：`lib/bundle.js` 用 `node:zlib` 的 `deflateRaw` + 手写 ZIP 头产出**确定性归档**（路径排序、时间戳固定为 2020-01-01、权限 0644），`lib/kernel.js` 把它 Base64 内嵌进 `remote/_entry.py` 模板；启动器解压到临时目录、把包根与 `remote/` 挂进 `sys.path`，再调用包内入口。
 - **为什么不用 `zipimport`**：解压后 `__file__` 指向真实文件，Kaggle 日志里的栈可以直接对应源码行，`contract.json` 也能按普通文件读；解压 30 个文件的开销可忽略。
-- **配置注入改为函数调用**：启动器不再做源码文本替换，而是调 `入口模块.set_embedded_config(b64)`。这样 `load_config` 后续搬进 `config.py` 时，只要入口模块 re-export 这个函数，注入链路自动跟着走（直接赋值模块属性会在搬家后静默丢配置）。
+- **配置注入改为函数调用**：启动器不再做源码文本替换，而是调 `入口模块.set_embedded_config(b64)`。这样 `load_config` 后续搬进 `config.py` 时，只要入口模块 re-export 这个函数，注入链路自动跟着走（直接赋值模块属性会在搬家后静默丢配置）。**Batch 2 切片③ 落地时的实际口径**：注入串 `EMBEDDED_CONFIG_B64` 与 `set_embedded_config()` 留在 `daemon.py`，只把「解析 → 原地回填 `CONFIG`」搬进 `config.py`——因为 `test/kernel-package.mjs` 用 `daemon.EMBEDDED_CONFIG_B64` 验证注入是否落到底层，变量若跟着实现搬走会让这条观测链断掉。
 - **契约入包**：`remote/contract.json` 已随源码包打进 Kernel。但 `_FALLBACK_LIMITS` **尚未删除**，见 §1.3 第 5 条（改动会收紧无注入契约时的默认边界，安排到 Batch 2 与校验器单测同批做）。
 - **两种打包模式**：默认归档模式；传 `sourcePath` 时退化为"单文件脚本 + 只注入配置"，供真机探针（`test/tunnel-probe.py`）使用。
 - **共用打包器**：`tools/verify-model.mjs` 用 `entryModule: 'payload.verify_model'` + `extraFiles` 把验证 payload 作为包内模块一起打进归档，与 `lib/session/provisioner.js` 共用 `buildKernelFolder`。
 - **包发布清单**：`package.json` 的 `files` 已扩到 `remote/**/*.py` 与 `remote/contract.json`；`scripts/package.mjs` 的 `remote` 目录过滤同步放行 `.json`，并把 `_entry.py` / `__init__.py` / `contract.json` 列入必需文件。
-- **验收**：`test/kernel-package.mjs` 15 项（含 CRC 标准向量、确定性、Python `zipfile.testzip()`、解包后 `import remote.daemon`、模板占位符唯一性、脚本模式）；`test/check-verify-model.mjs` 7 项。真机 `kaggle-live` / `gpu-live` 尚未在本批复跑（`remote/daemon.py` 业务逻辑零改动，仅移除内联标记）。
+- **验收**：`test/kernel-package.mjs` 16 项（含 CRC 标准向量、确定性、Python `zipfile.testzip()`、解包后 `import remote.daemon`、模板占位符唯一性、脚本模式）；`test/check-verify-model.mjs` 7 项。真机 `kaggle-live` / `gpu-live` 尚未在本批复跑（`remote/daemon.py` 业务逻辑零改动，仅移除内联标记）。
 
 ---
 
@@ -147,10 +147,10 @@ remote/
 
 | 批次 | 核心目标 | 状态与验收 |
 | :--- | :--- | :--- |
-| **Batch 0**<br/>打包器升级 | `lib/kernel.js` 改为内嵌 Base64 ZIP 自引导；配置注入改为 `set_embedded_config()` 函数调用；`remote/contract.json` 随包分发；`verify-model` 复用同一打包器；`package.json` `files` 与 `scripts/package.mjs` 同步 | ✅ **已完成**。`test/kernel-package.mjs` 15 项（含 Python `zipfile` 校验与解包后 `import remote.daemon`）、`test/check-verify-model.mjs` 7 项；`@@INLINE` 已从源码移除 |
+| **Batch 0**<br/>打包器升级 | `lib/kernel.js` 改为内嵌 Base64 ZIP 自引导；配置注入改为 `set_embedded_config()` 函数调用；`remote/contract.json` 随包分发；`verify-model` 复用同一打包器；`package.json` `files` 与 `scripts/package.mjs` 同步 | ✅ **已完成**。`test/kernel-package.mjs` 16 项（含 Python `zipfile` 校验与解包后 `import remote.daemon`）、`test/check-verify-model.mjs` 7 项；`@@INLINE` 已从源码移除 |
 | **Batch 1**<br/>Host 侧收口 | `lib/jobs.js`（948 行）→ `lib/jobs/`；`lib/kaggle-oauth.js`（674 行）→ `lib/kaggle/oauth/`；原路径保留聚合门面 | ✅ **已完成**。门面 16 / 23 行，实现分散到 5 + 5 个模块；`jobs-wait` 23 项、`kaggle-oauth` 14 项、`host-e2e` 46 项、`host-log(-events)` 20 项全绿 |
-| **Batch 2**<br/>远端包化 + 测试领域化<br/>（原 Batch 1 + 3） | 按 §2.1 建包：`config` / `state` / `observability` / `infra` / `inference` / `jobs` / `transport` / `app`；删掉 25 个胶水转发；`LoaderRegistry` + 表驱动调度器；`JobStore` 封装锁；同步把 `test/daemon-unit.py` 按领域拆到 `test/remote/test_*.py`，改用实例化隔离 | ⏳ **进行中**，按域切片推进（每片独立可回归）：<br/>① `errors.py` + `transport/validator.py` + `inference/reference_codec.py`（纯逻辑，依赖注入 `limits_for`，daemon 只留同名薄包装）；<br/>② `pipeline_loader` 调度器表驱动 ✅（5 条配方收成 `_SCHEDULER_RECIPES`，新增调度器只加一行）；<br/>③ `config.py` / `state.py`（单例对象原地更新，不重新绑定，避免测试静默测到旧对象）；<br/>④ `infra/process.py` + `observability/health.py`；<br/>⑤ `jobs/`（store + runner，`JOB_*` 全局收进 JobStore）；<br/>⑥ `transport/http_server.py` + `app.py`（Composition Root），最后删门面并把 `test/daemon-unit.py` 按域拆分 |
-| **Batch 3**<br/>契约收口与真机验证 | 删除 `_FALLBACK_LIMITS`，让无注入契约时消费内置 `contract.json`（行为变更：默认边界从 64–2048 收紧到 256–1536）；移除 `daemon.py` 门面；回填文档与 `CHANGELOG` | ⏳ 待开始。验收：`npm test` + `contract:check` 全绿，且**必须**跑一次真机 `kaggle-live` 与 `gpu-live`（这是唯一能验证启动器解包链路的关口） |
+| **Batch 2**<br/>远端包化 + 测试领域化<br/>（原 Batch 1 + 3） | 按 §2.1 建包：`config` / `state` / `observability` / `infra` / `inference` / `jobs` / `transport` / `app`；删掉 25 个胶水转发；`LoaderRegistry` + 表驱动调度器；`JobStore` 封装锁；同步把 `test/daemon-unit.py` 按领域拆到 `test/remote/test_*.py`，改用实例化隔离 | ⏳ **进行中**，按域切片推进（每片独立可回归）：<br/>① `errors.py` + `transport/validator.py` + `inference/reference_codec.py` ✅（纯逻辑三模块，边界由 `limits_for` 注入，daemon 只留同名薄包装）；<br/>② `pipeline_loader` 调度器表驱动 ✅（5 条配方收成 `_SCHEDULER_RECIPES`，新增调度器只加一行）；<br/>③ `config.py` / `state.py`（单例对象原地更新，不重新绑定，避免测试静默测到旧对象） ✅（`DaemonConfig` + 注入解析 + 契约边界进 `remote/config.py`，`RuntimeState` / `BootState` / 两把状态锁 + `set_phase` / `record_error` 进 `remote/state.py`；daemon 只 re-export，2366 → 2121 行（−245），单测 248 → 252 项并新增单例身份守卫）；<br/>④ `infra/process.py` + `observability/health.py`；<br/>⑤ `jobs/`（store + runner，`JOB_*` 全局收进 JobStore）；<br/>⑥ `transport/http_server.py` + `app.py`（Composition Root），最后删门面并把 `test/daemon-unit.py` 按域拆分 |
+| **Batch 3**<br/>契约收口与真机验证 | 删除 `_FALLBACK_LIMITS`，让无注入契约时消费内置 `contract.json`（行为变更：默认边界从 64–2048 收紧到 256–1536）；移除 `daemon.py` 门面；回填文档与 `CHANGELOG` | ⏳ 待开始。**必带项**：`test/mock-daemon.py` 的 limits 夹具当前与 `_FALLBACK_LIMITS` 同值（64–2048），删兜底后要同步改成契约值（256–1536），否则 mock 与真 daemon 的边界会静默漂移；建议同时加一条守卫测试。验收：`npm test` + `contract:check` 全绿，且**必须**跑一次真机 `kaggle-live` 与 `gpu-live`（这是唯一能验证启动器解包链路的关口） |
 
 ---
 

@@ -48,6 +48,9 @@
      请求体上限按契约参考图体积推导（假 PIL / 假 diffusers，不依赖 Pillow）
  25. /health.gpu_memory：只读显存快照（MiB 取整），torch 未加载 / CUDA 不可用 /
      读取异常时为 null，且不影响 status / phase 判定
+ 26. 状态与配置的模块边界（架构规格 §5.10）：CONFIG / STATE / BOOT 与 remote/config.py、
+     remote/state.py 里的单例是**同一对象**，load_config() 原地回填，daemon 不得重新绑定；
+     log_ring 只有一份（config / state 必须扁平导入，否则 /logs 会变空）
 
 运行：python test/daemon-unit.py
 """
@@ -56,11 +59,13 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import dataclasses
 import hashlib
 import importlib.util
 import io
 import json
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -115,6 +120,10 @@ def _load_daemon():
 
 
 d = _load_daemon()
+
+# 单例的真实宿主：daemon 只是 re-export，断言"两边是同一个对象"必须直接看这两个模块。
+import remote.config as remote_config  # noqa: E402
+import remote.state as remote_state  # noqa: E402
 
 AUTH_TOKEN = "test-token-0123456789"
 
@@ -378,15 +387,35 @@ def fake_torch_module():  # noqa: ANN201
     return torch_module
 
 
+def reset_stateful_singletons() -> None:
+    """把 CONFIG / STATE / BOOT 三个单例按 dataclass 默认值**原地**重置。
+
+    为什么不能写 `d.CONFIG = d.DaemonConfig()`：实现在 remote/config.py 与
+    remote/state.py，被测函数读的是那两个模块里的单例对象；在测试里重新绑定只改了
+    `daemon` 命名空间里的名字，断言会静默测到旧对象（假绿，见架构规格 §5.10）。
+    所以夹具统一走"逐字段覆盖默认值"，对象身份保持不变。
+
+    动态挂上去的属性（如 `STATE.waiting = 3` 这种 0.4.x 历史字段）不在 dataclass 声明里，
+    逐字段覆盖删不掉，必须显式 `delattr`，否则会跨用例残留。
+    """
+    for target, fresh in (
+        (d.CONFIG, d.DaemonConfig()),
+        (d.STATE, d.RuntimeState()),
+        (d.BOOT, d.BootState()),
+    ):
+        declared = {item.name for item in dataclasses.fields(target)}
+        for name in set(vars(target)) - declared:
+            delattr(target, name)
+        for item in dataclasses.fields(target):
+            setattr(target, item.name, getattr(fresh, item.name))
+
+
 class DaemonUnitTest(unittest.TestCase):
-    """公共夹具：每个用例一份独立 CONFIG/STATE/BOOT，并把日志导出到内存。"""
+    """公共夹具：每个用例把 CONFIG/STATE/BOOT 重置为初始值，并把日志导出到内存。"""
 
     def setUp(self) -> None:
-        prev_stdout = d.reset_log_ring(io.StringIO())
-        self._saved = (d.CONFIG, d.STATE, d.BOOT, prev_stdout)
-        d.CONFIG = d.DaemonConfig()
-        d.STATE = d.RuntimeState()
-        d.BOOT = d.BootState()
+        self._prev_stdout = d.reset_log_ring(io.StringIO())
+        reset_stateful_singletons()
         # 异步 job registry 是模块级可变状态，用例之间必须清干净。
         with d.JOB_LOCK:
             d.JOB_QUEUE.clear()
@@ -395,8 +424,10 @@ class DaemonUnitTest(unittest.TestCase):
         d.JOB_WAKE.clear()
 
     def tearDown(self) -> None:
-        d.CONFIG, d.STATE, d.BOOT, prev_stdout = self._saved
-        d.reset_log_ring(prev_stdout)
+        # 同样原地重置：不重置的话，后运行的用例（如 ImportSideEffectTest）会看到上一个
+        # 用例残留的 phase / 隧道状态。
+        reset_stateful_singletons()
+        d.reset_log_ring(self._prev_stdout)
 
     # ---- 断言辅助 ----
 
@@ -444,6 +475,58 @@ class ImportSideEffectTest(unittest.TestCase):
         self.assertNotIn("def load_anima_runtime", source)
         self.assertNotIn("@@INLINE", source, "内联标记已随源码包打包移除")
         self.assertIn("from anima_runtime import load_anima_runtime", source)
+
+
+class StateSingletonTest(DaemonUnitTest):
+    """单例只许原地更新：重新绑定会让被测函数静默读到旧对象（架构规格 §5.10）。"""
+
+    def test_daemon_reexports_the_same_objects(self) -> None:
+        self.assertIs(d.CONFIG, remote_config.CONFIG)
+        self.assertIs(d.STATE, remote_state.STATE)
+        self.assertIs(d.BOOT, remote_state.BOOT)
+        self.assertIs(d.STATE_LOCK, remote_state.STATE_LOCK)
+        self.assertIs(d.BOOT_LOCK, remote_state.BOOT_LOCK)
+
+    def test_load_config_updates_the_singleton_in_place(self) -> None:
+        before = d.CONFIG
+        payload = {"auth_token": "tok", "ntfy_topic": "t", "contract": CONTRACT}
+        encoded = base64.b64encode(json.dumps(payload).encode("utf-8")).decode("ascii")
+        with mock.patch.object(d, "EMBEDDED_CONFIG_B64", encoded):
+            loaded = d.load_config()
+        self.assertIs(loaded, before, "load_config 必须原地回填，不能返回新对象")
+        self.assertIs(loaded, remote_config.CONFIG)
+        self.assertEqual(d.CONFIG.auth_token, "tok")
+        self.assertEqual(d.CONFIG.ntfy_topic, "t")
+        self.assertEqual(d.CONFIG.contract["version"], CONTRACT_VERSION)
+
+    def test_daemon_never_rebinds_stateful_singletons(self) -> None:
+        """`CONFIG = load_config()` / `STATE = RuntimeState()` 会让实现读旧对象且不报错。"""
+        source = DAEMON_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("global CONFIG", source)
+        for name in ("CONFIG", "STATE", "BOOT"):
+            self.assertIsNone(
+                re.search(rf"(?m)^\s*{name}\s*=", source),
+                f"daemon.py 不得重新绑定 {name}（只允许 import 与原地更新）",
+            )
+
+    def test_logger_is_the_single_log_ring_module(self) -> None:
+        """config / state 必须扁平导入 log_ring，否则 /logs 会拿到第二份空环。"""
+        self.assertIs(d.log, remote_state.log)
+        self.assertIs(d.log, remote_config.log)
+        self.assertEqual(remote_state.log.__module__, "log_ring")
+
+    def test_reset_drops_dynamically_attached_fields(self) -> None:
+        """夹具重置要连非 dataclass 字段一起清（用例会挂 STATE.waiting 这类历史字段）。"""
+        d.STATE.waiting = 3
+        d.BOOT.legacy_marker = "x"
+        d.CONFIG.legacy_marker = "y"
+        reset_stateful_singletons()
+        self.assertFalse(hasattr(d.STATE, "waiting"))
+        self.assertFalse(hasattr(d.BOOT, "legacy_marker"))
+        self.assertFalse(hasattr(d.CONFIG, "legacy_marker"))
+        # 声明字段仍然按默认值恢复，对象身份不变。
+        self.assertEqual(d.STATE.phase, "booting")
+        self.assertIsNone(d.BOOT.tunnel_url)
 
 
 class BuildConfigTest(DaemonUnitTest):

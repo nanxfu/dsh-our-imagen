@@ -99,16 +99,16 @@ EMBEDDED_CONFIG_B64 = ""
 def set_embedded_config(value: str) -> None:
     """写入本次会话的注入配置（启动器唯一的注入入口）。
 
-    为什么是函数而不是让启动器直接改 `EMBEDDED_CONFIG_B64`：后续把配置相关代码搬进
-    `remote/config.py` 时，只要入口模块继续 re-export 本函数，注入链路就自动跟着走；
-    而直接赋值模块属性只改"名字"，搬家后会静默丢配置（表现为启动即 unauthorized 退出）。
+    为什么留在入口模块而不是搬进 remote/config.py：启动器（remote/_entry.py）按
+    `getattr(entry_module, "set_embedded_config")` 取这个函数，`test/kernel-package.mjs`
+    也按 `daemon.EMBEDDED_CONFIG_B64` 验证注入是否落地。变量与 setter 同处本模块，
+    "函数写进了另一个模块的变量"这种静默丢配置就不会发生；配置的解析与归一在
+    remote/config.py，由 load_config() 转交。
     """
     global EMBEDDED_CONFIG_B64
     EMBEDDED_CONFIG_B64 = value or ""
 
 VERSION = "0.10.0"
-
-DEFAULT_PORT = 7860
 
 # 依赖约束默认留空（0.4.1 修正）。0.4.0 曾内置「版本上限」做固化
 # （diffusers<1.0 / transformers<5 / accelerate<2 / peft<1），实测与当前 diffusers
@@ -160,71 +160,51 @@ from log_ring import LOG_LINE_MAX_CHARS, LOG_MAX_LINES, _LOG_LINES, _LOG_LOCK, _
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 显式状态对象
+# 状态与配置（单份源码在 remote/state.py、remote/config.py）
 #
 # 历史：配置、运行期资源、统计与生命周期原先塞在同一个模块级 dict 里（23 个键），
-# 无法在单测里构造隔离实例。现在拆成三个 dataclass：
-#   CONFIG —— Host 注入的配置，启动后只读；
-#   STATE  —— 运行期状态（生命周期 / 模型 / 统计）；
-#   BOOT   —— 启动期隧道会合状态；
-# 生成串行锁单独成模块级 GEN_LOCK，避免"锁"混进可复制的状态对象。
-# 约定：除本区块外全文件只用属性访问（STATE.phase / BOOT.tunnel_url / CONFIG.port）。
+# 无法在单测里构造隔离实例；0.9 拆成三个 dataclass，但对象与锁仍留在本文件顶层，
+# 于是每个函数都能绕过边界直接改字段（见架构规格 §1.3）。
+#
+# 现在：状态对象、锁、配置与契约边界各自搬进独立模块，本文件只做 re-export，
+# 保住 `d.CONFIG` / `d.STATE` / `d.BOOT` / `d.DaemonConfig` 这些既有引用面。
+#
+# 约定（架构规格 §5.9 / §5.10）：
+#   1. 三个单例**只在 import 时创建一次，之后只做原地更新**。禁止在本文件里写
+#      `CONFIG = load_config()` 或 `STATE = RuntimeState()`——remote/state.py 与
+#      remote/config.py 内部读的是同一个对象，重新绑定只会让两边各自持有一份状态，
+#      且不报错（单测断言会静默测到旧对象，假绿）。
+#   2. 全文件只用属性访问（STATE.phase / BOOT.tunnel_url / CONFIG.port）。
 # ─────────────────────────────────────────────────────────────────────────────
 
-
-@dataclass
-class DaemonConfig:
-    """Host 注入的配置。键名即字段名；ntfy_server / port / allow_no_auth 仅本地调试或旧 Host 使用。
-
-    Host 实际下发的键由 lib/session/provisioner.js 的 buildKernelConfig 组装。
-    """
-
-    auth_token: str = ""
-    ntfy_topic: str = ""
-    ntfy_server: str = "https://ntfy.sh"
-    idle_timeout_sec: int = 1800
-    port: int = DEFAULT_PORT
-    preload: dict | None = None
-    preset_id: str | None = None
-    log_level: str = "info"
-    version: str = ""
-    contract: dict = field(default_factory=dict)
-    # 本地调试专用：显式允许无鉴权（默认 false；正常路径必须带 auth_token）。
-    allow_no_auth: bool = False
-    # 冷启动可靠性（P1.2）：HF Token 只写环境变量，值不落日志；pip 约束按包名合并。
-    hf_token: str = ""
-    pip_constraints: list = field(default_factory=list)
-    # 备用隧道（P2.2）：argv 模板（{port} 占位）与地址提取正则。
-    fallback_tunnel_command: list = field(default_factory=list)
-    fallback_tunnel_url_regex: str = ""
-    # 权重预挂载（P2.1）：HF 仓库 → 容器内本地目录（Kaggle Dataset 挂载路径）。
-    local_models: dict = field(default_factory=dict)
-
-
-@dataclass
-class RuntimeState:
-    """运行期状态：生命周期、模型句柄与统计。"""
-
-    phase: str = "booting"
-    detail: str | None = "进程启动"
-    model_id: str | None = None
-    loaded: list = field(default_factory=list)
-    device: str | None = None
-    device_count: int = 0
-    last_active: float = _START_TS
-    jobs_done: int = 0
-    last_error: str | None = None
-    last_error_code: str | None = None
-    started_at: float = _START_TS
-    pipe: object | None = None
-    pipeline_key: str | None = None
-    sig_params: set = field(default_factory=set)
-    # 图生图管线：首次用到时用 AutoPipelineForImage2Image.from_pipe(STATE.pipe) 惰性创建，
-    # 与 txt2img 共用组件（不额外加载权重、不额外占显存）；切换/释放底座时一并清空。
-    img2img_pipe: object | None = None
-    img2img_sig_params: set = field(default_factory=set)
-    booted: bool = False
-    shutting_down: bool = False
+from remote.config import (  # noqa: E402
+    CONFIG,
+    DEFAULT_PORT,
+    FALLBACK_LIMITS as _FALLBACK_LIMITS,
+    KNOWN_CONFIG_KEYS as _KNOWN_CONFIG_KEYS,
+    MAX_TASKS_FALLBACK as _MAX_TASKS_FALLBACK,
+    DaemonConfig,
+    build_config as _build_config,
+    contract_limits as _contract_limits,
+    limit_spec as _limit_spec,
+    load_config as load_config_impl,
+    max_tasks as _max_tasks,
+    normalize_fallback_command,
+    normalize_local_models,
+    normalize_pip_constraints,
+    request_body_limit as _request_body_limit,
+)
+from remote.state import (  # noqa: E402, F401
+    BOOT,
+    BOOT_LOCK,
+    STATE,
+    STATE_LOCK,
+    BootState,
+    RuntimeState,
+    TunnelAttempt as _TunnelAttempt,
+    record_error,
+    set_phase,
+)
 
 
 @dataclass
@@ -251,40 +231,7 @@ class Job:
         return len(self.tasks)
 
 
-@dataclass
-class _TunnelAttempt:
-    """单次隧道启动尝试的令牌：超时后失活，防止旧 drain 线程污染新尝试的 BOOT 状态。"""
-
-    provider: str = ""
-    active: bool = True
-
-
-@dataclass
-class BootState:
-    """启动期会合状态：隧道与 ready 发布。"""
-
-    tunnel_url: str | None = None
-    tunnel_error: str | None = None
-    cloudflared: object | None = None
-    published_ready: bool = False
-    # P0.2：隧道监管状态（/health 与 ready 事件对外上报）。
-    tunnel_provider: str | None = None
-    tunnel_state: str = "starting"
-    tunnel_restarts: int = 0
-    # 隧道失败把 phase 打成 error 时记下原阶段；隧道恢复后还原，避免 Host 一直看到 error。
-    phase_before_error: str | None = None
-    http_server: object | None = None
-    current_attempt: _TunnelAttempt | None = None
-    # /shutdown 或信号置位后监管线程退出。整个进程只创建一个 Event。
-    stop_event: threading.Event = field(default_factory=threading.Event)
-
-
-CONFIG = DaemonConfig()
-STATE = RuntimeState()
-BOOT = BootState()
-# 状态锁与生成串行锁；不放状态对象里，避免状态复制时复制锁。
-STATE_LOCK = threading.RLock()
-BOOT_LOCK = threading.RLock()
+# 生成串行锁与清理闸门：只属于本进程，不塞进状态对象（状态复制时不该连带复制锁）。
 GEN_LOCK = threading.Lock()
 _CLEANUP_LOCK = threading.Lock()
 _CLEANUP_DONE = False
@@ -331,20 +278,8 @@ def short(exc: BaseException, limit: int = 600) -> str:
     return text[:limit]
 
 
-def set_phase(phase: str, detail: str | None = None) -> None:
-    with STATE_LOCK:
-        STATE.phase = phase
-        STATE.detail = detail
-        # 启动阶段的进度也算"活动"，避免依赖安装还没结束就被空闲看门狗收走。
-        STATE.last_active = time.time()
-    log(f"[phase] {phase}" + (f" — {detail}" if detail else ""))
-
-
-def record_error(code: str, message: str) -> None:
-    """``/health.last_error`` 是字符串：Host 直接拼进 UI，对象会显示成 [object Object]。"""
-    with STATE_LOCK:
-        STATE.last_error = f"{code}: {message}"
-        STATE.last_error_code = code
+# `set_phase` / `record_error` 已随状态对象搬到 remote/state.py（锁与数据同笼），
+# 这里按名字 re-export，`d.set_phase(...)` 与 `fail_boot` 的调用面不变。
 
 
 # ── 异步 job：表、队列与轮询视图（协议 0.5.0） ────────────────────────────────
@@ -392,8 +327,8 @@ def prune_jobs(now: float | None = None) -> None:
 
 def _max_queue_depth() -> int:
     """允许排队的最大待执行 job 数（防止内存 DoS）。"""
-    limits = CONFIG.contract.get("limits") if isinstance(CONFIG.contract, dict) else None
-    queue_cfg = limits.get("queue") if isinstance(limits, dict) else None
+    limits = _contract_limits()
+    queue_cfg = limits.get("queue") if limits else None
     raw = queue_cfg.get("maxPending") if isinstance(queue_cfg, dict) else None
     if isinstance(raw, (int, float)) and not isinstance(raw, bool) and int(raw) > 0:
         return int(raw)
@@ -504,153 +439,31 @@ def protocol_version() -> str:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 配置
+#
+# DaemonConfig、注入键表、各注入项的归一与契约边界取数都在 remote/config.py
+# （"本次会话允许什么"只有一个取数点）。本文件只剩两件事：
+#   1. 注入串与 setter —— 启动器与打包测试按 `daemon.EMBEDDED_CONFIG_B64` 观测注入结果，
+#      所以变量与函数必须留在入口模块；
+#   2. load_config() 薄包装 —— 把注入串交给 config.load_config()，由后者**原地**回填 CONFIG。
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-# 注入配置的精确键名（= DaemonConfig 字段名）。Host 侧由 lib/session/provisioner.js 组装；
-# ntfy_server / port / allow_no_auth 只给本地调试或旧 Host 使用。未登记的键只告警、不猜别名。
-_KNOWN_CONFIG_KEYS = frozenset(
-    {
-        "auth_token",
-        "ntfy_topic",
-        "ntfy_server",
-        "idle_timeout_sec",
-        "port",
-        "preload",
-        "preset_id",
-        "log_level",
-        "version",
-        "contract",
-        "allow_no_auth",
-        "hf_token",
-        "pip_constraints",
-        "fallback_tunnel_command",
-        "fallback_tunnel_url_regex",
-        "local_models",
-    }
-)
-
-
-def normalize_pip_constraints(raw) -> list[str]:  # noqa: ANN001
-    """Host 注入的 pip 约束：只保留非空字符串（数组或单个字符串）。"""
-    if isinstance(raw, str):
-        raw = [raw]
-    if not isinstance(raw, (list, tuple)):
-        if raw is not None:
-            log("[config] pip_constraints 不是数组，已忽略")
-        return []
-    constraints: list[str] = []
-    for item in raw:
-        if isinstance(item, str) and item.strip():
-            constraints.append(item.strip())
-        elif item is not None:
-            log("[config] WARN pip_constraints 中的非字符串项已忽略")
-    return constraints
-
-
-def normalize_fallback_command(raw) -> list[str]:  # noqa: ANN001
-    """Host 注入的备用隧道 argv 模板：逐项过滤空串/非字符串。"""
-    if not isinstance(raw, (list, tuple)):
-        if raw is not None:
-            log("[config] fallback_tunnel_command 不是数组，已忽略")
-        return []
-    command: list[str] = []
-    for item in raw:
-        if isinstance(item, str) and item.strip():
-            command.append(item)
-        elif item is not None:
-            log("[config] WARN fallback_tunnel_command 中的非字符串项已忽略")
-    return command
-
-
-def normalize_local_models(raw) -> dict[str, str]:  # noqa: ANN001
-    """Host 注入的权重预挂载映射：repo → 容器内目录；非法项过滤并告警。"""
-    if not isinstance(raw, dict):
-        if raw is not None:
-            log("[config] local_models 不是对象，已忽略")
-        return {}
-    models: dict[str, str] = {}
-    for repo, path in raw.items():
-        if isinstance(repo, str) and repo.strip() and isinstance(path, str) and path.strip():
-            models[repo.strip()] = path.strip()
-        else:
-            log("[config] WARN local_models 中的非法映射已忽略（值应是目录字符串）")
-    return models
-
-
-def _build_config(cfg: dict) -> DaemonConfig:
-    """注入 dict → DaemonConfig。未知键打日志（不再静默丢弃），敏感值不落日志。"""
-    config = DaemonConfig()
-    config.auth_token = str(cfg.get("auth_token") or "")
-    config.ntfy_topic = str(cfg.get("ntfy_topic") or "")
-    config.ntfy_server = str(cfg.get("ntfy_server") or "https://ntfy.sh").rstrip("/")
-    try:
-        config.idle_timeout_sec = int(cfg.get("idle_timeout_sec", 1800))
-    except (TypeError, ValueError):
-        config.idle_timeout_sec = 1800
-    try:
-        config.port = int(cfg.get("port", DEFAULT_PORT))
-    except (TypeError, ValueError):
-        config.port = DEFAULT_PORT
-    preload = cfg.get("preload")
-    # preload 必须是 /generate 里同形状的 pipeline 描述对象（含 loader/base）；
-    # Daemon 不认识预设 id，Host 已经在注入前把预设展开成对象。
-    config.preload = preload if isinstance(preload, dict) and preload.get("loader") else None
-    if preload is not None and config.preload is None:
-        log("[config] preload 不是 pipeline 描述对象，已忽略（Host 应下发 {loader, base, ...}）")
-    config.preset_id = cfg.get("preset_id")
-    config.log_level = str(cfg.get("log_level") or "info")
-    config.version = str(cfg.get("version") or "")
-    contract = cfg.get("contract")
-    config.contract = contract if isinstance(contract, dict) else {}
-    if contract is not None and not config.contract:
-        log("[config] contract 不是 JSON 对象，已忽略")
-    if not config.contract:
-        log("[config] WARN 未收到 contract，参数边界回退到内置默认值（兼容旧 Host）")
-    config.allow_no_auth = bool(cfg.get("allow_no_auth", False))
-    if config.allow_no_auth:
-        log("[config] WARN allow_no_auth=true：无 auth_token 也放行请求，仅限本地调试")
-    # P1.2 / P2.1 / P2.2：可选注入项。令牌与权重路径都不进日志（只打开关与数量）。
-    config.hf_token = str(cfg.get("hf_token") or "").strip()
-    config.pip_constraints = normalize_pip_constraints(cfg.get("pip_constraints"))
-    config.fallback_tunnel_command = normalize_fallback_command(cfg.get("fallback_tunnel_command"))
-    config.fallback_tunnel_url_regex = str(cfg.get("fallback_tunnel_url_regex") or "").strip()
-    config.local_models = normalize_local_models(cfg.get("local_models"))
-    unknown = sorted(set(cfg) - _KNOWN_CONFIG_KEYS)
-    if unknown:
-        log(f"[config] WARN 未知配置键已忽略：{', '.join(unknown)}")
-    # 配置项名可以打日志，值不行（含 token）。
-    log(f"[config] 已加载配置项：{', '.join(sorted(cfg.keys())) or '(空)'}")
-    log(
-        f"[config] idle_timeout={config.idle_timeout_sec}s port={config.port} "
-        f"ntfy={'on' if config.ntfy_topic else 'off'} auth={'on' if config.auth_token else 'off'} "
-        f"preload={config.preload.get('loader') if config.preload else 'none'} "
-        f"preset={config.preset_id or 'none'} log_level={config.log_level} "
-        f"version={config.version or 'none'} contract={'on' if config.contract else 'off'} "
-        f"allow_no_auth={'on' if config.allow_no_auth else 'off'} "
-        f"hf_token={'on' if config.hf_token else 'off'} "
-        f"pip_constraints={len(config.pip_constraints)} "
-        f"fallback_tunnel={'on' if config.fallback_tunnel_command else 'off'} "
-        f"local_models={len(config.local_models)}"
-    )
-    return config
-
-
 def load_config() -> DaemonConfig:
-    """读取 Host 注入的配置；环境变量 IMAGEN_CONFIG_B64 作为兜底（本地调试用）。"""
-    raw_b64 = (EMBEDDED_CONFIG_B64 or os.environ.get("IMAGEN_CONFIG_B64") or "").strip()
-    if not raw_b64:
-        log("[config] 未收到注入配置；本地调试需显式配置 allow_no_auth=true，否则启动会拒绝服务")
-        return DaemonConfig()
-    try:
-        raw = base64.b64decode(raw_b64.encode("ascii")).decode("utf-8")
-        cfg = json.loads(raw)
-    except Exception as exc:
-        # 只报异常类型，绝不把配置内容写进日志（里面含 auth_token）。
-        raise SystemExit(f"配置解析失败：{type(exc).__name__}: {exc}") from None
-    if not isinstance(cfg, dict):
-        raise SystemExit("配置必须是 JSON 对象")
-    return _build_config(cfg)
+    """读取 Host 注入的配置；环境变量 IMAGEN_CONFIG_B64 作为兜底（本地调试用）。
+
+    返回值就是模块级 ``CONFIG`` 本身（原地更新）。**不要写成 ``CONFIG = load_config()``**：
+    remote/config.py 内部读的是它自己的那个单例，重新绑定只会让两边各持一份配置，
+    而且不会报错（表现为"配置没生效"的假绿）。
+
+    拆分边界：解析、归一、日志都在 config.load_config()；注入串留在这里，因为启动器
+    （remote/_entry.py）与 test/kernel-package.mjs 都通过本模块的属性验证"注入已落地"。
+    """
+    return load_config_impl(EMBEDDED_CONFIG_B64, target=CONFIG)
+
+
+# `build_config` / `normalize_pip_constraints` / `normalize_fallback_command` /
+# `normalize_local_models` / `_KNOWN_CONFIG_KEYS` 已搬到 remote/config.py；本文件按上面的
+# 导入块保留 `_build_config` / `_KNOWN_CONFIG_KEYS` 等同名引用（单测与内部调用面不变）。
 
 
 def auth_missing() -> bool:
@@ -1275,68 +1088,12 @@ def ensure_img2img_pipeline():
 # remote/transport/validator.py（纯函数，参数边界由 limits_for 注入，无 daemon 全局依赖）。
 
 
-# 契约缺失时的兜底边界（兼容旧 Host / 本地调试）：保持 0.3.0 之前的 daemon 行为。
-# 图生图（reference / strength）是新增能力：旧 Host 不会下发这两组边界，这里与当前契约
-# 同值兜底，仅供契约缺项的本地调试；正常运行一律以注入契约的 limits 为准。
-_FALLBACK_LIMITS: dict[str, dict] = {
-    "width": {"min": 64, "max": 2048, "step": 8},
-    "height": {"min": 64, "max": 2048, "step": 8},
-    "steps": {"min": 1, "max": 80},
-    "cfg": {"min": 0, "max": 30},
-    "count": {"min": 1, "max": 8},
-    "seed": {"max": 2**31 - 1},
-    "prompt": {"maxChars": 2000},
-    "negativePrompt": {"maxChars": 1000},
-    "reference": {"maxBytes": 8 * 1024 * 1024, "maxEdge": 1536, "minEdge": 128},
-    "strength": {"min": 0.2, "max": 0.9, "step": 0.05, "default": 0.6},
-}
-_MAX_TASKS_FALLBACK = 8
-# 契约 limits 里可能出现的数值型键：合并兜底值时只认数字（bool 不算数字）。
-_LIMIT_NUMERIC_KEYS = ("min", "max", "step", "maxChars", "default", "maxBytes", "maxEdge", "minEdge")
-
-
-def _limit_spec(name: str) -> dict:
-    """取参数边界：优先注入契约 ``CONFIG.contract["limits"]``，缺失时退回内置兜底。"""
-    fallback = dict(_FALLBACK_LIMITS[name])
-    limits = CONFIG.contract.get("limits") if isinstance(CONFIG.contract, dict) else None
-    if not isinstance(limits, dict):
-        return fallback
-    item = limits.get(name)
-    if not isinstance(item, dict):
-        return fallback
-    merged = dict(fallback)
-    for key in _LIMIT_NUMERIC_KEYS:
-        value = item.get(key)
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            merged[key] = value
-    return merged
-
-
-def _max_tasks() -> int:
-    """单次请求任务上限：跟契约的 count 上限对齐（Host 的 count 就是每批张数）。"""
-    try:
-        value = int(_limit_spec("count").get("max"))
-    except (TypeError, ValueError):
-        return _MAX_TASKS_FALLBACK
-    return value if value > 0 else _MAX_TASKS_FALLBACK
-
-
-def _request_body_limit() -> int:
-    """请求体字节上限：默认 8MB；契约下发参考图边界后按 base64 膨胀放宽。
-
-    8MiB 原图 base64 后约 10.7MB，不下发 reference 的旧 Host 仍按 8MB 处理，
-    保证文生图路径的请求体上限与改造前完全一致。
-    """
-    base = 8 * 1024 * 1024
-    limits = CONFIG.contract.get("limits") if isinstance(CONFIG.contract, dict) else None
-    reference = limits.get("reference") if isinstance(limits, dict) else None
-    if not isinstance(reference, dict):
-        return base
-    max_bytes = reference.get("maxBytes")
-    if isinstance(max_bytes, bool) or not isinstance(max_bytes, (int, float)) or max_bytes <= 0:
-        return base
-    # base64 每 3 字节膨胀成 4 字符；再留 1MB 给 tasks / prompt / jobId 等 JSON 字段。
-    return max(base, 4 * ((int(max_bytes) + 2) // 3) + 1024 * 1024)
+# `_FALLBACK_LIMITS` / `_LIMIT_NUMERIC_KEYS` / `_limit_spec` / `_max_tasks` /
+# `_request_body_limit` 已随契约边界解析搬到 remote/config.py（那里是 `CONFIG.contract`
+# 的唯一取数点）。本文件只按导入块保留 `_limit_spec` / `_max_tasks` /
+# `_request_body_limit` / `_MAX_TASKS_FALLBACK` / `_FALLBACK_LIMITS` 这些同名引用，
+# 供 `validate_generate_spec` 等薄包装以 `limits_for=` 注入给纯函数，以及单测按
+# `d._limit_spec(...)` 调用。
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2267,8 +2024,6 @@ def _install_signal_handlers() -> None:
 
 
 def main() -> None:
-    global CONFIG
-
     install_stream_tee()
     _install_signal_handlers()
     with STATE_LOCK:
@@ -2278,7 +2033,9 @@ def main() -> None:
     log("=" * 72)
     log(f"imagen 远端 Daemon v{protocol_version()} 启动")
     try:
-        CONFIG = load_config()
+        # 原地回填模块级 CONFIG：不能写成 `CONFIG = load_config()`，remote/config.py 与
+        # 注入出去的协作者读的是同一个对象，重新绑定会让它们继续看旧配置（见架构规格 §5.10）。
+        load_config()
     except SystemExit as exc:
         log(f"[config] {exc}")
         os._exit(2)
