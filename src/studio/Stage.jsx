@@ -2,19 +2,20 @@
 
 import React from 'react'
 
+import { INSPIRE_KEYS } from '../constants.js'
 import { Icon } from './icons.jsx'
 import { formatSeconds } from '../logic/format.js'
 import { jobProgressText } from '../logic/status.js'
-
-const INSPIRE_KEYS = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
+import { useFocusTrap } from './hooks/useFocusTrap.js'
 
 /** 出图后一分钟内才算「刚落定」，超过就当历史作品直接陈列。 */
 const FRESH_MS = 60_000
 
-function isFreshItem(item) {
+function isFreshItem(item, now) {
   const finishedAt = Date.parse(String((item && item.finishedAt) || ''))
   if (!Number.isFinite(finishedAt)) return false
-  const delta = Date.now() - finishedAt
+  const current = Number.isFinite(now) ? now : Date.now()
+  const delta = current - finishedAt
   return delta > -5_000 && delta < FRESH_MS
 }
 
@@ -28,7 +29,7 @@ function ratioOf(width, height) {
 
 /** 接收 { t, ui, compute, form, library, actions } 领域对象。 */
 export function Stage(props) {
-  const { t, ui, compute, form, library, actions } = props
+  const { t, ui, compute, form, library, actions, now } = props
   const { zoom, setZoom, copyPath } = ui
   const { activeJob, sessionState } = compute
   // 进度文案区分「等云端就绪」与「等前一张图」：就绪后排队不能再写成申请 GPU。
@@ -54,41 +55,13 @@ export function Stage(props) {
   }
 
   // 看原图时 Esc 退出、Tab 在弹层内循环；打开时把焦点交给关闭按钮，关闭后还给触发按钮。
-  React.useEffect(() => {
-    if (!zoom) return undefined
-    function onKey(event) {
-      if (event.key === 'Escape') {
-        setZoom(false)
-        return
-      }
-      if (event.key !== 'Tab') return
-      const node = lightboxRef.current
-      if (!node || typeof node.querySelectorAll !== 'function') return
-      const nodes = Array.prototype.slice
-        .call(node.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])'))
-        .filter((item) => !item.disabled)
-      if (nodes.length === 0) return
-      const first = nodes[0]
-      const last = nodes[nodes.length - 1]
-      const active = document.activeElement
-      const outside = !node.contains || !node.contains(active)
-      if (event.shiftKey && (active === first || outside)) {
-        if (event.preventDefault) event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && (active === last || outside)) {
-        if (event.preventDefault) event.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', onKey)
-    if (closeRef.current && typeof closeRef.current.focus === 'function') closeRef.current.focus()
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      const opener = zoomOpenerRef.current
-      zoomOpenerRef.current = null
-      if (opener && typeof opener.focus === 'function' && opener.isConnected !== false) opener.focus()
-    }
-  }, [zoom])
+  useFocusTrap({
+    active: Boolean(zoom),
+    panelRef: lightboxRef,
+    initialFocusRef: closeRef,
+    returnFocusRef: zoomOpenerRef,
+    onClose: () => setZoom(false),
+  })
 
   if (!image) {
     // 手动关闭云端后不能再说「点击生成即可出图」：生成会被宿主拒绝，先提示唤醒。
@@ -153,7 +126,7 @@ export function Stage(props) {
   const imageKey = image.path || image.file || image.url
   const printRatio = ratioOf(image.width, image.height)
   // 刚落定的图才播一次显影；翻历史作品直接陈列。
-  const developing = isFreshItem(item)
+  const developing = isFreshItem(item, now)
 
   return (
     <section className="ofs-stage">

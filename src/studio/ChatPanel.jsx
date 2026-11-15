@@ -12,16 +12,12 @@
 
 import React from 'react'
 
-import { LIMITS, PRESETS } from '../../shared/contract.js'
+import { LIMITS, publicPresets } from '../../shared/contract.js'
 
+import { COUNT_OPTIONS, INSPIRE_KEYS } from '../constants.js'
 import { formatText } from '../logic/format.js'
 import { intentCount } from '../logic/intent.js'
 import { Icon } from './icons.jsx'
-
-const EXAMPLES = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
-
-// 生成张数固定 1~4 四格；默认 1 张，和契约 LIMITS.count 一致。
-const COUNT_OPTIONS = [1, 2, 3, 4]
 
 // 任务型气泡左上角的状态点：完成绿点，排队/生成是呼吸琥珀点，失败红点。
 const WORKING_STAGES = ['pending', 'queued', 'running']
@@ -40,9 +36,11 @@ function ratioLabel(t, ratioId) {
   return ratioId || t('studio.chat.ratioAuto')
 }
 
+const PUBLIC_PRESET_LIST = publicPresets()
+
 /** 模型建议里展示的模型名；未知 id 返回空串（整行不渲染）。 */
 function modelLabelOf(presetId) {
-  const preset = PRESETS.find((item) => item && item.id === presetId)
+  const preset = PUBLIC_PRESET_LIST.find((item) => item && item.id === presetId)
   return preset ? (preset.label || preset.short || preset.id) : ''
 }
 
@@ -305,7 +303,7 @@ export function ChatPanel(props) {
           <div className="ofs-chat-empty">
             <p className="ofs-chat-empty-text">{t('studio.chat.empty')}</p>
             <div className="ofs-chat-examples">
-              {EXAMPLES.map((key) => (
+              {INSPIRE_KEYS.map((key) => (
                 <button
                   type="button"
                   key={key}

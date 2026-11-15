@@ -18,6 +18,7 @@ import { Icon } from './icons.jsx'
 import { fetchSettings, saveSettings } from '../api/resources.js'
 import { formatText } from '../logic/format.js'
 import { KAGGLE_CREDENTIAL_PATH } from '../logic/guidance.js'
+import { useFocusTrap } from './hooks/useFocusTrap.js'
 import {
   IDLE_MAX_MINUTES,
   IDLE_MIN_MINUTES,
@@ -31,9 +32,6 @@ import {
   settingsViewOf,
   validateSettingsForm,
 } from '../logic/settings.js'
-
-/** 弹层内可聚焦元素（焦点陷阱用，与 LogsDrawer 同一份选择器）。 */
-const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
 
 export function SettingsDrawer(props) {
   const { t, ui, onClose } = props
@@ -78,38 +76,7 @@ export function SettingsDrawer(props) {
   }, [reloadKey])
 
   // Esc 关闭 + Tab 在抽屉内循环；打开时焦点落到关闭按钮。
-  React.useEffect(() => {
-    if (closeRef.current && typeof closeRef.current.focus === 'function') closeRef.current.focus()
-
-    function onKey(event) {
-      if (event.key === 'Escape') {
-        if (typeof event.stopPropagation === 'function') event.stopPropagation()
-        if (typeof onCloseRef.current === 'function') onCloseRef.current()
-        return
-      }
-      if (event.key !== 'Tab') return
-      const panel = panelRef.current
-      if (!panel || typeof panel.querySelectorAll !== 'function') return
-      const nodes = Array.prototype.slice
-        .call(panel.querySelectorAll(FOCUSABLE))
-        .filter((node) => !node.disabled && node.getAttribute('aria-hidden') !== 'true')
-      if (nodes.length === 0) return
-      const first = nodes[0]
-      const last = nodes[nodes.length - 1]
-      const active = document.activeElement
-      const outside = !panel.contains || !panel.contains(active)
-      if (event.shiftKey && (active === first || outside)) {
-        if (event.preventDefault) event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && (active === last || outside)) {
-        if (event.preventDefault) event.preventDefault()
-        first.focus()
-      }
-    }
-
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  useFocusTrap({ panelRef, initialFocusRef: closeRef, onClose })
 
   function patchForm(patch) {
     setForm((previous) => (previous ? { ...previous, ...patch } : previous))

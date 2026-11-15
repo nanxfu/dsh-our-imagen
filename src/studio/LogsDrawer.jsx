@@ -20,10 +20,8 @@ import { VERSION } from '../../shared/contract.js'
 import { Icon } from './icons.jsx'
 import { errorText } from '../logic/error.js'
 import { buildDiagnostics } from '../logic/logs.js'
+import { useFocusTrap } from './hooks/useFocusTrap.js'
 import { useHostSnapshot } from './hooks/useStudioLogs.js'
-
-/** 弹层内可聚焦元素（焦点陷阱用）。 */
-const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
 
 export function LogsDrawer(props) {
   const { t, ui, compute, logs, onClose } = props
@@ -44,39 +42,8 @@ export function LogsDrawer(props) {
   const autoFallback = manualView === null && autoView === 'host'
   const visibleLines = showingHost ? hostLines : remoteLines
 
-  // Esc 关闭 + Tab 在弹层内循环；打开时焦点落到关闭按钮。
-  React.useEffect(() => {
-    if (closeRef.current && typeof closeRef.current.focus === 'function') closeRef.current.focus()
-
-    function onKey(event) {
-      if (event.key === 'Escape') {
-        if (typeof event.stopPropagation === 'function') event.stopPropagation()
-        onClose()
-        return
-      }
-      if (event.key !== 'Tab') return
-      const panel = panelRef.current
-      if (!panel || typeof panel.querySelectorAll !== 'function') return
-      const nodes = Array.prototype.slice
-        .call(panel.querySelectorAll(FOCUSABLE))
-        .filter((node) => !node.disabled && node.getAttribute('aria-hidden') !== 'true')
-      if (nodes.length === 0) return
-      const first = nodes[0]
-      const last = nodes[nodes.length - 1]
-      const active = document.activeElement
-      const outside = !panel.contains || !panel.contains(active)
-      if (event.shiftKey && (active === first || outside)) {
-        if (event.preventDefault) event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && (active === last || outside)) {
-        if (event.preventDefault) event.preventDefault()
-        first.focus()
-      }
-    }
-
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  // Esc 关闭 + Tab 在弹层内循环；打开时焦点落到关闭按钮（onClose 由 hook 内部 ref 持有）。
+  useFocusTrap({ panelRef, initialFocusRef: closeRef, onClose })
 
   // 切换视图或新日志到达后滚到底部（只操作真实 DOM，测试替身里 ref 为空）。
   React.useEffect(() => {

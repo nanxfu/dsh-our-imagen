@@ -132,11 +132,6 @@ TUNNEL_RESTART_MAX_SEC = 60.0
 TUNNEL_ANNOUNCE_SEC = 300.0
 TUNNEL_PROVIDERS = ("cloudflare", "custom")
 
-# 与 bench/lightning/run.py 完全一致：镜像自带 torchao 0.10.0 与新版 diffusers 冲突，
-# 必须先卸载；随后升级这 4 个包。
-PIP_UNINSTALL = ("torchao",)
-PIP_INSTALL = ("diffusers", "transformers", "accelerate", "peft")
-
 # 依赖约束默认留空（0.4.1 修正）。0.4.0 曾内置「版本上限」做固化
 # （diffusers<1.0 / transformers<5 / accelerate<2 / peft<1），实测与当前 diffusers
 # 新版直接冲突：diffusers 0.42+ 依赖 huggingface-hub>=1.32，而 transformers 4.x
@@ -169,6 +164,7 @@ REFERENCE_IMAGE_FORMATS = ("PNG", "JPEG")
 # 数量上限同时也是内存上限。
 # ─────────────────────────────────────────────────────────────────────────────
 JOB_MAX_FINISHED = 8
+JOB_MAX_QUEUE_DEPTH = 16
 JOB_TTL_SEC = 600.0
 JOB_ID_MAX_CHARS = 64
 JOB_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -359,7 +355,7 @@ class RuntimeState:
     # 与 txt2img 共用组件（不额外加载权重、不额外占显存）；切换/释放底座时一并清空。
     img2img_pipe: object | None = None
     img2img_sig_params: set = field(default_factory=set)
-    waiting: int = 0
+    booted: bool = False
     shutting_down: bool = False
 
 
@@ -388,6 +384,14 @@ class Job:
 
 
 @dataclass
+class _TunnelAttempt:
+    """单次隧道启动尝试的令牌：超时后失活，防止旧 drain 线程污染新尝试的 BOOT 状态。"""
+
+    provider: str = ""
+    active: bool = True
+
+
+@dataclass
 class BootState:
     """启动期会合状态：隧道与 ready 发布。"""
 
@@ -401,6 +405,8 @@ class BootState:
     tunnel_restarts: int = 0
     # 隧道失败把 phase 打成 error 时记下原阶段；隧道恢复后还原，避免 Host 一直看到 error。
     phase_before_error: str | None = None
+    http_server: object | None = None
+    current_attempt: _TunnelAttempt | None = None
     # /shutdown 或信号置位后监管线程退出。整个进程只创建一个 Event。
     stop_event: threading.Event = field(default_factory=threading.Event)
 
@@ -408,15 +414,37 @@ class BootState:
 CONFIG = DaemonConfig()
 STATE = RuntimeState()
 BOOT = BootState()
-# 生成串行锁；不放状态对象里，避免状态复制时复制锁。
+# 状态锁与生成串行锁；不放状态对象里，避免状态复制时复制锁。
+STATE_LOCK = threading.RLock()
+BOOT_LOCK = threading.RLock()
 GEN_LOCK = threading.Lock()
+_CLEANUP_LOCK = threading.Lock()
+_CLEANUP_DONE = False
 
 # 异步 job 表：队列（待执行）/ 全表（含运行中与已结束）/ 结束顺序（淘汰用）。
 JOB_LOCK = threading.RLock()
 JOB_QUEUE: deque = deque()
 JOB_TABLE: dict[str, Job] = {}
 JOB_FINISHED_ORDER: deque = deque()
-JOB_WAKE = threading.Event()
+JOB_COND = threading.Condition(JOB_LOCK)
+
+
+class _JobWakeCompat:
+    """兼容旧调用与单测里的 JOB_WAKE.set()/clear()，底层委托给 JOB_COND。"""
+
+    def set(self) -> None:
+        with JOB_COND:
+            JOB_COND.notify_all()
+
+    def clear(self) -> None:
+        pass
+
+    def wait(self, timeout: float | None = None) -> bool:
+        with JOB_COND:
+            return JOB_COND.wait(timeout=timeout)
+
+
+JOB_WAKE = _JobWakeCompat()
 
 
 class RequestError(ValueError):
@@ -427,6 +455,10 @@ class LoadError(RuntimeError):
     """模型加载失败 → HTTP 500 load_failed。"""
 
 
+class QueueFullError(RuntimeError):
+    """任务队列达到上限 → HTTP 429 queue_full。"""
+
+
 def short(exc: BaseException, limit: int = 600) -> str:
     text = f"{type(exc).__name__}: {exc}"
     text = " ".join(text.split())
@@ -434,17 +466,19 @@ def short(exc: BaseException, limit: int = 600) -> str:
 
 
 def set_phase(phase: str, detail: str | None = None) -> None:
-    STATE.phase = phase
-    STATE.detail = detail
-    # 启动阶段的进度也算"活动"，避免依赖安装还没结束就被空闲看门狗收走。
-    STATE.last_active = time.time()
+    with STATE_LOCK:
+        STATE.phase = phase
+        STATE.detail = detail
+        # 启动阶段的进度也算"活动"，避免依赖安装还没结束就被空闲看门狗收走。
+        STATE.last_active = time.time()
     log(f"[phase] {phase}" + (f" — {detail}" if detail else ""))
 
 
 def record_error(code: str, message: str) -> None:
     """``/health.last_error`` 是字符串：Host 直接拼进 UI，对象会显示成 [object Object]。"""
-    STATE.last_error = f"{code}: {message}"
-    STATE.last_error_code = code
+    with STATE_LOCK:
+        STATE.last_error = f"{code}: {message}"
+        STATE.last_error_code = code
 
 
 # ── 异步 job：表、队列与轮询视图（协议 0.5.0） ────────────────────────────────
@@ -490,6 +524,16 @@ def prune_jobs(now: float | None = None) -> None:
         JOB_TABLE.pop(job_id, None)
 
 
+def _max_queue_depth() -> int:
+    """允许排队的最大待执行 job 数（防止内存 DoS）。"""
+    limits = CONFIG.contract.get("limits") if isinstance(CONFIG.contract, dict) else None
+    queue_cfg = limits.get("queue") if isinstance(limits, dict) else None
+    raw = queue_cfg.get("maxPending") if isinstance(queue_cfg, dict) else None
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool) and int(raw) > 0:
+        return int(raw)
+    return JOB_MAX_QUEUE_DEPTH
+
+
 def submit_job(
     pipeline_spec: dict,
     model_id: str,
@@ -508,6 +552,9 @@ def submit_job(
             existing = JOB_TABLE.get(job_id)
             if existing is not None:
                 return existing, False
+        max_depth = _max_queue_depth()
+        if len(JOB_QUEUE) >= max_depth:
+            raise QueueFullError(f"远端任务队列已满（最多 {max_depth} 个排队任务），请稍后重试")
         job = Job(
             job_id=job_id or new_job_id(),
             model_id=str(model_id),
@@ -518,7 +565,7 @@ def submit_job(
         JOB_TABLE[job.job_id] = job
         JOB_QUEUE.append(job)
         queue_len = len(JOB_QUEUE)
-        JOB_WAKE.set()
+        JOB_COND.notify_all()
         log(
             f"[job] 入队 {job.job_id}（tasks={job.total}，排队 {queue_len}"
             f"{'，带参考图' if job.reference is not None else ''}）"
@@ -570,7 +617,8 @@ def fail_boot(code: str, message: str, *, tunnel: bool = False) -> None:
     隧道错误原因，供启动等待逻辑复用。
     """
     if tunnel:
-        BOOT.tunnel_error = message
+        with BOOT_LOCK:
+            BOOT.tunnel_error = message
     record_error(code, message)
     set_phase("error", message)
     publish_error(code, message)
@@ -799,13 +847,19 @@ def ntfy_publish(payload: dict, label: str) -> bool:
 
 
 def publish_ready() -> None:
+    with BOOT_LOCK:
+        endpoint = BOOT.tunnel_url
+        provider = BOOT.tunnel_provider
+    with STATE_LOCK:
+        model_id = STATE.model_id
+        device = STATE.device
     payload = {
         "type": "ready",
-        "endpoint": BOOT.tunnel_url,
+        "endpoint": endpoint,
         # P2.2：Host 据此展示通道类型，并决定可信域校验策略。
-        "provider": BOOT.tunnel_provider,
-        "model_id": STATE.model_id,
-        "device": STATE.device,
+        "provider": provider,
+        "model_id": model_id,
+        "device": device,
     }
     ntfy_publish(payload, "ready")
 
@@ -817,14 +871,48 @@ def publish_error(code: str, message: str) -> None:
 
 def request_shutdown() -> None:
     """收到 /shutdown：标记停机并让隧道监管线程退出（进程随后由调用方安排退出）。"""
-    STATE.shutting_down = True
+    with STATE_LOCK:
+        STATE.shutting_down = True
     BOOT.stop_event.set()
     log("[shutdown] 收到 /shutdown，0.3s 后退出进程")
 
 
+def _cleanup_before_exit() -> None:
+    """进程退出前尽力关闭 HTTP 服务与隧道子进程（幂等，可重复调用）。"""
+    global _CLEANUP_DONE
+    with _CLEANUP_LOCK:
+        if _CLEANUP_DONE:
+            return
+        _CLEANUP_DONE = True
+    with STATE_LOCK:
+        STATE.shutting_down = True
+    BOOT.stop_event.set()
+    with BOOT_LOCK:
+        server = BOOT.http_server
+        proc = BOOT.cloudflared
+    if server is not None:
+        try:
+            shutdown = getattr(server, "shutdown", None)
+            if callable(shutdown):
+                shutdown()
+        except Exception:
+            pass
+        try:
+            server_close = getattr(server, "server_close", None)
+            if callable(server_close):
+                server_close()
+        except Exception:
+            pass
+    if proc is not None:
+        terminate_tunnel_process(proc)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# 依赖安装
+# 依赖安装与模型加载共享辅助（单份源码在 remote/pipeline_loader.py，打包时由
+# lib/kernel.js 内联；本地测试直接同目录 import）
 # ─────────────────────────────────────────────────────────────────────────────
+
+from pipeline_loader import PIP_INSTALL, PIP_UNINSTALL, filter_call_kwargs, from_pretrained_with_variant_fallback, is_oom_error, load_diffusers_pipeline, pip_install_argv, pip_uninstall_argv, pipe_signature_params  # noqa: E402  # @@INLINE:pipeline_loader.py@@
 
 
 def _stream_process(argv: list[str], prefix: str, tail_lines: int = 0) -> tuple[int, list[str]]:
@@ -964,50 +1052,33 @@ def install_dependencies() -> None:
       3. 安装失败时把 pip 输出的最后几行带进 LoadError，界面能直接看到原因。
     """
     set_phase("installing", "卸载 torchao 并升级 diffusers 相关依赖")
-    run_streaming(
-        [sys.executable, "-m", "pip", "uninstall", "-y", "-q", *PIP_UNINSTALL],
-        "[pip]",
-    )
+    run_streaming(pip_uninstall_argv(), "[pip]")
     constraints = merge_pip_constraints(CONFIG.pip_constraints)
-    plain_argv = [
-        sys.executable,
-        "-m",
-        "pip",
-        "install",
-        "-U",
-        "--progress-bar",
-        "off",
-        *PIP_INSTALL,
-    ]
-    if constraints:
-        constraints_path = write_constraints_file(constraints)
-        # 约束本身不含敏感信息，完整打印便于对照「为什么装的是这个版本」。
-        log(f"[pip] 依赖约束（Host 注入）：{' | '.join(constraints)}")
-        install_argv = [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "-U",
-            "--progress-bar",
-            "off",
-            "-c",
-            constraints_path,
-            *PIP_INSTALL,
-        ]
-    else:
-        log("[pip] 未配置版本约束：安装最新兼容组合（需要复现时用 pipConstraints 钉死已验证版本）")
-        install_argv = plain_argv
+    plain_argv = pip_install_argv()
+    constraints_dir: str | None = None
+    try:
+        if constraints:
+            constraints_dir = tempfile.mkdtemp(prefix="imagen-constraints-")
+            constraints_path = write_constraints_file(constraints, directory=constraints_dir)
+            # 约束本身不含敏感信息，完整打印便于对照「为什么装的是这个版本」。
+            log(f"[pip] 依赖约束（Host 注入）：{' | '.join(constraints)}")
+            install_argv = pip_install_argv(constraints_path)
+        else:
+            log("[pip] 未配置版本约束：安装最新兼容组合（需要复现时用 pipConstraints 钉死已验证版本）")
+            install_argv = plain_argv
 
-    code, tail = run_streaming_tail(install_argv, "[pip]", 12)
-    if code != 0 and constraints:
-        log(f"[pip] WARN 带约束安装失败（退出码 {code}）：{tail_summary(tail)}")
-        log("[pip] 去掉约束重试一次；成功后本次会话按最新兼容组合运行")
-        code, tail = run_streaming_tail(plain_argv, "[pip]", 12)
-        if code == 0:
-            log("[pip] WARN 未使用版本约束安装成功：如需固定版本，请修正 pipConstraints")
-    if code != 0:
-        raise LoadError(f"pip install 失败（退出码 {code}）：{tail_summary(tail)}")
+        code, tail = run_streaming_tail(install_argv, "[pip]", 12)
+        if code != 0 and constraints:
+            log(f"[pip] WARN 带约束安装失败（退出码 {code}）：{tail_summary(tail)}")
+            log("[pip] 去掉约束重试一次；成功后本次会话按最新兼容组合运行")
+            code, tail = run_streaming_tail(plain_argv, "[pip]", 12)
+            if code == 0:
+                log("[pip] WARN 未使用版本约束安装成功：如需固定版本，请修正 pipConstraints")
+        if code != 0:
+            raise LoadError(f"pip install 失败（退出码 {code}）：{tail_summary(tail)}")
+    finally:
+        if constraints_dir:
+            shutil.rmtree(constraints_dir, ignore_errors=True)
     verify_dependencies()
 
 
@@ -1017,14 +1088,7 @@ def install_dependencies() -> None:
 
 
 def _is_oom(exc: BaseException) -> bool:
-    name = type(exc).__name__
-    text = f"{name}: {exc}".lower()
-    return (
-        name in ("OutOfMemoryError", "CudaOutOfMemoryError")
-        or "out of memory" in text
-        or "insufficient memory" in text
-        or "cuda error: out of memory" in text
-    )
+    return is_oom_error(exc)
 
 
 def free_cuda_cache() -> None:
@@ -1108,10 +1172,19 @@ def anima_local_assets(pipeline_spec: dict) -> dict[str, str]:
     if te_weight:
         assets["te"] = te_weight
     vae = pipeline_spec.get("vae") or {}
-    vae_subfolder = str(vae.get("subfolder") or "").strip().strip("/")
-    vae_root = local_model_dir(str(vae.get("repo") or ""))
-    if vae_root and os.path.isfile(os.path.join(vae_root, vae_subfolder or ".", "config.json")):
-        assets["vae"] = vae_root
+    raw_subfolder = str(vae.get("subfolder") or "").strip()
+    vae_subfolder = raw_subfolder.strip("/")
+    vae_parts = vae_subfolder.split("/") if vae_subfolder else []
+    if raw_subfolder and (
+        os.path.isabs(raw_subfolder)
+        or "\\" in raw_subfolder
+        or any(part in ("", ".", "..") for part in vae_parts)
+    ):
+        log(f"[load] WARN 非法 vae.subfolder 已忽略：{raw_subfolder!r}")
+    else:
+        vae_root = local_model_dir(str(vae.get("repo") or ""))
+        if vae_root and os.path.isfile(os.path.join(vae_root, vae_subfolder or ".", "config.json")):
+            assets["vae"] = vae_root
     tokenizers = pipeline_spec.get("tokenizers") or {}
     tokenizer_root = local_model_dir(str(tokenizers.get("repo") or ""))
     if tokenizer_root and os.path.isdir(os.path.join(tokenizer_root, "qwen25_tokenizer")):
@@ -1607,23 +1680,9 @@ def _prefetch_weights(base: str, allow_patterns) -> None:  # noqa: ANN001
 
 def _from_pretrained(factory, base: str, kwargs: dict, loader: str):  # noqa: ANN001
     """fp16 变体缺失时回退到默认权重；OOM 不重试，直接抛给上层分类。"""
-    attempts = [dict(kwargs)]
-    if kwargs.get("variant"):
-        attempts.append({k: v for k, v in kwargs.items() if k != "variant"})
-    last: Exception | None = None
-    for index, attempt in enumerate(attempts, start=1):
-        try:
-            log(
-                f"[load] from_pretrained({base}) 第 {index} 次："
-                f"variant={attempt.get('variant')} device_map={attempt.get('device_map')}"
-            )
-            return factory.from_pretrained(base, **attempt)
-        except Exception as exc:
-            last = exc
-            if _is_oom(exc):
-                raise
-            log(f"[load] 第 {index} 次加载失败：{short(exc)}")
-    raise LoadError(f"{loader} 加载 {base} 失败：{short(last) if last else '未知原因'}")
+    return from_pretrained_with_variant_fallback(
+        factory, base, kwargs, loader, log=log, error_cls=LoadError
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1644,9 +1703,7 @@ def build_pipeline(pipeline_spec: dict):
     """按 loader 分支加载；返回 (pipe, 人类可读的 loaded 标识)。"""
     loader = str(pipeline_spec["loader"])
     base = str(pipeline_spec["base"])
-    variant = pipeline_spec.get("variant")
     allow_patterns = pipeline_spec.get("allowPatterns")
-    device_map = pipeline_spec.get("deviceMap")
 
     # P2.1：命中预挂载目录时直接用本地权重（跳过下载与磁盘预检）。
     local_base = resolve_local_model(base)
@@ -1663,57 +1720,6 @@ def build_pipeline(pipeline_spec: dict):
             _prefetch_weights(base, allow_patterns)
     base_source = local_base or base
 
-    import torch
-    from diffusers import (
-        AutoPipelineForText2Image,
-        DPMSolverMultistepScheduler,
-        DPMSolverSinglestepScheduler,
-        EulerAncestralDiscreteScheduler,
-        EulerDiscreteScheduler,
-        StableDiffusionXLPipeline,
-    )
-
-    def _apply_scheduler(pipe, default_type: str = "") -> None:
-        scheduler_spec = pipeline_spec.get("scheduler")
-        if not scheduler_spec and not default_type:
-            return
-        spec = scheduler_spec or {}
-        scheduler_type = str(spec.get("type") or default_type).strip().lower()
-        if not scheduler_type:
-            return
-        if scheduler_type == "euler":
-            spacing = str(spec.get("timestepSpacing") or "trailing")
-            pipe.scheduler = EulerDiscreteScheduler.from_config(
-                pipe.scheduler.config, timestep_spacing=spacing
-            )
-            log(f"[load] 调度器 EulerDiscreteScheduler(timestep_spacing={spacing})")
-        elif scheduler_type == "euler-a":
-            pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(
-                pipe.scheduler.config
-            )
-            log("[load] 调度器 EulerAncestralDiscreteScheduler")
-        elif scheduler_type == "dpmpp-sde-karras":
-            pipe.scheduler = DPMSolverSinglestepScheduler.from_config(
-                pipe.scheduler.config, use_karras_sigmas=True
-            )
-            log("[load] 调度器 DPMSolverSinglestepScheduler(use_karras_sigmas=True)")
-        elif scheduler_type == "dpmpp-2m-karras":
-            pipe.scheduler = DPMSolverMultistepScheduler.from_config(
-                pipe.scheduler.config, use_karras_sigmas=True
-            )
-            log("[load] 调度器 DPMSolverMultistepScheduler(use_karras_sigmas=True)")
-        elif scheduler_type == "dpmpp-2m-sde-karras":
-            pipe.scheduler = DPMSolverMultistepScheduler.from_config(
-                pipe.scheduler.config, use_karras_sigmas=True, algorithm_type="sde-dpmsolver++"
-            )
-            log("[load] 调度器 DPMSolverMultistepScheduler(use_karras_sigmas=True, algorithm_type=sde-dpmsolver++)")
-        else:
-            log(f"[load] 未识别的 scheduler.type={scheduler_type}，沿用底座默认调度器")
-
-    kwargs: dict = {"torch_dtype": torch.float16, "use_safetensors": True}
-    if variant:
-        kwargs["variant"] = str(variant)
-
     if loader == "anima":
         # 单文件 ComfyUI checkpoint：DiT + Qwen3-0.6B + Qwen-Image VAE + 双分词器。
         # 运行时实现只在 remote/anima_runtime.py（打包时由 lib/kernel.js 内联）。
@@ -1722,66 +1728,49 @@ def build_pipeline(pipeline_spec: dict):
                 pipeline_spec, log, local_paths=anima_assets
             )
         except Exception as exc:
+            free_cuda_cache()
             if _is_oom(exc):
                 raise
             raise LoadError(f"anima 加载失败：{short(exc)}") from exc
         return runtime, f"anima:{base}"
 
-    if loader == "sdxl":
-        # 整管直出：turbo / base / realvis 都走这里；若配置了 scheduler 则覆盖底座默认调度器
-        pipe = _from_pretrained(AutoPipelineForText2Image, base_source, kwargs, loader)
-        _apply_scheduler(pipe)
-        pipe = pipe.to("cuda")
-        return pipe, f"sdxl:{base}"
-
+    local_lora_weight = None
     if loader == "sdxl-lora":
         lora = pipeline_spec.get("lora") or {}
         lora_repo = str(lora.get("repo") or "").strip()
         lora_weight = str(lora.get("weight") or "").strip()
-        if not lora_repo or not lora_weight:
-            raise RequestError("sdxl-lora 需要 lora.repo 与 lora.weight")
+        if lora_repo and lora_weight:
+            local_lora_weight = resolve_local_weight(lora_repo, lora_weight)
 
-        pipe = _from_pretrained(StableDiffusionXLPipeline, base_source, kwargs, loader)
-        _apply_scheduler(pipe, default_type="euler")
-
-        # P2.1：LoRA 仓库预挂载时优先用本地权重文件；否则按文件名下载再按 repo+weight_name 载入
-        # （与 bench/lightning/run.py 一致）。
-        local_weight = resolve_local_weight(lora_repo, lora_weight)
-        if local_weight:
-            log(f"[load] 使用预挂载 LoRA 权重：{local_weight}")
-            pipe.load_lora_weights(os.path.dirname(local_weight) or ".", weight_name=os.path.basename(local_weight))
-        else:
-            from huggingface_hub import hf_hub_download
-
-            downloaded = hf_hub_download(lora_repo, lora_weight)
-            log(f"[load] LoRA 权重就绪：{downloaded}")
-            pipe.load_lora_weights(lora_repo, weight_name=lora_weight)
-        log(f"[load] LoRA 已挂载：{lora_repo}/{lora_weight}")
-
-        pipe = pipe.to("cuda")
-        return pipe, f"sdxl-lora:{base}"
-
-    if loader == "flux2":
-        # FLUX.2 klein 整管单卡放不下（>14.5GB），必须 device_map="balanced" 走双卡。
-        balanced = str(device_map or "balanced")
-        kwargs["device_map"] = balanced
-        log(f"[load] flux2 使用 device_map={balanced}")
-        pipe = _from_pretrained(AutoPipelineForText2Image, base_source, kwargs, loader)
-        return pipe, f"flux2:{base}"
-
-    # 到这里说明 validate 漏了分支，按请求错误处理。
-    raise RequestError(f"未知 loader：{loader}")
+    try:
+        pipe = load_diffusers_pipeline(
+            pipeline_spec,
+            base_source=base_source,
+            local_lora_weight=local_lora_weight,
+            log=log,
+            error_cls=LoadError,
+            request_error_cls=RequestError,
+        )
+    except RequestError:
+        raise
+    except Exception:
+        free_cuda_cache()
+        raise
+    return pipe, f"{loader}:{base}"
 
 
 def release_pipeline() -> None:
-    pipe = STATE.pipe
-    STATE.pipe = None
-    STATE.pipeline_key = None
-    STATE.loaded = []
-    # 图生图管线与 txt2img 共用组件，这里只清引用；下面释放 pipe 后由 GC 一次性回收，
-    # 不会重复卸载权重，也不会留下指向旧模型的悬空句柄。
-    STATE.img2img_pipe = None
-    STATE.img2img_sig_params = set()
+    with STATE_LOCK:
+        pipe = STATE.pipe
+        STATE.pipe = None
+        STATE.pipeline_key = None
+        STATE.model_id = None
+        STATE.loaded = []
+        STATE.sig_params = set()
+        # 图生图管线与 txt2img 共用组件，这里只清引用；下面释放 pipe 后由 GC 一次性回收，
+        # 不会重复卸载权重，也不会留下指向旧模型的悬空句柄。
+        STATE.img2img_pipe = None
+        STATE.img2img_sig_params = set()
     if pipe is not None:
         # anima 运行时持有文本 embedding 缓存，卸载前先显式清掉。
         release = getattr(pipe, "release", None)
@@ -1795,26 +1784,22 @@ def release_pipeline() -> None:
         except Exception:
             pass
     gc.collect()
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    except Exception:
-        pass
+    free_cuda_cache()
 
 
 def ensure_pipeline(pipeline_spec: dict) -> tuple[object, float]:
     """同一个 pipeline 描述只加载一次；描述变了先卸旧模型再加载。"""
     key = json.dumps(pipeline_spec, sort_keys=True, ensure_ascii=False, default=str)
-    if STATE.pipe is not None and STATE.pipeline_key == key:
-        return STATE.pipe, 0.0
+    with STATE_LOCK:
+        if STATE.pipe is not None and STATE.pipeline_key == key:
+            return STATE.pipe, 0.0
+        has_existing = STATE.pipe is not None
+        previous_phase = "ready" if STATE.phase == "ready" else STATE.phase
 
-    if STATE.pipe is not None:
+    if has_existing:
         log("[load] 请求的 pipeline 与已加载的不一致，先卸载旧模型")
         release_pipeline()
 
-    previous_phase = "ready" if STATE.phase == "ready" else STATE.phase
     set_phase("loading", f"加载 {pipeline_spec.get('base')}")
     # 只读诊断：首次加载前记下 HF 缓存与 /kaggle/working 的挂载点/剩余空间（进程内只打一次）。
     _log_cache_probe()
@@ -1828,18 +1813,18 @@ def ensure_pipeline(pipeline_spec: dict) -> tuple[object, float]:
         set_phase(previous_phase)
         raise
     except Exception as exc:
+        free_cuda_cache()
         set_phase("error" if previous_phase != "ready" else "ready", f"模型加载失败：{short(exc, 200)}")
         raise
 
     elapsed = round(time.time() - started, 1)
-    STATE.pipe = pipe
-    STATE.pipeline_key = key
-    STATE.model_id = str(pipeline_spec.get("base"))
-    STATE.loaded = [identity]
-    try:
-        STATE.sig_params = set(inspect.signature(pipe.__call__).parameters.keys())
-    except Exception:
-        STATE.sig_params = set()
+    sig_params = pipe_signature_params(pipe)
+    with STATE_LOCK:
+        STATE.pipe = pipe
+        STATE.pipeline_key = key
+        STATE.model_id = str(pipeline_spec.get("base"))
+        STATE.loaded = [identity]
+        STATE.sig_params = sig_params
     set_phase("ready")
     log(f"[load] 模型就绪，用时 {elapsed}s（{identity}）")
     return pipe, elapsed
@@ -1852,10 +1837,11 @@ def ensure_img2img_pipeline():
     ``STATE.img2img_pipe``；``release_pipeline()`` 与切换底座时会清空（见该函数）。
     img2img 管线的 ``__call__`` 签名与 txt2img 不同，因此单独缓存 ``img2img_sig_params``。
     """
-    pipe = STATE.img2img_pipe
-    if pipe is not None:
-        return pipe
-    base_pipe = STATE.pipe
+    with STATE_LOCK:
+        pipe = STATE.img2img_pipe
+        if pipe is not None:
+            return pipe
+        base_pipe = STATE.pipe
     if base_pipe is None:
         raise RequestError("图生图需要先加载模型底座")
     from diffusers import AutoPipelineForImage2Image
@@ -1867,11 +1853,10 @@ def ensure_img2img_pipeline():
         if _is_oom(exc):
             raise
         raise LoadError(f"图生图管线创建失败：{short(exc)}") from exc
-    STATE.img2img_pipe = pipe
-    try:
-        STATE.img2img_sig_params = set(inspect.signature(pipe.__call__).parameters.keys())
-    except Exception:
-        STATE.img2img_sig_params = set()
+    sig_params = pipe_signature_params(pipe)
+    with STATE_LOCK:
+        STATE.img2img_pipe = pipe
+        STATE.img2img_sig_params = sig_params
     log("[load] 图生图管线就绪")
     return pipe
 
@@ -1882,6 +1867,8 @@ def ensure_img2img_pipeline():
 
 
 def _int_param(value, field: str, low: int, high: int) -> int:  # noqa: ANN001
+    if isinstance(value, bool):
+        raise RequestError(f"{field} 必须是整数")
     try:
         number = int(value)
     except (TypeError, ValueError):
@@ -1889,6 +1876,21 @@ def _int_param(value, field: str, low: int, high: int) -> int:  # noqa: ANN001
     if number < low or number > high:
         raise RequestError(f"{field} 必须在 {low}..{high} 之间，收到 {number}")
     return number
+
+
+_HF_REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,199}$")
+
+
+def _valid_pipeline_base(base: str) -> bool:
+    text = base.strip()
+    if not text or len(text) > 512 or any(ord(ch) < 32 for ch in text) or "\\" in text:
+        return False
+    if text.startswith("/"):
+        parts = text.split("/")
+        return any(parts[1:]) and not any(part in (".", "..") for part in parts[1:])
+    if ".." in text:
+        return False
+    return bool(_HF_REPO_RE.match(text))
 
 
 # 契约缺失时的兜底边界（兼容旧 Host / 本地调试）：保持 0.3.0 之前的 daemon 行为。
@@ -1902,6 +1904,7 @@ _FALLBACK_LIMITS: dict[str, dict] = {
     "count": {"min": 1, "max": 8},
     "seed": {"max": 2**31 - 1},
     "prompt": {"maxChars": 2000},
+    "negativePrompt": {"maxChars": 1000},
     "reference": {"maxBytes": 8 * 1024 * 1024, "maxEdge": 1536, "minEdge": 128},
     "strength": {"min": 0.2, "max": 0.9, "step": 0.05, "default": 0.6},
 }
@@ -2059,37 +2062,42 @@ def decode_reference_image(reference: dict) -> object:
     image = _open_reference_image(bytes(data))
     source_size = image.size
     try:
-        image.load()
-    except Exception as exc:  # noqa: BLE001 - 截断/损坏图片按请求非法收敛
         try:
-            image.close()
-        except Exception:  # pragma: no cover
-            pass
-        raise RequestError(f"参考图无法解码：{type(exc).__name__}") from None
-    if image.mode != "RGB":
-        converted = image.convert("RGB")
-        try:
-            image.close()
-        except Exception:  # pragma: no cover
-            pass
-        image = converted
-    width, height = image.size
-    long_edge = max(width, height)
-    if max_edge > 0 and long_edge > max_edge:
-        from PIL import Image
+            image.load()
+        except Exception as exc:  # noqa: BLE001 - 截断/损坏图片按请求非法收敛
+            raise RequestError(f"参考图无法解码：{type(exc).__name__}") from None
+        if image.mode != "RGB":
+            converted = image.convert("RGB")
+            try:
+                image.close()
+            except Exception:  # pragma: no cover
+                pass
+            image = converted
+        width, height = image.size
+        long_edge = max(width, height)
+        if max_edge > 0 and long_edge > max_edge:
+            from PIL import Image
 
-        scale = max_edge / float(long_edge)
-        target = (max(1, round(width * scale)), max(1, round(height * scale)))
-        resampling = getattr(Image, "Resampling", None)
-        resample = getattr(resampling, "LANCZOS", None)
-        if resample is None:  # pragma: no cover - Pillow < 9.1 的旧常量
-            resample = getattr(Image, "LANCZOS")
-        resized = image.resize(target, resample)
-        try:
-            image.close()
-        except Exception:  # pragma: no cover
-            pass
-        image = resized
+            scale = max_edge / float(long_edge)
+            target = (max(1, round(width * scale)), max(1, round(height * scale)))
+            resampling = getattr(Image, "Resampling", None)
+            resample = getattr(resampling, "LANCZOS", None)
+            if resample is None:  # pragma: no cover - Pillow < 9.1 的旧常量
+                resample = getattr(Image, "LANCZOS")
+            resized = image.resize(target, resample)
+            try:
+                image.close()
+            except Exception:  # pragma: no cover
+                pass
+            image = resized
+    except Exception:
+        close_fn = getattr(image, "close", None)
+        if callable(close_fn):
+            try:
+                close_fn()
+            except Exception:  # pragma: no cover
+                pass
+        raise
     # 「参考图 WxH → 缩放后 WxH」的日志放在 run_task：原尺寸挂在图像对象上，
     # 这样 run_tasks / run_task 只需要多收一个 reference_image，不必再加元参数。
     try:
@@ -2112,6 +2120,8 @@ def validate_generate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN00
     base = pipeline_spec.get("base")
     if not isinstance(base, str) or not base.strip():
         raise RequestError("pipeline.base 必须是非空字符串")
+    if not _valid_pipeline_base(base):
+        raise RequestError("pipeline.base 必须是 owner/name 仓库标识或绝对路径")
 
     tasks_raw = spec.get("tasks")
     if not isinstance(tasks_raw, list) or not tasks_raw:
@@ -2126,6 +2136,7 @@ def validate_generate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN00
     cfg_limit = _limit_spec("cfg")
     seed_limit = _limit_spec("seed")
     prompt_max = int(_limit_spec("prompt").get("maxChars") or 0)
+    neg_max = int(_limit_spec("negativePrompt").get("maxChars") or 0)
     width_min, width_max = int(width_limit["min"]), int(width_limit["max"])
     height_min, height_max = int(height_limit["min"]), int(height_limit["max"])
     width_step = int(width_limit.get("step") or 8)
@@ -2145,17 +2156,34 @@ def validate_generate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN00
         prompt = prompt.strip()
         if prompt_max > 0 and len(prompt) > prompt_max:
             raise RequestError(f"tasks[{index}].prompt 最长 {prompt_max} 个字符")
+        neg_raw = raw.get("negative_prompt")
+        if neg_raw is None:
+            neg_prompt = ""
+        elif not isinstance(neg_raw, str):
+            raise RequestError(f"tasks[{index}].negative_prompt 必须是字符串")
+        else:
+            neg_prompt = neg_raw.strip()
+        if neg_max > 0 and len(neg_prompt) > neg_max:
+            raise RequestError(f"tasks[{index}].negative_prompt 最长 {neg_max} 个字符")
         width = _int_param(raw.get("width", 1024), f"tasks[{index}].width", width_min, width_max)
         height = _int_param(raw.get("height", 1024), f"tasks[{index}].height", height_min, height_max)
         steps = _int_param(raw.get("steps", 4), f"tasks[{index}].steps", steps_min, steps_max)
+        raw_cfg = raw.get("cfg", 0.0)
+        if isinstance(raw_cfg, bool):
+            raise RequestError(f"tasks[{index}].cfg 必须是数字")
         try:
-            cfg = float(raw.get("cfg", 0.0))
+            cfg = float(raw_cfg)
         except (TypeError, ValueError):
             raise RequestError(f"tasks[{index}].cfg 必须是数字") from None
+        if not math.isfinite(cfg):
+            raise RequestError(f"tasks[{index}].cfg 必须是有限数字")
         if cfg < cfg_min or cfg > cfg_max:
             raise RequestError(f"tasks[{index}].cfg 必须在 {cfg_min}..{cfg_max} 之间")
+        raw_seed = raw.get("seed", -1)
+        if isinstance(raw_seed, bool):
+            raise RequestError(f"tasks[{index}].seed 必须是整数")
         try:
-            seed = int(raw.get("seed", -1))
+            seed = int(raw_seed)
         except (TypeError, ValueError):
             raise RequestError(f"tasks[{index}].seed 必须是整数") from None
         if seed < 0:
@@ -2166,7 +2194,7 @@ def validate_generate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN00
             {
                 "name": str(raw.get("name") or f"{index + 1:02d}"),
                 "prompt": prompt,
-                "negative_prompt": str(raw.get("negative_prompt") or "").strip(),
+                "negative_prompt": neg_prompt,
                 "seed": seed,
                 "width": width - width % width_step,
                 "height": height - height % height_step,
@@ -2210,7 +2238,8 @@ def run_task(pipe, task: dict, reference_image=None, reference_strength=None) ->
     use_reference = reference_image is not None
     if use_reference:
         target_pipe = ensure_img2img_pipeline()
-        sig = STATE.img2img_sig_params
+        with STATE_LOCK:
+            sig = set(STATE.img2img_sig_params)
         strength = _coerce_strength(reference_strength)
         call_kwargs = {
             "prompt": task["prompt"],
@@ -2222,7 +2251,8 @@ def run_task(pipe, task: dict, reference_image=None, reference_strength=None) ->
         }
     else:
         target_pipe = pipe
-        sig = STATE.sig_params
+        with STATE_LOCK:
+            sig = set(STATE.sig_params)
         call_kwargs = {
             "prompt": task["prompt"],
             "num_inference_steps": task["steps"],
@@ -2232,10 +2262,12 @@ def run_task(pipe, task: dict, reference_image=None, reference_strength=None) ->
             "generator": generator,
         }
     # 只有底座支持 negative_prompt 且 CFG > 0 时才有意义（Lightning 的 cfg=0 会被忽略）。
-    if task["negative_prompt"] and "negative_prompt" in sig and task["cfg"] > 0.0:
-        call_kwargs["negative_prompt"] = task["negative_prompt"]
-    if sig:
-        call_kwargs = {k: v for k, v in call_kwargs.items() if k in sig}
+    call_kwargs = filter_call_kwargs(
+        call_kwargs,
+        sig,
+        negative_prompt=task["negative_prompt"],
+        cfg=task["cfg"],
+    )
 
     if use_reference:
         source = getattr(reference_image, "_imagen_source_size", reference_image.size)
@@ -2254,10 +2286,18 @@ def run_task(pipe, task: dict, reference_image=None, reference_strength=None) ->
         )
     started = time.time()
     image = target_pipe(**call_kwargs).images[0]
-    _sync_cuda()
-    seconds = round(time.time() - started, 2)
-    png = _encode_png(image)
-    width, height = image.size
+    try:
+        _sync_cuda()
+        seconds = round(time.time() - started, 2)
+        png = _encode_png(image)
+        width, height = image.size
+    finally:
+        close_fn = getattr(image, "close", None)
+        if callable(close_fn):
+            try:
+                close_fn()
+            except Exception:
+                pass
     if use_reference:
         expected = (reference_image.size[0], reference_image.size[1])
         if (width, height) != expected:
@@ -2298,7 +2338,8 @@ def run_tasks(
     """
     results: list[dict] = []
     for task in tasks:
-        STATE.last_active = time.time()
+        with STATE_LOCK:
+            STATE.last_active = time.time()
         if reference_image is None:
             results.append(run_task(pipe, task))
         else:
@@ -2348,7 +2389,8 @@ def _finish_job(job: Job, status: str, error: dict | None = None) -> None:
         job.finished_at = now
         JOB_FINISHED_ORDER.append(job.job_id)
         prune_jobs(now)
-    STATE.last_active = now
+    with STATE_LOCK:
+        STATE.last_active = now
 
 
 def execute_job(job: Job) -> None:
@@ -2359,11 +2401,12 @@ def execute_job(job: Job) -> None:
     with JOB_LOCK:
         job.status = JOB_STATUS_RUNNING
         job.updated_at = time.time()
-    STATE.last_active = time.time()
+    with STATE_LOCK:
+        STATE.last_active = time.time()
     GEN_LOCK.acquire()
+    reference_image = None
     try:
         started = time.time()
-        reference_image = None
         reference_strength = None
         if job.reference is not None:
             # 图生图：参考图完整解码只做一次（整批 count 共用），且放在加载模型之前——
@@ -2377,7 +2420,8 @@ def execute_job(job: Job) -> None:
         with JOB_LOCK:
             job.load_seconds = load_seconds
             job.updated_at = time.time()
-        STATE.last_active = time.time()
+        with STATE_LOCK:
+            STATE.last_active = time.time()
         if reference_image is None:
             results = run_tasks(
                 pipe,
@@ -2394,14 +2438,15 @@ def execute_job(job: Job) -> None:
             )
         with JOB_LOCK:
             job.results = list(results)
-        STATE.jobs_done += len(results)
+        with STATE_LOCK:
+            STATE.jobs_done += len(results)
         total = round(time.time() - started, 2)
         log(
             f"[job] {job.job_id} 完成：{len(results)} 张，总耗时 {total}s"
             f"（加载 {load_seconds}s）"
         )
         _finish_job(job, JOB_STATUS_DONE)
-    except BaseException as exc:  # noqa: BLE001 - 后台线程必须收住所有异常
+    except Exception as exc:  # noqa: BLE001 - 后台线程必须收住所有常规异常
         code, message = classify_failure(exc)
         if code == "oom":
             free_cuda_cache()
@@ -2410,11 +2455,19 @@ def execute_job(job: Job) -> None:
         log(traceback.format_exc())
         _finish_job(job, JOB_STATUS_FAILED, {"code": code, "message": message})
     finally:
+        if reference_image is not None:
+            close_fn = getattr(reference_image, "close", None)
+            if callable(close_fn):
+                try:
+                    close_fn()
+                except Exception:
+                    pass
         try:
             GEN_LOCK.release()
         except RuntimeError:  # pragma: no cover - 理论上不会发生
             pass
-        STATE.last_active = time.time()
+        with STATE_LOCK:
+            STATE.last_active = time.time()
 
 
 def job_worker_loop() -> None:
@@ -2422,17 +2475,21 @@ def job_worker_loop() -> None:
     log("[job] worker 启动，等待队列")
     while not BOOT.stop_event.is_set():
         with JOB_LOCK:
+            while not BOOT.stop_event.is_set() and not JOB_QUEUE:
+                JOB_COND.wait(timeout=0.5)
+            if BOOT.stop_event.is_set():
+                break
             job = JOB_QUEUE.popleft() if JOB_QUEUE else None
         if job is None:
-            JOB_WAKE.wait(timeout=0.5)
-            JOB_WAKE.clear()
             continue
         job_started = time.time()
         try:
             execute_job(job)
-        except BaseException as exc:  # pragma: no cover - execute_job 自身已兜底
+        except Exception as exc:  # pragma: no cover - execute_job 自身已兜底
             log(f"[job] worker 捕获异常：{short(exc)}")
-            if job.status not in (JOB_STATUS_DONE, JOB_STATUS_FAILED):
+            with JOB_LOCK:
+                unfinished = job.status not in (JOB_STATUS_DONE, JOB_STATUS_FAILED)
+            if unfinished:
                 _finish_job(job, JOB_STATUS_FAILED, {"code": "generation_failed", "message": short(exc)})
         log(f"[job] {job.job_id} 处理结束（{round(time.time() - job_started, 1)}s）")
 
@@ -2521,29 +2578,46 @@ def gpu_memory_payload() -> dict | None:
 
 
 def health_payload() -> dict:
+    with STATE_LOCK:
+        phase = STATE.phase
+        model_id = STATE.model_id
+        loaded = list(STATE.loaded)
+        device = STATE.device
+        device_count = STATE.device_count
+        last_active = STATE.last_active
+        jobs_done = STATE.jobs_done
+        last_error = STATE.last_error
+        last_error_code = STATE.last_error_code
+        detail = STATE.detail
+        started_at = STATE.started_at
+    with BOOT_LOCK:
+        tunnel_provider = BOOT.tunnel_provider
+        tunnel_state = BOOT.tunnel_state
+        tunnel_restarts = BOOT.tunnel_restarts
+    now = time.time()
     return {
-        "status": "error" if STATE.phase == "error" else "ok",
-        "phase": STATE.phase,
+        "status": "error" if phase == "error" else "ok",
+        "phase": phase,
         "version": protocol_version(),
         # M4.2：依赖版本快照（纯版本号，不含 token / 路径），用于 LKGR 基线与故障归因。
         "versions": dependency_versions(),
-        "model_id": STATE.model_id,
-        "loaded": list(STATE.loaded),
-        "device": STATE.device,
-        "device_count": STATE.device_count,
-        "idle_seconds": round(time.time() - STATE.last_active, 1),
+        "model_id": model_id,
+        "loaded": loaded,
+        "device": device,
+        "device_count": device_count,
+        "idle_seconds": round(now - last_active, 1),
         "idle_timeout_sec": CONFIG.idle_timeout_sec,
-        "jobs_done": STATE.jobs_done,
+        "jobs_done": jobs_done,
         # 0.5.0：排队中（尚未开始执行）的 job 数；运行中的不算。
         "queue_depth": queue_depth(),
-        "last_error": STATE.last_error,
-        "last_error_code": STATE.last_error_code,
-        "detail": STATE.detail,
-        "uptime_seconds": round(time.time() - STATE.started_at, 1),
+        "last_error": last_error,
+        "last_error_code": last_error_code,
+        "detail": detail,
+        "uptime_seconds": round(now - started_at, 1),
         # P0.2 / P2.2：隧道监管状态，Host 用于「重连中 / 通道类型」展示与故障归因。
-        "tunnel_provider": BOOT.tunnel_provider,
-        "tunnel_state": BOOT.tunnel_state,
-        "tunnel_restarts": BOOT.tunnel_restarts,
+        "tunnel_provider": tunnel_provider,
+        "tunnel_state": tunnel_state,
+        "tunnel_restarts": tunnel_restarts,
         # M3 图生图验收：显存只读诊断（torch 未加载 / CUDA 不可用时为 null）。
         "gpu_memory": gpu_memory_payload(),
     }
@@ -2667,13 +2741,19 @@ class DaemonHandler(BaseHTTPRequestHandler):
     @staticmethod
     def _delayed_exit() -> None:
         time.sleep(0.3)
+        _cleanup_before_exit()
         os._exit(0)
 
     def _handle_generate(self) -> None:
-        phase = STATE.phase
-        if phase != "ready":
+        with STATE_LOCK:
+            phase = STATE.phase
+            last_error = STATE.last_error
+            booted = STATE.booted
+            shutting_down = STATE.shutting_down
+        can_accept = not shutting_down and (phase == "ready" or (phase == "loading" and booted))
+        if not can_accept:
             if phase == "error":
-                message = STATE.last_error or "Daemon 启动失败"
+                message = last_error or "Daemon 启动失败"
                 self._send_error(503, "load_failed", message)
             else:
                 # Host 正常不会在 ready 之前调用；这里给它一个可重试的明确信号。
@@ -2699,12 +2779,17 @@ class DaemonHandler(BaseHTTPRequestHandler):
 
         try:
             job, created = submit_job(pipeline_spec, model_id, tasks, job_id, reference)
+        except QueueFullError as exc:
+            log(f"[gen] 队列已满：{exc}")
+            self._send_error(429, "queue_full", str(exc), {"Retry-After": "5"})
+            return
         except Exception as exc:  # pragma: no cover - 入队本身不涉及 IO
             log(f"[gen] 入队失败：{short(exc)}")
             self._send_error(500, "generation_failed", short(exc))
             return
 
-        STATE.last_active = time.time()
+        with STATE_LOCK:
+            STATE.last_active = time.time()
         if not created:
             log(f"[gen] 幂等命中 {job.job_id}（status={job.status}），不重复入队")
         self._send_json(
@@ -2721,6 +2806,8 @@ class DaemonHandler(BaseHTTPRequestHandler):
 def start_http_server(port: int) -> ThreadingHTTPServer:
     server = ThreadingHTTPServer(("127.0.0.1", port), DaemonHandler)
     server.daemon_threads = True
+    with BOOT_LOCK:
+        BOOT.http_server = server
     threading.Thread(
         target=server.serve_forever,
         kwargs={"poll_interval": 0.5},
@@ -2782,20 +2869,42 @@ def _download_cloudflared_once(partial: str) -> tuple[int, str]:
     return total, digest.hexdigest()
 
 
+def _file_sha256(path: str) -> str:
+    """计算本地文件 SHA256（小写十六进制）；读取失败返回空串触发重下。"""
+    digest = hashlib.sha256()
+    try:
+        with open(path, "rb") as handle:
+            while True:
+                chunk = handle.read(1 << 16)
+                if not chunk:
+                    break
+                digest.update(chunk)
+    except OSError:
+        return ""
+    return digest.hexdigest()
+
+
 def ensure_cloudflared() -> str:
-    """确保 ``CLOUDFLARED_PATH`` 可用：已就绪则复用，否则按固定版本下载并校验 SHA256。
+    """确保 ``CLOUDFLARED_PATH`` 可用：已就绪且 SHA256 一致则复用，否则按固定版本下载。
 
     0.8.1（v0.9 M1）起下载地址固定到 ``CLOUDFLARED_VERSION``：滚动 latest 时上游发版或传输
     半截文件都会让冷启动随机失败。下载异常与校验不匹配各重试一次，仍失败才抛错；
     ``start_tunnel`` 会把它收敛进 ``BOOT.tunnel_error`` 并回退备用通道。日志只打
     版本、大小与校验和（公开信息），绝不打印配置里的 token。
     """
+    expected = CLOUDFLARED_SHA256.strip().lower()
     if os.path.exists(CLOUDFLARED_PATH) and os.access(CLOUDFLARED_PATH, os.X_OK):
-        log("[tunnel] 复用已存在的 /tmp/cloudflared")
-        return CLOUDFLARED_PATH
+        existing_sha = _file_sha256(CLOUDFLARED_PATH)
+        if existing_sha == expected:
+            log("[tunnel] 复用已存在的 /tmp/cloudflared")
+            return CLOUDFLARED_PATH
+        log(
+            f"[tunnel] WARN 已存在的 /tmp/cloudflared SHA256 校验失败"
+            f"（期望 {expected[:16]}…，实际 {existing_sha[:16]}…），删除重下"
+        )
+        _remove_file_quietly(CLOUDFLARED_PATH)
 
     partial = CLOUDFLARED_PATH + ".part"
-    expected = CLOUDFLARED_SHA256.strip().lower()
     last_reason = "未知原因"
     for attempt in range(1, CLOUDFLARED_DOWNLOAD_ATTEMPTS + 1):
         log(f"[tunnel] 下载 cloudflared {CLOUDFLARED_VERSION}（第 {attempt}/{CLOUDFLARED_DOWNLOAD_ATTEMPTS} 次）…")
@@ -2897,7 +3006,9 @@ def tunnel_restart_delay(attempt: int) -> float:
 
 def tunnel_should_stop() -> bool:
     """隧道监管是否该退出（/shutdown、信号或显式置位）。"""
-    return BOOT.stop_event.is_set() or STATE.shutting_down
+    with STATE_LOCK:
+        shutting_down = STATE.shutting_down
+    return BOOT.stop_event.is_set() or shutting_down
 
 
 def _spawn_tunnel_process(argv: list[str], provider: str = "cloudflare"):  # noqa: ANN202 - 返回 Popen 或 None
@@ -2924,15 +3035,25 @@ def _spawn_tunnel_process(argv: list[str], provider: str = "cloudflare"):  # noq
             bufsize=1,
         )
     except Exception as exc:
-        BOOT.tunnel_error = f"隧道命令启动失败：{short(exc)}"
-        log(f"[tunnel] {BOOT.tunnel_error}")
+        err = f"隧道命令启动失败：{short(exc)}"
+        with BOOT_LOCK:
+            BOOT.tunnel_error = err
+        log(f"[tunnel] {err}")
         return None
 
 
-def _drain_tunnel_output(proc, provider: str, url_re, url_event: threading.Event) -> None:  # noqa: ANN001
+def _drain_tunnel_output(
+    proc,
+    provider: str,
+    url_re,
+    url_event: threading.Event,
+    attempt: _TunnelAttempt | None = None,
+) -> None:  # noqa: ANN001
     """持续读取隧道输出，首个地址写入 BOOT 并置位事件；必须读到进程退出为止。
 
     拿到地址后停止读取会让管道写满、隧道卡死（实测过的故障），所以这里不提前返回。
+    传入 ``attempt`` 令牌时，仅当本轮尝试仍处于激活状态才允许写 BOOT，防止超时后的
+    旧 drain 线程覆盖新一轮尝试的 ``tunnel_url`` / ``tunnel_error``。
     """
     prefix = "cloudflared" if provider == "cloudflare" else f"tunnel:{provider or 'custom'}"
     found_url: str | None = None
@@ -2951,8 +3072,10 @@ def _drain_tunnel_output(proc, provider: str, url_re, url_event: threading.Event
                     candidate = extract_tunnel_url(line, url_re)
                     if candidate:
                         found_url = candidate
-                        BOOT.tunnel_url = candidate
-                        BOOT.tunnel_provider = provider
+                        with BOOT_LOCK:
+                            if attempt is None or (attempt.active and BOOT.current_attempt is attempt):
+                                BOOT.tunnel_url = candidate
+                                BOOT.tunnel_provider = provider
                         url_event.set()
     except Exception as exc:
         log(f"[tunnel] 读取 {prefix} 输出出错：{short(exc)}")
@@ -2963,7 +3086,9 @@ def _drain_tunnel_output(proc, provider: str, url_re, url_event: threading.Event
             code = None
         log(f"[tunnel] {prefix} 输出结束（退出码 {code}，地址={found_url}）")
         if found_url is None:
-            BOOT.tunnel_error = f"{prefix} 未给出隧道地址（退出码 {code}）"
+            with BOOT_LOCK:
+                if attempt is None or (attempt.active and BOOT.current_attempt is attempt):
+                    BOOT.tunnel_error = f"{prefix} 未给出隧道地址（退出码 {code}）"
             url_event.set()
 
 
@@ -2991,28 +3116,50 @@ def tunnel_attempt(item: dict) -> tuple[str, object] | None:
     provider = str(item.get("provider") or "")
     argv = list(item.get("argv") or [])
     if not argv:
-        BOOT.tunnel_error = f"{provider or '隧道'} 通道命令为空"
-        log(f"[tunnel] {BOOT.tunnel_error}")
+        err = f"{provider or '隧道'} 通道命令为空"
+        with BOOT_LOCK:
+            BOOT.tunnel_error = err
+        log(f"[tunnel] {err}")
         return None
-    BOOT.tunnel_url = None
-    BOOT.tunnel_error = None
+    attempt = _TunnelAttempt(provider=provider, active=True)
+    with BOOT_LOCK:
+        if BOOT.current_attempt is not None:
+            BOOT.current_attempt.active = False
+        BOOT.current_attempt = attempt
+        BOOT.tunnel_url = None
+        BOOT.tunnel_error = None
     proc = _spawn_tunnel_process(argv, provider)
     if proc is None:
+        with BOOT_LOCK:
+            attempt.active = False
+            if BOOT.current_attempt is attempt:
+                BOOT.current_attempt = None
         return None
-    BOOT.cloudflared = proc
+    with BOOT_LOCK:
+        BOOT.cloudflared = proc
     url_event = threading.Event()
     threading.Thread(
         target=_drain_tunnel_output,
-        args=(proc, provider, item.get("url_re") or DEFAULT_CUSTOM_URL_RE, url_event),
+        args=(proc, provider, item.get("url_re") or DEFAULT_CUSTOM_URL_RE, url_event, attempt),
         name=f"tunnel-drain-{provider or 'custom'}",
         daemon=True,
     ).start()
     wait_sec = float(item.get("wait_sec") or TUNNEL_WAIT_SEC)
-    if url_event.wait(wait_sec) and BOOT.tunnel_url:
-        return provider, proc
-    if BOOT.tunnel_error is None:
-        BOOT.tunnel_error = f"{provider or '隧道'} 在 {int(wait_sec)}s 内未给出隧道地址"
-    log(f"[tunnel] WARN 通道 {provider or 'unknown'} 未建立：{BOOT.tunnel_error}")
+    signaled = url_event.wait(wait_sec)
+    with BOOT_LOCK:
+        if signaled and BOOT.tunnel_url:
+            return provider, proc
+        if BOOT.tunnel_url and attempt.active and BOOT.current_attempt is attempt:
+            return provider, proc
+        attempt.active = False
+        if BOOT.current_attempt is attempt:
+            BOOT.current_attempt = None
+        if BOOT.cloudflared is proc:
+            BOOT.cloudflared = None
+        if BOOT.tunnel_error is None:
+            BOOT.tunnel_error = f"{provider or '隧道'} 在 {int(wait_sec)}s 内未给出隧道地址"
+        err_msg = BOOT.tunnel_error
+    log(f"[tunnel] WARN 通道 {provider or 'unknown'} 未建立：{err_msg}")
     terminate_tunnel_process(proc)
     return None
 
@@ -3026,8 +3173,10 @@ def start_tunnel(port: int) -> tuple[str, object] | None:
             try:
                 binary = ensure_cloudflared()
             except Exception as exc:
-                BOOT.tunnel_error = f"cloudflared 下载失败：{short(exc)}"
-                log(f"[tunnel] WARN {BOOT.tunnel_error}，尝试下一个通道")
+                err = f"cloudflared 下载失败：{short(exc)}"
+                with BOOT_LOCK:
+                    BOOT.tunnel_error = err
+                log(f"[tunnel] WARN {err}，尝试下一个通道")
                 continue
             item["argv"] = [binary, *item["argv"][1:]]
         result = tunnel_attempt(item)
@@ -3042,27 +3191,38 @@ def recover_tunnel_error() -> None:
     即使错误被运行时的 phase 覆盖过（runtime_boot 末尾会写 ready），last_error
     也会残留给 Host 拼 UI，所以这里一并清掉。
     """
-    if STATE.last_error_code != "tunnel_failed":
-        return
-    STATE.last_error = None
-    STATE.last_error_code = None
-    if STATE.phase == "error":
-        phase = BOOT.phase_before_error if BOOT.phase_before_error not in (None, "error") else "booting"
+    with STATE_LOCK:
+        if STATE.last_error_code != "tunnel_failed":
+            return
+        STATE.last_error = None
+        STATE.last_error_code = None
+        current_phase = STATE.phase
+    if current_phase == "error":
+        with BOOT_LOCK:
+            prior = BOOT.phase_before_error
+        phase = prior if prior not in (None, "error") else "booting"
         set_phase(phase, "隧道已恢复")
     else:
-        log(f"[tunnel] 隧道恢复，清除残留错误记录（phase={STATE.phase}）")
+        log(f"[tunnel] 隧道恢复，清除残留错误记录（phase={current_phase}）")
 
 
 def announce_tunnel_ready(provider: str, *, restarted: bool = False) -> None:
     """隧道（重新）建立：记录通道类型、清隧道错误并重播 ready。"""
-    BOOT.tunnel_provider = provider
-    BOOT.tunnel_state = "up"
-    BOOT.tunnel_error = None
+    with BOOT_LOCK:
+        BOOT.tunnel_provider = provider
+        BOOT.tunnel_state = "up"
+        BOOT.tunnel_error = None
+        tunnel_url = BOOT.tunnel_url
     suffix = "（重连后重播 ready）" if restarted else ""
-    log(f"[tunnel] 通道 {provider} 就绪：{BOOT.tunnel_url}{suffix}")
+    log(f"[tunnel] 通道 {provider} 就绪：{tunnel_url}{suffix}")
     recover_tunnel_error()
-    BOOT.published_ready = True
-    publish_ready()
+    should_publish = False
+    with BOOT_LOCK:
+        if not BOOT.published_ready:
+            BOOT.published_ready = True
+            should_publish = True
+    if should_publish:
+        publish_ready()
 
 
 def tunnel_wait_exit(proc, poll_interval: float = 1.0):  # noqa: ANN001, ANN202
@@ -3091,21 +3251,28 @@ def tunnel_monitor(port: int) -> None:
     failure_reported = False
     while not tunnel_should_stop():
         if attempt > 0:
-            BOOT.tunnel_restarts += 1
+            with BOOT_LOCK:
+                BOOT.tunnel_restarts += 1
+                restarts = BOOT.tunnel_restarts
             delay = tunnel_restart_delay(attempt)
-            log(f"[tunnel] {delay:.0f}s 后重拉隧道（累计重启 {BOOT.tunnel_restarts} 次）")
+            log(f"[tunnel] {delay:.0f}s 后重拉隧道（累计重启 {restarts} 次）")
             if BOOT.stop_event.wait(delay):
                 break
-        BOOT.tunnel_state = "starting"
+        with BOOT_LOCK:
+            BOOT.tunnel_state = "starting"
         result = start_tunnel(port)
         if result is None:
             if tunnel_should_stop():
                 break
-            BOOT.tunnel_state = "down"
+            with BOOT_LOCK:
+                BOOT.tunnel_state = "down"
+                message = BOOT.tunnel_error or "隧道未建立（所有通道均失败）"
             attempt += 1
-            message = BOOT.tunnel_error or "隧道未建立（所有通道均失败）"
             if not ever_ready and not failure_reported:
-                BOOT.phase_before_error = STATE.phase
+                with STATE_LOCK:
+                    phase_before = STATE.phase
+                with BOOT_LOCK:
+                    BOOT.phase_before_error = phase_before
                 fail_boot("tunnel_failed", message, tunnel=True)
                 failure_reported = True
             else:
@@ -3114,23 +3281,29 @@ def tunnel_monitor(port: int) -> None:
         provider, proc = result
         attempt = 0
         ever_ready = True
-        announce_tunnel_ready(provider, restarted=BOOT.tunnel_restarts > 0)
+        with BOOT_LOCK:
+            restarted = BOOT.tunnel_restarts > 0
+        announce_tunnel_ready(provider, restarted=restarted)
         code = tunnel_wait_exit(proc)
         if tunnel_should_stop():
             log("[tunnel] 收到停机信号，结束隧道监管")
             terminate_tunnel_process(proc)
             break
         log(f"[tunnel] WARN 通道 {provider} 进程退出（退出码 {code}），准备重拉")
-        BOOT.tunnel_state = "down"
-        BOOT.tunnel_url = None
-        BOOT.published_ready = False
-        BOOT.tunnel_error = f"{provider} 进程异常退出（退出码 {code}）"
+        with BOOT_LOCK:
+            BOOT.tunnel_state = "down"
+            BOOT.tunnel_url = None
+            BOOT.published_ready = False
+            BOOT.tunnel_error = f"{provider} 进程异常退出（退出码 {code}）"
+            if BOOT.cloudflared is proc:
+                BOOT.cloudflared = None
         attempt = 1
 
 
 def tunnel_boot(port: int) -> None:
     """启动常驻隧道监管线程（不阻塞 HTTP 服务与运行时启动）。"""
-    BOOT.tunnel_state = "starting"
+    with BOOT_LOCK:
+        BOOT.tunnel_state = "starting"
     log("[tunnel] 启动隧道监管（cloudflared 优先，失败自动重拉）")
     threading.Thread(target=tunnel_monitor, args=(port,), name="tunnel-monitor", daemon=True).start()
 
@@ -3162,21 +3335,24 @@ GPU_UNAVAILABLE_MESSAGE = (
 def runtime_boot() -> None:
     """后台线程：探测 GPU → 装依赖 →（可选）预加载模型 → phase=ready。"""
     torch_error = ""
+    device_name = None
+    device_count = 0
     try:
         import torch
 
         if torch.cuda.is_available():
-            STATE.device = torch.cuda.get_device_name(0)
-            STATE.device_count = torch.cuda.device_count()
-            log(f"[cuda] {STATE.device} × {STATE.device_count}，torch={torch.__version__}，cuda={torch.version.cuda}")
-        else:
-            STATE.device = None
-            STATE.device_count = 0
+            device_name = torch.cuda.get_device_name(0)
+            device_count = torch.cuda.device_count()
+            log(f"[cuda] {device_name} × {device_count}，torch={torch.__version__}，cuda={torch.version.cuda}")
     except Exception as exc:
         torch_error = short(exc)
         log(f"[cuda] 导入 torch 失败：{torch_error}")
 
-    if not STATE.device_count:
+    with STATE_LOCK:
+        STATE.device = device_name
+        STATE.device_count = device_count
+
+    if not device_count:
         if torch_error:
             # torch 都没能导入时无法确认 GPU 状态，保留 load_failed 以免误导成账号问题。
             fail_boot("load_failed", f"无法确认 GPU 可用性：{torch_error}")
@@ -3193,13 +3369,18 @@ def runtime_boot() -> None:
     preload = CONFIG.preload
     if preload:
         try:
-            ensure_pipeline(preload)
+            with GEN_LOCK:
+                ensure_pipeline(preload)
         except Exception as exc:
+            free_cuda_cache()
             code, message = classify_failure(exc, default="load_failed")
             fail_boot(code, message)
             return
 
-    if STATE.phase != "ready":
+    with STATE_LOCK:
+        STATE.booted = True
+        need_ready = STATE.phase != "ready"
+    if need_ready:
         set_phase("ready", "依赖已就绪，等待首个生成请求下发 pipeline")
     log("[boot] 运行时就绪，可以接单")
 
@@ -3210,7 +3391,7 @@ def _install_signal_handlers() -> None:
 
         def _bye(signum, _frame):  # noqa: ANN001
             log(f"[signal] 收到信号 {signum}，退出进程")
-            BOOT.stop_event.set()
+            _cleanup_before_exit()
             os._exit(0)
 
         for sig in (signal.SIGTERM, signal.SIGINT):
@@ -3227,8 +3408,9 @@ def main() -> None:
 
     install_stream_tee()
     _install_signal_handlers()
-    STATE.started_at = time.time()
-    STATE.last_active = STATE.started_at
+    with STATE_LOCK:
+        STATE.started_at = time.time()
+        STATE.last_active = STATE.started_at
 
     log("=" * 72)
     log(f"imagen 远端 Daemon v{protocol_version()} 启动")
@@ -3272,38 +3454,49 @@ def main() -> None:
     #    隧道监管线程负责中途重拉后的重播，这里只兜底首次发布与周期重播。
     last_report = 0.0
     last_announce = time.time()
-    while True:
-        time.sleep(2.0)
+    while not BOOT.stop_event.wait(2.0):
         now = time.time()
 
-        if BOOT.tunnel_url and not BOOT.published_ready:
-            BOOT.published_ready = True
+        should_publish = False
+        with BOOT_LOCK:
+            if BOOT.tunnel_url and not BOOT.published_ready:
+                BOOT.published_ready = True
+                should_publish = True
+            tunnel_url = BOOT.tunnel_url
+            tunnel_provider = BOOT.tunnel_provider
+        if should_publish:
             publish_ready()
 
         # P0.2：每 TUNNEL_ANNOUNCE_SEC 秒重播一次 ready，Host 心跳丢失后可重新会合。
-        if BOOT.tunnel_url and now - last_announce >= TUNNEL_ANNOUNCE_SEC:
+        if tunnel_url and now - last_announce >= TUNNEL_ANNOUNCE_SEC:
             last_announce = now
             log(
-                f"[tunnel] 周期重播 ready（通道 {BOOT.tunnel_provider or 'unknown'}，"
+                f"[tunnel] 周期重播 ready（通道 {tunnel_provider or 'unknown'}，"
                 f"间隔 {int(TUNNEL_ANNOUNCE_SEC)}s）"
             )
             threading.Thread(target=publish_ready, name="announce-ready", daemon=True).start()
 
-        idle = now - STATE.last_active
+        with STATE_LOCK:
+            last_active = STATE.last_active
+            phase = STATE.phase
+            jobs_done = STATE.jobs_done
+        idle = now - last_active
         busy = active_job_count() > 0 or GEN_LOCK.locked()
         # 启动阶段（装依赖/预加载）不参与空闲退出：Host 可能把 idle_timeout 调得很短，
         # 但首轮加载本来就要几分钟。失败进入 error 后照样会被看门狗收走。
-        bootstrapping = STATE.phase in ("booting", "installing", "loading")
+        bootstrapping = phase in ("booting", "installing", "loading")
         if not busy and not bootstrapping and idle >= CONFIG.idle_timeout_sec:
             log(f"[idle] 空闲 {int(idle)}s ≥ {CONFIG.idle_timeout_sec}s，退出进程释放 GPU 配额")
+            _cleanup_before_exit()
             os._exit(0)
 
         if now - last_report >= 30:
             last_report = now
             log(
-                f"[alive] phase={STATE.phase} idle={int(idle)}s jobs={STATE.jobs_done} "
-                f"queue={queue_depth()} tunnel={'ok' if BOOT.tunnel_url else 'pending'}"
+                f"[alive] phase={phase} idle={int(idle)}s jobs={jobs_done} "
+                f"queue={queue_depth()} tunnel={'ok' if tunnel_url else 'pending'}"
             )
+    _cleanup_before_exit()
 
 
 if __name__ == "__main__":

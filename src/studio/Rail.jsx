@@ -20,6 +20,7 @@ import React from 'react'
 import { LIMITS } from '../../shared/contract.js'
 import { stepModeOf, stepTierOf } from '../../shared/models-guide.js'
 
+import { COUNT_OPTIONS, INSPIRE_KEYS } from '../constants.js'
 import { Tooltip } from '../components/Tooltip.jsx'
 import { clampSize } from '../logic/clamp.js'
 import { formatText } from '../logic/format.js'
@@ -28,8 +29,6 @@ import { Icon } from './icons.jsx'
 import { DEFAULT_RATIOS } from './presets.js'
 
 const PROMPT_MAX = LIMITS.prompt.maxChars
-const INSPIRE_KEYS = ['studio.inspire.1', 'studio.inspire.2', 'studio.inspire.3', 'studio.inspire.4', 'studio.inspire.5']
-const COUNT_OPTIONS = [1, 2, 3, 4]
 
 /**
  * 表单尺寸 → 宽/高输入框的展示文本。

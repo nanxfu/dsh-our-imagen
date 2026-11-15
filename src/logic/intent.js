@@ -5,7 +5,8 @@
  * 这里不碰网络与 React，方便离线断言归一与合并规则。
  */
 
-import { INTENT, LIMITS, PRESETS, RATIO_IDS } from '../../shared/contract.js'
+import { LIMITS, RATIO_IDS } from '../../shared/contract.js'
+import { historyMessages, normalizeClarify, normalizeModelHint } from '../../shared/validation.js'
 
 /**
  * 意图确认卡上可直接编辑的字段：提示词、排除项、生成张数。
@@ -63,10 +64,9 @@ export function intentHistory(messages) {
         content = prompt || question
       }
     }
-    if (!role || !content) continue
-    history.push({ role, content: content.slice(0, LIMITS.intentHistory.maxMessageChars) })
+    if (role && content) history.push({ role, content })
   }
-  return history.slice(-LIMITS.intentHistory.maxMessages)
+  return historyMessages(history)
 }
 
 /**
@@ -80,44 +80,19 @@ export function intentCount(value) {
 }
 
 /**
- * 通用澄清归一：问题非空且至少 2 个去重选项才算有效澄清。
- *
- * 宿主已经按契约输出；客户端再兜一层（旧宿主 / 模型漂移都可能给脏数据），
- * 不合法时直接当「没有澄清」处理，界面不出现没有选项的卡片。
+ * 通用澄清归一：委托 shared/validation.js 的 normalizeClarify。
+ * 问题非空且至少 2 个去重选项才算有效澄清，否则返回 null。
  */
 export function intentClarify(value) {
-  if (!value || typeof value !== 'object') return null
-  const question = typeof value.question === 'string'
-    ? value.question.trim().slice(0, INTENT.clarifyQuestionMaxChars)
-    : ''
-  if (!question) return null
-  const options = []
-  const rawOptions = Array.isArray(value.options) ? value.options : []
-  for (const option of rawOptions) {
-    const text = typeof option === 'string' ? option.trim().slice(0, INTENT.clarifyOptionMaxChars) : ''
-    if (!text || options.includes(text)) continue
-    options.push(text)
-    if (options.length >= INTENT.clarifyMaxOptions) break
-  }
-  if (options.length < INTENT.clarifyMinOptions) return null
-  return { question, options }
+  return normalizeClarify(value)
 }
 
 /**
- * 模型建议归一：预设必须真实存在且不等于当前预设，理由截断到契约上限。
- *
- * 不满足就整条丢弃：界面上少一行弱提示，不影响生成主链路。
+ * 模型建议归一：委托 shared/validation.js 的 normalizeModelHint。
+ * 预设必须真实存在、不等于当前预设且理由非空；不满足就整条丢弃。
  */
 export function intentModelHint(value, currentPresetId) {
-  if (!value || typeof value !== 'object') return null
-  const presetId = typeof value.presetId === 'string' ? value.presetId.trim() : ''
-  if (!presetId || presetId === currentPresetId) return null
-  if (!PRESETS.some((item) => item.id === presetId)) return null
-  const reason = typeof value.reason === 'string'
-    ? value.reason.trim().slice(0, INTENT.modelHintReasonMaxChars)
-    : ''
-  if (!reason) return null
-  return { presetId, reason }
+  return normalizeModelHint(value, currentPresetId)
 }
 
 /** 比例归一：只接受契约里的比例 id，其余按「自动」处理。 */

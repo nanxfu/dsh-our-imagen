@@ -20,6 +20,7 @@ import { buildGenerateBody } from '../../logic/generate.js'
 import {
   customSizePatch,
   detectCjk,
+  hintOf,
   presetNeedsEnglish,
   presetSelectPatch,
   ratioIdOf,
@@ -61,11 +62,6 @@ function referenceOf(image, path) {
   if (Number.isFinite(width) && width > 0) next.width = Math.round(width)
   if (Number.isFinite(height) && height > 0) next.height = Math.round(height)
   return next
-}
-
-/** 当前预设推荐的负向词；没有则空串。 */
-function hintOf(preset) {
-  return preset && typeof preset.negativeHint === 'string' ? preset.negativeHint.trim() : ''
 }
 
 export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {

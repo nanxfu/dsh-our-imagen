@@ -501,6 +501,7 @@ await check('日志路由成功 / 不可用分支带 env，env 抛错降级 {}',
 
 await check('LogsDrawer 双视图与兜底结构', async () => {
   const source = await readSource('../src/studio/LogsDrawer.jsx')
+  const trapSource = await readSource('../src/studio/hooks/useFocusTrap.js')
   for (const needle of [
     'studio.logs.tab.remote',
     'studio.logs.tab.host',
@@ -509,14 +510,17 @@ await check('LogsDrawer 双视图与兜底结构', async () => {
     'aria-pressed={!showingHost}',
     'aria-pressed={showingHost}',
     'ofs-chip',
-    'const FOCUSABLE =',
-    "'Escape'",
+    'useFocusTrap',
     'scrollTop',
     'studio.logs.close',
     'env: logs.env',
   ]) {
     assert.ok(source.includes(needle), `LogsDrawer 应包含：${needle}`)
   }
+  // 焦点陷阱与防抢焦点：FOCUSABLE 与 Escape 处理收口到 useFocusTrap，且不把 onClose 放进 effect 依赖。
+  assert.ok(trapSource.includes('export const FOCUSABLE ='), 'useFocusTrap 应定义 FOCUSABLE')
+  assert.ok(trapSource.includes("'Escape'"), 'useFocusTrap 应处理 Escape 键')
+  assert.ok(trapSource.includes('onCloseRef'), 'useFocusTrap 应通过 ref 持有 onClose，避免轮询重渲染时重复抢焦点')
   // 默认远端：没有任何 useState('host') 的默认值，视图由 autoView（remote 优先）决定。
   assert.ok(!source.includes("useState('host')"), '默认视图必须是远端，不能把 host 写死为初始值')
   assert.match(source, /manualView \?\? autoView/, '手动选择优先于自动兜底')

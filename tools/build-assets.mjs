@@ -185,17 +185,9 @@ export async function loadModels(modelsDir = MODELS_DIR) {
   return models.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
 }
 
-/** 完整资产记录（含 measured 与 runtime），供后续验证/诊断使用。 */
-function projectModels(models) {
-  return models.map((model) => ({
-    ...model,
-    // 能力字段落盘前归一成布尔值：旧资产没写该字段时按 false（不支持图生图 / 不消费负向词 / 仅英文提示词）。
-    supportsChinese: model.supportsChinese === true,
-    supportsImg2Img: model.supportsImg2Img === true,
-    supportsNegative: model.supportsNegative === true,
-    stepRange: model.stepRange || null,
-    measured: Object.fromEntries(MEASURED_FIELDS.map((field) => [field, model.measured[field] ?? null])),
-  }))
+/** 公开预设视图：在预设基础上剔除仅远端消费的 pipeline，供 Client 安全打包。 */
+function projectPublicPresets(presets) {
+  return presets.map(({ pipeline, ...rest }) => rest)
 }
 
 /** 契约使用的预设视图：模型事实字段 + 卡面展示字段（family / short / description）。 */
@@ -244,9 +236,10 @@ export function renderGenerated(models) {
     ' */',
     '',
   ].join('\n')
-  const modelsJson = JSON.stringify(projectModels(models), null, 2)
-  const presetsJson = JSON.stringify(projectPresets(models), null, 2)
-  return `${banner}export const MODELS = ${modelsJson}\n\nexport const PRESETS = ${presetsJson}\n`
+  const presets = projectPresets(models)
+  const publicJson = JSON.stringify(projectPublicPresets(presets), null, 2)
+  const presetsJson = JSON.stringify(presets, null, 2)
+  return `${banner}export const PUBLIC_PRESETS = ${publicJson}\n\nexport const PRESETS = ${presetsJson}\n`
 }
 
 /** 读取生成文件内容；不存在返回 null。 */

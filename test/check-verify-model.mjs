@@ -21,6 +21,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const TOOL = join(ROOT, 'tools', 'verify-model.mjs')
 const PAYLOAD_SOURCE = join(ROOT, 'tools', 'payload', 'verify-model.py')
 const ANIMA_RUNTIME_SOURCE = join(ROOT, 'remote', 'anima_runtime.py')
+const PIPELINE_LOADER_SOURCE = join(ROOT, 'remote', 'pipeline_loader.py')
 
 const failures = []
 let passed = 0
@@ -132,16 +133,21 @@ async function main() {
       if (!valid.stdout.includes('Kernel 打包演练通过')) throw new Error(`输出缺少打包结果\n${valid.stdout}`)
     })
 
-    await check('payload 源码保持单份真源：只留 anima_runtime 内联标记', async () => {
+    await check('payload 源码保持单份真源：只留 anima_runtime 与 pipeline_loader 内联标记', async () => {
       const source = await readFile(PAYLOAD_SOURCE, 'utf8')
-      if (source.match(/@@INLINE:/g)?.length !== 1) throw new Error('payload 应只有一处 @@INLINE 标记')
+      if (source.match(/@@INLINE:/g)?.length !== 2) throw new Error('payload 应有两处 @@INLINE 标记')
       if (/^def _anima_toolkit\(/m.test(source)) throw new Error('payload 仍内嵌 _anima_toolkit 实现')
       if (/^def load_anima_runtime\(/m.test(source)) throw new Error('payload 仍内嵌 load_anima_runtime 实现')
+      if (/^def load_diffusers_pipeline\(/m.test(source)) throw new Error('payload 仍内嵌 load_diffusers_pipeline 实现')
       const runtime = await readFile(ANIMA_RUNTIME_SOURCE, 'utf8')
       if (!runtime.includes('def load_anima_runtime(')) throw new Error('remote/anima_runtime.py 缺少 load_anima_runtime')
+      const loader = await readFile(PIPELINE_LOADER_SOURCE, 'utf8')
+      if (!loader.includes('def load_diffusers_pipeline(')) {
+        throw new Error('remote/pipeline_loader.py 缺少 load_diffusers_pipeline')
+      }
     })
 
-    await check('打包后的 payload 自包含：运行时只内联一份、python 语法可编译', async () => {
+    await check('打包后的 payload 自包含：共享模块只内联一份、python 语法可编译', async () => {
       const folder = await buildKernelFolder({
         username: 'dry-run-user',
         slug: 'payload0',
@@ -154,11 +160,18 @@ async function main() {
         if (/^[ \t]*from anima_runtime import /m.test(source)) {
           throw new Error('打包后的 payload 仍含未解析的 anima_runtime import 行')
         }
+        if (/^[ \t]*from pipeline_loader import /m.test(source)) {
+          throw new Error('打包后的 payload 仍含未解析的 pipeline_loader import 行')
+        }
         if (hasInlineMarkerLine(source)) throw new Error('打包后的 payload 仍有未处理的 @@INLINE 标记')
         const runtimeDefs = source.match(/^def load_anima_runtime\(/gm) ?? []
         if (runtimeDefs.length !== 1) throw new Error(`load_anima_runtime 定义 ${runtimeDefs.length} 份，应为 1 份`)
+        const loaderDefs = source.match(/^def load_diffusers_pipeline\(/gm) ?? []
+        if (loaderDefs.length !== 1) {
+          throw new Error(`load_diffusers_pipeline 定义 ${loaderDefs.length} 份，应为 1 份`)
+        }
         assertPythonSyntax(packagedPath)
-        assertPythonImports(packagedPath, ['load_anima_runtime', 'load_pipe', 'main'])
+        assertPythonImports(packagedPath, ['load_anima_runtime', 'load_diffusers_pipeline', 'load_pipe', 'main'])
       } finally {
         await removeKernelFolder(folder.dir)
       }

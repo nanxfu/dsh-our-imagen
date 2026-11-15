@@ -1,20 +1,5 @@
 {
-  "version": "0.10.0",
   "limits": {
-    "width": {
-      "max": 1536,
-      "min": 256,
-      "step": 8
-    },
-    "height": {
-      "max": 1536,
-      "min": 256,
-      "step": 8
-    },
-    "steps": {
-      "max": 60,
-      "min": 1
-    },
     "cfg": {
       "max": 20,
       "min": 0
@@ -23,19 +8,28 @@
       "max": 4,
       "min": 1
     },
-    "seed": {
-      "max": 2147483647
-    },
-    "prompt": {
-      "maxChars": 2000
+    "height": {
+      "max": 1536,
+      "min": 256,
+      "step": 8
     },
     "negativePrompt": {
       "maxChars": 1000
+    },
+    "prompt": {
+      "maxChars": 2000
     },
     "reference": {
       "maxBytes": 8388608,
       "maxEdge": 1536,
       "minEdge": 128
+    },
+    "seed": {
+      "max": 2147483647
+    },
+    "steps": {
+      "max": 60,
+      "min": 1
     },
     "strength": {
       "default": 0.6,
@@ -43,9 +37,11 @@
       "min": 0.2,
       "step": 0.05
     },
-    "historyTool": {
-      "defaultLimit": 5,
-      "maxLimit": 30
+    "width": {
+      "max": 1536,
+      "min": 256,
+      "step": 8
     }
-  }
+  },
+  "version": "0.10.0"
 }

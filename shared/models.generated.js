@@ -2,10 +2,9 @@
  * 本文件由 tools/build-assets.mjs 从 models/*.json 生成，请勿手改。
  * 修改模型请编辑 models/<id>.json，然后运行 npm run models:build。
  */
-export const MODELS = [
+export const PUBLIC_PRESETS = [
   {
     "id": "sdxl-lightning",
-    "order": 10,
     "label": "SDXL Lightning",
     "family": "SDXL",
     "short": "Lightning",
@@ -19,55 +18,29 @@ export const MODELS = [
     "licenseKind": "open",
     "gated": false,
     "gpus": 1,
-    "tier": "fast",
+    "downloadGb": 6.78,
     "size": 1024,
     "steps": 4,
+    "stepRange": null,
     "cfg": 0,
+    "peakVramMb": 10347,
+    "loadSeconds": 7.7,
+    "steadySeconds": 6.2,
+    "tier": "fast",
     "negativeHint": "blurry, low quality, deformed, extra limbs",
     "promptStyle": "concise",
     "qualityPrefix": "",
+    "supportsChinese": false,
+    "supportsImg2Img": true,
+    "supportsNegative": true,
     "sizeOptions": [
       768,
       1024,
       1152
-    ],
-    "runtime": "default",
-    "supportsChinese": false,
-    "supportsImg2Img": true,
-    "supportsNegative": true,
-    "pipeline": {
-      "loader": "sdxl-lora",
-      "base": "stabilityai/stable-diffusion-xl-base-1.0",
-      "lora": {
-        "repo": "ByteDance/SDXL-Lightning",
-        "weight": "sdxl_lightning_4step_lora.safetensors"
-      },
-      "scheduler": {
-        "type": "euler",
-        "timestepSpacing": "trailing"
-      },
-      "variant": "fp16",
-      "downloadGb": 6.78,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "**/*.fp16.safetensors"
-      ],
-      "deviceMap": null
-    },
-    "measured": {
-      "peakVramMb": 10347,
-      "loadSeconds": 7.7,
-      "steadySeconds": 6.2,
-      "downloadGb": 6.78
-    },
-    "stepRange": null
+    ]
   },
   {
     "id": "hyper-sdxl-8step",
-    "order": 15,
     "label": "Hyper-SDXL 8-Step",
     "family": "SDXL",
     "short": "Hyper-SD 8",
@@ -81,54 +54,28 @@ export const MODELS = [
     "licenseKind": "open",
     "gated": false,
     "gpus": 1,
-    "tier": "fast",
+    "downloadGb": 7.35,
     "size": 1024,
     "steps": 8,
+    "stepRange": null,
     "cfg": 0,
+    "peakVramMb": 10347,
+    "loadSeconds": 14.3,
+    "steadySeconds": 7.74,
+    "tier": "fast",
     "negativeHint": "blurry, low quality, deformed",
     "promptStyle": "concise",
     "qualityPrefix": "",
-    "sizeOptions": [
-      768,
-      1024
-    ],
-    "runtime": "default",
     "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
-    "pipeline": {
-      "loader": "sdxl-lora",
-      "base": "stabilityai/stable-diffusion-xl-base-1.0",
-      "lora": {
-        "repo": "ByteDance/Hyper-SD",
-        "weight": "Hyper-SDXL-8steps-lora.safetensors"
-      },
-      "scheduler": {
-        "type": "euler",
-        "timestepSpacing": "trailing"
-      },
-      "variant": "fp16",
-      "downloadGb": 6.78,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "**/*.fp16.safetensors"
-      ],
-      "deviceMap": null
-    },
-    "measured": {
-      "peakVramMb": 10347,
-      "loadSeconds": 14.3,
-      "steadySeconds": 7.74,
-      "downloadGb": 7.35
-    },
-    "stepRange": null
+    "sizeOptions": [
+      768,
+      1024
+    ]
   },
   {
     "id": "sdxl-turbo",
-    "order": 20,
     "label": "SDXL Turbo",
     "family": "SDXL",
     "short": "Turbo",
@@ -142,49 +89,29 @@ export const MODELS = [
     "licenseKind": "restricted",
     "gated": false,
     "gpus": 1,
-    "tier": "fast",
+    "downloadGb": 6.62,
     "size": 512,
     "steps": 4,
+    "stepRange": null,
     "cfg": 0,
+    "peakVramMb": 7666,
+    "loadSeconds": 4,
+    "steadySeconds": 1.87,
+    "tier": "fast",
     "negativeHint": "blurry, low quality",
     "promptStyle": "concise",
     "qualityPrefix": "",
+    "supportsChinese": false,
+    "supportsImg2Img": true,
+    "supportsNegative": true,
     "sizeOptions": [
       512,
       768,
       1024
-    ],
-    "runtime": "default",
-    "supportsChinese": false,
-    "supportsImg2Img": true,
-    "supportsNegative": true,
-    "pipeline": {
-      "loader": "sdxl",
-      "base": "stabilityai/sdxl-turbo",
-      "lora": null,
-      "scheduler": null,
-      "variant": "fp16",
-      "downloadGb": 6.62,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "**/*.fp16.safetensors"
-      ],
-      "deviceMap": null
-    },
-    "measured": {
-      "peakVramMb": 7666,
-      "loadSeconds": 4,
-      "steadySeconds": 1.87,
-      "downloadGb": 6.62
-    },
-    "stepRange": null
+    ]
   },
   {
     "id": "playground-v2.5",
-    "order": 25,
     "label": "Playground v2.5",
     "family": "SDXL",
     "short": "Playground 2.5",
@@ -198,7 +125,7 @@ export const MODELS = [
     "licenseKind": "open",
     "gated": false,
     "gpus": 1,
-    "tier": "usable",
+    "downloadGb": 6.46,
     "size": 1024,
     "steps": 30,
     "stepRange": {
@@ -210,46 +137,23 @@ export const MODELS = [
       "fine": 40
     },
     "cfg": 3,
+    "peakVramMb": 9967,
+    "loadSeconds": 5.7,
+    "steadySeconds": 28.34,
+    "tier": "usable",
     "negativeHint": "ugly, deformed, noisy, blurry, distorted",
     "promptStyle": "natural",
     "qualityPrefix": "",
-    "sizeOptions": [
-      768,
-      1024
-    ],
-    "runtime": "default",
     "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
-    "pipeline": {
-      "loader": "sdxl",
-      "base": "playgroundai/playground-v2.5-1024px-aesthetic",
-      "lora": null,
-      "scheduler": null,
-      "variant": "fp16",
-      "downloadGb": 6.6,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "unet/*.fp16.safetensors",
-        "text_encoder/model.fp16.safetensors",
-        "text_encoder_2/model.fp16.safetensors",
-        "vae/*.fp16.safetensors"
-      ],
-      "deviceMap": null
-    },
-    "measured": {
-      "peakVramMb": 9967,
-      "loadSeconds": 5.7,
-      "steadySeconds": 28.34,
-      "downloadGb": 6.46
-    }
+    "sizeOptions": [
+      768,
+      1024
+    ]
   },
   {
     "id": "sdxl-base",
-    "order": 30,
     "label": "SDXL Base 1.0",
     "family": "SDXL",
     "short": "Base 1.0",
@@ -263,7 +167,7 @@ export const MODELS = [
     "licenseKind": "open",
     "gated": false,
     "gpus": 1,
-    "tier": "usable",
+    "downloadGb": 6.78,
     "size": 1024,
     "steps": 25,
     "stepRange": {
@@ -275,44 +179,24 @@ export const MODELS = [
       "fine": 38
     },
     "cfg": 7.5,
+    "peakVramMb": 9966,
+    "loadSeconds": 5.8,
+    "steadySeconds": 27.8,
+    "tier": "usable",
     "negativeHint": "blurry, low quality, deformed, extra limbs",
     "promptStyle": "natural",
     "qualityPrefix": "",
+    "supportsChinese": false,
+    "supportsImg2Img": true,
+    "supportsNegative": true,
     "sizeOptions": [
       768,
       1024,
       1152
-    ],
-    "runtime": "default",
-    "supportsChinese": false,
-    "supportsImg2Img": true,
-    "supportsNegative": true,
-    "pipeline": {
-      "loader": "sdxl",
-      "base": "stabilityai/stable-diffusion-xl-base-1.0",
-      "lora": null,
-      "scheduler": null,
-      "variant": "fp16",
-      "downloadGb": 6.78,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "**/*.fp16.safetensors"
-      ],
-      "deviceMap": null
-    },
-    "measured": {
-      "peakVramMb": 9966,
-      "loadSeconds": 5.8,
-      "steadySeconds": 27.8,
-      "downloadGb": 6.78
-    }
+    ]
   },
   {
     "id": "realvis-v5",
-    "order": 35,
     "label": "RealVisXL V5.0",
     "family": "SDXL",
     "short": "RealVis V5",
@@ -326,60 +210,35 @@ export const MODELS = [
     "licenseKind": "open",
     "gated": false,
     "gpus": 1,
-    "tier": "usable",
+    "downloadGb": 6.46,
     "size": 1024,
     "steps": 30,
     "stepRange": {
-      "min": 20,
+      "min": 24,
       "max": 45,
       "step": 1,
-      "fast": 22,
+      "fast": 25,
       "balanced": 30,
       "fine": 40
     },
     "cfg": 5,
+    "peakVramMb": 9967,
+    "loadSeconds": 5.2,
+    "steadySeconds": 24.53,
+    "tier": "usable",
     "negativeHint": "blurry, low quality, deformed, extra limbs, ugly, bad anatomy",
     "promptStyle": "natural",
     "qualityPrefix": "",
-    "sizeOptions": [
-      768,
-      1024
-    ],
-    "runtime": "default",
     "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
-    "pipeline": {
-      "loader": "sdxl",
-      "base": "SG161222/RealVisXL_V5.0",
-      "lora": null,
-      "scheduler": {
-        "type": "dpmpp-sde-karras"
-      },
-      "variant": "fp16",
-      "downloadGb": 6.6,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "unet/*.fp16.safetensors",
-        "text_encoder/model.fp16.safetensors",
-        "text_encoder_2/model.fp16.safetensors",
-        "vae/*.fp16.safetensors"
-      ],
-      "deviceMap": null
-    },
-    "measured": {
-      "peakVramMb": 9967,
-      "loadSeconds": 5.2,
-      "steadySeconds": 24.53,
-      "downloadGb": 6.46
-    }
+    "sizeOptions": [
+      768,
+      1024
+    ]
   },
   {
     "id": "flux2-klein-4b",
-    "order": 40,
     "label": "FLUX.2 Klein 4B",
     "family": "FLUX",
     "short": "Klein 4B",
@@ -393,42 +252,28 @@ export const MODELS = [
     "licenseKind": "open",
     "gated": false,
     "gpus": 2,
-    "tier": "fast",
+    "downloadGb": 15.2,
     "size": 1024,
     "steps": 4,
+    "stepRange": null,
     "cfg": 1,
+    "peakVramMb": 7929,
+    "loadSeconds": 28.2,
+    "steadySeconds": 10.24,
+    "tier": "fast",
     "negativeHint": "",
     "promptStyle": "natural",
     "qualityPrefix": "",
-    "sizeOptions": [
-      768,
-      1024
-    ],
-    "runtime": "default",
     "supportsChinese": true,
     "supportsImg2Img": false,
     "supportsNegative": false,
-    "pipeline": {
-      "loader": "flux2",
-      "base": "black-forest-labs/FLUX.2-klein-4B",
-      "lora": null,
-      "scheduler": null,
-      "variant": "fp16",
-      "downloadGb": 15.2,
-      "allowPatterns": null,
-      "deviceMap": "balanced"
-    },
-    "measured": {
-      "peakVramMb": 7929,
-      "loadSeconds": 28.2,
-      "steadySeconds": 10.24,
-      "downloadGb": 15.2
-    },
-    "stepRange": null
+    "sizeOptions": [
+      768,
+      1024
+    ]
   },
   {
     "id": "animagine-xl-3.1",
-    "order": 45,
     "label": "Animagine XL 3.1",
     "family": "SDXL",
     "short": "Animagine 3.1",
@@ -442,7 +287,7 @@ export const MODELS = [
     "licenseKind": "open",
     "gated": false,
     "gpus": 1,
-    "tier": "usable",
+    "downloadGb": 6.46,
     "size": 1024,
     "steps": 28,
     "stepRange": {
@@ -454,46 +299,23 @@ export const MODELS = [
       "fine": 38
     },
     "cfg": 7,
+    "peakVramMb": 9176,
+    "loadSeconds": 4.8,
+    "steadySeconds": 26.17,
+    "tier": "usable",
     "negativeHint": "nsfw, lowres, (bad), text, error, fewer, extra, missing, worst quality, jpeg artifacts, low quality, watermark, unfinished, displeasing, oldest, early, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract]",
     "promptStyle": "danbooru",
     "qualityPrefix": "masterpiece, best quality, highres",
-    "sizeOptions": [
-      768,
-      1024
-    ],
-    "runtime": "default",
     "supportsChinese": false,
     "supportsImg2Img": true,
     "supportsNegative": true,
-    "pipeline": {
-      "loader": "sdxl",
-      "base": "cagliostrolab/animagine-xl-3.1",
-      "lora": null,
-      "scheduler": null,
-      "variant": null,
-      "downloadGb": 6.5,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "unet/*.safetensors",
-        "text_encoder/model.safetensors",
-        "text_encoder_2/model.safetensors",
-        "vae/*.safetensors"
-      ],
-      "deviceMap": null
-    },
-    "measured": {
-      "peakVramMb": 9176,
-      "loadSeconds": 4.8,
-      "steadySeconds": 26.17,
-      "downloadGb": 6.46
-    }
+    "sizeOptions": [
+      768,
+      1024
+    ]
   },
   {
     "id": "anima-light-lavender",
-    "order": 55,
     "label": "Anima Light Lavender",
     "family": "Anima",
     "short": "Lavender",
@@ -507,7 +329,7 @@ export const MODELS = [
     "licenseKind": "restricted",
     "gated": false,
     "gpus": 1,
-    "tier": "usable",
+    "downloadGb": 5.25,
     "size": 1024,
     "steps": 25,
     "stepRange": {
@@ -519,49 +341,21 @@ export const MODELS = [
       "fine": 35
     },
     "cfg": 4,
+    "peakVramMb": 8470,
+    "loadSeconds": 43.5,
+    "steadySeconds": 80.64,
+    "tier": "usable",
     "negativeHint": "",
     "promptStyle": "natural",
     "qualityPrefix": "",
+    "supportsChinese": false,
+    "supportsImg2Img": false,
+    "supportsNegative": true,
     "sizeOptions": [
       768,
       1024,
       1152
-    ],
-    "runtime": "default",
-    "supportsChinese": false,
-    "supportsImg2Img": false,
-    "supportsNegative": true,
-    "pipeline": {
-      "loader": "anima",
-      "base": "Johnny-Z/Anima-Light-Lavender",
-      "weight": "anima-light-lavender.safetensors",
-      "textEncoder": {
-        "repo": "circlestone-labs/Anima",
-        "weight": "split_files/text_encoders/qwen_3_06b_base.safetensors"
-      },
-      "vae": {
-        "repo": "Qwen/Qwen-Image",
-        "subfolder": "vae"
-      },
-      "tokenizers": {
-        "repo": "hugging-apps/anima-light-lavender-demo",
-        "repoType": "space"
-      },
-      "dtype": "auto",
-      "shift": 3,
-      "downloadGb": 5.6,
-      "allowPatterns": null,
-      "deviceMap": null,
-      "variant": null,
-      "lora": null,
-      "scheduler": null
-    },
-    "measured": {
-      "peakVramMb": 8470,
-      "loadSeconds": 43.5,
-      "steadySeconds": 80.64,
-      "downloadGb": 5.25
-    }
+    ]
   }
 ]
 
@@ -872,10 +666,10 @@ export const PRESETS = [
     "size": 1024,
     "steps": 30,
     "stepRange": {
-      "min": 20,
+      "min": 24,
       "max": 45,
       "step": 1,
-      "fast": 22,
+      "fast": 25,
       "balanced": 30,
       "fine": 40
     },
@@ -899,7 +693,7 @@ export const PRESETS = [
       "base": "SG161222/RealVisXL_V5.0",
       "lora": null,
       "scheduler": {
-        "type": "dpmpp-sde-karras"
+        "type": "dpmpp-2m-sde-karras"
       },
       "variant": "fp16",
       "downloadGb": 6.6,

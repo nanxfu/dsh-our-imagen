@@ -398,7 +398,7 @@ export const PROTOCOL = {
  * 每个预设的 `pipeline` 是下发给远端 Daemon 的加载描述（字段见 remote/daemon.py
  * 顶部说明）：Daemon 不认识预设 id，只按 loader 分支加载，因此新增预设不需要改 Python。
  */
-import { PRESETS } from './models.generated.js'
+import { PRESETS, PUBLIC_PRESETS } from './models.generated.js'
 
 export { PRESETS }
 
@@ -411,7 +411,7 @@ export function presetById(id) {
 
 /** 面向 Client 的精简视图（去掉下发远端用的 pipeline 细节，避免双份真相）。 */
 export function publicPresets() {
-  return PRESETS.map(({ pipeline, ...rest }) => rest)
+  return PUBLIC_PRESETS.map((preset) => ({ ...preset }))
 }
 
 /**
@@ -420,7 +420,7 @@ export function publicPresets() {
  *
  * 只保留 Python 容器实际消费的元数据：`daemon.py` 读取 `contract.version`
  * （protocol_version）与 `contract.limits`（_limit_spec / _max_tasks）。宿主路由、
- * health phase、ntfy 事件与错误码都只属于 Host/Client，不下发远端。
+ * health phase、ntfy 事件、historyTool 与错误码都只属于 Host/Client，不下发远端。
  */
 export function daemonContract() {
   return {
@@ -437,7 +437,6 @@ export function daemonContract() {
       // 图生图的参考图边界与重绘强度：daemon 依此校验请求（来源与 Host 同一份契约）。
       reference: LIMITS.reference,
       strength: LIMITS.strength,
-      historyTool: LIMITS.historyTool,
     },
   }
 }

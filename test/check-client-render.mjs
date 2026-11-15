@@ -2986,14 +2986,14 @@ await check('渲染：意图 v2 状态流（cfg / history / 张数 / 负向词�
       prompt: 'rainy night city street, wet pavement reflecting neon signs',
       count: 2,
       negativePrompt: 'blurry, low quality',
-      width: 1152,
-      height: 648,
+      width: 1280,
+      height: 720,
     }], '生成覆盖项应带编辑后的张数与比例尺寸')
     assert.deepEqual(calls.patches.at(-1), {
       prompt: 'rainy night city street, wet pavement reflecting neon signs',
       count: 2,
-      width: 1152,
-      height: 648,
+      width: 1280,
+      height: 720,
       negative: 'blurry, low quality',
     }, '确认卡参数应回填表单')
 
@@ -3128,8 +3128,8 @@ await check('渲染：带入参数面板写入真实表单（useStudio + handoff
     assert.equal(latest.studio.chat.handoffIntent(message), true, '带入成功应返回 true')
     await client.rerenderRaw()
     assert.equal(latest.studio.form.form.prompt, 'rainy street, neon lights', '提示词去空白后写入表单')
-    assert.equal(latest.studio.form.form.width, 1152, '比例换算成宽高')
-    assert.equal(latest.studio.form.form.height, 648)
+    assert.equal(latest.studio.form.form.width, 1280, '比例换算成宽高')
+    assert.equal(latest.studio.form.form.height, 720)
     assert.equal(latest.studio.form.form.count, 3, '张数写入表单')
     assert.equal(latest.studio.form.form.negative, 'blurry', '负向词可用时写入表单')
 
@@ -3387,6 +3387,72 @@ await check('渲染：胶片条取消按钮与取消中状态', async () => {
     required: { 'ofs-ghost': 3, 'ofs-ghost-cancel': 3, 'is-cancelling': 2 },
     forbidden: [],
   })
+})
+
+// 底部作品条横向滚轮适配：纵向滚轮转换为横向 scrollLeft，触控板横向事件交还原生，卸载时清理监听。
+await check('渲染：胶片条支持鼠标纵向滚轮横向滑动', async () => {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const listeners = new Map()
+  const fakeStrip = {
+    addEventListener(type, fn, opts) {
+      listeners.set(type, { fn, opts })
+    },
+    removeEventListener(type, fn) {
+      const entry = listeners.get(type)
+      if (entry && entry.fn === fn) listeners.delete(type)
+    },
+  }
+  const fakeRoll = {
+    scrollWidth: 800,
+    clientWidth: 320,
+    scrollLeft: 0,
+  }
+  const origUseRef = client.react.useRef.bind(client.react)
+  let refCount = 0
+  client.react.useRef = (init) => {
+    const ref = origUseRef(init)
+    refCount += 1
+    if (refCount === 1) ref.current = fakeStrip
+    if (refCount === 2) ref.current = fakeRoll
+    return ref
+  }
+
+  await client.mountRaw(client.components.Filmstrip, {
+    t: client.internals.i18n.fallbackTranslate('zh'),
+    ui: { setView: () => {} },
+    compute: { pendingJobs: [], sessionState: 'ready', startSession: () => {}, status: { stopped: false }, cancellingIds: [] },
+    library: { batches: [], selected: null, selectImage: () => {} },
+    now: NOW,
+  })
+
+  const wheel = listeners.get('wheel')
+  assert.ok(wheel, '应在底部作品条上注册 wheel 监听')
+  assert.deepEqual(wheel.opts, { passive: false }, 'wheel 监听需关闭 passive 以阻止默认垂直滚动')
+
+  let prevented = 0
+  // 1) 普通鼠标纵向滚轮（px 模式）：转成横向 scrollLeft，并调用 preventDefault。
+  wheel.fn({ deltaX: 0, deltaY: 120, deltaMode: 0, preventDefault: () => { prevented += 1 } })
+  assert.equal(fakeRoll.scrollLeft, 120, '纵向 deltaY 应累加到 scrollLeft')
+  assert.equal(prevented, 1)
+
+  // 2) 行模式滚轮（deltaMode === 1）：按 32px/行折算。
+  wheel.fn({ deltaX: 0, deltaY: -2, deltaMode: 1, preventDefault: () => { prevented += 1 } })
+  assert.equal(fakeRoll.scrollLeft, 56, '行模式负向 deltaY 应向回滚动')
+  assert.equal(prevented, 2)
+
+  // 3) 触控板以横向滚动为主（|deltaX| > |deltaY|）：交还原生滚动，不改 scrollLeft 也不拦截。
+  wheel.fn({ deltaX: 60, deltaY: 10, deltaMode: 0, preventDefault: () => { prevented += 1 } })
+  assert.equal(fakeRoll.scrollLeft, 56, '触控板横向手势不应重复叠加 scrollLeft')
+  assert.equal(prevented, 2)
+
+  // 4) 内容未超出容器宽度时不做拦截。
+  fakeRoll.scrollWidth = 300
+  wheel.fn({ deltaX: 0, deltaY: 100, deltaMode: 0, preventDefault: () => { prevented += 1 } })
+  assert.equal(fakeRoll.scrollLeft, 56, '无横向溢出时不应修改 scrollLeft')
+  assert.equal(prevented, 2)
+
+  client.unmount()
+  assert.equal(listeners.has('wheel'), false, '组件卸载时应移除 wheel 监听')
 })
 
 // 画廊分页脚：有更早记录时给「加载更多」，取完后给「已加载全部作品」。

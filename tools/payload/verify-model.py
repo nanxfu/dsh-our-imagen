@@ -51,37 +51,26 @@ def dir_bytes(path: str) -> int:
     return total
 
 
+from anima_runtime import load_anima_runtime  # noqa: E402  # @@INLINE:anima_runtime.py@@
+from pipeline_loader import PIP_INSTALL, PIP_UNINSTALL, filter_call_kwargs, load_diffusers_pipeline, pip_env, pip_install_argv, pip_uninstall_argv, pipe_signature_params  # noqa: E402  # @@INLINE:pipeline_loader.py@@
+
+
 def install_dependencies() -> None:
     """与 daemon/bench 同一条已验证路径：卸 torchao，装最新兼容组合（不钉版本）。"""
-    log("[pip] 卸载 torchao")
+    log(f"[pip] 卸载 {', '.join(PIP_UNINSTALL)}")
     uninstall = subprocess.run(
-        [sys.executable, "-m", "pip", "uninstall", "-y", "-q", "torchao"],
+        pip_uninstall_argv(),
         capture_output=True,
         text=True,
     )
     log(f"[pip] torchao 卸载退出码 {uninstall.returncode}")
 
-    log("[pip] 安装 diffusers / transformers / accelerate / peft")
-    env = dict(os.environ)
-    env.setdefault("PIP_DISABLE_PIP_VERSION_CHECK", "1")
-    env.setdefault("PIP_NO_INPUT", "1")
+    log(f"[pip] 安装 {' / '.join(PIP_INSTALL)}")
     install = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "-U",
-            "--progress-bar",
-            "off",
-            "diffusers",
-            "transformers",
-            "accelerate",
-            "peft",
-        ],
+        pip_install_argv(),
         capture_output=True,
         text=True,
-        env=env,
+        env=pip_env(),
         timeout=1800,
     )
     if install.returncode != 0:
@@ -94,30 +83,8 @@ def install_dependencies() -> None:
     log("[pip] 依赖安装完成")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# anima：Johnny-Z/Anima-Light-Lavender 运行时（单份源码在 remote/anima_runtime.py）
-#
-# 本 payload 不再复制运行时实现：仓库内直接 import remote/anima_runtime.py；推 Kaggle 前
-# tools/verify-model.mjs 经 lib/kernel.js 的 buildKernelFolder 打包，打包器会把下面带
-# @@INLINE 标记的 import 行整行替换为 remote/anima_runtime.py 全文，payload 仍是单文件。
-# 本地直接运行本文件（仅调试用）需要把仓库的 remote/ 目录加入 sys.path / PYTHONPATH；
-# 日志由 load_pipe 注入（payload 的 log 只 print），运行时模块不写死日志实现。
-# ─────────────────────────────────────────────────────────────────────────────
-
-from anima_runtime import load_anima_runtime  # noqa: E402  # @@INLINE:anima_runtime.py@@
-
-
 def load_pipe(spec: dict):
     """按 loader 分支加载 pipeline；返回 (pipe, load_seconds, download_gb)。"""
-    import torch
-    from diffusers import (
-        AutoPipelineForText2Image,
-        DPMSolverMultistepScheduler,
-        DPMSolverSinglestepScheduler,
-        EulerAncestralDiscreteScheduler,
-        EulerDiscreteScheduler,
-        StableDiffusionXLPipeline,
-    )
     from huggingface_hub import snapshot_download
 
     loader = str(spec.get("loader") or "")
@@ -131,10 +98,8 @@ def load_pipe(spec: dict):
         download_gb = round(anima_bytes / 2**30, 2)
         log(f"[load] anima 模型就绪：{load_seconds}s，下载 {download_gb} GiB")
         return pipe, load_seconds, download_gb
-    variant = spec.get("variant")
-    allow_patterns = spec.get("allowPatterns")
-    device_map = spec.get("deviceMap")
 
+    allow_patterns = spec.get("allowPatterns")
     download_started = time.time()
     download_bytes = 0
     if allow_patterns:
@@ -148,80 +113,18 @@ def load_pipe(spec: dict):
         download_bytes += dir_bytes(snapshot)
         log(f"[load] 下载完成：{round((time.time() - download_started), 1)}s / {round(download_bytes / 2**30, 2)} GiB")
 
-    kwargs = {"torch_dtype": torch.float16, "use_safetensors": True}
-    if variant:
-        kwargs["variant"] = str(variant)
-
-    def from_pretrained(factory):
-        attempts = [dict(kwargs)]
-        if kwargs.get("variant"):
-            attempts.append({key: value for key, value in kwargs.items() if key != "variant"})
-        last = None
-        for index, attempt in enumerate(attempts, start=1):
-            try:
-                log(f"[load] from_pretrained({base}) 第 {index} 次：variant={attempt.get('variant')}")
-                return factory.from_pretrained(base, **attempt)
-            except Exception as exc:  # noqa: BLE001
-                last = exc
-                log(f"[load] 第 {index} 次加载失败：{short(exc)}")
-        raise RuntimeError(f"加载 {base} 失败：{short(last) if last else '未知原因'}")
-
-    def apply_scheduler(pipe, default_type: str = "") -> None:
-        scheduler_spec = spec.get("scheduler")
-        if not scheduler_spec and not default_type:
-            return
-        sched = scheduler_spec or {}
-        scheduler_type = str(sched.get("type") or default_type).strip().lower()
-        if not scheduler_type:
-            return
-        if scheduler_type == "euler":
-            spacing = str(sched.get("timestepSpacing") or "trailing")
-            pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, timestep_spacing=spacing)
-            log(f"[load] 调度器 EulerDiscreteScheduler(timestep_spacing={spacing})")
-        elif scheduler_type == "euler-a":
-            pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
-            log("[load] 调度器 EulerAncestralDiscreteScheduler")
-        elif scheduler_type == "dpmpp-sde-karras":
-            pipe.scheduler = DPMSolverSinglestepScheduler.from_config(pipe.scheduler.config, use_karras_sigmas=True)
-            log("[load] 调度器 DPMSolverSinglestepScheduler(use_karras_sigmas=True)")
-        elif scheduler_type == "dpmpp-2m-karras":
-            pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config, use_karras_sigmas=True)
-            log("[load] 调度器 DPMSolverMultistepScheduler(use_karras_sigmas=True)")
-        elif scheduler_type == "dpmpp-2m-sde-karras":
-            pipe.scheduler = DPMSolverMultistepScheduler.from_config(
-                pipe.scheduler.config, use_karras_sigmas=True, algorithm_type="sde-dpmsolver++"
-            )
-            log("[load] 调度器 DPMSolverMultistepScheduler(use_karras_sigmas=True, algorithm_type=sde-dpmsolver++)")
-        else:
-            log(f"[load] 未识别的 scheduler.type={scheduler_type}，沿用底座默认调度器")
+    def _on_lora_download(weight_path: str) -> None:
+        nonlocal download_bytes
+        download_bytes += os.path.getsize(weight_path)
 
     load_started = time.time()
-    if loader == "sdxl":
-        pipe = from_pretrained(AutoPipelineForText2Image)
-        apply_scheduler(pipe)
-        pipe = pipe.to("cuda")
-    elif loader == "sdxl-lora":
-        lora = spec.get("lora") or {}
-        lora_repo = str(lora.get("repo") or "").strip()
-        lora_weight = str(lora.get("weight") or "").strip()
-        if not lora_repo or not lora_weight:
-            raise ValueError("sdxl-lora 需要 lora.repo 与 lora.weight")
-        pipe = from_pretrained(StableDiffusionXLPipeline)
-        apply_scheduler(pipe, default_type="euler")
-        from huggingface_hub import hf_hub_download
-
-        weight_path = hf_hub_download(lora_repo, lora_weight)
-        download_bytes += os.path.getsize(weight_path)
-        pipe.load_lora_weights(lora_repo, weight_name=lora_weight)
-        log(f"[load] LoRA 已挂载：{lora_repo}/{lora_weight}")
-        pipe = pipe.to("cuda")
-    elif loader == "flux2":
-        balanced = str(device_map or "balanced")
-        kwargs["device_map"] = balanced
-        log(f"[load] flux2 使用 device_map={balanced}")
-        pipe = from_pretrained(AutoPipelineForText2Image)
-    else:
-        raise ValueError(f"未知 loader：{loader}")
+    pipe = load_diffusers_pipeline(
+        spec,
+        on_lora_download=_on_lora_download,
+        log=log,
+        error_cls=RuntimeError,
+        request_error_cls=ValueError,
+    )
 
     load_seconds = round(time.time() - load_started, 1)
     download_gb = round(download_bytes / 2**30, 2)
@@ -230,8 +133,6 @@ def load_pipe(spec: dict):
 
 
 def sample(pipe, config: dict, sample_path: str) -> dict:
-    import inspect
-
     import torch
 
     size = int(config["size"])
@@ -240,32 +141,44 @@ def sample(pipe, config: dict, sample_path: str) -> dict:
     prompt = str(config["prompt"])
     negative = str(config.get("negativeHint") or "")
     seed = int(config.get("seed") or 42)
-    signature = set(inspect.signature(pipe.__call__).parameters)
+    signature = pipe_signature_params(pipe)
+    cfg_val = float(cfg) if cfg is not None else None
 
     runs = []
     peaks = []
     for index in range(SAMPLES):
         torch.cuda.reset_peak_memory_stats()
-        call_kwargs = {
+        raw_kwargs = {
             "prompt": prompt,
             "num_inference_steps": steps,
             "width": size,
             "height": size,
             "generator": torch.Generator("cuda").manual_seed(seed + index),
         }
-        if cfg is not None and "guidance_scale" in signature:
-            call_kwargs["guidance_scale"] = float(cfg)
-        if negative and "negative_prompt" in signature:
-            call_kwargs["negative_prompt"] = negative
+        if cfg_val is not None:
+            raw_kwargs["guidance_scale"] = cfg_val
+        call_kwargs = filter_call_kwargs(
+            raw_kwargs,
+            signature,
+            negative_prompt=negative,
+            cfg=cfg_val,
+        )
         started = time.time()
         image = pipe(**call_kwargs).images[0]
-        torch.cuda.synchronize()
-        runs.append(round(time.time() - started, 2))
-        peaks.append(round(torch.cuda.max_memory_allocated() / 2**20))
-        log(f"[sample] 第 {index + 1}/{SAMPLES} 张：{runs[-1]}s，峰值 {peaks[-1]} MB")
-        if index == 0:
-            image.save(sample_path)
-            image.close()
+        try:
+            torch.cuda.synchronize()
+            runs.append(round(time.time() - started, 2))
+            peaks.append(round(torch.cuda.max_memory_allocated() / 2**20))
+            log(f"[sample] 第 {index + 1}/{SAMPLES} 张：{runs[-1]}s，峰值 {peaks[-1]} MB")
+            if index == 0:
+                image.save(sample_path)
+        finally:
+            close_fn = getattr(image, "close", None)
+            if callable(close_fn):
+                try:
+                    close_fn()
+                except Exception:
+                    pass
 
     steady_pool = runs[1:] if len(runs) > 1 else runs
     steady_median = sorted(steady_pool)[len(steady_pool) // 2]

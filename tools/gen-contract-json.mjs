@@ -9,8 +9,7 @@
  *   node tools/gen-contract-json.mjs            # 生成/覆盖 remote/contract.json
  *   node tools/gen-contract-json.mjs --check    # 只比较不写盘；不一致时退出码 1（供 CI/测试复用）
  *
- * 输出约定：UTF-8、LF、2 空格缩进、末尾换行、键序稳定
- * （顶层固定 version→limits；limits 各项的子键按字典序排序）。
+ * 输出约定：UTF-8、LF、2 空格缩进、末尾换行、全部对象键按字典序递归排序以保证逐字节稳定。
  */
 
 import { readFile, writeFile } from 'node:fs/promises'
@@ -23,36 +22,23 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 
 export const CONTRACT_PATH = join(ROOT, 'remote', 'contract.json')
 
-/** 按 key 字典序排序，保证生成物逐字节稳定。 */
-function sortByKey(object) {
+/** 递归按 key 字典序排序，保证生成物逐字节稳定。 */
+function sortKeysDeep(value) {
+  if (Array.isArray(value)) return value.map(sortKeysDeep)
+  if (!value || typeof value !== 'object') return value
   return Object.fromEntries(
-    Object.entries(object).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+    Object.entries(value)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, item]) => [key, sortKeysDeep(item)]),
   )
 }
 
 /**
- * 生成 daemon 契约对象（只保留 daemon 需要的字段，键序固定）。
+ * 生成 daemon 契约对象（与 daemonContract() 结构完全一致，递归排序键序）。
  * @returns {object}
  */
 export function buildDaemonContractJson() {
-  const contract = daemonContract()
-  return {
-    version: contract.version,
-    limits: {
-      width: sortByKey(contract.limits.width),
-      height: sortByKey(contract.limits.height),
-      steps: sortByKey(contract.limits.steps),
-      cfg: sortByKey(contract.limits.cfg),
-      count: sortByKey(contract.limits.count),
-      seed: sortByKey(contract.limits.seed),
-      prompt: sortByKey(contract.limits.prompt),
-      negativePrompt: sortByKey(contract.limits.negativePrompt),
-      // 图生图（M3）：参考图体积/尺寸边界与重绘强度，daemon 依此校验请求。
-      reference: sortByKey(contract.limits.reference),
-      strength: sortByKey(contract.limits.strength),
-      historyTool: sortByKey(contract.limits.historyTool),
-    },
-  }
+  return sortKeysDeep(daemonContract())
 }
 
 /** 生成物全文（含末尾换行）。mock 与 check 都按这个文本比较。 */

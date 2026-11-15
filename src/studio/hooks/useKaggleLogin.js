@@ -207,16 +207,17 @@ export function useKaggleLogin({ t, ui, onDone } = {}) {
     }
     setCodeErrorKey('')
     if (busyRef.current) return false
+    const token = sessionRef.current
     markBusy(true)
     const result = await submitKaggleLoginCode(check.code)
-    if (!aliveRef.current) return false
+    if (!aliveRef.current || sessionRef.current !== token) return false
     markBusy(false)
     const view = loginViewOf(result)
     if (!view) {
-      failOnce(NETWORK_ERROR_KEY)
+      failFromResult(result, token)
       return false
     }
-    applyTerminalOrPending(view, sessionRef.current)
+    applyTerminalOrPending(view, token)
     return true
   }
 

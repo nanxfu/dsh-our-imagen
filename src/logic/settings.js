@@ -7,9 +7,16 @@
  */
 
 import { SETTINGS, TIMEOUTS } from '../../shared/contract.js'
+import {
+  isValidContainerPath,
+  isValidHfRepoId,
+  normalizeKaggleTransport,
+} from '../../shared/validation.js'
 
 import { clampInt } from './clamp.js'
 import { errorText } from './error.js'
+
+export { normalizeKaggleTransport }
 
 const IDLE = SETTINGS.idleTimeoutSec
 /** 自定义分钟输入的合法区间（由契约秒边界换算，向上/向下取整到整分钟）。 */
@@ -17,9 +24,6 @@ export const IDLE_MIN_MINUTES = Math.ceil(IDLE.min / 60)
 export const IDLE_MAX_MINUTES = Math.floor(IDLE.max / 60)
 /** 宿主没给 idleTimeoutSec 时的默认档位：与 TIMEOUTS.idleShutdownSec 保持一致。 */
 const DEFAULT_IDLE_SEC = clampInt(TIMEOUTS.idleShutdownSec, IDLE.min, IDLE.max, 1800)
-
-/** HuggingFace 模型 ID：owner/name 两段，不含空白或额外的斜杠。 */
-const REPO_ID_PATTERN = /^[^\s=/]+\/[^\s=/]+$/
 
 /** idleTimeoutSec → 整分钟（非法/缺失回落默认档，并钳制到契约区间）。 */
 export function idleMinutesOf(idleTimeoutSec) {
@@ -45,15 +49,6 @@ export function quickIdleMinutes(value) {
   const minutes = Number(value)
   if (!Number.isInteger(minutes)) return null
   return IDLE.quickMinutes.includes(minutes) ? minutes : null
-}
-
-/**
- * Kaggle 访问方式归一化：白名单来自契约 SETTINGS.kaggleTransports。
- * 未知值、旧宿主缺失字段一律回落 SETTINGS.defaultKaggleTransport（cli）——
- * 直连是试验特性，不能因为字段缺失就把用户切到直连。
- */
-export function normalizeKaggleTransport(value) {
-  return SETTINGS.kaggleTransports.includes(value) ? value : SETTINGS.defaultKaggleTransport
 }
 
 /** Kaggle 访问方式的展示名文案键（中英文案由字典提供）。 */
@@ -119,11 +114,11 @@ export function parseLocalModels(text, options = {}) {
     }
     const repo = line.slice(0, separator).trim()
     const path = line.slice(separator + 1).trim()
-    if (!REPO_ID_PATTERN.test(repo)) {
+    if (!isValidHfRepoId(repo)) {
       errors.push({ line: lineNumber, message: 'studio.settings.localModels.errorRepo' })
       continue
     }
-    if (!path.startsWith('/') || /\s/.test(path)) {
+    if (!isValidContainerPath(path, maxChars)) {
       errors.push({ line: lineNumber, message: 'studio.settings.localModels.errorPath' })
       continue
     }

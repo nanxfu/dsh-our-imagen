@@ -16,6 +16,8 @@
  */
 
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { Writable } from 'node:stream'
 
 import { httpText } from '../lib/net.js'
 
@@ -65,10 +67,34 @@ function fakeSubprocess(options = {}) {
       }
       assert.ok(Number.isFinite(spec.graceMs) && spec.graceMs > 0, 'graceMs 必须是正有限数')
       assert.equal(typeof spec.stdio, 'object', 'stdio 必须是对象')
-      calls.push(spec)
+
+      const stdinChunks = []
+      let headerConfig = null
+      const kIndex = spec.argv.indexOf('-K')
+      if (kIndex !== -1 && spec.argv[kIndex + 1] && spec.argv[kIndex + 1] !== '-') {
+        headerConfig = readFileSync(spec.argv[kIndex + 1], 'utf8')
+      }
+      const stdin =
+        spec.stdio?.stdin === 'pipe'
+          ? new Writable({
+              write(chunk, _encoding, cb) {
+                stdinChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
+                cb()
+              },
+            })
+          : null
+      const callRecord = {
+        ...spec,
+        headerConfig,
+        get stdinText() {
+          return Buffer.concat(stdinChunks).toString('utf8')
+        },
+      }
+      calls.push(callRecord)
 
       const body = `${stdout}\n__IMAGEN_HTTP_STATUS__:${String(status).padStart(3, '0')}`
       return {
+        stdin,
         done: Promise.resolve({ exitCode, signal: null }),
         collected: {
           stdout: { readFrom: () => ({ text: body, next: body.length, lossy: false }) },
@@ -84,7 +110,7 @@ function fakeSubprocess(options = {}) {
 const originalFetch = globalThis.fetch
 
 async function main() {
-  await check('fetch 失败时降级 curl，URL 对象被归一成字符串传给 argv', async () => {
+  await check('fetch 失败时降级 curl，URL 对象被归一成字符串传给 argv，敏感头走 stdin 不进 argv', async () => {
     globalThis.fetch = async () => {
       throw new TypeError('fetch failed')
     }
@@ -102,19 +128,21 @@ async function main() {
     assert.ok(spec.argv.every((value) => typeof value === 'string'), 'argv 全部是字符串')
     assert.equal(spec.cwd, process.cwd(), 'cwd 必须是字符串（缺省会抛 TypeError）')
     assert.equal(spec.argv.at(-1), 'https://example.test/health', 'URL 对象要转成字符串')
-    assert.ok(spec.argv.includes('-H'), '自定义请求头要透传')
-    assert.ok(spec.argv.includes('authorization: Bearer secret-token'), 'Bearer 头要透传')
+    assert.ok(!spec.argv.some((item) => item.includes('secret-token')), 'Authorization 头不能出现在 argv')
+    assert.ok(spec.argv.includes('-K') && spec.argv.includes('-'), '无 body 时头配置应走 -K -')
+    assert.equal(spec.stdio.stdin, 'pipe', '应通过 pipe 喂入 stdin')
+    assert.match(spec.stdinText, /header = "authorization: Bearer secret-token"/, 'Bearer 头要通过 stdin -K 透传')
     assert.ok(spec.argv.includes('--max-time') && spec.argv.includes('4'), '超时秒数要透传')
   })
 
-  await check('字符串 URL 与 POST 请求体同样可用，4xx 按失败返回状态码', async () => {
+  await check('字符串 URL 与 POST 请求体同样可用，body 走 stdin 且头不进 argv，4xx 按失败返回状态码', async () => {
     globalThis.fetch = async () => {
       throw new TypeError('fetch failed')
     }
     const fake = fakeSubprocess({ stdout: '{"error":{"code":"invalid_request"}}', status: 400 })
     const result = await httpText(fake.ctx, 'https://example.test/generate', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', authorization: 'Bearer post-secret' },
       body: '{"prompt":"x"}',
       timeoutMs: 15000,
     })
@@ -122,9 +150,13 @@ async function main() {
     assert.equal(result.ok, false)
     assert.equal(result.status, 400)
     assert.equal(result.text, '{"error":{"code":"invalid_request"}}')
-    assert.ok(fake.calls[0].argv.includes('--data-binary'), 'POST 请求体要透传')
-    assert.ok(fake.calls[0].argv.includes('{"prompt":"x"}'), '请求体内容要透传')
-    assert.ok(fake.calls[0].argv.includes('15'), '超时秒数四舍五入取整')
+    const spec = fake.calls[0]
+    assert.ok(spec.argv.includes('--data-binary') && spec.argv.includes('@-'), 'POST 请求体应走 --data-binary @-')
+    assert.ok(!spec.argv.some((item) => item.includes('{"prompt":"x"}')), '请求体不能出现在 argv')
+    assert.ok(!spec.argv.some((item) => item.includes('post-secret')), 'Authorization 头不能出现在 argv')
+    assert.equal(spec.stdinText, '{"prompt":"x"}', '请求体内容要通过 stdin 透传')
+    assert.match(spec.headerConfig ?? '', /header = "authorization: Bearer post-secret"/, '敏感头写入 0600 -K 文件')
+    assert.ok(spec.argv.includes('15'), '超时秒数四舍五入取整')
   })
 
   await check('fetch 成功时不再启动 curl', async () => {

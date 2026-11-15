@@ -26,10 +26,37 @@ export function Filmstrip(props) {
   const { batches, selected, selectImage } = library
 
   const selectedPath = selected && selected.image ? selected.image.path : ''
+  const stripRef = React.useRef(null)
+  const rollRef = React.useRef(null)
+
+  // 底部作品条是横向滚动容器：桌面鼠标滚轮默认只有纵向 deltaY，这里转为横向 scrollLeft；
+  // 触控板自带横向 deltaX（或系统 Shift+滚轮已转成 deltaX）时交还浏览器原生滚动。
+  React.useEffect(() => {
+    const strip = stripRef.current
+    const roll = rollRef.current
+    if (!strip || !roll || typeof strip.addEventListener !== 'function') return undefined
+
+    function onWheel(event) {
+      if (roll.scrollWidth <= roll.clientWidth) return
+      const deltaX = Number(event.deltaX) || 0
+      const deltaY = Number(event.deltaY) || 0
+      if (!deltaY || Math.abs(deltaX) > Math.abs(deltaY)) return
+      const unit = event.deltaMode === 1 ? 32 : (event.deltaMode === 2 ? roll.clientWidth : 1)
+      roll.scrollLeft += deltaY * unit
+      if (event.preventDefault) event.preventDefault()
+    }
+
+    strip.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      if (typeof strip.removeEventListener === 'function') {
+        strip.removeEventListener('wheel', onWheel)
+      }
+    }
+  }, [])
 
   return (
-    <footer className="ofs-filmstrip">
-      <div className="ofs-roll">
+    <footer className="ofs-filmstrip" ref={stripRef}>
+      <div className="ofs-roll" ref={rollRef}>
         {pendingJobs.map((job, index) => {
           const queued = job.status === 'queued'
           const cancelling = isJobCancelling(job, cancellingIds)

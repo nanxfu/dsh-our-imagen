@@ -18,10 +18,10 @@
   "size": 1024,
   "steps": 30,
   "stepRange": {
-    "min": 20,
+    "min": 24,
     "max": 45,
     "step": 1,
-    "fast": 22,
+    "fast": 25,
     "balanced": 30,
     "fine": 40
   },
@@ -42,7 +42,7 @@
     "base": "SG161222/RealVisXL_V5.0",
     "lora": null,
     "scheduler": {
-      "type": "dpmpp-sde-karras"
+      "type": "dpmpp-2m-sde-karras"
     },
     "variant": "fp16",
     "downloadGb": 6.6,

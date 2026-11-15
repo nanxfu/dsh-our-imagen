@@ -27,6 +27,7 @@ import { VERSION } from '../shared/contract.js'
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const DAEMON_SOURCE = join(ROOT, 'remote', 'daemon.py')
 const ANIMA_RUNTIME_SOURCE = join(ROOT, 'remote', 'anima_runtime.py')
+const PIPELINE_LOADER_SOURCE = join(ROOT, 'remote', 'pipeline_loader.py')
 
 const results = []
 async function check(name, fn) {
@@ -186,14 +187,19 @@ async function main() {
 
       // 注入只改一行、内联只替换标记行：其余内容必须与 remote/daemon.py 逐字一致。
       const runtimeSource = await readFile(ANIMA_RUNTIME_SOURCE, 'utf8')
-      const markerLineRe = /^[ \t]*from anima_runtime import [^\n]*#\s*@@INLINE:anima_runtime\.py@@[ \t]*$/m
-      assert.match(daemonSource, markerLineRe, 'remote/daemon.py 缺少 anima_runtime 内联标记行')
-      const expectedSource = daemonSource.replace(markerLineRe, () => runtimeSource.trimEnd())
+      const loaderSource = await readFile(PIPELINE_LOADER_SOURCE, 'utf8')
+      const runtimeMarkerRe = /^[ \t]*from anima_runtime import [^\n]*#\s*@@INLINE:anima_runtime\.py@@[ \t]*$/m
+      const loaderMarkerRe = /^[ \t]*from pipeline_loader import [^\n]*#\s*@@INLINE:pipeline_loader\.py@@[ \t]*$/m
+      assert.match(daemonSource, runtimeMarkerRe, 'remote/daemon.py 缺少 anima_runtime 内联标记行')
+      assert.match(daemonSource, loaderMarkerRe, 'remote/daemon.py 缺少 pipeline_loader 内联标记行')
+      const expectedSource = daemonSource
+        .replace(runtimeMarkerRe, () => runtimeSource.trimEnd())
+        .replace(loaderMarkerRe, () => loaderSource.trimEnd())
       assert.equal(stripInjectedConfig(patched), expectedSource)
       assert.equal(patched.match(/^VERSION = "([^"]+)"$/m)?.[1], VERSION)
     })
 
-    await check('打包产物自包含：anima 运行时只内联一份、无残留标记', async () => {
+    await check('打包产物自包含：anima 运行时与 pipeline_loader 只内联一份、无残留标记', async () => {
       const folder = await buildKernelFolder({
         username: 'tester',
         slug: 'a1b2c3d4',
@@ -203,25 +209,38 @@ async function main() {
       cleanup(folder.dir)
       const patched = await readFile(join(folder.dir, 'daemon.py'), 'utf8')
       assert.doesNotMatch(patched, /^[ \t]*from anima_runtime import /m, '仍有未解析的 anima_runtime import 行')
+      assert.doesNotMatch(patched, /^[ \t]*from pipeline_loader import /m, '仍有未解析的 pipeline_loader import 行')
       assert.equal(hasInlineMarkerLine(patched), false, '仍有未处理的 @@INLINE 标记')
       assert.equal(patched.match(/^def _anima_toolkit\(/gm)?.length, 1, '_anima_toolkit 应恰好一份')
       assert.equal(patched.match(/^def load_anima_runtime\(/gm)?.length, 1, 'load_anima_runtime 应恰好一份')
+      assert.equal(patched.match(/^def load_diffusers_pipeline\(/gm)?.length, 1, 'load_diffusers_pipeline 应恰好一份')
       const runtimeSource = await readFile(ANIMA_RUNTIME_SOURCE, 'utf8')
+      const loaderSource = await readFile(PIPELINE_LOADER_SOURCE, 'utf8')
       assert.ok(patched.includes(runtimeSource.trimEnd()), '产物未包含 remote/anima_runtime.py 全文')
+      assert.ok(patched.includes(loaderSource.trimEnd()), '产物未包含 remote/pipeline_loader.py 全文')
       assertPythonSyntax(join(folder.dir, 'daemon.py'))
       // 隔离目录内 import：产物不依赖 remote/ 目录，证明是真的单文件自包含。
-      assertPythonImports(join(folder.dir, 'daemon.py'), ['load_anima_runtime', 'build_pipeline', 'main'])
+      assertPythonImports(join(folder.dir, 'daemon.py'), [
+        'load_anima_runtime',
+        'load_diffusers_pipeline',
+        'build_pipeline',
+        'main',
+      ])
     })
 
-    await check('源文件保持单份真源：daemon.py 不再复制 anima 运行时', async () => {
-      assert.equal(daemonSource.match(/@@INLINE:/g)?.length, 1, 'remote/daemon.py 应只有一处内联标记')
+    await check('源文件保持单份真源：daemon.py 不再复制 anima 运行时与 pipeline_loader', async () => {
+      assert.equal(daemonSource.match(/@@INLINE:/g)?.length, 2, 'remote/daemon.py 应有两处内联标记')
       assert.doesNotMatch(daemonSource, /^def _anima_toolkit\(/m)
       assert.doesNotMatch(daemonSource, /^def load_anima_runtime\(/m)
+      assert.doesNotMatch(daemonSource, /^def load_diffusers_pipeline\(/m)
       const runtimeSource = await readFile(ANIMA_RUNTIME_SOURCE, 'utf8')
+      const loaderSource = await readFile(PIPELINE_LOADER_SOURCE, 'utf8')
       assert.match(runtimeSource, /^def _anima_toolkit\(/m)
       assert.match(runtimeSource, /^def load_anima_runtime\(/m)
       assert.match(runtimeSource, /^import os$/m)
       assert.match(runtimeSource, /^import time$/m)
+      assert.match(loaderSource, /^def load_diffusers_pipeline\(/m)
+      assert.match(loaderSource, /^def filter_call_kwargs\(/m)
     })
 
     await check('内联标记指向缺失模块时给出可读错误', async () => {

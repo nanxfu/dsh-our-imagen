@@ -59,7 +59,8 @@ export function presetNeedsEnglish(preset) {
   return true
 }
 
-function hintOf(preset) {
+/** 当前预设推荐的负向词；没有则空串。 */
+export function hintOf(preset) {
   return preset && typeof preset.negativeHint === 'string' ? preset.negativeHint.trim() : ''
 }
 

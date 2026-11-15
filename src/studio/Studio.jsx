@@ -31,6 +31,11 @@ import { useStudioLogs } from './hooks/useStudioLogs.js'
 import { useCompletionNotice } from './hooks/useStudioUi.js'
 import { useStudio } from './useStudio.js'
 
+/** 静态样式节点：1Hz 走字刷新时不重复比对整段 CSS 文本。 */
+const StudioStyles = React.memo(function StudioStyles() {
+  return <style>{CSS}</style>
+})
+
 export function Studio(props) {
   const { t, isEn, ui, compute, form, chat, library, guidance, actions } = useStudio(props)
   const status = compute.status
@@ -55,7 +60,7 @@ export function Studio(props) {
 
   return (
     <div className="ofs-root">
-      <style>{CSS}</style>
+      <StudioStyles />
 
       <div className="ofs-app">
         <TopBar t={t} isEn={isEn} ui={ui} compute={compute} form={form} library={library} defaultModelOpen={props.defaultModelOpen} />
@@ -74,7 +79,7 @@ export function Studio(props) {
               <Gallery
                 t={t}
                 gallery={library.gallery}
-                now={Date.now()}
+                now={now}
                 presets={compute.presets}
                 favorites={library.favorites}
                 hasMore={library.hasMore}
@@ -96,7 +101,7 @@ export function Studio(props) {
               <>
                 {/* 窄屏胶片条收起后，这里补一个只读的排队状态入口；宽屏由 CSS 隐藏。 */}
                 <QueuePill t={t} compute={compute} />
-                <Stage t={t} ui={ui} compute={compute} form={form} library={library} actions={actions} />
+                <Stage t={t} ui={ui} compute={compute} form={form} library={library} actions={actions} now={now} />
               </>
             )}
           </div>

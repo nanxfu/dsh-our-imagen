@@ -19,10 +19,10 @@ import { clampSize } from '../logic/clamp.js'
 /** 画面比例 → 像素（按比例算出的近似值，使用前再钳到契约边界）。 */
 const RATIO_SPECS = {
   '1:1': { width: 1024, height: 1024 },
-  '16:9': { width: 1152, height: 648 },
-  '9:16': { width: 648, height: 1152 },
-  '4:3': { width: 1024, height: 768 },
-  '3:4': { width: 768, height: 1024 },
+  '16:9': { width: 1280, height: 720 },
+  '9:16': { width: 720, height: 1280 },
+  '4:3': { width: 1152, height: 864 },
+  '3:4': { width: 864, height: 1152 },
 }
 
 export const DEFAULT_RATIOS = RATIO_IDS

@@ -654,7 +654,14 @@ def load_anima_runtime(spec, log=print, dir_bytes=None, local_paths=None):
         raise ValueError("anima 需要 pipeline.textEncoder.repo 与 textEncoder.weight")
     vae_spec = spec.get("vae") or {}
     vae_repo = str(vae_spec.get("repo") or "").strip()
-    vae_subfolder = str(vae_spec.get("subfolder") or "").strip().strip("/")
+    raw_vae_subfolder = str(vae_spec.get("subfolder") or "").strip()
+    if raw_vae_subfolder and (
+        os.path.isabs(raw_vae_subfolder)
+        or "\\" in raw_vae_subfolder
+        or any(part in ("", ".", "..") for part in raw_vae_subfolder.strip("/").split("/"))
+    ):
+        raise ValueError(f"anima pipeline.vae.subfolder 非法：{raw_vae_subfolder}")
+    vae_subfolder = raw_vae_subfolder.strip("/")
     if not vae_repo:
         raise ValueError("anima 需要 pipeline.vae.repo")
     tokenizer_spec = spec.get("tokenizers") or {}
@@ -1114,6 +1121,12 @@ def load_anima_runtime(spec, log=print, dir_bytes=None, local_paths=None):
             log(f"[anima] 解码完成：{round(time.time() - decode_started, 1)}s")
 
             if self.dit_dtype == torch.float16 and self._looks_flat(image):
+                close_fn = getattr(image, "close", None)
+                if callable(close_fn):
+                    try:
+                        close_fn()
+                    except Exception:
+                        pass
                 log("[anima] WARN fp16 出图近似纯色，切 bf16 重跑当前这张（会明显变慢）")
                 self._switch_dtype(torch.bfloat16)
                 if generator is not None and seed is not None:

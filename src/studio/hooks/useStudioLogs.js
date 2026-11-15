@@ -65,6 +65,7 @@ export function useStudioLogs(open) {
     if (!open) return undefined
     let alive = true
     let timer = null
+    let inFlight = false
 
     linesRef.current = []
     hostLinesRef.current = []
@@ -76,42 +77,66 @@ export function useStudioLogs(open) {
     setEnv({})
     setStatus('loading')
 
+    const clear = () => {
+      if (timer !== null) {
+        clearTimeout(timer)
+        timer = null
+      }
+    }
+
     const tick = async () => {
       timer = null
-      const result = await fetchLogs(sinceRef.current)
-      if (!alive) return
-      const payload = readLogsPayload(result)
-      if (payload.next !== null) sinceRef.current = payload.next
-      const merged = appendLogLines(linesRef.current, payload.lines)
-      if (merged !== linesRef.current) {
-        linesRef.current = merged
-        setLines(merged)
-      }
-      // hostLines 是固定长度的尾部快照：每次都用最新响应整体替换，内容没变就不重渲染。
-      if (!sameLines(hostLinesRef.current, payload.hostLines)) {
-        hostLinesRef.current = payload.hostLines
-        setHostLines(payload.hostLines)
-      }
-      // 环境指纹同理：只有内容（含阶段耗时）变化才更新状态。
-      if (!sameEnv(envRef.current, payload.env)) {
-        envRef.current = payload.env
-        setEnv(payload.env)
-      }
-      if (payload.ok) {
-        setStatus(merged.length === 0 ? 'empty' : 'ready')
-        setReason(null)
-      } else {
-        setStatus('unavailable')
-        setReason(payload.reason)
+      if (!alive || document.hidden || inFlight) return
+      inFlight = true
+      try {
+        const result = await fetchLogs(sinceRef.current)
+        if (!alive) return
+        const payload = readLogsPayload(result)
+        if (payload.next !== null) sinceRef.current = payload.next
+        const merged = appendLogLines(linesRef.current, payload.lines)
+        if (merged !== linesRef.current) {
+          linesRef.current = merged
+          setLines(merged)
+        }
+        // hostLines 是固定长度的尾部快照：每次都用最新响应整体替换，内容没变就不重渲染。
+        if (!sameLines(hostLinesRef.current, payload.hostLines)) {
+          hostLinesRef.current = payload.hostLines
+          setHostLines(payload.hostLines)
+        }
+        // 环境指纹同理：只有内容（含阶段耗时）变化才更新状态。
+        if (!sameEnv(envRef.current, payload.env)) {
+          envRef.current = payload.env
+          setEnv(payload.env)
+        }
+        if (payload.ok) {
+          setStatus(merged.length === 0 ? 'empty' : 'ready')
+          setReason(null)
+        } else {
+          setStatus('unavailable')
+          setReason(payload.reason)
+        }
+      } finally {
+        inFlight = false
       }
       // 单次请求可能已经用满超时；这里固定间隔，失败时也继续重试（隧道恢复后自动续上）。
-      timer = setTimeout(tick, TIMEOUTS.clientLogsPollMs)
+      if (alive && !document.hidden) timer = setTimeout(tick, TIMEOUTS.clientLogsPollMs)
+    }
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        clear()
+        return
+      }
+      clear()
+      tick()
     }
 
     tick()
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
       alive = false
-      if (timer !== null) clearTimeout(timer)
+      clear()
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [open])
 
@@ -126,7 +151,10 @@ export function useHostSnapshot(enabled) {
   const [snapshot, setSnapshot] = React.useState(null)
 
   React.useEffect(() => {
-    if (!enabled) return undefined
+    if (!enabled) {
+      setSnapshot(null)
+      return undefined
+    }
     let alive = true
     fetchState().then((result) => {
       if (!alive) return

@@ -50,6 +50,14 @@ var PHASE_STATE = {
   tunnel: "connecting",
   warm: "warming"
 };
+var INSPIRE_KEYS = [
+  "studio.inspire.1",
+  "studio.inspire.2",
+  "studio.inspire.3",
+  "studio.inspire.4",
+  "studio.inspire.5"
+];
+var COUNT_OPTIONS = [1, 2, 3, 4];
 
 // src/dict/zh.js
 var zh = {
@@ -1186,7 +1194,7 @@ function jobColor(status) {
 }
 
 // shared/models.generated.js
-var PRESETS = [
+var PUBLIC_PRESETS = [
   {
     "id": "sdxl-lightning",
     "label": "SDXL Lightning",
@@ -1221,29 +1229,7 @@ var PRESETS = [
       768,
       1024,
       1152
-    ],
-    "pipeline": {
-      "loader": "sdxl-lora",
-      "base": "stabilityai/stable-diffusion-xl-base-1.0",
-      "lora": {
-        "repo": "ByteDance/SDXL-Lightning",
-        "weight": "sdxl_lightning_4step_lora.safetensors"
-      },
-      "scheduler": {
-        "type": "euler",
-        "timestepSpacing": "trailing"
-      },
-      "variant": "fp16",
-      "downloadGb": 6.78,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "**/*.fp16.safetensors"
-      ],
-      "deviceMap": null
-    }
+    ]
   },
   {
     "id": "hyper-sdxl-8step",
@@ -1278,29 +1264,7 @@ var PRESETS = [
     "sizeOptions": [
       768,
       1024
-    ],
-    "pipeline": {
-      "loader": "sdxl-lora",
-      "base": "stabilityai/stable-diffusion-xl-base-1.0",
-      "lora": {
-        "repo": "ByteDance/Hyper-SD",
-        "weight": "Hyper-SDXL-8steps-lora.safetensors"
-      },
-      "scheduler": {
-        "type": "euler",
-        "timestepSpacing": "trailing"
-      },
-      "variant": "fp16",
-      "downloadGb": 6.78,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "**/*.fp16.safetensors"
-      ],
-      "deviceMap": null
-    }
+    ]
   },
   {
     "id": "sdxl-turbo",
@@ -1336,23 +1300,7 @@ var PRESETS = [
       512,
       768,
       1024
-    ],
-    "pipeline": {
-      "loader": "sdxl",
-      "base": "stabilityai/sdxl-turbo",
-      "lora": null,
-      "scheduler": null,
-      "variant": "fp16",
-      "downloadGb": 6.62,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "**/*.fp16.safetensors"
-      ],
-      "deviceMap": null
-    }
+    ]
   },
   {
     "id": "playground-v2.5",
@@ -1394,26 +1342,7 @@ var PRESETS = [
     "sizeOptions": [
       768,
       1024
-    ],
-    "pipeline": {
-      "loader": "sdxl",
-      "base": "playgroundai/playground-v2.5-1024px-aesthetic",
-      "lora": null,
-      "scheduler": null,
-      "variant": "fp16",
-      "downloadGb": 6.6,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "unet/*.fp16.safetensors",
-        "text_encoder/model.fp16.safetensors",
-        "text_encoder_2/model.fp16.safetensors",
-        "vae/*.fp16.safetensors"
-      ],
-      "deviceMap": null
-    }
+    ]
   },
   {
     "id": "sdxl-base",
@@ -1456,23 +1385,7 @@ var PRESETS = [
       768,
       1024,
       1152
-    ],
-    "pipeline": {
-      "loader": "sdxl",
-      "base": "stabilityai/stable-diffusion-xl-base-1.0",
-      "lora": null,
-      "scheduler": null,
-      "variant": "fp16",
-      "downloadGb": 6.78,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "**/*.fp16.safetensors"
-      ],
-      "deviceMap": null
-    }
+    ]
   },
   {
     "id": "realvis-v5",
@@ -1493,10 +1406,10 @@ var PRESETS = [
     "size": 1024,
     "steps": 30,
     "stepRange": {
-      "min": 20,
+      "min": 24,
       "max": 45,
       "step": 1,
-      "fast": 22,
+      "fast": 25,
       "balanced": 30,
       "fine": 40
     },
@@ -1514,28 +1427,7 @@ var PRESETS = [
     "sizeOptions": [
       768,
       1024
-    ],
-    "pipeline": {
-      "loader": "sdxl",
-      "base": "SG161222/RealVisXL_V5.0",
-      "lora": null,
-      "scheduler": {
-        "type": "dpmpp-sde-karras"
-      },
-      "variant": "fp16",
-      "downloadGb": 6.6,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "unet/*.fp16.safetensors",
-        "text_encoder/model.fp16.safetensors",
-        "text_encoder_2/model.fp16.safetensors",
-        "vae/*.fp16.safetensors"
-      ],
-      "deviceMap": null
-    }
+    ]
   },
   {
     "id": "flux2-klein-4b",
@@ -1570,17 +1462,7 @@ var PRESETS = [
     "sizeOptions": [
       768,
       1024
-    ],
-    "pipeline": {
-      "loader": "flux2",
-      "base": "black-forest-labs/FLUX.2-klein-4B",
-      "lora": null,
-      "scheduler": null,
-      "variant": "fp16",
-      "downloadGb": 15.2,
-      "allowPatterns": null,
-      "deviceMap": "balanced"
-    }
+    ]
   },
   {
     "id": "animagine-xl-3.1",
@@ -1622,26 +1504,7 @@ var PRESETS = [
     "sizeOptions": [
       768,
       1024
-    ],
-    "pipeline": {
-      "loader": "sdxl",
-      "base": "cagliostrolab/animagine-xl-3.1",
-      "lora": null,
-      "scheduler": null,
-      "variant": null,
-      "downloadGb": 6.5,
-      "allowPatterns": [
-        "model_index.json",
-        "**/config.json",
-        "**/*.json",
-        "**/*.txt",
-        "unet/*.safetensors",
-        "text_encoder/model.safetensors",
-        "text_encoder_2/model.safetensors",
-        "vae/*.safetensors"
-      ],
-      "deviceMap": null
-    }
+    ]
   },
   {
     "id": "anima-light-lavender",
@@ -1684,32 +1547,7 @@ var PRESETS = [
       768,
       1024,
       1152
-    ],
-    "pipeline": {
-      "loader": "anima",
-      "base": "Johnny-Z/Anima-Light-Lavender",
-      "weight": "anima-light-lavender.safetensors",
-      "textEncoder": {
-        "repo": "circlestone-labs/Anima",
-        "weight": "split_files/text_encoders/qwen_3_06b_base.safetensors"
-      },
-      "vae": {
-        "repo": "Qwen/Qwen-Image",
-        "subfolder": "vae"
-      },
-      "tokenizers": {
-        "repo": "hugging-apps/anima-light-lavender-demo",
-        "repoType": "space"
-      },
-      "dtype": "auto",
-      "shift": 3,
-      "downloadGb": 5.6,
-      "allowPatterns": null,
-      "deviceMap": null,
-      "variant": null,
-      "lora": null,
-      "scheduler": null
-    }
+    ]
   }
 ];
 
@@ -1896,6 +1734,9 @@ var DIAGNOSTICS = {
   timingFields: ["sessionStartMs", "sessionUptimeMs", "readyUptimeMs"]
 };
 var DEFAULT_PRESET = "sdxl-lightning";
+function publicPresets() {
+  return PUBLIC_PRESETS.map((preset) => ({ ...preset }));
+}
 
 // src/logic/jobs.js
 function stateJobs(state) {
@@ -2256,62 +2097,94 @@ function submitKaggleLoginCode(code) {
 }
 
 // src/hooks/useHostState.js
-function useHostState() {
-  const [state, setState] = import_react.default.useState(null);
-  const [error, setError] = import_react.default.useState(null);
-  const aliveRef = import_react.default.useRef(false);
-  const refreshRef = import_react.default.useRef(() => {
-  });
-  import_react.default.useEffect(() => {
-    aliveRef.current = true;
-    let timer = null;
-    const clear = () => {
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
-      }
-    };
-    const tick = async () => {
-      timer = null;
-      if (document.hidden) return;
-      const result = await fetchState();
-      if (!aliveRef.current) return;
-      let delay = TIMEOUTS.clientStatePollMs;
-      if (result.ok && result.data && typeof result.data === "object") {
-        setState(result.data);
-        setError(null);
-        delay = activeJobOf(result.data) ? TIMEOUTS.clientStateActivePollMs : TIMEOUTS.clientStatePollMs;
-      } else {
-        setError({ code: result.code, message: result.message });
-      }
-      timer = setTimeout(tick, delay);
-    };
-    const onVisible = () => {
-      if (document.hidden) {
-        clear();
-        return;
-      }
-      clear();
-      tick();
-    };
-    refreshRef.current = () => {
-      clear();
-      tick();
-    };
-    tick();
+var EMPTY_SNAPSHOT = { state: null, error: null };
+var snapshot = EMPTY_SNAPSHOT;
+var subscribers = /* @__PURE__ */ new Set();
+var timer = null;
+var generation = 0;
+var inFlight = false;
+var listeningVisibility = false;
+function clearTimer() {
+  if (timer !== null) {
+    clearTimeout(timer);
+    timer = null;
+  }
+}
+function notify() {
+  for (const listener of [...subscribers]) listener(snapshot);
+}
+async function tick() {
+  timer = null;
+  if (subscribers.size === 0 || document.hidden || inFlight) return;
+  inFlight = true;
+  const myGen = generation;
+  let result;
+  try {
+    result = await fetchState();
+  } finally {
+    if (myGen === generation) inFlight = false;
+  }
+  if (subscribers.size === 0 || myGen !== generation) return;
+  let delay = TIMEOUTS.clientStatePollMs;
+  if (result.ok && result.data && typeof result.data === "object") {
+    snapshot = { state: result.data, error: null };
+    delay = activeJobOf(result.data) ? TIMEOUTS.clientStateActivePollMs : TIMEOUTS.clientStatePollMs;
+  } else {
+    snapshot = { state: snapshot.state, error: { code: result.code, message: result.message } };
+  }
+  notify();
+  if (subscribers.size > 0 && myGen === generation && !document.hidden) {
+    timer = setTimeout(tick, delay);
+  }
+}
+function onVisible() {
+  if (document.hidden) {
+    clearTimer();
+    return;
+  }
+  clearTimer();
+  tick();
+}
+function refresh() {
+  if (subscribers.size === 0) return;
+  generation += 1;
+  inFlight = false;
+  clearTimer();
+  tick();
+}
+function subscribe(listener) {
+  const first = subscribers.size === 0;
+  subscribers.add(listener);
+  if (!first) return;
+  if (!listeningVisibility) {
     document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      aliveRef.current = false;
-      clear();
-      refreshRef.current = () => {
-      };
-      document.removeEventListener("visibilitychange", onVisible);
-    };
+    listeningVisibility = true;
+  }
+  tick();
+}
+function unsubscribe(listener) {
+  subscribers.delete(listener);
+  if (subscribers.size > 0) return;
+  resetHostStateStore();
+}
+function resetHostStateStore() {
+  clearTimer();
+  generation += 1;
+  inFlight = false;
+  if (listeningVisibility) {
+    document.removeEventListener("visibilitychange", onVisible);
+    listeningVisibility = false;
+  }
+  snapshot = EMPTY_SNAPSHOT;
+}
+function useHostState() {
+  const [current, setCurrent] = import_react.default.useState(() => snapshot);
+  import_react.default.useEffect(() => {
+    subscribe(setCurrent);
+    setCurrent(snapshot);
+    return () => unsubscribe(setCurrent);
   }, []);
-  const refresh = import_react.default.useCallback(() => {
-    refreshRef.current();
-  }, []);
-  return { state, error, refresh };
+  return { state: current.state, error: current.error, refresh };
 }
 
 // src/components/StatusChip.js
@@ -2338,7 +2211,7 @@ function StatusChip(props) {
 }
 
 // src/studio/Studio.jsx
-var import_react23 = __toESM(require("react"), 1);
+var import_react24 = __toESM(require("react"), 1);
 
 // src/styles/tokens.css
 var tokens_default = '/*\n * 设计变量：黑白灰工作室。\n *\n * 视觉立场：一间明度分层的工作室，而不是一块彩色 AI 画布。\n *  1. 地面是中性灰的柔光渐变，上面浮近白的实心卡片；不用彩色光晕，不用玻璃彩虹。\n *  2. 只有明度关系：墨黑做主操作与选中，灰阶做层级，语义色（成功/警告/错误）\n *     只以小圆点或窄条出现，不参与大面积装饰。\n *  3. 深色是同一套明度关系反相：深灰底、浅灰字、浅色主操作。\n *\n * 预览工具（tools/preview.mjs）用同一组值注入深色，改这里要同步那边。\n */\n\n.ofs-root {\n  /* 地面：三层中性柔光 + 一层底色 */\n  --ofs-ground-1: #e7e8ea;\n  --ofs-ground-2: #f1f1f2;\n  --ofs-ground-3: #e3e4e6;\n  --ofs-ground-base: #f5f5f6;\n\n  /* 表面 */\n  --ofs-window: rgb(255 255 255 / 86%);\n  --ofs-window-border: rgb(18 18 22 / 8%);\n  --ofs-card: #ffffff;\n  --ofs-card-solid: #ffffff;\n  --ofs-card-border: rgb(18 18 22 / 9%);\n  --ofs-hairline: rgb(18 18 22 / 7%);\n  --ofs-sunken: #f4f4f6;\n  --ofs-sunken-border: rgb(18 18 22 / 8%);\n\n  /* 文字 */\n  --ofs-ink: #141416;\n  --ofs-ink-2: #52525a;\n  --ofs-ink-3: #6b6b73;\n  --ofs-ink-4: #a8a8b0;\n\n  /* 主操作：墨黑 */\n  --ofs-accent: #141416;\n  --ofs-accent-2: #3f3f46;\n  --ofs-accent-ink: #ffffff;\n  --ofs-accent-soft: #f0f0f2;\n  --ofs-accent-soft-border: #dedee3;\n  --ofs-accent-grad: linear-gradient(180deg, #2b2b30 0%, #141416 100%);\n\n  /* 状态：只做小面积语义色 */\n  --ofs-ok: #2f8a5c;\n  --ofs-ok-soft: #eaf5ef;\n  --ofs-warn: #a96a18;\n  --ofs-warn-soft: #f7f0e4;\n  --ofs-error: #c04444;\n  --ofs-error-soft: #f9ecec;\n  --ofs-idle: #a0a0a8;\n  --ofs-idle-soft: #f1f1f3;\n\n  /* 光桌与相纸：舞台是一张下凹的光桌，出图是一张落在桌上的相纸。\n     这是界面里唯一带实物感的表面，其余控件都保持扁平卡片。 */\n  --ofs-mat: #f0f0f2;\n  --ofs-mat-lit: rgb(255 255 255 / 92%);\n  --ofs-mat-inner: inset 0 1px 3px rgb(16 16 20 / 6%);\n  --ofs-print-paper: #ffffff;\n  --ofs-print-edge: rgb(18 18 22 / 10%);\n  --ofs-print-shadow: 0 20px 40px -24px rgb(16 16 20 / 42%), 0 4px 10px -6px rgb(16 16 20 / 18%);\n  --ofs-print-shadow-hover: 0 26px 50px -24px rgb(16 16 20 / 46%), 0 6px 14px -6px rgb(16 16 20 / 20%);\n  --ofs-mark: rgb(18 18 22 / 26%);\n\n  /* 几何 */\n  --ofs-r-xl: 24px;\n  --ofs-r-lg: 18px;\n  --ofs-r-md: 14px;\n  --ofs-r-sm: 10px;\n  --ofs-r-pill: 999px;\n  --ofs-blur: 18px;\n\n  /* 投影：始终带偏移与柔和扩散，不用零偏移光晕 */\n  --ofs-shadow-card: 0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%);\n  --ofs-shadow-lift: 0 2px 6px rgb(16 16 20 / 6%), 0 18px 40px -20px rgb(16 16 20 / 26%);\n  --ofs-shadow-window: 0 1px 3px rgb(16 16 20 / 5%), 0 36px 80px -48px rgb(16 16 20 / 32%);\n  --ofs-shadow-accent: 0 8px 18px -10px rgb(16 16 20 / 48%);\n  --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(20 20 22 / 45%);\n\n  --ofs-font: -apple-system, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;\n\n  /* 留白节奏 */\n  --ofs-pad: 18px;\n  --ofs-gap: 14px;\n\n  display: flex;\n  flex-direction: column;\n  height: 100%;\n  min-height: 0;\n  padding: 18px;\n  color: var(--ofs-ink);\n  font-family: var(--ofs-font);\n  font-size: 13px;\n  line-height: 1.55;\n  -webkit-font-smoothing: antialiased;\n  background:\n    radial-gradient(1100px 620px at 12% -8%, var(--ofs-ground-1) 0%, transparent 62%),\n    radial-gradient(900px 520px at 88% 4%, var(--ofs-ground-2) 0%, transparent 58%),\n    radial-gradient(780px 540px at 62% 108%, var(--ofs-ground-3) 0%, transparent 62%),\n    linear-gradient(160deg, var(--ofs-ground-base) 0%, var(--ofs-ground-base) 100%);\n}\n\n@media (prefers-color-scheme: dark) {\n  .ofs-root {\n    --ofs-ground-1: #232326;\n    --ofs-ground-2: #17171a;\n    --ofs-ground-3: #26262a;\n    --ofs-ground-base: #101012;\n\n    --ofs-window: rgb(24 24 27 / 88%);\n    --ofs-window-border: rgb(255 255 255 / 9%);\n    --ofs-card: #18181b;\n    --ofs-card-solid: #1c1c20;\n    --ofs-card-border: rgb(255 255 255 / 9%);\n    --ofs-hairline: rgb(255 255 255 / 8%);\n    --ofs-sunken: rgb(255 255 255 / 5%);\n    --ofs-sunken-border: rgb(255 255 255 / 9%);\n\n    --ofs-ink: #f2f2f4;\n    --ofs-ink-2: #a4a4ac;\n    --ofs-ink-3: #8d8d95;\n    --ofs-ink-4: #5c5c63;\n\n    --ofs-accent: #f2f2f4;\n    --ofs-accent-2: #c8c8cf;\n    --ofs-accent-ink: #161618;\n    --ofs-accent-soft: rgb(255 255 255 / 8%);\n    --ofs-accent-soft-border: rgb(255 255 255 / 14%);\n    --ofs-accent-grad: linear-gradient(180deg, #fafafa 0%, #dcdce1 100%);\n\n    --ofs-ok: #58c08a;\n    --ofs-ok-soft: rgb(88 192 138 / 14%);\n    --ofs-warn: #d8a55c;\n    --ofs-warn-soft: rgb(216 165 92 / 14%);\n    --ofs-error: #e07a7a;\n    --ofs-error-soft: rgb(224 122 122 / 14%);\n    --ofs-idle: #8a8a92;\n    --ofs-idle-soft: rgb(255 255 255 / 6%);\n\n    /* 深色里相纸仍然是整间暗房里最亮的表面：光桌 > 相纸 > 卡片 > 地面 */\n    --ofs-mat: #1e1e22;\n    --ofs-mat-lit: rgb(255 255 255 / 7%);\n    --ofs-mat-inner: inset 0 1px 3px rgb(0 0 0 / 36%);\n    --ofs-print-paper: #2b2b31;\n    --ofs-print-edge: rgb(255 255 255 / 13%);\n    --ofs-print-shadow: 0 22px 44px -24px rgb(0 0 0 / 78%), 0 4px 12px -6px rgb(0 0 0 / 50%);\n    --ofs-print-shadow-hover: 0 28px 54px -24px rgb(0 0 0 / 82%), 0 6px 16px -6px rgb(0 0 0 / 54%);\n    --ofs-mark: rgb(255 255 255 / 28%);\n\n    --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 28px -18px rgb(0 0 0 / 70%);\n    --ofs-shadow-lift: 0 2px 6px rgb(0 0 0 / 44%), 0 20px 44px -22px rgb(0 0 0 / 76%);\n    --ofs-shadow-window: 0 1px 3px rgb(0 0 0 / 40%), 0 40px 88px -48px rgb(0 0 0 / 88%);\n    --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);\n    --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(255 255 255 / 40%);\n  }\n}';
@@ -2375,8 +2248,9 @@ function useNow(enabled) {
   const [now, setNow] = import_react.default.useState(() => Date.now());
   import_react.default.useEffect(() => {
     if (!enabled) return void 0;
-    const timer = setInterval(() => setNow(Date.now()), 1e3);
-    return () => clearInterval(timer);
+    setNow(Date.now());
+    const timer2 = setInterval(() => setNow(Date.now()), 1e3);
+    return () => clearInterval(timer2);
   }, [enabled]);
   return now;
 }
@@ -2459,6 +2333,95 @@ function guidanceDetailOf(input) {
 // src/studio/ChatPanel.jsx
 var import_react2 = __toESM(require("react"), 1);
 
+// shared/validation.js
+var HF_REPO_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function hasOwn(value, key) {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+function textOf(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+function isValidHfRepoId(repo) {
+  return typeof repo === "string" && HF_REPO_ID_RE.test(repo);
+}
+function isValidContainerPath(path, maxChars = SETTINGS.maxItemChars) {
+  return typeof path === "string" && path.startsWith("/") && !/[\s\0]/.test(path) && path.length <= maxChars;
+}
+function normalizeKaggleTransport(value) {
+  return typeof value === "string" && SETTINGS.kaggleTransports.includes(value) ? value : SETTINGS.defaultKaggleTransport;
+}
+function historyMessages(value) {
+  if (!Array.isArray(value)) return [];
+  const { maxMessages, maxMessageChars } = LIMITS.intentHistory;
+  const messages = [];
+  for (const entry of value) {
+    if (!isPlainObject(entry)) continue;
+    const role = entry.role === "assistant" ? "assistant" : entry.role === "user" ? "user" : "";
+    if (!role) continue;
+    const content = textOf(entry.content);
+    if (!content) continue;
+    messages.push({ role, content: content.slice(0, maxMessageChars) });
+  }
+  return messages.slice(-maxMessages);
+}
+function normalizeClarify(value) {
+  if (!isPlainObject(value)) return null;
+  const question = textOf(value.question).slice(0, INTENT.clarifyQuestionMaxChars);
+  if (!question) return null;
+  const options = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of Array.isArray(value.options) ? value.options : []) {
+    const option = textOf(item).slice(0, INTENT.clarifyOptionMaxChars);
+    if (!option || seen.has(option)) continue;
+    seen.add(option);
+    options.push(option);
+    if (options.length >= INTENT.clarifyMaxOptions) break;
+  }
+  if (options.length < INTENT.clarifyMinOptions) return null;
+  return { question, options };
+}
+function normalizeModelHint(value, currentPresetOrId, options = {}) {
+  if (!isPlainObject(value)) return null;
+  const currentId = typeof currentPresetOrId === "string" ? currentPresetOrId.trim() : isPlainObject(currentPresetOrId) ? textOf(currentPresetOrId.id) : "";
+  const presetId = textOf(value.presetId);
+  if (!presetId || !currentId || presetId === currentId) return null;
+  const presets = Array.isArray(options.presets) ? options.presets : publicPresets();
+  const target = presets.find((preset) => preset && preset.id === presetId);
+  if (!target) return null;
+  let reason = textOf(value.reason);
+  if (!reason && options.fallbackToDescription === true) {
+    const description = isPlainObject(target.description) ? target.description : {};
+    const locale = options.locale === "en" ? "en" : "zh";
+    reason = textOf(locale === "en" ? description.en || description.zh : description.zh || description.en);
+  }
+  reason = reason.slice(0, INTENT.modelHintReasonMaxChars);
+  if (!reason) return null;
+  return { presetId: target.id, reason };
+}
+var UI_STATE_FIELDS = Object.freeze(Object.keys(UI_STATE.defaults));
+function normalizeUiState(value) {
+  const source = isPlainObject(value) ? value : {};
+  const view = {};
+  for (const field of UI_STATE_FIELDS) {
+    const fallback = UI_STATE.defaults[field];
+    view[field] = typeof source[field] === typeof fallback ? source[field] : fallback;
+  }
+  return view;
+}
+function buildUiStatePatch(partial) {
+  const source = isPlainObject(partial) ? partial : {};
+  const patch = {};
+  for (const field of UI_STATE_FIELDS) {
+    if (!hasOwn(source, field)) continue;
+    if (typeof source[field] !== typeof UI_STATE.defaults[field]) continue;
+    patch[field] = source[field];
+  }
+  return patch;
+}
+
 // src/logic/intent.js
 var INTENT_EDITABLE_FIELDS = ["prompt", "negative", "count"];
 function lastIntentPrompt(messages) {
@@ -2494,10 +2457,9 @@ function intentHistory(messages) {
         content = prompt || question;
       }
     }
-    if (!role || !content) continue;
-    history.push({ role, content: content.slice(0, LIMITS.intentHistory.maxMessageChars) });
+    if (role && content) history.push({ role, content });
   }
-  return history.slice(-LIMITS.intentHistory.maxMessages);
+  return historyMessages(history);
 }
 function intentCount(value) {
   const number = Number(value);
@@ -2505,28 +2467,10 @@ function intentCount(value) {
   return Math.min(LIMITS.count.max, Math.max(LIMITS.count.min, Math.round(number)));
 }
 function intentClarify(value) {
-  if (!value || typeof value !== "object") return null;
-  const question = typeof value.question === "string" ? value.question.trim().slice(0, INTENT.clarifyQuestionMaxChars) : "";
-  if (!question) return null;
-  const options = [];
-  const rawOptions = Array.isArray(value.options) ? value.options : [];
-  for (const option of rawOptions) {
-    const text = typeof option === "string" ? option.trim().slice(0, INTENT.clarifyOptionMaxChars) : "";
-    if (!text || options.includes(text)) continue;
-    options.push(text);
-    if (options.length >= INTENT.clarifyMaxOptions) break;
-  }
-  if (options.length < INTENT.clarifyMinOptions) return null;
-  return { question, options };
+  return normalizeClarify(value);
 }
 function intentModelHint(value, currentPresetId) {
-  if (!value || typeof value !== "object") return null;
-  const presetId = typeof value.presetId === "string" ? value.presetId.trim() : "";
-  if (!presetId || presetId === currentPresetId) return null;
-  if (!PRESETS.some((item) => item.id === presetId)) return null;
-  const reason = typeof value.reason === "string" ? value.reason.trim().slice(0, INTENT.modelHintReasonMaxChars) : "";
-  if (!reason) return null;
-  return { presetId, reason };
+  return normalizeModelHint(value, currentPresetId);
 }
 function intentRatio(value) {
   return typeof value === "string" && RATIO_IDS.includes(value) ? value : "";
@@ -2727,8 +2671,6 @@ function Icon(props) {
 
 // src/studio/ChatPanel.jsx
 var import_jsx_runtime2 = require("react/jsx-runtime");
-var EXAMPLES = ["studio.inspire.1", "studio.inspire.2", "studio.inspire.3", "studio.inspire.4", "studio.inspire.5"];
-var COUNT_OPTIONS = [1, 2, 3, 4];
 var WORKING_STAGES = ["pending", "queued", "running"];
 function isWorking(stage) {
   return WORKING_STAGES.indexOf(stage) >= 0;
@@ -2741,8 +2683,9 @@ function dotClass(stage) {
 function ratioLabel(t, ratioId) {
   return ratioId || t("studio.chat.ratioAuto");
 }
+var PUBLIC_PRESET_LIST = publicPresets();
 function modelLabelOf(presetId) {
-  const preset = PRESETS.find((item) => item && item.id === presetId);
+  const preset = PUBLIC_PRESET_LIST.find((item) => item && item.id === presetId);
   return preset ? preset.label || preset.short || preset.id : "";
 }
 function ChatPanel(props) {
@@ -2977,7 +2920,7 @@ function ChatPanel(props) {
         children: [
           messages.length === 0 && !interpreting ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "ofs-chat-empty", children: [
             /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "ofs-chat-empty-text", children: t("studio.chat.empty") }),
-            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "ofs-chat-examples", children: EXAMPLES.map((key) => /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "ofs-chat-examples", children: INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
               "button",
               {
                 type: "button",
@@ -3051,8 +2994,30 @@ function Filmstrip(props) {
   const stopped = Boolean(status && status.stopped);
   const { batches, selected, selectImage } = library;
   const selectedPath = selected && selected.image ? selected.image.path : "";
-  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("footer", { className: "ofs-filmstrip", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "ofs-roll", children: [
+  const stripRef = import_react3.default.useRef(null);
+  const rollRef = import_react3.default.useRef(null);
+  import_react3.default.useEffect(() => {
+    const strip = stripRef.current;
+    const roll = rollRef.current;
+    if (!strip || !roll || typeof strip.addEventListener !== "function") return void 0;
+    function onWheel(event) {
+      if (roll.scrollWidth <= roll.clientWidth) return;
+      const deltaX = Number(event.deltaX) || 0;
+      const deltaY = Number(event.deltaY) || 0;
+      if (!deltaY || Math.abs(deltaX) > Math.abs(deltaY)) return;
+      const unit = event.deltaMode === 1 ? 32 : event.deltaMode === 2 ? roll.clientWidth : 1;
+      roll.scrollLeft += deltaY * unit;
+      if (event.preventDefault) event.preventDefault();
+    }
+    strip.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      if (typeof strip.removeEventListener === "function") {
+        strip.removeEventListener("wheel", onWheel);
+      }
+    };
+  }, []);
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("footer", { className: "ofs-filmstrip", ref: stripRef, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "ofs-roll", ref: rollRef, children: [
       pendingJobs.map((job, index) => {
         const queued = job.status === "queued";
         const cancelling = isJobCancelling(job, cancellingIds);
@@ -4033,7 +3998,7 @@ function renderDirectLogin({ t, guidance, login, runProbe: runProbe2, copyText, 
 }
 
 // src/studio/LogsDrawer.jsx
-var import_react7 = __toESM(require("react"), 1);
+var import_react8 = __toESM(require("react"), 1);
 
 // src/logic/error.js
 function errorText(t, error) {
@@ -4048,8 +4013,53 @@ function errorText(t, error) {
   return t("error.http");
 }
 
-// src/studio/hooks/useStudioLogs.js
+// src/studio/hooks/useFocusTrap.js
 var import_react6 = __toESM(require("react"), 1);
+var FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+function useFocusTrap({ active = true, panelRef, initialFocusRef, returnFocusRef, onClose }) {
+  const onCloseRef = import_react6.default.useRef(onClose);
+  onCloseRef.current = onClose;
+  import_react6.default.useEffect(() => {
+    if (!active) return void 0;
+    const initial = initialFocusRef && initialFocusRef.current;
+    if (initial && typeof initial.focus === "function") initial.focus();
+    function onKey(event) {
+      if (event.key === "Escape") {
+        if (typeof event.stopPropagation === "function") event.stopPropagation();
+        if (typeof onCloseRef.current === "function") onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const panel = panelRef && panelRef.current;
+      if (!panel || typeof panel.querySelectorAll !== "function") return;
+      const nodes = Array.prototype.slice.call(panel.querySelectorAll(FOCUSABLE)).filter((node) => !node.disabled && (!node.getAttribute || node.getAttribute("aria-hidden") !== "true"));
+      if (nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const current = document.activeElement;
+      const outside = !panel.contains || !panel.contains(current);
+      if (event.shiftKey && (current === first || outside)) {
+        if (event.preventDefault) event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (current === last || outside)) {
+        if (event.preventDefault) event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (returnFocusRef) {
+        const opener = returnFocusRef.current;
+        returnFocusRef.current = null;
+        if (opener && typeof opener.focus === "function" && opener.isConnected !== false) opener.focus();
+      }
+    };
+  }, [active, panelRef, initialFocusRef, returnFocusRef]);
+}
+
+// src/studio/hooks/useStudioLogs.js
+var import_react7 = __toESM(require("react"), 1);
 function sameLines(previous, next) {
   if (previous.length !== next.length) return false;
   return previous.every((line, index) => line === next[index]);
@@ -4071,19 +4081,20 @@ function sameEnv(previous, next) {
   return true;
 }
 function useStudioLogs(open) {
-  const [status, setStatus] = import_react6.default.useState("idle");
-  const [lines, setLines] = import_react6.default.useState([]);
-  const [hostLines, setHostLines] = import_react6.default.useState([]);
-  const [reason, setReason] = import_react6.default.useState(null);
-  const [env, setEnv] = import_react6.default.useState({});
-  const linesRef = import_react6.default.useRef([]);
-  const hostLinesRef = import_react6.default.useRef([]);
-  const envRef = import_react6.default.useRef({});
-  const sinceRef = import_react6.default.useRef(0);
-  import_react6.default.useEffect(() => {
+  const [status, setStatus] = import_react7.default.useState("idle");
+  const [lines, setLines] = import_react7.default.useState([]);
+  const [hostLines, setHostLines] = import_react7.default.useState([]);
+  const [reason, setReason] = import_react7.default.useState(null);
+  const [env, setEnv] = import_react7.default.useState({});
+  const linesRef = import_react7.default.useRef([]);
+  const hostLinesRef = import_react7.default.useRef([]);
+  const envRef = import_react7.default.useRef({});
+  const sinceRef = import_react7.default.useRef(0);
+  import_react7.default.useEffect(() => {
     if (!open) return void 0;
     let alive = true;
-    let timer = null;
+    let timer2 = null;
+    let inFlight2 = false;
     linesRef.current = [];
     hostLinesRef.current = [];
     envRef.current = {};
@@ -4093,46 +4104,71 @@ function useStudioLogs(open) {
     setReason(null);
     setEnv({});
     setStatus("loading");
-    const tick = async () => {
-      timer = null;
-      const result = await fetchLogs(sinceRef.current);
-      if (!alive) return;
-      const payload = readLogsPayload(result);
-      if (payload.next !== null) sinceRef.current = payload.next;
-      const merged = appendLogLines(linesRef.current, payload.lines);
-      if (merged !== linesRef.current) {
-        linesRef.current = merged;
-        setLines(merged);
+    const clear = () => {
+      if (timer2 !== null) {
+        clearTimeout(timer2);
+        timer2 = null;
       }
-      if (!sameLines(hostLinesRef.current, payload.hostLines)) {
-        hostLinesRef.current = payload.hostLines;
-        setHostLines(payload.hostLines);
-      }
-      if (!sameEnv(envRef.current, payload.env)) {
-        envRef.current = payload.env;
-        setEnv(payload.env);
-      }
-      if (payload.ok) {
-        setStatus(merged.length === 0 ? "empty" : "ready");
-        setReason(null);
-      } else {
-        setStatus("unavailable");
-        setReason(payload.reason);
-      }
-      timer = setTimeout(tick, TIMEOUTS.clientLogsPollMs);
     };
-    tick();
+    const tick2 = async () => {
+      timer2 = null;
+      if (!alive || document.hidden || inFlight2) return;
+      inFlight2 = true;
+      try {
+        const result = await fetchLogs(sinceRef.current);
+        if (!alive) return;
+        const payload = readLogsPayload(result);
+        if (payload.next !== null) sinceRef.current = payload.next;
+        const merged = appendLogLines(linesRef.current, payload.lines);
+        if (merged !== linesRef.current) {
+          linesRef.current = merged;
+          setLines(merged);
+        }
+        if (!sameLines(hostLinesRef.current, payload.hostLines)) {
+          hostLinesRef.current = payload.hostLines;
+          setHostLines(payload.hostLines);
+        }
+        if (!sameEnv(envRef.current, payload.env)) {
+          envRef.current = payload.env;
+          setEnv(payload.env);
+        }
+        if (payload.ok) {
+          setStatus(merged.length === 0 ? "empty" : "ready");
+          setReason(null);
+        } else {
+          setStatus("unavailable");
+          setReason(payload.reason);
+        }
+      } finally {
+        inFlight2 = false;
+      }
+      if (alive && !document.hidden) timer2 = setTimeout(tick2, TIMEOUTS.clientLogsPollMs);
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        clear();
+        return;
+      }
+      clear();
+      tick2();
+    };
+    tick2();
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       alive = false;
-      if (timer !== null) clearTimeout(timer);
+      clear();
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [open]);
   return { status, lines, hostLines, reason, env };
 }
 function useHostSnapshot(enabled) {
-  const [snapshot, setSnapshot] = import_react6.default.useState(null);
-  import_react6.default.useEffect(() => {
-    if (!enabled) return void 0;
+  const [snapshot2, setSnapshot] = import_react7.default.useState(null);
+  import_react7.default.useEffect(() => {
+    if (!enabled) {
+      setSnapshot(null);
+      return void 0;
+    }
     let alive = true;
     fetchState().then((result) => {
       if (!alive) return;
@@ -4142,61 +4178,33 @@ function useHostSnapshot(enabled) {
       alive = false;
     };
   }, [enabled]);
-  return snapshot;
+  return snapshot2;
 }
 
 // src/studio/LogsDrawer.jsx
 var import_jsx_runtime6 = require("react/jsx-runtime");
-var FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 function LogsDrawer(props) {
   const { t, ui, compute, logs, onClose } = props;
-  const panelRef = import_react7.default.useRef(null);
-  const closeRef = import_react7.default.useRef(null);
-  const bodyRef = import_react7.default.useRef(null);
-  const snapshot = useHostSnapshot(true);
+  const panelRef = import_react8.default.useRef(null);
+  const closeRef = import_react8.default.useRef(null);
+  const bodyRef = import_react8.default.useRef(null);
+  const snapshot2 = useHostSnapshot(true);
   const remoteLines = Array.isArray(logs.lines) ? logs.lines : [];
   const hostLines = Array.isArray(logs.hostLines) ? logs.hostLines : [];
-  const [manualView, setManualView] = import_react7.default.useState(null);
+  const [manualView, setManualView] = import_react8.default.useState(null);
   const autoView = remoteLines.length === 0 && hostLines.length > 0 ? "host" : "remote";
   const view = manualView ?? autoView;
   const showingHost = view === "host";
   const autoFallback = manualView === null && autoView === "host";
   const visibleLines = showingHost ? hostLines : remoteLines;
-  import_react7.default.useEffect(() => {
-    if (closeRef.current && typeof closeRef.current.focus === "function") closeRef.current.focus();
-    function onKey(event) {
-      if (event.key === "Escape") {
-        if (typeof event.stopPropagation === "function") event.stopPropagation();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const panel = panelRef.current;
-      if (!panel || typeof panel.querySelectorAll !== "function") return;
-      const nodes = Array.prototype.slice.call(panel.querySelectorAll(FOCUSABLE)).filter((node) => !node.disabled && node.getAttribute("aria-hidden") !== "true");
-      if (nodes.length === 0) return;
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      const active = document.activeElement;
-      const outside = !panel.contains || !panel.contains(active);
-      if (event.shiftKey && (active === first || outside)) {
-        if (event.preventDefault) event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || outside)) {
-        if (event.preventDefault) event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  import_react7.default.useEffect(() => {
+  useFocusTrap({ panelRef, initialFocusRef: closeRef, onClose });
+  import_react8.default.useEffect(() => {
     const node = bodyRef.current;
     if (!node) return;
     node.scrollTop = node.scrollHeight;
   }, [view, remoteLines.length, hostLines.length]);
   function copyDiagnostics() {
-    const context = snapshot || {};
+    const context = snapshot2 || {};
     const session = context.session || compute && compute.session || null;
     const probe = context.probe || compute && compute.probe || null;
     const text = buildDiagnostics(t, {
@@ -4302,7 +4310,7 @@ function QueuePill(props) {
 }
 
 // src/studio/Rail.jsx
-var import_react9 = __toESM(require("react"), 1);
+var import_react10 = __toESM(require("react"), 1);
 
 // shared/models-guide.js
 function effectiveCfgOf(preset, cfg) {
@@ -4350,7 +4358,7 @@ function safeResetPatch(preset) {
 }
 
 // src/components/Tooltip.jsx
-var import_react8 = __toESM(require("react"), 1);
+var import_react9 = __toESM(require("react"), 1);
 
 // src/logic/tooltip.js
 var GAP = 8;
@@ -4383,15 +4391,15 @@ var import_jsx_runtime8 = require("react/jsx-runtime");
 var POPUP_MAX = 248;
 function Tooltip(props) {
   const { text, tone = "info", side = "top" } = props;
-  const [open, setOpen] = import_react8.default.useState(false);
-  const [pinned, setPinned] = import_react8.default.useState(false);
-  const [pos, setPos] = import_react8.default.useState(null);
-  const triggerRef = import_react8.default.useRef(null);
-  const close = import_react8.default.useCallback(() => {
+  const [open, setOpen] = import_react9.default.useState(false);
+  const [pinned, setPinned] = import_react9.default.useState(false);
+  const [pos, setPos] = import_react9.default.useState(null);
+  const triggerRef = import_react9.default.useRef(null);
+  const close = import_react9.default.useCallback(() => {
     setPinned(false);
     setOpen(false);
   }, []);
-  const measure = import_react8.default.useCallback(() => {
+  const measure = import_react9.default.useCallback(() => {
     const node = triggerRef.current;
     if (!node) return;
     const anchor = node.getBoundingClientRect();
@@ -4404,7 +4412,7 @@ function Tooltip(props) {
     }
     setPos(tooltipPlacement({ anchor, frame, width: POPUP_MAX, preferBelow: side === "bottom" }));
   }, [side]);
-  import_react8.default.useEffect(() => {
+  import_react9.default.useEffect(() => {
     if (!open) return void 0;
     measure();
     const remeasure = () => measure();
@@ -4420,7 +4428,7 @@ function Tooltip(props) {
       document.removeEventListener("keydown", onKey);
     };
   }, [open, measure, close]);
-  import_react8.default.useEffect(() => {
+  import_react9.default.useEffect(() => {
     if (!pinned) return void 0;
     const onDown = (event) => {
       const node = triggerRef.current;
@@ -4722,10 +4730,10 @@ function retryOverrides(source) {
 // src/studio/presets.js
 var RATIO_SPECS = {
   "1:1": { width: 1024, height: 1024 },
-  "16:9": { width: 1152, height: 648 },
-  "9:16": { width: 648, height: 1152 },
-  "4:3": { width: 1024, height: 768 },
-  "3:4": { width: 768, height: 1024 }
+  "16:9": { width: 1280, height: 720 },
+  "9:16": { width: 720, height: 1280 },
+  "4:3": { width: 1152, height: 864 },
+  "3:4": { width: 864, height: 1152 }
 };
 var DEFAULT_RATIOS = RATIO_IDS.map((id) => RATIO_SPECS[id] ? { id, ...RATIO_SPECS[id] } : null).filter(Boolean);
 function ratioToSize(ratio) {
@@ -4735,8 +4743,6 @@ function ratioToSize(ratio) {
 // src/studio/Rail.jsx
 var import_jsx_runtime9 = require("react/jsx-runtime");
 var PROMPT_MAX = LIMITS.prompt.maxChars;
-var INSPIRE_KEYS = ["studio.inspire.1", "studio.inspire.2", "studio.inspire.3", "studio.inspire.4", "studio.inspire.5"];
-var COUNT_OPTIONS2 = [1, 2, 3, 4];
 function sizeDraftOf(fields) {
   const source = fields && typeof fields === "object" ? fields : {};
   return { width: String(clampSize(source.width)), height: String(clampSize(source.height)) };
@@ -4793,17 +4799,17 @@ function Rail(props) {
     removeReference
   } = form;
   const { sending, generate } = actions;
-  const [sizeDraft, setSizeDraft] = import_react9.default.useState(() => sizeDraftOf(fields));
-  const syncedSize = import_react9.default.useRef(void 0);
-  import_react9.default.useEffect(() => {
+  const [sizeDraft, setSizeDraft] = import_react10.default.useState(() => sizeDraftOf(fields));
+  const syncedSize = import_react10.default.useRef(void 0);
+  import_react10.default.useEffect(() => {
     const previous = syncedSize.current;
     syncedSize.current = { width: fields.width, height: fields.height };
     if (!previous) return;
     if (previous.width === fields.width && previous.height === fields.height) return;
     setSizeDraft(sizeDraftOf(fields));
   }, [fields.width, fields.height]);
-  const [customOpen, setCustomOpen] = import_react9.default.useState(false);
-  const [refineOpen, setRefineOpen] = import_react9.default.useState(true);
+  const [customOpen, setCustomOpen] = import_react10.default.useState(false);
+  const [refineOpen, setRefineOpen] = import_react10.default.useState(true);
   const onCustomSize = typeof applyCustomSize === "function" ? applyCustomSize : () => {
   };
   const onResetSeed = typeof resetSeed === "function" ? resetSeed : () => patchForm({ seed: "" });
@@ -5242,7 +5248,7 @@ function Rail(props) {
     /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-panel-foot", children: [
       /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-qty-row", children: [
         /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "ofs-qty-label", children: t("studio.countShort") }),
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-qty", role: "group", "aria-label": t("studio.count"), children: COUNT_OPTIONS2.map((value) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-qty", role: "group", "aria-label": t("studio.count"), children: COUNT_OPTIONS.map((value) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
           "button",
           {
             type: "button",
@@ -5297,14 +5303,13 @@ function SessionBar(props) {
 }
 
 // src/studio/SettingsDrawer.jsx
-var import_react10 = __toESM(require("react"), 1);
+var import_react11 = __toESM(require("react"), 1);
 
 // src/logic/settings.js
 var IDLE = SETTINGS.idleTimeoutSec;
 var IDLE_MIN_MINUTES = Math.ceil(IDLE.min / 60);
 var IDLE_MAX_MINUTES = Math.floor(IDLE.max / 60);
 var DEFAULT_IDLE_SEC = clampInt(TIMEOUTS.idleShutdownSec, IDLE.min, IDLE.max, 1800);
-var REPO_ID_PATTERN = /^[^\s=/]+\/[^\s=/]+$/;
 function idleMinutesOf(idleTimeoutSec) {
   const fallback = Math.round(DEFAULT_IDLE_SEC / 60);
   const seconds = Number(idleTimeoutSec);
@@ -5321,9 +5326,6 @@ function quickIdleMinutes(value) {
   const minutes = Number(value);
   if (!Number.isInteger(minutes)) return null;
   return IDLE.quickMinutes.includes(minutes) ? minutes : null;
-}
-function normalizeKaggleTransport(value) {
-  return SETTINGS.kaggleTransports.includes(value) ? value : SETTINGS.defaultKaggleTransport;
 }
 function kaggleTransportLabelKey(transport) {
   return `studio.settings.kaggleTransport.option.${normalizeKaggleTransport(transport)}`;
@@ -5375,11 +5377,11 @@ function parseLocalModels(text, options = {}) {
     }
     const repo = line.slice(0, separator).trim();
     const path = line.slice(separator + 1).trim();
-    if (!REPO_ID_PATTERN.test(repo)) {
+    if (!isValidHfRepoId(repo)) {
       errors.push({ line: lineNumber, message: "studio.settings.localModels.errorRepo" });
       continue;
     }
-    if (!path.startsWith("/") || /\s/.test(path)) {
+    if (!isValidContainerPath(path, maxChars)) {
       errors.push({ line: lineNumber, message: "studio.settings.localModels.errorPath" });
       continue;
     }
@@ -5484,23 +5486,22 @@ function hfTokenSourceKey(source) {
 
 // src/studio/SettingsDrawer.jsx
 var import_jsx_runtime11 = require("react/jsx-runtime");
-var FOCUSABLE2 = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 function SettingsDrawer(props) {
   const { t, ui, onClose } = props;
   const { defaultAdvancedOpen, defaultDraft } = props;
-  const panelRef = import_react10.default.useRef(null);
-  const closeRef = import_react10.default.useRef(null);
-  const onCloseRef = import_react10.default.useRef(onClose);
+  const panelRef = import_react11.default.useRef(null);
+  const closeRef = import_react11.default.useRef(null);
+  const onCloseRef = import_react11.default.useRef(onClose);
   onCloseRef.current = onClose;
-  const [status, setStatus] = import_react10.default.useState("loading");
-  const [view, setView] = import_react10.default.useState(null);
-  const [form, setForm] = import_react10.default.useState(null);
-  const [loadError, setLoadError] = import_react10.default.useState(null);
-  const [saveError, setSaveError] = import_react10.default.useState(null);
-  const [saving, setSaving] = import_react10.default.useState(false);
-  const [advancedOpen, setAdvancedOpen] = import_react10.default.useState(Boolean(defaultAdvancedOpen));
-  const [reloadKey, setReloadKey] = import_react10.default.useState(0);
-  import_react10.default.useEffect(() => {
+  const [status, setStatus] = import_react11.default.useState("loading");
+  const [view, setView] = import_react11.default.useState(null);
+  const [form, setForm] = import_react11.default.useState(null);
+  const [loadError, setLoadError] = import_react11.default.useState(null);
+  const [saveError, setSaveError] = import_react11.default.useState(null);
+  const [saving, setSaving] = import_react11.default.useState(false);
+  const [advancedOpen, setAdvancedOpen] = import_react11.default.useState(Boolean(defaultAdvancedOpen));
+  const [reloadKey, setReloadKey] = import_react11.default.useState(0);
+  import_react11.default.useEffect(() => {
     let alive = true;
     setStatus("loading");
     setLoadError(null);
@@ -5521,34 +5522,7 @@ function SettingsDrawer(props) {
       alive = false;
     };
   }, [reloadKey]);
-  import_react10.default.useEffect(() => {
-    if (closeRef.current && typeof closeRef.current.focus === "function") closeRef.current.focus();
-    function onKey(event) {
-      if (event.key === "Escape") {
-        if (typeof event.stopPropagation === "function") event.stopPropagation();
-        if (typeof onCloseRef.current === "function") onCloseRef.current();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const panel = panelRef.current;
-      if (!panel || typeof panel.querySelectorAll !== "function") return;
-      const nodes = Array.prototype.slice.call(panel.querySelectorAll(FOCUSABLE2)).filter((node) => !node.disabled && node.getAttribute("aria-hidden") !== "true");
-      if (nodes.length === 0) return;
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      const active = document.activeElement;
-      const outside = !panel.contains || !panel.contains(active);
-      if (event.shiftKey && (active === first || outside)) {
-        if (event.preventDefault) event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || outside)) {
-        if (event.preventDefault) event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  useFocusTrap({ panelRef, initialFocusRef: closeRef, onClose });
   function patchForm(patch) {
     setForm((previous) => previous ? { ...previous, ...patch } : previous);
   }
@@ -5820,14 +5794,14 @@ function SettingsDrawer(props) {
 }
 
 // src/studio/Stage.jsx
-var import_react11 = __toESM(require("react"), 1);
+var import_react12 = __toESM(require("react"), 1);
 var import_jsx_runtime12 = require("react/jsx-runtime");
-var INSPIRE_KEYS2 = ["studio.inspire.1", "studio.inspire.2", "studio.inspire.3", "studio.inspire.4", "studio.inspire.5"];
 var FRESH_MS = 6e4;
-function isFreshItem(item) {
+function isFreshItem(item, now) {
   const finishedAt = Date.parse(String(item && item.finishedAt || ""));
   if (!Number.isFinite(finishedAt)) return false;
-  const delta = Date.now() - finishedAt;
+  const current = Number.isFinite(now) ? now : Date.now();
+  const delta = current - finishedAt;
   return delta > -5e3 && delta < FRESH_MS;
 }
 function ratioOf(width, height) {
@@ -5837,7 +5811,7 @@ function ratioOf(width, height) {
   return w / h2;
 }
 function Stage(props) {
-  const { t, ui, compute, form, library, actions } = props;
+  const { t, ui, compute, form, library, actions, now } = props;
   const { zoom, setZoom, copyPath } = ui;
   const { activeJob, sessionState } = compute;
   const progressText = activeJob ? jobProgressText(t, activeJob, sessionState) : "";
@@ -5848,46 +5822,20 @@ function Stage(props) {
   const item = selected && selected.item || null;
   const params = item && item.params || null;
   const prompt = item && typeof item.prompt === "string" && item.prompt || params && typeof params.prompt === "string" && params.prompt || "";
-  const closeRef = import_react11.default.useRef(null);
-  const lightboxRef = import_react11.default.useRef(null);
-  const zoomOpenerRef = import_react11.default.useRef(null);
+  const closeRef = import_react12.default.useRef(null);
+  const lightboxRef = import_react12.default.useRef(null);
+  const zoomOpenerRef = import_react12.default.useRef(null);
   function openZoom() {
     zoomOpenerRef.current = document.activeElement || null;
     setZoom(true);
   }
-  import_react11.default.useEffect(() => {
-    if (!zoom) return void 0;
-    function onKey(event) {
-      if (event.key === "Escape") {
-        setZoom(false);
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const node = lightboxRef.current;
-      if (!node || typeof node.querySelectorAll !== "function") return;
-      const nodes = Array.prototype.slice.call(node.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])')).filter((item2) => !item2.disabled);
-      if (nodes.length === 0) return;
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      const active = document.activeElement;
-      const outside = !node.contains || !node.contains(active);
-      if (event.shiftKey && (active === first || outside)) {
-        if (event.preventDefault) event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || outside)) {
-        if (event.preventDefault) event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", onKey);
-    if (closeRef.current && typeof closeRef.current.focus === "function") closeRef.current.focus();
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      const opener = zoomOpenerRef.current;
-      zoomOpenerRef.current = null;
-      if (opener && typeof opener.focus === "function" && opener.isConnected !== false) opener.focus();
-    };
-  }, [zoom]);
+  useFocusTrap({
+    active: Boolean(zoom),
+    panelRef: lightboxRef,
+    initialFocusRef: closeRef,
+    returnFocusRef: zoomOpenerRef,
+    onClose: () => setZoom(false)
+  });
   if (!image) {
     const stopped = Boolean(compute.status && compute.status.stopped);
     const jobParams = activeJob && activeJob.params || {};
@@ -5908,7 +5856,7 @@ function Stage(props) {
           /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("p", { className: "ofs-muted", children: stopped ? t("studio.stage.stoppedHint") : t("studio.stage.emptyHint") }),
           /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-examples", children: [
             /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
-            INSPIRE_KEYS2.map((key) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
+            INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
           ] }),
           steady !== null ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("p", { className: "ofs-exposure", children: [
             /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" }),
@@ -5929,7 +5877,7 @@ function Stage(props) {
   const copyTarget = image.absolute || image.path || image.file;
   const imageKey = image.path || image.file || image.url;
   const printRatio = ratioOf(image.width, image.height);
-  const developing = isFreshItem(item);
+  const developing = isFreshItem(item, now);
   return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("section", { className: "ofs-stage", children: [
     /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("figure", { className: "ofs-figure", children: [
       /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
@@ -6048,7 +5996,7 @@ function Stage(props) {
 }
 
 // src/studio/Toast.jsx
-var import_react12 = __toESM(require("react"), 1);
+var import_react13 = __toESM(require("react"), 1);
 var import_jsx_runtime13 = require("react/jsx-runtime");
 function noticeSpecOf(t, kind, compute, actions) {
   if (!kind) return null;
@@ -6105,10 +6053,10 @@ function Toast(props) {
 }
 
 // src/studio/TopBar.jsx
-var import_react15 = __toESM(require("react"), 1);
+var import_react16 = __toESM(require("react"), 1);
 
 // src/studio/ModelCardPicker.jsx
-var import_react13 = __toESM(require("react"), 1);
+var import_react14 = __toESM(require("react"), 1);
 
 // src/studio/posters/animagine-xl-3.1.webp
 var animagine_xl_3_1_default = "data:image/webp;base64,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";
@@ -6186,10 +6134,10 @@ function ModelCardPicker(props) {
   const { t, isEn, presets, value, defaultPreset, onChange, open, onOpenChange } = props;
   const list = Array.isArray(presets) ? presets : [];
   const active = list.find((preset) => preset.id === value) || list[0] || null;
-  const rootRef = import_react13.default.useRef(null);
-  const triggerRef = import_react13.default.useRef(null);
-  const listRef = import_react13.default.useRef(null);
-  import_react13.default.useEffect(() => {
+  const rootRef = import_react14.default.useRef(null);
+  const triggerRef = import_react14.default.useRef(null);
+  const listRef = import_react14.default.useRef(null);
+  import_react14.default.useEffect(() => {
     if (!open || !listRef.current) return;
     const options = listRef.current.querySelectorAll('[role="option"]');
     if (options.length === 0) return;
@@ -6198,7 +6146,7 @@ function ModelCardPicker(props) {
     if (typeof target.focus === "function") target.focus({ preventScroll: true });
     if (typeof target.scrollIntoView === "function") target.scrollIntoView({ block: "nearest" });
   }, [open, value, list]);
-  import_react13.default.useEffect(() => {
+  import_react14.default.useEffect(() => {
     if (!open) return void 0;
     function onKeyDown(event) {
       if (event.key === "Escape") {
@@ -6324,7 +6272,7 @@ function ModelCardPicker(props) {
 }
 
 // src/studio/StudioIcon.jsx
-var import_react14 = __toESM(require("react"), 1);
+var import_react15 = __toESM(require("react"), 1);
 var import_jsx_runtime15 = require("react/jsx-runtime");
 function StudioIcon(props) {
   const size = props && props.size || 20;
@@ -6372,13 +6320,13 @@ function TopBar(props) {
     openFolder
   } = compute;
   const status = compute.status || computeStatusOf(t, { session });
-  const [open, setOpen] = import_react15.default.useState(Boolean(props.defaultOpen));
-  const [modelOpen, setModelOpen] = import_react15.default.useState(Boolean(props.defaultModelOpen));
-  const wrapRef = import_react15.default.useRef(null);
-  const pillRef = import_react15.default.useRef(null);
-  const snapshot = useHostSnapshot(open);
+  const [open, setOpen] = import_react16.default.useState(Boolean(props.defaultOpen));
+  const [modelOpen, setModelOpen] = import_react16.default.useState(Boolean(props.defaultModelOpen));
+  const wrapRef = import_react16.default.useRef(null);
+  const pillRef = import_react16.default.useRef(null);
+  const snapshot2 = useHostSnapshot(open);
   const now = useNow(open);
-  import_react15.default.useEffect(() => {
+  import_react16.default.useEffect(() => {
     if (!open) return void 0;
     function onKey(event) {
       if (event.key === "Escape") setOpen(false);
@@ -6402,14 +6350,14 @@ function TopBar(props) {
   const steadyRaw = loadedPreset && loadedPreset.steadySeconds !== void 0 ? loadedPreset.steadySeconds : loadedPreset && loadedPreset.measured ? loadedPreset.measured.steadySeconds : null;
   const steadySeconds = Number.isFinite(steadyRaw) ? steadyRaw : null;
   const kaggleTransport = compute.kaggleTransport === "direct" ? "direct" : "cli";
-  const probePayload = probe || snapshot && snapshot.probe || probeReport && probeReport.probe || null;
+  const probePayload = probe || snapshot2 && snapshot2.probe || probeReport && probeReport.probe || null;
   const probeInfo = probeStatusOf(probePayload);
   const accountStatus = accountStatusOf(probePayload, sessionState);
   const probeFailed = probeReport && probeReport.status && probeReport.status !== "ok" ? probeReport : null;
   const probeNote = probeInfo && probeInfo.notes.length > 0 ? probeInfo.notes[0] : "";
   const quotaUnavailable = Boolean(probeFailed || probeInfo && probeInfo.quota !== "ok");
-  const lastGood = snapshot && snapshot.probeLastGood || null;
-  const lastCheckTime = formatClockTime(snapshot && snapshot.probeLastGoodAt);
+  const lastGood = snapshot2 && snapshot2.probeLastGood || null;
+  const lastCheckTime = formatClockTime(snapshot2 && snapshot2.probeLastGoodAt);
   const lastGoodQuota = quotaText(lastGood && lastGood.quota);
   const sessionRunMs = session ? elapsedMsSince(session.startedAt, now) : null;
   const tunnelProvider = session && session.tunnelProvider ? session.tunnelProvider : "";
@@ -6654,7 +6602,7 @@ function TopBar(props) {
 }
 
 // src/studio/hooks/useStudioUi.js
-var import_react16 = __toESM(require("react"), 1);
+var import_react17 = __toESM(require("react"), 1);
 
 // src/logic/notice.js
 var NOTICE_TITLE_PREFIX = "● 生成完成 · ";
@@ -6680,16 +6628,6 @@ function completionNotice(input = {}) {
 }
 
 // src/logic/uiState.js
-var UI_STATE_FIELDS = Object.keys(UI_STATE.defaults);
-function normalizeUiState(value) {
-  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  const view = {};
-  for (const field of UI_STATE_FIELDS) {
-    const fallback = UI_STATE.defaults[field];
-    view[field] = typeof source[field] === typeof fallback ? source[field] : fallback;
-  }
-  return view;
-}
 function uiStateViewOf(result) {
   if (!result || result.ok !== true) return null;
   const data = result.data && typeof result.data === "object" ? result.data : null;
@@ -6698,48 +6636,46 @@ function uiStateViewOf(result) {
   if (!view || typeof view !== "object" || Array.isArray(view)) return null;
   return normalizeUiState(view);
 }
-function buildUiStatePatch(partial) {
-  const source = partial && typeof partial === "object" && !Array.isArray(partial) ? partial : {};
-  const patch = {};
-  for (const field of UI_STATE_FIELDS) {
-    if (!Object.prototype.hasOwnProperty.call(source, field)) continue;
-    if (typeof source[field] !== typeof UI_STATE.defaults[field]) continue;
-    patch[field] = source[field];
-  }
-  return patch;
-}
 
 // src/studio/hooks/useStudioUi.js
+var nextToastId = 0;
 function useStudioUi({ t, initialView, initialPanelMode }) {
-  const [view, setView] = import_react16.default.useState(initialView);
-  const [advancedOpen, setAdvancedOpen] = import_react16.default.useState(UI_STATE.defaults.advancedOpen);
-  const [negativeOpen, setNegativeOpen] = import_react16.default.useState(false);
-  const [error, setError] = import_react16.default.useState(null);
-  const [dismissed, setDismissed] = import_react16.default.useState("");
-  const [toast, setToast] = import_react16.default.useState(null);
-  const [panelMode, setPanelMode] = import_react16.default.useState(initialPanelMode);
-  const [zoom, setZoom] = import_react16.default.useState(false);
-  const [logsOpen, setLogsOpen] = import_react16.default.useState(false);
-  const logsReturnRef = import_react16.default.useRef(null);
-  const [settingsOpen, setSettingsOpen] = import_react16.default.useState(false);
-  const settingsReturnRef = import_react16.default.useRef(null);
+  const [view, setView] = import_react17.default.useState(initialView);
+  const [advancedOpen, setAdvancedOpen] = import_react17.default.useState(UI_STATE.defaults.advancedOpen);
+  const [negativeOpen, setNegativeOpen] = import_react17.default.useState(false);
+  const [error, setError] = import_react17.default.useState(null);
+  const [dismissed, setDismissed] = import_react17.default.useState("");
+  const [toast, setToast] = import_react17.default.useState(null);
+  const [panelMode, setPanelMode] = import_react17.default.useState(initialPanelMode);
+  const [zoom, setZoom] = import_react17.default.useState(false);
+  const [logsOpen, setLogsOpen] = import_react17.default.useState(false);
+  const logsReturnRef = import_react17.default.useRef(null);
+  const [settingsOpen, setSettingsOpen] = import_react17.default.useState(false);
+  const settingsReturnRef = import_react17.default.useRef(null);
+  const advancedOpenRef = import_react17.default.useRef(advancedOpen);
+  advancedOpenRef.current = advancedOpen;
   function showToast(text) {
-    setToast({ text, id: Date.now() });
+    nextToastId += 1;
+    setToast({ text, id: nextToastId });
   }
-  import_react16.default.useEffect(() => {
+  import_react17.default.useEffect(() => {
     let alive = true;
     Promise.resolve(fetchUiState()).then((result) => {
       if (!alive) return;
       const saved = uiStateViewOf(result);
-      if (saved) setAdvancedOpen(saved.advancedOpen);
+      if (saved) {
+        advancedOpenRef.current = saved.advancedOpen;
+        setAdvancedOpen(saved.advancedOpen);
+      }
     });
     return () => {
       alive = false;
     };
   }, []);
   function toggleAdvancedOpen() {
-    const next = !advancedOpen;
-    setAdvancedOpen(next);
+    setAdvancedOpen((prev) => !prev);
+    const next = !advancedOpenRef.current;
+    advancedOpenRef.current = next;
     Promise.resolve(saveUiState(buildUiStatePatch({ advancedOpen: next }))).catch(() => {
     });
   }
@@ -6751,10 +6687,10 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
     if (guidanceKey) setDismissed(guidanceKey);
     setError(null);
   }
-  import_react16.default.useEffect(() => {
+  import_react17.default.useEffect(() => {
     if (!toast) return void 0;
-    const timer = setTimeout(() => setToast(null), 2600);
-    return () => clearTimeout(timer);
+    const timer2 = setTimeout(() => setToast(null), 2600);
+    return () => clearTimeout(timer2);
   }, [toast]);
   async function copyText(text, okKey) {
     const value = String(text ?? "").trim();
@@ -6827,15 +6763,15 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
   };
 }
 function useCompletionNotice({ t, ui, job, activeJob }) {
-  const previousRef = import_react16.default.useRef(void 0);
-  const pendingRef = import_react16.default.useRef(false);
-  const hiddenJobRef = import_react16.default.useRef(null);
-  const returningRef = import_react16.default.useRef(null);
-  const tRef = import_react16.default.useRef(t);
-  const uiRef = import_react16.default.useRef(ui);
+  const previousRef = import_react17.default.useRef(void 0);
+  const pendingRef = import_react17.default.useRef(false);
+  const hiddenJobRef = import_react17.default.useRef(null);
+  const returningRef = import_react17.default.useRef(null);
+  const tRef = import_react17.default.useRef(t);
+  const uiRef = import_react17.default.useRef(ui);
   tRef.current = t;
   uiRef.current = ui;
-  const judge = import_react16.default.useCallback((nextJob) => {
+  const judge = import_react17.default.useCallback((nextJob) => {
     const previous = previousRef.current;
     previousRef.current = nextJob || null;
     if (previous === void 0) return;
@@ -6856,26 +6792,26 @@ function useCompletionNotice({ t, ui, job, activeJob }) {
       uiRef.current.showToast(tRef.current("studio.toast.generationDone"));
     }
   }, []);
-  import_react16.default.useEffect(() => {
+  import_react17.default.useEffect(() => {
     judge(job);
   }, [judge, job && job.id, job && job.status, job && (job.finishedAt ?? "")]);
-  import_react16.default.useEffect(() => {
-    let timer = null;
+  import_react17.default.useEffect(() => {
+    let timer2 = null;
     let alive = true;
     function stop() {
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
+      if (timer2 !== null) {
+        clearTimeout(timer2);
+        timer2 = null;
       }
     }
-    async function tick() {
-      timer = null;
+    async function tick2() {
+      timer2 = null;
       const result = await fetchState();
       if (!alive) return;
       const state = result && result.ok && result.data && typeof result.data === "object" ? result.data : null;
       if (state) judge(state.lastJob || null);
       const busy = Boolean(activeJob) || Boolean(state && activeJobOf(state));
-      if (alive && document.hidden && busy) timer = setTimeout(tick, TIMEOUTS.clientStateActivePollMs);
+      if (alive && document.hidden && busy) timer2 = setTimeout(tick2, TIMEOUTS.clientStateActivePollMs);
     }
     function rememberHidden() {
       hiddenJobRef.current = previousRef.current ?? null;
@@ -6883,7 +6819,7 @@ function useCompletionNotice({ t, ui, job, activeJob }) {
     function onVisibility() {
       if (document.hidden) {
         rememberHidden();
-        if (activeJob && timer === null) tick();
+        if (activeJob && timer2 === null) tick2();
         return;
       }
       stop();
@@ -6901,7 +6837,7 @@ function useCompletionNotice({ t, ui, job, activeJob }) {
     document.addEventListener("visibilitychange", onVisibility);
     if (document.hidden && activeJob) {
       rememberHidden();
-      tick();
+      tick2();
     }
     return () => {
       alive = false;
@@ -6912,10 +6848,10 @@ function useCompletionNotice({ t, ui, job, activeJob }) {
 }
 
 // src/studio/useStudio.js
-var import_react22 = __toESM(require("react"), 1);
+var import_react23 = __toESM(require("react"), 1);
 
 // src/studio/hooks/useChatThread.js
-var import_react17 = __toESM(require("react"), 1);
+var import_react18 = __toESM(require("react"), 1);
 function bubblePatch(t, job, current) {
   if (job.status === "waiting-session") return { stage: "queued", text: t("studio.chat.waitingSession") };
   if (job.status === "queued") return { stage: "queued", text: t("studio.chat.queued") };
@@ -6937,14 +6873,14 @@ function bubblePatch(t, job, current) {
   return null;
 }
 function useChatThread({ t, isEn, alive, state, form, generate }) {
-  const [messages, setMessages] = import_react17.default.useState([]);
-  const [interpreting, setInterpreting] = import_react17.default.useState(false);
-  const messageSeq = import_react17.default.useRef(0);
-  const interpretingRef = import_react17.default.useRef(false);
+  const [messages, setMessages] = import_react18.default.useState([]);
+  const [interpreting, setInterpreting] = import_react18.default.useState(false);
+  const messageSeq = import_react18.default.useRef(0);
+  const interpretingRef = import_react18.default.useRef(false);
   const jobs = stateJobs(state);
   const threadJobs = jobs.length > 0 ? jobs : state && state.lastJob ? [state.lastJob] : [];
   const threadKey = threadJobs.map((job) => `${job.id}:${job.status}`).join("|");
-  import_react17.default.useEffect(() => {
+  import_react18.default.useEffect(() => {
     if (messages.length === 0 || threadJobs.length === 0) return;
     setMessages((prev) => {
       let next = prev;
@@ -7072,24 +7008,24 @@ function useChatThread({ t, isEn, alive, state, form, generate }) {
 }
 
 // src/studio/hooks/useKaggleLogin.js
-var import_react18 = __toESM(require("react"), 1);
+var import_react19 = __toESM(require("react"), 1);
 var NETWORK_ERROR_KEY = "studio.guidance.auth.reason.network";
 var REQUEST_ERROR_KEY = "studio.guidance.auth.reason.request";
 var UNAVAILABLE_ERROR_KEY = "studio.guidance.auth.reason.unavailable";
 var TIMEOUT_ERROR_KEY = "studio.guidance.auth.reason.timeout";
 function useKaggleLogin({ t, ui, onDone } = {}) {
   const translate = typeof t === "function" ? t : (key) => key;
-  const [login, setLogin] = import_react18.default.useState(emptyLoginView);
-  const [busy, setBusy] = import_react18.default.useState(false);
-  const [errorKey, setErrorKey] = import_react18.default.useState("");
-  const [codeErrorKey, setCodeErrorKey] = import_react18.default.useState("");
-  const timerRef = import_react18.default.useRef(null);
-  const startedAtRef = import_react18.default.useRef(0);
-  const busyRef = import_react18.default.useRef(false);
-  const sessionRef = import_react18.default.useRef(0);
-  const aliveRef = import_react18.default.useRef(true);
-  const viewRef = import_react18.default.useRef(emptyLoginView());
-  const onDoneRef = import_react18.default.useRef(onDone);
+  const [login, setLogin] = import_react19.default.useState(emptyLoginView);
+  const [busy, setBusy] = import_react19.default.useState(false);
+  const [errorKey, setErrorKey] = import_react19.default.useState("");
+  const [codeErrorKey, setCodeErrorKey] = import_react19.default.useState("");
+  const timerRef = import_react19.default.useRef(null);
+  const startedAtRef = import_react19.default.useRef(0);
+  const busyRef = import_react19.default.useRef(false);
+  const sessionRef = import_react19.default.useRef(0);
+  const aliveRef = import_react19.default.useRef(true);
+  const viewRef = import_react19.default.useRef(emptyLoginView());
+  const onDoneRef = import_react19.default.useRef(onDone);
   onDoneRef.current = onDone;
   function toast(key) {
     if (ui && typeof ui.showToast === "function") ui.showToast(translate(key));
@@ -7108,7 +7044,7 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
     if (timerRef.current !== null || !aliveRef.current || sessionRef.current !== token2) return;
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
-      tick(token2);
+      tick2(token2);
     }, KAGGLE_LOGIN.pollMs);
   }
   function commitView(view, token2) {
@@ -7149,7 +7085,7 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
     }
     schedulePoll(token2);
   }
-  async function tick(token2) {
+  async function tick2(token2) {
     if (!aliveRef.current || sessionRef.current !== token2) return;
     if (loginTimedOut(startedAtRef.current, Date.now())) {
       failOnce(TIMEOUT_ERROR_KEY, token2);
@@ -7220,16 +7156,17 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
     }
     setCodeErrorKey("");
     if (busyRef.current) return false;
+    const token2 = sessionRef.current;
     markBusy(true);
     const result = await submitKaggleLoginCode(check.code);
-    if (!aliveRef.current) return false;
+    if (!aliveRef.current || sessionRef.current !== token2) return false;
     markBusy(false);
     const view = loginViewOf(result);
     if (!view) {
-      failOnce(NETWORK_ERROR_KEY);
+      failFromResult(result, token2);
       return false;
     }
-    applyTerminalOrPending(view, sessionRef.current);
+    applyTerminalOrPending(view, token2);
     return true;
   }
   function reset() {
@@ -7241,7 +7178,7 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
     setErrorKey("");
     setCodeErrorKey("");
   }
-  import_react18.default.useEffect(() => {
+  import_react19.default.useEffect(() => {
     aliveRef.current = true;
     function onVisibility() {
       if (document.hidden) {
@@ -7272,17 +7209,17 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
 }
 
 // src/studio/hooks/useSessionControl.js
-var import_react19 = __toESM(require("react"), 1);
+var import_react20 = __toESM(require("react"), 1);
 function rememberCancelling(previous, id) {
   if (!Array.isArray(previous)) return [id];
   return previous.includes(id) ? previous : [...previous, id];
 }
 function useSessionControl({ t, host, ui, alive }) {
-  const [busy, setBusy] = import_react19.default.useState("");
-  const [probing, setProbing] = import_react19.default.useState(false);
-  const [probeReport, setProbeReport] = import_react19.default.useState(null);
-  const [cancellingIds, setCancellingIds] = import_react19.default.useState([]);
-  const cancellingRef = import_react19.default.useRef(/* @__PURE__ */ new Set());
+  const [busy, setBusy] = import_react20.default.useState("");
+  const [probing, setProbing] = import_react20.default.useState(false);
+  const [probeReport, setProbeReport] = import_react20.default.useState(null);
+  const [cancellingIds, setCancellingIds] = import_react20.default.useState([]);
+  const cancellingRef = import_react20.default.useRef(/* @__PURE__ */ new Set());
   const state = host.state;
   const session = state && state.session || null;
   const kaggleTransport = normalizeKaggleTransport(state && state.kaggleTransport);
@@ -7292,7 +7229,7 @@ function useSessionControl({ t, host, ui, alive }) {
   const focusedJob = activeJob || state && state.lastJob || stateJobs(state)[0] || null;
   const status = computeStatusOf(t, { session });
   const pendingSignature = pendingJobs.map((job) => job.id).join(",");
-  import_react19.default.useEffect(() => {
+  import_react20.default.useEffect(() => {
     const activeIds = new Set(pendingJobs.map((job) => job.id));
     for (const id of [...cancellingRef.current]) {
       if (!activeIds.has(id)) cancellingRef.current.delete(id);
@@ -7302,9 +7239,9 @@ function useSessionControl({ t, host, ui, alive }) {
       return next.length === prev.length ? prev : next;
     });
   }, [pendingSignature]);
-  const hostErrorKeyRef = import_react19.default.useRef("");
-  const hostErrorCodeRef = import_react19.default.useRef("");
-  import_react19.default.useEffect(() => {
+  const hostErrorKeyRef = import_react20.default.useRef("");
+  const hostErrorCodeRef = import_react20.default.useRef("");
+  import_react20.default.useEffect(() => {
     if (!host.error) {
       if (!hostErrorCodeRef.current) return;
       const code = hostErrorCodeRef.current;
@@ -7322,21 +7259,27 @@ function useSessionControl({ t, host, ui, alive }) {
   async function startSession2(presetId, options = {}) {
     if (busy) return;
     setBusy("start");
-    const result = await alive(startSession(presetId, options));
-    if (!result) return;
-    setBusy("");
-    if (!result.ok) ui.fail(result.code, result.message);
-    else ui.setError(null);
-    host.refresh();
+    try {
+      const result = await alive(startSession(presetId, options));
+      if (!result) return;
+      if (!result.ok) ui.fail(result.code, result.message);
+      else ui.setError(null);
+      host.refresh();
+    } finally {
+      setBusy("");
+    }
   }
   async function stopSession2() {
     if (busy) return;
     setBusy("stop");
-    const result = await alive(stopSession());
-    if (!result) return;
-    setBusy("");
-    if (!result.ok) ui.fail(result.code, result.message);
-    host.refresh();
+    try {
+      const result = await alive(stopSession());
+      if (!result) return;
+      if (!result.ok) ui.fail(result.code, result.message);
+      host.refresh();
+    } finally {
+      setBusy("");
+    }
   }
   async function cancelJob2(id) {
     const target = typeof id === "string" ? id.trim() : "";
@@ -7373,31 +7316,30 @@ function useSessionControl({ t, host, ui, alive }) {
     if (probing) return;
     setProbing(true);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUTS.clientProbeMs);
-    let result;
+    const timer2 = setTimeout(() => controller.abort(), TIMEOUTS.clientProbeMs);
     try {
-      result = await alive(runProbe(controller.signal));
+      const result = await alive(runProbe(controller.signal));
+      if (!result) return;
+      if (!result.ok) {
+        setProbeReport({ status: result.code === "timeout" ? "timeout" : "failed", message: result.message, probe: null });
+        ui.showToast(result.code === "timeout" ? t("studio.probe.timeout") : t("studio.probe.failed"));
+        return;
+      }
+      const outcome = probeOutcomeOf(result.data, { transport: kaggleTransport });
+      if (outcome.ok) {
+        setProbeReport({ status: "ok", message: "", probe: outcome.probe });
+        if (ui.error && (ui.error.code === "cli_missing" || ui.error.code === "auth_required")) ui.setError(null);
+        ui.showToast(t("studio.probe.ok"));
+      } else {
+        setProbeReport({ status: "failed", message: outcome.detail, probe: outcome.probe });
+        if (outcome.code === "cli_missing" || outcome.code === "auth_required") ui.fail(outcome.code, outcome.detail);
+        else ui.showToast(t("studio.probe.failed"));
+      }
+      host.refresh();
     } finally {
-      clearTimeout(timer);
+      clearTimeout(timer2);
+      setProbing(false);
     }
-    if (!result) return;
-    setProbing(false);
-    if (!result.ok) {
-      setProbeReport({ status: result.code === "timeout" ? "timeout" : "failed", message: result.message, probe: null });
-      ui.showToast(result.code === "timeout" ? t("studio.probe.timeout") : t("studio.probe.failed"));
-      return;
-    }
-    const outcome = probeOutcomeOf(result.data, { transport: kaggleTransport });
-    if (outcome.ok) {
-      setProbeReport({ status: "ok", message: "", probe: outcome.probe });
-      if (ui.error && (ui.error.code === "cli_missing" || ui.error.code === "auth_required")) ui.setError(null);
-      ui.showToast(t("studio.probe.ok"));
-    } else {
-      setProbeReport({ status: "failed", message: outcome.detail, probe: outcome.probe });
-      if (outcome.code === "cli_missing" || outcome.code === "auth_required") ui.fail(outcome.code, outcome.detail);
-      else ui.showToast(t("studio.probe.failed"));
-    }
-    host.refresh();
   }
   return {
     session,
@@ -7422,7 +7364,7 @@ function useSessionControl({ t, host, ui, alive }) {
 }
 
 // src/studio/hooks/useStudioForm.js
-var import_react20 = __toESM(require("react"), 1);
+var import_react21 = __toESM(require("react"), 1);
 
 // src/logic/preset.js
 function detectCjk(text) {
@@ -7578,28 +7520,25 @@ function referenceOf(image, path) {
   if (Number.isFinite(height) && height > 0) next.height = Math.round(height);
   return next;
 }
-function hintOf2(preset) {
-  return preset && typeof preset.negativeHint === "string" ? preset.negativeHint.trim() : "";
-}
 function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const { presets, defaultPreset } = preset;
-  const [form, setForm] = import_react20.default.useState(() => ({
+  const [form, setForm] = import_react21.default.useState(() => ({
     ...EMPTY_FORM,
     prompt: initialPrompt
   }));
-  const [refineGroups, setRefineGroups] = import_react20.default.useState([]);
-  const [refineSource, setRefineSource] = import_react20.default.useState("");
-  const [enhancing, setEnhancing] = import_react20.default.useState(false);
-  const [translating, setTranslating] = import_react20.default.useState(false);
+  const [refineGroups, setRefineGroups] = import_react21.default.useState([]);
+  const [refineSource, setRefineSource] = import_react21.default.useState("");
+  const [enhancing, setEnhancing] = import_react21.default.useState(false);
+  const [translating, setTranslating] = import_react21.default.useState(false);
   const ratioId = ratioIdOf(form.width, form.height);
   const activePreset = presets.find((item) => item.id === form.presetId) || null;
-  const negativeHint = hintOf2(activePreset);
+  const negativeHint = hintOf(activePreset);
   const negativeActive = negativePromptActive(activePreset, form.cfg);
   const englishPromptHint = detectCjk(form.prompt) && presetNeedsEnglish(activePreset);
   const reference = form.reference || null;
   const referenceSupported = supportsImg2Img(activePreset);
   const referenceBlocked = Boolean(reference && presets.length > 0 && !referenceSupported);
-  import_react20.default.useEffect(() => {
+  import_react21.default.useEffect(() => {
     if (presets.length === 0) return;
     setForm((prev) => {
       if (prev.presetId && presets.some((item2) => item2.id === prev.presetId)) return prev;
@@ -7637,7 +7576,7 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
       const isActive = negativePromptActive(current, next);
       if (!wasActive && isActive) {
         const layers = resolveNegativeLayers(prev, presets);
-        const hint = hintOf2(current);
+        const hint = hintOf(current);
         if (!layers.model && hint) Object.assign(patch, negativeLayersPatch({ ...layers, model: hint }));
       }
       return applyNegativePatch(prev, patch);
@@ -7806,7 +7745,7 @@ ${value}` : value });
 }
 
 // src/studio/hooks/useWorkLibrary.js
-var import_react21 = __toESM(require("react"), 1);
+var import_react22 = __toESM(require("react"), 1);
 var PAGE_SIZE = LIMITS.history.pageSize;
 function flattenHistory(items) {
   const images = [];
@@ -7816,16 +7755,36 @@ function flattenHistory(items) {
   }
   return images;
 }
+function applyFavorite(list, target, on) {
+  const base = Array.isArray(list) ? list : [];
+  if (on) return base.includes(target) ? base : [...base, target];
+  return base.filter((item) => item !== target);
+}
+function mergePendingFavorites(serverList, pendingMap) {
+  let merged = Array.isArray(serverList) ? serverList : [];
+  for (const [target, entry] of pendingMap.entries()) {
+    merged = applyFavorite(merged, target, entry.next);
+  }
+  return merged;
+}
 function useWorkLibrary({ t, alive, ui, state }) {
-  const [selectedPath, setSelectedPath] = import_react21.default.useState("");
-  const [historyItems, setHistoryItems] = import_react21.default.useState([]);
-  const [historyHasMoreState, setHistoryHasMoreState] = import_react21.default.useState(false);
-  const [historyLoadingMore, setHistoryLoadingMore] = import_react21.default.useState(false);
-  const [favorites, setFavorites] = import_react21.default.useState([]);
-  const offsetRef = import_react21.default.useRef(0);
-  const hasMoreRef = import_react21.default.useRef(false);
-  const loadingMoreRef = import_react21.default.useRef(false);
-  const loadHistory = import_react21.default.useCallback(async () => {
+  const [selectedPath, setSelectedPath] = import_react22.default.useState("");
+  const [historyItems, setHistoryItems] = import_react22.default.useState([]);
+  const [historyHasMoreState, setHistoryHasMoreState] = import_react22.default.useState(false);
+  const [historyLoadingMore, setHistoryLoadingMore] = import_react22.default.useState(false);
+  const [favorites, setFavorites] = import_react22.default.useState([]);
+  const tRef = import_react22.default.useRef(t);
+  const uiRef = import_react22.default.useRef(ui);
+  tRef.current = t;
+  uiRef.current = ui;
+  const favoritesRef = import_react22.default.useRef(favorites);
+  favoritesRef.current = favorites;
+  const favSeqRef = import_react22.default.useRef(/* @__PURE__ */ new Map());
+  const favPendingRef = import_react22.default.useRef(/* @__PURE__ */ new Map());
+  const offsetRef = import_react22.default.useRef(0);
+  const hasMoreRef = import_react22.default.useRef(false);
+  const loadingMoreRef = import_react22.default.useRef(false);
+  const loadHistory = import_react22.default.useCallback(async () => {
     const result = await alive(fetchHistory(PAGE_SIZE, 0));
     if (!result) return;
     if (result.ok && result.data && Array.isArray(result.data.items)) {
@@ -7838,10 +7797,10 @@ function useWorkLibrary({ t, alive, ui, state }) {
       return;
     }
     if (!result.ok) {
-      ui.fail(result.code, result.message);
+      uiRef.current.fail(result.code, result.message);
     }
   }, [alive]);
-  const loadMoreHistory = import_react21.default.useCallback(async () => {
+  const loadMoreHistory = import_react22.default.useCallback(async () => {
     if (loadingMoreRef.current || !hasMoreRef.current) return;
     loadingMoreRef.current = true;
     setHistoryLoadingMore(true);
@@ -7858,35 +7817,38 @@ function useWorkLibrary({ t, alive, ui, state }) {
         setHistoryHasMoreState(more);
         return;
       }
-      if (!result.ok) ui.fail(result.code, result.message);
+      if (!result.ok) uiRef.current.fail(result.code, result.message);
     } finally {
       loadingMoreRef.current = false;
       setHistoryLoadingMore(false);
     }
   }, [alive]);
-  import_react21.default.useEffect(() => {
+  import_react22.default.useEffect(() => {
     loadHistory();
   }, [loadHistory]);
-  const loadLibrary = import_react21.default.useCallback(async () => {
+  const loadLibrary = import_react22.default.useCallback(async () => {
     const result = await alive(fetchLibrary());
     if (!result) return;
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
-      setFavorites(result.data.favorites);
+      const merged = mergePendingFavorites(result.data.favorites, favPendingRef.current);
+      favoritesRef.current = merged;
+      setFavorites(merged);
     } else if (!result.ok) {
-      ui.fail(result.code, result.message);
+      uiRef.current.fail(result.code, result.message);
     }
   }, [alive]);
-  import_react21.default.useEffect(() => {
+  import_react22.default.useEffect(() => {
     loadLibrary();
   }, [loadLibrary]);
-  const baselineRef = import_react21.default.useRef(false);
-  const seenJobRef = import_react21.default.useRef("");
-  const announcedRef = import_react21.default.useRef(false);
+  const hasState = Boolean(state);
+  const baselineRef = import_react22.default.useRef(false);
+  const seenJobRef = import_react22.default.useRef("");
+  const announcedRef = import_react22.default.useRef(false);
   const lastJob = state && state.lastJob ? state.lastJob : null;
   const lastJobKey = lastJob ? `${lastJob.id}:${lastJob.status}` : "";
   const sessionState = state && state.session && state.session.state || "absent";
-  import_react21.default.useEffect(() => {
-    if (!state) return;
+  import_react22.default.useEffect(() => {
+    if (!hasState) return;
     if (!baselineRef.current) {
       baselineRef.current = true;
       seenJobRef.current = lastJob ? lastJob.id : "";
@@ -7898,15 +7860,22 @@ function useWorkLibrary({ t, alive, ui, state }) {
     const images = Array.isArray(lastJob.output?.images) ? lastJob.output.images : [];
     if (images.length === 0) return;
     announcedRef.current = true;
-    ui.showToast(t("studio.toast.firstImage"));
-  }, [lastJobKey, sessionState]);
+    uiRef.current.showToast(tRef.current("studio.toast.firstImage"));
+  }, [hasState, lastJobKey, sessionState]);
+  const historyBaselineRef = import_react22.default.useRef(false);
   const lastJobId = state && state.lastJob ? `${state.lastJob.id}:${state.lastJob.finishedAt ?? ""}` : "";
-  const lastSeenRef = import_react21.default.useRef("");
-  import_react21.default.useEffect(() => {
+  const lastSeenRef = import_react22.default.useRef("");
+  import_react22.default.useEffect(() => {
+    if (!hasState) return;
+    if (!historyBaselineRef.current) {
+      historyBaselineRef.current = true;
+      lastSeenRef.current = lastJobId;
+      return;
+    }
     if (!lastJobId || lastSeenRef.current === lastJobId) return;
     lastSeenRef.current = lastJobId;
     loadHistory();
-  }, [lastJobId, loadHistory]);
+  }, [hasState, lastJobId, loadHistory]);
   const gallery = flattenHistory(historyItems);
   const batches = historyItems.map((item) => ({
     key: item.jobId || item.dir || String(item.prompt),
@@ -7928,17 +7897,30 @@ function useWorkLibrary({ t, alive, ui, state }) {
   async function toggleFavorite(path) {
     const target = String(path ?? "");
     if (!target) return;
-    const next = !isFavorite(target);
-    setFavorites((prev) => next ? [...prev, target] : prev.filter((item) => item !== target));
+    const next = !favoritesRef.current.includes(target);
+    const seq = (favSeqRef.current.get(target) || 0) + 1;
+    favSeqRef.current.set(target, seq);
+    favPendingRef.current.set(target, { seq, next });
+    const optimistic = applyFavorite(favoritesRef.current, target, next);
+    favoritesRef.current = optimistic;
+    setFavorites(optimistic);
     const result = await alive(favoriteImage(target, next));
     if (!result) return;
+    if (favSeqRef.current.get(target) !== seq) return;
+    favPendingRef.current.delete(target);
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
-      setFavorites(result.data.favorites);
-      ui.showToast(next ? t("studio.toast.favorited") : t("studio.toast.unfavorited"));
+      const merged = mergePendingFavorites(result.data.favorites, favPendingRef.current);
+      favoritesRef.current = merged;
+      setFavorites(merged);
+      uiRef.current.showToast(next ? tRef.current("studio.toast.favorited") : tRef.current("studio.toast.unfavorited"));
       return;
     }
-    setFavorites((prev) => next ? prev.filter((item) => item !== target) : [...prev, target]);
-    ui.fail(result.code, result.message);
+    setFavorites((prev) => {
+      const rolled = applyFavorite(prev, target, !next);
+      favoritesRef.current = rolled;
+      return rolled;
+    });
+    uiRef.current.fail(result.code, result.message);
   }
   async function deleteImages2(paths) {
     const list = (Array.isArray(paths) ? paths : []).filter(Boolean);
@@ -7946,13 +7928,13 @@ function useWorkLibrary({ t, alive, ui, state }) {
     const result = await alive(deleteImages(list));
     if (!result) return;
     if (!result.ok) {
-      ui.fail(result.code, result.message);
+      uiRef.current.fail(result.code, result.message);
       return null;
     }
     const removed = Array.isArray(result.data.removed) ? result.data.removed : [];
-    if (removed.length > 0) ui.showToast(t("studio.toast.deleted"));
+    if (removed.length > 0) uiRef.current.showToast(tRef.current("studio.toast.deleted"));
     if (Array.isArray(result.data.failed) && result.data.failed.length > 0) {
-      ui.fail("delete_failed", t("studio.error.deleteFailed"));
+      uiRef.current.fail("delete_failed", tRef.current("studio.error.deleteFailed"));
     }
     setSelectedPath("");
     await Promise.all([loadHistory(), loadLibrary()]);
@@ -7961,8 +7943,8 @@ function useWorkLibrary({ t, alive, ui, state }) {
   function zoomImage(entry) {
     if (!entry) return;
     selectImage(entry);
-    ui.setView("studio");
-    ui.setZoom(true);
+    uiRef.current.setView("studio");
+    uiRef.current.setZoom(true);
   }
   async function exportPaths(paths) {
     const list = (Array.isArray(paths) ? paths : []).filter(Boolean);
@@ -7976,12 +7958,12 @@ function useWorkLibrary({ t, alive, ui, state }) {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
-        ui.showToast(t("studio.toast.exported"));
+        uiRef.current.showToast(tRef.current("studio.toast.exported"));
         return;
       }
     } catch {
     }
-    ui.showToast(text);
+    uiRef.current.showToast(text);
   }
   return {
     gallery,
@@ -8006,14 +7988,14 @@ function useWorkLibrary({ t, alive, ui, state }) {
 
 // src/studio/useStudio.js
 function useAlive() {
-  const ref = import_react22.default.useRef(true);
-  import_react22.default.useEffect(() => {
+  const ref = import_react23.default.useRef(true);
+  import_react23.default.useEffect(() => {
     ref.current = true;
     return () => {
       ref.current = false;
     };
   }, []);
-  return import_react22.default.useCallback(async (promise) => {
+  return import_react23.default.useCallback(async (promise) => {
     const value = await promise;
     return ref.current ? value : null;
   }, []);
@@ -8029,8 +8011,8 @@ function useStudio(props) {
   const initialPanelMode = props && props.panelMode === "chat" ? "chat" : "form";
   const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : [];
   const defaultPreset = state && state.defaultPreset || "";
-  const [sending, setSending] = import_react22.default.useState(false);
-  const pendingRef = import_react22.default.useRef(null);
+  const [sending, setSending] = import_react23.default.useState(false);
+  const pendingRef = import_react23.default.useRef(null);
   const ui = useStudioUi({ t, initialView, initialPanelMode });
   const control = useSessionControl({ t, host, ui, alive });
   const kaggleLogin = useKaggleLogin({ t, ui, onDone: () => control.runProbe() });
@@ -8159,6 +8141,9 @@ function useStudio(props) {
 
 // src/studio/Studio.jsx
 var import_jsx_runtime17 = require("react/jsx-runtime");
+var StudioStyles = import_react24.default.memo(function StudioStyles2() {
+  return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("style", { children: CSS });
+});
 function Studio(props) {
   const { t, isEn, ui, compute, form, chat, library, guidance, actions } = useStudio(props);
   const status = compute.status;
@@ -8172,7 +8157,7 @@ function Studio(props) {
   const bannerGuidance = guidanceSurface === "banner" ? guidance : null;
   const noticeGuidance = guidanceSurface === "toast" ? guidance : null;
   return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-root", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("style", { children: CSS }),
+    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(StudioStyles, {}),
     /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-app", children: [
       /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(TopBar, { t, isEn, ui, compute, form, library, defaultModelOpen: props.defaultModelOpen }),
       /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(SessionBar, { t, status, elapsedMs: sessionElapsed }),
@@ -8184,7 +8169,7 @@ function Studio(props) {
           {
             t,
             gallery: library.gallery,
-            now: Date.now(),
+            now,
             presets: compute.presets,
             favorites: library.favorites,
             hasMore: library.hasMore,
@@ -8204,7 +8189,7 @@ function Studio(props) {
           }
         ) : /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(import_jsx_runtime17.Fragment, { children: [
           /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(QueuePill, { t, compute }),
-          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(Stage, { t, ui, compute, form, library, actions })
+          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(Stage, { t, ui, compute, form, library, actions, now })
         ] }) })
       ] }),
       ui.view === "studio" ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(Filmstrip, { t, ui, compute, library, now }) : null

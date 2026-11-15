@@ -89,22 +89,28 @@ export function useSessionControl({ t, host, ui, alive }) {
   async function startSession(presetId, options = {}) {
     if (busy) return
     setBusy('start')
-    const result = await alive(startSessionRequest(presetId, options))
-    if (!result) return
-    setBusy('')
-    if (!result.ok) ui.fail(result.code, result.message)
-    else ui.setError(null)
-    host.refresh()
+    try {
+      const result = await alive(startSessionRequest(presetId, options))
+      if (!result) return
+      if (!result.ok) ui.fail(result.code, result.message)
+      else ui.setError(null)
+      host.refresh()
+    } finally {
+      setBusy('')
+    }
   }
 
   async function stopSession() {
     if (busy) return
     setBusy('stop')
-    const result = await alive(stopSessionRequest())
-    if (!result) return
-    setBusy('')
-    if (!result.ok) ui.fail(result.code, result.message)
-    host.refresh()
+    try {
+      const result = await alive(stopSessionRequest())
+      if (!result) return
+      if (!result.ok) ui.fail(result.code, result.message)
+      host.refresh()
+    } finally {
+      setBusy('')
+    }
   }
 
   /**
@@ -153,31 +159,30 @@ export function useSessionControl({ t, host, ui, alive }) {
     // Host 的 /probe 会串行调用 kaggle CLI，首次检查约 20~30 秒；45 秒兜底，避免无限等待。
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), TIMEOUTS.clientProbeMs)
-    let result
     try {
-      result = await alive(runProbeRequest(controller.signal))
+      const result = await alive(runProbeRequest(controller.signal))
+      if (!result) return
+      // Host 固定回 HTTP 200，成败只能看 payload.ok / probe.auth.ok。
+      if (!result.ok) {
+        setProbeReport({ status: result.code === 'timeout' ? 'timeout' : 'failed', message: result.message, probe: null })
+        ui.showToast(result.code === 'timeout' ? t('studio.probe.timeout') : t('studio.probe.failed'))
+        return
+      }
+      const outcome = probeOutcomeOf(result.data, { transport: kaggleTransport })
+      if (outcome.ok) {
+        setProbeReport({ status: 'ok', message: '', probe: outcome.probe })
+        if (ui.error && (ui.error.code === 'cli_missing' || ui.error.code === 'auth_required')) ui.setError(null)
+        ui.showToast(t('studio.probe.ok'))
+      } else {
+        setProbeReport({ status: 'failed', message: outcome.detail, probe: outcome.probe })
+        if (outcome.code === 'cli_missing' || outcome.code === 'auth_required') ui.fail(outcome.code, outcome.detail)
+        else ui.showToast(t('studio.probe.failed'))
+      }
+      host.refresh()
     } finally {
       clearTimeout(timer)
+      setProbing(false)
     }
-    if (!result) return
-    setProbing(false)
-    // Host 固定回 HTTP 200，成败只能看 payload.ok / probe.auth.ok。
-    if (!result.ok) {
-      setProbeReport({ status: result.code === 'timeout' ? 'timeout' : 'failed', message: result.message, probe: null })
-      ui.showToast(result.code === 'timeout' ? t('studio.probe.timeout') : t('studio.probe.failed'))
-      return
-    }
-    const outcome = probeOutcomeOf(result.data, { transport: kaggleTransport })
-    if (outcome.ok) {
-      setProbeReport({ status: 'ok', message: '', probe: outcome.probe })
-      if (ui.error && (ui.error.code === 'cli_missing' || ui.error.code === 'auth_required')) ui.setError(null)
-      ui.showToast(t('studio.probe.ok'))
-    } else {
-      setProbeReport({ status: 'failed', message: outcome.detail, probe: outcome.probe })
-      if (outcome.code === 'cli_missing' || outcome.code === 'auth_required') ui.fail(outcome.code, outcome.detail)
-      else ui.showToast(t('studio.probe.failed'))
-    }
-    host.refresh()
   }
 
   return {

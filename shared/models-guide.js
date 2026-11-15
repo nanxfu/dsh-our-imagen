@@ -1,5 +1,5 @@
 /**
- * 模型知识的统一口径：把 `models/*.json`（经 `shared/contract.js` 的 PRESETS 下发）
+ * 模型知识的统一口径：把 `models/*.json`（经 `shared/contract.js` 的 publicPresets() 下发）
  * 整理成提示词规则、负向词能力、模型用法摘要，供三处复用：
  *
  *  - Host 助手层（`lib/intent.js`、`lib/enhance.js`、`lib/tools.js`）：告诉大模型每款模型
@@ -11,7 +11,7 @@
  * （唯一来源是 `models/*.json`）。
  */
 
-import { LIMITS, PRESETS } from './contract.js'
+import { LIMITS, publicPresets } from './contract.js'
 
 const PROMPT_STYLE_NAMES = {
   danbooru: 'Danbooru 标签',
@@ -138,7 +138,7 @@ export function modelUsageLine(preset) {
 
 /** 全部模型的一行摘要（每行一个，供 system prompt / 工具描述直接拼接）。 */
 export function modelCatalogText() {
-  return PRESETS.map(modelUsageLine).filter(Boolean).join('\n')
+  return publicPresets().map(modelUsageLine).filter(Boolean).join('\n')
 }
 
 /**

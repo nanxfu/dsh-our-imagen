@@ -38,12 +38,37 @@ function flattenHistory(items) {
   return images
 }
 
+function applyFavorite(list, target, on) {
+  const base = Array.isArray(list) ? list : []
+  if (on) return base.includes(target) ? base : [...base, target]
+  return base.filter((item) => item !== target)
+}
+
+function mergePendingFavorites(serverList, pendingMap) {
+  let merged = Array.isArray(serverList) ? serverList : []
+  for (const [target, entry] of pendingMap.entries()) {
+    merged = applyFavorite(merged, target, entry.next)
+  }
+  return merged
+}
+
 export function useWorkLibrary({ t, alive, ui, state }) {
   const [selectedPath, setSelectedPath] = React.useState('')
   const [historyItems, setHistoryItems] = React.useState([])
   const [historyHasMoreState, setHistoryHasMoreState] = React.useState(false)
   const [historyLoadingMore, setHistoryLoadingMore] = React.useState(false)
   const [favorites, setFavorites] = React.useState([])
+
+  // 最新回调函数与收藏视图放进 ref：异步回调与 effect 不依赖渲染闭包。
+  const tRef = React.useRef(t)
+  const uiRef = React.useRef(ui)
+  tRef.current = t
+  uiRef.current = ui
+  const favoritesRef = React.useRef(favorites)
+  favoritesRef.current = favorites
+  // 按路径记录收藏请求代号与在途乐观态：防快速连击或慢响应乱序覆盖/回滚新状态。
+  const favSeqRef = React.useRef(new Map())
+  const favPendingRef = React.useRef(new Map())
 
   // 分页推进用 ref：loadMore 在异步回调里读最新位置，不依赖 state 的提交时序。
   const offsetRef = React.useRef(0)
@@ -65,7 +90,7 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     }
     if (!result.ok) {
       // 加载失败走错误/指引通道，且不清空已有列表。
-      ui.fail(result.code, result.message)
+      uiRef.current.fail(result.code, result.message)
     }
   }, [alive])
 
@@ -88,7 +113,7 @@ export function useWorkLibrary({ t, alive, ui, state }) {
         setHistoryHasMoreState(more)
         return
       }
-      if (!result.ok) ui.fail(result.code, result.message)
+      if (!result.ok) uiRef.current.fail(result.code, result.message)
     } finally {
       loadingMoreRef.current = false
       setHistoryLoadingMore(false)
@@ -103,9 +128,11 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     const result = await alive(fetchLibrary())
     if (!result) return
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
-      setFavorites(result.data.favorites)
+      const merged = mergePendingFavorites(result.data.favorites, favPendingRef.current)
+      favoritesRef.current = merged
+      setFavorites(merged)
     } else if (!result.ok) {
-      ui.fail(result.code, result.message)
+      uiRef.current.fail(result.code, result.message)
     }
   }, [alive])
 
@@ -116,6 +143,7 @@ export function useWorkLibrary({ t, alive, ui, state }) {
   // 首张出图提示：只对本次页面观察到的新完成批次、且云端仍就绪时报一次。
   // 首次拿到 /state 时把历史 lastJob 记为基线，避免重挂载后对旧结果再次提示；
   // 云端已关闭时不再宣称「云端就绪」。
+  const hasState = Boolean(state)
   const baselineRef = React.useRef(false)
   const seenJobRef = React.useRef('')
   const announcedRef = React.useRef(false)
@@ -123,7 +151,7 @@ export function useWorkLibrary({ t, alive, ui, state }) {
   const lastJobKey = lastJob ? `${lastJob.id}:${lastJob.status}` : ''
   const sessionState = (state && state.session && state.session.state) || 'absent'
   React.useEffect(() => {
-    if (!state) return
+    if (!hasState) return
     if (!baselineRef.current) {
       baselineRef.current = true
       seenJobRef.current = lastJob ? lastJob.id : ''
@@ -135,18 +163,25 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     const images = Array.isArray(lastJob.output?.images) ? lastJob.output.images : []
     if (images.length === 0) return
     announcedRef.current = true
-    ui.showToast(t('studio.toast.firstImage'))
-  }, [lastJobKey, sessionState])
+    uiRef.current.showToast(tRef.current('studio.toast.firstImage'))
+  }, [hasState, lastJobKey, sessionState])
 
   // 任务完成后刷新历史：重新从第 0 页加载（新图可能连带改变后续分页边界），
-  // 同一个任务只触发一次；宿主轮询本身不会重置已加载的分页。
+  // 首次拿到 /state 时只记下基线（挂载 effect 已拉过第 0 页），避免首屏重复请求 /history。
+  const historyBaselineRef = React.useRef(false)
   const lastJobId = state && state.lastJob ? `${state.lastJob.id}:${state.lastJob.finishedAt ?? ''}` : ''
   const lastSeenRef = React.useRef('')
   React.useEffect(() => {
+    if (!hasState) return
+    if (!historyBaselineRef.current) {
+      historyBaselineRef.current = true
+      lastSeenRef.current = lastJobId
+      return
+    }
     if (!lastJobId || lastSeenRef.current === lastJobId) return
     lastSeenRef.current = lastJobId
     loadHistory()
-  }, [lastJobId, loadHistory])
+  }, [hasState, lastJobId, loadHistory])
 
   const gallery = flattenHistory(historyItems)
   // 最近生成按批次分组：一次生成（1~4 张）就是一组。
@@ -176,18 +211,32 @@ export function useWorkLibrary({ t, alive, ui, state }) {
   async function toggleFavorite(path) {
     const target = String(path ?? '')
     if (!target) return
-    const next = !isFavorite(target)
-    // 先本地翻转，再以宿主返回的列表为准，交互不等网络。
-    setFavorites((prev) => (next ? [...prev, target] : prev.filter((item) => item !== target)))
+    const next = !favoritesRef.current.includes(target)
+    const seq = (favSeqRef.current.get(target) || 0) + 1
+    favSeqRef.current.set(target, seq)
+    favPendingRef.current.set(target, { seq, next })
+    // 先本地翻转（同步写 ref 避免快速连击读到旧值），再以宿主返回的列表为准。
+    const optimistic = applyFavorite(favoritesRef.current, target, next)
+    favoritesRef.current = optimistic
+    setFavorites(optimistic)
     const result = await alive(favoriteImage(target, next))
     if (!result) return
+    // 同路径已有更新的点击发出后，旧响应（成功或失败）直接丢弃。
+    if (favSeqRef.current.get(target) !== seq) return
+    favPendingRef.current.delete(target)
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
-      setFavorites(result.data.favorites)
-      ui.showToast(next ? t('studio.toast.favorited') : t('studio.toast.unfavorited'))
+      const merged = mergePendingFavorites(result.data.favorites, favPendingRef.current)
+      favoritesRef.current = merged
+      setFavorites(merged)
+      uiRef.current.showToast(next ? tRef.current('studio.toast.favorited') : tRef.current('studio.toast.unfavorited'))
       return
     }
-    setFavorites((prev) => (next ? prev.filter((item) => item !== target) : [...prev, target]))
-    ui.fail(result.code, result.message)
+    setFavorites((prev) => {
+      const rolled = applyFavorite(prev, target, !next)
+      favoritesRef.current = rolled
+      return rolled
+    })
+    uiRef.current.fail(result.code, result.message)
   }
 
   async function deleteImages(paths) {
@@ -196,13 +245,13 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     const result = await alive(deleteImagesRequest(list))
     if (!result) return
     if (!result.ok) {
-      ui.fail(result.code, result.message)
+      uiRef.current.fail(result.code, result.message)
       return null
     }
     const removed = Array.isArray(result.data.removed) ? result.data.removed : []
-    if (removed.length > 0) ui.showToast(t('studio.toast.deleted'))
+    if (removed.length > 0) uiRef.current.showToast(tRef.current('studio.toast.deleted'))
     if (Array.isArray(result.data.failed) && result.data.failed.length > 0) {
-      ui.fail('delete_failed', t('studio.error.deleteFailed'))
+      uiRef.current.fail('delete_failed', tRef.current('studio.error.deleteFailed'))
     }
     setSelectedPath('')
     // 删除会改变记录可达性：重新从第 0 页加载，避免 offset 错位。
@@ -214,8 +263,8 @@ export function useWorkLibrary({ t, alive, ui, state }) {
   function zoomImage(entry) {
     if (!entry) return
     selectImage(entry)
-    ui.setView('studio')
-    ui.setZoom(true)
+    uiRef.current.setView('studio')
+    uiRef.current.setZoom(true)
   }
 
   async function exportPaths(paths) {
@@ -231,13 +280,13 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text)
-        ui.showToast(t('studio.toast.exported'))
+        uiRef.current.showToast(tRef.current('studio.toast.exported'))
         return
       }
     } catch {
       // 退化为提示
     }
-    ui.showToast(text)
+    uiRef.current.showToast(text)
   }
 
   return {

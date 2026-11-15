@@ -15,6 +15,9 @@ import { activeJobOf } from '../../logic/jobs.js'
 import { completionNotice, isCompletion, stripNoticePrefix } from '../../logic/notice.js'
 import { buildUiStatePatch, uiStateViewOf } from '../../logic/uiState.js'
 
+/** 单调递增的 Toast 编号，避免同一毫秒连续提示发生 id 碰撞。 */
+let nextToastId = 0
+
 export function useStudioUi({ t, initialView, initialPanelMode }) {
   // 初始视图与面板形态可由 props 指定（预览与测试用），由组合层算好后传入。
   const [view, setView] = React.useState(initialView)
@@ -32,9 +35,12 @@ export function useStudioUi({ t, initialView, initialPanelMode }) {
   // 运行设置抽屉与日志抽屉同一套焦点归还约定，两者独立开关。
   const [settingsOpen, setSettingsOpen] = React.useState(false)
   const settingsReturnRef = React.useRef(null)
+  const advancedOpenRef = React.useRef(advancedOpen)
+  advancedOpenRef.current = advancedOpen
 
   function showToast(text) {
-    setToast({ text, id: Date.now() })
+    nextToastId += 1
+    setToast({ text, id: nextToastId })
   }
 
   // 界面态只是体验优化：挂载时读一次，失败静默回落默认值（收起），不弹错误提示。
@@ -43,7 +49,10 @@ export function useStudioUi({ t, initialView, initialPanelMode }) {
     Promise.resolve(fetchUiState()).then((result) => {
       if (!alive) return
       const saved = uiStateViewOf(result)
-      if (saved) setAdvancedOpen(saved.advancedOpen)
+      if (saved) {
+        advancedOpenRef.current = saved.advancedOpen
+        setAdvancedOpen(saved.advancedOpen)
+      }
     })
     return () => {
       alive = false
@@ -55,8 +64,9 @@ export function useStudioUi({ t, initialView, initialPanelMode }) {
    * 保存失败不回滚、不提示——界面态丢失不影响出图。
    */
   function toggleAdvancedOpen() {
-    const next = !advancedOpen
-    setAdvancedOpen(next)
+    setAdvancedOpen((prev) => !prev)
+    const next = !advancedOpenRef.current
+    advancedOpenRef.current = next
     Promise.resolve(saveUiState(buildUiStatePatch({ advancedOpen: next }))).catch(() => {})
   }
 
