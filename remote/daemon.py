@@ -212,6 +212,8 @@ from remote.state import (  # noqa: E402, F401
     STATE_LOCK,
     BootState,
     RuntimeState,
+    # 门面导出：旧调用点（单测）按 `d._TunnelAttempt` 造"过期的尝试令牌"，
+    # 真实现已归 remote/infra/tunnel.py 使用（`TUNNEL.attempt` 内部构造）。
     TunnelAttempt as _TunnelAttempt,
     record_error,
     set_phase,
@@ -1227,165 +1229,62 @@ def start_http_server(port: int) -> ThreadingHTTPServer:
 # ─────────────────────────────────────────────────────────────────────────────
 # 隧道（cloudflared quick tunnel + 可配置备用通道）
 #
-# P0.2：隧道启动/监管拆成小而纯的函数，子进程与输出读取用替身即可离线覆盖：
-#   normalize_tunnel_command / extract_tunnel_url / tunnel_url_regex / build_tunnel_plan /
-#   tunnel_attempt（单通道尝试）/ tunnel_monitor（常驻监管与指数退避重拉）。
+# 实现已搬到 remote/infra/tunnel.py 的 TunnelSupervisor（二进制设置、通道计划、单次
+# 尝试、常驻监管与指数退避重拉）。本文件只保留纯函数再导出与门面别名：下面这行 import
+# 是 `normalize_tunnel_command` / `extract_tunnel_url` / 版本常量等旧取数点的出口，
+# 其余 `run_*` / `spawn_*` / 下载辅助都只在 infra/tunnel.py 内部使用。
 # P2.2：cloudflared 失败或超时后按 provider 计划尝试备用命令，成功后 provider='custom'。
 # ─────────────────────────────────────────────────────────────────────────────
 
+from tunnel import (  # noqa: E402
+    CLOUDFLARED_DOWNLOAD_URL,
+    CLOUDFLARED_PATH,
+    CLOUDFLARED_SHA256,
+    CLOUDFLARED_URL_RE,
+    CLOUDFLARED_VERSION,
+    DEFAULT_CUSTOM_URL_RE,
+    TUNNEL_ANNOUNCE_SEC,
+    TUNNEL_PROVIDERS,
+    TUNNEL_RESTART_MAX_SEC,
+    extract_tunnel_url,
+    normalize_tunnel_command,
+    terminate_tunnel_process,
+)
 
-from tunnel import CLOUDFLARED_DOWNLOAD_ATTEMPTS, CLOUDFLARED_DOWNLOAD_TIMEOUT_SEC, CLOUDFLARED_DOWNLOAD_URL, CLOUDFLARED_MAX_DOWNLOAD_BYTES, CLOUDFLARED_PATH, CLOUDFLARED_SHA256, CLOUDFLARED_URL_RE, CLOUDFLARED_VERSION, DEFAULT_CUSTOM_URL_RE, TUNNEL_ANNOUNCE_SEC, TUNNEL_PROVIDERS, TUNNEL_RESTART_BASE_SEC, TUNNEL_RESTART_MAX_SEC, TUNNEL_WAIT_SEC, _CloudflaredDownloadTooLarge, _file_sha256, _remove_file_quietly, build_tunnel_plan_for, download_cloudflared_once_from, drain_tunnel_output_for, extract_tunnel_url, normalize_tunnel_command, run_announce_tunnel_ready, run_recover_tunnel_error, run_start_tunnel, run_tunnel_attempt, run_tunnel_monitor, spawn_tunnel_process_for, terminate_tunnel_process, tunnel_restart_delay, tunnel_url_regex_for, verify_or_download_cloudflared, wait_tunnel_exit  # noqa: E402
+from remote.infra.tunnel import TunnelBinary, TunnelSupervisor  # noqa: E402, F401
 
+# 隧道生命周期的门面：boot / state 传活对象；三个回调都用 lambda——单测替换
+# `daemon.publish_ready` / `daemon.fail_boot` 时，调用点才解析实现（§1.3.6）。
+TUNNEL = TunnelSupervisor(
+    config=CONFIG,
+    boot=BOOT,
+    boot_lock=BOOT_LOCK,
+    state=STATE,
+    state_lock=STATE_LOCK,
+    publish_fn=lambda: publish_ready(),
+    set_phase_fn=lambda phase, detail=None: set_phase(phase, detail),
+    fail_boot_fn=lambda code, message, tunnel=False: fail_boot(code, message, tunnel=tunnel),
+)
 
-def _download_cloudflared_once(partial: str) -> tuple[int, str]:
-    """流式下载一次 cloudflared 到 ``partial``，边写边算 SHA256。"""
-    return download_cloudflared_once_from(
-        partial,
-        download_url=CLOUDFLARED_DOWNLOAD_URL,
-        timeout_sec=CLOUDFLARED_DOWNLOAD_TIMEOUT_SEC,
-        max_bytes=CLOUDFLARED_MAX_DOWNLOAD_BYTES,
-    )
-
-
-def ensure_cloudflared() -> str:
-    """确保 ``CLOUDFLARED_PATH`` 可用：已就绪且 SHA256 一致则复用，否则按固定版本下载。"""
-    return verify_or_download_cloudflared(
-        path=CLOUDFLARED_PATH,
-        download_url=CLOUDFLARED_DOWNLOAD_URL,
-        sha256=CLOUDFLARED_SHA256,
-        version=CLOUDFLARED_VERSION,
-        max_bytes=CLOUDFLARED_MAX_DOWNLOAD_BYTES,
-        timeout_sec=CLOUDFLARED_DOWNLOAD_TIMEOUT_SEC,
-        attempts=CLOUDFLARED_DOWNLOAD_ATTEMPTS,
-        download_once_fn=_download_cloudflared_once,
-        log=log,
-    )
-
-
-def tunnel_url_regex(pattern: str | None = None):  # noqa: ANN202 - 返回编译后的正则
-    """备用通道的地址提取规则：配置优先，非法或缺省时回退内置 https 规则。"""
-    return tunnel_url_regex_for(pattern, log=log)
-
-
-def build_tunnel_plan(port: int) -> list[dict]:
-    """按尝试顺序给出通道计划：cloudflare 优先，配置了备用命令再追加 custom。"""
-    return build_tunnel_plan_for(
-        port,
-        cloudflared_path=CLOUDFLARED_PATH,
-        fallback_command=CONFIG.fallback_tunnel_command,
-        fallback_regex=CONFIG.fallback_tunnel_url_regex,
-        url_regex_fn=tunnel_url_regex,
-        log=log,
-    )
-
-
-def tunnel_should_stop() -> bool:
-    """隧道监管是否该退出（/shutdown、信号或显式置位）。"""
-    with STATE_LOCK:
-        shutting_down = STATE.shutting_down
-    return BOOT.stop_event.is_set() or shutting_down
-
-
-def _spawn_tunnel_process(argv: list[str], provider: str = "cloudflare"):  # noqa: ANN202 - 返回 Popen 或 None
-    """启动隧道子进程；失败只记录原因，交给下一个通道或下一轮重试。"""
-    return spawn_tunnel_process_for(argv, provider, boot=BOOT, boot_lock=BOOT_LOCK, log=log)
-
-
-def _drain_tunnel_output(
-    proc,
-    provider: str,
-    url_re,
-    url_event: threading.Event,
-    attempt: _TunnelAttempt | None = None,
-) -> None:  # noqa: ANN001
-    """持续读取隧道输出，首个地址写入 BOOT 并置位事件；必须读到进程退出为止。"""
-    drain_tunnel_output_for(
-        proc,
-        provider,
-        url_re,
-        url_event,
-        attempt,
-        boot=BOOT,
-        boot_lock=BOOT_LOCK,
-        log=log,
-    )
-
-
-def tunnel_attempt(item: dict) -> tuple[str, object] | None:
-    """启动一个通道并等待地址：成功返回 (provider, proc)，失败返回 None。"""
-    return run_tunnel_attempt(
-        item,
-        boot=BOOT,
-        boot_lock=BOOT_LOCK,
-        attempt_cls=_TunnelAttempt,
-        spawn_fn=_spawn_tunnel_process,
-        drain_fn=_drain_tunnel_output,
-        terminate_fn=terminate_tunnel_process,
-        log=log,
-    )
-
-
-def start_tunnel(port: int) -> tuple[str, object] | None:
-    """按 provider 计划依次尝试；cloudflared 下载失败时仍会尝试备用通道。"""
-    return run_start_tunnel(
-        port,
-        plan_fn=build_tunnel_plan,
-        should_stop_fn=tunnel_should_stop,
-        ensure_binary_fn=ensure_cloudflared,
-        attempt_fn=tunnel_attempt,
-        boot=BOOT,
-        boot_lock=BOOT_LOCK,
-        log=log,
-    )
-
-
-def recover_tunnel_error() -> None:
-    """隧道恢复后清掉 tunnel_failed 错误态，避免 Host 把 /health 当成致命错误。"""
-    run_recover_tunnel_error(
-        state=STATE,
-        state_lock=STATE_LOCK,
-        boot=BOOT,
-        boot_lock=BOOT_LOCK,
-        set_phase_fn=set_phase,
-        log=log,
-    )
-
-
-def announce_tunnel_ready(provider: str, *, restarted: bool = False) -> None:
-    """隧道（重新）建立：记录通道类型、清隧道错误并重播 ready。"""
-    run_announce_tunnel_ready(
-        provider,
-        restarted=restarted,
-        boot=BOOT,
-        boot_lock=BOOT_LOCK,
-        recover_fn=recover_tunnel_error,
-        publish_fn=publish_ready,
-        log=log,
-    )
-
-
-def tunnel_wait_exit(proc, poll_interval: float = 1.0):  # noqa: ANN001, ANN202
-    """常驻等待隧道进程退出；收到停机信号时返回 None。"""
-    return wait_tunnel_exit(proc, tunnel_should_stop, poll_interval=poll_interval)
-
-
-def tunnel_monitor(port: int) -> None:
-    """常驻监管：拉起隧道 → 等进程退出 / 失败退避重拉；直到收到停机信号。"""
-    run_tunnel_monitor(
-        port,
-        should_stop_fn=tunnel_should_stop,
-        start_tunnel_fn=start_tunnel,
-        restart_delay_fn=tunnel_restart_delay,
-        announce_fn=announce_tunnel_ready,
-        wait_exit_fn=tunnel_wait_exit,
-        terminate_fn=terminate_tunnel_process,
-        fail_boot_fn=fail_boot,
-        state=STATE,
-        state_lock=STATE_LOCK,
-        boot=BOOT,
-        boot_lock=BOOT_LOCK,
-        log=log,
-    )
+# ── 门面别名（Batch 3 随 daemon 门面一起删） ──────────────────────────────────
+#
+# 与缓存域同一口径：实现已在 remote/infra/tunnel.py，下面只是 `TUNNEL` 上同名方法的
+# 别名。**替换这些名字不会改变内部行为**——内部调用一律走 self.*。要替换二进制参数
+# （路径 / URL / SHA256 / 大小上限），改 `TUNNEL.binary` 的字段；patch
+# `daemon.CLOUDFLARED_*` 只是改同一份数值的只读副本，不会影响下载路径。
+ensure_cloudflared = TUNNEL.ensure_cloudflared
+tunnel_url_regex = TUNNEL.url_regex
+build_tunnel_plan = TUNNEL.build_plan
+tunnel_should_stop = TUNNEL.should_stop
+_spawn_tunnel_process = TUNNEL.spawn
+_drain_tunnel_output = TUNNEL.drain
+tunnel_attempt = TUNNEL.attempt
+start_tunnel = TUNNEL.start
+recover_tunnel_error = TUNNEL.recover_error
+announce_tunnel_ready = TUNNEL.announce_ready
+tunnel_wait_exit = TUNNEL.wait_exit
+tunnel_monitor = TUNNEL.monitor
+tunnel_restart_delay = TUNNEL.restart_delay
 
 
 # `tunnel_boot`（拉起常驻监管线程）随进程生命周期搬到 remote/app.py 的

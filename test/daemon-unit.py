@@ -63,6 +63,9 @@
 30. 切片⑥c 的缓存域边界：`CACHE` 是唯一持有者（config 传活对象而非快照）、daemon 不再
      定义这些包装、闸门与探针的替换点必须命中实例（替换 daemon 上的同名别名不会改变
      内部行为）、探针"只打一次"收在实例里
+31. 切片⑥d 的隧道域边界：`TUNNEL` 是唯一持有者、`TunnelBinary` 字段在调用时读取（替换
+     `TUNNEL.binary.path` 要影响真实下载/计划路径）、退避函数走实例（否则 monitor 用例
+     会退化成真等 2s 而不报错）、daemon 不再定义这些包装
 
 运行：python test/daemon-unit.py
 """
@@ -140,6 +143,7 @@ import remote.app as remote_app  # noqa: E402
 import remote.config as remote_config  # noqa: E402
 import remote.infra.cache as remote_cache  # noqa: E402
 import remote.infra.process as remote_process  # noqa: E402
+import remote.infra.tunnel as remote_tunnel  # noqa: E402
 import remote.jobs.models as remote_job_models  # noqa: E402
 import remote.jobs.store as remote_job_store  # noqa: E402
 import remote.observability.health as remote_health  # noqa: E402
@@ -441,6 +445,9 @@ class DaemonUnitTest(unittest.TestCase):
         # job 表是进程级状态（JobStore 单例），用例之间必须清干净。
         d.JOB_STORE.clear()
         d.JOB_WAKE.clear()
+        # 缓存探针的"进程内只打一次"也是进程级状态：不复位的话，只有第一个用例能看到
+        # 探针日志，后面的用例会在"以为打了、其实没打"的假象里做断言。
+        d.CACHE.reset_probe()
 
     def tearDown(self) -> None:
         # 同样原地重置：不重置的话，后运行的用例（如 ImportSideEffectTest）会看到上一个
@@ -834,6 +841,57 @@ class CacheManagerBoundaryTest(DaemonUnitTest):
             self.assertIn("[cache] stub-again", self.logs())
         finally:
             d.CACHE.reset_probe()
+
+
+class TunnelSupervisorBoundaryTest(DaemonUnitTest):
+    """切片⑥d：隧道域收进 TUNNEL，二进制参数走 TunnelBinary 设置对象。"""
+
+    def test_supervisor_is_the_single_owner(self) -> None:
+        self.assertIsInstance(d.TUNNEL, remote_tunnel.TunnelSupervisor)
+        self.assertIsInstance(d.TUNNEL.binary, remote_tunnel.TunnelBinary)
+        # 常量仍是单一真源，binary 只是可替换的取数对象（生产口径必须同值）。
+        self.assertEqual(d.TUNNEL.binary.path, d.CLOUDFLARED_PATH)
+        self.assertEqual(d.TUNNEL.binary.url, d.CLOUDFLARED_DOWNLOAD_URL)
+        self.assertEqual(d.TUNNEL.binary.sha256, d.CLOUDFLARED_SHA256)
+        # 别名指向同一个方法对象，不是第二份实现。
+        self.assertEqual(d.start_tunnel, d.TUNNEL.start)
+        self.assertEqual(d.tunnel_monitor, d.TUNNEL.monitor)
+        self.assertEqual(d.tunnel_restart_delay, d.TUNNEL.restart_delay)
+
+    def test_daemon_no_longer_defines_the_wrappers(self) -> None:
+        source = DAEMON_PATH.read_text(encoding="utf-8")
+        for name in (
+            "start_tunnel",
+            "ensure_cloudflared",
+            "tunnel_monitor",
+            "build_tunnel_plan",
+            "announce_tunnel_ready",
+            "recover_tunnel_error",
+            "tunnel_wait_exit",
+        ):
+            self.assertIsNone(
+                re.search(rf"(?m)^def {name}\(", source),
+                f"daemon.py 不应再定义 {name}（实现已归 TunnelSupervisor）",
+            )
+        # 这两个内部步骤也随实现搬走，别留成第二份。
+        for name in ("_spawn_tunnel_process", "_download_cloudflared_once", "_drain_tunnel_output"):
+            self.assertNotIn(f"def {name}(", source)
+
+    def test_binary_fields_are_read_at_call_time(self) -> None:
+        """替换 TUNNEL.binary 的字段必须影响真实路径：构造期拷贝会静默失效。"""
+        self.assertEqual(d.build_tunnel_plan(7860)[0]["argv"][0], d.TUNNEL.binary.path)
+        with mock.patch.object(d.TUNNEL.binary, "path", "/tmp/other-cloudflared"):
+            self.assertEqual(d.build_tunnel_plan(7860)[0]["argv"][0], "/tmp/other-cloudflared")
+
+    def test_restart_backoff_is_exposed_on_the_instance(self) -> None:
+        """退避函数也走实例：monitor 内部是 `self.restart_delay`，替换才能压平等待。
+
+        （`TunnelMonitorTest` 用它把 2s 退避压成 1ms；若内部改回模块级函数，那条用例会
+        退化成真等 2 秒——不会报错，只是慢，所以这里再钉一次取值口径。）
+        """
+        self.assertEqual(d.TUNNEL.restart_delay(1), 2.0)
+        self.assertEqual(d.TUNNEL.restart_delay(100), d.TUNNEL_RESTART_MAX_SEC)
+        self.assertEqual(d.tunnel_restart_delay(0), 2.0)
 
 
 class BuildConfigTest(DaemonUnitTest):
@@ -2087,15 +2145,10 @@ class DiskPrecheckTest(DaemonUnitTest):
 
 
 class CacheProbeTest(DaemonUnitTest):
-    """远端 HF 缓存探针：目录/挂载点/剩余空间摘要、token 脱敏、异常降级、只打一次。"""
+    """远端 HF 缓存探针：目录/挂载点/剩余空间摘要、token 脱敏、异常降级、只打一次。
 
-    def setUp(self) -> None:
-        super().setUp()
-        d.CACHE.reset_probe()
-
-    def tearDown(self) -> None:
-        d.CACHE.reset_probe()
-        super().tearDown()
+    探针标志的复位在基类 setUp 里统一做（`d.CACHE.reset_probe()`），这里不再重复。
+    """
 
     def test_cache_dir_env_priority(self) -> None:
         with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
@@ -2579,17 +2632,22 @@ class CloudflaredDownloadTest(DaemonUnitTest):
         self.calls: list[str] = []
 
     def download(self, responses, expected_sha=None, max_bytes=None):  # noqa: ANN001, ANN202
-        """在隔离的临时路径 / 校验和 / urlopen 下调用 ensure_cloudflared。"""
+        """在隔离的临时路径 / 校验和 / urlopen 下调用 ensure_cloudflared。
+
+        替换的是 `TUNNEL.binary` 的字段（真实调用点每次读取），而不是 `daemon.CLOUDFLARED_*`
+        常量——后者只是同一份数值的只读副本，改了不会影响下载路径（切片⑥d 的边界约定）。
+        """
+        binary = d.TUNNEL.binary
         with contextlib.ExitStack() as stack:
-            stack.enter_context(mock.patch.object(d, "CLOUDFLARED_PATH", self.target))
-            stack.enter_context(mock.patch.object(d, "CLOUDFLARED_DOWNLOAD_URL", self.URL_SENTINEL))
+            stack.enter_context(mock.patch.object(binary, "path", self.target))
+            stack.enter_context(mock.patch.object(binary, "url", self.URL_SENTINEL))
             stack.enter_context(
                 mock.patch.object(
-                    d, "CLOUDFLARED_SHA256", self.payload_sha if expected_sha is None else expected_sha
+                    binary, "sha256", self.payload_sha if expected_sha is None else expected_sha
                 )
             )
             if max_bytes is not None:
-                stack.enter_context(mock.patch.object(d, "CLOUDFLARED_MAX_DOWNLOAD_BYTES", max_bytes))
+                stack.enter_context(mock.patch.object(binary, "max_bytes", max_bytes))
             stack.enter_context(mock.patch.object(d.urllib.request, "urlopen", make_urlopen(responses, self.calls)))
             return d.ensure_cloudflared()
 
@@ -2697,7 +2755,7 @@ class CloudflaredDownloadTest(DaemonUnitTest):
 
     def test_start_tunnel_surfaces_download_error(self) -> None:
         error = "cloudflared 2026.11.0 下载失败（2 次尝试均未成功）：下载异常：boom"
-        with mock.patch.object(d, "ensure_cloudflared", side_effect=RuntimeError(error)):
+        with mock.patch.object(d.TUNNEL, "ensure_cloudflared", side_effect=RuntimeError(error)):
             result = d.start_tunnel(7860)
         self.assertIsNone(result)
         self.assertIn("cloudflared 下载失败：", d.BOOT.tunnel_error or "")
@@ -2771,7 +2829,7 @@ class TunnelDrainTest(DaemonUnitTest):
     def test_attempt_success_returns_provider_and_proc(self) -> None:
         proc = FakeProc(["https://x1.trycloudflare.com"], code=0)
         item = {"provider": "cloudflare", "argv": ["cloudflared"], "url_re": d.CLOUDFLARED_URL_RE, "wait_sec": 2.0}
-        with mock.patch.object(d, "_spawn_tunnel_process", return_value=proc):
+        with mock.patch.object(d.TUNNEL, "spawn", return_value=proc):
             result = d.tunnel_attempt(item)
         self.assertEqual(result, ("cloudflare", proc))
         self.assertEqual(d.BOOT.tunnel_url, "https://x1.trycloudflare.com")
@@ -2779,7 +2837,7 @@ class TunnelDrainTest(DaemonUnitTest):
     def test_attempt_failure_terminates_process(self) -> None:
         proc = FakeProc(["boom"], code=2)
         item = {"provider": "custom", "argv": ["bore"], "url_re": d.DEFAULT_CUSTOM_URL_RE, "wait_sec": 0.2}
-        with mock.patch.object(d, "_spawn_tunnel_process", return_value=proc):
+        with mock.patch.object(d.TUNNEL, "spawn", return_value=proc):
             result = d.tunnel_attempt(item)
         self.assertIsNone(result)
         self.assertTrue(proc.terminated)
@@ -2810,8 +2868,8 @@ class TunnelDrainTest(DaemonUnitTest):
     def test_start_tunnel_falls_back_to_custom(self) -> None:
         d.CONFIG.fallback_tunnel_command = ["bore", "local", "127.0.0.1:{port}"]
         proc = FakeProc(["listening at https://bore.example.com"], code=0)
-        with mock.patch.object(d, "ensure_cloudflared", side_effect=RuntimeError("download blocked")), mock.patch.object(
-            d, "_spawn_tunnel_process", return_value=proc
+        with mock.patch.object(d.TUNNEL, "ensure_cloudflared", side_effect=RuntimeError("download blocked")), mock.patch.object(
+            d.TUNNEL, "spawn", return_value=proc
         ):
             result = d.start_tunnel(7860)
         self.assertEqual(result[0], "custom")
@@ -2895,9 +2953,9 @@ class TunnelMonitorTest(DaemonUnitTest):
             d.BOOT.stop_event.set()
             return 7
 
-        with mock.patch.object(d, "start_tunnel", side_effect=lambda _port: outcomes.pop(0)), mock.patch.object(
-            d, "tunnel_restart_delay", return_value=0.001
-        ), mock.patch.object(d, "tunnel_wait_exit", side_effect=fake_wait), mock.patch.object(
+        with mock.patch.object(d.TUNNEL, "start", side_effect=lambda _port: outcomes.pop(0)), mock.patch.object(
+            d.TUNNEL, "restart_delay", return_value=0.001
+        ), mock.patch.object(d.TUNNEL, "wait_exit", side_effect=fake_wait), mock.patch.object(
             d, "publish_ready", side_effect=lambda: published.append(True)
         ):
             d.tunnel_monitor(7860)
@@ -2911,7 +2969,7 @@ class TunnelMonitorTest(DaemonUnitTest):
 
     def test_monitor_exits_immediately_when_shutting_down(self) -> None:
         d.STATE.shutting_down = True
-        with mock.patch.object(d, "start_tunnel", side_effect=AssertionError("不应尝试启动隧道")):
+        with mock.patch.object(d.TUNNEL, "start", side_effect=AssertionError("不应尝试启动隧道")):
             d.tunnel_monitor(7860)
         self.assertEqual(d.BOOT.tunnel_restarts, 0)
 
@@ -2929,9 +2987,9 @@ class TunnelMonitorTest(DaemonUnitTest):
             return 0
 
         d.STATE.phase = "ready"
-        with mock.patch.object(d, "start_tunnel", side_effect=lambda _port: outcomes.pop(0)), mock.patch.object(
-            d, "tunnel_restart_delay", return_value=0.001
-        ), mock.patch.object(d, "tunnel_wait_exit", side_effect=fake_wait), mock.patch.object(
+        with mock.patch.object(d.TUNNEL, "start", side_effect=lambda _port: outcomes.pop(0)), mock.patch.object(
+            d.TUNNEL, "restart_delay", return_value=0.001
+        ), mock.patch.object(d.TUNNEL, "wait_exit", side_effect=fake_wait), mock.patch.object(
             d, "publish_ready", side_effect=lambda: published.append(True)
         ):
             d.tunnel_monitor(7860)
