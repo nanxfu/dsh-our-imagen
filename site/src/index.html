@@ -85,8 +85,8 @@
 
       <div class="chrome-actions">
         <div class="seg seg-lang" role="group" aria-label="语言切换" data-t-aria="langAria">
-          <button type="button" class="seg-btn is-active" data-lang="zh">中</button>
-          <button type="button" class="seg-btn" data-lang="en">EN</button>
+          <button type="button" class="seg-btn is-active" data-lang="zh" aria-pressed="true">中</button>
+          <button type="button" class="seg-btn" data-lang="en" aria-pressed="false">EN</button>
         </div>
 
         <button
@@ -143,7 +143,7 @@
           <circle cx="12" cy="12" r="9" />
           <path d="M12 8v4M12 16h.01" />
         </svg>
-        <span data-t="motionNotice">系统已开启「减少动态效果」，本页动效已暂停。</span>
+        <span data-t="motionNotice">动效已关闭：轮播、滚动显影与背景动画已暂停。</span>
       </p>
       <button type="button" class="btn btn-quiet btn-sm" id="motion-enable" data-t="motionEnable">开启动效</button>
     </div>
@@ -211,7 +211,7 @@
             <span class="exposure-nums tabular" id="hero-exp-nums">1152×640 · 6.8s · seed 71107</span>
           </figcaption>
 
-          <div class="hero-thumbs" id="hero-thumbs" role="tablist" aria-label="切换样张" data-t-aria="heroThumbsAria"></div>
+          <div class="hero-thumbs" id="hero-thumbs" role="group" aria-label="切换样张" data-t-aria="heroThumbsAria"></div>
 
           <div class="hero-cycle" aria-hidden="true"><i id="hero-cycle-bar"></i></div>
         </figure>
@@ -270,7 +270,7 @@
             <span data-t="railHeadModel">内置模型</span>
             <span data-t="railHeadSpeed">稳态单张耗时</span>
           </div>
-          <div class="model-list" id="model-list" role="listbox" aria-label="选择模型"></div>
+          <div class="model-list" id="model-list" role="group" aria-label="选择模型"></div>
           <div class="rail-scale tabular" aria-hidden="true">
             <span data-t="railFast">快 2s</span>
             <span data-t="railSlow">慢 90s</span>
@@ -360,49 +360,88 @@
       </div>
     </section>
 
-    <!-- 原理与边界 -->
+    <!-- 原理与边界：一条光路，滚动时依次点亮四个环节 -->
     <section class="architecture" id="architecture">
-      <div class="section-head section-head-single">
-        <h2 class="section-title" data-t="archTitle">算力白用，图片自留，限制也摊在明面上。</h2>
-        <p class="section-desc" data-t="archDesc">
-          没有中间服务器抽成，也没有公共图床留存。插件只做一件事：把你本机的操作指令安全地递给 Kaggle，再把算完的图接回本地硬盘。
-        </p>
-      </div>
+      <div class="flow" id="flow">
+        <div class="flow-stage" id="flow-stage">
+          <div class="section-head section-head-single">
+            <h2 class="section-title" data-t="archTitle">算力白用，图片自留，限制也摊在明面上。</h2>
+            <p class="section-desc" data-t="archDesc">
+              没有中间服务器抽成，也没有公共图床留存。插件只做一件事：把你本机的操作指令安全地递给 Kaggle，再把算完的图接回本地硬盘。
+            </p>
+          </div>
 
-      <ol class="pipeline" aria-label="数据与算力流向">
-        <li class="pipeline-node">
-          <span class="pipeline-step tabular">01</span>
-          <strong data-t="topo1Title">你的电脑 · DSH 界面</strong>
-          <span class="pipeline-sub" data-t="topo1Sub">独立工作台 / 聊天工具</span>
-        </li>
-        <li class="pipeline-link" aria-hidden="true">
-          <span class="pipeline-line"></span>
-          <span class="pipeline-tag" data-t="topoTunnel">单次 Token 加密隧道</span>
-        </li>
-        <li class="pipeline-node">
-          <span class="pipeline-step tabular">02</span>
-          <strong data-t="topo2Title">本地 Node.js Host</strong>
-          <span class="pipeline-sub" data-t="topo2Sub">管状态、发任务、写硬盘</span>
-        </li>
-        <li class="pipeline-link" aria-hidden="true">
-          <span class="pipeline-line"></span>
-          <span class="pipeline-tag" data-t="topoTunnel">单次 Token 加密隧道</span>
-        </li>
-        <li class="pipeline-node">
-          <span class="pipeline-step tabular">03</span>
-          <strong data-t="topo3Title">Kaggle 2×Tesla T4</strong>
-          <span class="pipeline-sub" data-t="topo3Sub">daemon.py · 30G 显存</span>
-        </li>
-        <li class="pipeline-link" aria-hidden="true">
-          <span class="pipeline-line"></span>
-          <span class="pipeline-tag" data-t="topoSave">流式回传落盘</span>
-        </li>
-        <li class="pipeline-node is-terminal">
-          <span class="pipeline-step tabular">04</span>
-          <strong>imagen-output/</strong>
-          <span class="pipeline-sub" data-t="topo4Sub">100% 留存你自己的工作区</span>
-        </li>
-      </ol>
+          <div class="flow-body">
+            <ol class="pipeline" aria-label="数据与算力流向">
+              <li class="pipeline-node" data-flow-step="0">
+                <span class="pipeline-step tabular">01</span>
+                <strong data-t="topo1Title">你的电脑 · DSH 界面</strong>
+                <span class="pipeline-sub" data-t="topo1Sub">独立工作台 / 聊天工具</span>
+              </li>
+              <li class="pipeline-link" aria-hidden="true">
+                <span class="pipeline-line"><i class="pipeline-fill"></i></span>
+                <span class="pipeline-tag" data-t="topoTunnel">单次 Token 加密隧道</span>
+              </li>
+              <li class="pipeline-node" data-flow-step="1">
+                <span class="pipeline-step tabular">02</span>
+                <strong data-t="topo2Title">本地 Node.js Host</strong>
+                <span class="pipeline-sub" data-t="topo2Sub">管状态、发任务、写硬盘</span>
+              </li>
+              <li class="pipeline-link" aria-hidden="true">
+                <span class="pipeline-line"><i class="pipeline-fill"></i></span>
+                <span class="pipeline-tag" data-t="topoTunnel">单次 Token 加密隧道</span>
+              </li>
+              <li class="pipeline-node" data-flow-step="2">
+                <span class="pipeline-step tabular">03</span>
+                <strong data-t="topo3Title">Kaggle 2×Tesla T4</strong>
+                <span class="pipeline-sub" data-t="topo3Sub">daemon.py · 30G 显存</span>
+              </li>
+              <li class="pipeline-link" aria-hidden="true">
+                <span class="pipeline-line"><i class="pipeline-fill"></i></span>
+                <span class="pipeline-tag" data-t="topoSave">流式回传落盘</span>
+              </li>
+              <li class="pipeline-node is-terminal" data-flow-step="3">
+                <span class="pipeline-step tabular">04</span>
+                <strong>imagen-output/</strong>
+                <span class="pipeline-sub" data-t="topo4Sub">100% 留存你自己的工作区</span>
+              </li>
+              <li class="flow-spark" aria-hidden="true"></li>
+            </ol>
+
+            <div class="flow-foot">
+              <ol class="flow-captions" aria-label="光路指引" data-t-aria="flowStepLabel">
+                <li class="flow-caption" data-flow-step="0">
+                  <span class="flow-caption-index tabular">01</span>
+                  <p data-t="flow1">提示词、画幅与种子留在本机，只有这一次任务的参数被递出去。</p>
+                </li>
+                <li class="flow-caption" data-flow-step="1">
+                  <span class="flow-caption-index tabular">02</span>
+                  <p data-t="flow2">Host 排队、记录会话状态与落盘路径；中途刷新或重启，任务也不会丢。</p>
+                </li>
+                <li class="flow-caption" data-flow-step="2">
+                  <span class="flow-caption-index tabular">03</span>
+                  <p data-t="flow3">云端容器只做一件事：把权重装进 30G 显存，按参数出图，不做任何留存。</p>
+                </li>
+                <li class="flow-caption" data-flow-step="3">
+                  <span class="flow-caption-index tabular">04</span>
+                  <p data-t="flow4">图片以流式回传直接写进你本地的 imagen-output/，不经过任何图床。</p>
+                </li>
+              </ol>
+
+              <figure class="flow-print" aria-hidden="true">
+                <img
+                  src="./assets/showcase/flux2-klein-4b-kyoto-poster.webp"
+                  width="1152"
+                  height="640"
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                />
+              </figure>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <ul class="truths">
         <li class="truth">
