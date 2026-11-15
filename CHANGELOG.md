@@ -1,8 +1,8 @@
 # 变更记录
 
-## 未发布（架构重构 Batch 0 / Batch 1）
+## 未发布（架构重构 Batch 0 / 1 / 2）
 
-> 对应 [docs/REFACTOR_ARCHITECTURE_SPEC.md](docs/REFACTOR_ARCHITECTURE_SPEC.md)。两批都只改内部模块边界与打包形态，`docs/SPEC.md` 定义的 HTTP 路由、报文、错误码与配置注入契约保持向后兼容。
+> 对应 [docs/REFACTOR_ARCHITECTURE_SPEC.md](docs/REFACTOR_ARCHITECTURE_SPEC.md)。各批都只改内部模块边界、依赖方向与打包形态，`docs/SPEC.md` 定义的 HTTP 路由、报文、错误码与配置注入契约保持向后兼容。
 
 ### 改进
 
@@ -18,14 +18,20 @@
 - **契约随包分发**：`remote/contract.json` 现在打进 Kernel 源码包；`package.json` 的 `files` 扩到 `remote/**/*.py` 与 `remote/contract.json`，`scripts/package.mjs` 的 `remote` 目录放行 `.json` 并把 `_entry.py` / `__init__.py` / `contract.json` 列入必需文件。硬编码 `_FALLBACK_LIMITS` 本轮**未删**（会收紧无注入契约时的默认边界，安排到下一批与校验器单测同批做）。
 - **验证 payload 复用同一打包器**：`tools/verify-model.mjs` 用 `entryModule: 'payload.verify_model'` + `extraFiles` 把 `tools/payload/verify-model.py` 作为包内模块打进归档，不再各自内联 anima 运行时与 Loader。
 - **Host 侧收口（Batch 1）**：`lib/jobs.js`（948 行）拆为 `lib/jobs/{validator,errors,reference-loader,queue}.js`，`lib/kaggle-oauth.js`（674 行）拆为 `lib/kaggle/oauth/{pkce,browser,callback-server,session,text}.js`；两个原文件保留 16 / 23 行的聚合门面，导出名、函数签名与日志 scope 均未变，调用方零改动。
+- **远端包化推进到切片⑥（Batch 2）**：`remote/` 已按目标分层落地 `config` / `state` / `observability/health` / `infra/process` / `transport/{validator,http_server}` / `inference/reference_codec` / `jobs/{models,store,runner}` / `app`；`remote/daemon.py` 从 2579 行降到 1533 行，只留配置注入点、ntfy 会合、模型加载与出图执行，以及各域的薄包装。
+  - **⑥a 传输层**：`DaemonHandler` 与 `start_http_server` 搬进 `remote/transport/http_server.py`，依赖由 `HttpApi` 显式注入——`config` / `state` 传活对象，其余传 lambda 延迟解析，handler 不再 import daemon。`/health` 的取样顺序（持 `STATE_LOCK` 取快照 → 释放 → 取 `queue_depth`）仍留在 daemon，单测的锁序观察点不变。
+  - **⑥b 生命周期**：启动顺序、信号、退出清理与空闲看门狗搬进 `remote/app.py` 的 `DaemonApp`；daemon 末尾以 lambda 装配实例并 re-export `main` / `runtime_boot` / `tunnel_boot`，`mock.patch.object(daemon, "install_dependencies")` 这类替换仍在调用点生效。
+  - 剩余切片 ⑥c / ⑥d / ⑥e（`CacheManager` / `TunnelSupervisor` / `LoaderRegistry`）与 ⑥f（删门面 + 测试按域拆分）的施工顺序、以及"为什么不能一次做完"记在 `docs/REFACTOR_ARCHITECTURE_SPEC.md` §4.1。
 - **修复 Windows 原子写入抖动**：`lib/fs-atomic.js` 的 `rename` 遇到杀毒软件 / 索引服务瞬时占用会抛 `EPERM`，此前会让 Kaggle 直连登录静默失败（`/state` 只显示「账号接入失败：unknown」）。现对 `EPERM` / `EACCES` / `EBUSY` 做 5 次有界重试（累计约 150ms），`test/kaggle-direct.mjs` 由「3 次跑 2 次失败」变为连跑 4 次全过。
 
 ### 测试
 
 - `test/kernel-package.mjs` 重写为源码包口径（15 项）：CRC 标准向量、归档确定性、Python `zipfile.testzip()` 校验、条目与 `remote/` 一致、解包后 `import remote.daemon` 且 `set_embedded_config()` 生效、模板占位符唯一性、`extraFiles`、脚本模式（探针）。
 - `test/check-verify-model.mjs` 同步为「payload 从源码包导入 + 归档含 payload 模块」（7 项）。
-- `test/daemon-unit.py` 的内联标记断言改为「源码不再含内联标记」，并新增 `set_embedded_config` 注入用例（248 项）。
-- 全量 `npm test` 通过；`npm run package` 产物含 `remote/contract.json` 与 `lib/jobs/`、`lib/kaggle/oauth/`。
+- `test/daemon-unit.py` 的内联标记断言改为「源码不再含内联标记」，并新增 `set_embedded_config` 注入用例。
+- `test/daemon-unit.py` 增至 272 项（切片⑥ 新增 10 项边界用例）：`HttpApi` 的装配身份与「lambda 延迟解析」（patch `daemon.submit_job` 后必须命中）、队列满 → 429、未装配时 handler 立即报错、`Server` 头版本；`DaemonApp` 的启动顺序（HTTP 早于隧道与运行时）、无鉴权 / 端口占用两条退出路径、daemon 暴露的 `APP` 绑定，以及「`app.py` 不得反向 import daemon」——用 AST 看 import 语句，不按字符串匹配（模块头说明文字里就写着这句话）。
+- `test/check-contract.mjs` 的 daemon 协议校验改为扫描 `daemon.py` + `transport/http_server.py` + `app.py`：路由搬到传输层、phase 取值搬到生命周期之后，校验仍指向真实实现位置，不因搬家静默空过。
+- 全量 `npm test` 通过（含 272 项 Python 单测、契约 11/11）；`npm run package` 产物含 `remote/contract.json` 与 `lib/jobs/`、`lib/kaggle/oauth/`。
 
 ## 0.10.0 — 2026-11-14
 

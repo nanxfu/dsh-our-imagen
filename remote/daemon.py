@@ -52,6 +52,12 @@
     ``contract.limits.reference.maxEdge`` 时等比 LANCZOS 缩小、转 RGB。图生图管线用
     ``AutoPipelineForImage2Image.from_pipe`` 复用已加载的 txt2img 底座，不重复加载、
     不额外占显存，随 ``STATE.pipeline_key`` 切换与 ``release_pipeline()`` 一起清理。
+
+文件边界（Batch 2 切片⑥ 之后）：本文件只留**配置注入点、ntfy 会合、模型加载与出图执行、
+job 执行，以及各域的薄包装**。HTTP 传输层在 ``remote/transport/http_server.py``，进程
+生命周期（启动顺序 / 信号 / 退出清理 / 空闲看门狗）在 ``remote/app.py``，两者都由本文件
+末尾的装配块接起来——本文件仍是入口模块，因为启动器按 ``daemon.main`` 与
+``daemon.set_embedded_config`` 取符号。
 """
 
 from __future__ import annotations
@@ -60,12 +66,10 @@ import base64
 import binascii
 import gc
 import hashlib
-import hmac
 import io
 import json
 import math
 import os
-import platform
 import random
 import re
 import shutil
@@ -78,7 +82,9 @@ import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+# 只有 ThreadingHTTPServer 还留在本文件（start_http_server 的返回类型）；handler 本体与
+# Bearer 鉴权的 hmac 比较随 transport/http_server.py 一起搬走了。
+from http.server import ThreadingHTTPServer
 
 # 1024² 的 VAE 解码单次申请约 5 GiB 连续显存：必须在任何 torch / CUDA 初始化之前设置，
 # 让分配器用可扩展段减少碎片（T4 14.56GiB 首跑正是在 VAE conv3d 处 OOM）。
@@ -1259,199 +1265,51 @@ def health_payload() -> dict:
     )
 
 
-class DaemonHandler(BaseHTTPRequestHandler):
-    server_version = f"imagen-daemon/{VERSION}"
-    sys_version = ""
+# ─────────────────────────────────────────────────────────────────────────────
+# HTTP 传输层（实现在 remote/transport/http_server.py）
+#
+# 路由分派、Bearer 鉴权与「异常 → 状态码」映射都搬进 transport/http_server.py；本文件
+# 只保留**装配**：把本模块的符号包成 lambda 交给 HttpApi，调用点才解析实现——这样单测
+# 的 `mock.patch.object(d, "submit_job")` 之类的替换仍然生效（直接传函数对象会把构造
+# 时刻的实现绑死，断言会静默测到旧对象，见架构规格 §1.3.6）。
+#
+# 为什么 /health 的取样留在本文件：它拥有锁顺序（先持 STATE_LOCK 取快照，释放后再取
+# queue_depth），是规格 §5.8 唯一方向的守卫点；单测按 `d.STATE_LOCK` / `d.queue_depth`
+# 观察它，搬进 transport 会让这两个替换点静默失效。
+# ─────────────────────────────────────────────────────────────────────────────
 
-    # 默认实现会把每行请求写 stderr；这里只写控制台，避免 /health 轮询把日志环刷满。
-    def log_message(self, fmt, *args):  # noqa: ANN001
-        try:
-            _ORIG_STDERR.write(f"[http] {self.address_string()} - {fmt % args}\n")
-            _ORIG_STDERR.flush()
-        except Exception:
-            pass
+from remote.transport.http_server import (  # noqa: E402
+    DaemonHandler,
+    HttpApi,
+    configure as configure_http_api,
+    start_server as start_http_server_impl,
+)
 
-    # ---- 基础响应 ----
-    def _send_json(self, code: int, payload: dict, extra_headers: dict | None = None) -> None:
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        for key, value in (extra_headers or {}).items():
-            self.send_header(key, value)
-        self.end_headers()
-        try:
-            self.wfile.write(body)
-        except Exception:
-            pass
-
-    def _send_error(self, code: int, error_code: str, message: str, headers: dict | None = None) -> None:
-        self._send_json(code, {"error": {"code": error_code, "message": message}}, headers)
-
-    def _require_auth(self) -> bool:
-        expected = CONFIG.auth_token
-        if not expected:
-            # 安全修复：没有 token 时默认不放行（本地调试需显式 allow_no_auth=true）。
-            if CONFIG.allow_no_auth:
-                return True
-            self._send_error(
-                401,
-                "unauthorized",
-                "Daemon 未配置 auth_token，拒绝请求（本地调试请显式配置 allow_no_auth=true）",
-            )
-            return False
-        header = self.headers.get("Authorization", "") or ""
-        if header.startswith("Bearer "):
-            provided = header[len("Bearer ") :].strip()
-            if hmac.compare_digest(provided, expected):
-                return True
-        self._send_error(401, "unauthorized", "缺少或错误的 Bearer Token")
-        return False
-
-    def _read_json(self):  # noqa: ANN202
-        try:
-            length = int(self.headers.get("Content-Length") or 0)
-        except (TypeError, ValueError):
-            length = 0
-        if length <= 0:
-            return {}
-        limit = _request_body_limit()
-        if length > limit:
-            raise RequestError(f"请求体超过上限（{round(limit / 1024 / 1024, 1)}MB）")
-        raw = self.rfile.read(length)
-        try:
-            return json.loads(raw.decode("utf-8"))
-        except Exception as exc:
-            raise RequestError(f"请求体不是合法 JSON：{type(exc).__name__}") from None
-
-    # ---- 路由 ----
-    def do_GET(self):  # noqa: N802
-        if not self._require_auth():
-            return
-        parts = urllib.parse.urlsplit(self.path)
-        path = parts.path.rstrip("/") or "/"
-        query = urllib.parse.parse_qs(parts.query)
-        if path == "/health":
-            self._send_json(200, health_payload())
-            return
-        if path == "/logs":
-            try:
-                since = int((query.get("since") or ["0"])[0])
-            except (TypeError, ValueError):
-                since = 0
-            lines, nxt = log_since(since)
-            self._send_json(200, {"lines": lines, "next": nxt})
-            return
-        if path == "/job":
-            job_id = str((query.get("id") or [""])[0]).strip()
-            if not job_id:
-                self._send_error(400, "invalid_request", "缺少 job id（GET /job?id=...）")
-                return
-            job = get_job(job_id)
-            if job is None:
-                self._send_error(404, "unknown_job", "任务不存在或已过期")
-                return
-            self._send_json(200, job_payload(job))
-            return
-        self._send_error(404, "not_found", f"未知路径：{path}")
-
-    def do_POST(self):  # noqa: N802
-        if not self._require_auth():
-            return
-        parts = urllib.parse.urlsplit(self.path)
-        path = parts.path.rstrip("/") or "/"
-
-        if path == "/shutdown":
-            request_shutdown()
-            self._send_json(200, {"status": "shutting_down"})
-            threading.Thread(target=self._delayed_exit, daemon=True).start()
-            return
-
-        if path == "/generate":
-            self._handle_generate()
-            return
-
-        self._send_error(404, "not_found", f"未知路径：{path}")
-
-    @staticmethod
-    def _delayed_exit() -> None:
-        time.sleep(0.3)
-        _cleanup_before_exit()
-        os._exit(0)
-
-    def _handle_generate(self) -> None:
-        with STATE_LOCK:
-            phase = STATE.phase
-            last_error = STATE.last_error
-            booted = STATE.booted
-            shutting_down = STATE.shutting_down
-        can_accept = not shutting_down and (phase == "ready" or (phase == "loading" and booted))
-        if not can_accept:
-            if phase == "error":
-                message = last_error or "Daemon 启动失败"
-                self._send_error(503, "load_failed", message)
-            else:
-                # Host 正常不会在 ready 之前调用；这里给它一个可重试的明确信号。
-                self._send_error(
-                    503,
-                    "warming",
-                    f"Daemon 尚未就绪（phase={phase}），请稍后重试",
-                    {"Retry-After": "5"},
-                )
-            return
-
-        try:
-            spec = self._read_json()
-            pipeline_spec, model_id, tasks = validate_generate_spec(spec)
-            # 图生图（M3）：参考图提交期只读图片头做校验，失败直接 400；
-            # 没有 reference 时返回 None，文生图路径逐字不变。
-            reference = parse_reference_spec(spec.get("reference"), pipeline_spec)
-            job_id = normalize_job_id(spec.get("jobId"))
-        except RequestError as exc:
-            log(f"[gen] 请求非法：{exc}")
-            self._send_error(400, "invalid_request", str(exc))
-            return
-
-        try:
-            job, created = submit_job(pipeline_spec, model_id, tasks, job_id, reference)
-        except QueueFullError as exc:
-            log(f"[gen] 队列已满：{exc}")
-            self._send_error(429, "queue_full", str(exc), {"Retry-After": "5"})
-            return
-        except Exception as exc:  # pragma: no cover - 入队本身不涉及 IO
-            log(f"[gen] 入队失败：{short(exc)}")
-            self._send_error(500, "generation_failed", short(exc))
-            return
-
-        with STATE_LOCK:
-            STATE.last_active = time.time()
-        if not created:
-            log(f"[gen] 幂等命中 {job.job_id}（status={job.status}），不重复入队")
-        self._send_json(
-            202,
-            {
-                "status": "accepted",
-                "job_id": job.job_id,
-                "model_id": job.model_id,
-                "created_at": iso_time(job.created_at),
-            },
-        )
+HTTP_API = HttpApi(
+    config=CONFIG,
+    state=STATE,
+    state_lock=STATE_LOCK,
+    request_body_limit=lambda: _request_body_limit(),
+    health_payload=lambda: health_payload(),
+    log_since=lambda since: log_since(since),
+    get_job=lambda job_id: get_job(job_id),
+    job_payload=lambda job: job_payload(job),
+    submit_job=lambda *args, **kwargs: submit_job(*args, **kwargs),
+    validate_generate_spec=lambda spec: validate_generate_spec(spec),
+    parse_reference_spec=lambda raw, pipeline_spec: parse_reference_spec(raw, pipeline_spec),
+    normalize_job_id=lambda raw: normalize_job_id(raw),
+    request_shutdown=lambda: request_shutdown(),
+    cleanup_before_exit=lambda: _cleanup_before_exit(),
+    iso_time=lambda ts: iso_time(ts),
+    version=lambda: VERSION,
+)
+# 装配一次即可：handler 用类属性持有 api，之后每个连接读同一份（config / state 是活对象）。
+configure_http_api(HTTP_API)
 
 
 def start_http_server(port: int) -> ThreadingHTTPServer:
-    server = ThreadingHTTPServer(("127.0.0.1", port), DaemonHandler)
-    server.daemon_threads = True
-    with BOOT_LOCK:
-        BOOT.http_server = server
-    threading.Thread(
-        target=server.serve_forever,
-        kwargs={"poll_interval": 0.5},
-        name="http-server",
-        daemon=True,
-    ).start()
-    log(f"[http] 监听 127.0.0.1:{port}")
-    return server
+    """监听并后台 serve（实现在 transport/http_server.py），server 句柄登记进 BOOT。"""
+    return start_http_server_impl(port, boot=BOOT, boot_lock=BOOT_LOCK)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1618,203 +1476,57 @@ def tunnel_monitor(port: int) -> None:
     )
 
 
-def tunnel_boot(port: int) -> None:
-    """启动常驻隧道监管线程（不阻塞 HTTP 服务与运行时启动）。"""
-    with BOOT_LOCK:
-        BOOT.tunnel_state = "starting"
-    log("[tunnel] 启动隧道监管（cloudflared 优先，失败自动重拉）")
-    threading.Thread(target=tunnel_monitor, args=(port,), name="tunnel-monitor", daemon=True).start()
+# `tunnel_boot`（拉起常驻监管线程）随进程生命周期搬到 remote/app.py 的
+# `DaemonApp.tunnel_boot`；本文件末尾按 `tunnel_boot = APP.tunnel_boot` 保留同名属性。
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 启动流程
+# 进程生命周期（实现在 remote/app.py）
+#
+# 启动顺序、信号、退出清理与空闲看门狗搬进 remote/app.py 的 DaemonApp；本文件只保留
+# **装配点**：把上面的符号以 lambda 传进去（不是函数对象），这样单测
+# `mock.patch.object(d, "install_dependencies")` / "ensure_pipeline" 在调用点仍然生效
+# ——直接传函数会把构造时刻的实现绑死在实例上（架构规格 §1.3.6 的假绿陷阱）。
+#
+# 装配留在本文件的原因：本文件仍是入口模块——启动器按 `daemon.main` /
+# `daemon.set_embedded_config` 取符号，test/kernel-package.mjs 按
+# `daemon.EMBEDDED_CONFIG_B64` 验证注入落地。Batch 3 移除门面时这两件事一起搬。
 # ─────────────────────────────────────────────────────────────────────────────
 
+from remote.app import GPU_UNAVAILABLE_MESSAGE, DaemonApp  # noqa: E402, F401
 
-def _log_environment() -> None:
-    log(f"[env] python={platform.python_version()} platform={platform.platform()}")
-    for path in ("/kaggle/working", "/tmp", os.getcwd()):
-        try:
-            usage = shutil.disk_usage(path)
-            log(f"[env] disk {path}: free={usage.free / 2**30:.1f}GiB total={usage.total / 2**30:.1f}GiB")
-        except Exception:
-            continue
-
-
-# M3.3：Kaggle 未绑定手机号或未启用 GPU 加速器时会静默降级成 CPU 容器。这里必须立刻
-# 给出可执行的下一步，而不是继续用 CPU 硬跑（那会表现为超时或模糊的 CUDA 报错）。
-GPU_UNAVAILABLE_MESSAGE = (
-    "未检测到可用 GPU（当前为 CPU 容器）。"
-    "请检查 Kaggle 账号是否已完成手机号验证，并确认已启用 GPU 加速器"
-    "（本插件推送 Kernel 时默认开启 2×Tesla T4）"
+APP = DaemonApp(
+    config=CONFIG,
+    state=STATE,
+    boot=BOOT,
+    state_lock=STATE_LOCK,
+    boot_lock=BOOT_LOCK,
+    gen_lock=GEN_LOCK,
+    load_config=lambda: load_config(),
+    apply_hf_token=lambda: apply_hf_token(),
+    auth_missing=lambda: auth_missing(),
+    protocol_version=lambda: protocol_version(),
+    install_stream_tee=lambda: install_stream_tee(),
+    install_dependencies=lambda: install_dependencies(),
+    ensure_pipeline=lambda spec: ensure_pipeline(spec),
+    classify_failure=lambda exc, default="generation_failed": classify_failure(exc, default=default),
+    free_cuda_cache=lambda: free_cuda_cache(),
+    set_phase=lambda phase, detail=None: set_phase(phase, detail),
+    fail_boot=lambda code, message: fail_boot(code, message),
+    publish_ready=lambda: publish_ready(),
+    active_job_count=lambda: active_job_count(),
+    queue_depth=lambda: queue_depth(),
+    start_http_server=lambda port: start_http_server(port),
+    start_job_worker=lambda: start_job_worker(),
+    tunnel_monitor=lambda port: tunnel_monitor(port),
+    cleanup_before_exit=lambda: _cleanup_before_exit(),
+    announce_interval_sec=TUNNEL_ANNOUNCE_SEC,
 )
 
-
-def runtime_boot() -> None:
-    """后台线程：探测 GPU → 装依赖 →（可选）预加载模型 → phase=ready。"""
-    torch_error = ""
-    device_name = None
-    device_count = 0
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            device_name = torch.cuda.get_device_name(0)
-            device_count = torch.cuda.device_count()
-            log(f"[cuda] {device_name} × {device_count}，torch={torch.__version__}，cuda={torch.version.cuda}")
-    except Exception as exc:
-        torch_error = short(exc)
-        log(f"[cuda] 导入 torch 失败：{torch_error}")
-
-    with STATE_LOCK:
-        STATE.device = device_name
-        STATE.device_count = device_count
-
-    if not device_count:
-        if torch_error:
-            # torch 都没能导入时无法确认 GPU 状态，保留 load_failed 以免误导成账号问题。
-            fail_boot("load_failed", f"无法确认 GPU 可用性：{torch_error}")
-        else:
-            fail_boot("gpu_unavailable", GPU_UNAVAILABLE_MESSAGE)
-        return
-
-    try:
-        install_dependencies()
-    except Exception as exc:
-        fail_boot("load_failed", short(exc))
-        return
-
-    preload = CONFIG.preload
-    if preload:
-        try:
-            with GEN_LOCK:
-                ensure_pipeline(preload)
-        except Exception as exc:
-            free_cuda_cache()
-            code, message = classify_failure(exc, default="load_failed")
-            fail_boot(code, message)
-            return
-
-    with STATE_LOCK:
-        STATE.booted = True
-        need_ready = STATE.phase != "ready"
-    if need_ready:
-        set_phase("ready", "依赖已就绪，等待首个生成请求下发 pipeline")
-    log("[boot] 运行时就绪，可以接单")
-
-
-def _install_signal_handlers() -> None:
-    try:
-        import signal
-
-        def _bye(signum, _frame):  # noqa: ANN001
-            log(f"[signal] 收到信号 {signum}，退出进程")
-            _cleanup_before_exit()
-            os._exit(0)
-
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            try:
-                signal.signal(sig, _bye)
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-
-def main() -> None:
-    install_stream_tee()
-    _install_signal_handlers()
-    with STATE_LOCK:
-        STATE.started_at = time.time()
-        STATE.last_active = STATE.started_at
-
-    log("=" * 72)
-    log(f"imagen 远端 Daemon v{protocol_version()} 启动")
-    try:
-        # 原地回填模块级 CONFIG：不能写成 `CONFIG = load_config()`，remote/config.py 与
-        # 注入出去的协作者读的是同一个对象，重新绑定会让它们继续看旧配置（见架构规格 §5.10）。
-        load_config()
-    except SystemExit as exc:
-        log(f"[config] {exc}")
-        os._exit(2)
-        return
-    _log_environment()
-    # P1.2：HF_TOKEN 必须在任何下载/加载之前写好（gated 仓库与匿名限流都依赖它）。
-    apply_hf_token()
-
-    # 0) 安全闸门：没有 auth_token 且没有显式允许无鉴权 → 拒绝对外服务（不发布 ready）。
-    if auth_missing():
-        message = "未配置 auth_token 且未开启 allow_no_auth，拒绝以无鉴权模式对外提供服务"
-        log(f"[boot] {message}")
-        fail_boot("unauthorized", message)
-        os._exit(4)
-        return
-
-    # 1) HTTP 先起来：Host 靠 /health 判断 phase，不依赖模型是否加载完。
-    try:
-        start_http_server(CONFIG.port)
-    except Exception as exc:
-        log(f"[http] 端口 {CONFIG.port} 监听失败：{short(exc)}")
-        os._exit(3)
-        return
-
-    # 1.5) 异步 job worker：常驻线程串行消费 /generate 入队的任务。
-    #      放在 HTTP 之后启动，这样即使首图加载慢，Host 的 /health 也一直可用。
-    start_job_worker()
-
-    # 2) 隧道与运行时各自后台跑，互不阻塞（tunnel_boot 自己拉起监管线程）。
-    tunnel_boot(CONFIG.port)
-    threading.Thread(target=runtime_boot, name="runtime-boot", daemon=True).start()
-
-    # 3) 主线程：会合点发布 + 周期性重播 + 空闲看门狗。
-    #    只要隧道地址到手就发布 ready，让 Host 立刻能建立 /health 心跳并从 phase
-    #    看到 installing / loading 的进度；模型是否加载完由 /health 回答，不靠会合点。
-    #    隧道监管线程负责中途重拉后的重播，这里只兜底首次发布与周期重播。
-    last_report = 0.0
-    last_announce = time.time()
-    while not BOOT.stop_event.wait(2.0):
-        now = time.time()
-
-        should_publish = False
-        with BOOT_LOCK:
-            if BOOT.tunnel_url and not BOOT.published_ready:
-                BOOT.published_ready = True
-                should_publish = True
-            tunnel_url = BOOT.tunnel_url
-            tunnel_provider = BOOT.tunnel_provider
-        if should_publish:
-            publish_ready()
-
-        # P0.2：每 TUNNEL_ANNOUNCE_SEC 秒重播一次 ready，Host 心跳丢失后可重新会合。
-        if tunnel_url and now - last_announce >= TUNNEL_ANNOUNCE_SEC:
-            last_announce = now
-            log(
-                f"[tunnel] 周期重播 ready（通道 {tunnel_provider or 'unknown'}，"
-                f"间隔 {int(TUNNEL_ANNOUNCE_SEC)}s）"
-            )
-            threading.Thread(target=publish_ready, name="announce-ready", daemon=True).start()
-
-        with STATE_LOCK:
-            last_active = STATE.last_active
-            phase = STATE.phase
-            jobs_done = STATE.jobs_done
-        idle = now - last_active
-        busy = active_job_count() > 0 or GEN_LOCK.locked()
-        # 启动阶段（装依赖/预加载）不参与空闲退出：Host 可能把 idle_timeout 调得很短，
-        # 但首轮加载本来就要几分钟。失败进入 error 后照样会被看门狗收走。
-        bootstrapping = phase in ("booting", "installing", "loading")
-        if not busy and not bootstrapping and idle >= CONFIG.idle_timeout_sec:
-            log(f"[idle] 空闲 {int(idle)}s ≥ {CONFIG.idle_timeout_sec}s，退出进程释放 GPU 配额")
-            _cleanup_before_exit()
-            os._exit(0)
-
-        if now - last_report >= 30:
-            last_report = now
-            log(
-                f"[alive] phase={phase} idle={int(idle)}s jobs={jobs_done} "
-                f"queue={queue_depth()} tunnel={'ok' if tunnel_url else 'pending'}"
-            )
-    _cleanup_before_exit()
+# 入口符号：启动器与 `python remote/daemon.py` 都按模块属性取（main 必须可调用）。
+runtime_boot = APP.runtime_boot
+tunnel_boot = APP.tunnel_boot
+main = APP.run
 
 
 if __name__ == "__main__":

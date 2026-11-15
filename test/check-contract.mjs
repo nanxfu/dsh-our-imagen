@@ -394,7 +394,11 @@ async function checkVersions() {
 
 // ── g. daemon 协议 ────────────────────────────────────────────────────────
 async function checkDaemonProtocol() {
-  const daemon = await readText('remote/daemon.py')
+  // 协议出口在 Batch 2 切片⑥ 之后分两处：路由与鉴权在传输层，phase 取值在生命周期
+  // （app.py 的 bootstrapping 列表）。三份合并扫描，避免"实现搬家 → 校验静默失去意义"。
+  const files = ['remote/daemon.py', 'remote/transport/http_server.py', 'remote/app.py']
+  const sources = await Promise.all(files.map((file) => readText(file)))
+  const daemon = sources.join('\n')
   const details = []
   for (const [name, route] of Object.entries(PROTOCOL.daemon.routes)) {
     const quoted = daemon.includes(`"${route.path}"`) || daemon.includes(`'${route.path}'`)
@@ -405,7 +409,11 @@ async function checkDaemonProtocol() {
     if (!quoted) details.push(`缺少 health phase 取值 ${phase}`)
   }
   if (details.length) return fail('g', 'daemon 协议与契约不一致', details)
-  pass('g', 'daemon 协议端点与 health 阶段齐全', `${Object.keys(PROTOCOL.daemon.routes).length} 路由、${PROTOCOL.daemon.healthPhases.length} 个 phase`)
+  pass(
+    'g',
+    'daemon 协议端点与 health 阶段齐全',
+    `${Object.keys(PROTOCOL.daemon.routes).length} 路由、${PROTOCOL.daemon.healthPhases.length} 个 phase（扫描 ${files.length} 个文件）`,
+  )
 }
 
 // ── h. SPEC 文档跟随契约 ──────────────────────────────────────────────────

@@ -56,12 +56,17 @@
      之后取（§5.8 锁顺序，反向嵌套会与 _finish_job 死锁）
  28. job 存储边界：JOB_* 表/队列/锁只存在于 JobStore（daemon 不再暴露裸状态）、
      排队上限每次读注入契约、`_finish_job` 先释放 JOB_LOCK 再取 STATE_LOCK
+29. 切片⑥ 的传输层与生命周期边界：handler 与 `HttpApi` 是同一份装配（config / state 传
+     活对象、其余 lambda 延迟解析，patch 后必须命中）、队列满 → 429、未装配立即报错；
+     `DaemonApp` 的启动顺序（HTTP 早于隧道与运行时）、两条退出路径（无鉴权 / 端口占用）、
+     daemon 暴露的 `APP` 绑定，以及 app.py 不反向 import 入口模块
 
 运行：python test/daemon-unit.py
 """
 
 from __future__ import annotations
 
+import ast
 import base64
 import contextlib
 import dataclasses
@@ -128,6 +133,7 @@ def _load_daemon():
 d = _load_daemon()
 
 # 单例与常量的真实宿主：daemon 只是 re-export，断言"两边是同一个对象"必须直接看这些模块。
+import remote.app as remote_app  # noqa: E402
 import remote.config as remote_config  # noqa: E402
 import remote.infra.process as remote_process  # noqa: E402
 import remote.jobs.models as remote_job_models  # noqa: E402
@@ -135,6 +141,7 @@ import remote.jobs.store as remote_job_store  # noqa: E402
 import remote.observability.health as remote_health  # noqa: E402
 import remote.state as remote_state  # noqa: E402
 import remote.text as remote_text  # noqa: E402
+import remote.transport.http_server as remote_http  # noqa: E402
 
 AUTH_TOKEN = "test-token-0123456789"
 
@@ -623,6 +630,161 @@ class JobStoreBoundaryTest(DaemonUnitTest):
 
         self.assertEqual(events[:2], ["store-finished", "state-lock"], "取 STATE_LOCK 前必须已释放 JOB_LOCK")
         self.assertEqual(job.status, d.JOB_STATUS_DONE)
+
+
+class HttpTransportBoundaryTest(DaemonUnitTest):
+    """切片⑥：handler 搬进 transport/http_server.py，协作者经 HttpApi 延迟解析。"""
+
+    def test_handler_and_api_are_the_single_assembled_objects(self) -> None:
+        self.assertIs(d.DaemonHandler, remote_http.DaemonHandler)
+        self.assertIs(remote_http.DaemonHandler.api, d.HTTP_API)
+        # config / state 必须是活对象：单测就地改字段，handler 要读到最新值。
+        self.assertIs(d.HTTP_API.config, d.CONFIG)
+        self.assertIs(d.HTTP_API.state, d.STATE)
+
+    def test_api_callables_resolve_daemon_attributes_at_call_time(self) -> None:
+        """装配用 lambda 而不是函数对象：patch.object(d, "submit_job") 必须穿过 api 生效。"""
+        job = types.SimpleNamespace(job_id="j-1", model_id="org/base", created_at=0.0, status="queued")
+        d.STATE.phase = "ready"
+        with mock.patch.object(d, "submit_job", return_value=(job, True)) as submit:
+            handler, sent = make_generate_handler(make_spec(tasks=TASKS))
+            d.DaemonHandler._handle_generate(handler)
+        self.assertTrue(submit.called, "api 把函数对象绑死了，替换点会静默失效")
+        self.assertEqual(sent[0][0], 202)
+        self.assertEqual(sent[0][1]["job_id"], "j-1")
+
+    def test_queue_full_maps_to_429(self) -> None:
+        d.STATE.phase = "ready"
+        with mock.patch.object(d, "submit_job", side_effect=d.QueueFullError("远端任务队列已满")):
+            handler, sent = make_generate_handler(make_spec(tasks=TASKS))
+            d.DaemonHandler._handle_generate(handler)
+        self.assertEqual(sent[0][0], 429)
+        self.assertEqual(sent[0][1]["error"]["code"], "queue_full")
+
+    def test_unconfigured_handler_fails_loudly(self) -> None:
+        """忘了装配要当场报错，而不是让每个请求 500。"""
+        with mock.patch.object(remote_http.DaemonHandler, "api", None):
+            with self.assertRaises(RuntimeError):
+                remote_http.DaemonHandler._api()
+
+    def test_server_header_version_matches_the_entry_constant(self) -> None:
+        """`Server:` 头与改造前一致（默认 version_string 会补一个尾随空格，故 strip 后比）。"""
+        handler = object.__new__(d.DaemonHandler)
+        self.assertEqual(handler.version_string().strip(), f"imagen-daemon/{d.VERSION}")
+
+
+class AppLifecycleBoundaryTest(DaemonUnitTest):
+    """切片⑥：启动顺序 / 信号 / 看门狗搬进 remote/app.py，daemon 只做装配。"""
+
+    def _make_app(self, *, auth_missing: bool = False, http_error: Exception | None = None):
+        events: list[str] = []
+        boot = types.SimpleNamespace(
+            stop_event=threading.Event(),
+            tunnel_url=None,
+            tunnel_provider=None,
+            published_ready=False,
+            tunnel_state="",
+            http_server=None,
+        )
+        # 预置停止信号：启动步骤照跑，主循环第一轮就退出（不真起隧道与运行时线程）。
+        boot.stop_event.set()
+        state = types.SimpleNamespace(started_at=0.0, last_active=0.0, phase="booting", jobs_done=0)
+
+        def fake_http(port: int) -> None:
+            events.append(f"http:{port}")
+            if http_error is not None:
+                raise http_error
+
+        app = remote_app.DaemonApp(
+            config=types.SimpleNamespace(port=7860, idle_timeout_sec=1800, preload=None),
+            state=state,
+            boot=boot,
+            state_lock=threading.RLock(),
+            boot_lock=threading.RLock(),
+            gen_lock=threading.Lock(),
+            load_config=lambda: events.append("load_config"),
+            apply_hf_token=lambda: events.append("hf_token"),
+            auth_missing=lambda: auth_missing,
+            protocol_version=lambda: "0.0.0-test",
+            install_stream_tee=lambda: events.append("tee"),
+            install_dependencies=lambda: events.append("install"),
+            ensure_pipeline=lambda spec: (object(), 0.0),
+            classify_failure=lambda exc, default="generation_failed": (default, str(exc)),
+            free_cuda_cache=lambda: None,
+            set_phase=lambda phase, detail=None: events.append(f"phase:{phase}"),
+            fail_boot=lambda code, message: events.append(f"fail:{code}"),
+            publish_ready=lambda: events.append("ready"),
+            active_job_count=lambda: 0,
+            queue_depth=lambda: 0,
+            start_http_server=fake_http,
+            start_job_worker=lambda: events.append("worker"),
+            tunnel_monitor=lambda port: events.append(f"tunnel:{port}"),
+            cleanup_before_exit=lambda: events.append("cleanup"),
+            announce_interval_sec=300,
+            exit_fn=lambda code: events.append(f"exit:{code}"),
+            thread_factory=lambda target, name: events.append(f"thread:{name}"),
+        )
+        # 信号处理器会改进程级 signal 表；单测只记录不安装。
+        app.install_signal_handlers = lambda: events.append("signals")
+        return app, events
+
+    def test_boot_order_puts_http_before_tunnel_and_runtime(self) -> None:
+        """HTTP 必须先起（装依赖期间 /health 仍可用），隧道与运行时各自后台跑。"""
+        app, events = self._make_app()
+        app.run()
+        self.assertEqual(
+            events,
+            [
+                "tee",
+                "signals",
+                "load_config",
+                "hf_token",
+                "http:7860",
+                "worker",
+                "thread:tunnel-monitor",
+                "thread:runtime-boot",
+                "cleanup",
+            ],
+        )
+
+    def test_unauthorized_boot_exits_before_serving(self) -> None:
+        app, events = self._make_app(auth_missing=True)
+        app.run()
+        self.assertIn("fail:unauthorized", events)
+        self.assertEqual(events[-1], "exit:4")
+        self.assertFalse(
+            [item for item in events if item.startswith(("http:", "worker", "thread:"))],
+            "无鉴权配置下不得开端口、不得起 worker",
+        )
+
+    def test_port_conflict_exits_with_code_3(self) -> None:
+        app, events = self._make_app(http_error=OSError("address already in use"))
+        app.run()
+        self.assertEqual(events[-1], "exit:3")
+        self.assertNotIn("worker", events)
+        self.assertLogContains("监听失败")
+
+    def test_daemon_exposes_the_composed_app(self) -> None:
+        self.assertIsInstance(d.APP, remote_app.DaemonApp)
+        self.assertIs(d.runtime_boot.__self__, d.APP)
+        self.assertIs(d.tunnel_boot.__self__, d.APP)
+        self.assertIs(d.main.__self__, d.APP)
+        self.assertIs(d.GPU_UNAVAILABLE_MESSAGE, remote_app.GPU_UNAVAILABLE_MESSAGE)
+
+    def test_app_never_imports_the_entry_module(self) -> None:
+        """app.py 只接受注入：反向 import daemon 会成环，也把依赖来源藏进 import 语句。
+
+        用 AST 看真正的 import 语句，而不是在源码里找字符串——模块头的说明文字里就写着
+        「不 import daemon」，按字符串匹配会把文档当成违规。
+        """
+        tree = ast.parse((ROOT / "remote" / "app.py").read_text(encoding="utf-8"))
+        modules: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                modules.append(node.module or "")
+        self.assertFalse([name for name in modules if "daemon" in name], modules)
 
 
 class BuildConfigTest(DaemonUnitTest):
