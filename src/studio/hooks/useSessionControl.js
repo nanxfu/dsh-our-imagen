@@ -86,13 +86,14 @@ export function useSessionControl({ t, host, ui, alive }) {
     ui.setError((prev) => prev || { code: host.error.code, message: host.error.message ?? '' })
   }, [host.error])
 
-  async function startSession(presetId) {
+  async function startSession(presetId, options = {}) {
     if (busy) return
     setBusy('start')
-    const result = await alive(startSessionRequest(presetId))
+    const result = await alive(startSessionRequest(presetId, options))
     if (!result) return
     setBusy('')
     if (!result.ok) ui.fail(result.code, result.message)
+    else ui.setError(null)
     host.refresh()
   }
 

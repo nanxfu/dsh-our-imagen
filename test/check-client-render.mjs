@@ -1913,6 +1913,67 @@ await check('渲染：gpu / auth / cli 指引卡动作与提示', async () => {
   }
 })
 
+await check('渲染：queue_timeout 指引卡区分继续等待与强制新建', async () => {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  try {
+    const t = client.internals.i18n.fallbackTranslate('zh')
+    const calls = []
+    const tree = await client.mountRaw(client.components.GuidanceCard, {
+      t,
+      actions: { resetToSafe: () => {}, retryFocusedJob: () => {} },
+      compute: {
+        session: {
+          state: 'error',
+          kernelUrl: 'https://www.kaggle.com/code/tester/imagen-12345678',
+          error: { code: 'queue_timeout', message: '等待 GPU 超时（45 分钟），Kernel 仍在队列中（QUEUED）' },
+        },
+        probe: null,
+        startSession: () => calls.push('continue'),
+        forceStartSession: () => calls.push('forceNew'),
+        runProbe: () => {},
+        retryHost: () => {},
+      },
+      ui: { openLogs: () => {}, copyText: () => {}, copyInstallCommand: () => {} },
+      guidance: {
+        kind: 'session',
+        code: 'queue_timeout',
+        detail: '等待 GPU 超时（45 分钟），Kernel 仍在队列中（QUEUED）',
+        dismiss: () => {},
+      },
+    })
+    const text = collectText(tree).join(' | ')
+    for (const needle of [
+      '云端会话没有就绪',
+      '继续等待当前队列',
+      '前往 Kaggle 查看',
+      '强制新建实例',
+      '避免重复排队消耗配额',
+      '查看日志',
+    ]) {
+      assert.ok(text.includes(needle), `[queue-timeout-card] 缺少文案：${needle}（实际：${text}）`)
+    }
+    assert.ok(!text.includes('唤醒云端'), '[queue-timeout-card] 不应继续显示模糊的「唤醒云端」')
+    const kaggleLink = findNodes(tree, (node) => node.type === 'a')[0]
+    assert.ok(kaggleLink, '[queue-timeout-card] 缺少 Kaggle 链接')
+    assert.equal(kaggleLink.props.href, 'https://www.kaggle.com/code/tester/imagen-12345678')
+    const continueBtn = findNodes(
+      tree,
+      (node) => node.type === 'button' && collectText(node).join('').includes('继续等待当前队列'),
+    )[0]
+    const forceBtn = findNodes(
+      tree,
+      (node) => node.type === 'button' && collectText(node).join('').includes('强制新建实例'),
+    )[0]
+    assert.ok(continueBtn && forceBtn, '[queue-timeout-card] 缺少继续等待或强制新建按钮')
+    continueBtn.props.onClick()
+    forceBtn.props.onClick()
+    assert.deepEqual(calls, ['continue', 'forceNew'])
+  } finally {
+    client.unmount()
+  }
+})
+
+
 await check('渲染：模型选择卡展开态', async () => {
   const client = await loadClient({
     now: NOW,

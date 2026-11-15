@@ -55,15 +55,20 @@ function snapshotOf(result) {
 
 export function GuidanceCard(props) {
   const { t, guidance, compute, actions, ui } = props
-  const { kind, detail, dismiss } = guidance
+  const { kind, code: errorCode, detail, dismiss } = guidance
   const { resetToSafe, retryFocusedJob } = actions
-  const { startSession, runProbe, retryHost } = compute
+  const { startSession, forceStartSession, runProbe, retryHost, session } = compute
   const { copyInstallCommand, copyText, openLogs } = ui
   // manual 模式授权码输入框的本地状态；发起新会话或卡片卸载时自然重置。
   const [code, setCode] = React.useState('')
   // 直连模式的登录会话由组合层的 useKaggleLogin 管理，卡片只负责展示与转发动作。
   const directMode = compute && compute.kaggleTransport === 'direct'
   const login = compute && compute.kaggleLogin ? compute.kaggleLogin : null
+  const isQueueTimeout = kind === 'session' && errorCode === 'queue_timeout'
+  const kernelUrl =
+    session && typeof session.kernelUrl === 'string' && /^https:\/\/www\.kaggle\.com\//.test(session.kernelUrl)
+      ? session.kernelUrl
+      : ''
   if (!kind) return null
   if (directMode && login && (kind === 'auth' || kind === 'cli')) {
     return renderDirectLogin({ t, guidance, login, runProbe, copyText, openLogs, dismiss, detail, code, setCode })
@@ -128,10 +133,22 @@ export function GuidanceCard(props) {
         { key: 'wake', label: t('studio.guidance.sleep.action'), run: startSession },
       ],
     },
-    session: {
-      title: t('studio.guidance.session.title'),
-      actions: [{ key: 'wake', label: t('studio.guidance.sleep.action'), run: startSession }],
-    },
+    session: isQueueTimeout
+      ? {
+          title: t('studio.guidance.session.title'),
+          note: t('studio.guidance.queueTimeout.hint'),
+          actions: [
+            { key: 'continueQueue', label: t('studio.guidance.queueTimeout.continue'), run: startSession },
+            ...(kernelUrl
+              ? [{ key: 'openKaggle', label: t('studio.guidance.queueTimeout.openKaggle'), href: kernelUrl }]
+              : []),
+            { key: 'forceNew', label: t('studio.guidance.queueTimeout.forceNew'), run: forceStartSession },
+          ],
+        }
+      : {
+          title: t('studio.guidance.session.title'),
+          actions: [{ key: 'wake', label: t('studio.guidance.sleep.action'), run: startSession }],
+        },
     generate: {
       title: t('studio.guidance.generic.title'),
       actions: [{ key: 'retry', label: t('studio.guidance.generic.action'), run: retryFocusedJob }],

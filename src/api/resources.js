@@ -44,11 +44,13 @@ export function fetchLibrary() {
   return request(routePath('library'), { method: 'GET' })
 }
 
-/** 启动云端会话。 */
-export function startSession(presetId) {
+/** 启动云端会话（forceNew=true 时跳过接管旧排队，强制推送新 Kernel）。 */
+export function startSession(presetId, options = {}) {
+  const body = { presetId }
+  if (options && options.forceNew === true) body.forceNew = true
   return request(routePath('sessionStart'), {
     method: 'POST',
-    body: JSON.stringify({ presetId }),
+    body: JSON.stringify(body),
   })
 }
 

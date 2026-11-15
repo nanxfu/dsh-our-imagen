@@ -74,13 +74,18 @@ export function useStudio(props) {
   const chat = useChatThread({ t, isEn, alive, state, form, generate })
   const library = useWorkLibrary({ t, alive, ui, state })
 
-  /** 启动会话：预设 id 取自当前表单，默认值来自宿主状态。 */
+  /** 启动会话（默认优先检查并接管仍在排队/运行的原 Kernel）。 */
   function startSession() {
     return control.startSession(form.form.presetId || defaultPreset)
   }
 
+  /** 强制新建云端实例：跳过接管检查，直接用新的随机 slug 重新推送。 */
+  function forceStartSession() {
+    return control.startSession(form.form.presetId || defaultPreset, { forceNew: true })
+  }
+
   // 组件层拿到的云端域：宿主派生状态 + 启停动作，startSession 已绑定当前表单预设。
-  const compute = { ...control, presets, defaultPreset, startSession, retryHost, kaggleLogin }
+  const compute = { ...control, presets, defaultPreset, startSession, forceStartSession, retryHost, kaggleLogin }
 
   async function generate(overrides, options = {}) {
     if (sending) return
@@ -229,7 +234,7 @@ export function useStudio(props) {
     form,
     chat,
     library,
-    guidance: { kind: guidanceKind, surface: guidanceSurface, detail: guidanceDetail, dismiss: dismissGuidance },
+    guidance: { kind: guidanceKind, code: guidanceCode, surface: guidanceSurface, detail: guidanceDetail, dismiss: dismissGuidance },
     actions: { sending, generate, reroll, iterate, referenceImage, retryFocusedJob, resetToSafe },
   }
 }

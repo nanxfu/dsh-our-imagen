@@ -501,6 +501,168 @@ async function scenarioRecoveryRenewalsExhausted() {
   }
 }
 
+/**
+ * queue_timeout 后再次 start() 的防孤儿接管：
+ *  1. 旧 Kernel 仍在 QUEUED：不重复 pushKernel，直接回到 provisioning/queue 并沿用原 topic，
+ *     之后原 Kernel 启动上报 ready 能直接接上；
+ *  2. 旧 Kernel 已进入 RUNNING：不重复 pushKernel，直接回到 connecting/tunnel 会合；
+ *  3. 旧 Kernel 已 COMPLETE（或显式传 forceNew: true）：正常重新 pushKernel。
+ */
+async function scenarioReattachAfterQueueTimeout() {
+  // 1. 仍在 QUEUED → 继续等待原队列，不重复推送
+  {
+    const ntfy = await startFakeNtfy()
+    const health = await startFakeDaemonHealth()
+    let currentStatus = 'QUEUED'
+    let slugCounter = 0
+    const { deps, calls } = fakeDeps({
+      buildKernelFolder: async () => {
+        slugCounter += 1
+        return {
+          dir: null,
+          kernelId: `tester/imagen-q${slugCounter}`,
+          kernelUrl: `https://www.kaggle.com/code/tester/imagen-q${slugCounter}`,
+        }
+      },
+      kernelStatus: async () => {
+        calls.status += 1
+        return { ok: true, status: currentStatus }
+      },
+    })
+    const session = makeSession({
+      ntfyPort: ntfy.port,
+      deps,
+      options: { provisionTimeoutMs: 140, kernelPollMs: 25, tickMs: 25 },
+    })
+    try {
+      await session.start(PRESET)
+      const firstKernelId = session.snapshot().kernelId
+      const firstTopic = session.secret.topic
+      await waitFor('等待排队超时转 error', () => session.snapshot().state === 'error')
+      check('排队超时错误码为 queue_timeout', session.snapshot().error?.code === 'queue_timeout')
+
+      // 放宽 timeout 后再次 start()：模拟用户点击「继续等待当前队列」。
+      session.options.provisionTimeoutMs = 5000
+      const resumed = await session.start(PRESET)
+      check('仍在 QUEUED → 不重复 pushKernel', calls.pushed === 1, `pushed=${calls.pushed}`)
+      check(
+        '仍在 QUEUED → 回到 provisioning/queue 并保留原 kernelId 与 topic',
+        resumed.state === 'provisioning' &&
+          resumed.phase === 'queue' &&
+          resumed.kernelId === firstKernelId &&
+          session.secret.topic === firstTopic,
+        JSON.stringify({ state: resumed.state, phase: resumed.phase, kernelId: resumed.kernelId }),
+      )
+
+      // 模拟原 Kernel 终于拿到 GPU 并通过原 topic 上报 ready。
+      currentStatus = 'RUNNING'
+      ntfy.state.line = ntfyMessage({ type: 'ready', endpoint: `http://127.0.0.1:${health.port}` })
+      await waitFor('原 Kernel 启动后回到 ready', () => session.snapshot().state === 'ready', { timeoutMs: 5000 })
+      check('接管后仍用原 kernelId 进入 ready', session.snapshot().kernelId === firstKernelId && calls.pushed === 1)
+    } finally {
+      session.dispose()
+      await ntfy.close()
+      await health.close()
+    }
+  }
+
+  // 2. 超时期间旧 Kernel 已经变成 RUNNING → 直接 connecting/tunnel 会合
+  {
+    const ntfy = await startFakeNtfy()
+    const health = await startFakeDaemonHealth()
+    let currentStatus = 'QUEUED'
+    const { deps, calls } = fakeDeps({
+      kernelStatus: async () => {
+        calls.status += 1
+        return { ok: true, status: currentStatus }
+      },
+    })
+    const session = makeSession({
+      ntfyPort: ntfy.port,
+      deps,
+      options: { provisionTimeoutMs: 120, kernelPollMs: 30, tickMs: 30 },
+    })
+    try {
+      await session.start(PRESET)
+      await waitFor('排队超时转 error', () => session.snapshot().state === 'error')
+      currentStatus = 'RUNNING'
+      session.options.provisionTimeoutMs = 5000
+      const resumed = await session.start(PRESET)
+      check('已 RUNNING → 不重推直接进 connecting/tunnel', resumed.state === 'connecting' && resumed.phase === 'tunnel' && calls.pushed === 1)
+      ntfy.state.line = ntfyMessage({ type: 'ready', endpoint: `http://127.0.0.1:${health.port}` })
+      await waitFor('会合后进入 ready', () => session.snapshot().state === 'ready', { timeoutMs: 5000 })
+      check('会合后未触发第二次推送', calls.pushed === 1)
+    } finally {
+      session.dispose()
+      await ntfy.close()
+      await health.close()
+    }
+  }
+
+  // 3. 临时查不到状态（非 404）→ 保守接管不双推；显式 forceNew: true 或已 COMPLETE → 推新 Kernel
+  {
+    const ntfy = await startFakeNtfy()
+    let statusMode = 'queued'
+    let slugCounter = 0
+    const { deps, calls } = fakeDeps({
+      buildKernelFolder: async () => {
+        slugCounter += 1
+        return {
+          dir: null,
+          kernelId: `tester/imagen-n${slugCounter}`,
+          kernelUrl: `https://www.kaggle.com/code/tester/imagen-n${slugCounter}`,
+        }
+      },
+      kernelStatus: async () => {
+        calls.status += 1
+        if (statusMode === 'network_error') return { ok: false, status: null, output: 'network timeout' }
+        if (statusMode === 'ended') return { ok: true, status: 'COMPLETE' }
+        return { ok: true, status: 'QUEUED' }
+      },
+    })
+    const session = makeSession({
+      ntfyPort: ntfy.port,
+      deps,
+      options: { provisionTimeoutMs: 120, kernelPollMs: 40, tickMs: 40 },
+    })
+    try {
+      await session.start(PRESET)
+      await waitFor('第一次排队超时', () => session.snapshot().state === 'error')
+      statusMode = 'network_error'
+      session.options.provisionTimeoutMs = 5000
+      const kept = await session.start(PRESET)
+      check('查状态临时失败（非 404）→ 保守接管不双推', kept.state === 'provisioning' && calls.pushed === 1)
+
+      // 显式 forceNew: true：跳过接管直接推新 slug
+      statusMode = 'queued'
+      session.options.provisionTimeoutMs = 120
+      await waitFor('第二次排队超时', () => session.snapshot().state === 'error')
+      session.options.provisionTimeoutMs = 5000
+      const forced = await session.start(PRESET, { forceNew: true })
+      check(
+        'forceNew=true → 跳过接管并推送新 Kernel',
+        forced.state === 'provisioning' && calls.pushed === 2 && forced.kernelId === 'tester/imagen-n2',
+        JSON.stringify({ pushed: calls.pushed, kernelId: forced.kernelId }),
+      )
+
+      // 已 COMPLETE → 自动推新 Kernel
+      session.options.provisionTimeoutMs = 120
+      await waitFor('第三次排队超时', () => session.snapshot().state === 'error')
+      statusMode = 'ended'
+      session.options.provisionTimeoutMs = 5000
+      const fresh = await session.start(PRESET)
+      check(
+        '旧 Kernel 已 COMPLETE → 推送新 Kernel',
+        fresh.state === 'provisioning' && calls.pushed === 3 && fresh.kernelId === 'tester/imagen-n3',
+        JSON.stringify({ pushed: calls.pushed, kernelId: fresh.kernelId }),
+      )
+    } finally {
+      session.dispose()
+      await ntfy.close()
+    }
+  }
+}
+
 async function scenario(title, fn) {
   console.log(`\n── ${title}`)
   try {
@@ -530,6 +692,7 @@ async function main() {
   await scenario('D push 失败清理临时目录', scenarioPushFailureCleansFolder)
   await scenario('E 超时错误码与文案区分', scenarioTimeoutWording)
   await scenario('F 任务保留会话错误码', scenarioJobKeepsSessionCode)
+  await scenario('G queue_timeout 后唤醒前检查与接管/强制新建', scenarioReattachAfterQueueTimeout)
 
   console.log('')
   if (failures.length) {

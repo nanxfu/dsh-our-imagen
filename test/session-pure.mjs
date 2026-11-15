@@ -21,7 +21,14 @@ import { LIMITS, PROTOCOL, VERSION } from '../shared/contract.js'
 import { JobQueue } from '../lib/jobs.js'
 import { isTrustedEndpoint } from '../lib/remote.js'
 import { SessionManager } from '../lib/session.js'
-import { describeHealthPhase, decideReadyHealthLoss, isKernelEnded, remoteErrorCodeOf } from '../lib/session/health.js'
+import {
+  describeHealthPhase,
+  decideReadyHealthLoss,
+  isKernelAlive,
+  isKernelEnded,
+  isKernelQueued,
+  remoteErrorCodeOf,
+} from '../lib/session/health.js'
 import { buildKernelConfig } from '../lib/session/provisioner.js'
 import {
   describeProvisionTimeout,
@@ -424,6 +431,21 @@ async function scenarioHealth() {
   await check('isKernelEnded 只认三种结束态', () => {
     for (const status of ['COMPLETE', 'ERROR', 'CANCEL_ACKNOWLEDGED']) assert.equal(isKernelEnded(status), true)
     for (const status of ['RUNNING', 'PENDING', 'QUEUED', null]) assert.equal(isKernelEnded(status), false)
+  })
+
+  await check('isKernelAlive 与 isKernelQueued 判定可接管状态与队列阶段', () => {
+    for (const status of ['QUEUED', 'PENDING', 'NEW_SCRIPT', 'RUNNING']) {
+      assert.equal(isKernelAlive(status), true, `${status} 应可接管`)
+    }
+    for (const status of ['COMPLETE', 'ERROR', 'CANCEL_ACKNOWLEDGED', 'CANCEL_REQUESTED', null, '']) {
+      assert.equal(isKernelAlive(status), false, `${String(status)} 不应接管`)
+    }
+    for (const status of ['QUEUED', 'PENDING', 'NEW_SCRIPT']) {
+      assert.equal(isKernelQueued(status), true, `${status} 属于排队阶段`)
+    }
+    for (const status of ['RUNNING', 'COMPLETE', null]) {
+      assert.equal(isKernelQueued(status), false, `${String(status)} 不属于排队阶段`)
+    }
   })
 
   await check('decideReadyHealthLoss：结束优先，其次重试次数', () => {

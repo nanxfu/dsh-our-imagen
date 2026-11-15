@@ -380,6 +380,10 @@ var zh = {
   "studio.guidance.generic.title": "生成没有成功",
   "studio.guidance.generic.action": "重试一次",
   "studio.guidance.session.title": "云端会话没有就绪",
+  "studio.guidance.queueTimeout.continue": "继续等待当前队列",
+  "studio.guidance.queueTimeout.openKaggle": "前往 Kaggle 查看",
+  "studio.guidance.queueTimeout.forceNew": "强制新建实例",
+  "studio.guidance.queueTimeout.hint": "该 Kernel 可能仍在 Kaggle 队列中，建议优先点「继续等待当前队列」保留原位次；若要重新起一个，请先到 Kaggle 网页停止旧任务后再点「强制新建实例」，避免重复排队消耗配额。",
   "studio.guidance.network.title": "连不上本地服务",
   "studio.guidance.network.action": "重试",
   "studio.guidance.other.title": "操作没有完成",
@@ -810,6 +814,10 @@ var en = {
   "studio.guidance.generic.title": "The generation did not finish",
   "studio.guidance.generic.action": "Try again",
   "studio.guidance.session.title": "The cloud session is not ready",
+  "studio.guidance.queueTimeout.continue": "Keep waiting in queue",
+  "studio.guidance.queueTimeout.openKaggle": "Open on Kaggle",
+  "studio.guidance.queueTimeout.forceNew": "Start a new instance",
+  "studio.guidance.queueTimeout.hint": 'This Kernel may still be queued on Kaggle. Choose "Keep waiting in queue" to preserve your spot; if you want a fresh instance, stop the old Kernel on Kaggle first to avoid duplicate quota usage.',
   "studio.guidance.network.title": "Cannot reach the local service",
   "studio.guidance.network.action": "Retry",
   "studio.guidance.other.title": "That action did not complete",
@@ -2144,10 +2152,12 @@ function fetchHistory(limit = LIMITS.history.pageSize, offset = 0) {
 function fetchLibrary() {
   return request(routePath("library"), { method: "GET" });
 }
-function startSession(presetId) {
+function startSession(presetId, options = {}) {
+  const body = { presetId };
+  if (options && options.forceNew === true) body.forceNew = true;
   return request(routePath("sessionStart"), {
     method: "POST",
-    body: JSON.stringify({ presetId })
+    body: JSON.stringify(body)
   });
 }
 function stopSession() {
@@ -3754,13 +3764,15 @@ function snapshotOf(result) {
 }
 function GuidanceCard(props) {
   const { t, guidance, compute, actions, ui } = props;
-  const { kind, detail, dismiss } = guidance;
+  const { kind, code: errorCode, detail, dismiss } = guidance;
   const { resetToSafe, retryFocusedJob } = actions;
-  const { startSession: startSession2, runProbe: runProbe2, retryHost } = compute;
+  const { startSession: startSession2, forceStartSession, runProbe: runProbe2, retryHost, session } = compute;
   const { copyInstallCommand, copyText, openLogs } = ui;
   const [code, setCode] = import_react5.default.useState("");
   const directMode = compute && compute.kaggleTransport === "direct";
   const login = compute && compute.kaggleLogin ? compute.kaggleLogin : null;
+  const isQueueTimeout = kind === "session" && errorCode === "queue_timeout";
+  const kernelUrl = session && typeof session.kernelUrl === "string" && /^https:\/\/www\.kaggle\.com\//.test(session.kernelUrl) ? session.kernelUrl : "";
   if (!kind) return null;
   if (directMode && login && (kind === "auth" || kind === "cli")) {
     return renderDirectLogin({ t, guidance, login, runProbe: runProbe2, copyText, openLogs, dismiss, detail, code, setCode });
@@ -3821,7 +3833,15 @@ function GuidanceCard(props) {
         { key: "wake", label: t("studio.guidance.sleep.action"), run: startSession2 }
       ]
     },
-    session: {
+    session: isQueueTimeout ? {
+      title: t("studio.guidance.session.title"),
+      note: t("studio.guidance.queueTimeout.hint"),
+      actions: [
+        { key: "continueQueue", label: t("studio.guidance.queueTimeout.continue"), run: startSession2 },
+        ...kernelUrl ? [{ key: "openKaggle", label: t("studio.guidance.queueTimeout.openKaggle"), href: kernelUrl }] : [],
+        { key: "forceNew", label: t("studio.guidance.queueTimeout.forceNew"), run: forceStartSession }
+      ]
+    } : {
       title: t("studio.guidance.session.title"),
       actions: [{ key: "wake", label: t("studio.guidance.sleep.action"), run: startSession2 }]
     },
@@ -7299,13 +7319,14 @@ function useSessionControl({ t, host, ui, alive }) {
     hostErrorCodeRef.current = host.error.code;
     ui.setError((prev) => prev || { code: host.error.code, message: host.error.message ?? "" });
   }, [host.error]);
-  async function startSession2(presetId) {
+  async function startSession2(presetId, options = {}) {
     if (busy) return;
     setBusy("start");
-    const result = await alive(startSession(presetId));
+    const result = await alive(startSession(presetId, options));
     if (!result) return;
     setBusy("");
     if (!result.ok) ui.fail(result.code, result.message);
+    else ui.setError(null);
     host.refresh();
   }
   async function stopSession2() {
@@ -8019,7 +8040,10 @@ function useStudio(props) {
   function startSession2() {
     return control.startSession(form.form.presetId || defaultPreset);
   }
-  const compute = { ...control, presets, defaultPreset, startSession: startSession2, retryHost, kaggleLogin };
+  function forceStartSession() {
+    return control.startSession(form.form.presetId || defaultPreset, { forceNew: true });
+  }
+  const compute = { ...control, presets, defaultPreset, startSession: startSession2, forceStartSession, retryHost, kaggleLogin };
   async function generate(overrides, options = {}) {
     if (sending) return;
     if (form.referenceBlocked) {
@@ -8128,7 +8152,7 @@ function useStudio(props) {
     form,
     chat,
     library,
-    guidance: { kind: guidanceKind, surface: guidanceSurface, detail: guidanceDetail, dismiss: dismissGuidance },
+    guidance: { kind: guidanceKind, code: guidanceCode, surface: guidanceSurface, detail: guidanceDetail, dismiss: dismissGuidance },
     actions: { sending, generate, reroll, iterate, referenceImage, retryFocusedJob, resetToSafe }
   };
 }
