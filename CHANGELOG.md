@@ -1,5 +1,45 @@
 # 变更记录
 
+## 未发布
+
+> 主题：长排队可操作化。Kaggle 免费 GPU 偶发队列条目卡住（45 分钟仍 `QUEUED`；重新推送一个 Kernel 常常能在几十秒内拿到 GPU，但同样受平台负载影响，不是保证）。本批把「干等 45 分钟」改成三层提示与一键重排，并补上旧 Kernel 清理与远端自证无人接管。
+
+### 功能
+
+- **排队分级提示**：排队超过 `queueSlowMs`（默认 3 分钟）只把等待提示换成「排队比平时久」，不弹卡；超过 `queueStalledMs`（默认 10 分钟）显示「排队超过 N 分钟还没拿到 GPU」横幅，主操作「换新实例重排」、次操作「继续等待」（只收起横幅）。两个阈值随 `/state.queuePolicy` 下发，插件配置 `queueSlowMinutes` / `queueStalledMinutes` 可覆盖。
+- **换新实例重排**：`POST /imagen-api/session/start` 新增 `replace: true`（配合 `forceNew`）。Host 允许在 `provisioning` / `connecting` 等活跃状态下放弃当前会话，best-effort 删除旧 Kernel 后推送新 Kernel；本地等待中的任务继续等新会话，不会被标记为 `stopped`。
+- **排队超时卡收敛**：`queue_timeout` 指引卡删除「继续等待当前队列」「打开 Kaggle Kernel」两个动作，只保留「换新实例重排」+「查看日志」+ 关闭；文案改为确定表述，不再出现「该 Kernel 可能仍在队列中」，也不再要求用户去 Kaggle 网页手动停止旧任务。
+- **旧 Kernel 自动清理**：排队硬超时、隧道握手超时、排队中主动关机与重排都会调用 `deleteKernel`（直连 `DeleteKernel` / CLI `kaggle kernels delete -y`）清理旧 Kernel；删除失败只记日志。
+- **远端 claim 超时兜底**：daemon 新增配置 `claim_timeout_sec`（默认 600 秒，由 `TIMEOUTS.kernelClaimSec` 注入）。启动后没有收到任何带正确 Bearer Token 的 Host 请求就自行退出，回收「删除失败 / 放弃后仍被调度到」的孤儿 Kernel，避免空转到 `idle_timeout_sec`（30 分钟）才释放配额。
+
+### 修复
+
+- **直连排队状态解析**：`KernelWorkerStatus.QUEUED` 是枚举默认值 0，Kaggle `GetKernelSessionStatus` 对排队中的 Kernel 返回 HTTP 200 + `{}`。旧实现解析成 `status=null`，导致会话快照一直停在 `PENDING`、排队超时文案与实际不符、「接管原队列」判断失效（会在用户点「继续等待」时重复推送新 Kernel）。现在空 `status` 归一为 `QUEUED`。
+- **已删除 Kernel 的缺失判定**：删除后再查 Kernel 返回 403 `PERMISSION_DENIED`（不是 404）。传输层统一识别为 `missing`，会话接管 / 启动恢复 / 健康恢复都不再对已不存在的 Kernel 乐观保留队列或空等。
+- **restore 不再对已删除 Kernel 空等**：会话记录指向的 Kernel 已不存在时直接清理记录，不再回会合点等 45 分钟。
+
+### 接口与配置
+
+- `GET /state` 新增 `queuePolicy: { slowMs, stalledMs }`（旧客户端忽略；旧 Host 不下发时客户端用契约默认值）。
+- `POST /session/start` 请求体新增可选 `replace`；`forceNew` 语义不变。
+- 插件配置新增可选 `queueSlowMinutes` / `queueStalledMinutes`；`shared/contract.js` 新增 `TIMEOUTS.queueSlowMs` / `queueStalledMs` / `kernelClaimSec`。
+
+### 测试
+
+- `test/session-reliability.mjs`：新增 H 组（排队中重排、排队中关机清理、旧 Kernel 已删除时不乐观接管），超时文案用例补充「自动清理旧 Kernel / 不再使用不确定表述」断言。
+- `test/kaggle-direct.mjs`：新增空 `status` → `QUEUED`、403 → `missing`、`deleteKernel` 报文与幂等用例。
+- `test/remote/test_claim.py`：claim 看门狗的默认/自定义/非法配置、接管取消与超时退出覆盖。
+- 客户端新增 `src/logic/queue.js` 分级纯函数与 `QueueNotice` 组件，`check-client-logic` / `check-client-render` 同步覆盖。
+
+### 插件自身版本提示
+
+> 与排队批次无关的独立小功能：让用户在工作台里知道 npm 上有没有更新版本；只提示，不下载、不安装。
+
+- **版本检查**：Host 只读查询 npm 注册表的 `dsh-our-imagen/latest`（npmjs 失败回退 npmmirror，单次 4 秒超时），成功结果缓存在 `<workspace>/.imagen/update-check.json`（24 小时有效）；启动约 5 秒后首次检查，之后按 TTL 复查，失败静默保留上一次结果。开发模式（`devEndpoint`）或插件配置 `updateCheck: false` 时不发起任何请求。
+- **提示**：`GET /state` 新增 `update` 快照；存在更高版本时顶栏算力胶囊显示红点，算力弹层给出「新版本 vX 可用（当前 vY）」、远端 `engines.dsh` 要求与 Release 说明链接；不阻断出图、不自动安装。
+- **兼容性声明**：`package.json` 新增 `engines.dsh: ">=0.2.0"`，DSH 插件管理在安装 / 更新时会校验运行版本。
+- **测试**：新增 `test/update-check.mjs`（14 项，完全离线）；`check-client-logic` / `check-client-render` 覆盖提示派生与顶栏渲染；`host-e2e` 断言 `/state.update` 形状。
+
 ## 0.11.0 — 2026-11-15
 
 > 本版完成架构重构 Batch 0–3（打包器、Host 模块边界、远端包化与测试领域化），新增画廊单张删除，切换 npm 包名并打通 Trusted Publishing 发布链，同时更新官网与成片资产。各批都只改内部模块边界、依赖方向与打包形态，`docs/SPEC.md` 定义的 HTTP 路由、报文、错误码与配置注入契约保持向后兼容（详见 [docs/REFACTOR_ARCHITECTURE_SPEC.md](docs/REFACTOR_ARCHITECTURE_SPEC.md)）。

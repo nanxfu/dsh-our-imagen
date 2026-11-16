@@ -37,6 +37,9 @@ from pathlib import Path
 from log_ring import log
 
 DEFAULT_PORT = 7860
+# 启动后等待 Host 接管的默认时限（秒）。与 shared/contract.js 的 TIMEOUTS.kernelClaimSec 同值；
+# 旧 Host 不下发 claim_timeout_sec 时用这个值，避免孤儿 Kernel 空转到 idle_timeout_sec。
+DEFAULT_CLAIM_TIMEOUT_SEC = 600
 
 
 @dataclass
@@ -50,6 +53,8 @@ class DaemonConfig:
     ntfy_topic: str = ""
     ntfy_server: str = "https://ntfy.sh"
     idle_timeout_sec: int = 1800
+    # 启动后无人接管的退出时限（秒）：任一通过 Bearer 鉴权的 Host 请求即视为已接管。
+    claim_timeout_sec: int = DEFAULT_CLAIM_TIMEOUT_SEC
     port: int = DEFAULT_PORT
     preload: dict | None = None
     preset_id: str | None = None
@@ -80,6 +85,7 @@ KNOWN_CONFIG_KEYS = frozenset(
         "ntfy_topic",
         "ntfy_server",
         "idle_timeout_sec",
+        "claim_timeout_sec",
         "port",
         "preload",
         "preset_id",
@@ -143,6 +149,27 @@ def normalize_local_models(raw) -> dict[str, str]:  # noqa: ANN001
     return models
 
 
+def normalize_claim_timeout(raw, *, explicit: bool) -> int:  # noqa: ANN001
+    """启动后等待 Host 接管的时限（秒）：正整数，非法值回落默认并告警。
+
+    ``explicit=False``（旧 Host 没下发该键）静默使用默认值——这是正常兼容路径，不算错误；
+    真正下发了却类型不对 / <= 0 才是配置错误（``true`` / ``600.5`` 也不接受：bool 是
+    int 子类，若放过 ``true`` 会变成 1 秒，正常会话会被误杀）。
+    """
+    if not explicit or raw is None:
+        return DEFAULT_CLAIM_TIMEOUT_SEC
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        log(
+            f"[config] WARN claim_timeout_sec 需为正整数秒，收到 {type(raw).__name__}，"
+            f"回落默认 {DEFAULT_CLAIM_TIMEOUT_SEC}s"
+        )
+        return DEFAULT_CLAIM_TIMEOUT_SEC
+    if raw <= 0:
+        log(f"[config] WARN claim_timeout_sec 需为正整数秒，收到 {raw}，回落默认 {DEFAULT_CLAIM_TIMEOUT_SEC}s")
+        return DEFAULT_CLAIM_TIMEOUT_SEC
+    return raw
+
+
 def build_config(cfg: dict) -> DaemonConfig:
     """注入 dict → DaemonConfig。未知键打日志（不再静默丢弃），敏感值不落日志。"""
     config = DaemonConfig()
@@ -153,6 +180,9 @@ def build_config(cfg: dict) -> DaemonConfig:
         config.idle_timeout_sec = int(cfg.get("idle_timeout_sec", 1800))
     except (TypeError, ValueError):
         config.idle_timeout_sec = 1800
+    config.claim_timeout_sec = normalize_claim_timeout(
+        cfg.get("claim_timeout_sec"), explicit="claim_timeout_sec" in cfg
+    )
     try:
         config.port = int(cfg.get("port", DEFAULT_PORT))
     except (TypeError, ValueError):
@@ -190,7 +220,8 @@ def build_config(cfg: dict) -> DaemonConfig:
     # 配置项名可以打日志，值不行（含 token）。
     log(f"[config] 已加载配置项：{', '.join(sorted(cfg.keys())) or '(空)'}")
     log(
-        f"[config] idle_timeout={config.idle_timeout_sec}s port={config.port} "
+        f"[config] idle_timeout={config.idle_timeout_sec}s claim_timeout={config.claim_timeout_sec}s "
+        f"port={config.port} "
         f"ntfy={'on' if config.ntfy_topic else 'off'} auth={'on' if config.auth_token else 'off'} "
         f"preload={config.preload.get('loader') if config.preload else 'none'} "
         f"preset={config.preset_id or 'none'} log_level={config.log_level} "

@@ -20,6 +20,7 @@ import { StudioIcon } from './studio/StudioIcon.jsx'
 import { Gallery } from './studio/Gallery.jsx'
 import { Filmstrip } from './studio/Filmstrip.jsx'
 import { GuidanceCard } from './studio/GuidanceCard.jsx'
+import { QueueNotice } from './studio/QueueNotice.jsx'
 import { Rail } from './studio/Rail.jsx'
 import { ChatPanel } from './studio/ChatPanel.jsx'
 import { Stage } from './studio/Stage.jsx'
@@ -54,6 +55,7 @@ export const __test = {
     Gallery,
     Filmstrip,
     GuidanceCard,
+    QueueNotice,
     Rail,
     ChatPanel,
     Stage,

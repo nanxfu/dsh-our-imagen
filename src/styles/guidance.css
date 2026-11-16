@@ -40,6 +40,17 @@
   gap: 6px;
 }
 
+/* ── 排队卡住提示（10 分钟档，非错误态）──────────────────────── */
+/* 沿用指引卡的布局，但色调更接近「等待」而不是「异常」，避免和真正的报错混淆。 */
+.ofs-queue-notice {
+  border-color: color-mix(in oklab, var(--ofs-warn) 18%, transparent);
+  background: color-mix(in oklab, var(--ofs-warn-soft) 72%, transparent);
+}
+
+.ofs-queue-notice .ofs-guidance-icon {
+  background: color-mix(in oklab, var(--ofs-warn) 12%, transparent);
+}
+
 .ofs-guidance-actions .ofs-chip.is-on {
   background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);
   border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);

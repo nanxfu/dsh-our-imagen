@@ -99,7 +99,7 @@
 
 ---
 
-## 五、 v0.9 开发计划（进行中）
+## 五、 v0.9 开发计划
 
 > **基线**：`0.9.0`（2026-11-13，v0.9 三个里程碑全部落地；`0.5.0 ~ 0.9.0` 变更详见 [CHANGELOG](../CHANGELOG.md)）。
 > **v0.9 主题**：新手零门槛（试验特性） + 图生图闭环 + 遗留体验与可靠性收口。
@@ -170,15 +170,33 @@
 
 ---
 
-## 七、 工程架构解耦与代码组织重构（进行中）
+## 七、 工程架构解耦与代码组织重构
 
-> **状态：🚧 Batch 0 与 Batch 1 已完成（2026-11-15），Batch 2 进行中（切片 ①②③④⑤ 已落地），Batch 3 待推进**。完整模块边界、设计模式与验收关口见 [REFACTOR_ARCHITECTURE_SPEC.md](REFACTOR_ARCHITECTURE_SPEC.md)。
+> **状态：✅ 已在 0.11.0 落地（2026-11-15）**。Batch 0–3 全部收口，现版本已实际用于真机开机生图（ZIP 自引导解包、配置注入与推理链路正常）。完整模块边界与后续可选演进项见 [REFACTOR_ARCHITECTURE_SPEC.md](REFACTOR_ARCHITECTURE_SPEC.md)。
 
-针对 `remote/daemon.py`（2579 行）的全局状态耦合、~25 个胶水转发函数、`if/elif` Loader 分支散落，以及 Host 侧 `lib/jobs.js`（948 行）/ `lib/kaggle-oauth.js`（674 行）体量偏大问题，按 4 个可独立回归的批次演进（**初版顺序已修正**：打包器必须先于远端包化，否则子目录包无法用 `@@INLINE` 拼接表达）：
+针对 `remote/daemon.py`（原 2579 行）的全局状态耦合、胶水转发函数、`if/elif` Loader 分支散落，以及 Host 侧 `lib/jobs.js`（原 948 行）/ `lib/kaggle-oauth.js`（原 674 行）体量偏大问题，分 4 个批次完成重构（打包器先于远端包化，避免子目录包受限于 `@@INLINE` 拼接）：
 
-1. **Batch 0 — 打包器升级（已完成）**：`lib/kernel.js` 从 `@@INLINE` 行替换改为**内嵌 Base64 ZIP 自引导**，`lib/bundle.js` 产出确定性归档；配置注入改为 `set_embedded_config()` 函数调用（避免搬家后静默丢配置）；`remote/contract.json` 随包分发；`verify-model` 复用同一打包器；`package.json` `files` 与 `scripts/package.mjs` 同步放行 `.json`。
-2. **Batch 1 — Host 侧收口（已完成）**：`lib/jobs.js` → `lib/jobs/{validator,errors,reference-loader,queue}.js`，`lib/kaggle-oauth.js` → `lib/kaggle/oauth/{pkce,browser,callback-server,session}.js`，原路径保留 16 / 23 行的聚合门面，调用方零改动。
-3. **Batch 2 — 远端包化 + 测试领域化（进行中）**：按目标结构建 `remote/{config,state,observability,infra,inference,jobs,transport}` 与 `app.py` 组装根，删掉胶水转发、引入 `LoaderRegistry` 与表驱动调度器；**同批**把 `test/daemon-unit.py` 按领域拆到 `test/remote/test_*.py` 并改用实例化隔离测试——单测通过替换 `d.STATE` 模拟隔离，若只留门面不改测试，会静默测到旧对象（假绿）。按域分批推进，每搬一域就改对应单测并跑绿。已落地：① 领域异常 + 请求校验 + 参考图编解码；② 调度器表驱动；③ `remote/config.py` + `remote/state.py`（单例原地更新、daemon 只 re-export，单测改原地重置并加身份守卫，`daemon.py` 2366 → 2121 行）；④ `remote/infra/process.py` + `remote/observability/health.py`（pip 环境与 import 自检单一实现；`/health` 取样与组装分离，`queue_depth` 在释放 `STATE_LOCK` 之后取）；⑤ `remote/jobs/`（`Job` 实体 + `JobStore` 独占锁与淘汰 + `JobRunner` 循环，`daemon.py` 1938 → 1822 行）。
-4. **Batch 3 — 契约收口与真机验证（离线部分已完成）**：`_FALLBACK_LIMITS` 已删除，`remote/config.py` 导入期直接读内置 `contract.json`（无注入契约时宽高 256–1536、steps≤60、cfg≤20、每批≤4）；`daemon.py` 门面已删除；`test/mock-daemon.py` 的夹具同步并用 `MockDaemonContractTest` 守卫。**待人工**：真机 `kaggle-live` / `gpu-live`，这是唯一能验证启动器解包链路的关口。
+1. **Batch 0 — 打包器升级**：`lib/kernel.js` 从 `@@INLINE` 行替换改为内嵌 Base64 ZIP 自引导，`lib/bundle.js` 产出确定性归档；配置注入改为 `set_embedded_config()` 函数调用；`remote/contract.json` 随包分发；`verify-model` 复用同一打包器；`package.json` `files` 与 `scripts/package.mjs` 同步放行 `.json`。
+2. **Batch 1 — Host 侧收口**：`lib/jobs.js` 拆为 `lib/jobs/{validator,errors,reference-loader,queue}.js`，`lib/kaggle-oauth.js` 拆为 `lib/kaggle/oauth/{pkce,browser,callback-server,session,text}.js`，原路径保留 16 / 23 行聚合门面，调用方零改动。
+3. **Batch 2 — 远端包化 + 测试领域化**：按域拆出 `remote/{config,state,observability,infra,inference,jobs,transport}` 与 `app.py` 组装根，引入 `LoaderRegistry` 与表驱动调度器，删掉 `daemon.py` 上 30 个转手转发名与 `JOB_WAKE`，`daemon.py` 降至 1223 行。同步将 `test/daemon-unit.py` 按域拆到 `test/remote/` 下 15 个模块，改用单例原地重置与实例化测试。
+4. **Batch 3 — 契约收口与真机验证**：`_FALLBACK_LIMITS` 已删除，`remote/config.py` 导入期直接读内置 `contract.json`（无注入契约时宽高 256–1536、steps ≤ 60、cfg ≤ 20、每批 ≤ 4）；`test/mock-daemon.py` 夹具同步并用 `MockDaemonContractTest` 守卫。离线全绿（`test/remote/` 296 项、契约 11 项），且现版本已通过真机开机生图验证。
 
-> **已顺带修掉的隐患**：`lib/fs-atomic.js` 的原子替换在 Windows 上遇到杀毒软件/索引服务瞬时占用 `rename` 会抛 `EPERM`，表现为 Kaggle 直连登录静默失败（`/state` 只显示"账号接入失败：unknown"）。现对 `rename` 做 5 次有界重试（累计约 150ms），`test/kaggle-direct.mjs` 从 3 次跑 1 次过变为连跑 4 次全过。
+> **0.11.0 同期落地的其余改动**：画廊卡片支持单张删除（二次确认）、Kaggle 访问方式默认切换为直连（`settings.json` schema v1 → v2 迁移）、npm 包名切换为 `dsh-our-imagen` 并接入 Trusted Publishing、官网展示与成片更新；另顺带修复了 `lib/fs-atomic.js` 在 Windows 上遇到文件瞬时占用抛 `EPERM` 的问题（`rename` 最多重试 5 次）。
+
+---
+
+## 八、 按模型按需预挂载官方 Kaggle Dataset（规划中）
+
+> **状态**：📝 规划中。完整方案与实施清单见 [PRESET_DATASET_PREMOUNT_PLAN.md](PRESET_DATASET_PREMOUNT_PLAN.md)。
+
+- **目标**：免去普通用户手动配置 `datasetSources` 与 `localModels` 的门槛，按启动时选中的 `presetId` 自动挂载对应精简公开 Dataset（共用 SDXL 底座合并打包），并保留显式开关、用户自定义覆盖优先与 `pushKernel` 404 自动回退 HuggingFace 的容错兜底。
+
+---
+
+## 九、 工作台双向同步与创作流转（规划中）
+
+> **状态**：📝 规划中。设计参考与边界约定见 [STUDIO_SYNC_AND_ITERATION_DESIGN.md](STUDIO_SYNC_AND_ITERATION_DESIGN.md)。
+
+- **目标**：理顺参数表单、创作助手与胶卷之间的流转边界——「清空对话」改为「新建对话」（开启新上下文）；表单生成同步到助手时展示细粒度参数摘要且不污染多轮 `intentHistory`；创作区点击胶卷自动带入原图参数（保留 Seed、保护未提交草稿），并明确「版本微调」与「新建创作」的重置边界。
+
+

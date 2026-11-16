@@ -1,7 +1,7 @@
 # 工程架构解耦与代码组织重构规格 (REFACTOR_ARCHITECTURE_SPEC)
 
-> **基线版本**：`0.10.0`（2026-11-15）
-> **文档状态**：规划中（后续分批迭代落地）
+> **基线版本**：`0.10.0` → `0.11.0`（2026-11-15）
+> **文档状态**：Batch 0–3 已落地并随 `0.11.0` 发布（仅剩 `inference` / `ntfy` 等可选下沉项，不阻塞功能）
 > **适用范围**：`remote/`（Python 远端推理守护进程）、`lib/kernel.js`（Kernel 打包器）、`lib/jobs.js`、`lib/kaggle-oauth.js` 及配套测试套件
 > **外部协议红线**：本重构只调整内部模块边界、依赖方向与打包形态；[`docs/SPEC.md`](SPEC.md) 定义的全部 HTTP 路由、`/health` / `/generate` / `/job` / `/logs` / `/shutdown` 报文、错误码、ntfy 事件及配置注入契约保持 **100% 向后兼容**。
 
@@ -19,9 +19,9 @@ Kaggle Kernel 的 `kernel-metadata.json` 只接受**单个 `code_file`**（`daem
 
 | 文件 | 行数 | 评估结论 | 说明 |
 | :--- | ---: | :--- | :--- |
-| `remote/daemon.py` | 2579 | **核心改造对象** | 混杂 7+ 职责、全局可变状态、~25 个胶水转发函数、多处 `if/elif` 分支 |
-| `lib/jobs.js` | 948 | **建议拆分** | 尚未如 `lib/session/` 般模块化，参数校验、错误映射、队列状态机、落盘与长轮询混居 |
-| `lib/kaggle-oauth.js` | 674 | **建议拆分** | `createKaggleLogin` 单函数约 390 行，耦合了 PKCE、本地回调 HTTP 服务、浏览器拉起与状态机 |
+| `remote/daemon.py` | 1223（原 2579） | ✅ **已按域拆出大部分职责**（Batch 2） | 已抽出 `config` / `state` / `health` / `cache` / `tunnel` / `jobs` / `transport` / `app` 等模块；剩余模型加载与 ntfy 会合列为可选演进项 |
+| `lib/jobs.js` | 16（原 948） | ✅ **已拆分**（Batch 1） | 拆为 `lib/jobs/{validator,errors,reference-loader,queue}.js`，原路径保留 16 行聚合门面 |
+| `lib/kaggle-oauth.js` | 23（原 674） | ✅ **已拆分**（Batch 1） | 拆为 `lib/kaggle/oauth/{pkce,browser,callback-server,session,text}.js`，原路径保留 23 行聚合门面 |
 | `test/daemon-unit.py` | 4218 | ✅ **已按域拆解**（切片⑥f） | 原 41 个测试类 / 55 处 `mock.patch.object(d, …)`；已拆成 `test/remote/` 下 15 个域模块 + 1 份夹具，单文件可独立运行 |
 | `lib/session.js` | 961 | 暂不作为重点 | 核心协作者与纯逻辑已拆至 `lib/session/`（9 个子模块），当前主要是 `SessionManager` 编排层 |
 | `remote/anima_runtime.py` | 1383 | 视节奏拆分 | 主体为 ComfyUI 直译 PyTorch 网络层；若拆分应按「网络模型 / 资产加载 / 运行时」三分，避免破坏上游对照 |
@@ -157,7 +157,7 @@ remote/
 | **Batch 0**<br/>打包器升级 | `lib/kernel.js` 改为内嵌 Base64 ZIP 自引导；配置注入改为 `set_embedded_config()` 函数调用；`remote/contract.json` 随包分发；`verify-model` 复用同一打包器；`package.json` `files` 与 `scripts/package.mjs` 同步 | ✅ **已完成**。`test/kernel-package.mjs` 16 项（含 Python `zipfile` 校验与解包后 `import remote.daemon`）、`test/check-verify-model.mjs` 7 项；`@@INLINE` 已从源码移除 |
 | **Batch 1**<br/>Host 侧收口 | `lib/jobs.js`（948 行）→ `lib/jobs/`；`lib/kaggle-oauth.js`（674 行）→ `lib/kaggle/oauth/`；原路径保留聚合门面 | ✅ **已完成**。门面 16 / 23 行，实现分散到 5 + 5 个模块；`jobs-wait` 23 项、`kaggle-oauth` 14 项、`host-e2e` 46 项、`host-log(-events)` 20 项全绿 |
 | **Batch 2**<br/>远端包化 + 测试领域化<br/>（原 Batch 1 + 3） | 按 §2.1 建包：`config` / `state` / `observability` / `infra` / `inference` / `jobs` / `transport` / `app`；删掉 25 个胶水转发；`LoaderRegistry` + 表驱动调度器；`JobStore` 封装锁；同步把 `test/daemon-unit.py` 按领域拆到 `test/remote/test_*.py`，改用实例化隔离 | ✅ **六片全部落地**（每片独立可回归；剩余逻辑下沉见 §2.1 的「仍待推进」）：<br/>① `errors.py` + `transport/validator.py` + `inference/reference_codec.py` ✅（纯逻辑三模块，边界由 `limits_for` 注入，daemon 只留同名薄包装）；<br/>② `pipeline_loader` 调度器表驱动 ✅（5 条配方收成 `_SCHEDULER_RECIPES`，新增调度器只加一行）；<br/>③ `config.py` / `state.py`（单例对象原地更新，不重新绑定，避免测试静默测到旧对象） ✅（`DaemonConfig` + 注入解析 + 契约边界进 `remote/config.py`，`RuntimeState` / `BootState` / 两把状态锁 + `set_phase` / `record_error` 进 `remote/state.py`；daemon 只 re-export，2366 → 2121 行（−245），单测 248 → 252 项并新增单例身份守卫）；<br/>④ `infra/process.py` + `observability/health.py` ✅（流式执行与一次性命令共用 `pipeline_loader.pip_env()`，`IMPORT_CHECK_CODE` 由模块清单生成；`/health` 拆成「持锁取样 → 释放 → 取队列深度」，`build_payload` 签名里没有任何锁，锁顺序由结构保证）；<br/>⑤ `jobs/`（store + runner，`JOB_*` 全局收进 JobStore）✅（`models.py` 放实体与失败分类，`store.py` 独占 `JOB_LOCK`/`JOB_COND` 并提供语义方法，`runner.py` 只做「取单 → 调注入的执行函数 → 收尾」；daemon 只剩薄包装与 `execute_job`，锁顺序以 `JOB_STORE.finish()` 返回后再取 `STATE_LOCK` 固定）；<br/>⑥ `transport/http_server.py` + `app.py`（Composition Root），最后删门面并把 `test/daemon-unit.py` 按域拆分 ✅（按 §4.1 拆成 ⑥a–⑥f 六小片：**全部落地**；⑥f 删掉 daemon 上 30 个转发名与 `JOB_WAKE`，单测拆成 `test/remote/` 下 15 个域模块 + 夹具） |
-| **Batch 3**<br/>契约收口与真机验证 | 删除 `_FALLBACK_LIMITS`，让无注入契约时消费内置 `contract.json`（行为变更：宽高 64–2048 → 256–1536、steps 80 → 60、cfg 30 → 20、每批 8 → 4，请求体上限 8MB → 11.7MB）；移除 `daemon.py` 门面；回填文档与 `CHANGELOG` | 🚧 **离线部分已落地**：`config.py` 导入期读 `contract.json`（`BUILTIN_CONTRACT` / `BUILTIN_LIMITS`，读不到直接抛）、`max_tasks()` / `request_body_limit()` 改走同一份契约；`test/mock-daemon.py` 的兜底夹具同步到契约值并把 `_request_body_limit()` 对齐同一条公式；新增 `MockDaemonContractTest` 3 项逐键比对 mock 与 daemon 的取数结果。验收：`python test/remote/run.py` 296 项、`check-contract` 11/11、`host-e2e` 46/46、`jobs-wait` 23/23 全绿。**待人工**：真机 `kaggle-live` 与 `gpu-live`（唯一能验证启动器解包链路的关口，需要 Kaggle 额度） |
+| **Batch 3**<br/>契约收口与真机验证 | 删除 `_FALLBACK_LIMITS`，让无注入契约时消费内置 `contract.json`（行为变更：宽高 64–2048 → 256–1536、steps 80 → 60、cfg 30 → 20、每批 8 → 4，请求体上限 8MB → 11.7MB）；移除 `daemon.py` 门面；回填文档与 `CHANGELOG` | ✅ **已完成**：`config.py` 导入期读 `contract.json`（`BUILTIN_CONTRACT` / `BUILTIN_LIMITS`，读不到直接抛）、`max_tasks()` / `request_body_limit()` 改走同一份契约；`test/mock-daemon.py` 的兜底夹具同步到契约值并把 `_request_body_limit()` 对齐同一条公式；新增 `MockDaemonContractTest` 3 项逐键比对 mock 与 daemon 的取数结果。离线：`python test/remote/run.py` 296 项、`check-contract` 11/11、`host-e2e` 46/46、`jobs-wait` 23/23 全绿；真机：已通过 `0.11.0` 现版本实际开机生图验证 |
 
 
 **Batch 3 落地记（2026-11-15，离线部分）**：`_FALLBACK_LIMITS` / `MAX_TASKS_FALLBACK` 已删除，
@@ -174,9 +174,7 @@ remote/
    会按内置 `maxBytes` 接受 8MiB 参考图——两条路径打架。现在统一按 `reference.maxBytes` 推导
    （11,233,388 字节），代价是无契约时的请求体上限从 8MB 涨到 11.7MB（仅影响本地调试 / 旧 Host）。
 
-**未完成项（需真机）**：`npm run test:live`（kaggle-live）与 `npm run test:gpu`（gpu-live）尚未在本批
-复跑。离线侧只能证明"源码包内容正确、解包后能 import"，不能证明 Kaggle 侧启动器解包 + 配置注入
-在真实 Kernel 上仍然成立，发布前必须补跑。
+**真机验证说明**：`0.11.0` 现版本已实际用于真机开机生图，验证了 Kaggle 侧 ZIP 自引导解包、配置注入与推理链路正常。如需自动化脚本回归，可按需运行 `npm run test:live`（kaggle-live）或 `npm run test:gpu`（gpu-live）。
 ---
 
 ### 4.1 Batch 2 切片⑥ 的拆分与剩余施工顺序（2026-11-15 实测结论）

@@ -66,6 +66,8 @@ export function useStudio(props) {
 
   const ui = useStudioUi({ t, initialView, initialPanelMode })
   const control = useSessionControl({ t, host, ui, alive })
+  // 10 分钟排队横幅的关闭记忆：值为轮次键（startedAt|presetId），同一轮排队只弹一次。
+  const [dismissedQueueKey, setDismissedQueueKey] = React.useState('')
   // 直连登录会话：成功（done）后重跑一次 probe，把账号与配额状态刷成最新。
   // CLI 模式下 hook 不会发起任何请求（指引卡使用原有「复制登录命令」动作）。
   const kaggleLogin = useKaggleLogin({ t, ui, onDone: () => control.runProbe() })
@@ -79,13 +81,40 @@ export function useStudio(props) {
     return control.startSession(form.form.presetId || defaultPreset)
   }
 
-  /** 强制新建云端实例：跳过接管检查，直接用新的随机 slug 重新推送。 */
-  function forceStartSession() {
-    return control.startSession(form.form.presetId || defaultPreset, { forceNew: true })
+  /**
+   * 换新实例重排：跳过接管、删除排不上的旧 Kernel 后推送新 Kernel。
+   * busy / 同一 tick 内的重复点击由 useSessionControl 判重，失败走 ui.fail。
+   */
+  function requeueSession() {
+    return control.requeueSession(form.form.presetId || defaultPreset)
   }
 
+  // 排队卡住（10 分钟档）横幅：非错误态通道，只对当前排队轮次弹一次。
+  // 「继续等待」只收起卡片、不影响会话；「换新实例重排」收起后发起 replace 请求。
+  // 重排成功会换新的 startedAt，新轮次（若仍卡住）可再次触发。
+  const queue = control.queue
+  const queueNotice = queue.level === 'stalled' && queue.key && queue.key !== dismissedQueueKey
+    ? {
+        minutes: queue.stalledMinutes,
+        dismiss: () => setDismissedQueueKey(queue.key),
+        requeue: () => {
+          setDismissedQueueKey(queue.key)
+          return requeueSession()
+        },
+      }
+    : null
+
   // 组件层拿到的云端域：宿主派生状态 + 启停动作，startSession 已绑定当前表单预设。
-  const compute = { ...control, presets, defaultPreset, startSession, forceStartSession, retryHost, kaggleLogin }
+  const compute = {
+    ...control,
+    presets,
+    defaultPreset,
+    startSession,
+    requeueSession,
+    queueNotice,
+    retryHost,
+    kaggleLogin,
+  }
 
   async function generate(overrides, options = {}) {
     if (sending) return

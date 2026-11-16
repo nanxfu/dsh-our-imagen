@@ -278,6 +278,98 @@ await check('云端状态派生：阶段标签、色调与可执行动作', () =
   assert.equal(pushFailed.label, t('session.state.errorPush'), '推送失败发生在云端介入前，不能归成云端异常')
 })
 
+await check('排队分级：阈值兜底、等待时长与轮次键', () => {
+  // 旧宿主不下发 queuePolicy：按契约默认 3 分钟 / 10 分钟兜底。
+  assert.deepEqual(logic.queuePolicyOf(null), {
+    slowMs: contract.TIMEOUTS.queueSlowMs,
+    stalledMs: contract.TIMEOUTS.queueStalledMs,
+  })
+  assert.deepEqual(logic.queuePolicyOf({ session: {} }), {
+    slowMs: contract.TIMEOUTS.queueSlowMs,
+    stalledMs: contract.TIMEOUTS.queueStalledMs,
+  })
+  // 宿主下发的合法阈值原样使用，标题里的分钟数随之换算。
+  assert.deepEqual(logic.queuePolicyOf({ queuePolicy: { slowMs: 120000, stalledMs: 300000 } }), {
+    slowMs: 120000,
+    stalledMs: 300000,
+  })
+  // 非法值逐字段回落；卡住档不得早于变慢档（与 Host 的归一化口径一致）。
+  assert.deepEqual(logic.queuePolicyOf({ queuePolicy: { slowMs: -1, stalledMs: 0 } }), {
+    slowMs: contract.TIMEOUTS.queueSlowMs,
+    stalledMs: contract.TIMEOUTS.queueStalledMs,
+  })
+  const inverted = logic.queuePolicyOf({ queuePolicy: { slowMs: 600000, stalledMs: 120000 } })
+  assert.equal(inverted.slowMs, 600000)
+  assert.equal(inverted.stalledMs, 600000)
+  assert.equal(logic.queueStalledMinutesOf({ slowMs: 60000, stalledMs: 300000 }), 5)
+  assert.equal(logic.queueStalledMinutesOf(undefined), 10)
+
+  // 「已排队」只认 provisioning + queue：推送与隧道阶段都不算排队。
+  const queue = { state: 'provisioning', phase: 'queue', startedAt: at(-200) }
+  assert.equal(logic.queueWaitMsOf(queue, NOW), 200000)
+  assert.equal(logic.queueWaitMsOf({ ...queue, phase: 'push' }, NOW), null)
+  assert.equal(logic.queueWaitMsOf({ ...queue, state: 'connecting', phase: 'tunnel' }, NOW), null)
+  assert.equal(logic.queueWaitMsOf({ state: 'provisioning', phase: 'queue' }, NOW), null, '缺 startedAt 时不做分级')
+  assert.equal(logic.queueWaitMsOf({ ...queue, startedAt: at(60) }, NOW), 0, '未来时间按 0 处理')
+  assert.equal(logic.queueWaitMsOf(null, NOW), null)
+
+  // 分级边界：慢档之前正常，卡住档之前仍只是变慢。
+  const policy = logic.queuePolicyOf(null)
+  assert.equal(logic.queueLevelOf(null, policy), '')
+  assert.equal(logic.queueLevelOf(policy.slowMs - 1, policy), '')
+  assert.equal(logic.queueLevelOf(policy.slowMs, policy), 'slow')
+  assert.equal(logic.queueLevelOf(policy.stalledMs - 1, policy), 'slow')
+  assert.equal(logic.queueLevelOf(policy.stalledMs, policy), 'stalled')
+  const custom = { slowMs: 60000, stalledMs: 300000 }
+  assert.equal(logic.queueLevelOf(299000, custom), 'slow')
+  assert.equal(logic.queueLevelOf(300000, custom), 'stalled')
+
+  // 轮次键：同一轮排队去重用同键，重排换新 startedAt 后可以再次提示。
+  const first = { state: 'provisioning', phase: 'queue', startedAt: at(-660), presetId: 'sdxl-lightning' }
+  const requeued = { ...first, startedAt: at(-5) }
+  assert.equal(logic.queueRoundKeyOf(first), `${first.startedAt}|sdxl-lightning`)
+  assert.notEqual(logic.queueRoundKeyOf(first), logic.queueRoundKeyOf(requeued))
+  assert.equal(logic.queueRoundKeyOf({ ...first, presetId: undefined }), first.startedAt)
+  assert.equal(logic.queueRoundKeyOf({ state: 'provisioning', phase: 'queue' }), '', '没有 startedAt 时无法判定轮次')
+  assert.equal(logic.queueRoundKeyOf(null), '')
+})
+
+await check('排队分级接入云端状态：慢档只换提示，卡住档给出级别', () => {
+  const queue = { state: 'provisioning', phase: 'queue', startedAt: at(-200), presetId: 'sdxl-lightning' }
+  const slow = logic.computeStatusOf(t, { session: queue, now: NOW })
+  assert.equal(slow.label, t('session.state.queue'), '慢档不改变胶囊标签')
+  assert.equal(slow.tone, 'warn')
+  assert.equal(slow.hint, zh['session.hint.queueSlow'])
+  assert.equal(slow.queueLevel, 'slow')
+  assert.equal(slow.queueWaitMs, 200000)
+
+  // 未到慢档：仍是常规排队提示。
+  const normal = logic.computeStatusOf(t, { session: { ...queue, startedAt: at(-30) }, now: NOW })
+  assert.equal(normal.queueLevel, '')
+  assert.equal(normal.hint, zh['session.hint.queue'])
+
+  // 卡住档：状态条仍是同一条慢提示，可操作横幅由组合层另加。
+  const stalled = logic.computeStatusOf(t, { session: { ...queue, startedAt: at(-700) }, now: NOW })
+  assert.equal(stalled.queueLevel, 'stalled')
+  assert.equal(stalled.hint, zh['session.hint.queueSlow'])
+
+  // 宿主下发更短的阈值：分级跟随 policy，而不是写死 3 / 10 分钟。
+  const custom = logic.computeStatusOf(t, {
+    session: { ...queue, startedAt: at(-320) },
+    queuePolicy: { slowMs: 60000, stalledMs: 300000 },
+    now: NOW,
+  })
+  assert.equal(custom.queueLevel, 'stalled')
+  assert.equal(logic.queueStalledMinutesOf({ slowMs: 60000, stalledMs: 300000 }), 5)
+
+  // 非排队阶段不参与分级。
+  const tunnel = logic.computeStatusOf(t, { session: { ...queue, state: 'connecting', phase: 'tunnel' }, now: NOW })
+  assert.equal(tunnel.queueLevel, '')
+  assert.equal(tunnel.hint, zh['session.hint.connecting'])
+  // 英文界面同样走慢提示，且文案成对存在。
+  assert.equal(logic.computeStatusOf(te, { session: queue, now: NOW }).hint, en['session.hint.queueSlow'])
+})
+
 await check('任务进度区分「等云端」与「等前一张图」', () => {
   const running = { status: 'running' }
   const waiting = { status: 'waiting-session' }
@@ -1993,6 +2085,40 @@ await check('模型语言能力、步数分治模式与安全重置补丁', () =
   assert.deepEqual(safeResetPatch(usable), { width: 1024, height: 1024, steps: 30, cfg: 5 })
   assert.deepEqual(safeResetPatch(fast), { width: 512, height: 512, steps: 4, cfg: 0 })
   assert.deepEqual(safeResetPatch(null), { width: 1024, height: 1024, steps: 4, cfg: 1 })
+})
+
+await check('更新提示：只在 hasUpdate 时派生，链接与字段做归一', async () => {
+  const update = logic.updateOf({
+    version: '0.11.0',
+    update: {
+      current: '0.11.0',
+      latest: '0.12.0',
+      hasUpdate: true,
+      releaseUrl: 'https://github.com/nanxfu/dsh-our-imagen/releases/tag/v0.12.0',
+      enginesDsh: '>=0.2.0',
+      checkedAt: '2026-01-01T00:00:00.000Z',
+    },
+  })
+  assert.deepEqual(update, {
+    latest: '0.12.0',
+    current: '0.11.0',
+    enginesDsh: '>=0.2.0',
+    releaseUrl: 'https://github.com/nanxfu/dsh-our-imagen/releases/tag/v0.12.0',
+    checkedAt: '2026-01-01T00:00:00.000Z',
+  })
+  assert.equal(logic.updateOf({}), null)
+  assert.equal(logic.updateOf({ update: { hasUpdate: false, latest: '0.12.0' } }), null)
+  assert.equal(logic.updateOf({ update: { hasUpdate: true } }), null)
+
+  // 旧宿主 / 不完整快照：current 回落到 /state.version，非 https 链接丢弃。
+  const fallbackFields = logic.updateOf({
+    version: '0.11.0',
+    update: { hasUpdate: true, latest: '0.12.0', releaseUrl: 'http://evil.example/x' },
+  })
+  assert.equal(fallbackFields.current, '0.11.0')
+  assert.equal(fallbackFields.releaseUrl, '')
+  assert.equal(fallbackFields.enginesDsh, '')
+  assert.equal(fallbackFields.checkedAt, null)
 })
 
 const failed = results.filter((item) => !item.ok)

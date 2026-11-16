@@ -6,6 +6,7 @@
 
 1. 路径分派（``/health`` / ``/logs`` / ``/job`` / ``/generate`` / ``/shutdown``）；
 2. Bearer 鉴权（``hmac.compare_digest``；无 token 时按 ``allow_no_auth`` 决定是否放行）；
+   鉴权通过即通知生命周期层「Host 已接管」（``mark_claimed``，取消启动后的 claim 看门狗）；
 3. 请求体解码与体积闸门（上限来自注入契约，见 ``config.request_body_limit``）；
 4. 把 ``RequestError`` / ``QueueFullError`` 映射成 400 / 429，其余异常交给调用方分类。
 
@@ -63,6 +64,8 @@ class HttpApi:
     normalize_job_id: Callable[[Any], Any]
     request_shutdown: Callable[[], None]
     cleanup_before_exit: Callable[[], None]
+    # 鉴权通过时调用：标记 Host 已接管，取消启动后的 claim 看门狗（幂等）。
+    mark_claimed: Callable[[], None]
     iso_time: Callable[[float], str]
     version: Callable[[], str]
 
@@ -117,11 +120,15 @@ class DaemonHandler(BaseHTTPRequestHandler):
         self._send_json(code, {"error": {"code": error_code, "message": message}}, headers)
 
     def _require_auth(self) -> bool:
-        config = self._api().config
+        api = self._api()
+        config = api.config
         expected = config.auth_token
         if not expected:
             # 安全修复：没有 token 时默认不放行（本地调试需显式 allow_no_auth=true）。
             if config.allow_no_auth:
+                # 本地调试没有 Token 可比，但请求确实到达了鉴权后的接口：同样算已接管，
+                # 否则调试中的进程会在 claim_timeout_sec 后自行退出。
+                api.mark_claimed()
                 return True
             self._send_error(
                 401,
@@ -133,6 +140,9 @@ class DaemonHandler(BaseHTTPRequestHandler):
         if header.startswith("Bearer "):
             provided = header[len("Bearer ") :].strip()
             if hmac.compare_digest(provided, expected):
+                # 任何带正确 Bearer Token 的请求（/health、/shutdown、/generate、/job、/logs 等）
+                # 都说明 Host 已经找到并接管了这个 Kernel：取消 claim 看门狗。
+                api.mark_claimed()
                 return True
         self._send_error(401, "unauthorized", "缺少或错误的 Bearer Token")
         return False

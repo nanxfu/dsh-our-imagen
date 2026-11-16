@@ -7,7 +7,8 @@
 三段职责（对应 docs/REFACTOR_ARCHITECTURE_SPEC.md §2.1 的 ``app.py``）：
 
 1. :meth:`DaemonApp.run` —— Composition Root 的执行体：读配置 → 安全闸门 → HTTP 先起 →
-   worker → 隧道 → 运行时后台线程 → 主循环（会合点发布、周期重播、空闲看门狗）；
+   worker → 隧道 → 运行时后台线程 → 主循环（会合点发布、周期重播、空闲看门狗、
+   claim 看门狗）；
 2. :meth:`DaemonApp.runtime_boot` —— GPU 探测 → 装依赖 → 可选预加载 → ``phase=ready``；
 3. :meth:`DaemonApp.tunnel_boot` / :meth:`DaemonApp.install_signal_handlers` /
    模块级 :func:`log_environment` —— 只做"拉起与收尾"，不含业务分支。
@@ -127,6 +128,11 @@ class DaemonApp:
         self._exit_fn = exit_fn
         self._clock = clock
         self._thread_factory = thread_factory
+        # 退出闸门：信号 / /shutdown / 空闲 / claim 超时是四条独立路径，可能同时到。
+        # 真正的 exit_fn 是 os._exit（第一次就结束了进程），但单测把它换成记录函数，
+        # 这里必须保证重复调用只落一次，否则「一次退出」的断言会被竞态带偏。
+        self._exit_lock = threading.Lock()
+        self._exited = False
 
     # ---- 线程 ----
 
@@ -138,6 +144,29 @@ class DaemonApp:
         thread = threading.Thread(target=target, name=name, daemon=True)
         thread.start()
         return thread
+
+    # ---- 退出 ----
+
+    def _terminate(self, code: int) -> None:
+        """进程退出的唯一闸门：所有退出路径都走这里，重复调用只执行第一次。
+
+        调用方负责先做清理（:meth:`_cleanup_before_exit` 本身幂等）；本方法只管
+        「退出码只落一次」。真实运行时 ``exit_fn`` 是 ``os._exit``，第二次调用不可能
+        发生；单测替换成记录函数后，这个闸门保证竞态用例可以断言恰好一次退出。
+        """
+        with self._exit_lock:
+            if self._exited:
+                return
+            self._exited = True
+        self._exit_fn(code)
+
+    def _claim_timeout_sec(self) -> int:
+        """claim 看门狗时限（秒）；<= 0 或缺失视为关闭（配置层已归一为正整数）。"""
+        try:
+            value = int(getattr(self._config, "claim_timeout_sec", 0))
+        except (TypeError, ValueError):
+            return 0
+        return value if value > 0 else 0
 
     # ---- 组装入口：启动顺序 ----
 
@@ -157,7 +186,7 @@ class DaemonApp:
             self._load_config()
         except SystemExit as exc:
             log(f"[config] {exc}")
-            self._exit_fn(2)
+            self._terminate(2)
             return
         log_environment()
         # P1.2：HF_TOKEN 必须在任何下载/加载之前写好（gated 仓库与匿名限流都依赖它）。
@@ -168,7 +197,7 @@ class DaemonApp:
             message = "未配置 auth_token 且未开启 allow_no_auth，拒绝以无鉴权模式对外提供服务"
             log(f"[boot] {message}")
             self._fail_boot("unauthorized", message)
-            self._exit_fn(4)
+            self._terminate(4)
             return
 
         # 1) HTTP 先起来：Host 靠 /health 判断 phase，不依赖模型是否加载完。
@@ -176,7 +205,7 @@ class DaemonApp:
             self._start_http_server(self._config.port)
         except Exception as exc:
             log(f"[http] 端口 {self._config.port} 监听失败：{short(exc)}")
-            self._exit_fn(3)
+            self._terminate(3)
             return
 
         # 1.5) 异步 job worker：常驻线程串行消费 /generate 入队的任务。
@@ -219,8 +248,29 @@ class DaemonApp:
 
             with self._state_lock:
                 last_active = self._state.last_active
+                started_at = self._state.started_at
                 phase = self._state.phase
                 jobs_done = self._state.jobs_done
+
+            # claim 看门狗：启动后一直没有人带正确 Token 来接管，说明 Host 已放弃这个
+            # Kernel（排队超时 / 强制重排 / 推送失败）。这时候不退出就会空转到
+            # idle_timeout_sec（默认 1800s）才释放 GPU，因此到点直接走与空闲退出相同的
+            # 清理路径。与空闲看门狗不同，这里不排除 bootstrapping：没有人等结果的
+            # 启动期（装依赖 / 预加载）没有保护价值，越早释放越好。
+            claim_timeout = self._claim_timeout_sec()
+            if (
+                claim_timeout
+                and not self._boot.claim_event.is_set()
+                and now - started_at >= claim_timeout
+            ):
+                log(
+                    f"[claim] 启动 {int(now - started_at)}s 内未收到任何带 Token 的 Host 请求"
+                    f"（claim_timeout={claim_timeout}s），退出进程释放 GPU 配额"
+                )
+                self._cleanup_before_exit()
+                self._terminate(0)
+                return
+
             idle = now - last_active
             busy = self._active_job_count() > 0 or self._gen_lock.locked()
             # 启动阶段（装依赖/预加载）不参与空闲退出：Host 可能把 idle_timeout 调得很短，
@@ -229,7 +279,7 @@ class DaemonApp:
             if not busy and not bootstrapping and idle >= self._config.idle_timeout_sec:
                 log(f"[idle] 空闲 {int(idle)}s ≥ {self._config.idle_timeout_sec}s，退出进程释放 GPU 配额")
                 self._cleanup_before_exit()
-                self._exit_fn(0)
+                self._terminate(0)
                 return
 
             if now - last_report >= self._report_interval_sec:
@@ -310,7 +360,7 @@ class DaemonApp:
         def _bye(signum, _frame):  # noqa: ANN001
             log(f"[signal] 收到信号 {signum}，退出进程")
             self._cleanup_before_exit()
-            self._exit_fn(0)
+            self._terminate(0)
 
         try:
             import signal

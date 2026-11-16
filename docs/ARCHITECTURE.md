@@ -16,7 +16,7 @@
   ├── 会话状态机：管理远端 Kernel 推送与保活
   ├── 任务队列：单并发串行排队、参数校验钳制
   ├── 文件落盘：写入当前工作区 imagen-output/ 目录
-  └── Kaggle CLI：负责推送代码、查询状态与拉取日志
+  └── Kaggle 传输层：默认直连 Kaggle API，保留 CLI 作为兼容退路
                   │
                   ▼ kaggle kernels push
 [ Kaggle 容器实例 (Remote / 2×Tesla T4) ]
@@ -166,6 +166,17 @@ Kaggle 镜像的包版本会随平台更新，插件里写死版本上限反而�
 
 相关离线断言见 `test/session-pending-cleanup.mjs` 与 `test/session-restore.mjs` 的 E2 组。
 
+### 2.14.1 放弃排队的孤儿 Kernel 清理（0.12.0）
+Kaggle 对「推送后一直 `QUEUED`」的 Kernel 没有取消 API（`CancelKernelSession` 需要批量 Kernel 拿不到的
+`kernel_session_id`），而放弃排队后旧 Kernel 仍可能在之后被调度到并空转。0.12.0 用两道防线处理：
+
+1. **Host 侧删除**：排队硬超时 / 隧道握手超时 / 排队中主动关机 / 「换新实例重排」都会调用
+   `deleteKernel`（直连 `DeleteKernel`，CLI `kaggle kernels delete -y`）best-effort 删除旧 Kernel；
+   已删除返回 403 时按「已不存在」成功处理。删除失败只记 warn，不影响新会话启动。
+2. **远端自证无人接管**：daemon 新增 `claim_timeout_sec`（默认 600 秒）。启动后任何一个带正确 Bearer
+   Token 的 Host 请求（`/health`、`/shutdown`、`/generate` 等）都会置位 claim 事件并取消看门狗；
+   超时仍无人接管就自行退出，不再空转到 `idle_timeout_sec`（默认 1800 秒）才释放 GPU 配额。
+
 ### 2.15 工作台界面状态持久化
 「表单高级设置是否展开」这类界面偏好存 `<workspace>/.imagen/ui-state.json`，通过
 `GET/POST /imagen-api/ui-state` 读写（同一 path 只注册一条路由、按 method 分发，与运行设置同款）。
@@ -179,22 +190,21 @@ Kaggle 镜像的包版本会随平台更新，插件里写死版本上限反而�
 
 相关离线断言见 `test/ui-state-host.mjs`（21 项）与客户端 `check-client-*` 的界面态用例。
 
-### 2.16 Kaggle 访问方式：CLI 与 Node 直连（试验特性）
-默认走本机 `kaggle` CLI（`lib/kaggle.js`）。「运行设置 → 高级 → Kaggle 访问方式」可切到试验性的
-Node 直连（`lib/kaggle-direct.js`）：直接调用 Kaggle 的 JSON API（`POST https://api.kaggle.com/v1/<service>.<Service>/<Method>`，
+### 2.16 Kaggle 访问方式：Node 直连与 CLI 兼容
+`0.11.0` 起默认走 Node 直连（`lib/kaggle-direct.js`），可在「运行设置 → 高级 → Kaggle 访问方式」切回本机 `kaggle` CLI（`lib/kaggle.js`）作为兼容退路。直连直接调用 Kaggle 的 JSON API（`POST https://api.kaggle.com/v1/<service>.<Service>/<Method>`，
 camelCase 报文，与 `kaggle` CLI 2.x 依赖的 `kagglesdk` 同协议），所有请求经 `lib/net.js` 的 `httpText`
-（内置 fetch 失败自动降级系统 `curl`，继承系统代理）。收益：去掉每次 CLI 调用 9~15 秒的 Python 冷启动，
-Windows 上不再依赖 Python `Scripts` 目录进 PATH。
+（内置 fetch 失败自动降级系统 `curl`，继承系统代理），省去每次 CLI 调用 9~15 秒的 Python 冷启动，
+Windows 上也不依赖 Python `Scripts` 目录进 PATH。
 
 传输选择由 `lib/kaggle-transport.js` 在**每次调用**时按最新设置解析——工作台切换后，下一次操作或唤醒
 即生效，不需要重载插件。它对 `SessionManager` 暴露的五个出口（`probeKaggle` / `kaggleUsername` /
-`pushKernel` / `kernelStatus` / `kernelLogs`）与 CLI 实现返回同形状，会话状态机完全不知道底层是哪种传输。
+`pushKernel` / `kernelStatus` / `kernelLogs`）与 CLI 实现返回同形状，会话状态机不感知底层传输差异。
 
 直连的凭据解析顺序与 kagglesdk 一致：`KAGGLE_API_TOKEN` 环境变量 → `~/.kaggle/access_token` →
 `~/.kaggle/credentials.json`（OAuth，`access_token` 到期用 `refresh_token` 调
 `users.AccountApiService/GenerateAccessToken` 续期并原子回写 0600）→ `~/.kaggle/kaggle.json`（Basic Auth）。
 401/403 统一归为鉴权失败（`auth_required`），网络错误归 `unknown`；token 只出现在请求头，
-不进入日志、错误详情与对外快照。默认 `cli`，试验特性关闭时行为与改造前完全一致。
+不进入日志、错误详情与对外快照。当前默认 `direct`；老用户升级时，`settings.json` 从 schema v1 迁到 v2 会把旧默认 `cli` 丢弃一次，之后手动切回 `cli` 会以 `schema=2` 保留。
 
 ### 2.17 内置 OAuth PKCE 登录
 直连模式不要求安装 CLI，登录在宿主侧完成（`lib/kaggle-oauth.js`），协议与 `kaggle auth login` 对齐
@@ -220,7 +230,7 @@ Windows 上不再依赖 Python `Scripts` 目录进 PATH。
 ### 2.18 图生图（垫图重绘，M3）
 链路分三段，参考图只在 Host 与远端内存里短暂存在，不进 `/state` 轮询：
 
-1. **Host 入队校验**（`lib/jobs.js`）：`reference` 支持 `path`（`imagen-output/` 内作品）或 `image`
+1. **Host 入队校验**（`lib/jobs/`）：`reference` 支持 `path`（`imagen-output/` 内作品）或 `image`
    （base64，可带 data URL 前缀）二选一；入队前做词法校验（相对路径、拒绝 `..`/绝对路径）、
    base64/体积/PNG-JPEG 魔数校验与 `strength` 归一（按契约钳制并对齐 step）。非法值立即 400，
    不占队列位置。`params.reference = { sourcePath, strength }` 进入公开视图，二进制只留在任务内部。
@@ -279,6 +289,15 @@ Windows 上不再依赖 Python `Scripts` 目录进 PATH。
 `[{ type: 'text', text }]`（为后续多模态预留），`options.prompt` 保留为单轮快捷方式；`prepareCall` 优先、`stream` 兜底、
 超时与空串降级的行为不变。请求侧 `history` 是可选数组：客户端只回传最近若干条消息，Host 再按 `LIMITS.intentHistory`
 裁剪（条数、单条长度、`user` / `assistant` 角色白名单），非法项直接丢弃；`history` 非空时优先于旧的 `previousPrompt`。
+
+### 2.21 插件自身版本检查（0.12.0）
+只在「npm 上有没有更新版本」这一个问题上做检查，和云端会话版本无关：
+
+1. **检查链路**（`lib/update-check.js`）：Host 只读请求 `<registry>/dsh-our-imagen/latest`，先 npmjs、失败回退 npmmirror，单次 4 秒超时；成功结果（版本号 + `engines.dsh` 要求）原子写入 `<workspace>/.imagen/update-check.json`，24 小时有效。插件启动约 5 秒后首次检查，之后按 TTL 复查；全部失败静默保留上一次成功结果，只记 debug/警告日志。
+2. **提示**：`GET /state` 下发 `update` 快照（`current` / `latest` / `hasUpdate` / `releaseUrl` / `enginesDsh` / `checkedAt` / `stale` / `error`）；客户端 `src/logic/update.js` 只在 `hasUpdate=true` 时派生提示，顶栏算力胶囊显示红点、算力弹层给出版本对比、`engines.dsh` 要求与 Release 说明链接。**不下载、不安装、不阻断出图**。
+3. **开关**：开发模式（`devEndpoint`）或插件配置 `updateCheck: false` 时不发起任何请求（离线测试同样走这个开关）。`package.json` 的 `engines.dsh` 供 DSH 插件管理在安装 / 更新时校验运行版本。
+
+比较口径是主版本号三段（`shared/version.js` 纯函数）：只在远端版本更高时提示，同版本 / 更旧 / 不可解析都不提示；不引入 semver 依赖。
 
 ---
 

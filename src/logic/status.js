@@ -8,6 +8,7 @@
 import { PHASE_STATE, TRANSIENT_SESSION } from '../constants.js'
 import { localized } from '../i18n.js'
 import { formatText } from './format.js'
+import { queueLevelOf, queuePolicyOf, queueWaitMsOf } from './queue.js'
 
 export function sessionStateText(t, state) {
   const key = state ? `session.state.${state}` : 'session.state.absent'
@@ -94,8 +95,15 @@ function labelKeyOf(state, phase, session, asleep) {
 /**
  * 云端展示状态：胶囊标签、语义色调、阶段、等待提示与可执行动作。
  *
+ * 排队分级只影响等待提示：超过慢档把「正在排队」换成「排队比平时久」，
+ * 卡片（10 分钟档）由组合层另行派生，不改变胶囊标签与色调。
+ *
  * @param {(key: string) => string} t
- * @param {{ session?: object|null }} input 宿主快照里的会话（或 compute.session）
+ * @param {{
+ *   session?: object|null,
+ *   queuePolicy?: { slowMs: number, stalledMs: number },
+ *   now?: number,
+ * }} input 宿主快照里的会话（或 compute.session）、排队阈值与当前时刻
  */
 export function computeStatusOf(t, input = {}) {
   const session = input && input.session ? input.session : null
@@ -103,9 +111,16 @@ export function computeStatusOf(t, input = {}) {
   const phase = session && typeof session.phase === 'string' ? session.phase : ''
   const asleep = isAsleepSession(session)
   const stopped = state === 'absent' && Boolean(session && session.stoppedByUser === true)
+  // 排队分级：阈值来自 /state.queuePolicy，旧宿主缺失时按契约兜底；now 由调用方传入便于测试。
+  // 传入值再走一次归一化，避免调用方直接传 0 / 负数时把提示误判成卡住。
+  const policy = queuePolicyOf({ queuePolicy: input && input.queuePolicy })
+  const queueWaitMs = queueWaitMsOf(session, input && input.now)
+  const queueLevel = queueLevelOf(queueWaitMs, policy)
   // 休眠/结束统一用「已关闭」的标签与说明；其余状态与状态机一一对应。
   const label = localized(t, labelKeyOf(state, phase, session, asleep)) || sessionStateText(t, state)
-  const hint = phaseHint(t, session) || (stopped ? localized(t, 'session.hint.asleep') : '')
+  const baseHint = phaseHint(t, session) || (stopped ? localized(t, 'session.hint.asleep') : '')
+  // 排队比平时久：只换这一句提示，不弹卡、不改变状态色调（10 分钟档才给可操作卡片）。
+  const hint = queueLevel ? localized(t, 'session.hint.queueSlow') || baseHint : baseHint
   const errorMessage = session && session.error && typeof session.error.message === 'string'
     ? session.error.message.split('\n')[0].trim()
     : ''
@@ -124,6 +139,9 @@ export function computeStatusOf(t, input = {}) {
     hint,
     tooltip,
     phaseLabel: phaseText(t, phase),
+    // 排队分级：'slow' 只改提示，'stalled' 由组合层加一张「换新实例重排」横幅。
+    queueLevel,
+    queueWaitMs,
     // 过渡态：需要持续刷新进度、显示状态条并计时的状态。
     transient: TRANSIENT_SESSION[state] === true,
     // 正在启动/等待云端（stopping 不计时）。

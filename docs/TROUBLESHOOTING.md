@@ -127,7 +127,8 @@ Kaggle 容器的 `/kaggle/working` 通常只有 20 GB，写入层满了会转只
 
 | 现象 | 排查 |
 | :--- | :--- |
-| 一直显示「正在排队等 GPU」 | Kaggle 账号是否绑定手机号；`kaggle kernels status <kernelId>` 看是否 PENDING |
+| 一直显示「正在排队等 GPU」 | 先看等待时长：本机历史里多数会话几十秒内会完成隧道会合（体验值，Kaggle 排队受平台负载影响，不保证）；超过 3 分钟会提示「排队比平时久」，超过 10 分钟会出现「换新实例重排」横幅（Host 删除旧 Kernel 后重新推送，等待中的任务不受影响；重排是主动操作，不会自动执行）。同时确认 Kaggle 账号已绑定手机号；可用 `kaggle kernels status <kernelId>` 查看是否仍为 `QUEUED` |
+| 排队硬超时（45 分钟 `queue_timeout`） | 说明这条排队条目已卡住。点「换新实例重排」即可；Host 会清理旧 Kernel，不需要去 Kaggle 网页手动停止。若旧 Kernel 清理失败，远端会在启动后 10 分钟内无人接管时自行退出，避免空转烧配额 |
 | 「隧道握手超时」 | 容器内 cloudflared 没拿到地址；日志里搜 `[tunnel]` 与 `[cloudflared]` |
 | `cloudflared 下载失败` / `SHA256 校验失败` | 0.8.1 起二进制固定版本并校验 SHA256，日志会写「期望 / 实际」校验和前缀；多为容器网络被代理拦截或上游资产异常，重试一次仍失败会自动回退备用通道（若配置了 `fallbackTunnelCommand`） |
 | 在线但每张图都失败 | Host 心跳丢失后会重取隧道地址；0.4.x 远端会在隧道重建后重播 ready，搜 `[tunnel] 通道 ... 就绪` |
@@ -223,10 +224,9 @@ LKGR（Last Known Good Revision）是一组**在真实 Kaggle GPU 上跑通过�
 
 ---
 
-## 9. 直连模式与内置 OAuth 登录（试验特性）
+## 9. 直连模式与内置 OAuth 登录
 
-不需要本机安装 `kaggle` CLI 也能出图：运行设置 →「高级」→「Kaggle 访问方式」选 **直连（direct）**，
-然后在指引卡点「在浏览器中登录 Kaggle」，完成一次浏览器授权即可（也可在终端运行
+`0.11.0` 起默认使用直连模式（`direct`），不需要本机安装 `kaggle` CLI 也能出图。在指引卡点「在浏览器中登录 Kaggle」完成一次浏览器授权即可（也可在终端运行
 `node tools/kaggle-login.mjs` 走同一条链路）。凭据写入 `%USERPROFILE%\.kaggle\credentials.json`
 （OAuth，含 `refresh_token`，过期自动续期），与 `kaggle auth login` 完全同格式——所以登录一次后，
 CLI 与直连两种模式都能读到同一份凭据。

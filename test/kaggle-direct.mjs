@@ -24,6 +24,8 @@ import { join, resolve } from 'node:path'
 
 import {
   buildSaveKernelBody,
+  deleteKernel,
+  isKernelMissingResponse,
   kagglePaths,
   kernelLogs,
   kernelStatus,
@@ -467,6 +469,7 @@ async function checkRequestsAndAuth() {
         const status = await kernelStatus({}, 'tester/imagen-abc', { homeDir: home, env: {} })
         assert.equal(status.ok, true)
         assert.equal(status.status, 'RUNNING')
+        assert.equal(status.missing, false)
         assert.equal(status.output, 'RUNNING')
 
         const logs = await kernelLogs({}, 'tester/imagen-abc', { homeDir: home, env: {} })
@@ -474,6 +477,101 @@ async function checkRequestsAndAuth() {
         assert.ok(logs.tail.includes('启动'))
         assert.ok(logs.tail.includes('就绪'))
         assert.ok(!logs.tail.includes('NbConvertApp'))
+      } finally {
+        fetchMock.restore()
+      }
+    })
+  })
+
+  await check('kernelStatus：200 但缺 status 字段 → QUEUED（枚举默认值被省略）', async () => {
+    await withHome(async (home) => {
+      const dir = join(home, '.kaggle')
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(dir, 'access_token'), TOKEN, 'utf8')
+      // 实测：排队中的 Kernel 返回 HTTP 200 + {}（KernelWorkerStatus.QUEUED = 0 被 protobuf 省略）。
+      const fetchMock = installFetch(() => ({ status: 200, body: {} }))
+      try {
+        const status = await kernelStatus({}, 'tester/imagen-queued', { homeDir: home, env: {} })
+        assert.equal(status.ok, true)
+        assert.equal(status.status, 'QUEUED')
+        assert.equal(status.missing, false)
+        assert.equal(status.output, 'QUEUED')
+      } finally {
+        fetchMock.restore()
+      }
+    })
+  })
+
+  await check('kernelStatus：已删除 Kernel 返回 403 → missing（不是 404）', async () => {
+    await withHome(async (home) => {
+      const dir = join(home, '.kaggle')
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(dir, 'access_token'), TOKEN, 'utf8')
+      const fetchMock = installFetch(() => ({
+        status: 403,
+        body: { error: { code: 403, message: "Permission 'kernels.get' was denied", status: 'PERMISSION_DENIED' } },
+      }))
+      try {
+        const status = await kernelStatus({}, 'tester/imagen-gone', { homeDir: home, env: {} })
+        assert.equal(status.ok, false)
+        assert.equal(status.missing, true)
+      } finally {
+        fetchMock.restore()
+      }
+    })
+  })
+
+  await check('isKernelMissingResponse：404 / 403 Permission denied / 文本 not found，认证失败不算缺失', () => {
+    assert.equal(isKernelMissingResponse({ status: 404 }), true)
+    assert.equal(
+      isKernelMissingResponse({ status: 403, detail: "Permission 'kernels.get' was denied" }),
+      true,
+    )
+    assert.equal(isKernelMissingResponse({ status: 0, detail: 'kernel not found' }), true)
+    // 401 鉴权失败不能当成「Kernel 不存在」，否则会把登录问题静默当成可重推。
+    assert.equal(isKernelMissingResponse({ status: 401, detail: 'Unauthorized' }), false)
+    assert.equal(isKernelMissingResponse({ status: 500, detail: 'internal error' }), false)
+    assert.equal(isKernelMissingResponse(null), false)
+  })
+
+  await check('deleteKernel：DeleteKernel 报文、已删除幂等、失败映射', async () => {
+    await withHome(async (home) => {
+      const dir = join(home, '.kaggle')
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(dir, 'access_token'), TOKEN, 'utf8')
+
+      let mode = 'ok'
+      const fetchMock = installFetch((call) => {
+        assert.ok(call.url.endsWith('/v1/kernels.KernelsApiService/DeleteKernel'), `unexpected ${call.url}`)
+        assert.equal(call.method, 'POST')
+        assert.equal(call.json.userName, 'tester')
+        assert.equal(call.json.kernelSlug, 'imagen-gone')
+        if (mode === 'ok') return { status: 200, body: {} }
+        if (mode === 'missing') {
+          return {
+            status: 403,
+            body: { error: { code: 403, message: "Permission 'kernels.get' was denied", status: 'PERMISSION_DENIED' } },
+          }
+        }
+        return { status: 500, body: { error: { message: 'internal error' } } }
+      })
+      try {
+        const ok = await deleteKernel({}, 'tester/imagen-gone', { homeDir: home, env: {} })
+        assert.equal(ok.ok, true)
+        assert.equal(ok.missing, false)
+
+        mode = 'missing'
+        const missing = await deleteKernel({}, 'tester/imagen-gone', { homeDir: home, env: {} })
+        assert.equal(missing.ok, true, '已删除的 Kernel 再删应视为成功')
+        assert.equal(missing.missing, true)
+
+        mode = 'fail'
+        const failed = await deleteKernel({}, 'tester/imagen-gone', { homeDir: home, env: {} })
+        assert.equal(failed.ok, false)
+
+        // 带版本号不支持删除：不发起请求直接失败。
+        const versioned = await deleteKernel({}, 'tester/imagen-gone/2', { homeDir: home, env: {} })
+        assert.equal(versioned.ok, false)
       } finally {
         fetchMock.restore()
       }

@@ -28,6 +28,7 @@ import { createUiStateRoutes } from './lib/routes/ui-state.js'
 import { SessionManager } from './lib/session.js'
 import { createSettingsStore } from './lib/settings.js'
 import { registerTools } from './lib/tools.js'
+import { createUpdateChecker } from './lib/update-check.js'
 
 export const name = 'our-imagen'
 // cordis 的服务访问是严格的：没有在 inject 里声明过的服务，读取属性会直接抛错，
@@ -59,6 +60,16 @@ export function apply(ctx, config = {}) {
   // 与传输方式解耦：CLI 模式下也能调用（两者写同一份凭据文件）。
   const kaggleLogin = createKaggleLogin({ ctx, log })
 
+  // 插件自身版本检查（只读 npm 注册表，结果缓存在 .imagen/update-check.json）：
+  // 只做「有新版本」提示，不下载、不安装、不影响出图链路。
+  // 开发模式（devEndpoint）与 config.updateCheck=false（测试 / 想静默的用户）不发起任何请求。
+  const updateChecker = createUpdateChecker({
+    ctx,
+    currentVersion: VERSION,
+    enabled: config.updateCheck !== false && !devEndpoint,
+  })
+  updateChecker.start()
+
   const session = new SessionManager({
     ctx,
     defaultPreset,
@@ -68,6 +79,9 @@ export function apply(ctx, config = {}) {
       accelerator: config.accelerator ?? 'NvidiaTeslaT4',
       idleTimeoutSec: toInt(config.idleTimeoutSec, TIMEOUTS.idleShutdownSec, 300, 10800),
       provisionTimeoutMs: toInt(config.provisionTimeoutMinutes, TIMEOUTS.provisionMs / 60000, 5, 240) * 60 * 1000,
+      // 排队分级提示阈值：超过慢档只做状态提示，超过卡住档才建议换新实例重排。
+      queueSlowMs: toInt(config.queueSlowMinutes, TIMEOUTS.queueSlowMs / 60000, 1, 60) * 60 * 1000,
+      queueStalledMs: toInt(config.queueStalledMinutes, TIMEOUTS.queueStalledMs / 60000, 2, 120) * 60 * 1000,
       // 冷启动可靠性（P1.2）：可选 HuggingFace Token、依赖约束、备用隧道命令。
       hfToken: typeof config.hfToken === 'string' && config.hfToken.trim() ? config.hfToken.trim() : null,
       pipConstraints: Array.isArray(config.pipConstraints) ? config.pipConstraints.filter((item) => typeof item === 'string') : [],
@@ -98,6 +112,8 @@ export function apply(ctx, config = {}) {
       pushKernel: (context, folder, options) => kaggleTransport.pushKernel(context, folder, options),
       kernelStatus: (context, kernelId) => kaggleTransport.kernelStatus(context, kernelId),
       kernelLogs: (context, kernelId) => kaggleTransport.kernelLogs(context, kernelId),
+      // 放弃排队 / 换新实例重排时清理旧 Kernel：直连与 CLI 两种传输都有 deleteKernel。
+      deleteKernel: (context, kernelId) => kaggleTransport.deleteKernel(context, kernelId),
     },
   })
 
@@ -116,6 +132,10 @@ export function apply(ctx, config = {}) {
     defaultPreset,
     presets: publicPresets(),
     session: session.snapshot(),
+    // 排队分级提示阈值：客户端据此决定「软提示 / 重排卡片」的触发时机（旧 Host 无此字段）。
+    queuePolicy: session.queuePolicy(),
+    // 插件自身版本检查结果：客户端只在 hasUpdate 时提示（不下载、不安装）。
+    update: updateChecker.snapshot(),
     probe: cache.probe,
     probeAt: cache.probeAt,
     probeLastGood: cache.lastGood,
@@ -206,6 +226,7 @@ export function apply(ctx, config = {}) {
     () => () => {
       session.dispose()
       queue.dispose()
+      updateChecker.dispose()
       // 登录管理器可能正在等待浏览器回调：卸载时取消并释放回环端口（不阻塞卸载）。
       void kaggleLogin.dispose()
       // 卸载尽力 flush 后关闭文件日志；不阻塞插件卸载，异常在 dispose 内部吞掉。

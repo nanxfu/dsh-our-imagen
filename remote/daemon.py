@@ -431,6 +431,20 @@ def request_shutdown() -> None:
     log("[shutdown] 收到 /shutdown，0.3s 后退出进程")
 
 
+def mark_claimed() -> None:
+    """Host 已接管：任一通过鉴权的请求都置位 ``BOOT.claim_event``，取消 claim 看门狗。
+
+    为什么在鉴权通过时标记而不是在 /health 里：/health、/shutdown、/generate、/job、
+    /logs 都可能是 Host 的第一个请求（例如恢复会话时先补发 /shutdown），按路由标记会漏。
+    置位是幂等的（``threading.Event``），Host 每 10s 轮询 /health 也只会在这里做一次
+    is_set() 判断；首次接管打一条日志，便于排障时区分「无人接管」与「接管后来空闲」。
+    """
+    if BOOT.claim_event.is_set():
+        return
+    BOOT.claim_event.set()
+    log("[claim] Host 已接管（Bearer Token 校验通过），取消启动看门狗")
+
+
 def _cleanup_before_exit() -> None:
     """进程退出前尽力关闭 HTTP 服务与隧道子进程（幂等，可重复调用）。"""
     global _CLEANUP_DONE
@@ -1106,6 +1120,7 @@ HTTP_API = HttpApi(
     normalize_job_id=lambda raw: normalize_job_id(raw),
     request_shutdown=lambda: request_shutdown(),
     cleanup_before_exit=lambda: _cleanup_before_exit(),
+    mark_claimed=lambda: mark_claimed(),
     iso_time=lambda ts: iso_time(ts),
     version=lambda: VERSION,
 )

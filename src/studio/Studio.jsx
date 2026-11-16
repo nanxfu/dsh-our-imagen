@@ -20,6 +20,7 @@ import { Filmstrip } from './Filmstrip.jsx'
 import { Gallery } from './Gallery.jsx'
 import { GuidanceCard } from './GuidanceCard.jsx'
 import { LogsDrawer } from './LogsDrawer.jsx'
+import { QueueNotice } from './QueueNotice.jsx'
 import { QueuePill } from './QueuePill.jsx'
 import { Rail } from './Rail.jsx'
 import { SessionBar } from './SessionBar.jsx'
@@ -66,6 +67,9 @@ export function Studio(props) {
         <TopBar t={t} isEn={isEn} ui={ui} compute={compute} form={form} library={library} defaultModelOpen={props.defaultModelOpen} />
 
         <SessionBar t={t} status={status} elapsedMs={sessionElapsed} />
+
+        {/* 排队卡住（10 分钟档）是非错误提示：横幅给「换新实例重排」，不阻挡工作区。 */}
+        <QueueNotice t={t} notice={compute.queueNotice} />
 
         {bannerGuidance ? (
           <GuidanceCard t={t} guidance={bannerGuidance} compute={compute} actions={actions} ui={ui} />

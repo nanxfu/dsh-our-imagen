@@ -146,7 +146,7 @@ async function startFakeDaemonHealth() {
 }
 
 function fakeDeps(overrides = {}) {
-  const calls = { removed: [], pushed: 0, status: 0, logs: 0 }
+  const calls = { removed: [], pushed: 0, status: 0, logs: 0, deleted: [] }
   const deps = {
     kaggleUsername: async () => 'tester',
     buildKernelFolder: async () => ({
@@ -168,6 +168,10 @@ function fakeDeps(overrides = {}) {
     kernelLogs: async () => {
       calls.logs += 1
       return { ok: true, tail: 'fake kernel log tail' }
+    },
+    deleteKernel: async (context, kernelId) => {
+      calls.deleted.push(kernelId)
+      return { ok: true, missing: false, output: 'Kernel 已删除' }
     },
     ...overrides,
   }
@@ -329,16 +333,17 @@ async function scenarioPushFailureCleansFolder() {
 /**
  * 排队超时文案要区分「仍在排队」与「容器已运行但没会合」：
  * 前者 queue_timeout，后者 tunnel_timeout（并带 Kernel 状态）。
+ * 两种超时都会自动删除旧 Kernel（放弃排队时清理孤儿），这里一并断言。
  */
 async function scenarioTimeoutWording() {
   const ntfy = await startFakeNtfy()
   const cases = [
     { kernel: 'RUNNING', code: 'tunnel_timeout', hint: /RUNNING/ },
-    { kernel: 'PENDING', code: 'queue_timeout', hint: /队列/ },
+    { kernel: 'PENDING', code: 'queue_timeout', hint: /排队/ },
   ]
   try {
     for (const item of cases) {
-      const { deps } = fakeDeps({ kernelStatus: async () => ({ ok: true, status: item.kernel }) })
+      const { deps, calls } = fakeDeps({ kernelStatus: async () => ({ ok: true, status: item.kernel }) })
       const session = makeSession({
         ntfyPort: ntfy.port,
         deps,
@@ -349,9 +354,19 @@ async function scenarioTimeoutWording() {
         await waitFor(`provisioning 超时后转 error（Kernel ${item.kernel}）`, () => session.snapshot().state === 'error', {
           timeoutMs: 4000,
         })
+        const kernelId = session.snapshot().kernelId
+        await waitFor(`超时后删除旧 Kernel（Kernel ${item.kernel}）`, () => calls.deleted.includes(kernelId), {
+          timeoutMs: 2000,
+        })
         const snapshot = session.snapshot()
         check(`Kernel ${item.kernel} 时错误码为 ${item.code}`, snapshot.error?.code === item.code, JSON.stringify(snapshot.error))
         check(`Kernel ${item.kernel} 时文案可区分排队与会合`, item.hint.test(snapshot.error?.message ?? ''))
+        check(`Kernel ${item.kernel} 时超时会清理旧 Kernel`, calls.deleted.includes(kernelId), JSON.stringify(calls.deleted))
+        check(
+          `Kernel ${item.kernel} 时文案不再使用不确定表述`,
+          !/可能仍在|仍在队列中/.test(snapshot.error?.message ?? ''),
+          snapshot.error?.message,
+        )
       } finally {
         session.dispose()
       }
@@ -663,6 +678,87 @@ async function scenarioReattachAfterQueueTimeout() {
   }
 }
 
+/**
+ * H 换新实例重排与排队清理：
+ *  - provisioning 中 start({ replace: true })：允许重排，删除旧 Kernel、推送新 Kernel，
+ *    不置 stoppedByUser（排队任务继续等新会话）；
+ *  - 排队中 stop()：删除旧 Kernel，文案不再让用户去网页手动停止；
+ *  - 旧 Kernel 已不存在（missing）：不再乐观接管，走新推流程并清理旧记录。
+ */
+async function scenarioRequeueAndDelete() {
+  const ntfy = await startFakeNtfy()
+  let slugCounter = 0
+  let kernelMissing = false
+  const { deps, calls } = fakeDeps({
+    buildKernelFolder: async () => {
+      slugCounter += 1
+      return {
+        dir: null,
+        kernelId: `tester/imagen-r${slugCounter}`,
+        kernelUrl: `https://www.kaggle.com/code/tester/imagen-r${slugCounter}`,
+      }
+    },
+    kernelStatus: async () => {
+      calls.status += 1
+      if (kernelMissing) {
+        return { ok: false, status: null, missing: true, output: "Permission 'kernels.get' was denied" }
+      }
+      return { ok: true, status: 'QUEUED' }
+    },
+  })
+  const session = makeSession({
+    ntfyPort: ntfy.port,
+    deps,
+    options: { provisionTimeoutMs: 60 * 60 * 1000, kernelPollMs: 40, tickMs: 40 },
+  })
+  try {
+    const first = await session.start(PRESET)
+    const firstKernelId = first.kernelId
+    check(
+      '首次启动进入排队',
+      first.state === 'provisioning' && first.phase === 'queue' && calls.pushed === 1,
+      JSON.stringify({ state: first.state, pushed: calls.pushed }),
+    )
+
+    // 1. 排队中换新实例重排：不置 stoppedByUser、删除旧 Kernel、推送新 Kernel。
+    const requeued = await session.start('sdxl-turbo', { forceNew: true, replace: true })
+    check(
+      'replace=true 允许在 provisioning 中重排',
+      requeued.state === 'provisioning' && calls.pushed === 2 && requeued.kernelId !== firstKernelId,
+      JSON.stringify({ state: requeued.state, pushed: calls.pushed, kernelId: requeued.kernelId }),
+    )
+    check('重排不置 stoppedByUser（排队任务继续等待）', session.stoppedByUser === false)
+    await waitFor('重排时删除旧 Kernel', () => calls.deleted.includes(firstKernelId), { timeoutMs: 2000 })
+    check('重排时删除旧 Kernel', calls.deleted.includes(firstKernelId), JSON.stringify(calls.deleted))
+
+    // 2. 排队中主动关机：删除当前 Kernel，文案改为自动清理。
+    const currentKernelId = requeued.kernelId
+    const stopped = await session.stop()
+    check('排队中关机回到 absent', stopped.state === 'absent', JSON.stringify({ state: stopped.state }))
+    await waitFor('排队中关机删除 Kernel', () => calls.deleted.includes(currentKernelId), { timeoutMs: 2000 })
+    check('排队中关机删除 Kernel', calls.deleted.includes(currentKernelId), JSON.stringify(calls.deleted))
+    check('排队中关机文案指向自动清理', /清理/.test(stopped.detail ?? ''), stopped.detail)
+
+    // 3. 记录中的旧 Kernel 已不存在（403 missing）：不乐观接管，直接推新 Kernel。
+    const again = await session.start(PRESET)
+    check('关机后可重新唤醒', again.state === 'provisioning' && calls.pushed === 3, JSON.stringify({ state: again.state, pushed: calls.pushed }))
+    const staleKernelId = session.snapshot().kernelId
+    // 人为制造 error(queue_timeout) 现场：记录里保留 kernelId + token/topic，但 Kernel 已被删除。
+    session.fail('queue_timeout', '等待 GPU 超时（45 分钟），已放弃这次排队')
+    kernelMissing = true
+    const fresh = await session.start(PRESET)
+    check(
+      '旧 Kernel 已不存在 → 推送新 Kernel（不乐观接管）',
+      fresh.state === 'provisioning' && calls.pushed === 4 && fresh.kernelId !== staleKernelId,
+      JSON.stringify({ state: fresh.state, pushed: calls.pushed, kernelId: fresh.kernelId, staleKernelId }),
+    )
+    await waitFor('旧 Kernel 不存在时也尝试清理', () => calls.deleted.includes(staleKernelId), { timeoutMs: 2000 })
+  } finally {
+    session.dispose()
+    await ntfy.close()
+  }
+}
+
 async function scenario(title, fn) {
   console.log(`\n── ${title}`)
   try {
@@ -693,6 +789,7 @@ async function main() {
   await scenario('E 超时错误码与文案区分', scenarioTimeoutWording)
   await scenario('F 任务保留会话错误码', scenarioJobKeepsSessionCode)
   await scenario('G queue_timeout 后唤醒前检查与接管/强制新建', scenarioReattachAfterQueueTimeout)
+  await scenario('H 换新实例重排与排队清理', scenarioRequeueAndDelete)
 
   console.log('')
   if (failures.length) {

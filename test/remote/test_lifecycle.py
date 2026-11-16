@@ -23,6 +23,7 @@ class AppLifecycleBoundaryTest(DaemonUnitTest):
         events: list[str] = []
         boot = types.SimpleNamespace(
             stop_event=threading.Event(),
+            claim_event=threading.Event(),
             tunnel_url=None,
             tunnel_provider=None,
             published_ready=False,
@@ -39,7 +40,9 @@ class AppLifecycleBoundaryTest(DaemonUnitTest):
                 raise http_error
 
         app = remote_app.DaemonApp(
-            config=types.SimpleNamespace(port=7860, idle_timeout_sec=1800, preload=None),
+            config=types.SimpleNamespace(
+                port=7860, idle_timeout_sec=1800, claim_timeout_sec=600, preload=None
+            ),
             state=state,
             boot=boot,
             state_lock=threading.RLock(),

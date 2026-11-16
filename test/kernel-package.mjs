@@ -366,6 +366,7 @@ ${run.stderr || run.stdout}`)
       })
       assert.deepEqual(Object.keys(plainConfig).sort(), [
         'auth_token',
+        'claim_timeout_sec',
         'contract',
         'idle_timeout_sec',
         'log_level',

@@ -44,10 +44,18 @@ export function fetchLibrary() {
   return request(routePath('library'), { method: 'GET' })
 }
 
-/** 启动云端会话（forceNew=true 时跳过接管旧排队，强制推送新 Kernel）。 */
+/**
+ * 启动云端会话。
+ *
+ * - forceNew=true：跳过接管旧排队，强制推送新 Kernel；
+ * - replace=true：换新实例重排，Host 会删除排不上的旧 Kernel 再推新 Kernel。
+ *
+ * 旧 Host 不识别 replace 时按普通启动处理（忽略未知字段），客户端不做额外分支。
+ */
 export function startSession(presetId, options = {}) {
   const body = { presetId }
   if (options && options.forceNew === true) body.forceNew = true
+  if (options && options.replace === true) body.replace = true
   return request(routePath('sessionStart'), {
     method: 'POST',
     body: JSON.stringify(body),

@@ -14,6 +14,11 @@
  *   kaggle CLI，主操作改为发起内置 OAuth 登录；进行中显示等待提示与取消，manual 模式给出
  *   可复制的授权链接与授权码输入框；失败/取消都回到可重新发起。CLI 模式行为保持不变。
  *
+ * 排队超时（`queue_timeout`，45 分钟硬超时）已收敛为单一动作：主按钮「换新实例重排」
+ * （forceNew + replace，Host 删除排不上的旧 Kernel 后重新推送），次级只留「查看日志」
+ * 与「关闭」。旧版的「继续等待当前队列」「打开 Kaggle Kernel」已删除——继续等待说明
+ * 这条排队确实卡住了，去 Kaggle 网页也不会自己变好。
+ *
  * 接收 { t, guidance, compute, actions, ui } 领域对象。
  */
 
@@ -57,16 +62,12 @@ export function GuidanceCard(props) {
   const { t, guidance, compute, actions, ui } = props
   const { kind, code: errorCode, detail, dismiss } = guidance
   const { resetToSafe, retryFocusedJob } = actions
-  const { startSession, forceStartSession, runProbe, retryHost, session } = compute
+  const { startSession, requeueSession, runProbe, retryHost } = compute
   const { copyInstallCommand, copyText, openLogs } = ui
   // 直连模式的登录会话由组合层的 useKaggleLogin 管理，卡片只负责展示与转发动作。
   const directMode = compute && compute.kaggleTransport === 'direct'
   const login = compute && compute.kaggleLogin ? compute.kaggleLogin : null
   const isQueueTimeout = kind === 'session' && errorCode === 'queue_timeout'
-  const kernelUrl =
-    session && typeof session.kernelUrl === 'string' && /^https:\/\/www\.kaggle\.com\//.test(session.kernelUrl)
-      ? session.kernelUrl
-      : ''
   if (!kind) return null
   if (directMode && login && (kind === 'auth' || kind === 'cli')) {
     return (
@@ -145,12 +146,9 @@ export function GuidanceCard(props) {
       ? {
           title: t('studio.guidance.session.title'),
           note: t('studio.guidance.queueTimeout.hint'),
+          // 45 分钟硬超时后排队已确定卡住：只给「换新实例重排」一个主操作。
           actions: [
-            { key: 'continueQueue', label: t('studio.guidance.queueTimeout.continue'), run: startSession },
-            ...(kernelUrl
-              ? [{ key: 'openKaggle', label: t('studio.guidance.queueTimeout.openKaggle'), href: kernelUrl }]
-              : []),
-            { key: 'forceNew', label: t('studio.guidance.queueTimeout.forceNew'), run: forceStartSession },
+            { key: 'requeue', label: t('studio.guidance.queueTimeout.requeue'), run: requeueSession },
           ],
         }
       : {
@@ -169,6 +167,8 @@ export function GuidanceCard(props) {
   const card = cards[kind] || cards.generic
   const actionList = card.actions.filter((action) => (action.href ? true : typeof action.run === 'function'))
   const hasSecondary = SECONDARY_KINDS.has(kind)
+  // 排队超时的次级动作只留「查看日志」与「关闭」：复制诊断信息在硬超时场景没有信息增量。
+  const canCopyDiagnostics = hasSecondary && !isQueueTimeout
 
   /** 查看日志：交给组合层的 openLogs，稍后关闭时焦点会送回触发元素。 */
   function viewLogs(event) {
@@ -241,7 +241,7 @@ export function GuidanceCard(props) {
               {t('studio.guidance.viewLogs')}
             </button>
           ) : null}
-          {hasSecondary ? (
+          {canCopyDiagnostics ? (
             <button type="button" className="ofs-chip" onClick={copyDiagnostics}>
               {t('studio.guidance.copyDiag')}
             </button>

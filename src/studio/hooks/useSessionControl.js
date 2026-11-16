@@ -1,5 +1,6 @@
 /**
- * 会话控制域：宿主状态派生、会话启停、任务取消、环境探测与配额、打开产物目录。
+ * 会话控制域：宿主状态派生、会话启停、换新实例重排、任务取消、环境探测与配额、
+ * 打开产物目录。
  *
  * 依赖入参：{ t, host, ui, alive }。host 是宿主状态桥（state / error / refresh），
  * ui 提供 error 与 toast 通道，alive 是统一的卸载边界。
@@ -21,7 +22,13 @@ import { formatText } from '../../logic/format.js'
 import { pendingJobsOf, stateJobs } from '../../logic/jobs.js'
 import { probeOutcomeOf } from '../../logic/probe.js'
 import { transportOf } from '../../logic/probe.js'
+import {
+  queuePolicyOf,
+  queueRoundKeyOf,
+  queueStalledMinutesOf,
+} from '../../logic/queue.js'
 import { computeStatusOf } from '../../logic/status.js'
+import { updateOf } from '../../logic/update.js'
 
 /** 已发出取消请求、还没在宿主快照里收敛的任务 id；同一个 id 只保留一次。 */
 function rememberCancelling(previous, id) {
@@ -36,6 +43,8 @@ export function useSessionControl({ t, host, ui, alive }) {
   const [cancellingIds, setCancellingIds] = React.useState([])
   // 与 cancellingIds 同步的集合：双击/重入时用它做同步判重，不依赖尚未提交的 state。
   const cancellingRef = React.useRef(new Set())
+  // 启动/重排请求的同步判重：state 里的 busy 要等下一轮渲染才生效，双击仍会发两次请求。
+  const startingRef = React.useRef(false)
 
   const state = host.state
   const session = (state && state.session) || null
@@ -48,8 +57,21 @@ export function useSessionControl({ t, host, ui, alive }) {
   const activeJob = pendingJobs[0] ?? null
   // 焦点任务：进行中优先，其次最近完成的，再次列表首个（历史任务的异常也要能出指引）。
   const focusedJob = activeJob || (state && state.lastJob) || stateJobs(state)[0] || null
+  // 排队分级阈值来自 /state.queuePolicy；旧宿主不下发时用契约默认值兜底。
+  const queuePolicy = queuePolicyOf(state)
   // 云端展示状态（胶囊 / 状态条 / 弹层 / 对话页徽章共用）。
-  const status = computeStatusOf(t, { session })
+  // now 每次渲染取当前时刻：过渡态下 Studio 的 useNow 每秒触发重渲染，慢档提示会按时出现。
+  const status = computeStatusOf(t, { session, queuePolicy, now: Date.now() })
+  // 插件自身版本提示：只在「npm 上有更高版本」时非空（数据由宿主检查并缓存）。
+  const update = updateOf(state)
+  // 排队轮次键：10 分钟横幅按它去重，重排（新 startedAt）后可再次触发。
+  const queue = {
+    policy: queuePolicy,
+    level: status.queueLevel,
+    waitMs: status.queueWaitMs,
+    key: queueRoundKeyOf(session),
+    stalledMinutes: queueStalledMinutesOf(queuePolicy),
+  }
 
   // 任务离开活动队列（已取消/已完成）后撤掉本地「取消中」标记；
   // 只要 pendingJobs 没变化就不更新状态，避免每次宿主轮询都触发一次重渲染。
@@ -86,8 +108,14 @@ export function useSessionControl({ t, host, ui, alive }) {
     ui.setError((prev) => prev || { code: host.error.code, message: host.error.message ?? '' })
   }, [host.error])
 
-  async function startSession(presetId, options = {}) {
-    if (busy) return
+  /**
+   * 启动会话的公共请求：busy 或同一 tick 内重复点击都不再发请求；
+   * options 原样交给资源层（forceNew / replace），旧宿主忽略未知字段即可。
+   * 失败一律走现有 ui.fail 指引通道，客户端不吞错。
+   */
+  async function requestStart(presetId, options) {
+    if (busy || startingRef.current) return
+    startingRef.current = true
     setBusy('start')
     try {
       const result = await alive(startSessionRequest(presetId, options))
@@ -96,8 +124,22 @@ export function useSessionControl({ t, host, ui, alive }) {
       else ui.setError(null)
       host.refresh()
     } finally {
+      startingRef.current = false
       setBusy('')
     }
+  }
+
+  /** 唤醒 / 接管当前会话（默认优先接管仍在排队或运行的原 Kernel）。 */
+  function startSession(presetId, options = {}) {
+    return requestStart(presetId, options)
+  }
+
+  /**
+   * 换新实例重排：Host 删除排不上的旧 Kernel 并推送新 Kernel（forceNew + replace）。
+   * 旧 Host 不认识 replace 时只按普通启动处理，不产生额外错误提示。
+   */
+  function requeueSession(presetId) {
+    return requestStart(presetId, { forceNew: true, replace: true })
   }
 
   async function stopSession() {
@@ -190,6 +232,8 @@ export function useSessionControl({ t, host, ui, alive }) {
     sessionState,
     kaggleTransport,
     status,
+    queue,
+    update,
     pendingJobs,
     activeJob,
     focusedJob,
@@ -199,6 +243,7 @@ export function useSessionControl({ t, host, ui, alive }) {
     probing,
     probeReport,
     startSession,
+    requeueSession,
     stopSession,
     cancelJob,
     cancellingIds,

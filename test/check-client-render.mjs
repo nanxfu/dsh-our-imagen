@@ -32,6 +32,7 @@ import {
   saveSettings as saveSettingsRequest,
   saveUiState as saveUiStateRequest,
   startKaggleLogin,
+  startSession as startSessionRequest,
   submitKaggleLoginCode,
 } from '../src/api/resources.js'
 
@@ -345,6 +346,69 @@ const scenarios = {
         'ofs-image': 1,
       },
       forbidden: ['ofs-guidance', 'ofs-figure--empty', 'ofs-toast'],
+    },
+  },
+  // 排队慢档（约 3 分钟）：只在状态条提示「排队比平时久」，不弹卡片、不影响工作区。
+  queueSlow: {
+    state: {
+      defaultPreset: 'sdxl-lightning',
+      presets: [preset],
+      session: {
+        state: 'provisioning',
+        phase: 'queue',
+        startedAt: at(-200),
+        presetId: 'sdxl-lightning',
+        error: null,
+      },
+      jobs: [{ id: 'job-slow', status: 'waiting-session', startedAt: at(-190), params: { prompt: '排队变慢的画面' } }],
+      lastJob: null,
+    },
+    history: { items: [] },
+    props: {},
+    expect: ['正在排队等 GPU', '排队比平时久', '几十秒', '已等待'],
+    reject: ['排队超过 10 分钟', '换新实例重排'],
+    structure: {
+      required: {
+        'ofs-sessionbar': 1,
+        'ofs-sessionbar-hint': 1,
+        'ofs-queue-pill': 1,
+      },
+      forbidden: ['ofs-queue-notice', 'ofs-guidance', 'ofs-toast'],
+    },
+  },
+  // 排队卡住档（约 10 分钟，旧快照没有 queuePolicy）：顶部横幅给「换新实例重排」+「继续等待」。
+  queueStalled: {
+    state: {
+      defaultPreset: 'sdxl-lightning',
+      presets: [preset],
+      session: {
+        state: 'provisioning',
+        phase: 'queue',
+        startedAt: at(-660),
+        presetId: 'sdxl-lightning',
+        error: null,
+      },
+      jobs: [],
+      lastJob: null,
+    },
+    history: { items: [] },
+    props: {},
+    expect: [
+      '排队超过 10 分钟还没拿到 GPU',
+      '多数会话推送后几十秒内就能启动',
+      '可能是这条排队卡住了',
+      '换新实例重排',
+      '继续等待',
+    ],
+    reject: ['该 Kernel 可能仍在 Kaggle 队列中', '继续等待当前队列', '强制新建实例'],
+    structure: {
+      required: {
+        'ofs-queue-notice': 1,
+        'ofs-guidance-title': 1,
+        'ofs-guidance-note': 1,
+        'ofs-guidance-actions': 1,
+      },
+      forbidden: ['ofs-toast--notice', 'ofs-stage-progress'],
     },
   },
   queueTwo: {
@@ -1979,7 +2043,7 @@ await check('渲染：gpu / auth / cli 指引卡动作与提示', async () => {
   }
 })
 
-await check('渲染：queue_timeout 指引卡区分继续等待与强制新建', async () => {
+await check('渲染：queue_timeout 指引卡收敛为「换新实例重排」', async () => {
   const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
   try {
     const t = client.internals.i18n.fallbackTranslate('zh')
@@ -1994,8 +2058,8 @@ await check('渲染：queue_timeout 指引卡区分继续等待与强制新建',
           error: { code: 'queue_timeout', message: '等待 GPU 超时（45 分钟），Kernel 仍在队列中（QUEUED）' },
         },
         probe: null,
-        startSession: () => calls.push('continue'),
-        forceStartSession: () => calls.push('forceNew'),
+        startSession: () => calls.push('start'),
+        requeueSession: () => calls.push('requeue'),
         runProbe: () => {},
         retryHost: () => {},
       },
@@ -2010,30 +2074,120 @@ await check('渲染：queue_timeout 指引卡区分继续等待与强制新建',
     const text = collectText(tree).join(' | ')
     for (const needle of [
       '云端会话没有就绪',
-      '继续等待当前队列',
-      '前往 Kaggle 查看',
-      '强制新建实例',
-      '避免重复排队消耗配额',
+      '换新实例重排',
+      '45 分钟仍未拿到 GPU',
+      '删除这条排不上的 Kernel',
       '查看日志',
+      '关闭',
     ]) {
       assert.ok(text.includes(needle), `[queue-timeout-card] 缺少文案：${needle}（实际：${text}）`)
     }
-    assert.ok(!text.includes('唤醒云端'), '[queue-timeout-card] 不应继续显示模糊的「唤醒云端」')
-    const kaggleLink = findNodes(tree, (node) => node.type === 'a')[0]
-    assert.ok(kaggleLink, '[queue-timeout-card] 缺少 Kaggle 链接')
-    assert.equal(kaggleLink.props.href, 'https://www.kaggle.com/code/tester/imagen-12345678')
-    const continueBtn = findNodes(
+    // 文案确定化：不再出现「可能仍在队列中」这类不确定表述，也不再提供继续等待 / 去 Kaggle。
+    for (const gone of [
+      '该 Kernel 可能仍在',
+      '继续等待当前队列',
+      '前往 Kaggle 查看',
+      '强制新建实例',
+      '复制诊断信息',
+    ]) {
+      assert.ok(!text.includes(gone), `[queue-timeout-card] 不应出现：${gone}（实际：${text}）`)
+    }
+    assert.equal(findNodes(tree, (node) => node.type === 'a').length, 0, '[queue-timeout-card] 不再提供 Kaggle 外链')
+    // 动作集合收敛为：主「换新实例重排」+ 「查看日志」+ 「关闭」。
+    const buttons = findNodes(tree, (node) => node.type === 'button')
+    assert.deepEqual(
+      buttons.map((node) => collectText(node).join('')),
+      ['换新实例重排', '查看日志', '关闭'],
+      '[queue-timeout-card] 动作集合应为换新实例重排 / 查看日志 / 关闭',
+    )
+    assert.ok(buttons[0].props.className.includes('is-on'), '[queue-timeout-card] 重排应是主操作')
+    buttons[0].props.onClick()
+    assert.deepEqual(calls, ['requeue'], '[queue-timeout-card] 主操作应调用 requeueSession')
+  } finally {
+    client.unmount()
+  }
+})
+
+/**
+ * 10 分钟卡住横幅的完整状态：旧快照没有 queuePolicy，靠契约默认值判定卡住；
+ * startedAt 与用例里的 NOW 相差 11 分钟。
+ */
+const stalledQueueState = {
+  defaultPreset: 'sdxl-lightning',
+  presets: [preset],
+  session: {
+    state: 'provisioning',
+    phase: 'queue',
+    startedAt: at(-660),
+    presetId: 'sdxl-lightning',
+    error: null,
+  },
+  jobs: [],
+  lastJob: null,
+}
+
+const mountStalledStudio = async () => {
+  const client = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/state': stalledQueueState,
+      '/imagen-api/history': { items: [] },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+    },
+    testBuild: true,
+  })
+  const tree = await client.mountRaw(client.components.Studio, {})
+  return { client, tree }
+}
+
+// 关闭（继续等待）只收起卡片：宿主仍返回同一轮卡住的会话时，轮询不会把卡片重新弹出来。
+await check('渲染：10 分钟卡住横幅关闭后同一轮不再弹回', async () => {
+  const { client, tree } = await mountStalledStudio()
+  try {
+    const collect = (root) => collectText(root).join(' | ')
+    assert.ok(collect(tree).includes('排队超过 10 分钟还没拿到 GPU'), '初始应显示排队卡住横幅')
+    const waitButton = findNodes(
       tree,
-      (node) => node.type === 'button' && collectText(node).join('').includes('继续等待当前队列'),
+      (node) => node.type === 'button' && collectText(node).join('') === '继续等待',
     )[0]
-    const forceBtn = findNodes(
+    assert.ok(waitButton, '[queue-stalled] 缺少「继续等待」按钮')
+    waitButton.props.onClick()
+    // 宿主轮询仍返回同一轮卡住的会话（startedAt 未变），卡片不能回来。
+    await client.advanceTimers(12000)
+    const next = await client.rerenderRaw()
+    assert.ok(!collect(next).includes('排队超过 10 分钟还没拿到 GPU'), '[queue-stalled] 关闭后同一轮不应重复弹出')
+    assert.equal(findNodes(next, (node) => node.props?.className === 'ofs-queue-notice').length, 0)
+  } finally {
+    client.unmount()
+  }
+})
+
+// 主操作「换新实例重排」：发一次 POST /session/start，body 带 forceNew + replace；点击后卡片收起。
+await check('渲染：10 分钟卡住横幅换新实例重排请求体与防重入', async () => {
+  const { client, tree } = await mountStalledStudio()
+  try {
+    const requeueButton = findNodes(
       tree,
-      (node) => node.type === 'button' && collectText(node).join('').includes('强制新建实例'),
+      (node) => node.type === 'button' && collectText(node).join('') === '换新实例重排',
     )[0]
-    assert.ok(continueBtn && forceBtn, '[queue-timeout-card] 缺少继续等待或强制新建按钮')
-    continueBtn.props.onClick()
-    forceBtn.props.onClick()
-    assert.deepEqual(calls, ['continue', 'forceNew'])
+    assert.ok(requeueButton, '[queue-stalled] 缺少「换新实例重排」按钮')
+    // 同一 tick 双击：useSessionControl 的同步判重只允许发一次请求。
+    requeueButton.props.onClick()
+    requeueButton.props.onClick()
+    await client.settle()
+    const starts = client.requests.filter((item) => item.path === '/imagen-api/session/start')
+    assert.equal(starts.length, 1, '[queue-stalled] 重排请求只应发出一次（防重入）')
+    assert.equal(starts[0].method, 'POST')
+    assert.deepEqual(
+      starts[0].body,
+      { presetId: 'sdxl-lightning', forceNew: true, replace: true },
+      '[queue-stalled] 重排请求体必须是 { presetId, forceNew: true, replace: true }',
+    )
+    const next = await client.rerenderRaw()
+    assert.ok(
+      !collectText(next).join(' | ').includes('排队超过 10 分钟还没拿到 GPU'),
+      '[queue-stalled] 点击重排后卡片应收起',
+    )
   } finally {
     client.unmount()
   }
@@ -3827,6 +3981,7 @@ await check('资源层：取消 / 历史分页 / 英译的请求形状', async (
     : undefined
   const savedHasDocument = Object.prototype.hasOwnProperty.call(globalThis, 'document')
   const calls = []
+  const startCalls = []
   globalThis.document = { baseURI: 'http://localhost/' }
   globalThis.fetch = async (url, init) => {
     calls.push({ url: String(url), method: init?.method ?? 'GET', body: init?.body ?? null })
@@ -3845,6 +4000,12 @@ await check('资源层：取消 / 历史分页 / 英译的请求形状', async (
     await startKaggleLogin()
     await cancelKaggleLogin()
     await submitKaggleLoginCode('  code=abcd-efgh-1234  ')
+    // 启动会话：普通启动只带 presetId；换新实例重排额外带 forceNew + replace（旧 Host 忽略未知字段）。
+    const startIndex = calls.length
+    await startSessionRequest('sdxl-lightning')
+    await startSessionRequest('sdxl-lightning', { forceNew: true })
+    await startSessionRequest('sdxl-lightning', { forceNew: true, replace: true })
+    startCalls.push(...calls.slice(startIndex))
   } finally {
     globalThis.fetch = savedFetch
     if (savedHasDocument) globalThis.document = savedDocument
@@ -3897,6 +4058,18 @@ await check('资源层：取消 / 历史分页 / 英译的请求形状', async (
   const invalidAction = await kaggleLoginAction('delete-account', 'x')
   assert.equal(invalidAction.ok, false)
   assert.equal(calls.length, beforeInvalid, '非法登录动作不应发出请求')
+
+  // 启动会话：普通启动只带 presetId；换新实例重排额外带 forceNew + replace（旧 Host 忽略未知字段）。
+  assert.equal(startCalls.length, 3)
+  assert.equal(startCalls[0].url, 'http://localhost/imagen-api/session/start')
+  assert.equal(startCalls[0].method, 'POST')
+  assert.deepEqual(JSON.parse(startCalls[0].body), { presetId: 'sdxl-lightning' }, '普通启动只带 presetId')
+  assert.deepEqual(JSON.parse(startCalls[1].body), { presetId: 'sdxl-lightning', forceNew: true })
+  assert.deepEqual(
+    JSON.parse(startCalls[2].body),
+    { presetId: 'sdxl-lightning', forceNew: true, replace: true },
+    '换新实例重排必须同时带 forceNew 与 replace',
+  )
 })
 
 // ── 工作台界面态持久化（M1：记住「高级设置」折叠状态） ─────────────
@@ -4786,6 +4959,35 @@ await check('渲染：hook 探针（useReducer/useMemo/useLayoutEffect/memo）',
   assert.match(HarnessProbe.displayName || '', /^Memo\(/, 'memo 应保留 displayName')
   // 未实现的 hook 要给出明确报错，而不是 undefined is not a function。
   assert.throws(() => client.react.useContext({}), /未实现 useContext/)
+})
+
+await check('渲染：顶栏新版本红点与弹层说明', async () => {
+  const update = {
+    latest: '0.12.0',
+    current: '0.11.0',
+    enginesDsh: '>=0.2.0',
+    releaseUrl: 'https://github.com/nanxfu/dsh-our-imagen/releases/tag/v0.12.0',
+    checkedAt: '2026-01-01T00:00:00.000Z',
+  }
+  const { tree } = await mountTopBarExpanded(idleShutdownSession, { update })
+  const plain = collectText(tree).join('')
+  assert.ok(plain.includes('新版本 v0.12.0 可用（当前 v0.11.0）'), `[update] 缺少版本提示：${plain}`)
+  assert.ok(plain.includes('新版本要求 DSH >=0.2.0'), `[update] 缺少 DSH 要求：${plain}`)
+  assert.equal(countByClass(tree, 'ofs-update-dot'), 1, '胶囊上应有版本红点')
+  const link = findNodes(
+    tree,
+    (node) => node.type === 'a' && node.props && node.props.href === update.releaseUrl,
+  )[0]
+  assert.ok(link, '[update] 缺少更新说明链接')
+  assert.equal(link.props.target, '_blank')
+  assert.equal(link.props.rel, 'noreferrer')
+})
+
+await check('渲染：没有新版本时不出现红点与更新说明', async () => {
+  const { tree } = await mountTopBarExpanded(idleShutdownSession)
+  const plain = collectText(tree).join('')
+  assert.equal(countByClass(tree, 'ofs-update-dot'), 0, '无更新时不应出现红点')
+  assert.ok(!plain.includes('查看更新说明'), `无更新时不应出现更新说明：${plain}`)
 })
 
 const failed = results.filter((item) => !item.ok)

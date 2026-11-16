@@ -17,7 +17,7 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 
-import { LIMITS, PROTOCOL, VERSION } from '../shared/contract.js'
+import { LIMITS, PROTOCOL, TIMEOUTS, VERSION } from '../shared/contract.js'
 import { JobQueue } from '../lib/jobs.js'
 import { isTrustedEndpoint } from '../lib/remote.js'
 import { SessionManager } from '../lib/session.js'
@@ -404,11 +404,12 @@ async function scenarioRendezvous() {
     assert.equal(queued.code, 'queue_timeout')
     assert.match(queued.message, /等待 GPU 超时（45 分钟）/)
     assert.match(queued.message, /PENDING/)
+    assert.match(queued.message, /清理旧 Kernel/)
     assert.match(queued.message, /日志尾$/)
 
     const noStatus = describeProvisionTimeout({ kernelStatus: null, provisionTimeoutMs: 60000 })
     assert.equal(noStatus.code, 'queue_timeout')
-    assert.match(noStatus.message, /状态未知/)
+    assert.match(noStatus.message, /未知/)
 
     const running = describeProvisionTimeout({ kernelStatus: 'RUNNING', provisionTimeoutMs: 60000 })
     assert.equal(running.code, 'tunnel_timeout')
@@ -476,6 +477,7 @@ async function scenarioProvisioner() {
     })
     assert.deepEqual(Object.keys(config).sort(), [
       'auth_token',
+      'claim_timeout_sec',
       'contract',
       'idle_timeout_sec',
       'log_level',
@@ -486,6 +488,7 @@ async function scenarioProvisioner() {
     ])
     assert.equal(config.version, VERSION)
     assert.equal(config.contract.version, VERSION)
+    assert.equal(config.claim_timeout_sec, TIMEOUTS.kernelClaimSec)
     assert.equal(config.preset_id, 'sdxl-lightning')
     assert.equal(config.preload.loader, 'sdxl-lora')
     assert.equal(config.idle_timeout_sec, 1800)

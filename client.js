@@ -94,9 +94,10 @@ var zh = {
   "session.phase.queue": "Kaggle 排队",
   "session.phase.tunnel": "建立隧道",
   "session.phase.warm": "加载模型",
-  "session.hint.provisioning": "正在向 Kaggle 申请 GPU 机器，排队通常需要 3~10 分钟。",
+  "session.hint.provisioning": "正在向 Kaggle 申请 GPU 机器。",
   "session.hint.push": "正在把运行环境推送到 Kaggle，推送完成后进入排队。",
-  "session.hint.queue": "正在等待 Kaggle 分配 GPU；排队通常需要 3~10 分钟。",
+  "session.hint.queue": "正在等待 Kaggle 分配 GPU；多数会话能在几十秒内启动。",
+  "session.hint.queueSlow": "排队比平时久（多数会话几十秒内就能启动）。",
   "session.hint.connecting": "正在建立隧道并等待远端响应。",
   "session.hint.warming": "正在安装运行环境并加载模型权重，通常需要几分钟；完成后即可连续出图。",
   "session.hint.stopping": "正在结束会话；若任务仍在排队，可能需要在 Kaggle 网页上停止对应 Kernel。",
@@ -161,7 +162,7 @@ var zh = {
   "studio.compute.idleFor": "闲置休眠阈值",
   "studio.compute.idleCountdown": "已空闲 {idle} 分钟 · 满 {total} 分钟自动关机",
   "studio.compute.idleTooltip": "云端实例默认闲置 30 分钟自动关机，以节省你每周 30 小时的 Kaggle 免费 GPU 额度。",
-  "studio.compute.offlineTooltip": "云端当前未运行，不占用 Kaggle 额度；点「唤醒」或直接生成都会自动启动（排队与装载通常需要几分钟）。",
+  "studio.compute.offlineTooltip": "云端当前未运行，不占用 Kaggle 额度；点「唤醒」或直接生成都会自动启动（排队通常几十秒，首次装载模型需要几分钟）。",
   "studio.compute.asleepTooltip": "会话已结束，额度会在实例释放后归还；若启动过程被中断，对应 Kernel 可能仍在 Kaggle 运行，可到 Kaggle 网页停止。",
   "studio.compute.errorTooltip": "云端会话没有就绪；具体原因见下方提示，可查看运行日志后重试。",
   "studio.compute.speedLine": "云端模型实测：单张约",
@@ -250,6 +251,11 @@ var zh = {
   "studio.filmstrip.offlineClosed": "云端已关闭",
   // 窄屏队列胶囊：胶片条在窄屏收起后用它显示后续待执行任务数。
   "studio.queue.waiting": "另有 {count} 张排队",
+  // 排队卡住（10 分钟档）顶部横幅：非错误提示，主操作换新实例重排。
+  "studio.queue.notice.title": "排队超过 {minutes} 分钟还没拿到 GPU",
+  "studio.queue.notice.note": "多数会话推送后几十秒内就能启动；这次已经等了好几分钟，可能是这条排队卡住了。可以继续等待，也可以换新实例重排。",
+  "studio.queue.notice.requeue": "换新实例重排",
+  "studio.queue.notice.wait": "继续等待",
   "studio.toast.firstImage": "云端就绪，第一张图已生成",
   // ── 运行日志 ─────────────────────────────────────────────────
   "studio.logs.open": "查看运行日志",
@@ -388,10 +394,8 @@ var zh = {
   "studio.guidance.generic.title": "生成没有成功",
   "studio.guidance.generic.action": "重试一次",
   "studio.guidance.session.title": "云端会话没有就绪",
-  "studio.guidance.queueTimeout.continue": "继续等待当前队列",
-  "studio.guidance.queueTimeout.openKaggle": "前往 Kaggle 查看",
-  "studio.guidance.queueTimeout.forceNew": "强制新建实例",
-  "studio.guidance.queueTimeout.hint": "该 Kernel 可能仍在 Kaggle 队列中，建议优先点「继续等待当前队列」保留原位次；若要重新起一个，请先到 Kaggle 网页停止旧任务后再点「强制新建实例」，避免重复排队消耗配额。",
+  "studio.guidance.queueTimeout.requeue": "换新实例重排",
+  "studio.guidance.queueTimeout.hint": "排队 45 分钟仍未拿到 GPU，这次排队已经卡住。换新实例重排会删除这条排不上的 Kernel 并重新推送一个新实例，等待中的任务会继续等新会话。",
   "studio.guidance.network.title": "连不上本地服务",
   "studio.guidance.network.action": "重试",
   "studio.guidance.other.title": "操作没有完成",
@@ -490,7 +494,12 @@ var zh = {
   "studio.logs.hostFallbackTitle": "远端日志为空，已切换到 Host 本地日志",
   "studio.logs.hostEmpty": "Host 本地日志为空，云端会话启动后这里会出现安装与运行记录。",
   "studio.guidance.viewLogs": "查看日志",
-  "studio.guidance.copyDiag": "复制诊断信息"
+  "studio.guidance.copyDiag": "复制诊断信息",
+  "studio.update.badge": "有新版本可用",
+  "studio.update.available": "新版本 v{latest} 可用（当前 v{current}）",
+  "studio.update.hint": "可在 DSH 设置 → 插件管理里更新，或按 README 的安装方式重新安装并重启 DSH。",
+  "studio.update.notes": "查看更新说明",
+  "studio.update.requiresDsh": "新版本要求 DSH {range}，请先升级 DSH。"
 };
 
 // src/dict/en.js
@@ -528,9 +537,10 @@ var en = {
   "session.phase.queue": "Kaggle queue",
   "session.phase.tunnel": "Connecting tunnel",
   "session.phase.warm": "Loading model",
-  "session.hint.provisioning": "Asking Kaggle for a GPU machine; the queue usually takes 3–10 minutes.",
+  "session.hint.provisioning": "Asking Kaggle for a GPU machine.",
   "session.hint.push": "Pushing the environment to Kaggle; the queue opens as soon as the push finishes.",
-  "session.hint.queue": "Waiting for Kaggle to assign a GPU; the queue usually takes 3–10 minutes.",
+  "session.hint.queue": "Waiting for Kaggle to assign a GPU; most sessions start within a minute.",
+  "session.hint.queueSlow": "This queue is slower than usual (most sessions start within a minute).",
   "session.hint.connecting": "Setting up the tunnel and waiting for the remote side to answer.",
   "session.hint.warming": "Installing the runtime and loading model weights; this usually takes a few minutes.",
   "session.hint.stopping": "Ending the session; a queued Kernel may still need to be stopped on the Kaggle website.",
@@ -595,7 +605,7 @@ var en = {
   "studio.compute.idleFor": "Auto-sleep after",
   "studio.compute.idleCountdown": "Idle for {idle} min · shuts down at {total} min",
   "studio.compute.idleTooltip": "The cloud instance shuts down after 30 idle minutes by default, to save your 30 free GPU hours per week on Kaggle.",
-  "studio.compute.offlineTooltip": "The cloud is not running and uses no quota. Press Wake, or just generate — either starts it automatically (queueing and loading usually take a few minutes).",
+  "studio.compute.offlineTooltip": "The cloud is not running and uses no quota. Press Wake, or just generate — either starts it automatically (the queue usually takes under a minute; the first model load takes a few minutes).",
   "studio.compute.asleepTooltip": "The session ended; quota is returned once the instance is released. If startup was interrupted, its Kernel may still be running on Kaggle — stop it on the Kaggle website.",
   "studio.compute.errorTooltip": "The cloud session is not ready; see the notice below or the runtime logs, then retry.",
   "studio.compute.speedLine": "Measured on the loaded model: about",
@@ -684,6 +694,11 @@ var en = {
   "studio.filmstrip.offlineClosed": "The cloud is closed",
   // Narrow-screen queue pill: the filmstrip is hidden below 820px, this keeps the pending count visible.
   "studio.queue.waiting": "{count} more queued",
+  // Stalled queue (10 min) banner: not an error; the primary action requeues a fresh instance.
+  "studio.queue.notice.title": "In queue for over {minutes} minutes without a GPU",
+  "studio.queue.notice.note": "Most sessions start within a minute of the push; this queue has been waiting for several minutes, so it is likely stuck. You can keep waiting or requeue a fresh instance.",
+  "studio.queue.notice.requeue": "Requeue a fresh instance",
+  "studio.queue.notice.wait": "Keep waiting",
   "studio.toast.firstImage": "The cloud is ready; your first image is here",
   // ── Runtime logs ──────────────────────────────────────────────
   "studio.logs.open": "View runtime logs",
@@ -822,10 +837,8 @@ var en = {
   "studio.guidance.generic.title": "The generation did not finish",
   "studio.guidance.generic.action": "Try again",
   "studio.guidance.session.title": "The cloud session is not ready",
-  "studio.guidance.queueTimeout.continue": "Keep waiting in queue",
-  "studio.guidance.queueTimeout.openKaggle": "Open on Kaggle",
-  "studio.guidance.queueTimeout.forceNew": "Start a new instance",
-  "studio.guidance.queueTimeout.hint": 'This Kernel may still be queued on Kaggle. Choose "Keep waiting in queue" to preserve your spot; if you want a fresh instance, stop the old Kernel on Kaggle first to avoid duplicate quota usage.',
+  "studio.guidance.queueTimeout.requeue": "Requeue a fresh instance",
+  "studio.guidance.queueTimeout.hint": "The queue has been stuck for 45 minutes without a GPU. Requeueing deletes the stuck Kernel and pushes a fresh instance; pending jobs keep waiting for the new session.",
   "studio.guidance.network.title": "Cannot reach the local service",
   "studio.guidance.network.action": "Retry",
   "studio.guidance.other.title": "That action did not complete",
@@ -924,7 +937,12 @@ var en = {
   "studio.logs.hostFallbackTitle": "No remote logs — switched to Host logs",
   "studio.logs.hostEmpty": "No Host logs yet. Install and runtime records appear after the cloud session starts.",
   "studio.guidance.viewLogs": "View logs",
-  "studio.guidance.copyDiag": "Copy diagnostics"
+  "studio.guidance.copyDiag": "Copy diagnostics",
+  "studio.update.badge": "Update available",
+  "studio.update.available": "Update available: v{latest} (current v{current})",
+  "studio.update.hint": "Update it in DSH Settings → Plugins, or reinstall following the README and restart DSH.",
+  "studio.update.notes": "Release notes",
+  "studio.update.requiresDsh": "The new version requires DSH {range}; upgrade DSH first."
 };
 
 // src/dict/index.js
@@ -1023,174 +1041,6 @@ function jobElapsed(job, now) {
   }
   const start = Date.parse(job.startedAt ?? job.createdAt ?? "");
   return Number.isFinite(start) ? Math.max(0, now - start) : null;
-}
-
-// src/logic/status.js
-function sessionStateText(t, state) {
-  const key = state ? `session.state.${state}` : "session.state.absent";
-  return localized(t, key) || (state ? String(state) : t("value.unknown"));
-}
-function jobStatusText(t, status) {
-  if (!status) return "";
-  return localized(t, `job.status.${status}`) || String(status);
-}
-function phaseText(t, phase) {
-  if (!phase) return "";
-  return localized(t, `session.phase.${phase}`) || "";
-}
-function isAsleepSession(session) {
-  return Boolean(
-    session && session.state === "error" && session.error && session.error.code === "session_ended"
-  );
-}
-function phaseHint(t, session) {
-  if (!session) return "";
-  const state = typeof session.state === "string" ? session.state : "";
-  const phase = typeof session.phase === "string" ? session.phase : "";
-  const resolved = state || PHASE_STATE[phase] || "";
-  if (resolved === "provisioning") {
-    const key = phase === "push" ? "session.hint.push" : phase === "queue" ? "session.hint.queue" : "session.hint.provisioning";
-    return localized(t, key) || "";
-  }
-  if (isAsleepSession(session)) return localized(t, "session.hint.asleep") || "";
-  return resolved ? localized(t, `session.hint.${resolved}`) || "" : "";
-}
-function toneOf(state, asleep) {
-  if (asleep) return "idle";
-  if (state === "ready") return "ok";
-  if (state === "error") return "error";
-  if (TRANSIENT_SESSION[state] === true) return "warn";
-  return "idle";
-}
-var ERROR_LABEL_KEY = {
-  auth_required: "session.state.errorAuth",
-  cli_missing: "session.state.errorCli",
-  push_failed: "session.state.errorPush",
-  queue_timeout: "session.state.errorTimeout",
-  tunnel_timeout: "session.state.errorTimeout",
-  session_timeout: "session.state.errorTimeout"
-};
-function labelKeyOf(state, phase, session, asleep) {
-  if (asleep) return "session.state.asleep";
-  if (state === "absent" && session && session.stoppedByUser === true) return "session.state.asleep";
-  if (state === "provisioning") {
-    if (phase === "push") return "session.state.push";
-    if (phase === "queue") return "session.state.queue";
-  }
-  if (state === "error") {
-    const code = session && session.error && session.error.code;
-    return ERROR_LABEL_KEY[code] || "session.state.error";
-  }
-  return `session.state.${state}`;
-}
-function computeStatusOf(t, input = {}) {
-  const session = input && input.session ? input.session : null;
-  const state = session && typeof session.state === "string" && session.state ? session.state : "absent";
-  const phase = session && typeof session.phase === "string" ? session.phase : "";
-  const asleep = isAsleepSession(session);
-  const stopped = state === "absent" && Boolean(session && session.stoppedByUser === true);
-  const label = localized(t, labelKeyOf(state, phase, session, asleep)) || sessionStateText(t, state);
-  const hint = phaseHint(t, session) || (stopped ? localized(t, "session.hint.asleep") : "");
-  const errorMessage = session && session.error && typeof session.error.message === "string" ? session.error.message.split("\n")[0].trim() : "";
-  let tooltip = hint;
-  if (state === "ready") tooltip = localized(t, "studio.compute.idleTooltip") || hint;
-  else if (asleep || stopped) tooltip = localized(t, "studio.compute.asleepTooltip") || hint;
-  else if (state === "absent") tooltip = localized(t, "studio.compute.offlineTooltip") || hint;
-  else if (state === "error") tooltip = localized(t, "studio.compute.errorTooltip") || errorMessage;
-  return {
-    state,
-    phase,
-    asleep,
-    stopped,
-    tone: toneOf(state, asleep || stopped),
-    label,
-    hint,
-    tooltip,
-    phaseLabel: phaseText(t, phase),
-    // 过渡态：需要持续刷新进度、显示状态条并计时的状态。
-    transient: TRANSIENT_SESSION[state] === true,
-    // 正在启动/等待云端（stopping 不计时）。
-    starting: state === "provisioning" || state === "connecting" || state === "warming",
-    ready: state === "ready",
-    canStart: state === "absent" || state === "error",
-    canStop: state !== "absent"
-  };
-}
-function idleShutdownOf(session) {
-  if (!session || typeof session !== "object") return null;
-  const idleSeconds = Number(session.idleSeconds);
-  const timeoutSeconds = Number(session.idleTimeoutSec);
-  if (!Number.isFinite(idleSeconds) || !Number.isFinite(timeoutSeconds)) return null;
-  if (idleSeconds <= 0 || timeoutSeconds <= 0) return null;
-  const idleMinutes = Math.floor(idleSeconds / 60);
-  if (idleMinutes < 1) return null;
-  return {
-    idleSeconds: Math.floor(idleSeconds),
-    idleMinutes,
-    totalMinutes: Math.max(1, Math.round(timeoutSeconds / 60))
-  };
-}
-var STAGE_CODES = /* @__PURE__ */ new Set(["queued", "waiting-session", "loading", "running", "done", "failed", "cancelled"]);
-function stageCodeOf(job) {
-  if (job.status === "cancelled") return "cancelled";
-  const code = typeof job.stageCode === "string" ? job.stageCode : "";
-  if (STAGE_CODES.has(code)) return code;
-  return STAGE_CODES.has(job.status) ? job.status : "";
-}
-function progressOf(job) {
-  const progress = job && job.progress;
-  if (!progress || typeof progress !== "object") return null;
-  const done = Number(progress.done);
-  const total = Number(progress.total);
-  if (!Number.isFinite(done) || !Number.isFinite(total)) return null;
-  const count = Math.floor(total);
-  if (count <= 1) return null;
-  return { done: Math.min(Math.max(0, Math.floor(done)) + 1, count), total: count };
-}
-function jobProgressText(t, job, sessionState) {
-  if (!job) return "";
-  const stage = stageCodeOf(job);
-  if (stage === "cancelled") return jobStatusText(t, "cancelled");
-  if (job.cancelRequested === true) return localized(t, "studio.job.cancelling") || "";
-  if (stage === "running") {
-    const progress = progressOf(job);
-    if (progress) {
-      const text = formatText(localized(t, "studio.progress.generatingCount"), progress);
-      if (text) return text;
-    }
-    return localized(t, "studio.progress.running") || "";
-  }
-  if (stage === "loading") {
-    return localized(t, "studio.progress.loading") || localized(t, "studio.progress.waitingSession") || "";
-  }
-  if (stage === "waiting-session") return localized(t, "studio.progress.waitingSession") || "";
-  if (stage === "queued") {
-    const key = sessionState === "ready" ? "studio.progress.queued" : "studio.progress.waitingSession";
-    return localized(t, key) || "";
-  }
-  return jobStatusText(t, job.status);
-}
-function sessionElapsedMs(session, now) {
-  if (!session || session.state !== "provisioning") return null;
-  const start = Date.parse(String(session.startedAt ?? ""));
-  if (!Number.isFinite(start)) return null;
-  const current = Number.isFinite(now) ? now : Date.now();
-  return Math.max(0, current - start);
-}
-
-// src/logic/color.js
-function toneColor(tone) {
-  if (tone === "ok") return token.ok;
-  if (tone === "warn") return token.warn;
-  if (tone === "error") return token.error;
-  return token.idle;
-}
-function jobColor(status) {
-  if (status === "done") return token.ok;
-  if (status === "failed") return token.error;
-  if (status === "running") return token.brand;
-  if (status === "queued" || status === "waiting-session") return token.warn;
-  return token.idle;
 }
 
 // shared/models.generated.js
@@ -1653,10 +1503,20 @@ var TIMEOUTS = {
   // 总兜底时长约 recoveryMs + recoveryMaxRenewals × kernelPollMs（约 7 分钟），
   // 避免隧道重建稍久就杀掉一个仍在 RUNNING 的 Kernel（重新排队代价很高）。
   recoveryMaxRenewals: 10,
+  // 排队分级提示：本机历史日志里 6 次正常会话从推送完成到隧道会合约 14–22 秒
+  // （从会话启动算 18–30 秒）；样本很小，只用于挑提示阈值，不代表 Kaggle 排队的普遍保证。
+  // 超过慢档只更新一句状态提示（不打断用户），超过卡住档才建议换新实例重排（不自动执行）。
+  // 两档都可以被插件配置覆盖（见 index.js 的 queueSlowMinutes / queueStalledMinutes）。
+  queueSlowMs: 3 * 60 * 1e3,
+  queueStalledMs: 10 * 60 * 1e3,
   provisionMs: 45 * 60 * 1e3,
   tunnelMs: 15 * 60 * 1e3,
   sessionWaitMs: 45 * 60 * 1e3,
   idleShutdownSec: 1800,
+  // Kernel 启动后等待宿主接管的时限（秒）：超过仍没有收到任何带 Token 的 Host 请求，
+  // daemon 自行退出。用于回收「放弃排队后仍被调度到」的孤儿 Kernel，避免空转到
+  // idleShutdownSec 才释放 GPU 配额。
+  kernelClaimSec: 600,
   kernelRunMaxSec: 10800,
   // 宿主本地动作
   revealWaitMs: 1500,
@@ -1737,6 +1597,216 @@ var DIAGNOSTICS = {
 var DEFAULT_PRESET = "sdxl-lightning";
 function publicPresets() {
   return PUBLIC_PRESETS.map((preset) => ({ ...preset }));
+}
+
+// src/logic/queue.js
+function queuePolicyOf(state) {
+  const raw = state && state.queuePolicy && typeof state.queuePolicy === "object" ? state.queuePolicy : null;
+  const slowRaw = Number(raw && raw.slowMs);
+  const stalledRaw = Number(raw && raw.stalledMs);
+  const slowMs = Number.isFinite(slowRaw) && slowRaw > 0 ? slowRaw : TIMEOUTS.queueSlowMs;
+  const stalledMs = Number.isFinite(stalledRaw) && stalledRaw > 0 ? stalledRaw : TIMEOUTS.queueStalledMs;
+  return { slowMs, stalledMs: Math.max(slowMs, stalledMs) };
+}
+function queueWaitMsOf(session, now) {
+  if (!session || session.state !== "provisioning" || session.phase !== "queue") return null;
+  const start = Date.parse(String(session.startedAt ?? ""));
+  if (!Number.isFinite(start)) return null;
+  const current = Number.isFinite(now) ? now : Date.now();
+  return Math.max(0, current - start);
+}
+function queueLevelOf(waitMs, policy) {
+  if (!Number.isFinite(waitMs)) return "";
+  const resolved = policy || queuePolicyOf(null);
+  if (waitMs >= resolved.stalledMs) return "stalled";
+  if (waitMs >= resolved.slowMs) return "slow";
+  return "";
+}
+function queueRoundKeyOf(session) {
+  if (!session) return "";
+  const startedAt = typeof session.startedAt === "string" ? session.startedAt.trim() : "";
+  if (!startedAt) return "";
+  const presetId = typeof session.presetId === "string" ? session.presetId.trim() : "";
+  return presetId ? `${startedAt}|${presetId}` : startedAt;
+}
+function queueStalledMinutesOf(policy) {
+  const resolved = policy || queuePolicyOf(null);
+  return Math.max(1, Math.round(resolved.stalledMs / 6e4));
+}
+
+// src/logic/status.js
+function sessionStateText(t, state) {
+  const key = state ? `session.state.${state}` : "session.state.absent";
+  return localized(t, key) || (state ? String(state) : t("value.unknown"));
+}
+function jobStatusText(t, status) {
+  if (!status) return "";
+  return localized(t, `job.status.${status}`) || String(status);
+}
+function phaseText(t, phase) {
+  if (!phase) return "";
+  return localized(t, `session.phase.${phase}`) || "";
+}
+function isAsleepSession(session) {
+  return Boolean(
+    session && session.state === "error" && session.error && session.error.code === "session_ended"
+  );
+}
+function phaseHint(t, session) {
+  if (!session) return "";
+  const state = typeof session.state === "string" ? session.state : "";
+  const phase = typeof session.phase === "string" ? session.phase : "";
+  const resolved = state || PHASE_STATE[phase] || "";
+  if (resolved === "provisioning") {
+    const key = phase === "push" ? "session.hint.push" : phase === "queue" ? "session.hint.queue" : "session.hint.provisioning";
+    return localized(t, key) || "";
+  }
+  if (isAsleepSession(session)) return localized(t, "session.hint.asleep") || "";
+  return resolved ? localized(t, `session.hint.${resolved}`) || "" : "";
+}
+function toneOf(state, asleep) {
+  if (asleep) return "idle";
+  if (state === "ready") return "ok";
+  if (state === "error") return "error";
+  if (TRANSIENT_SESSION[state] === true) return "warn";
+  return "idle";
+}
+var ERROR_LABEL_KEY = {
+  auth_required: "session.state.errorAuth",
+  cli_missing: "session.state.errorCli",
+  push_failed: "session.state.errorPush",
+  queue_timeout: "session.state.errorTimeout",
+  tunnel_timeout: "session.state.errorTimeout",
+  session_timeout: "session.state.errorTimeout"
+};
+function labelKeyOf(state, phase, session, asleep) {
+  if (asleep) return "session.state.asleep";
+  if (state === "absent" && session && session.stoppedByUser === true) return "session.state.asleep";
+  if (state === "provisioning") {
+    if (phase === "push") return "session.state.push";
+    if (phase === "queue") return "session.state.queue";
+  }
+  if (state === "error") {
+    const code = session && session.error && session.error.code;
+    return ERROR_LABEL_KEY[code] || "session.state.error";
+  }
+  return `session.state.${state}`;
+}
+function computeStatusOf(t, input = {}) {
+  const session = input && input.session ? input.session : null;
+  const state = session && typeof session.state === "string" && session.state ? session.state : "absent";
+  const phase = session && typeof session.phase === "string" ? session.phase : "";
+  const asleep = isAsleepSession(session);
+  const stopped = state === "absent" && Boolean(session && session.stoppedByUser === true);
+  const policy = queuePolicyOf({ queuePolicy: input && input.queuePolicy });
+  const queueWaitMs = queueWaitMsOf(session, input && input.now);
+  const queueLevel = queueLevelOf(queueWaitMs, policy);
+  const label = localized(t, labelKeyOf(state, phase, session, asleep)) || sessionStateText(t, state);
+  const baseHint = phaseHint(t, session) || (stopped ? localized(t, "session.hint.asleep") : "");
+  const hint = queueLevel ? localized(t, "session.hint.queueSlow") || baseHint : baseHint;
+  const errorMessage = session && session.error && typeof session.error.message === "string" ? session.error.message.split("\n")[0].trim() : "";
+  let tooltip = hint;
+  if (state === "ready") tooltip = localized(t, "studio.compute.idleTooltip") || hint;
+  else if (asleep || stopped) tooltip = localized(t, "studio.compute.asleepTooltip") || hint;
+  else if (state === "absent") tooltip = localized(t, "studio.compute.offlineTooltip") || hint;
+  else if (state === "error") tooltip = localized(t, "studio.compute.errorTooltip") || errorMessage;
+  return {
+    state,
+    phase,
+    asleep,
+    stopped,
+    tone: toneOf(state, asleep || stopped),
+    label,
+    hint,
+    tooltip,
+    phaseLabel: phaseText(t, phase),
+    // 排队分级：'slow' 只改提示，'stalled' 由组合层加一张「换新实例重排」横幅。
+    queueLevel,
+    queueWaitMs,
+    // 过渡态：需要持续刷新进度、显示状态条并计时的状态。
+    transient: TRANSIENT_SESSION[state] === true,
+    // 正在启动/等待云端（stopping 不计时）。
+    starting: state === "provisioning" || state === "connecting" || state === "warming",
+    ready: state === "ready",
+    canStart: state === "absent" || state === "error",
+    canStop: state !== "absent"
+  };
+}
+function idleShutdownOf(session) {
+  if (!session || typeof session !== "object") return null;
+  const idleSeconds = Number(session.idleSeconds);
+  const timeoutSeconds = Number(session.idleTimeoutSec);
+  if (!Number.isFinite(idleSeconds) || !Number.isFinite(timeoutSeconds)) return null;
+  if (idleSeconds <= 0 || timeoutSeconds <= 0) return null;
+  const idleMinutes = Math.floor(idleSeconds / 60);
+  if (idleMinutes < 1) return null;
+  return {
+    idleSeconds: Math.floor(idleSeconds),
+    idleMinutes,
+    totalMinutes: Math.max(1, Math.round(timeoutSeconds / 60))
+  };
+}
+var STAGE_CODES = /* @__PURE__ */ new Set(["queued", "waiting-session", "loading", "running", "done", "failed", "cancelled"]);
+function stageCodeOf(job) {
+  if (job.status === "cancelled") return "cancelled";
+  const code = typeof job.stageCode === "string" ? job.stageCode : "";
+  if (STAGE_CODES.has(code)) return code;
+  return STAGE_CODES.has(job.status) ? job.status : "";
+}
+function progressOf(job) {
+  const progress = job && job.progress;
+  if (!progress || typeof progress !== "object") return null;
+  const done = Number(progress.done);
+  const total = Number(progress.total);
+  if (!Number.isFinite(done) || !Number.isFinite(total)) return null;
+  const count = Math.floor(total);
+  if (count <= 1) return null;
+  return { done: Math.min(Math.max(0, Math.floor(done)) + 1, count), total: count };
+}
+function jobProgressText(t, job, sessionState) {
+  if (!job) return "";
+  const stage = stageCodeOf(job);
+  if (stage === "cancelled") return jobStatusText(t, "cancelled");
+  if (job.cancelRequested === true) return localized(t, "studio.job.cancelling") || "";
+  if (stage === "running") {
+    const progress = progressOf(job);
+    if (progress) {
+      const text = formatText(localized(t, "studio.progress.generatingCount"), progress);
+      if (text) return text;
+    }
+    return localized(t, "studio.progress.running") || "";
+  }
+  if (stage === "loading") {
+    return localized(t, "studio.progress.loading") || localized(t, "studio.progress.waitingSession") || "";
+  }
+  if (stage === "waiting-session") return localized(t, "studio.progress.waitingSession") || "";
+  if (stage === "queued") {
+    const key = sessionState === "ready" ? "studio.progress.queued" : "studio.progress.waitingSession";
+    return localized(t, key) || "";
+  }
+  return jobStatusText(t, job.status);
+}
+function sessionElapsedMs(session, now) {
+  if (!session || session.state !== "provisioning") return null;
+  const start = Date.parse(String(session.startedAt ?? ""));
+  if (!Number.isFinite(start)) return null;
+  const current = Number.isFinite(now) ? now : Date.now();
+  return Math.max(0, current - start);
+}
+
+// src/logic/color.js
+function toneColor(tone) {
+  if (tone === "ok") return token.ok;
+  if (tone === "warn") return token.warn;
+  if (tone === "error") return token.error;
+  return token.idle;
+}
+function jobColor(status) {
+  if (status === "done") return token.ok;
+  if (status === "failed") return token.error;
+  if (status === "running") return token.brand;
+  if (status === "queued" || status === "waiting-session") return token.warn;
+  return token.idle;
 }
 
 // src/logic/jobs.js
@@ -1997,6 +2067,7 @@ function fetchLibrary() {
 function startSession(presetId, options = {}) {
   const body = { presetId };
   if (options && options.forceNew === true) body.forceNew = true;
+  if (options && options.replace === true) body.replace = true;
   return request(routePath("sessionStart"), {
     method: "POST",
     body: JSON.stringify(body)
@@ -2212,7 +2283,7 @@ function StatusChip(props) {
 }
 
 // src/studio/Studio.jsx
-var import_react35 = __toESM(require("react"), 1);
+var import_react36 = __toESM(require("react"), 1);
 
 // src/styles/tokens.css
 var tokens_default = '/*\n * 设计变量：黑白灰工作室。\n *\n * 视觉立场：一间明度分层的工作室，而不是一块彩色 AI 画布。\n *  1. 地面是中性灰的柔光渐变，上面浮近白的实心卡片；不用彩色光晕，不用玻璃彩虹。\n *  2. 只有明度关系：墨黑做主操作与选中，灰阶做层级，语义色（成功/警告/错误）\n *     只以小圆点或窄条出现，不参与大面积装饰。\n *  3. 深色是同一套明度关系反相：深灰底、浅灰字、浅色主操作。\n *\n * 预览工具（tools/preview/render.mjs）与宿主页面直接读取这里的深色变量（支持系统 prefers-color-scheme 与显式 [data-theme="dark"]）。\n */\n\n.ofs-root {\n  /* 地面：三层中性柔光 + 一层底色 */\n  --ofs-ground-1: #e7e8ea;\n  --ofs-ground-2: #f1f1f2;\n  --ofs-ground-3: #e3e4e6;\n  --ofs-ground-base: #f5f5f6;\n\n  /* 表面 */\n  --ofs-window: rgb(255 255 255 / 86%);\n  --ofs-window-border: rgb(18 18 22 / 8%);\n  --ofs-card: #ffffff;\n  --ofs-card-solid: #ffffff;\n  --ofs-card-border: rgb(18 18 22 / 9%);\n  --ofs-hairline: rgb(18 18 22 / 7%);\n  --ofs-sunken: #f4f4f6;\n  --ofs-sunken-border: rgb(18 18 22 / 8%);\n\n  /* 文字 */\n  --ofs-ink: #141416;\n  --ofs-ink-2: #52525a;\n  --ofs-ink-3: #6b6b73;\n  --ofs-ink-4: #a8a8b0;\n\n  /* 主操作：墨黑 */\n  --ofs-accent: #141416;\n  --ofs-accent-2: #3f3f46;\n  --ofs-accent-ink: #ffffff;\n  --ofs-accent-soft: #f0f0f2;\n  --ofs-accent-soft-border: #dedee3;\n  --ofs-accent-grad: linear-gradient(180deg, #2b2b30 0%, #141416 100%);\n\n  /* 状态：只做小面积语义色 */\n  --ofs-ok: #2f8a5c;\n  --ofs-ok-soft: #eaf5ef;\n  --ofs-warn: #a96a18;\n  --ofs-warn-soft: #f7f0e4;\n  --ofs-error: #c04444;\n  --ofs-error-soft: #f9ecec;\n  --ofs-idle: #a0a0a8;\n  --ofs-idle-soft: #f1f1f3;\n\n  /* 光桌与相纸：舞台是一张下凹的光桌，出图是一张落在桌上的相纸。\n     这是界面里唯一带实物感的表面，其余控件都保持扁平卡片。 */\n  --ofs-mat: #f0f0f2;\n  --ofs-mat-lit: rgb(255 255 255 / 92%);\n  --ofs-mat-inner: inset 0 1px 3px rgb(16 16 20 / 6%);\n  --ofs-print-paper: #ffffff;\n  --ofs-print-edge: rgb(18 18 22 / 10%);\n  --ofs-print-shadow: 0 20px 40px -24px rgb(16 16 20 / 42%), 0 4px 10px -6px rgb(16 16 20 / 18%);\n  --ofs-print-shadow-hover: 0 26px 50px -24px rgb(16 16 20 / 46%), 0 6px 14px -6px rgb(16 16 20 / 20%);\n  --ofs-mark: rgb(18 18 22 / 26%);\n\n  /* 几何 */\n  --ofs-r-xl: 24px;\n  --ofs-r-lg: 18px;\n  --ofs-r-md: 14px;\n  --ofs-r-sm: 10px;\n  --ofs-r-pill: 999px;\n  --ofs-blur: 18px;\n\n  /* 投影：始终带偏移与柔和扩散，不用零偏移光晕 */\n  --ofs-shadow-card: 0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%);\n  --ofs-shadow-lift: 0 2px 6px rgb(16 16 20 / 6%), 0 18px 40px -20px rgb(16 16 20 / 26%);\n  --ofs-shadow-window: 0 1px 3px rgb(16 16 20 / 5%), 0 36px 80px -48px rgb(16 16 20 / 32%);\n  --ofs-shadow-accent: 0 8px 18px -10px rgb(16 16 20 / 48%);\n  --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(20 20 22 / 45%);\n\n  --ofs-font: -apple-system, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;\n\n  /* 留白节奏 */\n  --ofs-pad: 18px;\n  --ofs-gap: 14px;\n\n  display: flex;\n  flex-direction: column;\n  height: 100%;\n  min-height: 0;\n  padding: 18px;\n  color: var(--ofs-ink);\n  font-family: var(--ofs-font);\n  font-size: 13px;\n  line-height: 1.55;\n  -webkit-font-smoothing: antialiased;\n  background:\n    radial-gradient(1100px 620px at 12% -8%, var(--ofs-ground-1) 0%, transparent 62%),\n    radial-gradient(900px 520px at 88% 4%, var(--ofs-ground-2) 0%, transparent 58%),\n    radial-gradient(780px 540px at 62% 108%, var(--ofs-ground-3) 0%, transparent 62%),\n    linear-gradient(160deg, var(--ofs-ground-base) 0%, var(--ofs-ground-base) 100%);\n}\n\n@media (prefers-color-scheme: dark) {\n  :root:not([data-theme="light"]) .ofs-root:not([data-theme="light"]) {\n    --ofs-ground-1: #232326;\n    --ofs-ground-2: #17171a;\n    --ofs-ground-3: #26262a;\n    --ofs-ground-base: #101012;\n\n    --ofs-window: rgb(24 24 27 / 88%);\n    --ofs-window-border: rgb(255 255 255 / 9%);\n    --ofs-card: #18181b;\n    --ofs-card-solid: #1c1c20;\n    --ofs-card-border: rgb(255 255 255 / 9%);\n    --ofs-hairline: rgb(255 255 255 / 8%);\n    --ofs-sunken: rgb(255 255 255 / 5%);\n    --ofs-sunken-border: rgb(255 255 255 / 9%);\n\n    --ofs-ink: #f2f2f4;\n    --ofs-ink-2: #a4a4ac;\n    --ofs-ink-3: #8d8d95;\n    --ofs-ink-4: #5c5c63;\n\n    --ofs-accent: #f2f2f4;\n    --ofs-accent-2: #c8c8cf;\n    --ofs-accent-ink: #161618;\n    --ofs-accent-soft: rgb(255 255 255 / 8%);\n    --ofs-accent-soft-border: rgb(255 255 255 / 14%);\n    --ofs-accent-grad: linear-gradient(180deg, #fafafa 0%, #dcdce1 100%);\n\n    --ofs-ok: #58c08a;\n    --ofs-ok-soft: rgb(88 192 138 / 14%);\n    --ofs-warn: #d8a55c;\n    --ofs-warn-soft: rgb(216 165 92 / 14%);\n    --ofs-error: #e07a7a;\n    --ofs-error-soft: rgb(224 122 122 / 14%);\n    --ofs-idle: #8a8a92;\n    --ofs-idle-soft: rgb(255 255 255 / 6%);\n\n    /* 深色里相纸仍然是整间暗房里最亮的表面：光桌 > 相纸 > 卡片 > 地面 */\n    --ofs-mat: #1e1e22;\n    --ofs-mat-lit: rgb(255 255 255 / 7%);\n    --ofs-mat-inner: inset 0 1px 3px rgb(0 0 0 / 36%);\n    --ofs-print-paper: #2b2b31;\n    --ofs-print-edge: rgb(255 255 255 / 13%);\n    --ofs-print-shadow: 0 22px 44px -24px rgb(0 0 0 / 78%), 0 4px 12px -6px rgb(0 0 0 / 50%);\n    --ofs-print-shadow-hover: 0 28px 54px -24px rgb(0 0 0 / 82%), 0 6px 16px -6px rgb(0 0 0 / 54%);\n    --ofs-mark: rgb(255 255 255 / 28%);\n\n    --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 28px -18px rgb(0 0 0 / 70%);\n    --ofs-shadow-lift: 0 2px 6px rgb(0 0 0 / 44%), 0 20px 44px -22px rgb(0 0 0 / 76%);\n    --ofs-shadow-window: 0 1px 3px rgb(0 0 0 / 40%), 0 40px 88px -48px rgb(0 0 0 / 88%);\n    --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);\n    --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(255 255 255 / 40%);\n  }\n}\n\n/* 显式深色主题（预览脚本 / 宿主切换 `data-theme="dark"` 时生效），与上面同源。 */\n[data-theme="dark"] .ofs-root,\n.ofs-root[data-theme="dark"] {\n  --ofs-ground-1: #232326;\n  --ofs-ground-2: #17171a;\n  --ofs-ground-3: #26262a;\n  --ofs-ground-base: #101012;\n\n  --ofs-window: rgb(24 24 27 / 88%);\n  --ofs-window-border: rgb(255 255 255 / 9%);\n  --ofs-card: #18181b;\n  --ofs-card-solid: #1c1c20;\n  --ofs-card-border: rgb(255 255 255 / 9%);\n  --ofs-hairline: rgb(255 255 255 / 8%);\n  --ofs-sunken: rgb(255 255 255 / 5%);\n  --ofs-sunken-border: rgb(255 255 255 / 9%);\n\n  --ofs-ink: #f2f2f4;\n  --ofs-ink-2: #a4a4ac;\n  --ofs-ink-3: #8d8d95;\n  --ofs-ink-4: #5c5c63;\n\n  --ofs-accent: #f2f2f4;\n  --ofs-accent-2: #c8c8cf;\n  --ofs-accent-ink: #161618;\n  --ofs-accent-soft: rgb(255 255 255 / 8%);\n  --ofs-accent-soft-border: rgb(255 255 255 / 14%);\n  --ofs-accent-grad: linear-gradient(180deg, #fafafa 0%, #dcdce1 100%);\n\n  --ofs-ok: #58c08a;\n  --ofs-ok-soft: rgb(88 192 138 / 14%);\n  --ofs-warn: #d8a55c;\n  --ofs-warn-soft: rgb(216 165 92 / 14%);\n  --ofs-error: #e07a7a;\n  --ofs-error-soft: rgb(224 122 122 / 14%);\n  --ofs-idle: #8a8a92;\n  --ofs-idle-soft: rgb(255 255 255 / 6%);\n\n  --ofs-mat: #1e1e22;\n  --ofs-mat-lit: rgb(255 255 255 / 7%);\n  --ofs-mat-inner: inset 0 1px 3px rgb(0 0 0 / 36%);\n  --ofs-print-paper: #2b2b31;\n  --ofs-print-edge: rgb(255 255 255 / 13%);\n  --ofs-print-shadow: 0 22px 44px -24px rgb(0 0 0 / 78%), 0 4px 12px -6px rgb(0 0 0 / 50%);\n  --ofs-print-shadow-hover: 0 28px 54px -24px rgb(0 0 0 / 82%), 0 6px 16px -6px rgb(0 0 0 / 54%);\n  --ofs-mark: rgb(255 255 255 / 28%);\n\n  --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 28px -18px rgb(0 0 0 / 70%);\n  --ofs-shadow-lift: 0 2px 6px rgb(0 0 0 / 44%), 0 20px 44px -22px rgb(0 0 0 / 76%);\n  --ofs-shadow-window: 0 1px 3px rgb(0 0 0 / 40%), 0 40px 88px -48px rgb(0 0 0 / 88%);\n  --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);\n  --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(255 255 255 / 40%);\n}';
@@ -2221,13 +2292,13 @@ var tokens_default = '/*\n * 设计变量：黑白灰工作室。\n *\n * 视觉
 var base_default = "/*\n * 基础件：浏览器表面、通用原语（按钮 / 胶囊 / 图标钮 / 输入 / 分段控件）。\n *\n * 所有组件只从这里取原语，不在各自文件里重造按钮。类名都以 .ofs- 开头，\n * 避免污染宿主页面。\n */\n\n.ofs-root *,\n.ofs-root *::before,\n.ofs-root *::after {\n  box-sizing: border-box;\n}\n\n.ofs-root ::selection {\n  background: color-mix(in oklab, var(--ofs-ink) 16%, transparent);\n  color: var(--ofs-ink);\n}\n\n.ofs-root :focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-root :focus:not(:focus-visible) {\n  outline: none;\n}\n\n.ofs-root input,\n.ofs-root textarea,\n.ofs-root select {\n  font: inherit;\n  color: inherit;\n  caret-color: var(--ofs-accent);\n}\n\n.ofs-root button {\n  font: inherit;\n}\n\n.ofs-root img {\n  display: block;\n}\n\n.ofs-root h2,\n.ofs-root h3,\n.ofs-root h4,\n.ofs-root p {\n  margin: 0;\n}\n\n.ofs-root a {\n  color: var(--ofs-accent);\n  text-decoration-thickness: 1px;\n  text-underline-offset: 3px;\n}\n\n.ofs-icon {\n  display: block;\n  flex: 0 0 auto;\n}\n\n.ofs-grow {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ofs-muted {\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n}\n\n/* 滚动条：属于同一个世界，不做默认灰条 */\n.ofs-panel-scroll,\n.ofs-thread,\n.ofs-gallery,\n.ofs-roll {\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-panel-scroll::-webkit-scrollbar,\n.ofs-thread::-webkit-scrollbar,\n.ofs-gallery::-webkit-scrollbar,\n.ofs-roll::-webkit-scrollbar {\n  width: 8px;\n  height: 8px;\n}\n\n.ofs-panel-scroll::-webkit-scrollbar-thumb,\n.ofs-thread::-webkit-scrollbar-thumb,\n.ofs-gallery::-webkit-scrollbar-thumb,\n.ofs-roll::-webkit-scrollbar-thumb {\n  border: 2px solid transparent;\n  border-radius: 8px;\n  background: var(--ofs-ink-4);\n  background-clip: content-box;\n}\n\n.ofs-panel-scroll::-webkit-scrollbar-thumb:hover,\n.ofs-thread::-webkit-scrollbar-thumb:hover,\n.ofs-gallery::-webkit-scrollbar-thumb:hover,\n.ofs-roll::-webkit-scrollbar-thumb:hover {\n  background: var(--ofs-ink-3);\n  background-clip: content-box;\n}\n\n/* ── 按钮 ───────────────────────────────────────────────────── */\n.ofs-btn {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  height: 38px;\n  padding: 0 18px;\n  border: 1px solid transparent;\n  border-radius: 12px;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  font-weight: 600;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 160ms ease,\n    background-color 160ms ease,\n    border-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-btn:disabled {\n  cursor: default;\n}\n\n.ofs-btn.is-primary {\n  color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n.ofs-btn.is-primary:hover:not(:disabled) {\n  transform: translateY(-1px);\n  box-shadow: 0 14px 28px -12px rgb(16 16 20 / 50%);\n}\n\n.ofs-btn.is-primary:active:not(:disabled) {\n  transform: translateY(0) scale(0.99);\n}\n\n.ofs-btn.is-primary:disabled {\n  background: var(--ofs-accent-grad);\n  border-color: transparent;\n  /* 文字色必须跟主题的主操作文字色（--ofs-accent-ink）：深色主题的主操作是浅色渐变\n     配墨黑字，写死白色会变成白字浅底，禁用时整行字看不见。 */\n  color: color-mix(in oklab, var(--ofs-accent-ink) 82%, transparent);\n  box-shadow: none;\n  opacity: 0.36;\n  filter: saturate(0.6);\n}\n\n.ofs-btn.is-quiet {\n  background: var(--ofs-card);\n  border-color: var(--ofs-card-border);\n  color: var(--ofs-ink);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n.ofs-btn.is-quiet:hover:not(:disabled) {\n  background: var(--ofs-card-solid);\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-accent);\n}\n\n.ofs-btn.is-quiet:disabled {\n  color: var(--ofs-ink-4);\n  box-shadow: none;\n}\n\n.ofs-btn.is-ghost {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-btn.is-ghost:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-ink);\n}\n\n/* ── 图标按钮 ───────────────────────────────────────────────── */\n.ofs-icon-btn {\n  appearance: none;\n  display: inline-grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid transparent;\n  border-radius: 10px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    color 150ms ease,\n    border-color 150ms ease,\n    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-icon-btn:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-icon-btn:active:not(:disabled) {\n  transform: scale(0.96);\n}\n\n.ofs-icon-btn:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n.ofs-icon-btn.is-on {\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-accent);\n}\n\n/* ── 胶囊 / 标签 ────────────────────────────────────────────── */\n.ofs-chip {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 28px;\n  padding: 0 12px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-chip:hover:not(:disabled) {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-chip.is-on {\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-accent);\n}\n\n.ofs-chip.is-danger {\n  color: var(--ofs-error);\n  border-color: transparent;\n  background: var(--ofs-error-soft);\n}\n\n.ofs-chip.is-danger:hover:not(:disabled) {\n  color: var(--ofs-error);\n  border-color: var(--ofs-error);\n}\n\n.ofs-chip:disabled {\n  color: var(--ofs-ink-4);\n  background: transparent;\n  border-color: var(--ofs-sunken-border);\n  cursor: default;\n}\n\n/* ── 分段控件 ───────────────────────────────────────────────── */\n.ofs-seg {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  border: 1px solid var(--ofs-sunken-border);\n}\n\n.ofs-seg button {\n  appearance: none;\n  height: 26px;\n  padding: 0 12px;\n  border: 0;\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 500;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-seg button:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-seg button.is-on {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n  font-weight: 600;\n  box-shadow: 0 1px 2px rgb(16 16 20 / 8%);\n}\n\n/* ── 状态点 ─────────────────────────────────────────────────── */\n.ofs-dot {\n  display: inline-block;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--ofs-idle);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-idle) 22%, transparent);\n}\n\n.ofs-dot.is-ok { background: var(--ofs-ok); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-ok) 20%, transparent); }\n.ofs-dot.is-warn { background: var(--ofs-warn); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-warn) 22%, transparent); }\n.ofs-dot.is-error { background: var(--ofs-error); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-error) 20%, transparent); }\n.ofs-dot.is-idle { background: var(--ofs-idle); }\n.ofs-dot.is-live { animation: ofs-pulse 2.4s ease-out infinite; }\n\n/* 排队 / 预热用琥珀点：呼吸圈也换成警告色。 */\n.ofs-dot.is-warn.is-live {\n  animation: ofs-warn-pulse 2.2s ease-out infinite;\n}\n\n@keyframes ofs-warn-pulse {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 34%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n}\n\n/* ── 动效 ───────────────────────────────────────────────────── */\n@keyframes ofs-pulse {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok) 34%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-ok) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok) 0%, transparent); }\n}\n\n@keyframes ofs-shimmer {\n  0% { background-position: -220% 0; }\n  100% { background-position: 220% 0; }\n}\n\n@keyframes ofs-fade-in {\n  from { opacity: 0; transform: translateY(4px); }\n  to { opacity: 1; transform: translateY(0); }\n}\n\n@keyframes ofs-pop-in {\n  from { opacity: 0; transform: translateY(6px) scale(0.985); }\n  to { opacity: 1; transform: translateY(0) scale(1); }\n}\n\n/* ── 悬浮提示 ─────────────────────────────────────────────── */\n.ofs-tip {\n  position: relative;\n  display: inline-flex;\n  align-items: center;\n  margin-left: 5px;\n  vertical-align: middle;\n}\n\n.ofs-tip-trigger {\n  appearance: none;\n  display: inline-grid;\n  place-items: center;\n  width: 15px;\n  height: 15px;\n  padding: 0;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-3);\n  font-size: 9.5px;\n  font-weight: 700;\n  line-height: 1;\n  cursor: help;\n}\n\n.ofs-tip-trigger:hover,\n.ofs-tip-trigger:focus-visible {\n  color: var(--ofs-ink);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-tip-trigger:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-tip--warn .ofs-tip-trigger {\n  color: var(--ofs-warn);\n  border-color: color-mix(in oklab, var(--ofs-warn) 45%, transparent);\n  background: var(--ofs-warn-soft);\n}\n\n/* 固定在视口坐标上，不被侧栏的滚动容器裁剪；位置由组件按触发点计算。 */\n.ofs-tip-pop {\n  position: fixed;\n  z-index: 90;\n  width: max-content;\n  max-width: 248px;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: 10px;\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink-2);\n  box-shadow: var(--ofs-shadow-lift);\n  font-size: 11.5px;\n  line-height: 1.55;\n  text-align: left;\n  white-space: normal;\n  transform: translateY(-100%);\n  pointer-events: none;\n}\n\n.ofs-tip-pop.is-below {\n  transform: none;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-root *,\n  .ofs-root *::before,\n  .ofs-root *::after {\n    animation-duration: 1ms !important;\n    animation-iteration-count: 1 !important;\n    transition-duration: 1ms !important;\n  }\n}";
 
 // src/styles/shell.css
-var shell_default = "/*\n * 外壳：整页容器、顶栏、云端过渡状态条、布局骨架与 Toast。\n * 模型选卡、异常指引与抽屉样式已拆至 model-picker.css / guidance.css / drawers.css。\n *\n * 页面是一张浮在柔光地面上的雾面玻璃大卡：\n *   .ofs-root = 柔光底，.ofs-app = 玻璃大卡，内部再分顶栏 / 主体 / 最近生成栏。\n */\n\n.ofs-app {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-xl);\n  background: var(--ofs-window);\n  box-shadow: var(--ofs-shadow-window);\n  backdrop-filter: blur(24px) saturate(140%);\n  -webkit-backdrop-filter: blur(24px) saturate(140%);\n  overflow: hidden;\n}\n\n/* ── 顶栏 ───────────────────────────────────────────────────── */\n.ofs-topbar {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 14px;\n  height: 58px;\n  padding: 0 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-brand {\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  min-width: 0;\n}\n\n.ofs-brand-mark {\n  display: grid;\n  place-items: center;\n  width: 30px;\n  height: 30px;\n  border-radius: 9px;\n  color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n.ofs-brand-name {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-brand-sub {\n  padding-left: 2px;\n  font-size: 10px;\n  font-weight: 550;\n  letter-spacing: 0.14em;\n  text-transform: uppercase;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-tabs {\n  display: flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  margin-left: 4px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n}\n\n.ofs-tab {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 28px;\n  padding: 0 12px;\n  border: 0;\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-tab:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-tab.is-on {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n  font-weight: 600;\n  box-shadow: 0 1px 2px rgb(16 16 20 / 8%);\n}\n\n/* 云端GPU 状态 */\n.ofs-pill-wrap {\n  position: relative;\n  flex: 0 0 auto;\n}\n\n.ofs-compute {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    color 160ms ease,\n    background-color 160ms ease;\n}\n\n.ofs-compute:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-compute em {\n  font-style: normal;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-pill-caret {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-popover {\n  position: absolute;\n  top: calc(100% + 8px);\n  right: 0;\n  z-index: 40;\n  width: 248px;\n  padding: 6px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  animation: ofs-pop-in 160ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-popover-head {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  padding: 8px 10px 10px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-popover-head > span {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-popover-head > span b {\n  font-size: 12.5px;\n  font-weight: 650;\n  color: var(--ofs-ink);\n}\n\n/* 检查结果 / 失败说明：弹层里的一行到三行小字，避免长 notes 撑开菜单。 */\n.ofs-popover-note {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 8px 10px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.ofs-popover-note span {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n/* 弹层里的一句话状态说明：允许换行，不截断。 */\n.ofs-popover-hint {\n  margin: 0;\n  padding: 8px 10px 9px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.55;\n}\n\n/* 配额回退：接口不可读时给出的本地统计，与检查结果行区分开。 */\n.ofs-popover-fallback {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  padding: 8px 10px 9px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.ofs-popover-fallback-title {\n  color: var(--ofs-ink-2);\n  font-weight: 600;\n}\n\n.ofs-popover-link {\n  align-self: flex-start;\n  margin-top: 2px;\n  border-radius: 4px;\n  color: var(--ofs-accent);\n  font-size: 11px;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}\n\n.ofs-popover-link:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-popover-row {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  width: 100%;\n  height: 32px;\n  padding: 0 10px;\n  border: 0;\n  border-radius: 9px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-popover-row:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-popover-row:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* ── 云端过渡态状态条 ───────────────────────────────────────── */\n/* 只在申请 GPU / 连接 / 准备模型 / 关闭时出现：讲清在等什么、已经等了多久。 */\n.ofs-sessionbar {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  min-height: 34px;\n  margin: 12px 16px 0;\n  padding: 7px 12px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  line-height: 1.4;\n  animation: ofs-fade-in 220ms ease;\n}\n\n.ofs-sessionbar-label {\n  flex: 0 0 auto;\n  font-weight: 600;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n.ofs-sessionbar-hint {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-sessionbar-time {\n  flex: 0 0 auto;\n  padding-left: 10px;\n  border-left: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n/* ── 骨架 ───────────────────────────────────────────────────── */\n.ofs-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: grid;\n  /* 单轨创作面板 + 自适应预览区；视图切换与状态全部收在顶栏。 */\n  grid-template-columns: 320px minmax(0, 1fr);\n  grid-template-rows: minmax(0, 1fr);\n}\n\n.ofs-body.is-gallery {\n  grid-template-columns: minmax(0, 1fr);\n}\n\n.ofs-main {\n  position: relative;\n  min-width: 0;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  margin: 14px;\n}\n\n/* ── 右上角轻量通知区（瞬时反馈 + 非全局阻塞的可恢复异常） ──────────── */\n.ofs-toast-stack {\n  position: absolute;\n  top: 66px;\n  right: 16px;\n  z-index: 60;\n  display: flex;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 8px;\n  max-width: min(380px, calc(100% - 32px));\n  pointer-events: none;\n}\n\n.ofs-toast {\n  pointer-events: auto;\n  max-width: 100%;\n  padding: 9px 14px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 90%, transparent);\n  box-shadow: var(--ofs-shadow-lift);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  animation: ofs-toast-in 180ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-toast--notice {\n  display: flex;\n  align-items: flex-start;\n  gap: 9px;\n  width: 100%;\n  padding: 10px 12px;\n  border-color: color-mix(in oklab, var(--ofs-warn) 28%, transparent);\n  border-radius: 14px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 92%, var(--ofs-warn-soft));\n  white-space: normal;\n  overflow: visible;\n}\n\n.ofs-toast-icon {\n  display: grid;\n  place-items: center;\n  flex: 0 0 auto;\n  width: 24px;\n  height: 24px;\n  border-radius: 8px;\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  color: var(--ofs-warn);\n}\n\n.ofs-toast-body {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.ofs-toast-title {\n  margin: 0;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ofs-ink);\n  line-height: 1.4;\n}\n\n.ofs-toast-detail {\n  margin: 0;\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  line-height: 1.45;\n  overflow-wrap: anywhere;\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n  line-clamp: 2;\n  overflow: hidden;\n}\n\n.ofs-toast-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 5px;\n  margin-top: 2px;\n}\n\n.ofs-toast-actions .ofs-chip.is-on {\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);\n  color: var(--ofs-warn);\n}\n\n@keyframes ofs-toast-in {\n  from {\n    opacity: 0;\n    transform: translateY(-6px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\n";
+var shell_default = "/*\n * 外壳：整页容器、顶栏、云端过渡状态条、布局骨架与 Toast。\n * 模型选卡、异常指引与抽屉样式已拆至 model-picker.css / guidance.css / drawers.css。\n *\n * 页面是一张浮在柔光地面上的雾面玻璃大卡：\n *   .ofs-root = 柔光底，.ofs-app = 玻璃大卡，内部再分顶栏 / 主体 / 最近生成栏。\n */\n\n.ofs-app {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-xl);\n  background: var(--ofs-window);\n  box-shadow: var(--ofs-shadow-window);\n  backdrop-filter: blur(24px) saturate(140%);\n  -webkit-backdrop-filter: blur(24px) saturate(140%);\n  overflow: hidden;\n}\n\n/* ── 顶栏 ───────────────────────────────────────────────────── */\n.ofs-topbar {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 14px;\n  height: 58px;\n  padding: 0 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-brand {\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  min-width: 0;\n}\n\n.ofs-brand-mark {\n  display: grid;\n  place-items: center;\n  width: 30px;\n  height: 30px;\n  border-radius: 9px;\n  color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n.ofs-brand-name {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-brand-sub {\n  padding-left: 2px;\n  font-size: 10px;\n  font-weight: 550;\n  letter-spacing: 0.14em;\n  text-transform: uppercase;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-tabs {\n  display: flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  margin-left: 4px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n}\n\n.ofs-tab {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 28px;\n  padding: 0 12px;\n  border: 0;\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 160ms ease,\n    color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-tab:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-tab.is-on {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n  font-weight: 600;\n  box-shadow: 0 1px 2px rgb(16 16 20 / 8%);\n}\n\n/* 云端GPU 状态 */\n.ofs-pill-wrap {\n  position: relative;\n  flex: 0 0 auto;\n}\n\n.ofs-compute {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    color 160ms ease,\n    background-color 160ms ease;\n}\n\n.ofs-compute:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-compute em {\n  font-style: normal;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n/* 插件自身有新版本：胶囊内的小圆点；详情与更新说明在弹层里，不打断出图。 */\n.ofs-update-dot {\n  width: 7px;\n  height: 7px;\n  flex: 0 0 auto;\n  border-radius: 50%;\n  background: var(--ofs-warn);\n}\n\n.ofs-pill-caret {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-popover {\n  position: absolute;\n  top: calc(100% + 8px);\n  right: 0;\n  z-index: 40;\n  width: 248px;\n  padding: 6px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  animation: ofs-pop-in 160ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-popover-head {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  padding: 8px 10px 10px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-popover-head > span {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-popover-head > span b {\n  font-size: 12.5px;\n  font-weight: 650;\n  color: var(--ofs-ink);\n}\n\n/* 检查结果 / 失败说明：弹层里的一行到三行小字，避免长 notes 撑开菜单。 */\n.ofs-popover-note {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 8px 10px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.ofs-popover-note span {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n/* 弹层里的一句话状态说明：允许换行，不截断。 */\n.ofs-popover-hint {\n  margin: 0;\n  padding: 8px 10px 9px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.55;\n}\n\n/* 配额回退：接口不可读时给出的本地统计，与检查结果行区分开。 */\n.ofs-popover-fallback {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  padding: 8px 10px 9px;\n  margin-bottom: 4px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n.ofs-popover-fallback-title {\n  color: var(--ofs-ink-2);\n  font-weight: 600;\n}\n\n.ofs-popover-link {\n  align-self: flex-start;\n  margin-top: 2px;\n  border-radius: 4px;\n  color: var(--ofs-accent);\n  font-size: 11px;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}\n\n.ofs-popover-link:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-popover-row {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  width: 100%;\n  height: 32px;\n  padding: 0 10px;\n  border: 0;\n  border-radius: 9px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-popover-row:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-popover-row:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* ── 云端过渡态状态条 ───────────────────────────────────────── */\n/* 只在申请 GPU / 连接 / 准备模型 / 关闭时出现：讲清在等什么、已经等了多久。 */\n.ofs-sessionbar {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  min-height: 34px;\n  margin: 12px 16px 0;\n  padding: 7px 12px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  line-height: 1.4;\n  animation: ofs-fade-in 220ms ease;\n}\n\n.ofs-sessionbar-label {\n  flex: 0 0 auto;\n  font-weight: 600;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n.ofs-sessionbar-hint {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-sessionbar-time {\n  flex: 0 0 auto;\n  padding-left: 10px;\n  border-left: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n/* ── 骨架 ───────────────────────────────────────────────────── */\n.ofs-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: grid;\n  /* 单轨创作面板 + 自适应预览区；视图切换与状态全部收在顶栏。 */\n  grid-template-columns: 320px minmax(0, 1fr);\n  grid-template-rows: minmax(0, 1fr);\n}\n\n.ofs-body.is-gallery {\n  grid-template-columns: minmax(0, 1fr);\n}\n\n.ofs-main {\n  position: relative;\n  min-width: 0;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  margin: 14px;\n}\n\n/* ── 右上角轻量通知区（瞬时反馈 + 非全局阻塞的可恢复异常） ──────────── */\n.ofs-toast-stack {\n  position: absolute;\n  top: 66px;\n  right: 16px;\n  z-index: 60;\n  display: flex;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 8px;\n  max-width: min(380px, calc(100% - 32px));\n  pointer-events: none;\n}\n\n.ofs-toast {\n  pointer-events: auto;\n  max-width: 100%;\n  padding: 9px 14px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 90%, transparent);\n  box-shadow: var(--ofs-shadow-lift);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  animation: ofs-toast-in 180ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-toast--notice {\n  display: flex;\n  align-items: flex-start;\n  gap: 9px;\n  width: 100%;\n  padding: 10px 12px;\n  border-color: color-mix(in oklab, var(--ofs-warn) 28%, transparent);\n  border-radius: 14px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 92%, var(--ofs-warn-soft));\n  white-space: normal;\n  overflow: visible;\n}\n\n.ofs-toast-icon {\n  display: grid;\n  place-items: center;\n  flex: 0 0 auto;\n  width: 24px;\n  height: 24px;\n  border-radius: 8px;\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  color: var(--ofs-warn);\n}\n\n.ofs-toast-body {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.ofs-toast-title {\n  margin: 0;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ofs-ink);\n  line-height: 1.4;\n}\n\n.ofs-toast-detail {\n  margin: 0;\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  line-height: 1.45;\n  overflow-wrap: anywhere;\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n  line-clamp: 2;\n  overflow: hidden;\n}\n\n.ofs-toast-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 5px;\n  margin-top: 2px;\n}\n\n.ofs-toast-actions .ofs-chip.is-on {\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);\n  color: var(--ofs-warn);\n}\n\n@keyframes ofs-toast-in {\n  from {\n    opacity: 0;\n    transform: translateY(-6px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\n";
 
 // src/styles/model-picker.css
 var model_picker_default = '/* 模型选择卡（ModelCardPicker） */\n.ofs-model-wrap {\n  position: relative;\n  flex: 0 0 auto;\n}\n\n.ofs-model {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 10px 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    color 160ms ease,\n    background-color 160ms ease;\n}\n\n.ofs-model:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-model:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-model[aria-expanded="true"] {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-model > svg {\n  flex: 0 0 auto;\n}\n\n.ofs-model.is-empty {\n  cursor: default;\n}\n\n.ofs-model-family {\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 4px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  color: var(--ofs-ink-2);\n  font-size: 10px;\n  font-weight: 650;\n  line-height: 1;\n  letter-spacing: .05em;\n}\n\n.ofs-model-now {\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  font-weight: 600;\n  line-height: 1;\n  letter-spacing: .01em;\n}\n\n.ofs-model-div {\n  width: 1px;\n  height: 12px;\n  background: var(--ofs-hairline);\n}\n\n.ofs-model-eta {\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 550;\n  line-height: 1;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-model-caret {\n  color: var(--ofs-ink-3);\n  transition: transform 180ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model[aria-expanded="true"] .ofs-model-caret {\n  transform: rotate(180deg);\n}\n\n/* 弹层：与云端状态弹层同构；列表自身滚动，头尾固定。 */\n.ofs-model-menu {\n  position: absolute;\n  top: calc(100% + 8px);\n  right: 0;\n  z-index: 40;\n  display: flex;\n  flex-direction: column;\n  width: min(380px, calc(100vw - 32px));\n  max-height: 420px;\n  padding: 8px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  animation: ofs-pop-in 160ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding: 4px 10px 9px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: .03em;\n}\n\n.ofs-model-head span:last-child {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 500;\n  letter-spacing: .02em;\n}\n\n.ofs-model-list {\n  flex: 1 1 auto;\n  min-height: 0;\n  max-height: 304px; /* 4 行 × 76px：避免截出半行，剩余模型用滚动查看 */\n  overflow-y: auto;\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 6px 0 0;\n  overscroll-behavior: contain;\n  scrollbar-gutter: stable;\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-model-list::-webkit-scrollbar {\n  width: 6px;\n}\n\n.ofs-model-list::-webkit-scrollbar-thumb {\n  border-radius: 3px;\n  background: var(--ofs-ink-4);\n}\n\n.ofs-model-option {\n  appearance: none;\n  display: grid;\n  grid-template-columns: 56px minmax(0, 1fr) auto;\n  align-items: center;\n  gap: 12px;\n  width: 100%;\n  padding: 9px 10px;\n  border: 1px solid transparent;\n  border-radius: 12px;\n  background: color-mix(in oklab, var(--ofs-sunken) 55%, transparent);\n  color: var(--ofs-ink);\n  text-align: left;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease;\n}\n\n.ofs-model-option:hover {\n  border-color: var(--ofs-hairline);\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-model-option.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-model-option:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-model-poster {\n  display: block;\n  width: 56px;\n  height: 56px;\n  overflow: hidden;\n  border: 1px solid var(--ofs-print-edge);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n}\n\n.ofs-model-poster img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n  filter: saturate(.96) brightness(.98);\n  transition:\n    filter 170ms ease,\n    transform 220ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model-option:hover .ofs-model-poster img {\n  filter: saturate(1.03) brightness(1.05);\n  transform: scale(1.03);\n}\n\n.ofs-model-poster-fallback {\n  display: grid;\n  place-items: center;\n  width: 100%;\n  height: 100%;\n  color: var(--ofs-ink-3);\n  font-size: 18px;\n  font-weight: 650;\n}\n\n.ofs-model-copy {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  min-width: 0;\n}\n\n.ofs-model-line {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-model-fam {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 4px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  color: var(--ofs-ink-3);\n  font-size: 9.5px;\n  font-weight: 650;\n  line-height: 1;\n  letter-spacing: .05em;\n}\n\n.ofs-model-option.is-on .ofs-model-fam {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-model-name {\n  overflow: hidden;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  font-weight: 600;\n  line-height: 1.3;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n.ofs-model-default {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 5px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink-2);\n  font-size: 10px;\n  font-weight: 600;\n  line-height: 1;\n}\n\n.ofs-model-lang {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 5px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  color: var(--ofs-ink-3);\n  font-size: 9.5px;\n  font-weight: 550;\n  line-height: 1;\n}\n\n.ofs-model-lang.is-zh {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-model-desc {\n  overflow: hidden;\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  line-height: 1.45;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n.ofs-model-spec {\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 500;\n  line-height: 1.4;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-model-side {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 4px;\n  min-width: 46px;\n}\n\n.ofs-model-option-eta {\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 550;\n  line-height: 1.2;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: .01em;\n  white-space: nowrap;\n}\n\n.ofs-model-option.is-on .ofs-model-option-eta {\n  color: var(--ofs-ink);\n  font-weight: 600;\n}\n\n.ofs-model-check {\n  display: grid;\n  place-items: center;\n  width: 16px;\n  height: 16px;\n  color: var(--ofs-accent);\n  opacity: 0;\n  transition: opacity 140ms ease;\n}\n\n.ofs-model-option.is-on .ofs-model-check {\n  opacity: 1;\n}\n\n.ofs-model-foot {\n  flex: 0 0 auto;\n  margin-top: 4px;\n  padding: 9px 10px 3px;\n  border-top: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11.5px;\n  font-weight: 500;\n  line-height: 1.5;\n  letter-spacing: .01em;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-model-menu {\n    animation: none;\n  }\n\n  .ofs-model,\n  .ofs-model-caret,\n  .ofs-model-option,\n  .ofs-model-poster img,\n  .ofs-model-check {\n    transition: none;\n  }\n}\n';
 
 // src/styles/guidance.css
-var guidance_default = '/* ── 异常指引 ───────────────────────────────────────────────── */\n.ofs-guidance {\n  display: flex;\n  align-items: flex-start;\n  gap: 10px;\n  margin: 12px 16px 0;\n  padding: 10px 12px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n  border-radius: 14px;\n  background: var(--ofs-warn-soft);\n  animation: ofs-fade-in 220ms ease;\n}\n\n.ofs-guidance-icon {\n  display: grid;\n  place-items: center;\n  flex: 0 0 auto;\n  width: 28px;\n  height: 28px;\n  border-radius: 9px;\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  color: var(--ofs-warn);\n}\n\n.ofs-guidance-body {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  min-width: 0;\n}\n\n.ofs-guidance-title {\n  font-size: 12.5px;\n  color: var(--ofs-ink);\n}\n\n.ofs-guidance-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-guidance-actions .ofs-chip.is-on {\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);\n  color: var(--ofs-warn);\n  text-decoration: none;\n}\n\n.ofs-guidance-detail {\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  overflow-wrap: anywhere;\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n  line-clamp: 2;\n  overflow: hidden;\n}\n\n/* 指引卡的可执行提示（Windows PATH、凭据文件位置、GPU 开启步骤）：不截断，允许换行。 */\n.ofs-guidance-note {\n  margin: 0;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.55;\n  overflow-wrap: anywhere;\n}\n\n.ofs-guidance-command {\n  display: inline-block;\n  max-width: 100%;\n  padding: 3px 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 8px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 70%, transparent);\n  color: var(--ofs-ink);\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  overflow-wrap: anywhere;\n}\n\n/* 直连登录的 manual 兜底：授权链接 + 复制按钮 + 授权码输入 + 行内校验错误。 */\n.ofs-guidance-manual {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  min-width: 0;\n}\n\n.ofs-guidance-url {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-guidance-code {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-guidance-code-input {\n  flex: 1 1 200px;\n  min-width: 0;\n  height: 30px;\n  font-size: 11.5px;\n}\n\n.ofs-guidance-code-error {\n  margin: 0;\n  color: var(--ofs-error);\n  font-size: 11px;\n  line-height: 1.5;\n}\n';
+var guidance_default = '/* ── 异常指引 ───────────────────────────────────────────────── */\n.ofs-guidance {\n  display: flex;\n  align-items: flex-start;\n  gap: 10px;\n  margin: 12px 16px 0;\n  padding: 10px 12px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n  border-radius: 14px;\n  background: var(--ofs-warn-soft);\n  animation: ofs-fade-in 220ms ease;\n}\n\n.ofs-guidance-icon {\n  display: grid;\n  place-items: center;\n  flex: 0 0 auto;\n  width: 28px;\n  height: 28px;\n  border-radius: 9px;\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  color: var(--ofs-warn);\n}\n\n.ofs-guidance-body {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  min-width: 0;\n}\n\n.ofs-guidance-title {\n  font-size: 12.5px;\n  color: var(--ofs-ink);\n}\n\n.ofs-guidance-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n/* ── 排队卡住提示（10 分钟档，非错误态）──────────────────────── */\n/* 沿用指引卡的布局，但色调更接近「等待」而不是「异常」，避免和真正的报错混淆。 */\n.ofs-queue-notice {\n  border-color: color-mix(in oklab, var(--ofs-warn) 18%, transparent);\n  background: color-mix(in oklab, var(--ofs-warn-soft) 72%, transparent);\n}\n\n.ofs-queue-notice .ofs-guidance-icon {\n  background: color-mix(in oklab, var(--ofs-warn) 12%, transparent);\n}\n\n.ofs-guidance-actions .ofs-chip.is-on {\n  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);\n  color: var(--ofs-warn);\n  text-decoration: none;\n}\n\n.ofs-guidance-detail {\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  overflow-wrap: anywhere;\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n  line-clamp: 2;\n  overflow: hidden;\n}\n\n/* 指引卡的可执行提示（Windows PATH、凭据文件位置、GPU 开启步骤）：不截断，允许换行。 */\n.ofs-guidance-note {\n  margin: 0;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.55;\n  overflow-wrap: anywhere;\n}\n\n.ofs-guidance-command {\n  display: inline-block;\n  max-width: 100%;\n  padding: 3px 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 8px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 70%, transparent);\n  color: var(--ofs-ink);\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  overflow-wrap: anywhere;\n}\n\n/* 直连登录的 manual 兜底：授权链接 + 复制按钮 + 授权码输入 + 行内校验错误。 */\n.ofs-guidance-manual {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  min-width: 0;\n}\n\n.ofs-guidance-url {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-guidance-code {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-guidance-code-input {\n  flex: 1 1 200px;\n  min-width: 0;\n  height: 30px;\n  font-size: 11.5px;\n}\n\n.ofs-guidance-code-error {\n  margin: 0;\n  color: var(--ofs-error);\n  font-size: 11px;\n  line-height: 1.5;\n}\n';
 
 // src/styles/drawers.css
 var drawers_default = '/* ── 右侧抽屉共用骨架（LogsDrawer / SettingsDrawer） ──────────── */\n.ofs-logs,\n.ofs-settings {\n  position: fixed;\n  inset: 0;\n  z-index: 100;\n  display: flex;\n  justify-content: flex-end;\n  background: rgb(16 16 18 / 38%);\n  backdrop-filter: blur(2px);\n  -webkit-backdrop-filter: blur(2px);\n  animation: ofs-fade-in 160ms ease;\n}\n\n.ofs-logs-panel,\n.ofs-settings-panel {\n  display: flex;\n  flex-direction: column;\n  height: 100%;\n  border-left: 1px solid var(--ofs-window-border);\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-window);\n  animation: ofs-slide-in 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-logs-panel {\n  width: min(560px, 100%);\n}\n\n/* 设置项是短表单，不需要日志那样的整屏宽度。 */\n.ofs-settings-panel {\n  width: min(440px, 100%);\n}\n\n.ofs-logs-head,\n.ofs-settings-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  padding: 12px 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-logs-head {\n  flex-wrap: wrap;\n}\n\n.ofs-logs-title,\n.ofs-settings-title {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n.ofs-logs-body,\n.ofs-settings-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-logs-body::-webkit-scrollbar,\n.ofs-settings-body::-webkit-scrollbar {\n  width: 8px;\n}\n\n.ofs-logs-body::-webkit-scrollbar-thumb,\n.ofs-settings-body::-webkit-scrollbar-thumb {\n  border: 2px solid transparent;\n  border-radius: 8px;\n  background: var(--ofs-ink-4);\n  background-clip: content-box;\n}\n\n.ofs-logs-note,\n.ofs-settings-note {\n  margin: 0;\n  padding: 18px 16px;\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n  line-height: 1.6;\n}\n\n@keyframes ofs-slide-in {\n  from {\n    opacity: 0;\n    transform: translateX(18px);\n  }\n  to {\n    opacity: 1;\n    transform: translateX(0);\n  }\n}\n\n/* ── 运行日志抽屉专属规则 ───────────────────────────────────── */\n/* 远端 / Host 双视图切换：紧凑胶囊，与 header 里的复制按钮同一视觉语言。 */\n.ofs-logs-tabs {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n}\n\n.ofs-logs-tab {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11.5px;\n}\n\n.ofs-logs-copy {\n  height: 30px;\n}\n\n.ofs-logs-body {\n  background: var(--ofs-sunken);\n}\n\n.ofs-logs-lines {\n  margin: 0;\n  padding: 14px 16px 22px;\n  color: var(--ofs-ink-2);\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  line-height: 1.65;\n  font-variant-numeric: tabular-nums;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.ofs-logs-note.is-warn {\n  color: var(--ofs-warn);\n}\n\n/* 自动兜底提示：远端没有日志、已切到 Host 本地日志时说明来源。 */\n.ofs-logs-fallback {\n  margin: 0;\n  padding: 9px 16px;\n  border-bottom: 1px solid color-mix(in oklab, var(--ofs-accent) 22%, transparent);\n  background: color-mix(in oklab, var(--ofs-accent) 10%, transparent);\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n/* ── 运行设置抽屉专属规则 ───────────────────────────────────── */\n/* 读取失败：不白屏，给原因 + 重试。 */\n.ofs-settings-error-state {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 10px;\n  padding: 18px 16px;\n}\n\n.ofs-settings-form {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 4px 16px 16px;\n}\n\n/* 生效提示：温和的暖色窄条，说明改动要等下次唤醒。 */\n.ofs-settings-effective {\n  margin: 10px 0 2px;\n  padding: 8px 10px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n  border-radius: 10px;\n  background: var(--ofs-warn-soft);\n  color: var(--ofs-warn);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n.ofs-settings-section {\n  display: flex;\n  flex-direction: column;\n  gap: 9px;\n  padding: 13px 0;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-settings-section:last-of-type {\n  border-bottom: 0;\n}\n\n.ofs-settings-section-title {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-settings-row {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ofs-settings-label {\n  font-size: 11.5px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-settings-quick {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-settings-quick-item {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11.5px;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-settings-field {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.ofs-settings-input,\n.ofs-settings-textarea {\n  width: 100%;\n  padding: 0 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-settings-input {\n  height: 32px;\n}\n\n.ofs-settings-textarea {\n  min-height: 66px;\n  padding: 8px 10px;\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-settings-input:focus-visible,\n.ofs-settings-textarea:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-settings-options {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n/* 加速器单选：原生 radio 收进 label 里，视觉仍是轻量卡片。 */\n.ofs-settings-option {\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 32px;\n  padding: 0 12px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-settings-option:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-settings-option input {\n  margin: 0;\n  accent-color: var(--ofs-accent);\n}\n\n.ofs-settings-option.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-settings-inline {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ofs-settings-muted {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-settings-clear {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11px;\n}\n\n/* 高级折叠头：一行标题 + 箭头，默认收起，不占表单纵向空间。 */\n.ofs-settings-advanced-toggle {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-settings-advanced-toggle:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-settings-advanced {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  padding-top: 9px;\n}\n\n.ofs-settings-hint {\n  font-size: 10.5px;\n  line-height: 1.5;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-settings-errors {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.ofs-settings-error-item {\n  color: var(--ofs-error);\n  font-size: 11px;\n  line-height: 1.5;\n  overflow-wrap: anywhere;\n}\n\n.ofs-settings-error {\n  margin: 0;\n  color: var(--ofs-error);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n/* 底部操作条：滚动时贴住抽屉底部，保存按钮始终可点。 */\n.ofs-settings-foot {\n  position: sticky;\n  bottom: 0;\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n  margin-top: 4px;\n  padding: 12px 0 4px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-settings-save {\n  height: 32px;\n  padding: 0 16px;\n  font-size: 12.5px;\n}\n';
@@ -4045,12 +4116,11 @@ function GuidanceCard(props) {
   const { t, guidance, compute, actions, ui } = props;
   const { kind, code: errorCode, detail, dismiss } = guidance;
   const { resetToSafe, retryFocusedJob } = actions;
-  const { startSession: startSession2, forceStartSession, runProbe: runProbe2, retryHost, session } = compute;
+  const { startSession: startSession2, requeueSession, runProbe: runProbe2, retryHost } = compute;
   const { copyInstallCommand, copyText, openLogs } = ui;
   const directMode = compute && compute.kaggleTransport === "direct";
   const login = compute && compute.kaggleLogin ? compute.kaggleLogin : null;
   const isQueueTimeout = kind === "session" && errorCode === "queue_timeout";
-  const kernelUrl = session && typeof session.kernelUrl === "string" && /^https:\/\/www\.kaggle\.com\//.test(session.kernelUrl) ? session.kernelUrl : "";
   if (!kind) return null;
   if (directMode && login && (kind === "auth" || kind === "cli")) {
     return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
@@ -4125,10 +4195,9 @@ function GuidanceCard(props) {
     session: isQueueTimeout ? {
       title: t("studio.guidance.session.title"),
       note: t("studio.guidance.queueTimeout.hint"),
+      // 45 分钟硬超时后排队已确定卡住：只给「换新实例重排」一个主操作。
       actions: [
-        { key: "continueQueue", label: t("studio.guidance.queueTimeout.continue"), run: startSession2 },
-        ...kernelUrl ? [{ key: "openKaggle", label: t("studio.guidance.queueTimeout.openKaggle"), href: kernelUrl }] : [],
-        { key: "forceNew", label: t("studio.guidance.queueTimeout.forceNew"), run: forceStartSession }
+        { key: "requeue", label: t("studio.guidance.queueTimeout.requeue"), run: requeueSession }
       ]
     } : {
       title: t("studio.guidance.session.title"),
@@ -4146,6 +4215,7 @@ function GuidanceCard(props) {
   const card = cards[kind] || cards.generic;
   const actionList = card.actions.filter((action) => action.href ? true : typeof action.run === "function");
   const hasSecondary = SECONDARY_KINDS.has(kind);
+  const canCopyDiagnostics = hasSecondary && !isQueueTimeout;
   function viewLogs(event) {
     if (typeof openLogs !== "function") return;
     openLogs(event && event.currentTarget ? event.currentTarget : null);
@@ -4203,7 +4273,7 @@ function GuidanceCard(props) {
           action.key
         )),
         hasSecondary ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("button", { type: "button", className: "ofs-chip", onClick: viewLogs, children: t("studio.guidance.viewLogs") }) : null,
-        hasSecondary ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("button", { type: "button", className: "ofs-chip", onClick: copyDiagnostics, children: t("studio.guidance.copyDiag") }) : null,
+        canCopyDiagnostics ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("button", { type: "button", className: "ofs-chip", onClick: copyDiagnostics, children: t("studio.guidance.copyDiag") }) : null,
         dismiss ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("button", { type: "button", className: "ofs-chip", onClick: dismiss, children: t("studio.guidance.close") }) : null
       ] })
     ] })
@@ -4504,8 +4574,29 @@ function LogsDrawer(props) {
   ) });
 }
 
+// src/studio/QueueNotice.jsx
+var import_react13 = __toESM(require("react"), 1);
+var import_jsx_runtime11 = require("react/jsx-runtime");
+function QueueNotice(props) {
+  const { t, notice } = props;
+  if (!notice) return null;
+  const minutes = Number.isFinite(notice.minutes) ? notice.minutes : 10;
+  const title = formatText(t("studio.queue.notice.title"), { minutes });
+  return /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-guidance ofs-queue-notice", role: "status", "aria-live": "polite", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-guidance-icon", children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "clock", size: 15 }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-guidance-body", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("p", { className: "ofs-guidance-title", children: title }),
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("p", { className: "ofs-guidance-note", children: t("studio.queue.notice.note") }),
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-guidance-actions", children: [
+        typeof notice.requeue === "function" ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: notice.requeue, children: t("studio.queue.notice.requeue") }) : null,
+        typeof notice.dismiss === "function" ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", className: "ofs-chip", onClick: notice.dismiss, children: t("studio.queue.notice.wait") }) : null
+      ] })
+    ] })
+  ] });
+}
+
 // src/studio/QueuePill.jsx
-var import_jsx_runtime11 = (
+var import_jsx_runtime12 = (
   // 不用 role="status"：窄屏上舞台进度胶囊已经在播报同一条进度，避免重复朗读。
   require("react/jsx-runtime")
 );
@@ -4515,15 +4606,15 @@ function QueuePill(props) {
   if (pendingJobs.length === 0) return null;
   const activeJob = compute.activeJob || pendingJobs[0];
   const waiting = pendingJobs.length - 1;
-  return /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-queue-pill", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("i", { className: "ofs-dot is-warn is-live", "aria-hidden": "true" }),
-    /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-queue-pill-label", children: jobProgressText(t, activeJob, compute.sessionState) }),
-    waiting > 0 ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-queue-pill-count", children: formatText(localized(t, "studio.queue.waiting"), { count: waiting }) }) : null
+  return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-queue-pill", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("i", { className: "ofs-dot is-warn is-live", "aria-hidden": "true" }),
+    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-queue-pill-label", children: jobProgressText(t, activeJob, compute.sessionState) }),
+    waiting > 0 ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-queue-pill-count", children: formatText(localized(t, "studio.queue.waiting"), { count: waiting }) }) : null
   ] });
 }
 
 // src/studio/Rail.jsx
-var import_react19 = __toESM(require("react"), 1);
+var import_react20 = __toESM(require("react"), 1);
 
 // src/logic/clamp.js
 function clampInt(value, min, max, fallback) {
@@ -4564,7 +4655,7 @@ function parseSeed(text) {
 }
 
 // src/studio/rail/FrameSection.jsx
-var import_react14 = __toESM(require("react"), 1);
+var import_react15 = __toESM(require("react"), 1);
 
 // src/studio/presets.js
 var RATIO_SPECS = {
@@ -4580,12 +4671,12 @@ function ratioToSize(ratio) {
 }
 
 // src/studio/rail/Fieldset.jsx
-var import_react13 = __toESM(require("react"), 1);
-var import_jsx_runtime12 = require("react/jsx-runtime");
+var import_react14 = __toESM(require("react"), 1);
+var import_jsx_runtime13 = require("react/jsx-runtime");
 function Fieldset(props) {
-  return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("section", { className: "ofs-fieldset", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-fieldset-head", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("h3", { children: props.title }),
+  return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("section", { className: "ofs-fieldset", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "ofs-fieldset-head", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("h3", { children: props.title }),
       props.action ? props.action : null
     ] }),
     props.children
@@ -4593,7 +4684,7 @@ function Fieldset(props) {
 }
 
 // src/studio/rail/FrameSection.jsx
-var import_jsx_runtime13 = require("react/jsx-runtime");
+var import_jsx_runtime14 = require("react/jsx-runtime");
 function sizeDraftOf(width, height) {
   return { width: String(clampSize(width)), height: String(clampSize(height)) };
 }
@@ -4608,16 +4699,16 @@ function FrameSection({
   hasReference,
   referenceSize
 }) {
-  const [sizeDraft, setSizeDraft] = import_react14.default.useState(() => sizeDraftOf(width, height));
-  const syncedSize = import_react14.default.useRef(void 0);
-  import_react14.default.useEffect(() => {
+  const [sizeDraft, setSizeDraft] = import_react15.default.useState(() => sizeDraftOf(width, height));
+  const syncedSize = import_react15.default.useRef(void 0);
+  import_react15.default.useEffect(() => {
     const previous = syncedSize.current;
     syncedSize.current = { width, height };
     if (!previous) return;
     if (previous.width === width && previous.height === height) return;
     setSizeDraft(sizeDraftOf(width, height));
   }, [width, height]);
-  const [customOpen, setCustomOpen] = import_react14.default.useState(false);
+  const [customOpen, setCustomOpen] = import_react15.default.useState(false);
   const onCustomSize = typeof applyCustomSize === "function" ? applyCustomSize : () => {
   };
   function updateSizeDraft(key, value) {
@@ -4638,15 +4729,15 @@ function FrameSection({
     { key: "width", label: t("studio.rail.width"), limits: LIMITS.width },
     { key: "height", label: t("studio.rail.height"), limits: LIMITS.height }
   ];
-  return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
     Fieldset,
     {
       title: t("studio.rail.frame"),
-      action: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-frame-readout", children: hasReference ? referenceSize ? `${referenceSize} · ${t("studio.rail.followReference")}` : t("studio.rail.followReference") : frameSizeText }),
-      children: hasReference ? null : /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(import_jsx_runtime13.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "ofs-frame-group", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-frame-label", children: t("studio.rail.ratio") }),
-          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "ofs-ratio-row", role: "group", "aria-label": t("studio.rail.ratio"), children: DEFAULT_RATIOS.map((ratio) => /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
+      action: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-frame-readout", children: hasReference ? referenceSize ? `${referenceSize} · ${t("studio.rail.followReference")}` : t("studio.rail.followReference") : frameSizeText }),
+      children: hasReference ? null : /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(import_jsx_runtime14.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "ofs-frame-group", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-frame-label", children: t("studio.rail.ratio") }),
+          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "ofs-ratio-row", role: "group", "aria-label": t("studio.rail.ratio"), children: DEFAULT_RATIOS.map((ratio) => /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
             "button",
             {
               type: "button",
@@ -4654,15 +4745,15 @@ function FrameSection({
               onClick: () => applyRatio(ratio.id),
               "aria-pressed": ratioId === ratio.id,
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: `ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(":", "-")}`, "aria-hidden": "true" }),
-                /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-ratio-label", children: ratio.id })
+                /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: `ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(":", "-")}`, "aria-hidden": "true" }),
+                /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-ratio-label", children: ratio.id })
               ]
             },
             ratio.id
           )) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "ofs-frame-group", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "ofs-frame-group", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
             "button",
             {
               type: "button",
@@ -4670,16 +4761,16 @@ function FrameSection({
               "aria-expanded": customOpen,
               onClick: () => setCustomOpen((open) => !open),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { children: t("studio.rail.customSize") }),
-                /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: customOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Icon, { name: "chevronDown", size: 14 }) })
+                /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { children: t("studio.rail.customSize") }),
+                /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: customOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Icon, { name: "chevronDown", size: 14 }) })
               ]
             }
           ),
-          customOpen ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "ofs-custom-body", children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "ofs-size-custom", children: sizeFields.map((item, index) => /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(import_react14.default.Fragment, { children: [
-            index > 0 ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-size-custom-times", "aria-hidden": "true", children: "×" }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("label", { className: "ofs-size-custom-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { children: item.label }),
-              /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+          customOpen ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "ofs-custom-body", children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "ofs-size-custom", children: sizeFields.map((item, index) => /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(import_react15.default.Fragment, { children: [
+            index > 0 ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-size-custom-times", "aria-hidden": "true", children: "×" }) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("label", { className: "ofs-size-custom-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { children: item.label }),
+              /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
                 "input",
                 {
                   type: "number",
@@ -4704,7 +4795,7 @@ function FrameSection({
 }
 
 // src/studio/rail/ParamsSection.jsx
-var import_react16 = __toESM(require("react"), 1);
+var import_react17 = __toESM(require("react"), 1);
 
 // shared/models-guide.js
 function effectiveCfgOf(preset, cfg) {
@@ -4752,7 +4843,7 @@ function safeResetPatch(preset) {
 }
 
 // src/components/Tooltip.jsx
-var import_react15 = __toESM(require("react"), 1);
+var import_react16 = __toESM(require("react"), 1);
 
 // src/logic/tooltip.js
 var GAP = 8;
@@ -4781,19 +4872,19 @@ function tooltipPlacement(input) {
 }
 
 // src/components/Tooltip.jsx
-var import_jsx_runtime14 = require("react/jsx-runtime");
+var import_jsx_runtime15 = require("react/jsx-runtime");
 var POPUP_MAX = 248;
 function Tooltip(props) {
   const { text, tone = "info", side = "top" } = props;
-  const [open, setOpen] = import_react15.default.useState(false);
-  const [pinned, setPinned] = import_react15.default.useState(false);
-  const [pos, setPos] = import_react15.default.useState(null);
-  const triggerRef = import_react15.default.useRef(null);
-  const close = import_react15.default.useCallback(() => {
+  const [open, setOpen] = import_react16.default.useState(false);
+  const [pinned, setPinned] = import_react16.default.useState(false);
+  const [pos, setPos] = import_react16.default.useState(null);
+  const triggerRef = import_react16.default.useRef(null);
+  const close = import_react16.default.useCallback(() => {
     setPinned(false);
     setOpen(false);
   }, []);
-  const measure = import_react15.default.useCallback(() => {
+  const measure = import_react16.default.useCallback(() => {
     const node = triggerRef.current;
     if (!node) return;
     const anchor = node.getBoundingClientRect();
@@ -4806,7 +4897,7 @@ function Tooltip(props) {
     }
     setPos(tooltipPlacement({ anchor, frame, width: POPUP_MAX, preferBelow: side === "bottom" }));
   }, [side]);
-  import_react15.default.useEffect(() => {
+  import_react16.default.useEffect(() => {
     if (!open) return void 0;
     measure();
     const remeasure = () => measure();
@@ -4822,7 +4913,7 @@ function Tooltip(props) {
       document.removeEventListener("keydown", onKey);
     };
   }, [open, measure, close]);
-  import_react15.default.useEffect(() => {
+  import_react16.default.useEffect(() => {
     if (!pinned) return void 0;
     const onDown = (event) => {
       const node = triggerRef.current;
@@ -4834,8 +4925,8 @@ function Tooltip(props) {
   }, [pinned, close]);
   if (!text) return null;
   const popupStyle = pos ? { left: `${pos.left}px`, top: `${pos.top}px`, maxWidth: `${pos.maxWidth}px` } : void 0;
-  return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("span", { className: `ofs-tip ofs-tip--${tone}${open ? " is-open" : ""}`, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { className: `ofs-tip ofs-tip--${tone}${open ? " is-open" : ""}`, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
       "button",
       {
         ref: triggerRef,
@@ -4859,15 +4950,15 @@ function Tooltip(props) {
             setOpen(true);
           }
         },
-        children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { "aria-hidden": "true", children: tone === "warn" ? "!" : "i" })
+        children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { "aria-hidden": "true", children: tone === "warn" ? "!" : "i" })
       }
     ),
-    open && pos ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { role: "tooltip", className: pos.below ? "ofs-tip-pop is-below" : "ofs-tip-pop", style: popupStyle, children: text }) : null
+    open && pos ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { role: "tooltip", className: pos.below ? "ofs-tip-pop is-below" : "ofs-tip-pop", style: popupStyle, children: text }) : null
   ] });
 }
 
 // src/studio/rail/ParamsSection.jsx
-var import_jsx_runtime15 = require("react/jsx-runtime");
+var import_jsx_runtime16 = require("react/jsx-runtime");
 function AdvancedParamsGrid({
   t,
   fields,
@@ -4883,19 +4974,19 @@ function AdvancedParamsGrid({
   const displayedSteps = stepMode === "fixed" && Number.isFinite(Number(activePreset?.steps)) ? Number(activePreset.steps) : Number(fields.steps) || 1;
   const onResetSeed = typeof resetSeed === "function" ? resetSeed : () => patchForm({ seed: "" });
   const onCfgChange = typeof applyCfg === "function" ? applyCfg : (value) => patchForm({ cfg: Number(value) });
-  return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-grid2", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-field ofs-field--wide", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-step-head", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { className: "ofs-field-label", children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-grid2", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-field ofs-field--wide", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-step-head", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { className: "ofs-field-label", children: [
           t("studio.steps"),
-          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Tooltip, { text: t(stepMode === "fixed" ? "studio.stepsFixedTooltip" : "studio.stepsTooltip") })
+          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Tooltip, { text: t(stepMode === "fixed" ? "studio.stepsFixedTooltip" : "studio.stepsTooltip") })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: stepMode === "fixed" ? "ofs-step-readout is-fixed" : "ofs-step-readout", children: formatText(t("studio.stepsReadout"), {
+        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: stepMode === "fixed" ? "ofs-step-readout is-fixed" : "ofs-step-readout", children: formatText(t("studio.stepsReadout"), {
           steps: displayedSteps,
           tier: t(`studio.stepsTier.${stepTier}`)
         }) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
         "input",
         {
           type: "range",
@@ -4909,7 +5000,7 @@ function AdvancedParamsGrid({
           onChange: (event) => patchForm({ steps: Number(event.target.value) })
         }
       ),
-      stepRange ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "ofs-step-ticks", children: ["fast", "balanced", "fine"].map((key) => /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+      stepRange ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "ofs-step-ticks", children: ["fast", "balanced", "fine"].map((key) => /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
         "button",
         {
           type: "button",
@@ -4920,12 +5011,12 @@ function AdvancedParamsGrid({
         key
       )) }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-field ofs-field--wide", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { className: "ofs-field-label", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-field ofs-field--wide", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { className: "ofs-field-label", children: [
         t("studio.cfg"),
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Tooltip, { text: t("studio.cfgTooltip") })
+        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Tooltip, { text: t("studio.cfgTooltip") })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
         "input",
         {
           type: "number",
@@ -4938,10 +5029,10 @@ function AdvancedParamsGrid({
         }
       )
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-field ofs-field--wide", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { children: t("studio.seed") }),
-      /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-seed-row", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-field ofs-field--wide", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { children: t("studio.seed") }),
+      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-seed-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
           "input",
           {
             type: "text",
@@ -4952,7 +5043,7 @@ function AdvancedParamsGrid({
             onChange: (event) => patchForm({ seed: event.target.value })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
           "button",
           {
             type: "button",
@@ -4988,15 +5079,15 @@ function ParamsSection({
     `CFG ${cfgValue}`,
     seedText ? `${t("studio.meta.seed")} ${seedText}` : t("studio.seed")
   ].join(" · ");
-  return /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
     Fieldset,
     {
       title: t("studio.rail.advanced"),
-      action: advancedOpen ? null : /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "ofs-row-readout", children: paramsReadout }),
-      children: /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-rows", children: [
-        showNegative ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: negativeOpen ? "ofs-row is-open" : "ofs-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-row-head", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
+      action: advancedOpen ? null : /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "ofs-row-readout", children: paramsReadout }),
+      children: /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-rows", children: [
+        showNegative ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: negativeOpen ? "ofs-row is-open" : "ofs-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-row-head", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
               "button",
               {
                 type: "button",
@@ -5004,14 +5095,14 @@ function ParamsSection({
                 onClick: () => setNegativeOpen((open) => !open),
                 "aria-expanded": negativeOpen,
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { children: t("studio.negative") }),
-                  /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: negativeOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Icon, { name: "chevronDown", size: 14 }) })
+                  /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { children: t("studio.negative") }),
+                  /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: negativeOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Icon, { name: "chevronDown", size: 14 }) })
                 ]
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Tooltip, { text: t("studio.negativeTooltip") })
+            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Tooltip, { text: t("studio.negativeTooltip") })
           ] }),
-          negativeOpen ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+          negativeOpen ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
             "textarea",
             {
               className: "ofs-row-textarea",
@@ -5023,8 +5114,8 @@ function ParamsSection({
             }
           ) : null
         ] }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: advancedOpen ? "ofs-row is-open" : "ofs-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "ofs-row-head", children: /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: advancedOpen ? "ofs-row is-open" : "ofs-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "ofs-row-head", children: /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
             "button",
             {
               type: "button",
@@ -5032,12 +5123,12 @@ function ParamsSection({
               onClick: toggleAdvanced,
               "aria-expanded": advancedOpen,
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { children: t("studio.rail.params") }),
-                /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: advancedOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Icon, { name: "chevronDown", size: 14 }) })
+                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { children: t("studio.rail.params") }),
+                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: advancedOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Icon, { name: "chevronDown", size: 14 }) })
               ]
             }
           ) }),
-          advancedOpen ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+          advancedOpen ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
             AdvancedParamsGrid,
             {
               t,
@@ -5056,8 +5147,8 @@ function ParamsSection({
 }
 
 // src/studio/rail/PromptSection.jsx
-var import_react17 = __toESM(require("react"), 1);
-var import_jsx_runtime16 = require("react/jsx-runtime");
+var import_react18 = __toESM(require("react"), 1);
+var import_jsx_runtime17 = require("react/jsx-runtime");
 var PROMPT_MAX = LIMITS.prompt.maxChars;
 function PromptSection({
   t,
@@ -5074,17 +5165,17 @@ function PromptSection({
   refineSource,
   toggleRefine
 }) {
-  const [refineOpen, setRefineOpen] = import_react17.default.useState(true);
+  const [refineOpen, setRefineOpen] = import_react18.default.useState(true);
   const promptLength = prompt.length;
   const hasPrompt = prompt.trim().length > 0;
-  return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
     Fieldset,
     {
       title: t("studio.prompt"),
-      action: /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Tooltip, { text: t("studio.promptTooltip") }),
+      action: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(Tooltip, { text: t("studio.promptTooltip") }),
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-composer", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-composer", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
             "textarea",
             {
               className: "ofs-composer-input",
@@ -5098,14 +5189,14 @@ function PromptSection({
               }
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-composer-foot", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { className: "ofs-counter", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-composer-foot", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("span", { className: "ofs-counter", children: [
               promptLength,
               " / ",
               PROMPT_MAX
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { className: "ofs-composer-actions", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("span", { className: "ofs-composer-actions", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
                 "button",
                 {
                   type: "button",
@@ -5116,17 +5207,17 @@ function PromptSection({
                   children: translating ? t("studio.translate.thinking") : t("studio.translate.button")
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("button", { type: "button", className: "ofs-text-action", onClick: enhance, disabled: enhancing || translating, children: [
-                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Icon, { name: "expandText", size: 13 }),
+              /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("button", { type: "button", className: "ofs-text-action", onClick: enhance, disabled: enhancing || translating, children: [
+                /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(Icon, { name: "expandText", size: 13 }),
                 enhancing ? t("studio.enhance.thinking") : t("studio.enhance.button")
               ] })
             ] })
           ] })
         ] }),
-        englishPromptHint ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("p", { className: "ofs-hint ofs-prompt-lang-hint", children: t("studio.prompt.englishHint") }) : null,
-        hasPrompt ? null : /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-inspire", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "ofs-inspire-label", children: t("studio.inspire.title") }),
-          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "ofs-suggestions", children: INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+        englishPromptHint ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("p", { className: "ofs-hint ofs-prompt-lang-hint", children: t("studio.prompt.englishHint") }) : null,
+        hasPrompt ? null : /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-inspire", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "ofs-inspire-label", children: t("studio.inspire.title") }),
+          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "ofs-suggestions", children: INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
             "button",
             {
               type: "button",
@@ -5138,12 +5229,12 @@ function PromptSection({
             key
           )) })
         ] }),
-        refineGroups.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-refine", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-refine-head", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { children: t("studio.refine.title") }),
-            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { className: "ofs-refine-head-actions", children: [
-              refineSource === "local" ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "ofs-muted", children: t("studio.enhance.local") }) : null,
-              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+        refineGroups.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-refine", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-refine-head", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { children: t("studio.refine.title") }),
+            /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("span", { className: "ofs-refine-head-actions", children: [
+              refineSource === "local" ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "ofs-muted", children: t("studio.enhance.local") }) : null,
+              /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
                 "button",
                 {
                   type: "button",
@@ -5155,9 +5246,9 @@ function PromptSection({
               )
             ] })
           ] }),
-          refineOpen ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(import_jsx_runtime16.Fragment, { children: refineGroups.map((group) => /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-refine-group", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "ofs-refine-dim", children: t(`studio.refine.${group.dimension}`) }),
-            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "ofs-suggestions", children: group.options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+          refineOpen ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(import_jsx_runtime17.Fragment, { children: refineGroups.map((group) => /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-refine-group", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "ofs-refine-dim", children: t(`studio.refine.${group.dimension}`) }),
+            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "ofs-suggestions", children: group.options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
               "button",
               {
                 type: "button",
@@ -5177,7 +5268,7 @@ function PromptSection({
 }
 
 // src/studio/rail/ReferenceSection.jsx
-var import_react18 = __toESM(require("react"), 1);
+var import_react19 = __toESM(require("react"), 1);
 
 // src/logic/prompt.js
 var NEGATIVE_LAYER_ORDER = ["model", "user"];
@@ -5397,7 +5488,7 @@ function retryOverrides(source) {
 }
 
 // src/studio/rail/ReferenceSection.jsx
-var import_jsx_runtime17 = require("react/jsx-runtime");
+var import_jsx_runtime18 = require("react/jsx-runtime");
 function ReferenceSection({
   t,
   referenceImage,
@@ -5413,22 +5504,22 @@ function ReferenceSection({
   };
   const onStrengthChange = typeof applyStrength === "function" ? applyStrength : () => {
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
     Fieldset,
     {
       title: t("studio.reference.title"),
-      action: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("button", { type: "button", className: "ofs-text-action ofs-reference-remove", onClick: onRemoveReference, children: t("studio.reference.remove") }),
+      action: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("button", { type: "button", className: "ofs-text-action ofs-reference-remove", onClick: onRemoveReference, children: t("studio.reference.remove") }),
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: referenceBlocked ? "ofs-reference is-unsupported" : "ofs-reference", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "ofs-reference-thumb", children: referenceImage.url ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("img", { src: referenceImage.url, alt: referenceName || t("studio.reference.title"), loading: "lazy" }) : /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(Icon, { name: "image", size: 18 }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-reference-meta", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "ofs-reference-name", title: referenceName || void 0, children: referenceName || "—" }),
-            /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("label", { className: "ofs-reference-strength", title: t("studio.reference.hint"), children: [
-              /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("span", { className: "ofs-reference-strength-head", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: referenceBlocked ? "ofs-reference is-unsupported" : "ofs-reference", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "ofs-reference-thumb", children: referenceImage.url ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("img", { src: referenceImage.url, alt: referenceName || t("studio.reference.title"), loading: "lazy" }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Icon, { name: "image", size: 18 }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-reference-meta", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "ofs-reference-name", title: referenceName || void 0, children: referenceName || "—" }),
+            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("label", { className: "ofs-reference-strength", title: t("studio.reference.hint"), children: [
+              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "ofs-reference-strength-head", children: [
                 t("studio.reference.strength"),
-                /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("b", { children: strengthValue.toFixed(2) })
+                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("b", { children: strengthValue.toFixed(2) })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
                 "input",
                 {
                   type: "range",
@@ -5445,14 +5536,14 @@ function ReferenceSection({
             ] })
           ] })
         ] }),
-        referenceBlocked ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("p", { className: "ofs-hint ofs-reference-warn", children: t("studio.reference.unsupported") }) : null
+        referenceBlocked ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "ofs-hint ofs-reference-warn", children: t("studio.reference.unsupported") }) : null
       ]
     }
   );
 }
 
 // src/studio/Rail.jsx
-var import_jsx_runtime18 = require("react/jsx-runtime");
+var import_jsx_runtime19 = require("react/jsx-runtime");
 function finiteSize(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? Math.round(number) : null;
@@ -5513,10 +5604,10 @@ function Rail(props) {
     `${countValue} ${t("unit.image")}`
   ];
   if (referenceImage) specParts.push(t("studio.reference.title"));
-  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("aside", { className: "ofs-panel ofs-panel--form", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(PanelModeTabs, { t, mode, setMode }),
-    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-panel-scroll", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("aside", { className: "ofs-panel ofs-panel--form", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(PanelModeTabs, { t, mode, setMode }),
+    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "ofs-panel-scroll", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         PromptSection,
         {
           t,
@@ -5534,7 +5625,7 @@ function Rail(props) {
           toggleRefine
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         ReferenceSection,
         {
           t,
@@ -5545,7 +5636,7 @@ function Rail(props) {
           removeReference
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         FrameSection,
         {
           t,
@@ -5559,7 +5650,7 @@ function Rail(props) {
           referenceSize
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         ParamsSection,
         {
           t,
@@ -5577,10 +5668,10 @@ function Rail(props) {
         }
       )
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-panel-foot", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-qty-row", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "ofs-qty-label", children: t("studio.countShort") }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "ofs-qty", role: "group", "aria-label": t("studio.count"), children: COUNT_OPTIONS.map((value) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "ofs-panel-foot", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "ofs-qty-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "ofs-qty-label", children: t("studio.countShort") }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "ofs-qty", role: "group", "aria-label": t("studio.count"), children: COUNT_OPTIONS.map((value) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "button",
           {
             type: "button",
@@ -5592,7 +5683,7 @@ function Rail(props) {
           value
         )) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "button",
         {
           type: "button",
@@ -5600,33 +5691,33 @@ function Rail(props) {
           onClick: () => generate(),
           disabled: sending || !hasPrompt,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Icon, { name: "sparkles", size: 16 }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Icon, { name: "sparkles", size: 16 }),
             sending ? t("studio.generating") : t("studio.generate")
           ]
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "ofs-hint ofs-spec-summary", children: specParts.join(" · ") })
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "ofs-hint ofs-spec-summary", children: specParts.join(" · ") })
     ] })
   ] });
 }
 
 // src/studio/SessionBar.jsx
-var import_jsx_runtime19 = require("react/jsx-runtime");
+var import_jsx_runtime20 = require("react/jsx-runtime");
 function SessionBar(props) {
   const { t, status, elapsedMs } = props;
   if (!status || status.transient !== true) return null;
   const showElapsed = status.starting && Number.isFinite(elapsedMs) && elapsedMs > 0;
-  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: `ofs-sessionbar is-${status.tone}`, role: "status", "aria-live": "polite", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: `ofs-sessionbar is-${status.tone}`, role: "status", "aria-live": "polite", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
       "i",
       {
         className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`,
         "aria-hidden": "true"
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("b", { className: "ofs-sessionbar-label", children: status.label }),
-    status.hint ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "ofs-sessionbar-hint", title: status.hint, children: status.hint }) : null,
-    showElapsed ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "ofs-sessionbar-time", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("b", { className: "ofs-sessionbar-label", children: status.label }),
+    status.hint ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "ofs-sessionbar-hint", title: status.hint, children: status.hint }) : null,
+    showElapsed ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("span", { className: "ofs-sessionbar-time", children: [
       t("studio.session.elapsed"),
       " ",
       formatDuration(t, elapsedMs)
@@ -5635,10 +5726,10 @@ function SessionBar(props) {
 }
 
 // src/studio/SettingsDrawer.jsx
-var import_react22 = __toESM(require("react"), 1);
+var import_react23 = __toESM(require("react"), 1);
 
 // src/studio/settings/SettingsForm.jsx
-var import_react21 = __toESM(require("react"), 1);
+var import_react22 = __toESM(require("react"), 1);
 
 // src/logic/settings.js
 var IDLE = SETTINGS.idleTimeoutSec;
@@ -5820,8 +5911,8 @@ function hfTokenSourceKey(source) {
 }
 
 // src/studio/settings/SettingsAdvancedSection.jsx
-var import_react20 = __toESM(require("react"), 1);
-var import_jsx_runtime20 = require("react/jsx-runtime");
+var import_react21 = __toESM(require("react"), 1);
+var import_jsx_runtime21 = require("react/jsx-runtime");
 function SettingsAdvancedSection({
   t,
   form,
@@ -5830,8 +5921,8 @@ function SettingsAdvancedSection({
   onToggleAdvanced,
   validationErrors
 }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("section", { className: "ofs-settings-section", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("section", { className: "ofs-settings-section", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
       "button",
       {
         type: "button",
@@ -5839,26 +5930,26 @@ function SettingsAdvancedSection({
         "aria-expanded": advancedOpen,
         onClick: onToggleAdvanced,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { children: t("studio.settings.advanced.toggle") }),
-          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: `ofs-chevron${advancedOpen ? " is-open" : ""}`, children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(Icon, { name: "chevronDown", size: 13 }) })
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: t("studio.settings.advanced.toggle") }),
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: `ofs-chevron${advancedOpen ? " is-open" : ""}`, children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Icon, { name: "chevronDown", size: 13 }) })
         ]
       }
     ),
-    advancedOpen ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "ofs-settings-advanced", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "ofs-settings-row", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.kaggleTransport.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+    advancedOpen ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ofs-settings-advanced", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ofs-settings-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.kaggleTransport.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
           "div",
           {
             className: "ofs-settings-options",
             role: "radiogroup",
             "aria-label": t("studio.settings.kaggleTransport.label"),
-            children: SETTINGS.kaggleTransports.map((transport) => /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+            children: SETTINGS.kaggleTransports.map((transport) => /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
               "label",
               {
                 className: `ofs-settings-option${form.kaggleTransport === transport ? " is-on" : ""}`,
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
                     "input",
                     {
                       type: "radio",
@@ -5868,20 +5959,20 @@ function SettingsAdvancedSection({
                       onChange: () => patchForm({ kaggleTransport: transport })
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { children: t(kaggleTransportLabelKey(transport)) })
+                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: t(kaggleTransportLabelKey(transport)) })
                 ]
               },
               transport
             ))
           }
         ),
-        form.kaggleTransport === "direct" ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("small", { className: "ofs-settings-hint", children: formatText(t("studio.settings.kaggleTransport.directHint"), {
+        form.kaggleTransport === "direct" ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("small", { className: "ofs-settings-hint", children: formatText(t("studio.settings.kaggleTransport.directHint"), {
           path: KAGGLE_CREDENTIAL_PATH
         }) }) : null
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("label", { className: "ofs-settings-field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.dataset.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("label", { className: "ofs-settings-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.dataset.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
           "textarea",
           {
             className: "ofs-settings-textarea",
@@ -5891,11 +5982,11 @@ function SettingsAdvancedSection({
             onChange: (event) => patchForm({ datasetSourcesText: event.target.value })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("small", { className: "ofs-settings-hint", children: formatText(t("studio.settings.dataset.hint"), { max: SETTINGS.maxItems }) })
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("small", { className: "ofs-settings-hint", children: formatText(t("studio.settings.dataset.hint"), { max: SETTINGS.maxItems }) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("label", { className: "ofs-settings-field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.localModels.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("label", { className: "ofs-settings-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.localModels.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
           "textarea",
           {
             className: "ofs-settings-textarea",
@@ -5905,12 +5996,12 @@ function SettingsAdvancedSection({
             onChange: (event) => patchForm({ localModelsText: event.target.value })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("small", { className: "ofs-settings-hint", children: t("studio.settings.localModels.hint") })
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("small", { className: "ofs-settings-hint", children: t("studio.settings.localModels.hint") })
       ] }),
-      validationErrors.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("ul", { className: "ofs-settings-errors", children: validationErrors.map((error) => /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("li", { className: "ofs-settings-error-item", children: formatText(t(error.message), { line: error.line, ...error.params || {} }) }, `${error.line}-${error.message}`)) }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("label", { className: "ofs-settings-field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.pip.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+      validationErrors.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("ul", { className: "ofs-settings-errors", children: validationErrors.map((error) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("li", { className: "ofs-settings-error-item", children: formatText(t(error.message), { line: error.line, ...error.params || {} }) }, `${error.line}-${error.message}`)) }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("label", { className: "ofs-settings-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.pip.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
           "textarea",
           {
             className: "ofs-settings-textarea",
@@ -5920,14 +6011,14 @@ function SettingsAdvancedSection({
             onChange: (event) => patchForm({ pipConstraintsText: event.target.value })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("small", { className: "ofs-settings-hint", children: t("studio.settings.pip.hint") })
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("small", { className: "ofs-settings-hint", children: t("studio.settings.pip.hint") })
       ] })
     ] }) : null
   ] });
 }
 
 // src/studio/settings/SettingsForm.jsx
-var import_jsx_runtime21 = require("react/jsx-runtime");
+var import_jsx_runtime22 = require("react/jsx-runtime");
 function SettingsForm({
   t,
   view,
@@ -5944,13 +6035,13 @@ function SettingsForm({
   onSubmit
 }) {
   const activeQuick = quickIdleMinutes(form.idleMinutes);
-  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ofs-settings-form", children: [
-    view && view.effectiveOnNextSession === true ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { className: "ofs-settings-effective", role: "status", children: t("studio.settings.effectiveNext") }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("section", { className: "ofs-settings-section", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("h3", { className: "ofs-settings-section-title", children: t("studio.settings.section.runtime") }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ofs-settings-row", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.idle.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "ofs-settings-quick", role: "group", "aria-label": t("studio.settings.idle.label"), children: SETTINGS.idleTimeoutSec.quickMinutes.map((minutes) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-form", children: [
+    view && view.effectiveOnNextSession === true ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "ofs-settings-effective", role: "status", children: t("studio.settings.effectiveNext") }) : null,
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("section", { className: "ofs-settings-section", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("h3", { className: "ofs-settings-section-title", children: t("studio.settings.section.runtime") }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.idle.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { className: "ofs-settings-quick", role: "group", "aria-label": t("studio.settings.idle.label"), children: SETTINGS.idleTimeoutSec.quickMinutes.map((minutes) => /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           "button",
           {
             type: "button",
@@ -5962,9 +6053,9 @@ function SettingsForm({
           minutes
         )) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("label", { className: "ofs-settings-field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: formatText(t("studio.settings.idle.custom"), { min: IDLE_MIN_MINUTES, max: IDLE_MAX_MINUTES }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("label", { className: "ofs-settings-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: formatText(t("studio.settings.idle.custom"), { min: IDLE_MIN_MINUTES, max: IDLE_MAX_MINUTES }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           "input",
           {
             className: "ofs-settings-input",
@@ -5978,14 +6069,14 @@ function SettingsForm({
           }
         )
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ofs-settings-row", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.accelerator.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "ofs-settings-options", role: "radiogroup", "aria-label": t("studio.settings.accelerator.label"), children: SETTINGS.accelerators.map((id) => /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.accelerator.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { className: "ofs-settings-options", role: "radiogroup", "aria-label": t("studio.settings.accelerator.label"), children: SETTINGS.accelerators.map((id) => /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
           "label",
           {
             className: `ofs-settings-option${form.accelerator === id ? " is-on" : ""}`,
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                 "input",
                 {
                   type: "radio",
@@ -5995,18 +6086,18 @@ function SettingsForm({
                   onChange: () => patchForm({ accelerator: id })
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: t(`studio.settings.accelerator.${id}`) })
+              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { children: t(`studio.settings.accelerator.${id}`) })
             ]
           },
           id
         )) })
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("section", { className: "ofs-settings-section", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("h3", { className: "ofs-settings-section-title", children: t("studio.settings.section.download") }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("label", { className: "ofs-settings-field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.hfToken.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("section", { className: "ofs-settings-section", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("h3", { className: "ofs-settings-section-title", children: t("studio.settings.section.download") }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("label", { className: "ofs-settings-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.hfToken.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           "input",
           {
             className: "ofs-settings-input",
@@ -6018,9 +6109,9 @@ function SettingsForm({
           }
         )
       ] }),
-      view && view.hasHfToken === true ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ofs-settings-inline", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-muted", children: formatText(t("studio.settings.hfToken.source"), { source: tokenSource }) }),
-        form.clearHfToken ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-muted", children: t("studio.settings.hfToken.clearPending") }) : /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+      view && view.hasHfToken === true ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-inline", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-muted", children: formatText(t("studio.settings.hfToken.source"), { source: tokenSource }) }),
+        form.clearHfToken ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-muted", children: t("studio.settings.hfToken.clearPending") }) : /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           "button",
           {
             type: "button",
@@ -6031,7 +6122,7 @@ function SettingsForm({
         )
       ] }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
       SettingsAdvancedSection,
       {
         t,
@@ -6042,12 +6133,12 @@ function SettingsForm({
         validationErrors: validation.errors
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("footer", { className: "ofs-settings-foot", children: [
-      !validation.ok ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { className: "ofs-settings-error", role: "alert", children: formatText(t("studio.settings.invalid"), { count: validation.errors.length }) }) : null,
-      saveError ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { className: "ofs-settings-error", role: "alert", children: settingsErrorText(t, saveError) }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-grow" }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", className: "ofs-chip", onClick: onCancel, children: t("studio.settings.cancel") }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("footer", { className: "ofs-settings-foot", children: [
+      !validation.ok ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "ofs-settings-error", role: "alert", children: formatText(t("studio.settings.invalid"), { count: validation.errors.length }) }) : null,
+      saveError ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "ofs-settings-error", role: "alert", children: settingsErrorText(t, saveError) }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-grow" }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", className: "ofs-chip", onClick: onCancel, children: t("studio.settings.cancel") }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
         "button",
         {
           type: "button",
@@ -6063,23 +6154,23 @@ function SettingsForm({
 }
 
 // src/studio/SettingsDrawer.jsx
-var import_jsx_runtime22 = require("react/jsx-runtime");
+var import_jsx_runtime23 = require("react/jsx-runtime");
 function SettingsDrawer(props) {
   const { t, ui, onClose } = props;
   const { defaultAdvancedOpen, defaultDraft } = props;
-  const panelRef = import_react22.default.useRef(null);
-  const closeRef = import_react22.default.useRef(null);
-  const onCloseRef = import_react22.default.useRef(onClose);
+  const panelRef = import_react23.default.useRef(null);
+  const closeRef = import_react23.default.useRef(null);
+  const onCloseRef = import_react23.default.useRef(onClose);
   onCloseRef.current = onClose;
-  const [status, setStatus] = import_react22.default.useState("loading");
-  const [view, setView] = import_react22.default.useState(null);
-  const [form, setForm] = import_react22.default.useState(null);
-  const [loadError, setLoadError] = import_react22.default.useState(null);
-  const [saveError, setSaveError] = import_react22.default.useState(null);
-  const [saving, setSaving] = import_react22.default.useState(false);
-  const [advancedOpen, setAdvancedOpen] = import_react22.default.useState(Boolean(defaultAdvancedOpen));
-  const [reloadKey, setReloadKey] = import_react22.default.useState(0);
-  import_react22.default.useEffect(() => {
+  const [status, setStatus] = import_react23.default.useState("loading");
+  const [view, setView] = import_react23.default.useState(null);
+  const [form, setForm] = import_react23.default.useState(null);
+  const [loadError, setLoadError] = import_react23.default.useState(null);
+  const [saveError, setSaveError] = import_react23.default.useState(null);
+  const [saving, setSaving] = import_react23.default.useState(false);
+  const [advancedOpen, setAdvancedOpen] = import_react23.default.useState(Boolean(defaultAdvancedOpen));
+  const [reloadKey, setReloadKey] = import_react23.default.useState(0);
+  import_react23.default.useEffect(() => {
     let alive = true;
     setStatus("loading");
     setLoadError(null);
@@ -6125,15 +6216,15 @@ function SettingsDrawer(props) {
     setSaveError({ code: result && result.code || "internal_error", message: result && result.message || "" });
   }
   function renderLoadError() {
-    return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-error-state", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("p", { className: "ofs-settings-error", role: "alert", children: [
+    return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-settings-error-state", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("p", { className: "ofs-settings-error", role: "alert", children: [
         t("studio.settings.loadFailed"),
         loadError && (loadError.code || loadError.message) ? ` · ${settingsErrorText(t, loadError)}` : ""
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", className: "ofs-chip", onClick: () => setReloadKey((value) => value + 1), children: t("studio.settings.retry") })
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-chip", onClick: () => setReloadKey((value) => value + 1), children: t("studio.settings.retry") })
     ] });
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { className: "ofs-settings", role: "presentation", onClick: () => onCloseRef.current && onCloseRef.current(), children: /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "ofs-settings", role: "presentation", onClick: () => onCloseRef.current && onCloseRef.current(), children: /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
     "div",
     {
       className: "ofs-settings-panel",
@@ -6143,10 +6234,10 @@ function SettingsDrawer(props) {
       ref: panelRef,
       onClick: (event) => event.stopPropagation(),
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("header", { className: "ofs-settings-head", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-title", children: t("studio.settings.title") }),
-          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-grow" }),
-          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("header", { className: "ofs-settings-head", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-settings-title", children: t("studio.settings.title") }),
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-grow" }),
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
             "button",
             {
               ref: closeRef,
@@ -6155,14 +6246,14 @@ function SettingsDrawer(props) {
               onClick: () => onCloseRef.current && onCloseRef.current(),
               title: t("studio.settings.close"),
               "aria-label": t("studio.settings.close"),
-              children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Icon, { name: "close", size: 16 })
+              children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "close", size: 16 })
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-body", children: [
-          status === "loading" ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "ofs-settings-note", children: t("studio.settings.loading") }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-settings-body", children: [
+          status === "loading" ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-settings-note", children: t("studio.settings.loading") }) : null,
           status === "error" ? renderLoadError() : null,
-          status === "ready" && form ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+          status === "ready" && form ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
             SettingsForm,
             {
               t,
@@ -6187,8 +6278,8 @@ function SettingsDrawer(props) {
 }
 
 // src/studio/Stage.jsx
-var import_react23 = __toESM(require("react"), 1);
-var import_jsx_runtime23 = require("react/jsx-runtime");
+var import_react24 = __toESM(require("react"), 1);
+var import_jsx_runtime24 = require("react/jsx-runtime");
 var FRESH_MS = 6e4;
 function isFreshItem(item, now) {
   const finishedAt = Date.parse(String(item && item.finishedAt || ""));
@@ -6215,9 +6306,9 @@ function Stage(props) {
   const item = selected && selected.item || null;
   const params = item && item.params || null;
   const prompt = item && typeof item.prompt === "string" && item.prompt || params && typeof params.prompt === "string" && params.prompt || "";
-  const closeRef = import_react23.default.useRef(null);
-  const lightboxRef = import_react23.default.useRef(null);
-  const zoomOpenerRef = import_react23.default.useRef(null);
+  const closeRef = import_react24.default.useRef(null);
+  const lightboxRef = import_react24.default.useRef(null);
+  const zoomOpenerRef = import_react24.default.useRef(null);
   function openZoom() {
     zoomOpenerRef.current = document.activeElement || null;
     setZoom(true);
@@ -6236,33 +6327,33 @@ function Stage(props) {
     const frameRatio = ratioOf(jobParams.width || fields.width, jobParams.height || fields.height);
     const preset = (compute.presets || []).find((option) => option && option.id === fields.presetId) || null;
     const steady = preset && Number.isFinite(Number(preset.steadySeconds)) ? Number(preset.steadySeconds) : null;
-    return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("section", { className: "ofs-stage", children: /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-figure ofs-figure--empty", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-frame", style: { "--ofs-frame-r": String(frameRatio) }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("span", { className: "ofs-marks", "aria-hidden": "true", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {})
+    return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("section", { className: "ofs-stage", children: /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-figure ofs-figure--empty", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-frame", style: { "--ofs-frame-r": String(frameRatio) }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { className: "ofs-marks", "aria-hidden": "true", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", {})
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "ofs-frame-body", children: activeJob ? null : /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-empty-card", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.empty") }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-muted", children: stopped ? t("studio.stage.stoppedHint") : t("studio.stage.emptyHint") }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-examples", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
-            INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "ofs-frame-body", children: activeJob ? null : /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-empty-card", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.empty") }),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "ofs-muted", children: stopped ? t("studio.stage.stoppedHint") : t("studio.stage.emptyHint") }),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-examples", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
+            INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
           ] }),
-          steady !== null ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("p", { className: "ofs-exposure", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" }),
+          steady !== null ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("p", { className: "ofs-exposure", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" }),
             t("studio.stage.steady"),
             " ",
             formatSeconds(t, steady),
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" })
+            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" })
           ] }) : null
         ] }) })
       ] }),
-      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-stage-progress is-inside", role: "status", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-progress-label", children: progressText })
+      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-stage-progress is-inside", role: "status", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "ofs-progress-label", children: progressText })
       ] }) : null
     ] }) });
   }
@@ -6271,9 +6362,9 @@ function Stage(props) {
   const imageKey = image.path || image.file || image.url;
   const printRatio = ratioOf(image.width, image.height);
   const developing = isFreshItem(item, now);
-  return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("section", { className: "ofs-stage", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("figure", { className: "ofs-figure", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("section", { className: "ofs-stage", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("figure", { className: "ofs-figure", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
         "button",
         {
           type: "button",
@@ -6281,14 +6372,14 @@ function Stage(props) {
           style: { "--ofs-print-r": String(printRatio) },
           onClick: openZoom,
           title: t("studio.stage.zoom"),
-          children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("img", { src: image.url, alt: prompt || image.file || t("studio.image.alt"), className: "ofs-image" })
+          children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("img", { src: image.url, alt: prompt || image.file || t("studio.image.alt"), className: "ofs-image" })
         },
         imageKey
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-figure-tools", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: openZoom, title: t("studio.stage.zoom"), "aria-label": t("studio.stage.zoom"), children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "expand", size: 16 }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: () => copyPath(copyTarget), title: t("studio.action.copyPath"), "aria-label": t("studio.action.copyPath"), children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "copy", size: 16 }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-figure-tools", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: openZoom, title: t("studio.stage.zoom"), "aria-label": t("studio.stage.zoom"), children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: "expand", size: 16 }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: () => copyPath(copyTarget), title: t("studio.action.copyPath"), "aria-label": t("studio.action.copyPath"), children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: "copy", size: 16 }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
           "button",
           {
             type: "button",
@@ -6297,48 +6388,48 @@ function Stage(props) {
             title: favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
             "aria-label": favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
             "aria-pressed": favorite,
-            children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: favorite ? "starFilled" : "star", size: 16 })
+            children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: favorite ? "starFilled" : "star", size: 16 })
           }
         )
       ] }),
-      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-stage-progress", role: "status", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-progress-label", children: progressText })
+      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-stage-progress", role: "status", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "ofs-progress-label", children: progressText })
       ] }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-stage-foot", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-stage-prompt", title: prompt || void 0, children: prompt }),
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-stage-meta", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("span", { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-stage-foot", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "ofs-stage-prompt", title: prompt || void 0, children: prompt }),
+      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-stage-meta", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { children: [
           image.width || "—",
           " × ",
           image.height || "—"
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { "aria-hidden": "true", children: "·" }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { children: formatSeconds(t, image.seconds) }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { "aria-hidden": "true", children: "·" }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("span", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { "aria-hidden": "true", children: "·" }),
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { children: formatSeconds(t, image.seconds) }),
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { "aria-hidden": "true", children: "·" }),
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { children: [
           t("studio.meta.seed"),
           " ",
           image.seed ?? "—"
         ] })
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-dock", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => iterate(selected), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "focus", size: 15 }),
+    /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-dock", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => iterate(selected), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: "focus", size: 15 }),
         t("studio.action.iterate")
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => reroll(selected), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "reroll", size: 15 }),
+      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => reroll(selected), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: "reroll", size: 15 }),
         t("studio.action.reroll")
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => copyPath(copyTarget), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "copy", size: 15 }),
+      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => copyPath(copyTarget), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: "copy", size: 15 }),
         t("studio.action.copyPath")
       ] })
     ] }),
-    zoom ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
+    zoom ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
       "div",
       {
         className: "ofs-lightbox",
@@ -6348,7 +6439,7 @@ function Stage(props) {
         ref: lightboxRef,
         onClick: () => setZoom(false),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
             "img",
             {
               src: image.url,
@@ -6356,7 +6447,7 @@ function Stage(props) {
               onClick: (event) => event.stopPropagation()
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
             "button",
             {
               ref: closeRef,
@@ -6364,10 +6455,10 @@ function Stage(props) {
               className: "ofs-lightbox-close",
               onClick: () => setZoom(false),
               "aria-label": t("studio.stage.close"),
-              children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "close", size: 16 })
+              children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: "close", size: 16 })
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
             "button",
             {
               type: "button",
@@ -6377,7 +6468,7 @@ function Stage(props) {
                 if (typeof referenceImage === "function") referenceImage(selected);
               },
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "image", size: 15 }),
+                /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: "image", size: 15 }),
                 t("studio.action.reference")
               ]
             }
@@ -6389,8 +6480,8 @@ function Stage(props) {
 }
 
 // src/studio/Toast.jsx
-var import_react24 = __toESM(require("react"), 1);
-var import_jsx_runtime24 = require("react/jsx-runtime");
+var import_react25 = __toESM(require("react"), 1);
+var import_jsx_runtime25 = require("react/jsx-runtime");
 function noticeSpecOf(t, kind, compute, actions) {
   if (!kind) return null;
   const specs = {
@@ -6428,28 +6519,28 @@ function Toast(props) {
   const dismiss = guidance && typeof guidance.dismiss === "function" ? guidance.dismiss : null;
   const openLogs = ui && typeof ui.openLogs === "function" ? ui.openLogs : null;
   const actionRun = spec && spec.action && typeof spec.action.run === "function" ? spec.action.run : null;
-  return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-toast-stack", "aria-live": "polite", children: [
-    spec ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-toast ofs-toast--notice", role: "alert", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "ofs-toast-icon", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: "alert", size: 14 }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-toast-body", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "ofs-toast-title", children: spec.title }),
-        detail ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "ofs-toast-detail", title: detail, children: detail }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-toast-actions", children: [
-          actionRun ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: actionRun, children: spec.action.label }) : null,
-          spec.logs && openLogs ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { type: "button", className: "ofs-chip", onClick: (event) => openLogs(event.currentTarget), children: t("studio.guidance.viewLogs") }) : null,
-          dismiss ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { type: "button", className: "ofs-chip", onClick: dismiss, children: t("studio.guidance.close") }) : null
+  return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "ofs-toast-stack", "aria-live": "polite", children: [
+    spec ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "ofs-toast ofs-toast--notice", role: "alert", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-toast-icon", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Icon, { name: "alert", size: 14 }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "ofs-toast-body", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "ofs-toast-title", children: spec.title }),
+        detail ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "ofs-toast-detail", title: detail, children: detail }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "ofs-toast-actions", children: [
+          actionRun ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: actionRun, children: spec.action.label }) : null,
+          spec.logs && openLogs ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("button", { type: "button", className: "ofs-chip", onClick: (event) => openLogs(event.currentTarget), children: t("studio.guidance.viewLogs") }) : null,
+          dismiss ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("button", { type: "button", className: "ofs-chip", onClick: dismiss, children: t("studio.guidance.close") }) : null
         ] })
       ] })
     ] }) : null,
-    toast ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "ofs-toast", role: "status", children: toast.text }, toast.id) : null
+    toast ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "ofs-toast", role: "status", children: toast.text }, toast.id) : null
   ] });
 }
 
 // src/studio/TopBar.jsx
-var import_react27 = __toESM(require("react"), 1);
+var import_react28 = __toESM(require("react"), 1);
 
 // src/studio/ModelCardPicker.jsx
-var import_react25 = __toESM(require("react"), 1);
+var import_react26 = __toESM(require("react"), 1);
 
 // src/studio/posters/animagine-xl-3.1.webp
 var animagine_xl_3_1_default = "data:image/webp;base64,UklGRj4MAABXRUJQVlA4IDIMAABQLgCdASpwAHAAPo02kUglIyGhN3qrsKARiWIAzfSNxBe78md9X0YberzAeax6P/Oq6l70AOlw/wVqk6S+Dvjb+W5++XO0X7Po02SPx/1AsQuyL2j/Z+gX368CHVH8S9HX/F8SX796g/6Y9IrROqJn+d/fwl10dH5rN1Mwf6wcOvBCsj4oRO5xLIjXy0h7VGvOWDAMoFJoOB9tpwjnETvss2lM5HBTdm3sUM+iwYYRIM9UTmjhjcvT11mabLsn5cHP3MdHst1brWsgno5VaFn6E9JE2OxFhK/DV2WFSh7zHO5sl9x4X/WrK8T7/cTS7OGzUqHX2I2sTRTcElTCQ0u347Xz4F0j021izy4cBOvGoEiCdR+FavR2N8O8NamscwcSQ3oVdGpenpLMQLAffvPn3CHdfr6X9dOj1NExZbWO3tN0WCfEU9BubTQVjIq/DrKIx3rE4c2o7JdrKEfxeny5ca0eO1rKe9cOzWwLbNflGYICnep3foalz3gAAP7000ZnhZ4vmuuMkTKDJHFBdi/mmEDLo1llzm/qISqNVdyayyKOhpVGu62ysf21Dp/vn03XbwRv2tDxXJLm+D+ytSObZdL69zaWrC8Kdy2Qrid3p2wPImDzOHosc6Suo3YILzADT3ehxFnBGwhZ/Wm6gxlS5vIA2sMpv7MtircKiIpqwfeBcaBx5dQsWJ4brr8S6kKqnzP+9svtYgYnuQG148turJrS7IVLYNznA95z/drhdF5R9Dr/uXQiIdCegcOHDm2Fojs7fgGTlEoXh/xx/YayHnJwBp7jMrQ2W9pPq6hREBGLiIvKT1omBjtXeUJXXoFHiRp5JA4MtMxSlpP5o/mDyR5M2v6uG9CSUgsTxP58hf3P97Pt/MuqP9eo6YJoDJw7ArV4lTcOU+DC+mJ3ZQDYtd5anzX7WreLSrVwKBW1U75Q/3fnEhmkfAufqg4i+C+81AJGr+1BFyk0JiACJgCqs89/PTU+D9PKaZCc1erGbfmofGwX+GSoYn1t+jz9F68KDm7Gz+2qO+6oYRl/q5MXO+fNG5VPGAPMHt50MN4twH+i/6BQYTiniz7GMoAyiJUrHr4KErCP21zKly9jV2rGTJB6T+oRvwmA7zpVE1Sd5OYFq0hJOprb36xkuy0vAgG2oy+Mz0rH/Ht8I4shOM8mBxUhtc3XaEQpL7EHIp7+EVjqVeg97yNEttvDFtaDH1FnYcfabx7+vIB6ACLb99WlRt0kiINwsttJTsJuD/E45gKIDBbtlEUl5uket/eWlh0CtzV6pn5+3p+ZuTtc/DVZ2wcevUPpqqv3eCcK0LVNiC3JJpb5cpLBpunMfSGzZ2Ye4zXDd0I2ogyasH3H6CAX9cqzi8tK3SAWGzoXQWBCPzQ17c9QUUavVe5jMrulmV27fD2GqD9etsFHasHhv4j7tIkUpT1EbPhPhLN8MCAxrA0HXgQGKZIX6UK1YvcWywz+3BFek2Is/Y2MuO57eTTMk0J8WGYmyd4pUfP+xcixXZyuXLUOLdwJqGt1P69pg3/jKRT5NSOAqnZfO/12OZdRXhgvD+gfVIKRwdApojBMq8TdpUSqIooHuqCgDaqyn2B8rp2nG+Kmc639uGKuXCa6vTUHvuOqvCw/U5qQJqbtSAOLjdYWuMSxU5RK7B4RlBGvp3pO8fHgHqDrMGywz5nTQZRbDnuycWdpZTBvpDgz9RbiN3mfKalqbKNoUr1liODuGks4Jvwqr49vS812pP893dLZkFtis6kFA2dAwgQZDRl/DXfXMs+0PEk3E2U7ZHVTK53zsfK+aZNd0zhrqjnAUjdsMdfGq+eH7gLwbnxcydzF9Uh3oKKus1IB69tK1nJ3QmV1hZPsxFe1jaMdKP9KGGOXlXCWMx666oviGICin6sMj9KQYjPtbR1+BzULQeM79UNnn0ySuZ8yYl1n8Yvl1VR2JFxTfbAHOn3WJm5BtWdlkBVgF1xxHDfdqS2tQzhZrlnrtha242RHRVjpweOFjggi7yYDk5t5JoKqGL4opofQISwwEriwuo+bpjq12t6N2WzNna9oQI3lxbuW+Cix5k1fb6MeFST/9RFC9WeJI0S7nRLpjEMB83yFLKc13UNwj3h0cT+cQotgP7+VhGIuxRBZIlVwGwKlFWt0F1nGepdpIQ7KzVPcmfz4IShcUr70bRcOpBRnApDnv/vBqrg1/va1JXdAIlRX2LJuOT25nDD+XjKlWK+xRZxlPg45zfGTrrpLNVaSWjZCSITn/IluVsekszCZj542nNCEN7O8WB+2rH1Hgu7a8kEGrw6/UBgedAIq07DoJvMrMS5E7//4dOMD5V1y2ppH4x6lEZn+YtcHeELvivgDQqJW5JMp2/3O+3J9pgHzG5YJuqbtCZrgmy++FGNwlwLJlzazHL+1tlTTC4/zCZBkKd8hwgzIqjJfsmNilE2A1BmlNceFDm4Q8qzAm/sO86Fw1Xzs1EuVe+fk5T9KymZ9uI954QfJRxW00xxaMHt+dfw4lBThUooj8p7RdQV8bd0pFLxRG0iQ2GgxlRyuaT5iBAr/XCTMO8HAXGf7nJSyL2rLvjbP1M/QXTYTuP//ZD5S1xSUmEJXzU/1PKhc9iqW3NrQwe5lfTCMBLYlXWv0q8/hBNWtmqK01288hpmRwunEijcmd7qAaNKJb6wwv4exBn+b2/ttkbNFW8UIie65jfSJO2OVZZSBXr3sTw62arC+cpPcODCaIe7m6j3GyqCY2RxA2EmuX7bwCkQvEwAnH5mZ6wr1a5WpuQcwoBnEA43KyPpb/4zTmheI+pxo7B3jJCTjt/iMuzzd9s8kVH5AwwLENivQ27yaOxjLDH51y9v0b+IHp8MHIroYCm61DDyDghfA0d62pc16e1KsSQ1tTvMW97yG+7pDzsG5OqX0PgPJTTDr9kit13rBnjeZUeOFC4DCWrbbtQuJgcgDUfgCTuRDqXYmCOQmvLqJDz2VSlj6yG1Bjd63VQGiZY3y/6bns7/mdOa90d/Z5QmgolBHzfLEKyvRcrEG/M5wYwCz4PT7LGKafWQcIfX8uNyCeUm0k1/cQxx2NcRMIKy8ATg3Ds6njAs46wN2SmyXiQBZQYlgaes/7AvRSBDOI40W9G1ZiRTScsbWpE4QItRXM7q5LZmnWIqfCzuVF8au4QnXojHH32LxVGFHbG4DDVaGi0LZSCHppSUk2yPVObuwl01uDNpsgcBvNbOtIs2aoLYr+Kkzysu7jbqXbsiPEUr/7MH+gFvopyfOizqem1Un8VKK39KMmxBg1j4vu5p5Byp/WQkpXrM7h3bZdk9BHP52gmSEhuxhtz+EsNHrJfq3qQ+vO0N9CunS0rrIN/AhjcU81ZjNUoxLc0XT8WicXO1Ix+b1vKXj2INDPO8knrBWZwRTtYKec+edlz3wUbUB+95loU0jdgg/cwJT4FfxRA9QbTQlK/Wj+ic5XJnVa85Z8Xub50zj4Wx9U7cUow7yf6AAuMUh7MO4WRnu2xh2AnEIt5lQawkZga/cIMUk5/wkvBzBmwCfw2X1ZQC7vvNcjhSz2VXEeX3uYXfhtB7dGGo/QXgvDfoSlqHnMOd9aRJaV83cpFgLrCO6QW/IpZrsLho2swkrvun3wxdK89rzd4kwGw7OPsL6QJHaHGPRLJsbCpCmGZG7nJLdhWa9Fly74GkqkU+I4XVIV5T60KiS/9cgUL68UXz00zPz0CRUNWnBrDLcHFYReUZ4w7BGlilnkCfM3WgktXOBZTtqRuvlEs39yIPU/zjNKnA1kQDC+NQyZw4a3R5Gr5Vpb5b9wst1VwedQzu5D2loS42J3ge9bXlekU0u3UG8csq/j8sE0aVH9HhvIvVu1tYJyR3apqTPj2JglKaHzzNRdIUfD3TvI7ChQRzx46l0Cscw2BCqEhDm4PXQyUtu54tfYn9Eos6WvlJvCg2iCSWwjVnRACkS/MIBFvLuGg/qViFYpnASj7psF7t08Ph4hjQQkKROwn/VA3JyAlrI+fTAqlpTy/Ri567w9do/HYMoIH4WEoS2N2Ba6FaSByZhGAFqstIYvj9hI+v8aaSQ5AJz9pyxfgonu6S+RJ2/ut6Lcl1b+TkyP9fPKQf57kFQcvkg8ssQRBMWd+g2wVTa0gSC/jP8v8GFqH87d8AapdP5UgA/EAAAAA==";
@@ -6479,7 +6570,7 @@ var realvis_v5_default = "data:image/webp;base64,UklGRmQFAABXRUJQVlA4IFgFAAAQJAC
 var sdxl_turbo_default = "data:image/webp;base64,UklGRkwLAABXRUJQVlA4IEALAACQLACdASpwAHAAPo06lUglI6IhNZdO+KARiWwAsv8hR2fK+ZFXH8FsJldeUq+N/tvUx+ht6d+6Pq5/bT9nffV9Mf/P9HL+zdbD6AHnO+sB5XPX6ad3xnxa9KIihxfVJ39/MHUCuOd3Bs3+o5R6eF+u6NPT7wlTSGl89H4ZbwsqMPCzFFT1xA7/1Hwgdf/zx//s4HTf+YQiPvW81nqOl8A2xN6o0G9ri0cXcduyW5uMLu5dwnCzsr52TzLvamBwPDWjAI9O9MFzWNsI7EtL6HdufnA1lMBeBtgovAksGg/Klqe5uC4Qtq+c/slf/W+Zq3U4EMc5ksQDegTrlJgL3WaYoDzHM6iE/uSiaLkvVN/QLC6Z6tzsJb7ZI0MtyhlN6B1UKDRfIL7s28SqNx1BOLi9N1LlWilbXS1n8YgxNH4oQW6EiUF7s+f7CgrsKG2pu2RiMUp2nyuKKSl8kKJ9utYCsY/z938dUEnuJkdDgAD+2IvRErU87UDtgc3To785vxbvrG9Y7uxklJG5T872jf6wxr+OWDMMClFgIzdIyrrwsAv+z9MySVMXqrNTReZTBymIQyIUvK1ys3TvSWMmvzvMGVyAA/t9mau9fsZQLFnvRqyuDOJm40Ji/YWjj471EDTlD+uW51wv6pz0W4aXaXHbvgPjFe+2uCuBlsqs4ULv4TQ5J67wUauutxlUm2QZ77Xt9F1/Nvph2Sq4rmvuSXxEc4tfBb8/ODBw5OifshVtDG3MYUnAOx9mlnV3Wbh7ti5gnoT+pk9MVmlgwtnpBcTXXnzx6McGNeDNsIQb7slBx4JdJWI6kI8Bx9zS1LKYFx9CGq7k3cBQS7QUHo+rCbFa0lXPfTtUKGk/H8jiK0HuTDvxoFaeCNu/cYhfewe/PRkQayjTAd2huSq5YACqQ4IGTBqm7JJq9lTQ0GcrQ76L+Zf2NjfVD5QmbQnaokgnk0Q/EFsLl8Sp5ve25LSRI32vmCyzTMu34jwhRRERm5tvVAFAO/nV0DS+6ZnO9MFUD5ct89HzyPFqNvcktQulN4du9KtuLIR+BhVvnw+HN2IamOt/tIeaGrKbqEdVfgJRLlnzmQMZZ9g6llz1zAe4pGT4fgaqhMbkZ7vCmHK5VbKeBNEzPgDKk5BDO71cyZXPmBwXLFdHK9Icq+yUT18lpMuSkweVV8bFIU4x754zPKLbt61N8Xi1SY6ss4T8HdIdPkmIr/BKwuxO7Mgw0zzAUyR3eGtm3i8xFaPaUCf9lOemLW0MoYimfrzDHU7KIWup5fDimmZcepwqHepdxlrn5DPAMguXeZy8vkTRMUhm6kNihDW0S0o3RrBj7YPBSbnUGM5hBtmdoWxZ1fKLb+9rLQQjCw28FKZULmWOWh9FjQHiFrQHG5QIXEx0LYnIDo15d+yLDbndpV2VFznQ+knpeNYPu8/aXgKCqM/8xYH8PCF3T628j+NKAf528r7MsAd1BH0XATPVtIhu6mK3PUlvJKbqQOylSP2QzpFIPDGCTkAEVDBF2DJ3tQAU4XP96r0FF7Uan94OWr5EoFqhHm9h3NVJ26gZCiyf21syyEHA0rCsBdJYz/rcQsD9ixzGUWu0u2aXy9SOFtNLjBfOSVyMJZz8zesgNuhw1aekEfUSw1EdnuYpF7dAN5UYhAxT4m7Ms75XkxJh1c3uHYEEbjYw5l/dezaKGVt95NhoD8K4F/wd1KuZWCNJXRDC/6rR2OZ8p22P97Ka5e6MD7SNf5vq2bfzd26CDoWFPqu17a8Vohvg8VxgSNe0M5Kj/IQPtTk7IoiTbCuDsgyFgX5JiZakIFhJHRu9jWCsU0QOLOwzdZzpvOp+Ky635rqqLQM7ACcCS6quaixQ3PS7xg8DBrlAPWGBBYujdSGsmnZi2ZdxSTN0Vh1hYHDmuLOLkn24jAmfg7Q8csiKaSq76BZIj5+G3Rp5h5xy8aZsuucCcENoqwrn+HVHFhVpQn7eo5Z0TGbd9kuu04z9av2LsHzJmXKD38U3e9eWdSvq84QK5dOIVBxJ3Jz7RLH/7Zub13NKuamJsGVPIjSgq/WUFtEmDOgV0s7oWCJ5H5dmwrjTcAkX5pOddRXi0PiZQ40hV9FFTzg61v1S3al0cvM9kAjIiroaUKuw5YtYY39NSOnW3xDWwXpPaB4etcxvX2Ou+BA57CxGBgCGJm487yuGbDdHpOjVGBV7/y5NiVNSK/dfp5mSruH55XOeGdRfcqmXj3Re3ykk49u0+lpJfiW5ox/PqibhL502IoWGd0d+b7Siza+ej3Oi6EsvgKxg5jWrMd53uEdewRPg9KIDtDHIwuKZ5DSd2e7ratdU3JdbacU6N+KfT/ZrIfRHLwUk22uxJy1sIXewegO1yxXRNlEoLHLTCK+wGyT2U9okgRdYVPqmax1SPXo2O30zubcnl3fZ74ODvEGlgQr/RMnjeCBDhjvXKweT0FhpEDlkWytlSBwxB65zc285Rv9AztBXNy6XgnAr6Tqh5RR97xdXNurY2N3ZKP+1j99ybEN2ZNiYJLYaZKYV6DaSVbXgcr2b83toq3L74X5wM7yUEeHBbpEBNvLtlWENpZtBkp8WTptCwTNT4UOlU6OFQTq5fdgoE+Z+UxDCDLCl98UWVfvSCE7gsuEGcrxv04iKo/qYv/MS+MWWWyWINjnlRgiPseEycbadm6IxmJC2/QHI7EWyx3D4GMsV3HWTj7kE00GO6w09G2jBUjCbM1MqwsinPzOXgkSEz8IJVWNPmvZHvnE3HsrpW9T8vJKYXfGfW0RCWs4XvOPXNltuwEqE91PtQP45JNSn/+kwfFrHCaXkBkM2Czo1Rmumqo6S+DrH85eaee5MHNHkzGFvjPYSnzynV48lxDntaS9iSMdzGlQc3LY7j8QwLBuN/JOFFjwIpy9bL7yAAAC3IEMqdhRHA6lQfgdlYHY4IaAx4Er/zF4tcnN97wTdLX7f9Fo9Dk0i6pfiwHNiAB9oPk5w70hY4/sPBXdTdRApd/c4lZfRg67R+JMwolB8Utn7NDDe3gaPo/7r8og2gxbaML30q9Ul4okz/pj/MjvNULV0Sg6Ao5vb6Zaf8wLCnV/6GI6B/v71rTQPwqSgpFY3Wlc+d48FBJMhHU4mZj2XCZIn2liDlDPdpA+LjIELb5JJMSYoyqnjv8l47blKRtbZ9rBQ+OMn56STv4ncrOdoWCHSPLZEp2icLw70lHdtjX6Mky7eVGv9lc+M4/UqbpOFAZbfvn0HEHrGgSijozpFiPqehnMtXdLpXv1EYGEpjaQ+BZuSD2v0iKrvCtwjrNgPQ+XDtz8tRpVD8SW3aZ7A1ylo+Txm2nD4Lg+jHNXKCjiAhBgOCA7I2Ovrl2v9p1TLYjFcOV/YKF/BQ/iK7GhCZkI7UFLkvD6synmPyE4/4OxdQEnzc84EK1ogK/8wuKowKItmfaBFkzhPtPsQ9/moVQHqR/G2P6BIQsF+fxzXprCxYMB8oj6177N+GXi8P5gPAiawl1sTbjB98GWLDjtaRzJPYXwYBmkxV6yR8VAiCIdzf3NZFq10mdzJuM8z1rbmr+dw9M3yX5OS6dtRoDQnTu51O+SCaKA5TBW1nsJs/2Lpb7VMSAZyFDrCiJ4M9j31BuqgpSpqnJdgyMMFOE3Ik+pYOdWZ92BOurYEDxZBNyySNiugFHYLIlZgqsOcYvXVWJJIa3n1Z8O/WmqRnqprSpfd7bAxVTk5odM7VhCCkFSSgUl+LKwLxrAc0MZHT3LEoURP885MjEg6sJodrCRLktMa6MyNO2FkplRaYbdb1ZbP6iB5rryzgUupUXWQBobhOivudDCeOCMWDAukjbEKSLer5kCgEAA=";
 
 // src/studio/ModelCardPicker.jsx
-var import_jsx_runtime25 = require("react/jsx-runtime");
+var import_jsx_runtime26 = require("react/jsx-runtime");
 var MENU_ID = "ofs-model-menu";
 var POSTERS = {
   "sdxl-lightning": sdxl_lightning_default,
@@ -6527,10 +6618,10 @@ function ModelCardPicker(props) {
   const { t, isEn, presets, value, defaultPreset, onChange, open, onOpenChange } = props;
   const list = Array.isArray(presets) ? presets : [];
   const active = list.find((preset) => preset.id === value) || list[0] || null;
-  const rootRef = import_react25.default.useRef(null);
-  const triggerRef = import_react25.default.useRef(null);
-  const listRef = import_react25.default.useRef(null);
-  import_react25.default.useEffect(() => {
+  const rootRef = import_react26.default.useRef(null);
+  const triggerRef = import_react26.default.useRef(null);
+  const listRef = import_react26.default.useRef(null);
+  import_react26.default.useEffect(() => {
     if (!open || !listRef.current) return;
     const options = listRef.current.querySelectorAll('[role="option"]');
     if (options.length === 0) return;
@@ -6539,7 +6630,7 @@ function ModelCardPicker(props) {
     if (typeof target.focus === "function") target.focus({ preventScroll: true });
     if (typeof target.scrollIntoView === "function") target.scrollIntoView({ block: "nearest" });
   }, [open, value, list]);
-  import_react25.default.useEffect(() => {
+  import_react26.default.useEffect(() => {
     if (!open) return void 0;
     function onKeyDown(event) {
       if (event.key === "Escape") {
@@ -6581,15 +6672,15 @@ function ModelCardPicker(props) {
     if (typeof next.scrollIntoView === "function") next.scrollIntoView({ block: "nearest" });
   }
   if (!active) {
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { className: "ofs-model is-empty", "aria-hidden": "true", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Icon, { name: "sliders", size: 14 }),
-      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-now", children: "—" })
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("span", { className: "ofs-model is-empty", "aria-hidden": "true", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Icon, { name: "sliders", size: 14 }),
+      /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-now", children: "—" })
     ] });
   }
   const eta = etaOf(t, active);
   const poster = POSTERS[active.id] || "";
-  return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "ofs-model-wrap", ref: rootRef, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("div", { className: "ofs-model-wrap", ref: rootRef, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)(
       "button",
       {
         ref: triggerRef,
@@ -6607,29 +6698,29 @@ function ModelCardPicker(props) {
           }
         },
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Icon, { name: "sliders", size: 14 }),
-          active.family ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-family", children: active.family }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-now", children: shortOf(active) }),
-          eta ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(import_jsx_runtime25.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-div", "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-eta", children: eta })
+          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Icon, { name: "sliders", size: 14 }),
+          active.family ? /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-family", children: active.family }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-now", children: shortOf(active) }),
+          eta ? /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)(import_jsx_runtime26.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-div", "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-eta", children: eta })
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Icon, { name: "chevronDown", size: 13, className: "ofs-model-caret" })
+          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Icon, { name: "chevronDown", size: 13, className: "ofs-model-caret" })
         ]
       }
     ),
-    open ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "ofs-model-menu", id: MENU_ID, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "ofs-model-head", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { children: `${t(LABELS.menuTitle)}${list.length > 1 ? ` · ${list.length}` : ""}` }),
-        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { children: t(LABELS.measured) })
+    open ? /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("div", { className: "ofs-model-menu", id: MENU_ID, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("div", { className: "ofs-model-head", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { children: `${t(LABELS.menuTitle)}${list.length > 1 ? ` · ${list.length}` : ""}` }),
+        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { children: t(LABELS.measured) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "ofs-model-list", role: "listbox", "aria-label": t(LABELS.menuTitle), ref: listRef, onKeyDown: onListKeyDown, children: list.map((preset) => {
+      /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("div", { className: "ofs-model-list", role: "listbox", "aria-label": t(LABELS.menuTitle), ref: listRef, onKeyDown: onListKeyDown, children: list.map((preset) => {
         const selected = preset.id === active.id;
         const image = POSTERS[preset.id] || "";
         const isDefault = preset.id === defaultPreset;
         const optionEta = etaOf(t, preset);
         const description = descriptionOf(preset, isEn);
-        return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
+        return /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)(
           "button",
           {
             type: "button",
@@ -6639,37 +6730,37 @@ function ModelCardPicker(props) {
             "data-preset-id": preset.id,
             onClick: () => choose(preset),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-poster", "aria-hidden": "true", children: image ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("img", { src: image, alt: "", width: "56", height: "56", draggable: "false" }) : /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-poster-fallback", children: (preset.family || preset.id || "M").slice(0, 1) }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { className: "ofs-model-copy", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { className: "ofs-model-line", children: [
-                  preset.family ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-fam", children: preset.family }) : null,
-                  /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-name", children: shortOf(preset) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: preset.supportsChinese === true ? "ofs-model-lang is-zh" : "ofs-model-lang", children: t(preset.supportsChinese === true ? LABELS.langZhEn : LABELS.langEnOnly) }),
-                  isDefault ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-default", children: t(LABELS.default) }) : null
+              /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-poster", "aria-hidden": "true", children: image ? /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("img", { src: image, alt: "", width: "56", height: "56", draggable: "false" }) : /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-poster-fallback", children: (preset.family || preset.id || "M").slice(0, 1) }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("span", { className: "ofs-model-copy", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("span", { className: "ofs-model-line", children: [
+                  preset.family ? /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-fam", children: preset.family }) : null,
+                  /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-name", children: shortOf(preset) }),
+                  /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: preset.supportsChinese === true ? "ofs-model-lang is-zh" : "ofs-model-lang", children: t(preset.supportsChinese === true ? LABELS.langZhEn : LABELS.langEnOnly) }),
+                  isDefault ? /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-default", children: t(LABELS.default) }) : null
                 ] }),
-                description ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-desc", children: description }) : null,
-                /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-spec", children: specOf(t, preset) })
+                description ? /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-desc", children: description }) : null,
+                /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-spec", children: specOf(t, preset) })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { className: "ofs-model-side", children: [
-                optionEta ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-option-eta", children: optionEta }) : /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-option-eta" }),
-                /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-check", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Icon, { name: "check", size: 15 }) })
+              /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("span", { className: "ofs-model-side", children: [
+                optionEta ? /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-option-eta", children: optionEta }) : /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-option-eta" }),
+                /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { className: "ofs-model-check", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Icon, { name: "check", size: 15 }) })
               ] })
             ]
           },
           preset.id
         );
       }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "ofs-model-foot", children: t(LABELS.footer) })
+      /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("div", { className: "ofs-model-foot", children: t(LABELS.footer) })
     ] }) : null
   ] });
 }
 
 // src/studio/StudioIcon.jsx
-var import_react26 = __toESM(require("react"), 1);
-var import_jsx_runtime26 = require("react/jsx-runtime");
+var import_react27 = __toESM(require("react"), 1);
+var import_jsx_runtime27 = require("react/jsx-runtime");
 function StudioIcon(props) {
   const size = props && props.size || 20;
-  return /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
     "svg",
     {
       width: size,
@@ -6682,18 +6773,18 @@ function StudioIcon(props) {
       strokeLinejoin: "round",
       "aria-hidden": "true",
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("path", { d: "M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8" }),
-        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("path", { d: "M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8" }),
-        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("path", { d: "M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16" }),
-        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("path", { d: "M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" }),
-        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("circle", { cx: "12", cy: "12", r: "3.2" })
+        /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("path", { d: "M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8" }),
+        /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("path", { d: "M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8" }),
+        /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("path", { d: "M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16" }),
+        /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("path", { d: "M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" }),
+        /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("circle", { cx: "12", cy: "12", r: "3.2" })
       ]
     }
   );
 }
 
 // src/studio/TopBar.jsx
-var import_jsx_runtime27 = require("react/jsx-runtime");
+var import_jsx_runtime28 = require("react/jsx-runtime");
 function TopBar(props) {
   const { t, isEn, ui, compute, library } = props;
   const { form: fields, patchForm, selectPreset } = props.form;
@@ -6707,19 +6798,20 @@ function TopBar(props) {
     probing,
     probe,
     probeReport,
+    update,
     startSession: startSession2,
     stopSession: stopSession2,
     runProbe: runProbe2,
     openFolder
   } = compute;
   const status = compute.status || computeStatusOf(t, { session });
-  const [open, setOpen] = import_react27.default.useState(Boolean(props.defaultOpen));
-  const [modelOpen, setModelOpen] = import_react27.default.useState(Boolean(props.defaultModelOpen));
-  const wrapRef = import_react27.default.useRef(null);
-  const pillRef = import_react27.default.useRef(null);
+  const [open, setOpen] = import_react28.default.useState(Boolean(props.defaultOpen));
+  const [modelOpen, setModelOpen] = import_react28.default.useState(Boolean(props.defaultModelOpen));
+  const wrapRef = import_react28.default.useRef(null);
+  const pillRef = import_react28.default.useRef(null);
   const snapshot2 = useHostSnapshot(open);
   const now = useNow(open);
-  import_react27.default.useEffect(() => {
+  import_react28.default.useEffect(() => {
     if (!open) return void 0;
     function onKey(event) {
       if (event.key === "Escape") setOpen(false);
@@ -6761,24 +6853,24 @@ function TopBar(props) {
     if (value === "unavailable") return t("value.quotaUnavailable");
     return t("value.unknown");
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("header", { className: "ofs-topbar", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-brand", title: t("studio.nav.label"), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-brand-mark", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(StudioIcon, { size: 18 }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-brand-name", children: t("studio.brand") }),
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-brand-sub", children: t("studio.brandSub") })
+  return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("header", { className: "ofs-topbar", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-brand", title: t("studio.nav.label"), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-brand-mark", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(StudioIcon, { size: 18 }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-brand-name", children: t("studio.brand") }),
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-brand-sub", children: t("studio.brandSub") })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("nav", { className: "ofs-tabs", "aria-label": t("studio.tabs"), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("button", { type: "button", className: view === "studio" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("studio"), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "sparkles", size: 15 }),
+    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("nav", { className: "ofs-tabs", "aria-label": t("studio.tabs"), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("button", { type: "button", className: view === "studio" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("studio"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "sparkles", size: 15 }),
         t("studio.tab.studio")
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("button", { type: "button", className: view === "gallery" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("gallery"), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "images", size: 15 }),
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("button", { type: "button", className: view === "gallery" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("gallery"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "images", size: 15 }),
         t("studio.tab.gallery")
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-grow" }),
-    openFolder ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-grow" }),
+    openFolder ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
       "button",
       {
         type: "button",
@@ -6786,12 +6878,12 @@ function TopBar(props) {
         onClick: openFolder,
         title: t("studio.action.openFolder"),
         "aria-label": t("studio.action.openFolder"),
-        children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "folder", size: 16 })
+        children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "folder", size: 16 })
       }
     ) : null,
-    library.loadHistory ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("button", { type: "button", className: "ofs-icon-btn", onClick: library.loadHistory, title: t("studio.refresh"), "aria-label": t("studio.refresh"), children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "refresh", size: 16 }) }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-pill-wrap", ref: wrapRef, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
+    library.loadHistory ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("button", { type: "button", className: "ofs-icon-btn", onClick: library.loadHistory, title: t("studio.refresh"), "aria-label": t("studio.refresh"), children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "refresh", size: 16 }) }) : null,
+    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-pill-wrap", ref: wrapRef, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
         "button",
         {
           ref: pillRef,
@@ -6807,88 +6899,113 @@ function TopBar(props) {
           "aria-expanded": open,
           "aria-haspopup": "menu",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { children: status.label }),
-            quotaUsed !== null && quotaTotal !== null ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("em", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { children: status.label }),
+            quotaUsed !== null && quotaTotal !== null ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("em", { children: [
               quotaUsed,
               " / ",
               quotaTotal,
               " ",
               t("unit.hour")
             ] }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-pill-caret", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "chevronDown", size: 13 }) })
+            update ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+              "span",
+              {
+                className: "ofs-update-dot",
+                role: "img",
+                "aria-label": t("studio.update.badge"),
+                title: formatText(t("studio.update.available"), { latest: update.latest, current: update.current })
+              }
+            ) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-pill-caret", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "chevronDown", size: 13 }) })
           ]
         }
       ),
-      open ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-popover", role: "menu", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-popover-head", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("b", { children: status.label }),
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Tooltip, { text: status.tooltip, side: "bottom" })
+      open ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-popover", role: "menu", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-popover-head", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("b", { children: status.label }),
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Tooltip, { text: status.tooltip, side: "bottom" })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { className: "ofs-muted", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.quota"),
             " ",
             quotaUsed !== null && quotaTotal !== null ? `${quotaUsed} / ${quotaTotal} ${t("unit.hour")}` : "—"
           ] }),
-          status.phaseLabel ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { className: "ofs-muted", children: [
+          status.phaseLabel ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.phase"),
             " · ",
             status.phaseLabel
           ] }) : null,
-          status.ready && steadySeconds !== null ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { className: "ofs-muted", children: [
+          status.ready && steadySeconds !== null ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.speedLine"),
             " ",
             formatSeconds(t, steadySeconds)
           ] }) : null,
-          idleShutdown ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-muted", children: formatText(t("studio.compute.idleCountdown"), {
+          idleShutdown ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-muted", children: formatText(t("studio.compute.idleCountdown"), {
             idle: idleShutdown.idleMinutes,
             total: idleShutdown.totalMinutes
-          }) }) : idleMinutes > 0 ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { className: "ofs-muted", children: [
+          }) }) : idleMinutes > 0 ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.idleFor"),
             " ",
             idleMinutes,
             " ",
             t("unit.min")
           ] }) : null,
-          session && session.device ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-muted", children: session.device }) : null,
-          tunnelLabel ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { className: "ofs-muted", children: [
+          session && session.device ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-muted", children: session.device }) : null,
+          tunnelLabel ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.tunnel"),
             " · ",
             tunnelLabel
           ] }) : null
         ] }),
-        status.hint ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("p", { className: "ofs-popover-hint", children: status.hint }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-popover-note", children: [
-          probing ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { children: t("action.probing") }) : null,
-          probeInfo ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(import_jsx_runtime27.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { children: [
+        status.hint ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("p", { className: "ofs-popover-hint", children: status.hint }) : null,
+        update ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-popover-fallback ofs-popover-update", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-popover-fallback-title", children: formatText(t("studio.update.available"), { latest: update.latest, current: update.current }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { children: t("studio.update.hint") }),
+          update.enginesDsh ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { children: formatText(t("studio.update.requiresDsh"), { range: update.enginesDsh }) }) : null,
+          update.releaseUrl ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+            "a",
+            {
+              className: "ofs-popover-link",
+              href: update.releaseUrl,
+              target: "_blank",
+              rel: "noreferrer",
+              role: "menuitem",
+              children: t("studio.update.notes")
+            }
+          ) : null
+        ] }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-popover-note", children: [
+          probing ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { children: t("action.probing") }) : null,
+          probeInfo ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(import_jsx_runtime28.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { children: [
               t(accessMethodKey(kaggleTransport)),
               " · ",
               t(accessStatusKey(kaggleTransport, accessStatusOf(probeInfo, kaggleTransport)))
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { children: [
               t("studio.probe.quota"),
               " · ",
               statusText(probeInfo.quota)
             ] })
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { children: [
             t("studio.probe.account"),
             " · ",
             statusText(accountStatus),
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Tooltip, { text: t("studio.compute.authTooltip"), tone: "warn", side: "bottom" })
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Tooltip, { text: t("studio.compute.authTooltip"), tone: "warn", side: "bottom" })
           ] }),
-          probeFailed ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { title: probeFailed.message || void 0, children: [
+          probeFailed ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { title: probeFailed.message || void 0, children: [
             probeFailed.status === "timeout" ? t("studio.probe.timeout") : t("studio.probe.failed"),
             probeFailed.message ? ` · ${probeFailed.message}` : ""
           ] }) : null,
-          probeNote ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { title: probeInfo.notes.join(" · "), children: probeNote }) : null
+          probeNote ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { title: probeInfo.notes.join(" · "), children: probeNote }) : null
         ] }),
-        quotaUnavailable ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-popover-fallback", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-popover-fallback-title", children: t("studio.compute.quotaFallback") }),
-          lastCheckTime ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { children: [
+        quotaUnavailable ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-popover-fallback", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-popover-fallback-title", children: t("studio.compute.quotaFallback") }),
+          lastCheckTime ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { children: [
             t("studio.compute.lastGood"),
             " ",
             lastCheckTime,
@@ -6896,13 +7013,13 @@ function TopBar(props) {
             t("studio.compute.quota"),
             " ",
             lastGoodQuota
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { children: t("studio.compute.neverChecked") }),
-          sessionRunMs !== null ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { children: [
+          ] }) : /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { children: t("studio.compute.neverChecked") }),
+          sessionRunMs !== null ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { children: [
             t("studio.compute.sessionRan"),
             " ",
             formatDuration(t, sessionRunMs)
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
             "a",
             {
               className: "ofs-popover-link",
@@ -6914,15 +7031,15 @@ function TopBar(props) {
             }
           )
         ] }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: startSession2, disabled: !!busy || !status.canStart, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "cloud", size: 15 }),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: startSession2, disabled: !!busy || !status.canStart, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "cloud", size: 15 }),
           t("studio.compute.start")
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: stopSession2, disabled: !!busy || !status.canStop, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "clock", size: 15 }),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: stopSession2, disabled: !!busy || !status.canStop, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "clock", size: 15 }),
           t("studio.compute.stop")
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
           "button",
           {
             type: "button",
@@ -6932,12 +7049,12 @@ function TopBar(props) {
             disabled: !!busy || probing,
             "aria-busy": probing,
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "refresh", size: 15 }),
+              /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "refresh", size: 15 }),
               probing ? t("action.probing") : t("studio.compute.check")
             ]
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
           "button",
           {
             type: "button",
@@ -6948,12 +7065,12 @@ function TopBar(props) {
               if (openLogs) openLogs(pillRef.current);
             },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "message", size: 15 }),
+              /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "message", size: 15 }),
               t("studio.logs.open")
             ]
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
           "button",
           {
             type: "button",
@@ -6964,14 +7081,14 @@ function TopBar(props) {
               if (openSettings) openSettings(pillRef.current);
             },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "sliders", size: 15 }),
+              /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "sliders", size: 15 }),
               t("studio.settings.open")
             ]
           }
         )
       ] }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
       ModelCardPicker,
       {
         t,
@@ -6995,7 +7112,7 @@ function TopBar(props) {
 }
 
 // src/studio/hooks/useStudioUi.js
-var import_react28 = __toESM(require("react"), 1);
+var import_react29 = __toESM(require("react"), 1);
 
 // src/logic/notice.js
 var NOTICE_TITLE_PREFIX = "● 生成完成 · ";
@@ -7033,25 +7150,25 @@ function uiStateViewOf(result) {
 // src/studio/hooks/useStudioUi.js
 var nextToastId = 0;
 function useStudioUi({ t, initialView, initialPanelMode }) {
-  const [view, setView] = import_react28.default.useState(initialView);
-  const [advancedOpen, setAdvancedOpen] = import_react28.default.useState(UI_STATE.defaults.advancedOpen);
-  const [negativeOpen, setNegativeOpen] = import_react28.default.useState(false);
-  const [error, setError] = import_react28.default.useState(null);
-  const [dismissed, setDismissed] = import_react28.default.useState("");
-  const [toast, setToast] = import_react28.default.useState(null);
-  const [panelMode, setPanelMode] = import_react28.default.useState(initialPanelMode);
-  const [zoom, setZoom] = import_react28.default.useState(false);
-  const [logsOpen, setLogsOpen] = import_react28.default.useState(false);
-  const logsReturnRef = import_react28.default.useRef(null);
-  const [settingsOpen, setSettingsOpen] = import_react28.default.useState(false);
-  const settingsReturnRef = import_react28.default.useRef(null);
-  const advancedOpenRef = import_react28.default.useRef(advancedOpen);
+  const [view, setView] = import_react29.default.useState(initialView);
+  const [advancedOpen, setAdvancedOpen] = import_react29.default.useState(UI_STATE.defaults.advancedOpen);
+  const [negativeOpen, setNegativeOpen] = import_react29.default.useState(false);
+  const [error, setError] = import_react29.default.useState(null);
+  const [dismissed, setDismissed] = import_react29.default.useState("");
+  const [toast, setToast] = import_react29.default.useState(null);
+  const [panelMode, setPanelMode] = import_react29.default.useState(initialPanelMode);
+  const [zoom, setZoom] = import_react29.default.useState(false);
+  const [logsOpen, setLogsOpen] = import_react29.default.useState(false);
+  const logsReturnRef = import_react29.default.useRef(null);
+  const [settingsOpen, setSettingsOpen] = import_react29.default.useState(false);
+  const settingsReturnRef = import_react29.default.useRef(null);
+  const advancedOpenRef = import_react29.default.useRef(advancedOpen);
   advancedOpenRef.current = advancedOpen;
   function showToast(text) {
     nextToastId += 1;
     setToast({ text, id: nextToastId });
   }
-  import_react28.default.useEffect(() => {
+  import_react29.default.useEffect(() => {
     let alive = true;
     Promise.resolve(fetchUiState()).then((result) => {
       if (!alive) return;
@@ -7080,7 +7197,7 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
     if (guidanceKey) setDismissed(guidanceKey);
     setError(null);
   }
-  import_react28.default.useEffect(() => {
+  import_react29.default.useEffect(() => {
     if (!toast) return void 0;
     const timer2 = setTimeout(() => setToast(null), 2600);
     return () => clearTimeout(timer2);
@@ -7156,15 +7273,15 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
   };
 }
 function useCompletionNotice({ t, ui, job, activeJob }) {
-  const previousRef = import_react28.default.useRef(void 0);
-  const pendingRef = import_react28.default.useRef(false);
-  const hiddenJobRef = import_react28.default.useRef(null);
-  const returningRef = import_react28.default.useRef(null);
-  const tRef = import_react28.default.useRef(t);
-  const uiRef = import_react28.default.useRef(ui);
+  const previousRef = import_react29.default.useRef(void 0);
+  const pendingRef = import_react29.default.useRef(false);
+  const hiddenJobRef = import_react29.default.useRef(null);
+  const returningRef = import_react29.default.useRef(null);
+  const tRef = import_react29.default.useRef(t);
+  const uiRef = import_react29.default.useRef(ui);
   tRef.current = t;
   uiRef.current = ui;
-  const judge = import_react28.default.useCallback((nextJob) => {
+  const judge = import_react29.default.useCallback((nextJob) => {
     const previous = previousRef.current;
     previousRef.current = nextJob || null;
     if (previous === void 0) return;
@@ -7185,10 +7302,10 @@ function useCompletionNotice({ t, ui, job, activeJob }) {
       uiRef.current.showToast(tRef.current("studio.toast.generationDone"));
     }
   }, []);
-  import_react28.default.useEffect(() => {
+  import_react29.default.useEffect(() => {
     judge(job);
   }, [judge, job && job.id, job && job.status, job && (job.finishedAt ?? "")]);
-  import_react28.default.useEffect(() => {
+  import_react29.default.useEffect(() => {
     let timer2 = null;
     let alive = true;
     function stop() {
@@ -7241,10 +7358,10 @@ function useCompletionNotice({ t, ui, job, activeJob }) {
 }
 
 // src/studio/useStudio.js
-var import_react34 = __toESM(require("react"), 1);
+var import_react35 = __toESM(require("react"), 1);
 
 // src/studio/hooks/useChatThread.js
-var import_react29 = __toESM(require("react"), 1);
+var import_react30 = __toESM(require("react"), 1);
 function bubblePatch(t, job, current) {
   if (job.status === "waiting-session") return { stage: "queued", text: t("studio.chat.waitingSession") };
   if (job.status === "queued") return { stage: "queued", text: t("studio.chat.queued") };
@@ -7266,14 +7383,14 @@ function bubblePatch(t, job, current) {
   return null;
 }
 function useChatThread({ t, isEn, alive, state, form, generate }) {
-  const [messages, setMessages] = import_react29.default.useState([]);
-  const [interpreting, setInterpreting] = import_react29.default.useState(false);
-  const messageSeq = import_react29.default.useRef(0);
-  const interpretingRef = import_react29.default.useRef(false);
+  const [messages, setMessages] = import_react30.default.useState([]);
+  const [interpreting, setInterpreting] = import_react30.default.useState(false);
+  const messageSeq = import_react30.default.useRef(0);
+  const interpretingRef = import_react30.default.useRef(false);
   const jobs = stateJobs(state);
   const threadJobs = jobs.length > 0 ? jobs : state && state.lastJob ? [state.lastJob] : [];
   const threadKey = threadJobs.map((job) => `${job.id}:${job.status}`).join("|");
-  import_react29.default.useEffect(() => {
+  import_react30.default.useEffect(() => {
     if (messages.length === 0 || threadJobs.length === 0) return;
     setMessages((prev) => {
       let next = prev;
@@ -7401,24 +7518,24 @@ function useChatThread({ t, isEn, alive, state, form, generate }) {
 }
 
 // src/studio/hooks/useKaggleLogin.js
-var import_react30 = __toESM(require("react"), 1);
+var import_react31 = __toESM(require("react"), 1);
 var NETWORK_ERROR_KEY = "studio.guidance.auth.reason.network";
 var REQUEST_ERROR_KEY = "studio.guidance.auth.reason.request";
 var UNAVAILABLE_ERROR_KEY = "studio.guidance.auth.reason.unavailable";
 var TIMEOUT_ERROR_KEY = "studio.guidance.auth.reason.timeout";
 function useKaggleLogin({ t, ui, onDone } = {}) {
   const translate = typeof t === "function" ? t : (key) => key;
-  const [login, setLogin] = import_react30.default.useState(emptyLoginView);
-  const [busy, setBusy] = import_react30.default.useState(false);
-  const [errorKey, setErrorKey] = import_react30.default.useState("");
-  const [codeErrorKey, setCodeErrorKey] = import_react30.default.useState("");
-  const timerRef = import_react30.default.useRef(null);
-  const startedAtRef = import_react30.default.useRef(0);
-  const busyRef = import_react30.default.useRef(false);
-  const sessionRef = import_react30.default.useRef(0);
-  const aliveRef = import_react30.default.useRef(true);
-  const viewRef = import_react30.default.useRef(emptyLoginView());
-  const onDoneRef = import_react30.default.useRef(onDone);
+  const [login, setLogin] = import_react31.default.useState(emptyLoginView);
+  const [busy, setBusy] = import_react31.default.useState(false);
+  const [errorKey, setErrorKey] = import_react31.default.useState("");
+  const [codeErrorKey, setCodeErrorKey] = import_react31.default.useState("");
+  const timerRef = import_react31.default.useRef(null);
+  const startedAtRef = import_react31.default.useRef(0);
+  const busyRef = import_react31.default.useRef(false);
+  const sessionRef = import_react31.default.useRef(0);
+  const aliveRef = import_react31.default.useRef(true);
+  const viewRef = import_react31.default.useRef(emptyLoginView());
+  const onDoneRef = import_react31.default.useRef(onDone);
   onDoneRef.current = onDone;
   function toast(key) {
     if (ui && typeof ui.showToast === "function") ui.showToast(translate(key));
@@ -7571,7 +7688,7 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
     setErrorKey("");
     setCodeErrorKey("");
   }
-  import_react30.default.useEffect(() => {
+  import_react31.default.useEffect(() => {
     aliveRef.current = true;
     function onVisibility() {
       if (document.hidden) {
@@ -7602,17 +7719,43 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
 }
 
 // src/studio/hooks/useSessionControl.js
-var import_react31 = __toESM(require("react"), 1);
+var import_react32 = __toESM(require("react"), 1);
+
+// src/logic/update.js
+function safeUrl(value) {
+  if (typeof value !== "string" || !value.startsWith("https://")) return "";
+  return value;
+}
+function updateOf(state) {
+  const input = state && typeof state === "object" ? state.update : null;
+  if (!input || typeof input !== "object") return null;
+  if (input.hasUpdate !== true) return null;
+  const latest = typeof input.latest === "string" ? input.latest.trim() : "";
+  if (!latest) return null;
+  const current = typeof input.current === "string" && input.current.trim() ? input.current.trim() : typeof state.version === "string" ? state.version : "";
+  const enginesDsh = typeof input.enginesDsh === "string" ? input.enginesDsh.trim() : "";
+  const checkedAt = typeof input.checkedAt === "string" && input.checkedAt.trim() ? input.checkedAt.trim() : null;
+  return {
+    latest,
+    current,
+    enginesDsh,
+    releaseUrl: safeUrl(input.releaseUrl),
+    checkedAt
+  };
+}
+
+// src/studio/hooks/useSessionControl.js
 function rememberCancelling(previous, id) {
   if (!Array.isArray(previous)) return [id];
   return previous.includes(id) ? previous : [...previous, id];
 }
 function useSessionControl({ t, host, ui, alive }) {
-  const [busy, setBusy] = import_react31.default.useState("");
-  const [probing, setProbing] = import_react31.default.useState(false);
-  const [probeReport, setProbeReport] = import_react31.default.useState(null);
-  const [cancellingIds, setCancellingIds] = import_react31.default.useState([]);
-  const cancellingRef = import_react31.default.useRef(/* @__PURE__ */ new Set());
+  const [busy, setBusy] = import_react32.default.useState("");
+  const [probing, setProbing] = import_react32.default.useState(false);
+  const [probeReport, setProbeReport] = import_react32.default.useState(null);
+  const [cancellingIds, setCancellingIds] = import_react32.default.useState([]);
+  const cancellingRef = import_react32.default.useRef(/* @__PURE__ */ new Set());
+  const startingRef = import_react32.default.useRef(false);
   const state = host.state;
   const session = state && state.session || null;
   const kaggleTransport = transportOf(state);
@@ -7620,9 +7763,18 @@ function useSessionControl({ t, host, ui, alive }) {
   const pendingJobs = pendingJobsOf(state);
   const activeJob = pendingJobs[0] ?? null;
   const focusedJob = activeJob || state && state.lastJob || stateJobs(state)[0] || null;
-  const status = computeStatusOf(t, { session });
+  const queuePolicy = queuePolicyOf(state);
+  const status = computeStatusOf(t, { session, queuePolicy, now: Date.now() });
+  const update = updateOf(state);
+  const queue = {
+    policy: queuePolicy,
+    level: status.queueLevel,
+    waitMs: status.queueWaitMs,
+    key: queueRoundKeyOf(session),
+    stalledMinutes: queueStalledMinutesOf(queuePolicy)
+  };
   const pendingSignature = pendingJobs.map((job) => job.id).join(",");
-  import_react31.default.useEffect(() => {
+  import_react32.default.useEffect(() => {
     const activeIds = new Set(pendingJobs.map((job) => job.id));
     for (const id of [...cancellingRef.current]) {
       if (!activeIds.has(id)) cancellingRef.current.delete(id);
@@ -7632,9 +7784,9 @@ function useSessionControl({ t, host, ui, alive }) {
       return next.length === prev.length ? prev : next;
     });
   }, [pendingSignature]);
-  const hostErrorKeyRef = import_react31.default.useRef("");
-  const hostErrorCodeRef = import_react31.default.useRef("");
-  import_react31.default.useEffect(() => {
+  const hostErrorKeyRef = import_react32.default.useRef("");
+  const hostErrorCodeRef = import_react32.default.useRef("");
+  import_react32.default.useEffect(() => {
     if (!host.error) {
       if (!hostErrorCodeRef.current) return;
       const code = hostErrorCodeRef.current;
@@ -7649,8 +7801,9 @@ function useSessionControl({ t, host, ui, alive }) {
     hostErrorCodeRef.current = host.error.code;
     ui.setError((prev) => prev || { code: host.error.code, message: host.error.message ?? "" });
   }, [host.error]);
-  async function startSession2(presetId, options = {}) {
-    if (busy) return;
+  async function requestStart(presetId, options) {
+    if (busy || startingRef.current) return;
+    startingRef.current = true;
     setBusy("start");
     try {
       const result = await alive(startSession(presetId, options));
@@ -7659,8 +7812,15 @@ function useSessionControl({ t, host, ui, alive }) {
       else ui.setError(null);
       host.refresh();
     } finally {
+      startingRef.current = false;
       setBusy("");
     }
+  }
+  function startSession2(presetId, options = {}) {
+    return requestStart(presetId, options);
+  }
+  function requeueSession(presetId) {
+    return requestStart(presetId, { forceNew: true, replace: true });
   }
   async function stopSession2() {
     if (busy) return;
@@ -7739,6 +7899,8 @@ function useSessionControl({ t, host, ui, alive }) {
     sessionState,
     kaggleTransport,
     status,
+    queue,
+    update,
     pendingJobs,
     activeJob,
     focusedJob,
@@ -7748,6 +7910,7 @@ function useSessionControl({ t, host, ui, alive }) {
     probing,
     probeReport,
     startSession: startSession2,
+    requeueSession,
     stopSession: stopSession2,
     cancelJob: cancelJob2,
     cancellingIds,
@@ -7757,7 +7920,7 @@ function useSessionControl({ t, host, ui, alive }) {
 }
 
 // src/studio/hooks/useStudioForm.js
-var import_react32 = __toESM(require("react"), 1);
+var import_react33 = __toESM(require("react"), 1);
 
 // src/logic/preset.js
 function detectCjk(text) {
@@ -7915,14 +8078,14 @@ function referenceOf(image, path) {
 }
 function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const { presets, defaultPreset } = preset;
-  const [form, setForm] = import_react32.default.useState(() => ({
+  const [form, setForm] = import_react33.default.useState(() => ({
     ...EMPTY_FORM,
     prompt: initialPrompt
   }));
-  const [refineGroups, setRefineGroups] = import_react32.default.useState([]);
-  const [refineSource, setRefineSource] = import_react32.default.useState("");
-  const [enhancing, setEnhancing] = import_react32.default.useState(false);
-  const [translating, setTranslating] = import_react32.default.useState(false);
+  const [refineGroups, setRefineGroups] = import_react33.default.useState([]);
+  const [refineSource, setRefineSource] = import_react33.default.useState("");
+  const [enhancing, setEnhancing] = import_react33.default.useState(false);
+  const [translating, setTranslating] = import_react33.default.useState(false);
   const ratioId = ratioIdOf(form.width, form.height);
   const activePreset = presets.find((item) => item.id === form.presetId) || null;
   const negativeHint = hintOf(activePreset);
@@ -7931,7 +8094,7 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const reference = form.reference || null;
   const referenceSupported = supportsImg2Img(activePreset);
   const referenceBlocked = Boolean(reference && presets.length > 0 && !referenceSupported);
-  import_react32.default.useEffect(() => {
+  import_react33.default.useEffect(() => {
     if (presets.length === 0) return;
     setForm((prev) => {
       if (prev.presetId && presets.some((item2) => item2.id === prev.presetId)) return prev;
@@ -8138,7 +8301,7 @@ ${value}` : value });
 }
 
 // src/studio/hooks/useWorkLibrary.js
-var import_react33 = __toESM(require("react"), 1);
+var import_react34 = __toESM(require("react"), 1);
 var PAGE_SIZE = LIMITS.history.pageSize;
 function flattenHistory(items) {
   const images = [];
@@ -8161,23 +8324,23 @@ function mergePendingFavorites(serverList, pendingMap) {
   return merged;
 }
 function useWorkLibrary({ t, alive, ui, state }) {
-  const [selectedPath, setSelectedPath] = import_react33.default.useState("");
-  const [historyItems, setHistoryItems] = import_react33.default.useState([]);
-  const [historyHasMoreState, setHistoryHasMoreState] = import_react33.default.useState(false);
-  const [historyLoadingMore, setHistoryLoadingMore] = import_react33.default.useState(false);
-  const [favorites, setFavorites] = import_react33.default.useState([]);
-  const tRef = import_react33.default.useRef(t);
-  const uiRef = import_react33.default.useRef(ui);
+  const [selectedPath, setSelectedPath] = import_react34.default.useState("");
+  const [historyItems, setHistoryItems] = import_react34.default.useState([]);
+  const [historyHasMoreState, setHistoryHasMoreState] = import_react34.default.useState(false);
+  const [historyLoadingMore, setHistoryLoadingMore] = import_react34.default.useState(false);
+  const [favorites, setFavorites] = import_react34.default.useState([]);
+  const tRef = import_react34.default.useRef(t);
+  const uiRef = import_react34.default.useRef(ui);
   tRef.current = t;
   uiRef.current = ui;
-  const favoritesRef = import_react33.default.useRef(favorites);
+  const favoritesRef = import_react34.default.useRef(favorites);
   favoritesRef.current = favorites;
-  const favSeqRef = import_react33.default.useRef(/* @__PURE__ */ new Map());
-  const favPendingRef = import_react33.default.useRef(/* @__PURE__ */ new Map());
-  const offsetRef = import_react33.default.useRef(0);
-  const hasMoreRef = import_react33.default.useRef(false);
-  const loadingMoreRef = import_react33.default.useRef(false);
-  const loadHistory = import_react33.default.useCallback(async () => {
+  const favSeqRef = import_react34.default.useRef(/* @__PURE__ */ new Map());
+  const favPendingRef = import_react34.default.useRef(/* @__PURE__ */ new Map());
+  const offsetRef = import_react34.default.useRef(0);
+  const hasMoreRef = import_react34.default.useRef(false);
+  const loadingMoreRef = import_react34.default.useRef(false);
+  const loadHistory = import_react34.default.useCallback(async () => {
     const result = await alive(fetchHistory(PAGE_SIZE, 0));
     if (!result) return;
     if (result.ok && result.data && Array.isArray(result.data.items)) {
@@ -8193,7 +8356,7 @@ function useWorkLibrary({ t, alive, ui, state }) {
       uiRef.current.fail(result.code, result.message);
     }
   }, [alive]);
-  const loadMoreHistory = import_react33.default.useCallback(async () => {
+  const loadMoreHistory = import_react34.default.useCallback(async () => {
     if (loadingMoreRef.current || !hasMoreRef.current) return;
     loadingMoreRef.current = true;
     setHistoryLoadingMore(true);
@@ -8216,10 +8379,10 @@ function useWorkLibrary({ t, alive, ui, state }) {
       setHistoryLoadingMore(false);
     }
   }, [alive]);
-  import_react33.default.useEffect(() => {
+  import_react34.default.useEffect(() => {
     loadHistory();
   }, [loadHistory]);
-  const loadLibrary = import_react33.default.useCallback(async () => {
+  const loadLibrary = import_react34.default.useCallback(async () => {
     const result = await alive(fetchLibrary());
     if (!result) return;
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
@@ -8230,17 +8393,17 @@ function useWorkLibrary({ t, alive, ui, state }) {
       uiRef.current.fail(result.code, result.message);
     }
   }, [alive]);
-  import_react33.default.useEffect(() => {
+  import_react34.default.useEffect(() => {
     loadLibrary();
   }, [loadLibrary]);
   const hasState = Boolean(state);
-  const baselineRef = import_react33.default.useRef(false);
-  const seenJobRef = import_react33.default.useRef("");
-  const announcedRef = import_react33.default.useRef(false);
+  const baselineRef = import_react34.default.useRef(false);
+  const seenJobRef = import_react34.default.useRef("");
+  const announcedRef = import_react34.default.useRef(false);
   const lastJob = state && state.lastJob ? state.lastJob : null;
   const lastJobKey = lastJob ? `${lastJob.id}:${lastJob.status}` : "";
   const sessionState = state && state.session && state.session.state || "absent";
-  import_react33.default.useEffect(() => {
+  import_react34.default.useEffect(() => {
     if (!hasState) return;
     if (!baselineRef.current) {
       baselineRef.current = true;
@@ -8255,10 +8418,10 @@ function useWorkLibrary({ t, alive, ui, state }) {
     announcedRef.current = true;
     uiRef.current.showToast(tRef.current("studio.toast.firstImage"));
   }, [hasState, lastJobKey, sessionState]);
-  const historyBaselineRef = import_react33.default.useRef(false);
+  const historyBaselineRef = import_react34.default.useRef(false);
   const lastJobId = state && state.lastJob ? `${state.lastJob.id}:${state.lastJob.finishedAt ?? ""}` : "";
-  const lastSeenRef = import_react33.default.useRef("");
-  import_react33.default.useEffect(() => {
+  const lastSeenRef = import_react34.default.useRef("");
+  import_react34.default.useEffect(() => {
     if (!hasState) return;
     if (!historyBaselineRef.current) {
       historyBaselineRef.current = true;
@@ -8382,14 +8545,14 @@ function useWorkLibrary({ t, alive, ui, state }) {
 
 // src/studio/useStudio.js
 function useAlive() {
-  const ref = import_react34.default.useRef(true);
-  import_react34.default.useEffect(() => {
+  const ref = import_react35.default.useRef(true);
+  import_react35.default.useEffect(() => {
     ref.current = true;
     return () => {
       ref.current = false;
     };
   }, []);
-  return import_react34.default.useCallback(async (promise) => {
+  return import_react35.default.useCallback(async (promise) => {
     const value = await promise;
     return ref.current ? value : null;
   }, []);
@@ -8405,10 +8568,11 @@ function useStudio(props) {
   const initialPanelMode = props && props.panelMode === "chat" ? "chat" : "form";
   const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : [];
   const defaultPreset = state && state.defaultPreset || "";
-  const [sending, setSending] = import_react34.default.useState(false);
-  const pendingRef = import_react34.default.useRef(null);
+  const [sending, setSending] = import_react35.default.useState(false);
+  const pendingRef = import_react35.default.useRef(null);
   const ui = useStudioUi({ t, initialView, initialPanelMode });
   const control = useSessionControl({ t, host, ui, alive });
+  const [dismissedQueueKey, setDismissedQueueKey] = import_react35.default.useState("");
   const kaggleLogin = useKaggleLogin({ t, ui, onDone: () => control.runProbe() });
   const form = useStudioForm({ t, isEn, alive, ui, preset: { presets, defaultPreset }, initialPrompt });
   const chat = useChatThread({ t, isEn, alive, state, form, generate });
@@ -8416,10 +8580,28 @@ function useStudio(props) {
   function startSession2() {
     return control.startSession(form.form.presetId || defaultPreset);
   }
-  function forceStartSession() {
-    return control.startSession(form.form.presetId || defaultPreset, { forceNew: true });
+  function requeueSession() {
+    return control.requeueSession(form.form.presetId || defaultPreset);
   }
-  const compute = { ...control, presets, defaultPreset, startSession: startSession2, forceStartSession, retryHost, kaggleLogin };
+  const queue = control.queue;
+  const queueNotice = queue.level === "stalled" && queue.key && queue.key !== dismissedQueueKey ? {
+    minutes: queue.stalledMinutes,
+    dismiss: () => setDismissedQueueKey(queue.key),
+    requeue: () => {
+      setDismissedQueueKey(queue.key);
+      return requeueSession();
+    }
+  } : null;
+  const compute = {
+    ...control,
+    presets,
+    defaultPreset,
+    startSession: startSession2,
+    requeueSession,
+    queueNotice,
+    retryHost,
+    kaggleLogin
+  };
   async function generate(overrides, options = {}) {
     if (sending) return;
     if (form.referenceBlocked) {
@@ -8534,9 +8716,9 @@ function useStudio(props) {
 }
 
 // src/studio/Studio.jsx
-var import_jsx_runtime28 = require("react/jsx-runtime");
-var StudioStyles = import_react35.default.memo(function StudioStyles2() {
-  return /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("style", { children: CSS });
+var import_jsx_runtime29 = require("react/jsx-runtime");
+var StudioStyles = import_react36.default.memo(function StudioStyles2() {
+  return /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("style", { children: CSS });
 });
 function Studio(props) {
   const { t, isEn, ui, compute, form, chat, library, guidance, actions } = useStudio(props);
@@ -8546,19 +8728,20 @@ function Studio(props) {
   const chatMode = ui.panelMode === "chat";
   const logs = useStudioLogs(ui.logsOpen);
   useCompletionNotice({ t, ui, job: compute.focusedJob, activeJob: compute.activeJob });
-  const panel = chatMode ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(ChatPanel, { t, ui, form, chat, library, actions }) : /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Rail, { t, ui, form, actions });
+  const panel = chatMode ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(ChatPanel, { t, ui, form, chat, library, actions }) : /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Rail, { t, ui, form, actions });
   const guidanceSurface = guidance && guidance.kind ? guidance.surface || guidanceSurfaceOf(guidance.kind) : "";
   const bannerGuidance = guidanceSurface === "banner" ? guidance : null;
   const noticeGuidance = guidanceSurface === "toast" ? guidance : null;
-  return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-root", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(StudioStyles, {}),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-app", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(TopBar, { t, isEn, ui, compute, form, library, defaultModelOpen: props.defaultModelOpen }),
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(SessionBar, { t, status, elapsedMs: sessionElapsed }),
-      bannerGuidance ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(GuidanceCard, { t, guidance: bannerGuidance, compute, actions, ui }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: `ofs-body${ui.view === "gallery" ? " is-gallery" : ""}`, children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "ofs-root", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(StudioStyles, {}),
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "ofs-app", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(TopBar, { t, isEn, ui, compute, form, library, defaultModelOpen: props.defaultModelOpen }),
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(SessionBar, { t, status, elapsedMs: sessionElapsed }),
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(QueueNotice, { t, notice: compute.queueNotice }),
+      bannerGuidance ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(GuidanceCard, { t, guidance: bannerGuidance, compute, actions, ui }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: `ofs-body${ui.view === "gallery" ? " is-gallery" : ""}`, children: [
         ui.view === "studio" ? panel : null,
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { className: "ofs-main", children: ui.view === "gallery" ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "ofs-main", children: ui.view === "gallery" ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
           Gallery,
           {
             t,
@@ -8581,16 +8764,16 @@ function Studio(props) {
               ui.setView("studio");
             }
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(import_jsx_runtime28.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(QueuePill, { t, compute }),
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Stage, { t, ui, compute, form, library, actions, now })
+        ) : /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(import_jsx_runtime29.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(QueuePill, { t, compute }),
+          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Stage, { t, ui, compute, form, library, actions, now })
         ] }) })
       ] }),
-      ui.view === "studio" ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Filmstrip, { t, ui, compute, library, now }) : null
+      ui.view === "studio" ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Filmstrip, { t, ui, compute, library, now }) : null
     ] }),
-    ui.logsOpen ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(LogsDrawer, { t, ui, compute, logs, onClose: ui.closeLogs }) : null,
-    ui.settingsOpen ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(SettingsDrawer, { t, ui, onClose: ui.closeSettings }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Toast, { t, toast: ui.toast, guidance: noticeGuidance, compute, actions, ui })
+    ui.logsOpen ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(LogsDrawer, { t, ui, compute, logs, onClose: ui.closeLogs }) : null,
+    ui.settingsOpen ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(SettingsDrawer, { t, ui, onClose: ui.closeSettings }) : null,
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Toast, { t, toast: ui.toast, guidance: noticeGuidance, compute, actions, ui })
   ] });
 }
 

@@ -266,6 +266,10 @@ async function main() {
     assert.equal(body.devMode, true)
     assert.ok(Array.isArray(body.presets) && body.presets.length >= 4)
     assert.equal(body.presets[0].pipeline, undefined, '预设不应泄露 pipeline 细节')
+    // 版本检查快照：开发模式不发起请求，但字段形状稳定（客户端按 hasUpdate 决定是否提示）。
+    assert.equal(body.update.current, VERSION)
+    assert.equal(body.update.hasUpdate, false)
+    assert.equal(body.update.latest, null)
   })
 
   await check('日志路由无会话时仍返回 hostLines 与老字段', async () => {

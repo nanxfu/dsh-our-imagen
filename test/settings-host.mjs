@@ -647,7 +647,8 @@ async function scenarioIndexAssembly() {
   console.log('\n── index.js 装配（真实插件入口）')
   const workspace = await makeWorkspace()
   const fake = createFakeContext(workspace)
-  applyPlugin(fake.ctx, {})
+  // 版本检查默认开启会在启动数秒后访问 npm 注册表；离线测试显式关闭，避免联网。
+  applyPlugin(fake.ctx, { updateCheck: false })
   const host = await startHost(fake.routes)
   try {
     await check('settings 路由已注册（单条路由按 method 分发），GET 返回默认脱敏视图', async () => {

@@ -128,10 +128,20 @@ export const TIMEOUTS = {
   // 总兜底时长约 recoveryMs + recoveryMaxRenewals × kernelPollMs（约 7 分钟），
   // 避免隧道重建稍久就杀掉一个仍在 RUNNING 的 Kernel（重新排队代价很高）。
   recoveryMaxRenewals: 10,
+  // 排队分级提示：本机历史日志里 6 次正常会话从推送完成到隧道会合约 14–22 秒
+  // （从会话启动算 18–30 秒）；样本很小，只用于挑提示阈值，不代表 Kaggle 排队的普遍保证。
+  // 超过慢档只更新一句状态提示（不打断用户），超过卡住档才建议换新实例重排（不自动执行）。
+  // 两档都可以被插件配置覆盖（见 index.js 的 queueSlowMinutes / queueStalledMinutes）。
+  queueSlowMs: 3 * 60 * 1000,
+  queueStalledMs: 10 * 60 * 1000,
   provisionMs: 45 * 60 * 1000,
   tunnelMs: 15 * 60 * 1000,
   sessionWaitMs: 45 * 60 * 1000,
   idleShutdownSec: 1800,
+  // Kernel 启动后等待宿主接管的时限（秒）：超过仍没有收到任何带 Token 的 Host 请求，
+  // daemon 自行退出。用于回收「放弃排队后仍被调度到」的孤儿 Kernel，避免空转到
+  // idleShutdownSec 才释放 GPU 配额。
+  kernelClaimSec: 600,
   kernelRunMaxSec: 10800,
   // 宿主本地动作
   revealWaitMs: 1500,

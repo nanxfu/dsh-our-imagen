@@ -53,6 +53,27 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 
 记录含远端 Bearer Token，只落盘、不进日志；开发模式（`devEndpoint`）不写该记录。
 
+**排队分级与「换新实例重排」（0.12.0）**：Kaggle 免费 GPU 的排队时长不稳定——本机历史日志里 6 次正常会话从推送完成到
+隧道会合约 14–22 秒（从会话启动算 18–30 秒；Kernel 日志反推容器启动在推送后 3–6 秒），但偶发队列条目卡住（45 分钟仍
+`QUEUED`）。样本很小，且集中在一个账号的几天内，这两组阈值只用于挑「提示时机」，**不代表 Kaggle 排队的普遍保证**。
+Host 因此把排队等待拆成四档：
+
+| 档位 | 触发条件 | 行为 |
+| :--- | :--- | :--- |
+| 正常 | `elapsed < queueSlowMs`（默认 3 分钟） | 状态条显示「正在排队等 GPU」 |
+| 变慢 | `elapsed ≥ queueSlowMs` | 只把等待提示换成「排队比平时久」，不弹卡、不改变状态色调 |
+| 卡住 | `elapsed ≥ queueStalledMs`（默认 10 分钟） | 客户端显示「排队超过 N 分钟还没拿到 GPU」横幅，主操作「换新实例重排」 |
+| 硬超时 | `elapsed ≥ provisionMs`（默认 45 分钟） | 收敛为 `error.queue_timeout`，客户端只给「换新实例重排」一个主操作 |
+
+阈值随 `/state.queuePolicy` 下发（插件配置 `queueSlowMinutes` / `queueStalledMinutes` 可覆盖，卡住档不会早于慢档）。
+
+**换新实例重排**：客户端调用 `POST /imagen-api/session/start` 并带 `{ "forceNew": true, "replace": true }`。
+Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个新 Kernel（新的排队条目）；本地等待中的任务
+继续等待新会话，不会被标记为 `stopped`。同样的旧 Kernel 清理也发生在：排队硬超时（`queue_timeout`）、
+隧道握手超时（`tunnel_timeout`）、以及会话仍在排队时的主动关机。旧 Kernel 删除失败（网络/权限）时，
+远端 daemon 的 `claim_timeout_sec`（默认 600 秒）兜底：启动后没有任何带 Token 的 Host 请求就自行退出，
+避免空转到 `idle_timeout_sec` 才释放 GPU 配额。
+
 ### 1.2 任务状态（Job Status）
 
 | `status` | 含义 |
@@ -96,7 +117,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | `cli_missing` | — | 本机未安装 `kaggle` CLI |
 | `cli_timeout` | — | `kaggle` CLI 启动超时 |
 | `push_failed` | — | 构建/推送 Kernel 失败 |
-| `queue_timeout` | — | Kaggle GPU 排队超时（默认 45 分钟） |
+| `queue_timeout` | — | Kaggle GPU 排队超时（默认 45 分钟）；Host 会放弃这次排队并 best-effort 删除旧 Kernel，客户端建议「换新实例重排」 |
 | `tunnel_timeout` | — | 容器已启动但隧道未建立 / 会合失败 |
 | `health_failed` | — | 隧道已建立但 `/health` 持续不可达 |
 | `remote_error` | — | 远端 daemon 主动报告错误 |
@@ -169,8 +190,8 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | POST | `/imagen-api/settings` | 保存运行设置（空闲关机 / 加速器 / HF Token / 预挂载 / 依赖约束） |
 | GET | `/imagen-api/ui-state` | 读取工作台界面状态（高级设置折叠等白名单字段） |
 | POST | `/imagen-api/ui-state` | 保存工作台界面状态（合并白名单字段） |
-| GET | `/imagen-api/kaggle/login` | 读取 Kaggle 直连登录态（试验特性） |
-| POST | `/imagen-api/kaggle/login` | 发起 / 取消登录，或提交粘贴的授权码（试验特性） |
+| GET | `/imagen-api/kaggle/login` | 读取 Kaggle 直连登录态 |
+| POST | `/imagen-api/kaggle/login` | 发起 / 取消登录，或提交粘贴的授权码 |
 
 ### 2.1 会话与状态
 
@@ -195,6 +216,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | `queue` | `{ running: id \| null, pending: number }` |
 | `devMode` | 是否通过 `devEndpoint` 走本地联调 |
 | `kaggleTransport` | 当前生效的 Kaggle 访问方式：`direct`（Node 直连 Kaggle API + 内置 OAuth 登录，**默认**）或 `cli`（调用本机 `kaggle` CLI，兼容退路） |
+| `update` | 插件自身版本检查快照：`current` / `latest` / `hasUpdate` / `releaseUrl` / `enginesDsh` / `checkedAt` / `stale` / `error`（见下） |
 
 - **响应示例**：
 
@@ -253,6 +275,17 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
     "idleTimeoutSec": 1800,
     "error": null
   },
+  "queuePolicy": { "slowMs": 180000, "stalledMs": 600000 },
+  "update": {
+    "current": "0.11.0",
+    "latest": "0.12.0",
+    "hasUpdate": true,
+    "releaseUrl": "https://github.com/nanxfu/dsh-our-imagen/releases/tag/v0.12.0",
+    "enginesDsh": ">=0.2.0",
+    "checkedAt": "2026-11-16T00:00:00.000Z",
+    "stale": false,
+    "error": null
+  },
   "probe": null,
   "probeAt": 0,
   "probeLastGood": null,
@@ -267,6 +300,16 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 > `presets` 是 `publicPresets()` 的结果：不含 `pipeline`（下发远端 daemon 用的加载描述），避免同一份数据在
 > 客户端快照里出现两份；`supportsImg2Img` / `supportsNegative` 等能力字段随公开视图下发，客户端据此决定参考图
 > 槽位与「排除项」是否可用。
+>
+> `queuePolicy` 是排队分级阈值（毫秒）：客户端据此决定「排队比平时久」提示与「换新实例重排」横幅的出现时机。
+> 旧 Host 不下发该字段时，客户端回落到契约 `TIMEOUTS.queueSlowMs` / `queueStalledMs`。
+>
+> `update` 是插件**自身**的版本检查快照，与云端会话版本无关：Host 只读查询 npm 注册表的
+> `dsh-our-imagen/latest`（npmjs 失败回退 npmmirror，单次 4 秒超时），成功结果缓存在
+> `<workspace>/.imagen/update-check.json`（24 小时有效），启动约 5 秒后首次检查、之后按 TTL 复查，
+> 失败静默保留上一次成功结果。只有 `hasUpdate=true` 时客户端才在顶栏算力胶囊上显示红点，
+> 并在算力弹层给出「新版本 vX 可用（当前 vY）」、`engines.dsh` 要求与 Release 说明链接；
+> **不下载、不安装、不阻断出图**。开发模式（`devEndpoint`）或插件配置 `updateCheck: false` 时不发起请求。
 
 #### `POST /imagen-api/probe`
 
@@ -318,7 +361,11 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 
 启动远端 GPU 会话。具备幂等性（会话已在运行中直接返回当前快照；`error` 态会先清空再重试）。
 
-- **请求体**：`{ "presetId": "sdxl-lightning" }`（可选；未知 id 回退 `defaultPreset`）
+- **请求体**：`{ "presetId": "sdxl-lightning", "forceNew": false, "replace": false }`
+  - `presetId` 可选；未知 id 回退 `defaultPreset`；
+  - `forceNew: true`：跳过「接管旧排队」检查，直接推送新 Kernel（`error` 态重试时使用）；
+  - `replace: true`：换新实例重排，允许在 `provisioning` / `connecting` 等活跃状态下放弃当前会话——
+    Host 先 best-effort 删除旧 Kernel，再推送新 Kernel；等待中的任务继续等待新会话。旧 Host 会忽略该字段。
 - **响应**：`{ "ok": true, "session": SessionSnapshot }`
 
 #### `POST /imagen-api/session/stop`
@@ -955,7 +1002,7 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
 | **采样步数** | 采样步数 | `(ℹ)` | 模型迭代去噪的步数。SDXL Lightning 推荐 4~8 步，SDXL Base 推荐 25~30 步。 |
 | **引导强度** | 引导强度 (CFG) | `(ℹ)` | 数值越高越贴合提示词，过高可能产生色彩失真。默认推荐 1.5~7.0。 |
 | **Kaggle 账号** | 账号 | `(!)` | Kaggle 账号必须完成手机号绑定。未绑定的账号会被平台静默降级为 CPU，无法出图。 |
-| **云端状态** | 云端就绪 / 正在准备模型 / 正在排队等 GPU | `(ℹ)` | 状态胶囊与状态条共用一套阶段文案：推送内核 → Kaggle 排队 → 建立隧道 → 加载模型 → 就绪；排队通常 3~10 分钟，已等待时长实时显示。 |
+| **云端状态** | 云端就绪 / 正在准备模型 / 正在排队等 GPU | `(ℹ)` | 状态胶囊与状态条共用一套阶段文案：推送内核 → Kaggle 排队 → 建立隧道 → 加载模型 → 就绪；多数会话几十秒内启动，超过 3 分钟提示「排队比平时久」，超过 10 分钟给「换新实例重排」横幅，45 分钟硬超时（阈值是经验值，非平台保证）。已等待时长实时显示。 |
 | **空闲休眠** | 闲置休眠阈值 | `(ℹ)` | 云端实例默认闲置 30 分钟自动关机，以节省你的每周 30 小时免费 GPU 额度。 |
 | **提示词输入** | 提示词 | `(ℹ)` | 请尽量用英文：九个预设都按英文提示词训练，中文提示词容易偏离预期。输入含中文时会给一条软提示（不拦截生成）。建议包含主体、光影、构图与画风。 |
 
@@ -1079,3 +1126,26 @@ Host 会**同步**把补发关机所需的最小信息（`endpointUrl` / `token`
     任务 / 错误气泡不进上下文）；Host 裁剪后作为多轮消息送入模型，`history` 非空时优先于 `previousPrompt`。
     确认卡默认随机种子，只有显式勾选「沿用上张构图」且表单未手填种子时才沿用上一张，避免跨主题对话构图僵化。
 13. **空态示例**：点击灵感示例只填入对话草稿，不改动参数表单。
+
+### 5.12 第九批交互补充（排队分级与换新实例重排，0.12.0）
+
+Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常会话从推送完成到隧道会合约 14–22 秒（样本仅 6 次、
+集中在一个账号的几天内，只用于挑阈值，不代表平台保证），但偶发队列条目卡住（45 分钟仍 `QUEUED`），重新推送
+一个 Kernel 往往几十秒就能拿到 GPU（同样受平台负载影响，不是保证）。界面据此把「继续等待」与「重排」拆成清晰的三层，不再让用户干等到
+45 分钟才发现可能卡住。阈值只影响提示时机，重排永远是用户主动选择，不会自动执行。
+
+1. **排队比平时久（3 分钟软提示）**：状态条等待提示换成「排队比平时久（多数会话几十秒内就能启动）」，
+   胶囊标签与色调不变，不弹卡、不打断操作。阈值取契约 `TIMEOUTS.queueSlowMs`（默认 3 分钟，插件配置
+   `queueSlowMinutes` 可覆盖）。
+2. **排队卡住横幅（10 分钟档）**：顶部出现非错误态横幅「排队超过 {N} 分钟还没拿到 GPU」，说明里给出判断依据，
+   动作只有两个：主操作「换新实例重排」（`forceNew + replace`：Host 删除旧 Kernel 后推新 Kernel）与
+   「继续等待」（只收起横幅，不改变会话）。同一轮排队只弹一次，重排后换了 `startedAt` 才会再次触发。
+   阈值取 `TIMEOUTS.queueStalledMs`（默认 10 分钟，配置 `queueStalledMinutes`）。
+3. **45 分钟硬超时卡收敛**：`queue_timeout` 错误卡的「继续等待当前队列」「打开 Kaggle Kernel」两个动作删除，
+   只保留主操作「换新实例重排」、次级「查看日志」与关闭；文案改为确定表述，不再出现「该 Kernel 可能仍在
+   队列中」这类不确定提示，也不再要求用户去 Kaggle 网页手动停止旧任务（Host 会自动清理）。
+4. **换新实例重排不打断排队任务**：重排只替换远端会话，本地 `waiting-session` / `queued` 任务继续等待新会话，
+   不会被标记为 `stopped`；新旧会话切换期间进度条按新 `startedAt` 重新计时。
+5. **旧 Kernel 自动清理**：排队超时、隧道握手超时、排队中主动关机与重排都会 best-effort 删除旧 Kernel；
+   远端 daemon 的 `claim_timeout_sec`（默认 600 秒）在删除失败时兜底，避免孤儿 Kernel 空转到 30 分钟才释放配额。
+

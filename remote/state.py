@@ -81,6 +81,9 @@ class BootState:
     current_attempt: TunnelAttempt | None = None
     # /shutdown 或信号置位后监管线程退出。整个进程只创建一个 Event。
     stop_event: threading.Event = field(default_factory=threading.Event)
+    # 启动接管信号：任一通过 Bearer 鉴权的 Host 请求置位（见 transport/http_server.py）。
+    # claim 看门狗在置位后不再触发；用 Event 而不是 bool，是为了跨线程读不持锁且幂等。
+    claim_event: threading.Event = field(default_factory=threading.Event)
 
 
 # 单例：全进程各一份，只原地更新（见模块头第 1 条）。

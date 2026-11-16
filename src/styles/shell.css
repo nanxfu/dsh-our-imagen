@@ -150,6 +150,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 插件自身有新版本：胶囊内的小圆点；详情与更新说明在弹层里，不打断出图。 */
+.ofs-update-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--ofs-warn);
+}
+
 .ofs-pill-caret {
   display: grid;
   place-items: center;
