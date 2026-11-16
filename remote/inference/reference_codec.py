@@ -10,6 +10,10 @@
 蒙版语义（跨端契约）：客户端导出的黑白 PNG，**白色 = 重绘区域，黑色 = 保留区域**，随参考图
 一起提交（job 级 ``reference.mask_b64``）。提交期只校验 base64 / PNG / 体积 / loader 白名单；
 执行期完整解码恰好一次，转灰度 ``'L'`` 并精确对齐到参考图宽高（尺寸不一致时最近邻缩放）。
+对齐后统计白色覆盖率：低于 ``contract.limits.mask.minCoverage`` 的空蒙版在加载模型前抛
+``RequestError``（job 收敛为 invalid_request），全白（整图重绘）允许；羽化半径按覆盖率
+自适应（见模块顶部常量）。带蒙版时 ``strength`` 上限取 ``contract.limits.strength.inpaintMax``，
+普通垫图仍用 ``max``。
 """
 
 from __future__ import annotations
@@ -25,20 +29,43 @@ from remote.errors import RequestError
 REFERENCE_IMAGE_FORMATS = ("PNG", "JPEG")
 
 # 局部重绘蒙版的边界处理：二进制硬边会让 4 通道 inpaint 路径留下可见矩形接缝。
-# 做法是「先按短边比例外扩白色区域，再做高斯羽化」，让边界有一段过渡带；
+# 做法是「先按蒙版规模外扩白色区域，再做高斯羽化」，让边界有一段过渡带；
 # 出图后再用同一张羽化蒙版把原图未涂抹区域贴回（见 ``composite_inpaint_image``）。
-MASK_FEATHER_RATIO = 0.008
-MASK_FEATHER_MIN_RADIUS = 2
-MASK_FEATHER_MAX_RADIUS = 24
+#
+# 外扩/羽化半径按蒙版覆盖率自适应（覆盖率 = 白色重绘像素 / 全图像素）：
+#  - < 0.5%：精细小蒙版（眼睛、嘴唇、花瓣这类局部涂抹），2px 即可，不波及周围像素；
+#  - < 5%：中等蒙版，4px 兼顾盖住抗锯齿边缘与笔画精细度；
+#  - 更大：按短边 0.8% 计算并钳在 6~8px，大蒙版需要更宽的过渡带才不露接缝。
+# 阈值与半径是首版估计（真机复验后可调），改动时同步 ``test/remote/test_reference.py``。
+MASK_FEATHER_TINY_COVERAGE = 0.005
+MASK_FEATHER_SMALL_COVERAGE = 0.05
+MASK_FEATHER_TINY_RADIUS = 2
+MASK_FEATHER_SMALL_RADIUS = 4
+MASK_FEATHER_LARGE_RATIO = 0.008
+MASK_FEATHER_LARGE_MIN_RADIUS = 6
+MASK_FEATHER_LARGE_MAX_RADIUS = 8
+# 旧调用方显式传 ``ratio`` 时的钳制范围（正常路径按覆盖率分档，不再使用该参数）。
+MASK_FEATHER_RATIO_MIN_RADIUS = 2
+MASK_FEATHER_RATIO_MAX_RADIUS = 8
+# 蒙版「白色」判定阈值：客户端导出的是 0/255 二值图，抗锯齿边缘按半亮以上算重绘区域。
+MASK_COVERAGE_WHITE_THRESHOLD = 128
+# 空蒙版拦截阈值的兜底值（契约 ``contract.limits.mask.minCoverage`` 缺失时使用）。
+MASK_MIN_COVERAGE_DEFAULT = 0.0005
 # 蒙版允许的容器格式：客户端导出的黑白二值图，只接受无损 PNG（有损格式会在边界造灰边）。
 MASK_IMAGE_FORMATS = ("PNG",)
 
 
-def _coerce_strength(value, *, limits_for) -> float:  # noqa: ANN001
-    """重绘强度归一到 ``contract.limits.strength``：非法/缺失回退默认值，越界钳制。"""
+def _coerce_strength(value, *, limits_for, has_mask: bool = False) -> float:  # noqa: ANN001
+    """重绘强度归一到 ``contract.limits.strength``：非法/缺失回退默认值，越界钳制。
+
+    上限按场景区分：``has_mask`` 为真时取 ``inpaintMax``（缺省回落 ``max``），
+    普通垫图仍用 ``max``——契约只放宽局部重绘，img2img 的保守上限不变。
+    """
     limits = limits_for("strength")
     low = float(limits.get("min", 0.0))
     high = float(limits.get("max", 1.0))
+    if has_mask:
+        high = float(limits.get("inpaintMax", high))
     default = float(limits.get("default", 0.6))
     if value is None or isinstance(value, bool):
         return default
@@ -124,10 +151,11 @@ def parse_reference_spec(  # noqa: ANN001
     """提交期校验 job 级参考图（含可选蒙版），归一成 ``{image_bytes, strength, width, height}``。
 
     只做「不需要完整解码」的检查：loader 白名单、base64 合法性、原始字节上限、PNG/JPEG、
-    最小长边与 strength 钳制。``raw.mask_b64`` 存在时再按局部重绘校验一遍：loader 必须同时
-    在 ``inpaint_loaders`` 白名单里（服务端独立兜底，不依赖前端置灰）、蒙版只接受 PNG、
-    体积按 ``contract.limits.mask.maxBytes``，此时额外返回 ``mask_bytes`` / ``mask_width`` /
-    ``mask_height``。返回 None 表示文生图请求（行为与改造前一致）。
+    最小长边与 strength 钳制（带蒙版时上限为 ``inpaintMax``，否则为 ``max``）。``raw.mask_b64``
+    存在时再按局部重绘校验一遍：loader 必须同时在 ``inpaint_loaders`` 白名单里（服务端独立
+    兜底，不依赖前端置灰）、蒙版只接受 PNG、体积按 ``contract.limits.mask.maxBytes``，此时
+    额外返回 ``mask_bytes`` / ``mask_width`` / ``mask_height``。返回 None 表示文生图请求
+    （行为与改造前一致）。
     """
     native_inpaint = pipeline_spec.get("nativeInpaint") is True
     if raw is None:
@@ -166,7 +194,10 @@ def parse_reference_spec(  # noqa: ANN001
         _close_quietly(image)
     spec = {
         "image_bytes": data,
-        "strength": _coerce_strength(raw.get("strength"), limits_for=limits_for),
+        # 带蒙版时按 inpaintMax 归一（提交期已判断过 has_mask），否则仍用 max。
+        "strength": _coerce_strength(
+            raw.get("strength"), limits_for=limits_for, has_mask=has_mask
+        ),
         "width": int(width),
         "height": int(height),
     }
@@ -245,13 +276,18 @@ def decode_reference_image(reference: dict, *, limits_for) -> object:  # noqa: A
     return image
 
 
-def decode_mask_image(mask: dict, *, size) -> object:  # noqa: ANN001
+def decode_mask_image(mask: dict, *, size, limits_for) -> object:  # noqa: ANN001
     """执行期完整解码蒙版一次：转灰度 ``'L'``，并精确对齐到参考图宽高。
 
     ``size`` 是参考图实际送入模型的 ``(width, height)``。蒙版尺寸与之不一致时按**最近邻**
     缩放：蒙版是黑白二值图，双线性 / 三次插值会造出灰边，让边界像素变成「半重绘」，
     表现为重绘区域被削弱或溢出。返回的 PIL Image 可直接作为 ``mask_image`` 传给 inpaint
-    管线；原始尺寸挂在 ``_imagen_source_size`` 上，供 run_task 打日志与回传结果字段。
+    管线；原始尺寸挂在 ``_imagen_source_size``、白色覆盖率挂在 ``_imagen_coverage`` 上，
+    供 run_task 打日志、execute_job 挑羽化档位与回传结果字段。
+
+    对齐后统计白色（重绘）区域覆盖率：低于 ``contract.limits.mask.minCoverage`` 视为空蒙版
+    （典型场景是外部直接传全黑 PNG），抛 ``RequestError`` 让 job 在加载模型前收敛为
+    invalid_request；全白（整图重绘）是合法请求，必须放行。
     """
     if not isinstance(mask, dict):
         raise RequestError("reference.mask_b64 缺失，无法解码蒙版")
@@ -288,21 +324,72 @@ def decode_mask_image(mask: dict, *, size) -> object:  # noqa: ANN001
             except Exception:  # pragma: no cover
                 pass
         raise
+    coverage = mask_coverage(image)
+    min_coverage = float(limits_for("mask").get("minCoverage", MASK_MIN_COVERAGE_DEFAULT))
+    if coverage is not None and coverage < min_coverage:
+        _close_quietly(image)
+        raise RequestError(
+            f"蒙版是空的：没有涂抹任何区域（白色覆盖率 {coverage:.4%}，"
+            f"低于 {min_coverage:.4%}）；请在参考图上涂抹需要重绘的区域后重试"
+        )
     try:
         image._imagen_source_size = source_size
+        image._imagen_coverage = coverage
     except Exception:  # pragma: no cover - PIL Image 允许挂属性，仅作防御
         pass
     return image
 
-def feather_mask_image(mask, *, ratio=None):  # noqa: ANN001
-    """把二值蒙版做「外扩 + 羽化」，返回新的灰度 ``'L'`` 图（原地调用方负责关闭入参）。
+
+def mask_coverage(image) -> float | None:  # noqa: ANN001
+    """统计蒙版白色（重绘区域）像素占比，返回 0.0~1.0；非 PIL 对象返回 None。
+
+    兼容离线单测的假图替身：无法做像素统计时返回 None，调用方据此跳过空蒙版拦截
+    （真实运行环境由 Pillow 保证可统计）。``convert('L')`` 对已是灰度的图返回自身，不复制。
+    """
+    try:
+        from PIL import Image
+    except Exception:  # pragma: no cover - 无 Pillow 的离线环境
+        return None
+    try:
+        if not isinstance(image, Image.Image):
+            return None
+        histogram = image.convert("L").histogram()
+    except Exception:  # pragma: no cover - 异常图不应被误判成空蒙版
+        return None
+    total = sum(histogram)
+    if total <= 0:
+        return 0.0
+    return sum(histogram[MASK_COVERAGE_WHITE_THRESHOLD:]) / float(total)
+
+
+def feather_radius_for(size, coverage=None) -> int:  # noqa: ANN001
+    """按蒙版尺寸与覆盖率挑羽化半径（像素）：小蒙版精细、大蒙版过渡宽。
+
+    覆盖率未知（旧调用 / 非 PIL 替身）时按大蒙版档处理，保持改造前的保守过渡带。
+    """
+    short_edge = min(max(1, int(size[0])), max(1, int(size[1])))
+    if coverage is not None and coverage < MASK_FEATHER_TINY_COVERAGE:
+        return MASK_FEATHER_TINY_RADIUS
+    if coverage is not None and coverage < MASK_FEATHER_SMALL_COVERAGE:
+        return MASK_FEATHER_SMALL_RADIUS
+    radius = int(round(short_edge * MASK_FEATHER_LARGE_RATIO))
+    return max(MASK_FEATHER_LARGE_MIN_RADIUS, min(MASK_FEATHER_LARGE_MAX_RADIUS, radius))
+
+
+def feather_mask_image(mask, *, ratio=None, coverage=None):  # noqa: ANN001
+    """把二值蒙版做「外扩 + 羽化」，返回新的灰度 ``'L'`` 图（调用方负责关闭入参）。
 
     为什么需要：蒙版是硬边黑白图，而 SDXL 底座走的是 4 通道「每步把未涂抹区域混回」
-    路径，边界没有专门融合能力，硬边会留下可见的矩形接缝。先按短边比例把白色区域
-    向外扩一圈（盖住涂抹边缘的抗锯齿像素），再用高斯羽化造一段过渡带；出图后再用
-    同一张羽化蒙版把原图未涂抹区域贴回（``composite_inpaint_image``）。
+    路径，边界没有专门融合能力，硬边会留下可见的矩形接缝。先把白色区域向外扩一圈
+    （盖住涂抹边缘的抗锯齿像素），再用高斯羽化造一段过渡带；出图后再用同一张羽化蒙版
+    把原图未涂抹区域贴回（``composite_inpaint_image``）。
 
-    非 PIL 图像（离线测试替身）原样返回，不做像素处理。
+    半径按蒙版覆盖率自适应（见模块顶部常量）：``coverage`` 由 execute_job 传入
+    （decode_mask_image 已统计过），缺省时这里现算一次；``ratio`` 是旧调用方的显式
+    短边比例，仅排障用。
+
+    非 PIL 图像（离线测试替身）原样返回，不做像素处理；返回值上挂
+    ``_imagen_source_size`` / ``_imagen_coverage`` / ``_imagen_feather_radius`` 供日志使用。
     """
     try:
         from PIL import Image, ImageFilter
@@ -311,10 +398,14 @@ def feather_mask_image(mask, *, ratio=None):  # noqa: ANN001
     if not isinstance(mask, Image.Image):
         return mask
     width, height = mask.size
-    short_edge = min(int(width), int(height))
-    scale = MASK_FEATHER_RATIO if ratio is None else float(ratio)
-    radius = int(round(short_edge * scale))
-    radius = max(MASK_FEATHER_MIN_RADIUS, min(MASK_FEATHER_MAX_RADIUS, radius))
+    if coverage is None:
+        coverage = mask_coverage(mask)
+    if ratio is None:
+        radius = feather_radius_for(mask.size, coverage)
+    else:
+        short_edge = min(int(width), int(height))
+        radius = int(round(short_edge * float(ratio)))
+        radius = max(MASK_FEATHER_RATIO_MIN_RADIUS, min(MASK_FEATHER_RATIO_MAX_RADIUS, radius))
     try:
         work = mask.convert("L")
         if work is mask:
@@ -328,6 +419,8 @@ def feather_mask_image(mask, *, ratio=None):  # noqa: ANN001
         return mask
     try:
         work._imagen_source_size = getattr(mask, "_imagen_source_size", mask.size)
+        work._imagen_coverage = coverage
+        work._imagen_feather_radius = radius
     except Exception:  # pragma: no cover - 属性写入失败不影响结果
         pass
     return work

@@ -232,7 +232,8 @@ Windows 上也不依赖 Python `Scripts` 目录进 PATH。
 
 1. **Host 入队校验**（`lib/jobs/`）：`reference` 支持 `path`（`imagen-output/` 内作品）或 `image`
    （base64，可带 data URL 前缀）二选一；入队前做词法校验（相对路径、拒绝 `..`/绝对路径）、
-   base64/体积/PNG-JPEG 魔数校验与 `strength` 归一（按契约钳制并对齐 step）。非法值立即 400，
+   base64/体积/PNG-JPEG 魔数校验与 `strength` 归一（按契约钳制并对齐 step，带蒙版时上限用
+   `LIMITS.strength.inpaintMax`、否则用 `max`）。非法值立即 400，
    不占队列位置。`params.reference = { sourcePath, strength }` 进入公开视图，二进制只留在任务内部。
 2. **Host 执行期**：`resolveReferencePayload()` 用 `resolveOutputPath` 校验并读取画廊文件（只允许
    `imagen-output/` 内、拒绝软链接逃逸），再校验体积与格式，base64 后作为 job 级
@@ -248,16 +249,22 @@ Windows 上也不依赖 Python `Scripts` 目录进 PATH。
 
 **局部重绘（Inpaint，0.12.0）** 复用同一条链路，只多一个可选蒙版：
 
-- 契约 `LIMITS.mask = { maxBytes: 2 MiB }`，蒙版是客户端生成的 PNG base64（白 = 重绘区域、
-  黑 = 保留区域），与 `reference` 一起提交；`reference.mask` 缺省时请求体与纯图生图逐字一致。
+- 契约 `LIMITS.mask = { maxBytes: 2 MiB, minCoverage: 0.0005 }`，蒙版是客户端生成的 PNG base64
+  （白 = 重绘区域、黑 = 保留区域），与 `reference` 一起提交；`reference.mask` 缺省时请求体与纯图生图
+  逐字一致。`strength` 带蒙版时上限放宽到 `LIMITS.strength.inpaintMax`（1.0），img2img 仍用 `max`（0.9），
+  Host 与 daemon 用同一口径（`lib/jobs/validator.js` / `reference_codec._coerce_strength`）。
 - Host 只做词法与字节级预检（PNG 魔数、体积、无参考图时带蒙版直接拒绝），并把
   `reference: { image_b64, strength, mask_b64? }` 透传给远端；产物 `meta.json` 加 `inpaint: true`。
   出图路由的请求体上限按「参考图 + 蒙版」一起推导（`lib/routes/jobs.js`），否则两张图同时顶格时
   会在路由层被 `invalid_body` 拦掉。
 - 远端 `ensure_inpaint_pipeline()` 用 `AutoPipelineForInpainting.from_pipe(STATE.pipe)` 惰性创建
   （`STATE.inpaint_pipe`，与 img2img 一样随切模型 / `release_pipeline()` 清空）；`decode_mask_image()`
-  执行期完整解码一次、转灰度 `'L'` 并用最近邻对齐到参考图精确宽高，`run_task()` 走
-  `image` + `mask_image` + `strength` 分支（不传 width/height，出图尺寸跟随参考图）。
+  执行期完整解码一次、转灰度 `'L'`、用最近邻对齐到参考图精确宽高，并统计白色（重绘）覆盖率：
+  低于 `contract.limits.mask.minCoverage` 的空蒙版在加载模型前以 `invalid_request` 失败（全白允许）。
+  `feather_mask_image()` 按覆盖率自适应羽化半径（< 0.5% → 2px，< 5% → 4px，更大按短边 0.8% 钳在
+  6~8px），出图后再用同一张羽化蒙版做像素级合成。`run_task()` 走 `image` + `mask_image` + `strength`
+  分支，并显式下传按 8 对齐的参考图宽高（`w // 8 * 8`、`h // 8 * 8`）——非正方形参考图不再被管线的
+  缺省方形推理后拉回；管线不支持该参数时由 `__call__` 签名过滤丢弃，composite 仍是尺寸不一致时的兜底。
 - 能力声明：模型资产 `supportsInpaint`（首期仅 SDXL 家族 true，且必须同时 `supportsImg2Img`），
   daemon 侧由 loader 白名单 `SUPPORTED_INPAINT_LOADERS` 独立兜底，不信任客户端标记。
 - **专用 inpaint 权重（0.12.0）**：`models/sdxl-inpaint.json` 用 `pipeline.nativeInpaint: true` +

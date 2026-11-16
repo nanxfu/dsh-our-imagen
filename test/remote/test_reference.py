@@ -34,6 +34,9 @@ from support import (
     make_reference_b64,
 )
 
+# 纯函数实现模块：契约缺键时的回落分支、覆盖率/羽化半径这类不经过 daemon 包装的断言直接打这里。
+from remote.inference import reference_codec as codec  # noqa: E402
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # v0.9 M3：图生图（垫图重绘）
@@ -57,15 +60,38 @@ class ReferenceLimitsTest(DaemonUnitTest):
         self.contract_config()
         spec = d._limit_spec("mask")
         mask = self.limits()["mask"]
-        for key in ("maxBytes",):
+        for key in ("maxBytes", "minCoverage"):
             self.assertEqual(spec[key], mask[key])
 
     def test_strength_limits_include_default_from_contract(self) -> None:
         self.contract_config()
         spec = d._limit_spec("strength")
         strength = self.limits()["strength"]
-        for key in ("min", "max", "step", "default"):
+        for key in ("min", "max", "inpaintMax", "step", "default"):
             self.assertEqual(spec[key], strength[key])
+
+    def test_strength_ceiling_is_relaxed_only_with_mask(self) -> None:
+        """蒙版场景上限 1.0，纯 img2img 仍是 0.9（既有行为不变）。"""
+        self.contract_config()
+        strength = self.limits()["strength"]
+        self.assertGreater(strength["inpaintMax"], strength["max"])
+        # 无蒙版：仍按 max 钳制。
+        self.assertEqual(d._coerce_strength(1.0), strength["max"])
+        self.assertEqual(d._coerce_strength(99), strength["max"])
+        # 带蒙版：放宽到 inpaintMax，且中间值不被改写。
+        self.assertEqual(d._coerce_strength(1.0, has_mask=True), strength["inpaintMax"])
+        self.assertEqual(d._coerce_strength(99, has_mask=True), strength["inpaintMax"])
+        self.assertEqual(d._coerce_strength(0.75, has_mask=True), 0.75)
+
+    def test_missing_inpaint_max_falls_back_to_max(self) -> None:
+        """旧契约 / 自定义契约没给 inpaintMax 时，带蒙版也必须回落到 max。"""
+        limits = {"min": 0.1, "max": 0.8, "step": 0.05, "default": 0.5}
+        self.assertEqual(
+            codec._coerce_strength(9, limits_for=lambda _name: limits, has_mask=True), 0.8
+        )
+        self.assertEqual(
+            codec._coerce_strength(0.5, limits_for=lambda _name: limits, has_mask=True), 0.5
+        )
 
     def test_strength_normalization_is_contract_driven(self) -> None:
         self.contract_config()
@@ -367,6 +393,15 @@ class MaskValidationTest(DaemonUnitTest):
             spec = self.parse(make_reference())
         self.assertEqual(set(spec), {"image_bytes", "strength", "width", "height"})
 
+    def test_strength_ceiling_is_relaxed_only_with_mask(self) -> None:
+        # 提交期归一：带蒙版按 inpaintMax 放行 1.0，无蒙版仍按 img2img 的 max 钳到 0.9。
+        limits = CONTRACT["limits"]["strength"]
+        with mock.patch.dict(sys.modules, fake_pil_for(FakePILImage((512, 512)))):
+            masked = self.parse(self.masked(strength=1.0))
+            plain = self.parse(make_reference(strength=1.0))
+        self.assertEqual(masked["strength"], limits["inpaintMax"])
+        self.assertEqual(plain["strength"], limits["max"])
+
     def test_accepts_mask_on_sdxl_family(self) -> None:
         for loader in ("sdxl", "sdxl-lora"):
             with mock.patch.dict(
@@ -512,6 +547,11 @@ class MaskDecodeTest(DaemonUnitTest):
             with self.assertRaises(d.RequestError):
                 d.decode_mask_image(mask, (512, 512))
 
+    def test_non_pil_mask_skips_coverage_guard(self) -> None:
+        # 离线替身没有像素可统计：覆盖率返回 None，跳过空蒙版拦截（真实 Pillow 环境会拦住）。
+        image = self.decode(FakePILImage((64, 32), mode="L"))
+        self.assertIsNone(image._imagen_coverage)
+
 
 @unittest.skipUnless(HAS_PILLOW, "需要 Pillow 做真实 PNG/JPEG 解码的集成用例")
 class ReferencePillowIntegrationTest(DaemonUnitTest):
@@ -604,6 +644,79 @@ class ReferencePillowIntegrationTest(DaemonUnitTest):
                 make_pipeline(),
             )
         self.assertIn("蒙版必须是 PNG", str(ctx.exception))
+
+    def rect_mask_b64(self, size, box, mode="L") -> str:  # noqa: ANN001
+        """在黑色蒙版上涂一个白色矩形（``box`` = (left, top, right, bottom)）。"""
+        image = _RealPILImage.new(mode, size, 0)
+        white = 255 if mode == "L" else (255, 255, 255)
+        image.paste(white, box)
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        return self.encode(buffer, "PNG")
+
+    def mask_spec(self, mask_b64, size=(1024, 1024)):  # noqa: ANN001, ANN202
+        return d.parse_reference_spec(
+            {"image_b64": self.png_b64(size), "mask_b64": mask_b64}, make_pipeline()
+        )
+
+    def test_decode_reports_mask_coverage(self) -> None:
+        # 256² 里 64×64 = 6.25% 的白色区域。
+        spec = self.mask_spec(self.rect_mask_b64((256, 256), (0, 0, 64, 64)), size=(256, 256))
+        mask = d.decode_mask_image(spec, (256, 256))
+        self.assertAlmostEqual(mask._imagen_coverage, 0.0625, places=4)
+
+    def test_decode_rejects_empty_mask(self) -> None:
+        # 全黑蒙版 = 没有涂抹区域：必须在加载模型前以 invalid_request（RequestError）收敛。
+        spec = self.mask_spec(self.mask_png_b64((1024, 1024), fill=0))
+        with self.assertRaises(d.RequestError) as ctx:
+            d.decode_mask_image(spec, (1024, 1024))
+        message = str(ctx.exception)
+        self.assertIn("蒙版是空的", message)
+        self.assertIn("没有涂抹", message)
+
+    def test_decode_rejects_mask_below_min_coverage(self) -> None:
+        # 1024² 里只涂 10×10：覆盖率约 0.0095%，低于契约 0.05%。
+        spec = self.mask_spec(self.rect_mask_b64((1024, 1024), (0, 0, 10, 10)))
+        with self.assertRaises(d.RequestError) as ctx:
+            d.decode_mask_image(spec, (1024, 1024))
+        self.assertIn("蒙版是空的", str(ctx.exception))
+
+    def test_decode_allows_mask_above_min_coverage(self) -> None:
+        # 1000² 里涂 55×10 = 550 像素（0.055%），刚过契约的 0.05% 阈值。
+        spec = self.mask_spec(self.rect_mask_b64((1000, 1000), (0, 0, 55, 10)), size=(1000, 1000))
+        mask = d.decode_mask_image(spec, (1000, 1000))
+        min_coverage = CONTRACT["limits"]["mask"]["minCoverage"]
+        self.assertGreaterEqual(mask._imagen_coverage, min_coverage)
+        self.assertAlmostEqual(mask._imagen_coverage, 0.00055, places=5)
+
+    def test_decode_allows_full_white_mask(self) -> None:
+        # 全白 = 整图重绘，合法：不能因为“不是局部涂抹”被拦下。
+        spec = self.mask_spec(self.mask_png_b64((256, 256), fill=255), size=(256, 256))
+        mask = d.decode_mask_image(spec, (256, 256))
+        self.assertEqual(mask._imagen_coverage, 1.0)
+
+    def test_decode_coverage_is_measured_after_alignment(self) -> None:
+        # 蒙版比参考图小：最近邻放大到参考图宽高后，覆盖率仍是白色像素占比（约 2%）。
+        spec = self.mask_spec(self.rect_mask_b64((100, 100), (0, 0, 20, 10)), size=(400, 200))
+        mask = d.decode_mask_image(spec, (400, 200))
+        self.assertEqual(mask.size, (400, 200))
+        self.assertAlmostEqual(mask._imagen_coverage, 0.02, delta=0.004)
+
+    def test_min_coverage_guard_reads_contract_limit(self) -> None:
+        # 阈值来自 limits_for("mask")：调高后同一张 6.25% 的蒙版也必须被拦。
+        spec = self.mask_spec(self.rect_mask_b64((256, 256), (0, 0, 64, 64)), size=(256, 256))
+        real_limit_spec = d._limit_spec
+
+        def strict_limit_spec(name):  # noqa: ANN001, ANN202
+            item = dict(real_limit_spec(name))
+            if name == "mask":
+                item["minCoverage"] = 0.5
+            return item
+
+        with mock.patch.object(d, "_limit_spec", strict_limit_spec):
+            with self.assertRaises(d.RequestError) as ctx:
+                d.decode_mask_image(spec, (256, 256))
+        self.assertIn("蒙版是空的", str(ctx.exception))
 
 
 class GenerateWithReferenceTest(DaemonUnitTest):
@@ -742,6 +855,42 @@ class MaskFeatherCompositeTest(DaemonUnitTest):
     def test_feather_passes_non_pil_objects_through(self) -> None:
         marker = object()
         self.assertIs(d.feather_mask_image(marker), marker)
+
+    def test_feather_radius_follows_mask_coverage_tiers(self) -> None:
+        # 三档：< 0.5% → 2px；< 5% → 4px；更大 → clamp(round(短边×0.008), 6, 8)。
+        tiny = _RealPILImage.new("L", (1024, 1024), 0)
+        tiny.paste(255, (0, 0, 4, 4))  # 约 0.0015%
+        medium = _RealPILImage.new("L", (512, 512), 0)
+        medium.paste(255, (0, 0, 40, 40))  # 约 0.61%
+        large = _RealPILImage.new("L", (1024, 768), 0)
+        large.paste(255, (100, 100, 900, 700))  # 约 61%
+        self.assertEqual(d.feather_mask_image(tiny)._imagen_feather_radius, 2)
+        self.assertEqual(d.feather_mask_image(medium)._imagen_feather_radius, 4)
+        # 短边 768 × 0.008 ≈ 6.14 → 6px。
+        self.assertEqual(d.feather_mask_image(large)._imagen_feather_radius, 6)
+        # 短边 1024 × 0.008 ≈ 8.19 → 封顶 8px；全白蒙版覆盖率 1.0 属于大蒙版档。
+        whole = _RealPILImage.new("L", (1024, 1024), 255)
+        full = d.feather_mask_image(whole)
+        self.assertEqual(full._imagen_feather_radius, 8)
+        self.assertEqual(full._imagen_coverage, 1.0)
+
+    def test_small_mask_feather_radius_keeps_neighbours_untouched(self) -> None:
+        # 256² 里 16×16 = 0.39% 的小蒙版：半径 2px 只影响边界附近，远处像素严格保持黑色。
+        mask = _RealPILImage.new("L", (256, 256), 0)
+        mask.paste(255, (120, 120, 136, 136))
+        feathered = d.feather_mask_image(mask)
+        self.assertEqual(feathered._imagen_feather_radius, 2)
+        self.assertGreater(feathered.getpixel((128, 128)), 245, "涂抹中心仍应接近全白")
+        self.assertEqual(feathered.getpixel((110, 128)), 0, "半径 2px 不应波及 10px 外的像素")
+        self.assertGreater(feathered.getpixel((117, 128)), 0, "边界外侧应有过渡带")
+
+    def test_feather_uses_passed_coverage_instead_of_rescanning(self) -> None:
+        # execute_job 已算过覆盖率：入参优先（这里故意传一档小半径的覆盖率验证确实被采用）。
+        mask = _RealPILImage.new("L", (512, 512), 0)
+        mask.paste(255, (0, 0, 40, 40))
+        feathered = d.feather_mask_image(mask, coverage=0.001)
+        self.assertEqual(feathered._imagen_feather_radius, 2)
+        self.assertEqual(feathered._imagen_coverage, 0.001)
 
     def test_composite_keeps_black_region_exact(self) -> None:
         original = _RealPILImage.new("RGB", (128, 128), (10, 20, 30))

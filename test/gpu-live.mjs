@@ -20,6 +20,14 @@
  *     做 Inpaint，report.json 记录蒙版字节数、对齐后的参考图尺寸与显存对比（验证
  *     `AutoPipelineForInpainting.from_pipe` 复用底座）。`--inpaint-prompt` 可给重绘单独
  *     的提示词，用于确认蒙版区真的按新内容重写。只能配单个支持 Inpaint 的预设使用。
+ *     §六 真机验收的扩展参数：
+ *       - `--reference-size WxH`：源文生图按给定宽高出图（非正方形验收，如 1024x768），
+ *         程序化蒙版与参考图同比例生成；
+ *       - `--mask-scale <0~1>`：中心蒙版面积占比（如 0.05 = 5%），默认沿用 `--mask-size` 旧口径；
+ *       - `--strength-compare 0.9,1.0`：同一蒙版按多档强度各重绘一次，记录蒙版内平均差异；
+ *       - `--inpaint-rounds <n>`：连续局部重绘轮数（第 2 轮起把上一轮出图当参考图继续重绘）。
+ *     report.json 的 `inpaint.rounds[]` 记录每轮 strength / 耗时 / result 宽高 / 参考图与
+ *     蒙版尺寸 / 蒙版覆盖率 / 蒙版内平均差异，便于验收文档直接引用。
  *
  * 前置条件：默认走直连，本机有可用的 Kaggle 凭据（`~/.kaggle/credentials.json` 等）即可；
 加 `--cli` 时才要求本机安装并登录 kaggle CLI。账号需启用 GPU 加速器且当天配额充足。
@@ -31,7 +39,7 @@ import { spawn } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { deflateSync } from 'node:zlib'
+import { deflateSync, inflateSync } from 'node:zlib'
 
 import { SessionManager } from '../lib/session.js'
 import {
@@ -80,6 +88,9 @@ function printHelp() {
   node test/gpu-live.mjs --presets <id1,id2,...> [--prompt <text>] [--keep]
   node test/gpu-live.mjs --preset sdxl-lightning --img2img [--strength 0.6]
   node test/gpu-live.mjs --preset sdxl-lightning --inpaint [--strength 0.6]
+  node test/gpu-live.mjs --preset sdxl-inpaint --inpaint --reference-size 1024x768 --mask-scale 0.05
+  node test/gpu-live.mjs --preset sdxl-inpaint --inpaint --strength-compare 0.9,1.0
+  node test/gpu-live.mjs --preset sdxl-inpaint --inpaint --inpaint-rounds 2
 
 选项：
   --preset <id>     单预设模式（默认 sdxl-lightning），出图一张
@@ -90,6 +101,18 @@ function printHelp() {
   --inpaint-prompt <text>
                     局部重绘使用单独的提示词（默认与 --prompt 相同）。给一段与文生图不同的描述，
                     才能肉眼确认白色蒙版区真的按新内容重写
+  --reference-size WxH
+                    仅 --inpaint：源文生图的宽高（默认跟随 --source-preset 的 size），
+                    用于非正方形验收（如 1024x768）；程序化蒙版按参考图同比例生成
+  --mask-scale <0~1>
+                    仅 --inpaint：中心蒙版面积占画布的比例（如 0.05 = 5%）。
+                    默认沿用 --mask-size 的旧口径（rect 为边长比例 0.4）
+  --strength-compare <a,b,...>
+                    仅 --inpaint：同一参考图与蒙版按多档强度各重绘一次（如 0.9,1.0），
+                    report 记录每档的蒙版内平均差异；不能与 --inpaint-rounds 同时使用
+  --inpaint-rounds <n>
+                    仅 --inpaint：连续局部重绘轮数（1~3，默认 1）。第 2 轮起把上一轮出图
+                    当作参考图继续重绘，用于验证「以结果继续重绘」；模型不重新加载
   --max-queue-minutes <n>
                     排队超过 n 分钟仍是 QUEUED 时自动换新实例重排（默认 5，0 表示一直等）
   --max-replace <n> 最多换新实例几次（默认 3）；每次会用 DeleteKernel 清理旧 Kernel
@@ -100,7 +123,7 @@ function printHelp() {
   --mask-size <n>   蒙版尺寸占画布边长的比例（0.02~1，默认 0.4）；调小可模拟真实小笔刷
   --mask-center <x,y>
                     蒙版中心位置（0~1 相对坐标，默认 0.5,0.5 画面中心）
-  --strength <n>    垫图 / 局部重绘强度（0.2~0.9，默认 0.6）
+  --strength <n>    垫图 / 局部重绘强度（img2img 0.2~0.9；--inpaint 时上限放宽到 1.0，默认 0.6）
   --cli             用本机 kaggle CLI 推 Kernel（默认走直连，不需要 CLI）
   --keep            结束后不关机，保留 Kernel 便于手动观察
   --help, -h        显示本帮助；不会推送 Kernel，也不会消耗配额
@@ -112,11 +135,35 @@ function printHelp() {
   - Kaggle 账号已绑定手机号并启用 GPU 加速器，当天 GPU 配额充足
 
 报告：bench-results/gpu-live/<时间戳>/report.json
-  - models[]：每个预设的 modelId / pipelineKind / 加载秒数 / 出图秒数 / PNG 字节数
+  - models[]：每个预设的 modelId / pipelineKind / 加载秒数 / 出图秒数 / 出图宽高 / PNG 字节数
+  - inpaint：局部重绘每轮/每档的 result 宽高、参考图与蒙版尺寸、蒙版覆盖率与蒙版内平均差异
   - versions：远端 /health 上报的依赖版本快照（用于维护 LKGR 基线）
   - cacheLogs：远端 [cache] 日志摘要，拉取失败时为 null（不影响验证结论）
 
 可用预设：${PRESETS.map((preset) => preset.id).join(', ')}`)
+}
+
+/** 按契约钳制并对齐一个出图尺寸（非正方形验收用）。 */
+function normalizeDimensionValue(value, limits = LIMITS.width) {
+  const number = Number(value)
+  const { min, max, step } = limits
+  const base = Number.isFinite(number) ? Math.round(number) : min
+  const clamped = Math.min(max, Math.max(min, base))
+  return Math.round(clamped / step) * step
+}
+
+/**
+ * 按契约钳制重绘强度（两位小数，与 Host validator 同口径）。
+ * ``ceiling`` 是场景上限：局部重绘传 ``LIMITS.strength.inpaintMax``，img2img 保持 ``max``。
+ */
+function normalizeStrengthValue(value, ceiling = LIMITS.strength.max) {
+  const { min, max, step } = LIMITS.strength
+  const hardMax = Math.max(max, Number(LIMITS.strength.inpaintMax) || max)
+  const upper = Math.min(hardMax, Math.max(max, Number(ceiling) || max))
+  const raw = Number.isFinite(Number(value)) ? Number(value) : LIMITS.strength.default
+  const clamped = Math.min(upper, Math.max(min, raw))
+  const aligned = min + Math.round((clamped - min) / step) * step
+  return Math.round(Math.min(upper, Math.max(min, aligned)) * 100) / 100
 }
 
 /** 解析并校验命令行参数；--help 由调用方提前处理，不会走到这里。 */
@@ -148,9 +195,64 @@ function parseOptions() {
     console.log(`  · 提示：源图与重绘使用同一预设 ${sourcePresetArg}`)
   }
   if (img2img && inpaint) throw new Error('--img2img 与 --inpaint 是两种独立验收，请分开运行')
+  // 强度上限按场景：局部重绘允许契约 inpaintMax（1.0），img2img 仍用 max（0.9）。
   const rawStrength = Number(argOf('strength', String(LIMITS.strength.default)))
-  const { min, max } = LIMITS.strength
-  const strength = Number.isFinite(rawStrength) ? Math.min(max, Math.max(min, rawStrength)) : LIMITS.strength.default
+  const strength = normalizeStrengthValue(
+    Number.isFinite(rawStrength) ? rawStrength : LIMITS.strength.default,
+    inpaint ? LIMITS.strength.inpaintMax : LIMITS.strength.max,
+  )
+  // 非正方形验收：--reference-size WxH 同时决定源文生图宽高（蒙版按参考图同比例生成）。
+  let referenceSize = null
+  if (process.argv.includes('--reference-size')) {
+    if (!inpaint) throw new Error('--reference-size 只能配合 --inpaint 使用')
+    const raw = String(argOf('reference-size', '')).trim()
+    const match = raw.match(/^(\d+)\s*[x×]\s*(\d+)$/i)
+    if (!match) throw new Error(`--reference-size 格式应为 WxH（例如 1024x768），收到 ${raw || '(空)'}`)
+    referenceSize = {
+      width: normalizeDimensionValue(Number(match[1]), LIMITS.width),
+      height: normalizeDimensionValue(Number(match[2]), LIMITS.height),
+    }
+  }
+  // --mask-scale 是中心蒙版的面积占比（rect 用 sqrt 换算边长比例），优先于旧的 --mask-size 口径。
+  let maskScale = null
+  if (process.argv.includes('--mask-scale')) {
+    if (!inpaint) throw new Error('--mask-scale 只能配合 --inpaint 使用')
+    const value = Number(argOf('mask-scale', ''))
+    if (!Number.isFinite(value) || value <= 0 || value > 1) {
+      throw new Error(`--mask-scale 取值应在 (0, 1]，收到 ${argOf('mask-scale', '') || '(空)'}`)
+    }
+    maskScale = value
+  }
+  // 同一蒙版多档强度对比：各出一张，记录蒙版内平均差异（验收 §六 第 3 项）。
+  let strengthCompare = null
+  if (process.argv.includes('--strength-compare')) {
+    if (!inpaint) throw new Error('--strength-compare 只能配合 --inpaint 使用')
+    const parts = String(argOf('strength-compare', ''))
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+    if (parts.length < 2) {
+      throw new Error('--strength-compare 至少给两档，例如 --strength-compare 0.9,1.0')
+    }
+    const values = []
+    for (const part of parts) {
+      const value = Number(part)
+      if (!Number.isFinite(value)) throw new Error(`--strength-compare 含非法数值：${part}`)
+      const normalized = normalizeStrengthValue(value, LIMITS.strength.inpaintMax)
+      if (!values.includes(normalized)) values.push(normalized)
+    }
+    if (values.length < 2) throw new Error('--strength-compare 去重后不足两档')
+    strengthCompare = values
+  }
+  // 连续局部重绘轮数：第 2 轮起把上一轮出图当参考图（验证「以结果继续重绘」）。
+  const rawRounds = Number(argOf('inpaint-rounds', '1'))
+  const inpaintRounds = Number.isFinite(rawRounds) ? Math.min(3, Math.max(1, Math.round(rawRounds))) : 1
+  if (process.argv.includes('--inpaint-rounds') && !inpaint) {
+    throw new Error('--inpaint-rounds 只能配合 --inpaint 使用')
+  }
+  if (strengthCompare && inpaintRounds > 1) {
+    throw new Error('--strength-compare 与 --inpaint-rounds 是两种验收方式，请分开运行')
+  }
   // 局部重绘的提示词可以单独给：用与文生图不同的描述，才能肉眼确认「白色蒙版区真的按新内容重写」。
   const prompt = String(argOf('prompt', DEFAULT_PROMPT))
   const inpaintPrompt = String(argOf('inpaint-prompt', '')).trim() || prompt
@@ -176,6 +278,10 @@ function parseOptions() {
     img2img,
     inpaint,
     strength,
+    referenceSize,
+    maskScale,
+    strengthCompare,
+    inpaintRounds,
     maxQueueMinutes,
     maxReplace,
     sourcePreset: sourcePresetArg,
@@ -241,11 +347,18 @@ function fmt(value) {
  *
  * 连续调用即完成「同一会话内连续切换模型」：daemon 在切换时先释放旧 pipeline，
  * 再按目标模型依赖构建 keep_set 清理 HF 缓存，最后下载/加载新模型。
+ *
+ * `width` / `height` 可选（默认跟随预设 size）：`--inpaint --reference-size` 用它生成
+ * 非正方形源图，后续局部重绘按参考图同比例生成蒙版。
  */
-async function generateOne({ endpoint, token, presetId, prompt, index, total }) {
+async function generateOne({ endpoint, token, presetId, prompt, index, total, width, height }) {
   const preset = presetById(presetId)
   const pipelineKind = preset?.pipeline?.loader ?? null
-  console.log(`  · [${index + 1}/${total}] ${presetId}（${pipelineKind ?? '-'}）加载并出图 …`)
+  const taskWidth = width ?? preset.size
+  const taskHeight = height ?? preset.size
+  console.log(
+    `  · [${index + 1}/${total}] ${presetId}（${pipelineKind ?? '-'}）加载并出图 ${taskWidth}x${taskHeight} …`,
+  )
   const begin = Date.now()
   const response = await requestGenerate(
     endpoint,
@@ -259,8 +372,8 @@ async function generateOne({ endpoint, token, presetId, prompt, index, total }) 
           prompt,
           negative_prompt: preset.negativeHint ?? '',
           seed: 42,
-          width: preset.size,
-          height: preset.size,
+          width: taskWidth,
+          height: taskHeight,
           steps: preset.steps,
           cfg: preset.cfg,
         },
@@ -282,6 +395,11 @@ async function generateOne({ endpoint, token, presetId, prompt, index, total }) 
       pipelineKind,
       loadSeconds: response.load_seconds ?? null,
       imageSeconds: result.seconds ?? null,
+      // 实际出图尺寸（anima 会把宽高向下取整到 16 的倍数，与请求值可能不同）。
+      width: result.width ?? null,
+      height: result.height ?? null,
+      requestedWidth: taskWidth,
+      requestedHeight: taskHeight,
       wallSeconds,
       pngBytes: png.length,
       isPng,
@@ -427,29 +545,50 @@ function pngChunk(type, data) {
  * 生成程序化黑白蒙版 PNG（8 位灰度），供 --inpaint 真机验收使用。
  *
  * 语义与客户端 canvas 导出完全一致：白 = 重绘区域、黑 = 保留区域。
- * 尺寸不必与参考图相同（远端按最近邻对齐），这里直接用目标出图尺寸，便于核对 maskWidth/Height。
+ * 返回 `{ png, width, height, coverage, shape }`：`coverage` 是白色像素占全图比例
+ * （与远端 decode_mask_image 的统计口径一致），报告里直接引用便于排障与验收记录。
  *
- * `shape` 支持 `rect`（居中矩形，宽高取画布边长 × size）与 `circle`（居中圆，直径取短边 × size）；
- * `centerX` / `centerY` 是 0~1 的相对位置，默认画面中心。用 `--mask-size` 调小、`--mask-center`
- * 移到具体物体上，即可模拟真实笔刷的小面积涂抹。
+ * 尺寸口径（二者取其一）：
+ *  - `scale`（面积占比 0~1）优先：rect 用边长 √scale、circle 用面积 = scale × 画布面积的
+ *    圆/椭圆，白色区域面积 ≈ scale；
+ *  - 否则沿用旧 `size` 口径：rect 的宽高 = 画布边长 × size，circle 直径 = 短边 × size。
+ * `centerX` / `centerY` 是 0~1 的相对位置，默认画面中心；调小面积、移到具体物体上即可
+ * 模拟真实笔刷的小面积涂抹。
  */
-function maskPngOf(width, height, options = {}) {
+function buildMaskPng(width, height, options = {}) {
   const w = Math.max(16, Math.round(Number(width) || 0))
   const h = Math.max(16, Math.round(Number(height) || 0))
   const shape = options.shape === 'circle' ? 'circle' : 'rect'
-  const rawSize = Number(options.size)
-  const sizeRatio = Number.isFinite(rawSize) ? Math.min(1, Math.max(0.02, rawSize)) : 0.4
+  let radiusX
+  let radiusY
+  const rawScale = Number(options.scale)
+  if (Number.isFinite(rawScale) && rawScale > 0) {
+    const target = Math.min(1, rawScale)
+    if (shape === 'circle') {
+      const radius = Math.sqrt((target * w * h) / Math.PI)
+      radiusX = radius
+      radiusY = radius
+    } else {
+      const side = Math.sqrt(target)
+      radiusX = (w * side) / 2
+      radiusY = (h * side) / 2
+    }
+  } else {
+    const rawSize = Number(options.size)
+    const sizeRatio = Number.isFinite(rawSize) ? Math.min(1, Math.max(0.02, rawSize)) : 0.4
+    radiusX = ((shape === 'circle' ? Math.min(w, h) : w) * sizeRatio) / 2
+    radiusY = ((shape === 'circle' ? Math.min(w, h) : h) * sizeRatio) / 2
+  }
   const rawCenterX = Number(options.centerX)
   const rawCenterY = Number(options.centerY)
   const centerX = Math.round(w * (Number.isFinite(rawCenterX) ? Math.min(1, Math.max(0, rawCenterX)) : 0.5))
   const centerY = Math.round(h * (Number.isFinite(rawCenterY) ? Math.min(1, Math.max(0, rawCenterY)) : 0.5))
-  const radiusX = (shape === 'circle' ? Math.min(w, h) : w) * sizeRatio / 2
-  const radiusY = (shape === 'circle' ? Math.min(w, h) : h) * sizeRatio / 2
   const left = Math.round(centerX - radiusX)
   const right = Math.round(centerX + radiusX)
   const top = Math.round(centerY - radiusY)
   const bottom = Math.round(centerY + radiusY)
   const raw = Buffer.alloc((w + 1) * h)
+  let whitePixels = 0
   for (let y = 0; y < h; y += 1) {
     const row = y * (w + 1)
     raw[row] = 0 // filter type: none
@@ -463,6 +602,7 @@ function maskPngOf(width, height, options = {}) {
         inside = x >= left && x < right && y >= top && y < bottom
       }
       raw[row + 1 + x] = inside ? 255 : 0
+      if (inside) whitePixels += 1
     }
   }
   const ihdr = Buffer.alloc(13)
@@ -470,28 +610,171 @@ function maskPngOf(width, height, options = {}) {
   ihdr.writeUInt32BE(h, 4)
   ihdr[8] = 8 // bit depth
   ihdr[9] = 0 // color type: grayscale
-  return Buffer.concat([
+  const png = Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     pngChunk('IHDR', ihdr),
     pngChunk('IDAT', deflateSync(raw)),
     pngChunk('IEND', Buffer.alloc(0)),
   ])
+  return { png, width: w, height: h, coverage: whitePixels / (w * h), shape }
+}
+
+/** 读取 PNG 的 IHDR 宽高；非 PNG / 头部不完整返回 null。 */
+function pngSize(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 24) return null
+  if (buffer.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') return null
+  if (buffer.subarray(12, 16).toString('ascii') !== 'IHDR') return null
+  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) }
 }
 
 /**
- * M3 局部重绘真机验收：同一会话里用刚生成的图 + 程序化黑白蒙版做一次 Inpaint。
+ * 最小 PNG 解码器（位深 8、非隔行、灰度/RGB/RGBA）：只用于计算「蒙版内平均差异」。
  *
- * 关键观察点：`load_seconds` 应为 0（`AutoPipelineForInpainting.from_pipe` 复用已加载底座），
- * `gpu_memory` 相比文生图结束时应基本持平；出图尺寸跟随参考图（与 img2img 一致）。
- * 提交形状与 Host 下发一致：job 级 `reference = { image_b64, strength, mask_b64 }`。
+ * 远端的样张是 PIL 默认保存的 8 位 RGB PNG；调色板 / 16 位 / 隔行图不在验收范围内，
+ * 遇到不支持的格式返回 null（报告里的差异记 null，不影响出图验收本身）。
  */
-async function runInpaint({ endpoint, token, presetId, sourcePng, prompt, strength, mask = {} }) {
+function decodePng(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 8) return null
+  if (buffer.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') return null
+  let offset = 8
+  let header = null
+  const idat = []
+  while (offset + 8 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset)
+    const type = buffer.subarray(offset + 4, offset + 8).toString('ascii')
+    const data = buffer.subarray(offset + 8, offset + 8 + length)
+    if (data.length !== length) return null
+    if (type === 'IHDR') {
+      header = {
+        width: data.readUInt32BE(0),
+        height: data.readUInt32BE(4),
+        bitDepth: data[8],
+        colorType: data[9],
+        interlace: data[12],
+      }
+    } else if (type === 'IDAT') {
+      idat.push(data)
+    } else if (type === 'IEND') {
+      break
+    }
+    offset += 12 + length
+  }
+  if (!header || header.bitDepth !== 8 || header.interlace !== 0) return null
+  const channels = { 0: 1, 2: 3, 4: 2, 6: 4 }[header.colorType]
+  if (!channels) return null
+  let raw
+  try {
+    raw = inflateSync(Buffer.concat(idat))
+  } catch {
+    return null
+  }
+  const stride = header.width * channels
+  const pixels = Buffer.alloc(stride * header.height)
+  let prev = Buffer.alloc(stride)
+  let pos = 0
+  for (let y = 0; y < header.height; y += 1) {
+    const filter = raw[pos]
+    pos += 1
+    const line = raw.subarray(pos, pos + stride)
+    pos += stride
+    if (line.length !== stride) return null
+    const out = pixels.subarray(y * stride, (y + 1) * stride)
+    for (let x = 0; x < stride; x += 1) {
+      const a = x >= channels ? out[x - channels] : 0
+      const b = prev[x]
+      const c = x >= channels ? prev[x - channels] : 0
+      let value
+      switch (filter) {
+        case 0:
+          value = line[x]
+          break
+        case 1:
+          value = line[x] + a
+          break
+        case 2:
+          value = line[x] + b
+          break
+        case 3:
+          value = line[x] + ((a + b) >> 1)
+          break
+        case 4: {
+          const p = a + b - c
+          const pa = Math.abs(p - a)
+          const pb = Math.abs(p - b)
+          const pc = Math.abs(p - c)
+          const predictor = pa <= pb && pa <= pc ? a : pb <= pc ? b : c
+          value = line[x] + predictor
+          break
+        }
+        default:
+          return null
+      }
+      out[x] = value & 0xff
+    }
+    prev = out
+  }
+  return { width: header.width, height: header.height, channels, pixels }
+}
+
+/**
+ * 两张同尺寸 PNG 在蒙版白色区域内的平均亮度绝对差异（0~255，保留两位小数）。
+ * 尺寸不一致或任一张图无法解码时返回 null；蒙版按「任一通道 >=128 视为重绘区」
+ * 判定（与远端「白 = 重绘」语义一致）。
+ */
+function maskedMeanDiff(basePng, otherPng, maskPng) {
+  const base = decodePng(basePng)
+  const other = decodePng(otherPng)
+  const mask = decodePng(maskPng)
+  if (!base || !other || !mask) return null
+  if (
+    base.width !== other.width ||
+    base.height !== other.height ||
+    base.width !== mask.width ||
+    base.height !== mask.height
+  ) {
+    return null
+  }
+  const brightness = (image, index) => {
+    const offset = index * image.channels
+    if (image.channels === 1) return image.pixels[offset]
+    if (image.channels === 2) return image.pixels[offset]
+    return (image.pixels[offset] + image.pixels[offset + 1] + image.pixels[offset + 2]) / 3
+  }
+  let sum = 0
+  let count = 0
+  const total = mask.width * mask.height
+  for (let index = 0; index < total; index += 1) {
+    const maskOffset = index * mask.channels
+    let white = false
+    for (let channel = 0; channel < mask.channels; channel += 1) {
+      if (mask.pixels[maskOffset + channel] >= 128) {
+        white = true
+        break
+      }
+    }
+    if (!white) continue
+    sum += Math.abs(brightness(base, index) - brightness(other, index))
+    count += 1
+  }
+  if (!count) return null
+  return Math.round((sum / count) * 100) / 100
+}
+
+/**
+ * 局部重绘单次执行（一次远端 /generate）：给定参考图 + 程序化蒙版，返回 PNG、蒙版与报告条目。
+ *
+ * 关键观察点：`load_seconds` 应为 0（`AutoPipelineForInpainting.from_pipe` 复用已加载底座）；
+ * 出图尺寸跟随参考图；提交形状与 Host 下发一致：job 级 `reference = { image_b64, strength, mask_b64 }`。
+ * 蒙版尺寸按参考图实际尺寸生成（非正方形验收时与源图同比例）。
+ */
+async function runInpaintOnce({ endpoint, token, presetId, sourcePng, prompt, strength, maskOptions = {} }) {
   const preset = presetById(presetId)
-  const maskPng = maskPngOf(preset.size, preset.size, mask)
+  const sourceSize = pngSize(sourcePng) ?? { width: preset.size, height: preset.size }
+  const mask = buildMaskPng(sourceSize.width, sourceSize.height, maskOptions)
   const maskLabel = mask.shape === 'circle' ? '圆形' : '矩形'
   console.log(
-    `  · [inpaint] ${presetId} 以刚生成的图 + 程序化蒙版做局部重绘（strength=${strength}，` +
-      `${maskLabel}蒙版 ${maskPng.length} 字节，中心 ${mask.centerX}/${mask.centerY}）…`,
+    `  · [inpaint] ${presetId} 参考图 ${sourceSize.width}x${sourceSize.height} + ${maskLabel}蒙版 ` +
+      `（strength=${strength}，覆盖率 ${(mask.coverage * 100).toFixed(2)}%，${mask.png.length} 字节）…`,
   )
   const begin = Date.now()
   const response = await requestGenerate(
@@ -503,7 +786,7 @@ async function runInpaint({ endpoint, token, presetId, sourcePng, prompt, streng
       reference: {
         image_b64: sourcePng.toString('base64'),
         strength,
-        mask_b64: maskPng.toString('base64'),
+        mask_b64: mask.png.toString('base64'),
       },
       tasks: [
         {
@@ -511,8 +794,8 @@ async function runInpaint({ endpoint, token, presetId, sourcePng, prompt, streng
           prompt,
           negative_prompt: preset.negativeHint ?? '',
           seed: 44,
-          width: preset.size,
-          height: preset.size,
+          width: sourceSize.width,
+          height: sourceSize.height,
           steps: preset.steps,
           cfg: preset.cfg,
         },
@@ -528,11 +811,15 @@ async function runInpaint({ endpoint, token, presetId, sourcePng, prompt, streng
   if (!isPng) throw new Error('inpaint：返回内容不是合法 PNG')
   return {
     png,
+    maskPng: mask.png,
     entry: {
       preset: presetId,
       strength,
+      sourceWidth: sourceSize.width,
+      sourceHeight: sourceSize.height,
       referenceBytes: sourcePng.length,
-      maskBytes: maskPng.length,
+      maskBytes: mask.png.length,
+      maskCoveragePercent: Number((mask.coverage * 100).toFixed(4)),
       loadSeconds: response.load_seconds ?? null,
       imageSeconds: result.seconds ?? null,
       width: result.width ?? null,
@@ -546,6 +833,110 @@ async function runInpaint({ endpoint, token, presetId, sourcePng, prompt, streng
       isPng,
     },
   }
+}
+
+/**
+ * 局部重绘验收编排：连续多轮（--inpaint-rounds）或同一参考图多档强度（--strength-compare）。
+ *
+ * - 连续多轮：第 2 轮起把上一轮出图当参考图继续重绘，模型不重新加载（load_seconds 应为 0）；
+ * - 强度对比：同一参考图与同一蒙版重复出图，只换 strength；
+ * - 每轮差异 `maskedMeanDiffFromPrevious` 是「本轮出图 vs 本轮参考图」在蒙版内的平均亮度差，
+ *   `maskedMeanDiffFromSource` 统一对比最初的源图（尺寸不一致时为 null）。
+ *
+ * 返回 `{ runs, report }`：runs 供落盘样张，report 是 report.json 里的 inpaint 段。
+ */
+async function runInpaint({ endpoint, token, presetId, sourcePng, prompt, options, maskOptions = {} }) {
+  const compare = Array.isArray(options.strengthCompare) && options.strengthCompare.length > 0
+  const strengths = compare ? options.strengthCompare : [options.strength]
+  const rounds = compare ? 1 : Math.max(1, options.inpaintRounds ?? 1)
+  const totalRuns = compare ? strengths.length : rounds
+  const runs = []
+  let referencePng = sourcePng
+  let previousPng = sourcePng
+  for (let index = 0; index < totalRuns; index += 1) {
+    const round = index + 1
+    const strength = compare ? strengths[index] : options.strength
+    const referenceRole = compare || round === 1 ? 'source' : 'previous-round'
+    if (compare) {
+      console.log(`  · [inpaint] 强度对比 ${round}/${totalRuns}：strength=${strength}`)
+    } else if (round > 1) {
+      console.log(`  · [inpaint] 连续重绘第 ${round}/${totalRuns} 轮：以上一轮出图为参考图`)
+    }
+    const run = await runInpaintOnce({
+      endpoint,
+      token,
+      presetId,
+      sourcePng: referencePng,
+      prompt,
+      strength,
+      maskOptions,
+    })
+    const diffFromPrevious = maskedMeanDiff(previousPng, run.png, run.maskPng)
+    const diffFromSource =
+      referenceRole === 'source' ? diffFromPrevious : maskedMeanDiff(sourcePng, run.png, run.maskPng)
+    runs.push({ ...run, round, strength, referenceRole, diffFromPrevious, diffFromSource })
+    previousPng = run.png
+    if (!compare) referencePng = run.png
+    console.log(
+      `  · 出图 ${run.entry.width ?? '?'}x${run.entry.height ?? '?'}，蒙版内平均差异 ` +
+        `${diffFromPrevious ?? '-'}（对源图 ${diffFromSource ?? '-'}）`,
+    )
+  }
+  const sourceSize = pngSize(sourcePng) ?? { width: null, height: null }
+  const perRun = runs.map((run) => ({
+    round: run.round,
+    strength: run.strength,
+    referenceRole: run.referenceRole,
+    loadSeconds: run.entry.loadSeconds,
+    imageSeconds: run.entry.imageSeconds,
+    wallSeconds: run.entry.wallSeconds,
+    width: run.entry.width,
+    height: run.entry.height,
+    sourceWidth: run.entry.sourceWidth,
+    sourceHeight: run.entry.sourceHeight,
+    referenceWidth: run.entry.referenceWidth,
+    referenceHeight: run.entry.referenceHeight,
+    maskWidth: run.entry.maskWidth,
+    maskHeight: run.entry.maskHeight,
+    maskCoveragePercent: run.entry.maskCoveragePercent,
+    referenceBytes: run.entry.referenceBytes,
+    maskBytes: run.entry.maskBytes,
+    pngBytes: run.entry.pngBytes,
+    maskedMeanDiffFromPrevious: run.diffFromPrevious,
+    maskedMeanDiffFromSource: run.diffFromSource,
+  }))
+  const first = perRun[0]
+  const report = {
+    preset: presetId,
+    prompt,
+    mode: compare ? 'strength-compare' : rounds > 1 ? 'rounds' : 'single',
+    sourcePreset: options.sourcePreset,
+    requestedReferenceSize: options.referenceSize
+      ? [options.referenceSize.width, options.referenceSize.height]
+      : null,
+    sourceWidth: sourceSize.width,
+    sourceHeight: sourceSize.height,
+    maskShape: options.maskShape,
+    maskSize: options.maskSize,
+    maskScale: options.maskScale,
+    maskCenter: [options.maskCenterX, options.maskCenterY],
+    rounds: perRun,
+    // 兼容字段（第一次出图）：旧报告消费方按这些键读单次局部重绘结果。
+    strength: first.strength,
+    referenceBytes: first.referenceBytes,
+    maskBytes: first.maskBytes,
+    loadSeconds: first.loadSeconds,
+    imageSeconds: first.imageSeconds,
+    width: first.width,
+    height: first.height,
+    referenceWidth: first.referenceWidth,
+    referenceHeight: first.referenceHeight,
+    maskWidth: first.maskWidth,
+    maskHeight: first.maskHeight,
+    maskCoveragePercent: first.maskCoveragePercent,
+    pngBytes: first.pngBytes,
+  }
+  return { runs, report }
 }
 
 async function main() {
@@ -639,7 +1030,10 @@ async function main() {
       options.img2img
         ? '[4/5] 文生图 + 垫图重绘 …'
         : options.inpaint
-          ? '[4/5] 文生图 + 程序化蒙版局部重绘 …'
+          ? '[4/5] 文生图 + 程序化蒙版局部重绘' +
+            `（${options.strengthCompare ? `强度对比 ${options.strengthCompare.join('/')}` : `${options.inpaintRounds ?? 1} 轮`}` +
+            `${options.referenceSize ? `，参考尺寸 ${options.referenceSize.width}x${options.referenceSize.height}` : ''}` +
+            `${options.maskScale ? `，蒙版面积 ${(options.maskScale * 100).toFixed(1)}%` : ''}）…`
           : single
             ? '[4/5] 生成一张 …'
             : `[4/5] 在同一会话内连续生成 ${options.presets.length} 个模型（验证 LRU 缓存清理）…`,
@@ -709,7 +1103,7 @@ async function main() {
         reusedBasePipeline: (redraw.entry.loadSeconds ?? 0) === 0,
       }
     } else if (options.inpaint) {
-      // M3 真机验收：先文生图，再用程序化蒙版做局部重绘；对比 /health.gpu_memory。
+      // 真机验收：先文生图，再用程序化蒙版做局部重绘；支持非正方形源图 / 连续多轮 / 强度对比。
       if (!single) throw new Error('--inpaint 只能配合单个 --preset 使用')
       const presetId = options.presets[0]
       const preset = presetById(presetId)
@@ -717,6 +1111,7 @@ async function main() {
         throw new Error(`预设 ${presetId} 不支持局部重绘（supportsInpaint=false），请换 SDXL 家族预设`)
       }
       // 专用 inpaint 模型不能文生图：源图用 --source-preset（默认 sdxl-lightning）先出。
+      // --reference-size 同时决定源文生图宽高，局部重绘蒙版按源图实际尺寸（同比例）生成。
       const sourcePresetId = options.sourcePreset
       const txt2img = await generateOne({
         endpoint,
@@ -725,63 +1120,66 @@ async function main() {
         prompt: options.prompt,
         index: 0,
         total: 1,
+        width: options.referenceSize?.width,
+        height: options.referenceSize?.height,
       })
       models.push(txt2img.entry)
       images.push({ index: 0, presetId: sourcePresetId, png: txt2img.png })
       console.log(
-        `  · ${sourcePresetId} 文生图完成：加载 ${txt2img.entry.loadSeconds ?? '-'}s / 出图 ${txt2img.entry.imageSeconds ?? '-'}s`,
+        `  · ${sourcePresetId} 文生图完成：加载 ${txt2img.entry.loadSeconds ?? '-'}s / 出图 ` +
+          `${txt2img.entry.width ?? '?'}x${txt2img.entry.height ?? '?'}`,
       )
       const before = await readGpuMemory(endpoint, token)
-      const redraw = await runInpaint({
+      const { runs: inpaintRuns, report } = await runInpaint({
         endpoint,
         token,
         presetId,
         sourcePng: txt2img.png,
         prompt: options.inpaintPrompt,
-        strength: options.strength,
-        mask: {
+        options,
+        maskOptions: {
           shape: options.maskShape,
           size: options.maskSize,
+          scale: options.maskScale,
           centerX: options.maskCenterX,
           centerY: options.maskCenterY,
         },
       })
       const after = await readGpuMemory(endpoint, token)
-      images.push({ index: 'inpaint', presetId: `${presetId}-inpaint`, png: redraw.png })
-      console.log(
-        `  · 局部重绘完成：加载 ${redraw.entry.loadSeconds ?? '-'}s / 出图 ${redraw.entry.imageSeconds ?? '-'}s` +
-          `（参考图 ${redraw.entry.referenceWidth ?? '?'}x${redraw.entry.referenceHeight ?? '?'}，` +
-          `蒙版 ${redraw.entry.maskWidth ?? '?'}x${redraw.entry.maskHeight ?? '?'}）`,
-      )
+      const multiRun = inpaintRuns.length > 1
+      inpaintRuns.forEach((run) => {
+        const label = options.strengthCompare
+          ? `strength-${run.strength}`
+          : multiRun
+            ? `round${run.round}`
+            : ''
+        images.push({
+          index: 'inpaint',
+          presetId: `${presetId}-inpaint`,
+          png: run.png,
+          name: label ? `02-inpaint-${label}.png` : '02-inpaint.png',
+        })
+        console.log(
+          `  · 局部重绘${multiRun ? `第 ${run.round}/${inpaintRuns.length} 轮` : ''}完成：加载 ` +
+            `${run.entry.loadSeconds ?? '-'}s / 出图 ${run.entry.imageSeconds ?? '-'}s` +
+            `（${run.entry.width ?? '?'}x${run.entry.height ?? '?'}，参考图 ` +
+            `${run.entry.referenceWidth ?? '?'}x${run.entry.referenceHeight ?? '?'}，蒙版 ` +
+            `${run.entry.maskWidth ?? '?'}x${run.entry.maskHeight ?? '?'}，覆盖率 ` +
+            `${run.entry.maskCoveragePercent ?? '?'}%，蒙版内平均差异 ${run.diffFromPrevious ?? '-'}）`,
+        )
+      })
       console.log(`  · 显存对比（MiB）：文生图后 ${fmt(before)} → 局部重绘后 ${fmt(after)}`)
       const reservedDeltaMb =
         Number.isFinite(before?.reserved_mb) && Number.isFinite(after?.reserved_mb)
           ? after.reserved_mb - before.reserved_mb
           : null
       inpaintReport = {
-        preset: presetId,
-        prompt: options.inpaintPrompt,
-        strength: redraw.entry.strength,
-        sourcePreset: options.sourcePreset,
-        maskShape: options.maskShape,
-        maskSize: options.maskSize,
-        maskCenter: [options.maskCenterX, options.maskCenterY],
-        referenceBytes: redraw.entry.referenceBytes,
-        maskBytes: redraw.entry.maskBytes,
-        loadSeconds: redraw.entry.loadSeconds,
-        imageSeconds: redraw.entry.imageSeconds,
-        width: redraw.entry.width,
-        height: redraw.entry.height,
-        referenceWidth: redraw.entry.referenceWidth,
-        referenceHeight: redraw.entry.referenceHeight,
-        maskWidth: redraw.entry.maskWidth,
-        maskHeight: redraw.entry.maskHeight,
-        pngBytes: redraw.entry.pngBytes,
+        ...report,
         gpuMemoryBefore: before,
         gpuMemoryAfter: after,
         reservedDeltaMb,
-        // from_pipe 复用底座不应重新加载权重：load_seconds 期望为 0 或接近 0。
-        reusedBasePipeline: (redraw.entry.loadSeconds ?? 0) === 0,
+        // from_pipe 复用底座不应重新加载权重：每轮 load_seconds 期望为 0 或接近 0。
+        reusedBasePipeline: inpaintRuns.every((run) => (run.entry.loadSeconds ?? 0) === 0),
       }
     } else {
       for (const [index, presetId] of options.presets.entries()) {
@@ -810,11 +1208,12 @@ async function main() {
     await mkdir(dir, { recursive: true })
     for (const image of images) {
       const name =
-        image.index === 'img2img'
+        image.name ??
+        (image.index === 'img2img'
           ? '01-img2img.png'
           : image.index === 'inpaint'
             ? '02-inpaint.png'
-            : artifactName(image.index, image.presetId, options.presets.length)
+            : artifactName(image.index, image.presetId, options.presets.length))
       await writeFile(join(dir, name), image.png)
     }
     const first = models[0]

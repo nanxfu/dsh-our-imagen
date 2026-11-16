@@ -50,18 +50,63 @@ export const MASK_STRENGTH_DEFAULT = 0.8
  */
 export const MASK_STRENGTH_NATIVE = 0.9
 
+/** 涂抹推荐强度档：专用 inpaint 权重取 0.9，通用模型取 0.8。 */
+export function maskStrengthTargetOf(native) {
+  return native === true ? MASK_STRENGTH_NATIVE : MASK_STRENGTH_DEFAULT
+}
+
 /**
- * 进入涂抹模式时要不要把强度抬到默认档。
+ * 进入涂抹模式时要不要把强度抬到推荐档。
  *
  * `native` 为真表示当前是专用 inpaint 权重，用更高的 0.9；否则用 0.8。
- * 返回 `{ strength }` 补丁或 null：用户已经调过强度（不等于契约默认值）时不覆盖。
+ * `auto` 为真表示强度仍在自动档（没被用户手调过），无条件跟随推荐档；
+ * 否则沿用旧语义：只有当前仍是契约默认值时才抬档，用户手调过的值一律尊重。
+ * 返回 `{ strength }` 补丁或 null。
  */
 export function maskStrengthPatch(current, options = {}) {
-  const target = options.native === true ? MASK_STRENGTH_NATIVE : MASK_STRENGTH_DEFAULT
+  const target = maskStrengthTargetOf(options.native === true)
+  const auto = options.auto === true
   const number = Number(current)
+  // 自动档要么从未被改过、要么上一轮就是推荐档：直接跟随当前预设的推荐档。
+  if (auto) return { strength: target }
   if (!Number.isFinite(number)) return { strength: target }
   if (Math.abs(number - LIMITS.strength.default) > 1e-9) return null
   return { strength: target }
+}
+
+/**
+ * 切换预设时的强度联动：自动档按新预设的推荐档更新，用户手调过则返回 null（不动）。
+ */
+export function maskStrengthPresetPatch(strengthAuto, options = {}) {
+  if (strengthAuto !== true) return null
+  return { strength: maskStrengthTargetOf(options.native === true) }
+}
+
+/**
+ * 强度上限：有蒙版时用契约的 `strength.inpaintMax`（局部重绘允许更强替换），
+ * 旧契约 / 旧宿主没有该项时回落通用 `strength.max`；img2img 始终用通用上限。
+ */
+export function strengthMaxOf(hasMask) {
+  const max = Number(LIMITS.strength.max)
+  if (!hasMask) return max
+  const inpaintMax = Number(LIMITS.strength.inpaintMax)
+  if (!Number.isFinite(inpaintMax)) return max
+  return Math.max(max, inpaintMax)
+}
+
+/**
+ * mask-aware 的重绘强度归一：边界 / step 对齐 / 浮点噪声规则与 `clampStrength` 一致，
+ * 只有上限按「本次是否提交蒙版」切换。表单滑块与请求体都必须走同一套口径。
+ */
+export function clampMaskStrength(value, hasMask) {
+  const { min, step, default: fallback } = LIMITS.strength
+  const max = strengthMaxOf(hasMask)
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return fallback
+  const number = Number(value)
+  if (!Number.isFinite(number)) return fallback
+  const clamped = Math.min(max, Math.max(min, number))
+  const aligned = min + Math.round((clamped - min) / step) * step
+  return Math.round(aligned * 1000) / 1000
 }
 
 /** 蒙版画布长边像素：黑底 PNG 压得很小，1024 足够保留涂抹边界细节。 */

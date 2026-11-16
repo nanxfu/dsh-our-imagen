@@ -372,6 +372,18 @@
   color: var(--ofs-accent);
 }
 
+/* 续绘闭环的主入口：以此结果继续重绘，强调一档但不抢生成按钮。 */
+.ofs-continue-inpaint {
+  border-color: var(--ofs-accent-soft-border);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+}
+
+.ofs-continue-inpaint:hover {
+  border-color: var(--ofs-accent);
+  color: var(--ofs-accent);
+}
+
 /* ── 空态 ───────────────────────────────────────────────────── */
 .ofs-figure--empty {
   background:
@@ -544,7 +556,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* 内容超出（矮窗口 / 竖图）时从顶部开始滚动，不被居中的 flex 裁掉上半截。 */
   justify-content: center;
+  justify-content: safe center;
   gap: 10px;
   width: 100%;
   height: 100%;
@@ -565,11 +579,22 @@
   font-weight: 600;
 }
 
-/* 画布外框：比例来自参考图像素，由内联 aspect-ratio 给出。 */
+/*
+ * 画布外框：比例来自参考图像素（内联 aspect-ratio 与 --ofs-mask-r）。
+ *
+ * 宽度同时受容器宽与可用高度约束：与 .ofs-frame / .ofs-print 一样用容器单位算，
+ * 竖图或矮窗口下按比例整体缩小，而不是被 max-height 单独压扁。
+ * 200px 是上方标题、下方工具栏与两行提示的大致占位；画布保比例优先，必要时编辑器滚动。
+ */
 .ofs-mask-stage {
   position: relative;
-  width: min(100%, 560px);
-  max-height: 100%;
+  flex: 0 0 auto;
+  width: min(
+    calc(100cqw - 24px),
+    560px,
+    max(120px, calc((100cqh - 200px) * var(--ofs-mask-r, 1)))
+  );
+  aspect-ratio: var(--ofs-mask-r, 1);
   border-radius: 6px;
   overflow: hidden;
   background: #000;

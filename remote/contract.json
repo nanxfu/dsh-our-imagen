@@ -14,7 +14,8 @@
       "step": 8
     },
     "mask": {
-      "maxBytes": 2097152
+      "maxBytes": 2097152,
+      "minCoverage": 0.0005
     },
     "negativePrompt": {
       "maxChars": 1000
@@ -36,6 +37,7 @@
     },
     "strength": {
       "default": 0.6,
+      "inpaintMax": 1,
       "max": 0.9,
       "min": 0.2,
       "step": 0.05

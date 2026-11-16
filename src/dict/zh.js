@@ -318,6 +318,11 @@ export const zh = {
   'studio.toast.recalled': '参数已回填',
   // 胶卷点击遇到未提交的手动修改：只换预览、保留草稿。
   'studio.toast.draftKept': '已保留当前草稿',
+  // 胶卷点击遇到参考图 / 蒙版：只换预览，参考图与蒙版原样保留。
+  'studio.toast.referenceKept': '已保留当前参考图与蒙版',
+  'studio.toast.referenceImageKept': '已保留当前参考图',
+  // 失败重试：原任务蒙版无法还原，只把参考图填回表单。
+  'studio.toast.maskLost': '原任务的蒙版已无法恢复，请重新涂抹后再生成',
   'studio.toast.newCreation': '已开始新的创作',
   'studio.toast.favorited': '已加入收藏',
   'studio.toast.unfavorited': '已取消收藏',
@@ -431,6 +436,19 @@ export const zh = {
   'studio.reference.applied': '已设为参考图，可调整重绘强度。',
   'studio.reference.unavailable': '当前宿主版本不支持垫图重绘，无法把作品设为参考图。',
   'studio.reference.noPath': '这张作品没有可用的文件路径，无法作为参考图。',
+  // 还没放参考图时的引导：专用局部重绘模型给两步说明，普通垫图模型只给单行入口。
+  'studio.reference.emptyTitle': '先选一张参考图',
+  'studio.reference.emptyHint': '从作品画廊选一张图，再涂抹要重绘的区域',
+  'studio.reference.emptySimple': '可挂一张参考图做垫图重绘',
+  'studio.reference.emptyAction': '从作品画廊选择',
+  // 参考图已就位：蒙版覆盖率、继续涂抹 / 清空蒙版与页脚来源标注。
+  'studio.reference.maskCoverage': '已涂抹 {percent}%',
+  'studio.reference.maskEmpty': '尚未涂抹蒙版',
+  'studio.reference.continuePaint': '继续涂抹',
+  'studio.reference.clearMask': '清空蒙版',
+  'studio.reference.basedOn': '本次基于 {name} 重绘',
+  // 助手 / 变体强制纯文生图：当前预设只支持局部重绘时本次改用兜底预设。
+  'studio.reference.autoText2Image': '当前预设只支持局部重绘，本次已改用 {preset} 文生图',
 
   // ── 局部涂抹（Inpaint） ──────────────────────────────────────
   'studio.mask.toggle': '局部涂抹',
@@ -448,6 +466,9 @@ export const zh = {
   'studio.mask.kept': '已涂抹的蒙版会保留，切回支持局部重绘的模型后可继续使用。',
   'studio.mask.tooLarge': '蒙版体积超过上限，未保存；请减少涂抹面积后重试。',
   'studio.mask.canvasLabel': '局部涂抹画布：方向键移动画笔，空格键或回车键落笔，Esc 完成涂抹。',
+  // 续绘闭环：把当前结果设为新参考图并进入涂抹。
+  'studio.mask.continueFromResult': '以此结果继续重绘',
+  'studio.mask.continueHint': '已设为参考图，请涂抹要重绘的区域',
 
   // ── 创作助手 ─────────────────────────────────────────────────
   'studio.chat.assistant': '创作助手',

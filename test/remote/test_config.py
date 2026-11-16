@@ -451,13 +451,46 @@ class MockDaemonContractTest(DaemonUnitTest):
     def test_limit_merge_and_body_limit_match_daemon(self) -> None:
         """同一份注入契约下，mock 与 daemon 的取数结果逐键相等。"""
         mock_module = self.load_mock()
-        for injected in ({}, {"limits": {"width": {"max": 1024}}}, {"limits": {"count": {"max": 2}}}):
+        for injected in (
+            {},
+            {"limits": {"width": {"max": 1024}}},
+            {"limits": {"count": {"max": 2}}},
+            # 局部重绘的两个新键也要走同一条合并路径（mock / daemon 都不能各自丢键）。
+            {"limits": {"strength": {"inpaintMax": 0.97}, "mask": {"minCoverage": 0.002}}},
+        ):
             mock_module.CONTRACT = json.loads(json.dumps(injected))
             d.CONFIG.contract = json.loads(json.dumps(injected))
-            for name in ("width", "height", "steps", "cfg", "count", "reference", "strength"):
+            for name in ("width", "height", "steps", "cfg", "count", "reference", "strength", "mask"):
                 self.assertEqual(mock_module._limit(name), d._limit_spec(name), f"{injected} / {name}")
             self.assertEqual(mock_module._max_tasks(), d._max_tasks(), str(injected))
             self.assertEqual(mock_module._request_body_limit(), d._request_body_limit(), str(injected))
+
+    def test_new_inpaint_limit_keys_are_injected_first(self) -> None:
+        """inpaintMax / minCoverage 同样「注入契约优先、内置 contract.json 兜底」。"""
+        mock_module = self.load_mock()
+        injected = {
+            "version": CONTRACT_VERSION,
+            "limits": {
+                "strength": {"inpaintMax": 0.97},
+                "mask": {"minCoverage": 0.002},
+            },
+        }
+        mock_module.CONTRACT = json.loads(json.dumps(injected))
+        d.CONFIG.contract = json.loads(json.dumps(injected))
+        self.assertEqual(d._limit_spec("strength")["inpaintMax"], 0.97)
+        self.assertEqual(d._limit_spec("mask")["minCoverage"], 0.002)
+        for name in ("strength", "mask"):
+            self.assertEqual(mock_module._limit(name), d._limit_spec(name), name)
+
+        # 旧 Host 没下发这两个键时回落到随包分发的 remote/contract.json（同源生成）。
+        d.CONFIG.contract = {}
+        self.assertEqual(
+            d._limit_spec("strength")["inpaintMax"],
+            CONTRACT_DOC["limits"]["strength"]["inpaintMax"],
+        )
+        self.assertEqual(
+            d._limit_spec("mask")["minCoverage"], CONTRACT_DOC["limits"]["mask"]["minCoverage"]
+        )
 
 
 if __name__ == "__main__":

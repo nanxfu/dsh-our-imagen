@@ -15,16 +15,19 @@ import { LIMITS } from '../../../shared/contract.js'
 import { negativePromptActive } from '../../../shared/models-guide.js'
 
 import { enhancePromptRequest } from '../../api/resources.js'
-import { clampInt, clampNumber, clampStrength } from '../../logic/clamp.js'
+import { clampInt, clampNumber } from '../../logic/clamp.js'
 import { formSnapshotOf, isFormDirty, newCreationPatch } from '../../logic/form.js'
 import { buildGenerateBody } from '../../logic/generate.js'
 import {
+  clampMaskStrength,
   maskDigestOf,
   maskExportVerdict,
   maskStateOf,
   maskStrengthPatch,
+  maskStrengthPresetPatch,
   referenceMaskOf,
   referenceWithoutMask,
+  strengthMaxOf,
 } from '../../logic/mask.js'
 import {
   customSizePatch,
@@ -95,6 +98,9 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const [refineSource, setRefineSource] = React.useState('')
   const [enhancing, setEnhancing] = React.useState(false)
   const [translating, setTranslating] = React.useState(false)
+  // 重绘强度是否处于自动档：进入涂抹时按当前预设套用推荐档，用户手调后退出；
+  // 自动档下切换预设会跟随新预设的推荐档，手调过的值保持不动。
+  const [strengthAuto, setStrengthAuto] = React.useState(false)
   // 干净基准快照：最近一次「生成提交 / 从作品回填 / 新建创作 / 初始预设同步」时的表单，
   // 与当前表单不一致即为 dirty（胶卷点击时据此保护草稿）。
   const [cleanBaseline, setCleanBaseline] = React.useState('')
@@ -160,7 +166,13 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   /** 切换预设：套用推荐尺寸 / 步数 / 引导强度，并按负向能力整层替换模型负向词。 */
   function selectPreset(next) {
     if (!next || !next.id) return
-    setForm((prev) => applyNegativePatch(prev, presetSelectPatch(next, prev, presets)))
+    setForm((prev) => {
+      const patch = presetSelectPatch(next, prev, presets)
+      // 强度自动档跟随新预设的推荐档；用户手调过的值保持不动。
+      const strengthPatch = maskStrengthPresetPatch(strengthAuto, { native: inpaintOnlyOf(next) })
+      if (strengthPatch) Object.assign(patch, strengthPatch)
+      return applyNegativePatch(prev, patch)
+    })
   }
 
   /**
@@ -205,15 +217,33 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     setForm(next)
     setCleanBaseline(formSnapshotOf(next))
     setTuning(null)
+    // 新创作把强度重置回契约默认值：退出自动档，下次涂抹再按预设推荐档抬升。
+    setStrengthAuto(false)
     ui.showToast(t('studio.toast.newCreation'))
   }
 
-  function buildBody(overrides) {
+  /**
+   * 拼装生成请求体。
+   *
+   * `options.preset` 指定本次请求的有效预设（重试恢复 / 兜底切换后的预设）：
+   * 负向词门控与蒙版提交都按有效预设重新判断，避免用左栏当前预设误判。
+   */
+  function buildBody(overrides, options = {}) {
+    const presetOverride = options.preset && typeof options.preset === 'object' ? options.preset : null
+    const effectivePreset = presetOverride || activePreset
+    const effectiveCfg = overrides && Object.prototype.hasOwnProperty.call(overrides, 'cfg')
+      ? overrides.cfg
+      : form.cfg
     // 提交值以两层合并结果为准，并按 negativeActive 门控（不可用时置空串）。
-    // 局部重绘同理：当前模型不支持 Inpaint 时不提交蒙版，蒙版本身保留在表单里。
+    // 局部重绘同理：有效预设不支持 Inpaint 时不提交蒙版，蒙版本身保留在表单里。
     return buildGenerateBody(
       { ...form, negative: negativePromptOf(form) },
-      { defaultPreset, overrides, negativeActive, maskActive: inpaintSupported },
+      {
+        defaultPreset,
+        overrides,
+        negativeActive: negativePromptActive(effectivePreset, effectiveCfg),
+        maskActive: supportsInpaint(effectivePreset),
+      },
     )
   }
 
@@ -283,20 +313,26 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     patchForm(customSizePatch(partial))
   }
 
-  /** 重绘强度：滑块本身按契约 step 取值，这里再兜一次边界与浮点噪声。 */
+  /**
+   * 重绘强度：滑块按契约 step 取值，这里再兜一次边界与浮点噪声。
+   * 有蒙版时上限放宽到契约 inpaintMax（缺省回落通用 max），手调即退出自动档。
+   */
   function applyStrength(value) {
-    patchForm({ strength: clampStrength(value) })
+    setStrengthAuto(false)
+    patchForm({ strength: clampMaskStrength(value, Boolean(mask)) })
   }
 
   /**
-   * 进入涂抹模式：把「还没调过」的重绘强度抬到局部重绘的默认档。
+   * 进入涂抹模式：把强度抬到局部重绘的推荐档。
    *
-   * 真机验收结论：4 步极速模型在契约默认 0.6 下蒙版区改动偏弱，0.8 才有可见重写。
-   * 用户手动调过的强度（不等于契约默认值）保持不动，避免覆盖明确选择。
+   * 真机验收结论：4 步极速模型在契约默认 0.6 下蒙版区改动偏弱，0.8 才有可见重写；
+   * 专用 inpaint 权重（9 通道）需要 0.9 才会明显替换。自动档下无条件跟随推荐档，
+   * 用户手调过的强度（且不等于契约默认值）保持不动，避免覆盖明确选择。
    */
   function beginMaskEdit() {
-    const patch = maskStrengthPatch(formRef.current.strength, { native: inpaintOnly })
+    const patch = maskStrengthPatch(formRef.current.strength, { native: inpaintOnly, auto: strengthAuto })
     if (!patch) return false
+    setStrengthAuto(true)
     patchForm(patch)
     return true
   }
@@ -493,7 +529,11 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     applyIntent,
     // 图生图：参考图 / 重绘强度与它们的能力判断、动作。
     reference,
-    strength: clampStrength(form.strength),
+    strength: clampMaskStrength(form.strength, Boolean(mask)),
+    // 强度滑块上限：有蒙版时用契约 inpaintMax（局部重绘允许更强替换），否则通用 max。
+    strengthMax: strengthMaxOf(Boolean(mask)),
+    // 强度是否处于自动档：自动档下切预设跟随推荐档，用户手调后为 false。
+    strengthAuto,
     referenceSupported,
     referenceBlocked,
     applyStrength,

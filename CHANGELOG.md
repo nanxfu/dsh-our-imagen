@@ -106,8 +106,54 @@
 - **Host**：`JobQueue.submit` 在入队前拒绝「`inpaintOnly` 预设 + 无蒙版」的请求，不占队列与 GPU。
 - **客户端**：新增 `inpaintOnlyOf()` 与表单 `maskRequiredBlocked`——缺参考图或蒙版时生成被拦下并 toast 说明，参数面板常驻「需要先以此图重绘并涂抹蒙版」提示；参考图兜底预设（`referencePresetOf`）跳过专用模型；进入涂抹模式时专用模型的默认重绘强度取 **0.9**（通用模型 0.8）；模型选择卡复用 SDXL Base 海报，不新增图片资产。
 - **测试**：远端单测 371 项（+18：native 加载分支、`ensure_inpaint_pipeline` 复用、无蒙版拦截、提交期校验）；`jobs-wait.mjs` 25 项（+1：专用预设缺蒙版拒绝入队、带蒙版放行）；客户端逻辑与渲染新增 `inpaintOnlyOf`、兜底预设跳过、专用模型拦截与补蒙版后按 `reference.mask` 提交的断言（最终 logic 77 / render 89）。
-- **真机验收（2026-11-16，2×Tesla T4）**：kernel 预热即加载 `sdxl:diffusers/stable-diffusion-xl-1.0-inpainting-0.1`；40% 中心蒙版 + 「蓝色大象」提示词下象头明确生成（蒙版内平均差异 41.9/35.7/30.9 vs 通用模型同用例 24.6/27.3/25.2），黑色保留区逐像素不变（0.00），边界融合明显更自然；整图蒙版可完整按提示词成图。**已知行为**：小蒙版（约 2.5% 面积）时上下文补全压过提示词，想插入新物体建议涂抹更大区域或换用更强强度；1024² / 30 步单张 20.9~24.9s。产物见 `bench-results/gpu-live/`。
-## 0.11.0 — 2026-11-15
+### 状态流转与局部重绘可用性修复
+
+> 对应 ROADMAP 第十一条，问题清单、已拍板决策与分批方案见 [docs/STUDIO_STATE_FLOW_AND_INPAINT_FIX_PLAN.md](docs/STUDIO_STATE_FLOW_AND_INPAINT_FIX_PLAN.md)。
+
+**状态流转（P0-a）**
+
+- **胶片条不再清掉参考图与蒙版**：创作区胶卷点击的优先级固定为「切换预览 → 表单有参考图（含蒙版）则只切预览并提示 → 有未提交草稿则保留草稿 → 都没有才回填参数」。此前「提交成功后表单变干净、再点胶卷就走回填」会把参考图与刚涂好的蒙版一起清掉；现在涂过蒙版就受保护，要换参考图需显式「移除」或「带回参数」。
+- **生成来源策略表**：`src/logic/generate.js` 新增 `GENERATE_SOURCES` / `generateSourcePolicy()` / `generateCapabilityOf()` / `effectivePresetOf()`，`generate(overrides, { source })` 统一消费——`form` 沿用表单参考图与蒙版；`assistant`（确认卡）与 `variant`（生成变体）**强制纯文生图**（显式 `reference: null`）；当前预设为 `inpaintOnly` 时仅本次请求切到参考图兜底预设并轻提示，左栏表单不变。能力预检改用「有效预设 + 有效参考图」，不再用左栏表单误拦重试恢复出的带蒙版任务。
+- **失败重试恢复参考图**：新增 `retryReferencePlan()`——任务有参考图且上一次提交体同源时恢复完整蒙版（含 strength）直接重试；蒙版已不可恢复时不自动提交，改为把参考图填回表单、请求进入涂抹并提示重新涂抹；任务本来没有参考图时显式纯文生图，不会把表单里挂着的参考图串进重试。
+
+**可用性与续绘闭环（P0-b）**
+
+- **参考图空槽位**：`ReferenceSection` 按 `supportsImg2Img` 门控——支持垫图且无参考图时渲染空槽位（`inpaintOnly` 预设给虚线框 + 「选择参考图 → 涂抹蒙版」两步说明与「从作品画廊选择」按钮；普通模型只给一行轻量入口）；不支持垫图的模型仍整块隐藏。
+- **自动进入涂抹**：`useStudioUi` 新增 `paintRequest / requestPaint() / clearPaintRequest()` 计数信号，`Stage` 挂载或计数变化时消费一次。`inpaintOnly` 预设下从画廊「以此图重绘」成功、失败重试需要重涂、连续重绘都会直接进入涂抹态，且跨视图（画廊 → 创作）后挂载同样生效。
+- **连续重绘闭环**：舞台动作坞新增「以此结果继续重绘」（设为新参考图、清空旧蒙版、自动进入涂抹，不自动切换以免打断对比）；参考图区显示蒙版覆盖率、「继续涂抹」「清空蒙版」；生成按钮下方标注「本次基于 <文件名> 重绘」。
+
+**正确性（P1）**
+
+- **涂抹画布不再被压扁**：`.ofs-mask-stage` 宽度改为同时受容器宽与可用高度约束（与相纸 / 取景框一致用 `cqw/cqh` 计算）并按参考图比例给 `aspect-ratio`，竖图与矮窗口下整体等比缩小；指针坐标、键盘光标与光标直径按 `rect` 的宽/高**分别**换算，压扁场景下笔迹不再是椭圆。
+- **空舞台涂抹入口**：舞台没有选中作品、但表单已挂参考图且当前模型支持局部重绘时，空舞台同样显示涂抹入口与编辑器。
+- **涂抹中切换作品**：点胶卷切换作品会退出涂抹态让预览跟随，已涂蒙版保留在表单里。
+- **强度自动档**：打开涂抹模式时若强度未被手调过则按当前预设抬档（通用 0.8 / `inpaintOnly` 0.9）并标记自动档，用户拖动滑块即退出；自动档下切换预设跟随新预设推荐档，手调过的不动。带蒙版时强度上限用契约 `inpaintMax`（1.0），img2img 仍 0.9。纯逻辑见 `src/logic/mask.js` 的 `maskStrengthTargetOf()` / `maskStrengthPatch()` / `maskStrengthPresetPatch()` / `strengthMaxOf()` / `clampMaskStrength()`。
+
+**契约与远端（P2）**
+
+- **契约**：`LIMITS.strength.inpaintMax = 1.0`（`max` 仍 0.9）、`LIMITS.mask.minCoverage = 0.0005`；`remote/contract.json` 由 `npm run contract:gen` 同步，`remote/config.py` 的 `LIMIT_NUMERIC_KEYS` 登记新键，保持「注入契约优先、内置契约兜底」口径。
+- **Host**：`normalizeStrength(value, ceiling)` 支持场景上限，`normalizeReference` 带蒙版时用 `inpaintMax`、否则用 `max`；无蒙版 / 无参考图行为不变。
+- **空蒙版拦截**：`decode_mask_image()` 对齐后统计白色（重绘）覆盖率，低于 `minCoverage` 视为空蒙版，在**加载模型前**以 `invalid_request` 失败（文案说明「蒙版是空的」）；全白（整图重绘）放行。此前外部直接传全黑 PNG 会完整跑一次 GPU 推理后原样返回。
+- **羽化按覆盖率分档**：< 0.5% → 2px，< 5% → 4px，更大按短边 0.8% 计算并钳在 6~8px（此前固定 8px，只改眼睛 / 嘴唇等精细区域会波及周围像素）。常量集中在 `remote/inference/reference_codec.py` 顶部。
+- **非正方形参考图**：`run_task()` 的局部重绘分支显式下传按 8 对齐的参考图宽高（`w // 8 * 8`、`h // 8 * 8`），不再依赖管线缺省方形尺寸后拉回；不支持该参数的管线由 `__call__` 签名过滤丢弃，composite 仍是尺寸不一致时的兜底。日志新增蒙版覆盖率与羽化半径（`[gen] inpaint 蒙版覆盖率 X% 羽化半径 Npx`）。
+- **测试工具**：`test/gpu-live.mjs` 的 `--inpaint` 新增 `--reference-size WxH`（源文生图与蒙版都按非正方形生成）、`--mask-scale`（中心蒙版面积占比）、`--strength-compare 0.9,1.0`（同蒙版多档对比并记录蒙版内平均差异）、`--inpaint-rounds N`（第 2 轮起以上一轮出图为参考图）；report 记录每轮宽高、参考图 / 蒙版尺寸、覆盖率与差异。
+
+**测试**
+
+- `check-client-logic` **84** 项（77 → 84，+7：四来源策略、重试全分支、有效预设能力预检、胶片条保护优先级、强度自动档、mask-aware 钳制、新文案键双语）。
+- `check-client-render` **99** 项（89 → 99，+10：四来源实际请求体、空槽位与画廊入口、蒙版读数与动作、`paintRequest` 自动涂抹与空舞台、画布比例变量、续绘按钮与闭环、涂抹中切图退出、强度上限、重试恢复与蒙版丢失分支）。
+- `check-client-locale` zh/en 各 **477** 键严格同构（+15 文案键）。
+- `host-e2e` **50** 项（48 → 50：`strength=1.0 + mask` 全链路透传；空蒙版按异步任务终态 `failed + invalid_request` 断言）；`jobs-wait` **26** 项（25 → 26：validator 层带蒙版上限 1.0、img2img 仍 0.9）；`test/remote/run.py` **390** 项（371 → 390：空/低覆盖/全白蒙版、覆盖率计算、羽化三档像素级断言、带蒙版强度归一、非正方形 kwargs 对齐、`execute_job` 覆盖率日志）；`check-contract` **12** 项（+1）；`test/mock-daemon.py` 与真 daemon 的契约边界同步（防漂移断言未改弱）。
+- `npm test` 全绿；`node tools/gen-contract-json.mjs --check` 一致。
+
+**真机验收（2026-11-17，Kaggle 2×Tesla T4，diffusers 0.43.0 / torch 2.11.0，两轮）**
+
+- **非正方形（9 通道 `sdxl-inpaint`）**：1024×768 源图 + 3% 圆形蒙版 → 出图 **1024×768**，参考图 / 蒙版尺寸一致，日志 `kw` 含 `width/height`、`[gen] inpaint 蒙版覆盖率 3.00% 羽化半径 4px`；无拉伸畸变，`max_allocated_mb` 保持 9465 不变。单张 20.09s / 22.72s。
+- **精细小蒙版**：3% 覆盖率 → 羽化 4px；25% 覆盖率 → 羽化 6px（旧实现固定 8px）。
+- **强度 0.9 vs 1.0**：同蒙版同提示词（红唇 → 蓝唇）下蒙版内平均差异 26.46 / 21.92，两次输出不同；强度更大不等于像素差更大，但两次都按新提示词重写。
+- **连续两轮局部重绘（通用底座 `from_pipe`）**：第 2 轮以第 1 轮出图为参考图，两轮 `load_seconds=0`、蒙版内平均差异 16.44 → 21.29（对上轮）/ 32.81（对首轮源图）；显存 `allocated_mb` 7000→7000、`reserved_mb` +4 MiB、`max_allocated_mb` 不变；单张 6.53s / 6.52s。
+- **无遗留 Kernel**：两轮结束均正常关机（`absent`），最终 Kernel `COMPLETE`、换新实例产生的旧 Kernel 已删除，无 `RUNNING` / `QUEUED`。产物见 `bench-results/gpu-live/2026-11-16T18-49-20`（9 通道）与 `2026-11-16T19-12-31`（连续重绘）。
+
 
 > 本版完成架构重构 Batch 0–3（打包器、Host 模块边界、远端包化与测试领域化），新增画廊单张删除，切换 npm 包名并打通 Trusted Publishing 发布链，同时更新官网与成片资产。各批都只改内部模块边界、依赖方向与打包形态，`docs/SPEC.md` 定义的 HTTP 路由、报文、错误码与配置注入契约保持向后兼容（详见 [docs/REFACTOR_ARCHITECTURE_SPEC.md](docs/REFACTOR_ARCHITECTURE_SPEC.md)）。
 

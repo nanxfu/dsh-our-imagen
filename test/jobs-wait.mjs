@@ -28,7 +28,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { JobQueue } from '../lib/jobs.js'
+import { JobQueue, normalizeReference, normalizeStrength } from '../lib/jobs.js'
 import { submitGenerate, waitForJob } from '../lib/remote.js'
 import { LIMITS, PRESETS } from '../shared/contract.js'
 
@@ -938,17 +938,17 @@ async function main() {
       assert.equal(failed.error?.code, 'invalid_path')
       assert.equal(remote.state.generateCalls.length, 0)
 
-      // base64 来源（前端上传）：直接下发 image_b64；strength 5 → 钳到 0.9。
+      // base64 来源（前端上传）：直接下发 image_b64；strength 5 → 钳到 img2img 上限（契约 max）。
       const uploaded = queue.submit({ prompt: '上传参考图', reference: { image: PNG_B64, strength: 5 } })
       assert.equal(uploaded.ok, true)
-      assert.equal(uploaded.job.params.reference.strength, 0.9)
+      assert.equal(uploaded.job.params.reference.strength, LIMITS.strength.max)
       const done = await queue.waitFor(uploaded.job.id, 10)
       assert.equal(done.status, 'done', JSON.stringify(done.error))
       const call = remote.state.generateCalls.at(-1)
-      assert.deepEqual(call.reference, { image_b64: PNG_B64, strength: 0.9 })
+      assert.deepEqual(call.reference, { image_b64: PNG_B64, strength: LIMITS.strength.max })
       const meta = JSON.parse(await readFile(join(workspace, done.output.dir, 'meta.json'), 'utf8'))
       assert.equal(meta.sourceImage, null, '上传来源没有工作区路径')
-      assert.equal(meta.strength, 0.9)
+      assert.equal(meta.strength, LIMITS.strength.max)
     } finally {
       queue.dispose()
       await remote.close()
@@ -956,6 +956,30 @@ async function main() {
   })
 
   // ── 局部重绘（Inpaint）：参考图 + 蒙版入队校验 / 远端载荷 / meta 标记 ──────
+  await check('validator：带蒙版 strength 上限 1.0，无蒙版（含纯 img2img）仍 0.9', async () => {
+    // 纯函数层先断言：带蒙版用契约 inpaintMax，否则保持契约 max（img2img 行为不变）。
+    assert.ok(
+      LIMITS.strength.inpaintMax > LIMITS.strength.max,
+      `契约应放宽蒙版场景上限：inpaintMax=${LIMITS.strength.inpaintMax} max=${LIMITS.strength.max}`,
+    )
+    const masked = normalizeReference({ path: 'imagen-output/x/01.png', strength: 5, mask: PNG_B64 })
+    assert.equal(masked.ok, true, JSON.stringify(masked))
+    assert.equal(masked.value.strength, LIMITS.strength.inpaintMax)
+    const plain = normalizeReference({ path: 'imagen-output/x/01.png', strength: 5 })
+    assert.equal(plain.ok, true)
+    assert.equal(plain.value.strength, LIMITS.strength.max)
+    const uploaded = normalizeReference({ image: PNG_B64, strength: 0.95 })
+    assert.equal(uploaded.ok, true)
+    assert.equal(uploaded.value.strength, LIMITS.strength.max)
+    // 蒙版场景的档位对齐不变：0.777 → 0.8。
+    const aligned = normalizeReference({ path: 'imagen-output/x/01.png', strength: 0.777, mask: PNG_B64 })
+    assert.equal(aligned.value.strength, 0.8)
+    // 显式上限参数同样只允许在 [max, inpaintMax] 之间取值。
+    assert.equal(normalizeStrength(5), LIMITS.strength.max)
+    assert.equal(normalizeStrength(5, LIMITS.strength.inpaintMax), LIMITS.strength.inpaintMax)
+    assert.equal(normalizeStrength(-1, LIMITS.strength.inpaintMax), LIMITS.strength.min)
+  })
+
   await check('局部重绘：蒙版入队校验、远端 mask_b64 透传与 meta.inpaint', async () => {
     const remote = await startFlakyRemote()
     remote.state.onGenerate = (state, count) => {
@@ -1017,6 +1041,25 @@ async function main() {
       assert.equal(meta.sourceImage, seedPath)
       assert.equal(meta.strength, 0.75)
       assert.equal(meta.params.reference.mask, true)
+
+      // 带蒙版时 strength 上限放宽到 inpaintMax（1.0）：params / 远端载荷 / meta 全链路一致。
+      const strong = queue.submit({
+        prompt: '高强度局部重绘',
+        reference: { path: seedPath, strength: 1.0, mask: PNG_B64 },
+      })
+      assert.equal(strong.ok, true, JSON.stringify(strong))
+      assert.equal(strong.job.params.reference.strength, LIMITS.strength.inpaintMax)
+      const strongDone = await queue.waitFor(strong.job.id, 10)
+      assert.equal(strongDone.status, 'done', JSON.stringify(strongDone.error))
+      assert.deepEqual(remote.state.generateCalls.at(-1).reference, {
+        image_b64: PNG_B64,
+        strength: LIMITS.strength.inpaintMax,
+        mask_b64: PNG_B64,
+      })
+      const strongMeta = JSON.parse(
+        await readFile(join(workspace, strongDone.output.dir, 'meta.json'), 'utf8'),
+      )
+      assert.equal(strongMeta.strength, LIMITS.strength.inpaintMax)
     } finally {
       queue.dispose()
       await remote.close()

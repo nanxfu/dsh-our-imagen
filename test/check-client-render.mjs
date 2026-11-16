@@ -4073,14 +4073,15 @@ await check('渲染：胶卷点击回填参数、草稿保护与新建创作边�
     assert.equal(form().dirty, true, '手动修改后应标记为脏')
 
     // 脏时点胶卷：预览照常切换，草稿与参考图都保留，并给轻提示。
+    // 参考图保护优先于草稿保护：有参考图时提示「已保留当前参考图」，不能只说草稿。
     latest.studio.actions.previewWork(thumbB)
     await client.rerenderRaw()
     assert.equal(latest.studio.library.selected.image.path, thumbB.image.path, '预览应切到被点的图')
     assert.equal(form().form.prompt, '我自己的草稿', '脏表单不得被覆盖')
     assert.equal(form().form.reference.path, thumbA.image.path, '脏表单的参考图也保留')
     assert.ok(
-      latest.studio.ui.toast && latest.studio.ui.toast.text.includes('已保留当前草稿'),
-      '脏表单应提示「已保留当前草稿」',
+      latest.studio.ui.toast && latest.studio.ui.toast.text.includes('已保留当前参考图'),
+      '有参考图时应提示「已保留当前参考图」',
     )
 
     // 生成提交成功后表单回到干净状态（干净基准更新到刚提交的内容）。
@@ -4089,7 +4090,23 @@ await check('渲染：胶卷点击回填参数、草稿保护与新建创作边�
     await client.rerenderRaw()
     assert.equal(form().dirty, false, '刚生成完应回到干净状态')
 
-    // 干净时再点胶卷：完整回填该作品参数，保留原图 seed，并清掉残留参考图。
+    // 提交成功后参考图仍在表单里：干净态的胶卷点击同样只换预览，不得清掉参考图。
+    latest.studio.actions.previewWork(thumbB)
+    await client.rerenderRaw()
+    assert.equal(form().form.reference.path, thumbA.image.path, '干净态也要保留参考图（决策 1）')
+    assert.ok(
+      latest.studio.ui.toast && latest.studio.ui.toast.text.includes('已保留当前参考图'),
+      '干净态保留参考图也要提示',
+    )
+
+    // 显式移除参考图并回到干净基准，才是普通回填路径。
+    form().removeReference()
+    await client.rerenderRaw()
+    form().markClean()
+    await client.rerenderRaw()
+    assert.equal(form().dirty, false, '移除参考图后重新标为干净')
+
+    // 干净时再点胶卷：完整回填该作品参数，保留原图 seed。
     latest.studio.actions.previewWork(thumbB)
     await client.rerenderRaw()
     assert.equal(form().form.prompt, '测试用的荷花池塘', '提示词来自作品')
@@ -5803,6 +5820,735 @@ await check('渲染：没有新版本时不出现红点与更新说明', async (
   const plain = collectText(tree).join('')
   assert.equal(countByClass(tree, 'ofs-update-dot'), 0, '无更新时不应出现红点')
   assert.ok(!plain.includes('查看更新说明'), `无更新时不应出现更新说明：${plain}`)
+})
+
+// ── 状态流转与局部重绘可用性修复（P0-b / P1） ─────────────────────
+//
+// 组件层用最小 props 挂载（Rail / Stage），来源策略与重试恢复用 useStudio harness
+// 驱动真实状态流转：断言的是「用户操作后发生了什么」，不是内部函数名。
+
+const inpaintPreset = { ...preset, supportsImg2Img: true, supportsInpaint: true }
+const nativeInpaintPreset = {
+  ...preset,
+  id: 'sdxl-inpaint',
+  label: 'SDXL Inpaint',
+  short: 'Inpaint',
+  supportsImg2Img: true,
+  supportsInpaint: true,
+  inpaintOnly: true,
+}
+
+/** useStudio harness：暴露 latest.studio，便于直接驱动动作并断言状态。 */
+async function mountStudioHarness(responses) {
+  const client = await loadClient({ now: NOW, responses, testBuild: true })
+  const React = client.react
+  const h = React.createElement
+  const latest = {}
+  function Harness() {
+    const studio = client.hooks.useStudio({ t: client.internals.i18n.fallbackTranslate('zh') })
+    latest.studio = studio
+    return h('div', { className: 'ofs-fix-harness' }, String(studio.form.dirty))
+  }
+  await client.mountRaw(Harness, {})
+  await client.settle()
+  await client.rerenderRaw()
+  return { client, latest }
+}
+
+/** 生成请求列表（只保留 POST /imagen-api/generate）。 */
+const generateRequests = (client) => client.requests.filter((item) => item.path === '/imagen-api/generate')
+
+/** 取带某个 class token 的节点。 */
+const byClassToken = (tree, token) => findNodes(
+  tree,
+  (node) => typeof node.props?.className === 'string' && node.props.className.split(/\s+/).includes(token),
+)
+
+/** Rail 渲染替身：参考图区三类形态与蒙版动作的按钮只记录不执行。 */
+async function mountReferenceRail(options = {}) {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const calls = { views: [], paints: 0, clears: 0 }
+  const form = {
+    form: {
+      prompt: '',
+      negative: '',
+      presetId: 'sdxl-lightning',
+      width: 1024,
+      height: 1024,
+      steps: 4,
+      cfg: 0,
+      seed: '',
+      count: 1,
+    },
+    patchForm: () => {},
+    selectPreset: () => {},
+    ratioId: '1:1',
+    applyRatio: () => {},
+    applyCfg: () => {},
+    resetSeed: () => {},
+    applyCustomSize: () => {},
+    negativeActive: false,
+    negativeHint: '',
+    refineGroups: [],
+    refineSource: '',
+    enhancing: false,
+    enhance: () => {},
+    translating: false,
+    translate: () => {},
+    toggleRefine: () => {},
+    useInspiration: () => {},
+    englishPromptHint: false,
+    reference: null,
+    referenceSupported: false,
+    referenceBlocked: false,
+    strength: LIMITS.strength.default,
+    strengthMax: LIMITS.strength.max,
+    mask: null,
+    inpaintOnly: false,
+    inpaintSupported: false,
+    applyStrength: () => {},
+    removeReference: () => {},
+    clearMask: () => { calls.clears += 1 },
+    ...(options.form ?? {}),
+  }
+  const tree = await client.mountRaw(client.components.Rail, {
+    t,
+    ui: {
+      advancedOpen: false,
+      setAdvancedOpen: () => {},
+      negativeOpen: false,
+      setNegativeOpen: () => {},
+      panelMode: 'form',
+      setPanelMode: () => {},
+      setView: (view) => calls.views.push(view),
+      requestPaint: () => { calls.paints += 1 },
+      ...(options.ui ?? {}),
+    },
+    form,
+    actions: { sending: false, generate: () => {} },
+  })
+  return { client, tree, calls, t }
+}
+
+/** Stage 渲染替身：涂抹态、空舞台与续绘入口。 */
+async function mountStageFixture(options = {}) {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const calls = { paints: 0, clears: 0, clearsMask: 0, begins: 0 }
+  const reference = options.reference === undefined
+    ? { path: historyItem.images[0].path, url: historyItem.images[0].url, width: 1024, height: 1024 }
+    : options.reference
+  const tree = await client.mountRaw(client.components.Stage, {
+    t,
+    ui: {
+      zoom: false,
+      setZoom: () => {},
+      copyPath: () => {},
+      showToast: () => {},
+      paintRequest: options.paintRequest ?? 0,
+      clearPaintRequest: () => { calls.clears += 1 },
+      ...(options.ui ?? {}),
+    },
+    compute: { activeJob: null, status: {}, presets: [] },
+    form: {
+      form: { width: 1024, height: 1024, presetId: 'sdxl-lightning' },
+      activePreset: { steps: 25 },
+      reference,
+      mask: options.mask ?? null,
+      inpaintSupported: options.inpaintSupported !== false,
+      applyMask: () => ({ ok: true }),
+      clearMask: () => { calls.clearsMask += 1 },
+      beginMaskEdit: () => { calls.begins += 1 },
+      useInspiration: () => {},
+      ...(options.form ?? {}),
+    },
+    library: {
+      selected: options.selected === undefined
+        ? { image: historyItem.images[0], item: historyItem }
+        : options.selected,
+      isFavorite: () => false,
+      toggleFavorite: () => {},
+    },
+    actions: {
+      iterate: () => {},
+      reroll: () => {},
+      referenceImage: () => {},
+      ...(options.actions ?? {}),
+    },
+  })
+  return { client, tree, calls, t }
+}
+
+await check('渲染：参考图空槽位按模型能力门控，画廊入口可点击', async () => {
+  // 普通垫图模型：轻量单行入口。
+  let mounted = await mountReferenceRail({ form: { referenceSupported: true, inpaintSupported: true } })
+  try {
+    let tree = mounted.tree
+    assert.ok(collectText(tree).join(' | ').includes('可挂一张参考图做垫图重绘'), '普通垫图模型给单行引导')
+    assertStructure('reference-empty-simple', tree, {
+      required: { 'ofs-reference-entry': 1, 'ofs-reference-pick': 1 },
+      forbidden: ['ofs-reference-empty', 'ofs-reference'],
+    })
+    const pick = byClassToken(tree, 'ofs-reference-pick')[0]
+    assert.ok(pick, '空槽位缺少「从作品画廊选择」按钮')
+    assert.ok(Number(pick.props.style.minHeight) >= 44, '空槽位按钮触控热区不小于 44px')
+    assert.ok(collectText(pick).join('').includes('从作品画廊选择'))
+    pick.props.onClick()
+    assert.deepEqual(mounted.calls.views, ['gallery'], '点画廊入口应切到画廊视图')
+  } finally {
+    mounted.client.unmount()
+  }
+
+  // 专用局部重绘模型：虚线框 + 两步说明 + 画廊入口。
+  mounted = await mountReferenceRail({ form: { referenceSupported: true, inpaintOnly: true, inpaintSupported: true } })
+  try {
+    const tree = mounted.tree
+    const text = collectText(tree).join(' | ')
+    assert.ok(text.includes('先选一张参考图'), '专用模型空槽位应先提示选参考图')
+    assert.ok(text.includes('从作品画廊选一张图，再涂抹要重绘的区域'), '专用模型空槽位应说明第二步涂抹')
+    assertStructure('reference-empty-inpaint-only', tree, {
+      required: {
+        'ofs-reference-empty': 1,
+        'ofs-reference-empty-title': 1,
+        'ofs-reference-empty-hint': 1,
+        'ofs-reference-pick': 1,
+      },
+      forbidden: ['ofs-reference-entry'],
+    })
+    byClassToken(tree, 'ofs-reference-pick')[0].props.onClick()
+    assert.deepEqual(mounted.calls.views, ['gallery'])
+  } finally {
+    mounted.client.unmount()
+  }
+
+  // 不支持垫图的模型：整块不渲染，纯文生图界面不变。
+  mounted = await mountReferenceRail({ form: { referenceSupported: false } })
+  try {
+    assertStructure('reference-empty-unsupported', mounted.tree, {
+      required: {},
+      forbidden: ['ofs-reference', 'ofs-reference-entry', 'ofs-reference-empty', 'ofs-reference-pick'],
+    })
+  } finally {
+    mounted.client.unmount()
+  }
+})
+
+await check('渲染：参考图区显示蒙版覆盖率，可继续涂抹 / 清空蒙版，强度上限跟随蒙版', async () => {
+  const reference = {
+    path: historyItem.images[0].path,
+    url: historyItem.images[0].url,
+    width: 1024,
+    height: 1024,
+  }
+  // 有蒙版：覆盖率读数 + 两个入口 + 强度上限放宽到 inpaintMax。
+  let mounted = await mountReferenceRail({
+    form: {
+      reference,
+      referenceSupported: true,
+      inpaintSupported: true,
+      mask: { data: MASK_PNG_B64, coverage: 0.12, digest: 'd-1' },
+      strength: 0.9,
+      strengthMax: LIMITS.strength.inpaintMax,
+    },
+  })
+  try {
+    let tree = mounted.tree
+    let text = collectText(tree).join(' | ')
+    assert.ok(text.includes('已涂抹 12%'), `参考图区应显示蒙版覆盖率，实际：${text}`)
+    assertStructure('reference-mask-readout', tree, {
+      required: {
+        'ofs-reference': 1,
+        'ofs-reference-mask': 1,
+        'ofs-reference-mask-readout': 1,
+        'ofs-reference-paint': 1,
+        'ofs-reference-clear': 1,
+      },
+      forbidden: ['ofs-reference-warn'],
+    })
+    const range = findNodes(tree, (node) => node.type === 'input' && node.props?.type === 'range')[0]
+    assert.equal(range.props.max, LIMITS.strength.inpaintMax, '有蒙版时滑块上限用 inpaintMax')
+    assert.equal(range.props.value, 0.9)
+    byClassToken(tree, 'ofs-reference-paint')[0].props.onClick()
+    assert.equal(mounted.calls.paints, 1, '「继续涂抹」应请求舞台进入涂抹态')
+    byClassToken(tree, 'ofs-reference-clear')[0].props.onClick()
+    assert.equal(mounted.calls.clears, 1, '「清空蒙版」应调用清空动作')
+    // 页脚标注本次基于哪张参考图重绘。
+    assert.ok(collectText(tree).join(' | ').includes('本次基于 7.png 重绘'), '页脚应标注参考图来源')
+  } finally {
+    mounted.client.unmount()
+  }
+
+  // 无蒙版：尚未涂抹、清空按钮禁用、上限回到通用 max。
+  mounted = await mountReferenceRail({
+    form: {
+      reference,
+      referenceSupported: true,
+      inpaintSupported: true,
+      mask: null,
+      strength: LIMITS.strength.default,
+      strengthMax: LIMITS.strength.max,
+    },
+  })
+  try {
+    const tree = mounted.tree
+    assert.ok(collectText(tree).join(' | ').includes('尚未涂抹蒙版'))
+    const range = findNodes(tree, (node) => node.type === 'input' && node.props?.type === 'range')[0]
+    assert.equal(range.props.max, LIMITS.strength.max, '无蒙版时滑块上限仍是 img2img 上限')
+    assert.equal(byClassToken(tree, 'ofs-reference-clear')[0].props.disabled, true, '没有蒙版时清空按钮禁用')
+  } finally {
+    mounted.client.unmount()
+  }
+
+  // 不支持 Inpaint：不出现蒙版读数与两个入口。
+  mounted = await mountReferenceRail({
+    form: { reference, referenceSupported: true, inpaintSupported: false, mask: null },
+  })
+  try {
+    assertStructure('reference-mask-unsupported', mounted.tree, {
+      required: { 'ofs-reference': 1 },
+      forbidden: ['ofs-reference-mask', 'ofs-reference-paint', 'ofs-reference-clear'],
+    })
+  } finally {
+    mounted.client.unmount()
+  }
+
+  // strengthMax 的真实值来自表单域：有蒙版 1.0（契约 inpaintMax），否则 0.9。
+  const { client: hookClient, latest } = await mountStudioHarness({
+    '/imagen-api/state': { ...readyState, presets: [inpaintPreset], defaultPreset: 'sdxl-lightning' },
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+  })
+  try {
+    const form = () => latest.studio.form
+    assert.equal(form().strengthMax, LIMITS.strength.max, '无蒙版时 strengthMax 为 img2img 上限')
+    assert.equal(form().applyReference({ image: historyItem.images[0], item: historyItem }).ok, true)
+    await hookClient.rerenderRaw()
+    assert.equal(form().applyMask({ data: MASK_PNG_B64, coverage: 0.2 }).ok, true)
+    await hookClient.rerenderRaw()
+    assert.equal(form().strengthMax, LIMITS.strength.inpaintMax, '有蒙版时 strengthMax 为 inpaintMax')
+  } finally {
+    hookClient.unmount()
+  }
+})
+
+await check('渲染：Stage 消费涂抹请求自动进入涂抹，空舞台同样可涂抹', async () => {
+  // 1) paintRequest > 0 且可涂抹：自动进入涂抹态并消费请求。
+  let mounted = await mountStageFixture({ paintRequest: 3 })
+  try {
+    assertStructure('paint-request-auto', mounted.tree, {
+      required: { 'ofs-mask-editor': 1, 'ofs-mask-canvas': 1, 'ofs-mask-tools': 1 },
+      forbidden: ['ofs-mask-toggle', 'ofs-print'],
+    })
+    assert.equal(mounted.calls.clears, 1, '消费涂抹请求后必须清掉计数')
+    assert.equal(mounted.calls.begins, 1, '自动进入涂抹也要抬升强度')
+  } finally {
+    mounted.client.unmount()
+  }
+
+  // 2) 没有请求：维持普通预览，不擅自进入涂抹。
+  mounted = await mountStageFixture({ paintRequest: 0 })
+  try {
+    assertStructure('paint-request-none', mounted.tree, {
+      required: { 'ofs-mask-toggle': 1 },
+      forbidden: ['ofs-mask-editor'],
+    })
+    assert.equal(mounted.calls.clears, 0, '没有请求时不应清计数')
+  } finally {
+    mounted.client.unmount()
+  }
+
+  // 3) 空舞台（没有选中作品）但表单已有参考图：同样提供涂抹入口与编辑器。
+  mounted = await mountStageFixture({ selected: null, paintRequest: 0 })
+  try {
+    let tree = mounted.tree
+    assertStructure('empty-stage-paint-entry', tree, {
+      required: { 'ofs-mask-toggle': 1, 'ofs-mask-bar': 1, 'ofs-figure--empty': 1 },
+      forbidden: ['ofs-mask-editor'],
+    })
+    assert.ok(collectText(tree).join(' | ').includes('还没有涂抹区域'), '空舞台的涂抹入口也显示蒙版状态')
+    byClassToken(tree, 'ofs-mask-toggle')[0].props.onClick()
+    tree = await mounted.client.rerenderRaw()
+    assertStructure('empty-stage-mask-editor', tree, {
+      required: { 'ofs-mask-editor': 1, 'ofs-mask-canvas': 1 },
+      forbidden: ['ofs-empty-card', 'ofs-frame', 'ofs-mask-toggle'],
+    })
+    byClassToken(tree, 'ofs-mask-close')[0].props.onClick()
+    tree = await mounted.client.rerenderRaw()
+    assertStructure('empty-stage-mask-closed', tree, {
+      required: { 'ofs-mask-toggle': 1, 'ofs-figure--empty': 1 },
+      forbidden: ['ofs-mask-editor'],
+    })
+  } finally {
+    mounted.client.unmount()
+  }
+
+  // 4) 空舞台且没有参考图：不出现涂抹入口。
+  mounted = await mountStageFixture({ selected: null, reference: null })
+  try {
+    assertStructure('empty-stage-no-reference', mounted.tree, {
+      required: { 'ofs-figure--empty': 1 },
+      forbidden: ['ofs-mask-toggle', 'ofs-mask-editor', 'ofs-mask-bar'],
+    })
+  } finally {
+    mounted.client.unmount()
+  }
+})
+
+await check('渲染：涂抹画布按参考图比例给出宽高比变量（竖图不被压扁）', async () => {
+  // 竖图参考图：画布外框的宽高比与 --ofs-mask-r 都由参考图像素换算，
+  // CSS 用它同时约束宽度与可用高度（问题三.2）。
+  const mounted = await mountStageFixture({
+    reference: { path: 'imagen-output/job-1/portrait.png', url: '/imagen-api/file?path=portrait.png', width: 768, height: 1024 },
+    paintRequest: 1,
+  })
+  try {
+    const tree = mounted.tree
+    const stageNode = byClassToken(tree, 'ofs-mask-stage')[0]
+    assert.ok(stageNode, '涂抹态应挂载画布外框')
+    assert.equal(stageNode.props.style['--ofs-mask-r'], '0.75', '宽高比变量按 768×1024 换算')
+    assert.equal(stageNode.props.style.aspectRatio, '768 / 1024', '内联 aspect-ratio 与参考图一致')
+    assertStructure('mask-stage-ratio', tree, {
+      required: { 'ofs-mask-editor': 1, 'ofs-mask-canvas': 1, 'ofs-mask-photo': 1 },
+      forbidden: [],
+    })
+  } finally {
+    mounted.client.unmount()
+  }
+})
+
+await check('渲染：舞台动作坞提供「以此结果继续重绘」', async () => {
+  const received = []
+  let mounted = await mountStageFixture({
+    actions: { continueInpaint: (entry) => received.push(entry) },
+  })
+  try {
+    const tree = mounted.tree
+    const button = byClassToken(tree, 'ofs-continue-inpaint')[0]
+    assert.ok(button, '存在选中作品且支持 Inpaint 时应提供续绘入口')
+    assert.ok(collectText(button).join('').includes('以此结果继续重绘'))
+    button.props.onClick()
+    assert.equal(received.length, 1, '点击应调用 continueInpaint')
+    assert.equal(received[0] && received[0].image && received[0].image.path, historyItem.images[0].path, '应把完整选中条目交出去')
+  } finally {
+    mounted.client.unmount()
+  }
+
+  // 当前模型不支持局部重绘：不出现续绘入口。
+  mounted = await mountStageFixture({
+    inpaintSupported: false,
+    actions: { continueInpaint: () => {} },
+  })
+  try {
+    assert.equal(byClassToken(mounted.tree, 'ofs-continue-inpaint').length, 0)
+  } finally {
+    mounted.client.unmount()
+  }
+
+  // 旧调用方没有 continueInpaint 动作：静默不渲染，不能报错。
+  mounted = await mountStageFixture({})
+  try {
+    assert.equal(byClassToken(mounted.tree, 'ofs-continue-inpaint').length, 0)
+  } finally {
+    mounted.client.unmount()
+  }
+})
+
+await check('渲染：以此结果继续重绘——设为新参考图并自动进入涂抹', async () => {
+  const client = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/state': { ...readyState, presets: [inpaintPreset], defaultPreset: 'sdxl-lightning' },
+      '/imagen-api/history': { items: [historyItem] },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+    },
+    testBuild: true,
+  })
+  try {
+    const tree = await client.mountRaw(client.components.Studio, {})
+    assertStructure('continue-before', tree, {
+      required: { 'ofs-continue-inpaint': 1, 'ofs-print': 1 },
+      forbidden: ['ofs-mask-editor'],
+    })
+    byClassToken(tree, 'ofs-continue-inpaint')[0].props.onClick()
+    const next = await client.rerenderRaw()
+    // 结果设为参考图、旧蒙版清空、舞台进入涂抹态：一个动作完成整条续绘闭环。
+    assertStructure('continue-after', next, {
+      required: { 'ofs-mask-editor': 1, 'ofs-reference': 1, 'ofs-reference-paint': 1 },
+      forbidden: ['ofs-print', 'ofs-mask-toggle'],
+    })
+    const text = collectText(next).join(' | ')
+    assert.ok(text.includes('已设为参考图，请涂抹要重绘的区域'), '续绘应提示涂抹下一步')
+    assert.ok(text.includes('尚未涂抹蒙版'), '旧蒙版应被清空')
+    assert.ok(text.includes('本次基于 7.png 重绘'), '左栏应标注新的参考图来源')
+  } finally {
+    client.unmount()
+  }
+})
+
+await check('渲染：涂抹中切换胶卷作品退出涂抹态，参考图与蒙版保留', async () => {
+  const responses = {
+    '/imagen-api/state': { ...readyState, presets: [inpaintPreset], defaultPreset: 'sdxl-lightning' },
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+  }
+  const client = await loadClient({ now: NOW, responses, testBuild: true })
+  try {
+    // 从画廊设参考图并回到创作视图。
+    let tree = await client.mountRaw(client.components.Studio, { view: 'gallery' })
+    byClassToken(
+      tree,
+      'ofs-gallery-action',
+    ).find((node) => collectText(node).join('').includes('以此图重绘')).props.onClick()
+    tree = await client.rerenderRaw()
+    assertStructure('switch-thumb-ready', tree, {
+      required: { 'ofs-mask-toggle': 1, 'ofs-reference': 1 },
+      forbidden: ['ofs-mask-editor', 'ofs-gallery'],
+    })
+    byClassToken(tree, 'ofs-mask-toggle')[0].props.onClick()
+    tree = await client.rerenderRaw()
+    assertStructure('switch-thumb-painting', tree, {
+      required: { 'ofs-mask-editor': 1 },
+      forbidden: ['ofs-print'],
+    })
+
+    // 点另一张胶卷作品：退出涂抹态，预览跟随选中作品。
+    const thumbs = byClassToken(tree, 'ofs-thumb')
+    assert.equal(thumbs.length, 2, '历史批次应有 2 张缩略图')
+    const target = thumbs.find((node) => node.key !== historyItem.images[0].path) || thumbs[1]
+    target.props.onClick()
+    tree = await client.rerenderRaw()
+    assertStructure('switch-thumb-after', tree, {
+      required: { 'ofs-print': 1, 'ofs-mask-toggle': 1, 'ofs-reference': 1 },
+      forbidden: ['ofs-mask-editor'],
+    })
+  } finally {
+    client.unmount()
+  }
+
+  // 有蒙版时胶卷点击只换预览：已涂蒙版必须原样留在表单里。
+  const { client: hookClient, latest } = await mountStudioHarness({
+    '/imagen-api/state': { ...readyState, presets: [inpaintPreset], defaultPreset: 'sdxl-lightning' },
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+  })
+  try {
+    const form = () => latest.studio.form
+    assert.equal(form().applyReference({ image: historyItem.images[0], item: historyItem }).ok, true)
+    await hookClient.rerenderRaw()
+    assert.equal(form().applyMask({ data: MASK_PNG_B64, coverage: 0.2 }).ok, true)
+    await hookClient.rerenderRaw()
+    latest.studio.actions.previewWork({ image: historyItem.images[1], item: historyItem })
+    await hookClient.rerenderRaw()
+    assert.ok(
+      latest.studio.ui.toast && latest.studio.ui.toast.text.includes('已保留当前参考图与蒙版'),
+      '有蒙版的胶卷点击要提示参考图与蒙版已保留',
+    )
+    assert.equal(form().form.reference.path, historyItem.images[0].path, '参考图必须保留')
+    assert.equal(form().form.reference.mask.data, MASK_PNG_B64, '已涂蒙版必须保留')
+  } finally {
+    hookClient.unmount()
+  }
+})
+
+await check('渲染：生成来源策略——表单带蒙版提交，助手与变体强制纯文生图', async () => {
+  const { client, latest } = await mountStudioHarness({
+    '/imagen-api/state': {
+      ...readyState,
+      presets: [inpaintPreset, nativeInpaintPreset],
+      defaultPreset: 'sdxl-lightning',
+    },
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    '/imagen-api/generate': { id: 'job-src', status: 'queued' },
+  })
+  try {
+    const form = () => latest.studio.form
+    form().patchForm({ prompt: '雨夜街景' })
+    await client.rerenderRaw()
+    assert.equal(form().applyReference({ image: historyItem.images[0], item: historyItem }).ok, true)
+    await client.rerenderRaw()
+    assert.equal(form().applyMask({ data: MASK_PNG_B64, coverage: 0.2 }).ok, true)
+    await client.rerenderRaw()
+
+    // 1) form 来源：参考图 + 蒙版随请求体提交。
+    let before = generateRequests(client).length
+    assert.equal(await latest.studio.actions.generate(), true)
+    await client.settle()
+    assert.equal(generateRequests(client).length, before + 1, '表单来源应正常提交')
+    let submitted = generateRequests(client).pop()
+    assert.deepEqual(submitted.body.reference, {
+      path: historyItem.images[0].path,
+      strength: LIMITS.strength.default,
+      mask: MASK_PNG_B64,
+    }, '表单来源请求体应带参考图与蒙版')
+    assert.equal(submitted.body.presetId, 'sdxl-lightning')
+
+    // 2) assistant 来源：强制纯文生图，且不改左栏表单挂着的参考图与蒙版。
+    before = generateRequests(client).length
+    assert.equal(
+      await latest.studio.actions.generate({ prompt: '助手提示词' }, { source: 'assistant', pushUser: false }),
+      true,
+    )
+    await client.settle()
+    await client.rerenderRaw()
+    assert.equal(generateRequests(client).length, before + 1)
+    submitted = generateRequests(client).pop()
+    assert.ok(!('reference' in submitted.body), '助手来源不得携带参考图')
+    assert.ok(!('strength' in submitted.body), '助手来源不得携带重绘强度')
+    assert.equal(submitted.body.prompt, '助手提示词')
+    assert.equal(form().form.reference.path, historyItem.images[0].path, '助手请求不改左栏参考图')
+    assert.equal(form().form.reference.mask.data, MASK_PNG_B64, '助手请求不改左栏蒙版')
+
+    // 3) variant 来源：同样强制纯文生图（保留该作品的提示词与随机种子）。
+    before = generateRequests(client).length
+    latest.studio.actions.reroll({ image: historyItem.images[1], item: historyItem })
+    await client.settle()
+    await client.rerenderRaw()
+    assert.equal(generateRequests(client).length, before + 1)
+    submitted = generateRequests(client).pop()
+    assert.ok(!('reference' in submitted.body), '生成变体不得携带参考图')
+    assert.equal(submitted.body.count, 1, '生成变体固定一张')
+    assert.equal(submitted.body.seed, -1, '生成变体使用随机种子')
+
+    // 4) inpaintOnly 预设 + 助手来源：仅本次请求切到兜底预设并轻提示，左栏表单预设不变。
+    form().selectPreset(nativeInpaintPreset)
+    await client.rerenderRaw()
+    assert.equal(form().inpaintOnly, true)
+    before = generateRequests(client).length
+    assert.equal(
+      await latest.studio.actions.generate({ prompt: '专用预设上的助手请求' }, { source: 'assistant', pushUser: false }),
+      true,
+    )
+    await client.settle()
+    await client.rerenderRaw()
+    assert.equal(generateRequests(client).length, before + 1)
+    submitted = generateRequests(client).pop()
+    assert.equal(submitted.body.presetId, 'sdxl-lightning', 'inpaintOnly 预设下助手请求改用兜底预设')
+    assert.ok(!('reference' in submitted.body), '改用兜底预设后仍是纯文生图')
+    assert.ok(
+      latest.studio.ui.toast && latest.studio.ui.toast.text.includes('本次已改用 SDXL Lightning 文生图'),
+      '自动切换预设要给轻提示',
+    )
+    assert.equal(form().form.presetId, 'sdxl-inpaint', '仅覆盖本次请求，不改左栏预设')
+
+    // 5) 表单来源回到 inpaintOnly 预设 + 蒙版：照常带 reference.mask 提交。
+    before = generateRequests(client).length
+    assert.equal(await latest.studio.actions.generate(), true)
+    await client.settle()
+    assert.equal(generateRequests(client).length, before + 1)
+    submitted = generateRequests(client).pop()
+    assert.equal(submitted.body.presetId, 'sdxl-inpaint')
+    assert.equal(submitted.body.reference.mask, MASK_PNG_B64, '专用预设的表单来源仍按局部重绘提交')
+  } finally {
+    client.unmount()
+  }
+})
+
+await check('渲染：失败重试恢复参考图与蒙版，蒙版不可恢复时只填回参考图并要求重涂', async () => {
+  const sourcePath = historyItem.images[0].path
+  const failedJob = {
+    id: 'job-retry',
+    status: 'failed',
+    createdAt: at(-60),
+    finishedAt: at(-10),
+    presetId: 'sdxl-lightning',
+    params: {
+      prompt: '失败的局部重绘',
+      presetId: 'sdxl-lightning',
+      width: 1024,
+      height: 1024,
+      steps: 4,
+      cfg: 0,
+      reference: { sourcePath, strength: 0.8, mask: true },
+    },
+    error: { code: 'generation_failed', message: '远端生成失败' },
+  }
+  const responses = {
+    '/imagen-api/state': { ...readyState, presets: [inpaintPreset], defaultPreset: 'sdxl-lightning', lastJob: failedJob },
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    '/imagen-api/generate': { id: 'job-retried', status: 'queued' },
+  }
+
+  // 分支一：没有同源提交体，蒙版不可恢复 → 不自动提交，填回参考图并请求进入涂抹。
+  let harness = await mountStudioHarness(responses)
+  try {
+    const form = () => harness.latest.studio.form
+    const before = generateRequests(harness.client).length
+    harness.latest.studio.actions.retryFocusedJob()
+    await harness.client.settle()
+    await harness.client.rerenderRaw()
+    assert.equal(form().form.reference.path, sourcePath, '重试应按失败任务恢复参考图')
+    assert.equal(form().form.reference.mask, undefined, '蒙版不可恢复时不得伪造蒙版')
+    assert.ok(harness.latest.studio.ui.paintRequest > 0, '恢复参考图后应请求舞台进入涂抹')
+    assert.ok(
+      harness.latest.studio.ui.toast && harness.latest.studio.ui.toast.text.includes('原任务的蒙版已无法恢复'),
+      '蒙版不可恢复要给明确提示',
+    )
+    assert.equal(generateRequests(harness.client).length, before, '蒙版不可恢复时不得自动提交')
+  } finally {
+    harness.client.unmount()
+  }
+
+  // 分支二：同源提交体仍带完整蒙版 → 恢复参考图与蒙版后按原参数重试。
+  harness = await mountStudioHarness(responses)
+  try {
+    const form = () => harness.latest.studio.form
+    form().patchForm({ prompt: '失败的局部重绘' })
+    await harness.client.rerenderRaw()
+    assert.equal(form().applyReference({ image: historyItem.images[0], item: historyItem }).ok, true)
+    await harness.client.rerenderRaw()
+    assert.equal(form().applyMask({ data: MASK_PNG_B64, coverage: 0.2 }).ok, true)
+    await harness.client.rerenderRaw()
+    // 先按表单提交一次，形成与失败任务同源的 pendingRef。
+    assert.equal(await harness.latest.studio.actions.generate(), true)
+    await harness.client.settle()
+    const before = generateRequests(harness.client).length
+    harness.latest.studio.actions.retryFocusedJob()
+    await harness.client.settle()
+    assert.equal(generateRequests(harness.client).length, before + 1, '蒙版可恢复时应直接重试')
+    const retried = generateRequests(harness.client).pop()
+    assert.equal(retried.body.reference.path, sourcePath, '重试请求带原参考图')
+    assert.equal(retried.body.reference.mask, MASK_PNG_B64, '同源提交体的完整蒙版随重试恢复')
+    assert.equal(retried.body.reference.strength, 0.8, '重试强度按失败任务恢复')
+  } finally {
+    harness.client.unmount()
+  }
+})
+
+await check('渲染：专用局部重绘预设从画廊设参考图后自动进入涂抹', async () => {
+  const client = await loadClient({
+    now: NOW,
+    responses: {
+      '/imagen-api/state': {
+        ...readyState,
+        presets: [inpaintPreset, nativeInpaintPreset],
+        defaultPreset: 'sdxl-inpaint',
+      },
+      '/imagen-api/history': { items: [historyItem] },
+      '/imagen-api/library': { favorites: [], deleted: [] },
+    },
+    testBuild: true,
+  })
+  try {
+    // 从画廊触发：Stage 此刻还没挂载，paintRequest 必须在切回创作视图后仍生效。
+    let tree = await client.mountRaw(client.components.Studio, { view: 'gallery' })
+    byClassToken(
+      tree,
+      'ofs-gallery-action',
+    ).find((node) => collectText(node).join('').includes('以此图重绘')).props.onClick()
+    tree = await client.rerenderRaw()
+    assertStructure('inpaint-only-auto-paint', tree, {
+      required: { 'ofs-mask-editor': 1, 'ofs-mask-canvas': 1, 'ofs-reference': 1 },
+      forbidden: ['ofs-gallery', 'ofs-mask-toggle'],
+    })
+    const text = collectText(tree).join(' | ')
+    assert.ok(text.includes('已设为参考图'), '设参考图的提示仍要出现')
+    assert.ok(text.includes('尚未涂抹蒙版'), '左栏参考图区应显示蒙版尚未涂抹')
+  } finally {
+    client.unmount()
+  }
 })
 
 const failed = results.filter((item) => !item.ok)

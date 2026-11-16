@@ -16,7 +16,17 @@ import { useHostState } from '../hooks/useHostState.js'
 import { translator } from '../i18n.js'
 import { guidanceDetailOf, guidanceKindOf, guidanceSurfaceOf, isConnectionCode } from '../logic/guidance.js'
 import { formatText } from '../logic/format.js'
-import { iteratePatch, formSummaryOf, rerollOverrides, retryOverrides } from '../logic/generate.js'
+import {
+  effectivePresetOf,
+  formSummaryOf,
+  generateCapabilityOf,
+  generateSourcePolicy,
+  iteratePatch,
+  previewRecallOf,
+  rerollOverrides,
+  retryReferencePlan,
+} from '../logic/generate.js'
+import { inpaintOnlyOf } from '../logic/preset.js'
 import { safeResetPatch } from '../../shared/models-guide.js'
 import { accountStatusOf } from '../logic/probe.js'
 import { useChatThread } from './hooks/useChatThread.js'
@@ -116,23 +126,48 @@ export function useStudio(props) {
     kaggleLogin,
   }
 
+  /**
+   * 提交生成。
+   *
+   * 来源策略统一在这里消费（`options.source`）：assistant / variant 强制纯文生图，
+   * form / retry 沿用（或恢复出的）参考图；随后用「有效预设 + 有效参考图」做能力校验，
+   * 不能用当前表单预设去误拦重试恢复出的、来自别的预设的带蒙版任务。
+   */
   async function generate(overrides, options = {}) {
     if (sending) return false
-    // 参考图与当前预设的能力不匹配时拦下本次生成：既不能悄悄丢掉参考图当文生图发出去，
+    const policy = generateSourcePolicy(options.source, {
+      overrides,
+      preset: form.activePreset,
+      presets,
+    })
+    if (!policy.ok) {
+      ui.showToast(t(policy.blockedKey))
+      return false
+    }
+    const effectivePreset = effectivePresetOf(policy.overrides, form.activePreset, presets)
+    const hasReferenceOverride = Boolean(policy.overrides)
+      && Object.prototype.hasOwnProperty.call(policy.overrides, 'reference')
+    const effectiveReference = hasReferenceOverride ? policy.overrides.reference : form.reference
+    // 参考图 / 蒙版与本次有效预设的能力不匹配时拦下：既不能悄悄丢掉参考图当文生图发出去，
     // 也不该把注定失败的请求交给宿主。提示里写明下一步（切模型或移除参考图）。
-    if (form.referenceBlocked) {
-      ui.showToast(t('studio.reference.blocked'))
+    const capability = generateCapabilityOf({
+      preset: effectivePreset,
+      presets,
+      reference: effectiveReference,
+    })
+    if (!capability.ok) {
+      ui.showToast(t(capability.noticeKey))
       return false
     }
-    // 专用局部重绘模型必须带蒙版：缺参考图或没涂抹时直接拦下并说明下一步。
-    if (form.maskRequiredBlocked) {
-      ui.showToast(t('studio.mask.onlyHint'))
-      return false
-    }
-    const body = form.buildBody(overrides)
+    const body = form.buildBody(policy.overrides, { preset: effectivePreset })
     if (!body.prompt) {
       ui.fail('need_prompt', '')
       return false
+    }
+    // 来源策略的轻提示要在提交结果之后弹：成功提示会覆盖先前的 toast，否则用户看不到
+    // 「本次已改用 X 文生图」这类关键说明。
+    const showPolicyNotice = () => {
+      if (policy.notice) ui.showToast(formatText(t(policy.notice.key), policy.notice.params))
     }
     // 提交时的表单对象：成功回来后只有它仍是当前表单，才记为干净基准。
     const submittedForm = form.form
@@ -165,8 +200,10 @@ export function useStudio(props) {
         // 历史只在任务完成后刷新（见 useWorkLibrary 的 lastJob effect）：
         // 刚提交的任务还没有产物，这里再拉一次会把已加载的分页重置回第一页。
         ui.showToast(t('studio.toast.submitted'))
+        showPolicyNotice()
         return true
       }
+      showPolicyNotice()
       ui.fail(result.code, result.message)
     } finally {
       // 卸载导致 alive 返回 null、或后续逻辑抛错时也必须复位，否则按钮永远停在「提交中」。
@@ -203,21 +240,19 @@ export function useStudio(props) {
   /**
    * 创作区胶卷点击：始终切换右侧预览；表单干净时把该作品参数回填到左侧面板。
    *
-   * 表单有未提交的手动修改（dirty）时不覆盖草稿，只给轻提示——用户仍可通过大图上的
-   * 「带回参数」显式覆写。画廊视图不接这个动作，保持纯浏览。
+   * 回填由纯逻辑按优先级判定（见 `previewRecallOf()`）：表单挂着参考图（含蒙版）时
+   * 只换预览、绝不回填——涂好的蒙版一旦被隐式清掉，用户得从头再涂一遍；其次是未提交的
+   * 手动修改（dirty）保护草稿；两者都没有才回填。画廊视图不接这个动作，保持纯浏览。
    */
   function previewWork(entry) {
     const target = entry && entry.image ? entry : null
     if (!target) return
     library.selectImage(target)
-    if (form.dirty) {
-      ui.showToast(t('studio.toast.draftKept'))
-      return
-    }
     const patch = iteratePatch(target, form.form, presets)
-    if (Object.keys(patch).length === 0) return
+    const decision = previewRecallOf({ reference: form.reference, dirty: form.dirty, patch })
+    if (decision.noticeKey) ui.showToast(t(decision.noticeKey))
+    if (decision.action !== 'recall') return
     form.applyRecall(patch, target)
-    ui.showToast(t('studio.toast.recalled'))
   }
 
   /**
@@ -225,6 +260,7 @@ export function useStudio(props) {
    *
    * 预设是否支持垫图由表单域判断：不支持时自动切到支持的预设，toast 里说明切到了哪个；
    * 旧宿主一个支持的预设都没有时保持表单不变并明确提示（不把参考图塞给必然拒绝的宿主）。
+   * 专用局部重绘权重只能带蒙版使用：设为参考图后直接请求进入涂抹态（见决策 4）。
    */
   function referenceImage(entry) {
     const target = entry || library.selected
@@ -239,6 +275,9 @@ export function useStudio(props) {
     ui.setPanelMode('form')
     // 从大图预览触发时一并收起放大层，用户能直接看到左侧参考图槽位。
     ui.setZoom(false)
+    // 生效预设是专用局部重绘权重：自动进入涂抹，省掉再点一次「局部涂抹」。
+    const effectivePreset = result.switchedPreset || form.activePreset
+    if (inpaintOnlyOf(effectivePreset)) ui.requestPaint()
     if (result.switchedPreset) {
       const preset = result.switchedPreset
       const label = preset.label || preset.short || preset.id
@@ -248,15 +287,58 @@ export function useStudio(props) {
     ui.showToast(t('studio.reference.applied'))
   }
 
-  /** 按失败任务原来的参数重试；没有任务时退回上一次提交的 body。 */
+  /**
+   * 以此结果继续重绘：把该作品设为新参考图、清空蒙版、进入涂抹（见决策 5）。
+   *
+   * 选择不自动切换，避免打断用户对比；只有显式点击这个动作才换底图。
+   * `applyReference()` 整块替换 reference，旧蒙版随之清掉，不需要再单独清。
+   */
+  function continueInpaint(entry) {
+    const target = entry || library.selected
+    const result = form.applyReference(target)
+    if (!result || !result.ok) {
+      const failedKey = result && result.reason === 'no_path' ? 'studio.reference.noPath' : 'studio.reference.unavailable'
+      ui.showToast(t(failedKey))
+      return false
+    }
+    ui.setView('studio')
+    ui.setPanelMode('form')
+    ui.setZoom(false)
+    ui.requestPaint()
+    ui.showToast(t('studio.mask.continueHint'))
+    return true
+  }
+
+  /**
+   * 按失败任务原来的参数重试。
+   *
+   * 参考图的恢复计划由纯逻辑给出：任务本来没有参考图时显式纯文生图；
+   * 有参考图且同源提交体还留着蒙版时直接恢复重试；蒙版已不可恢复时只把参考图填回
+   * 表单并请求进入涂抹，不自动提交。没有可重试的任务时退回上一次提交的 body。
+   */
   function retryFocusedJob() {
-    const overrides = retryOverrides(control.focusedJob)
-      || (pendingRef.current ? retryOverrides(pendingRef.current) : null)
-    if (!overrides) {
+    const pending = pendingRef.current
+    // 失败任务参数不完整（旧宿主）时退回上一次提交体，保持原有重试兜底。
+    let plan = retryReferencePlan(control.focusedJob, { pendingRef: pending })
+    if (!plan && pending) plan = retryReferencePlan(pending, { pendingRef: pending })
+    if (!plan) {
       ui.showToast(t('workbench.needPrompt'))
       return
     }
-    generate(overrides, { source: 'retry' })
+    if (plan.maskLost) {
+      const applied = form.applyReference({ image: plan.fillReference })
+      if (!applied || !applied.ok) {
+        const failedKey = applied && applied.reason === 'no_path' ? 'studio.reference.noPath' : 'studio.reference.unavailable'
+        ui.showToast(t(failedKey))
+        return
+      }
+      ui.setView('studio')
+      ui.setPanelMode('form')
+      if (plan.requestPaint) ui.requestPaint()
+      ui.showToast(t(plan.noticeKey))
+      return
+    }
+    generate(plan.overrides, { source: 'retry' })
   }
 
   /** OOM 指引卡上的「重置参数」：表单回到当前活跃预设的安全默认档，并清掉当前错误。 */
@@ -308,6 +390,6 @@ export function useStudio(props) {
     chat,
     library,
     guidance: { kind: guidanceKind, code: guidanceCode, surface: guidanceSurface, detail: guidanceDetail, key: guidanceKey, dismiss: dismissGuidance },
-    actions: { sending, generate, previewWork, reroll, iterate, referenceImage, retryFocusedJob, resetToSafe },
+    actions: { sending, generate, previewWork, reroll, iterate, referenceImage, continueInpaint, retryFocusedJob, resetToSafe },
   }
 }

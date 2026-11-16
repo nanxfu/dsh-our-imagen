@@ -10,10 +10,15 @@
  * 当前模型/CFG 不消费负向词时提交空串，不发无效参数。
  */
 
-import { LIMITS } from '../../shared/contract.js'
-import { clampInt, clampNumber, clampSize, clampStrength, parseSeed } from './clamp.js'
-import { referenceMaskForSubmit } from './mask.js'
-import { ratioIdOf } from './preset.js'
+import { LIMITS, ROUTES } from '../../shared/contract.js'
+import { clampInt, clampNumber, clampSize, parseSeed } from './clamp.js'
+import {
+  clampMaskStrength,
+  referenceMaskForSubmit,
+  referenceMaskOf,
+  referenceWithoutMask,
+} from './mask.js'
+import { inpaintOnlyOf, ratioIdOf, referencePresetOf, supportsImg2Img } from './preset.js'
 import { negativeForSubmit } from './prompt.js'
 
 /** 参考图的文件名：路径只用于向宿主定位作品，界面只显示文件名。 */
@@ -22,6 +27,18 @@ export function referenceFileName(path) {
   if (!value) return ''
   const parts = value.split(/[\\/]/)
   return parts[parts.length - 1] || value
+}
+
+/**
+ * 参考图的缩略图地址：与 `lib/output.js` 的 `fileUrl()` 同口径（工作区相对路径做一次 URL 编码）。
+ *
+ * 重试只能从任务参数拿到 `sourcePath`，把参考图恢复进表单时没有现成的 `image.url`，
+ * 这里按同一条 `/imagen-api/file?path=` 口径补出来。
+ */
+export function referenceUrlOf(path) {
+  const value = String(path ?? '').trim()
+  if (!value) return ''
+  return `${ROUTES.file.path}?path=${encodeURIComponent(value)}`
 }
 
 /**
@@ -80,11 +97,12 @@ export function buildGenerateBody(form, options = {}) {
   const referencePath = referencePathOf({ reference })
   if (referencePath) {
     const strength = hasOverride('strength') ? overrides.strength : input.strength
-    body.reference = { path: referencePath, strength: clampStrength(strength) }
     // 局部重绘：参考图上带蒙版且当前模型消费 Inpaint 时才提交 reference.mask。
     // `maskActive === false` 表示当前模型不支持局部重绘（或调用方显式要求整图重绘）：
     // 蒙版仍留在表单里，只是这次不提交，避免把必被远端拒绝的字段发出去。
     const mask = options.maskActive === false ? '' : referenceMaskForSubmit(reference)
+    // 强度上限跟着「本次是否真的带蒙版」走：蒙版场景放宽到契约 inpaintMax，img2img 仍用通用 max。
+    body.reference = { path: referencePath, strength: clampMaskStrength(strength, Boolean(mask)) }
     if (mask) body.reference.mask = mask
   }
 
@@ -99,6 +117,227 @@ export function buildGenerateBody(form, options = {}) {
   // 统一清空，保证请求体不出现无效参数。
   if (!negativeActive) body.negativePrompt = ''
   return body
+}
+
+// ---- 生成来源策略 ----------------------------------------------------------
+//
+// 「本次请求的参考图从哪来」只在下面这张表里决定，调用方不再各自往 overrides 里拼
+// reference：表单面板沿用表单，助手与变体强制纯文生图，失败重试按冻结参数恢复。
+
+/** 生成来源：form = 左栏表单；assistant = 对话确认卡；variant = 生成变体；retry = 失败重试。 */
+export const GENERATE_SOURCES = Object.freeze(['form', 'assistant', 'variant', 'retry'])
+
+/** 来源归一：未知值按面板生成（form）处理，旧调用方不传 source 时行为不变。 */
+export function normalizeGenerateSource(value) {
+  const source = typeof value === 'string' ? value.trim() : ''
+  return GENERATE_SOURCES.includes(source) ? source : 'form'
+}
+
+/** 预设展示名：toast 里的 {preset} 只放用户认得出的名字，缺 label 时退回 id。 */
+export function presetLabelOf(preset) {
+  if (!preset || typeof preset !== 'object') return ''
+  if (typeof preset.label === 'string' && preset.label.trim()) return preset.label.trim()
+  if (typeof preset.short === 'string' && preset.short.trim()) return preset.short.trim()
+  return typeof preset.id === 'string' ? preset.id : ''
+}
+
+/**
+ * 本次请求的「有效预设」：覆盖项里的 presetId（重试 / 变体 / 兜底切换）优先，
+ * 解析不到或没有覆盖项时回落到表单当前预设。
+ */
+export function effectivePresetOf(overrides, preset, presets) {
+  const list = Array.isArray(presets) ? presets : []
+  const input = overrides && typeof overrides === 'object' ? overrides : null
+  const id = input && typeof input.presetId === 'string' ? input.presetId.trim() : ''
+  if (id) {
+    const found = list.find((item) => item && item.id === id)
+    if (found) return found
+  }
+  return preset && typeof preset === 'object' ? preset : null
+}
+
+/**
+ * 生成来源策略：算出本次请求实际使用的覆盖项。
+ *
+ *  - form：沿用表单参考图 + 蒙版，覆盖项原样透传；
+ *  - assistant / variant：强制纯文生图（显式 `reference: null`）；当前有效预设是专用
+ *    局部重绘权重时，仅本次请求切到参考图兜底预设并给一条轻提示（不改左栏表单）；
+ *  - retry：参考图由 `retryReferencePlan()` 恢复，这里只透传它的覆盖项。
+ *
+ * @returns {{ source: string, ok: boolean, overrides: object, notice: null|{key: string, params: object}, blockedKey: string }}
+ */
+export function generateSourcePolicy(source, options = {}) {
+  const normalized = normalizeGenerateSource(source)
+  const overrides = options.overrides && typeof options.overrides === 'object' ? { ...options.overrides } : {}
+  const presets = Array.isArray(options.presets) ? options.presets : []
+  const preset = options.preset && typeof options.preset === 'object' ? options.preset : null
+  const policy = { source: normalized, ok: true, overrides, notice: null, blockedKey: '' }
+  if (normalized !== 'assistant' && normalized !== 'variant') return policy
+
+  // 助手与变体只做纯文生图：显式置空，避免 buildGenerateBody 顺手带上表单里的参考图。
+  overrides.reference = null
+  const effective = effectivePresetOf(overrides, preset, presets)
+  if (!inpaintOnlyOf(effective)) return policy
+  const fallback = referencePresetOf(presets)
+  if (!fallback) {
+    // 一个能做文生图的预设都没有（旧宿主）：本次请求必然被宿主拒绝，直接拦下并说明。
+    policy.ok = false
+    policy.blockedKey = 'studio.reference.blocked'
+    return policy
+  }
+  overrides.presetId = fallback.id
+  policy.notice = {
+    key: 'studio.reference.autoText2Image',
+    params: { preset: presetLabelOf(fallback) },
+  }
+  return policy
+}
+
+/**
+ * 本次请求的能力预检：用「有效预设 + 有效参考图」判断，而不是当前表单。
+ *
+ * 重试恢复出的带蒙版任务可能来自与表单不同的预设，用表单预设判断会误拦；
+ * 旧宿主没有能力字段时按不支持处理（既有口径），预设列表还没拿到时不拦截。
+ *
+ * @returns {{ ok: boolean, reason: ''|'reference'|'mask', noticeKey: string }}
+ */
+export function generateCapabilityOf(options = {}) {
+  const preset = options.preset && typeof options.preset === 'object' ? options.preset : null
+  const presets = Array.isArray(options.presets) ? options.presets : []
+  const reference = options.reference && typeof options.reference === 'object' ? options.reference : null
+  const result = { ok: true, reason: '', noticeKey: '' }
+  // 旧宿主 / 启动瞬间没有预设列表时不做拦截，交给宿主判断，避免误拦文生图。
+  if (presets.length > 0 && referencePathOf({ reference }) && !supportsImg2Img(preset)) {
+    result.ok = false
+    result.reason = 'reference'
+    result.noticeKey = 'studio.reference.blocked'
+    return result
+  }
+  // 专用局部重绘权重必须带有效蒙版：缺参考图或没涂抹都直接拦下并说明下一步。
+  if (inpaintOnlyOf(preset) && !referenceMaskOf(reference)) {
+    result.ok = false
+    result.reason = 'mask'
+    result.noticeKey = 'studio.mask.onlyHint'
+  }
+  return result
+}
+
+/** 任务参数 / 提交体里冻结的参考图：任务里 mask 只是布尔标记，提交体里是完整蒙版对象。 */
+function frozenReferenceOf(source) {
+  const holder = source && typeof source === 'object' ? source : null
+  if (!holder) return null
+  const params = holder.params && typeof holder.params === 'object' ? holder.params : holder
+  const raw = params && params.reference && typeof params.reference === 'object' ? params.reference : null
+  if (!raw) return null
+  const path = typeof raw.sourcePath === 'string'
+    ? raw.sourcePath.trim()
+    : typeof raw.path === 'string'
+      ? raw.path.trim()
+      : ''
+  const strength = finiteNumber(raw.strength)
+  // 任务参数里是 mask: true；直接传上一次提交体时 mask 是完整蒙版对象 / base64 字符串。
+  const mask = raw.mask === true
+    || typeof raw.mask === 'string'
+    || Boolean(raw.mask && typeof raw.mask === 'object')
+  return { path, strength, mask }
+}
+
+/** 上一次提交体里的参考图（含完整蒙版 base64）；没有时返回 null。 */
+function submittedReferenceOf(body) {
+  const input = body && typeof body === 'object' ? body : null
+  const reference = input && input.reference && typeof input.reference === 'object' ? input.reference : null
+  return reference ? { ...reference } : null
+}
+
+/**
+ * 失败重试的参考图恢复计划。
+ *
+ * 任务参数只冻结参考图出处与「是否带蒙版」，蒙版 base64 不在 /state 里回传：
+ *  - 同源的 `pendingRef`（上一次提交体）还带着完整蒙版 → 直接恢复并重试；
+ *  - 蒙版已不可恢复 → 不自动提交：把参考图填回表单并请求进入涂抹，由用户重画；
+ *  - 失败任务本来没有参考图 → 显式 `reference: null`，不能静默继承表单里挂着的参考图。
+ *
+ * @param {object|null} source 失败任务；没有任务时也可以是上一次提交的请求体
+ * @param {object} [options]
+ * @param {object} [options.pendingRef] 上一次提交的请求体
+ * @returns {null | {
+ *   overrides: object,
+ *   restored: 'none'|'reference'|'mask',
+ *   maskLost: boolean,
+ *   fillReference: object|null,
+ *   requestPaint: boolean,
+ *   noticeKey: string,
+ * }} null 表示连提示词都没有，调用方给「缺少提示词」的提示
+ */
+export function retryReferencePlan(source, options = {}) {
+  const overrides = retryOverrides(source)
+  if (!overrides) return null
+  const frozen = frozenReferenceOf(source)
+  const plan = {
+    overrides,
+    restored: 'none',
+    maskLost: false,
+    fillReference: null,
+    requestPaint: false,
+    noticeKey: '',
+  }
+  if (!frozen || !frozen.path) {
+    // 失败任务没有参考图：显式纯文生图，表单里的参考图不得串进重试请求。
+    overrides.reference = null
+    return plan
+  }
+  const pending = submittedReferenceOf(options.pendingRef)
+  const sameSource = Boolean(pending && referencePathOf({ reference: pending }) === frozen.path)
+  const pendingMask = sameSource ? referenceMaskForSubmit(pending) : ''
+  if (sameSource && frozen.mask && pendingMask) {
+    // 同源提交体还留着完整蒙版：直接恢复原参数重试。
+    overrides.reference = { ...pending, path: frozen.path }
+    plan.restored = 'mask'
+  } else if (sameSource && !frozen.mask) {
+    // 同源提交体可能带着更晚一次涂抹的蒙版：重试的是普通图生图，不能凭它变成局部重绘。
+    overrides.reference = referenceWithoutMask({ ...pending, path: frozen.path })
+    plan.restored = 'reference'
+  } else if (frozen.mask) {
+    plan.maskLost = true
+    plan.fillReference = { path: frozen.path, url: referenceUrlOf(frozen.path) }
+    plan.requestPaint = true
+    plan.noticeKey = 'studio.toast.maskLost'
+    overrides.reference = null
+    return plan
+  } else {
+    overrides.reference = { path: frozen.path, url: referenceUrlOf(frozen.path) }
+    plan.restored = 'reference'
+  }
+  // 强度跟失败任务走；任务参数缺强度时退回同源提交体里的值。
+  const strength = frozen.strength ?? (sameSource && pending ? finiteNumber(pending.strength) : null)
+  if (strength !== null) overrides.strength = strength
+  return plan
+}
+
+/**
+ * 胶片条点击的纯判定：预览始终切换（由调用方执行），这里只决定要不要回填表单。
+ *
+ * 优先级：表单挂着参考图（含蒙版）> 脏草稿 > 干净回填。参考图必须排在草稿之前：
+ * 涂抹后即使表单刚提交完被判干净，也不能被隐式回填清掉参考图与蒙版。
+ *
+ * @param {object} options
+ * @param {object|null} [options.reference] 表单当前参考图
+ * @param {boolean} [options.dirty] 表单是否有未提交修改
+ * @param {object} [options.patch] `iteratePatch()` 的结果
+ * @returns {{ action: 'reference'|'draft'|'recall'|'idle', noticeKey: string }}
+ */
+export function previewRecallOf(options = {}) {
+  const reference = options.reference && typeof options.reference === 'object' ? options.reference : null
+  if (referencePathOf({ reference })) {
+    return {
+      action: 'reference',
+      noticeKey: referenceMaskOf(reference) ? 'studio.toast.referenceKept' : 'studio.toast.referenceImageKept',
+    }
+  }
+  if (options.dirty === true) return { action: 'draft', noticeKey: 'studio.toast.draftKept' }
+  const patch = options.patch && typeof options.patch === 'object' ? options.patch : {}
+  if (Object.keys(patch).length === 0) return { action: 'idle', noticeKey: '' }
+  return { action: 'recall', noticeKey: 'studio.toast.recalled' }
 }
 
 /**

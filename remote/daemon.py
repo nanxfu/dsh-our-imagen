@@ -55,9 +55,13 @@
 15. **局部重绘（Inpaint）**：在图生图之上再带可选 ``reference.mask_b64``——客户端导出的
     黑白 PNG（白 = 重绘区域，黑 = 保留区域）。提交期除参考图校验外还查 ``inpaint``
     loader 白名单（首期仅 SDXL 家族，服务端独立兜底）与蒙版 PNG / ``limits.mask.maxBytes``；
+    带蒙版时 ``strength`` 上限放宽到 ``limits.strength.inpaintMax``（img2img 仍用 ``max``）。
     执行期（``decode_mask_image``）完整解码一次，转灰度 ``'L'`` 并按最近邻精确对齐到参考图
-    宽高。管线用 ``AutoPipelineForInpainting.from_pipe(STATE.pipe)`` 复用同一批底座组件，
-    缓存与释放规则同 ``ensure_img2img_pipeline``；出图尺寸跟随参考图。
+    宽高；对齐后统计白色覆盖率，低于 ``limits.mask.minCoverage`` 的空蒙版在加载模型前
+    直接 ``invalid_request``（全白 = 整图重绘，允许）。羽化半径按覆盖率自适应（小蒙版 2px /
+    中 4px / 大 6~8px）。管线用 ``AutoPipelineForInpainting.from_pipe(STATE.pipe)`` 复用
+    同一批底座组件，缓存与释放规则同 ``ensure_img2img_pipeline``；出图尺寸跟随参考图，
+    并显式传按 8 对齐的参考图宽高（不支持该参数的管线由 ``filter_call_kwargs`` 丢弃）。
 
 文件边界（Batch 2 切片⑥f 之后）：本文件只留**配置注入点、ntfy 会合、模型加载的装配与出图
 执行、job 执行、/health 取样、以及三处装配块**（HTTP_API / TUNNEL / APP）。HTTP 传输层在
@@ -821,9 +825,9 @@ from remote.inference.reference_codec import (  # noqa: E402
 from remote.transport.validator import validate_generate_spec as validate_generate_spec_impl  # noqa: E402
 
 
-def _coerce_strength(value) -> float:  # noqa: ANN001
-    """重绘强度归一到 ``contract.limits.strength``：非法/缺失回退默认值，越界钳制。"""
-    return _coerce_strength_impl(value, limits_for=_limit_spec)
+def _coerce_strength(value, has_mask: bool = False) -> float:  # noqa: ANN001
+    """重绘强度归一到 ``contract.limits.strength``：带蒙版时上限取 ``inpaintMax``。"""
+    return _coerce_strength_impl(value, limits_for=_limit_spec, has_mask=has_mask)
 
 
 def _open_reference_image(image_bytes: bytes):  # noqa: ANN202
@@ -852,13 +856,13 @@ def decode_reference_image(reference: dict) -> object:
 
 
 def decode_mask_image(mask: dict, size: tuple[int, int]) -> object:
-    """执行期完整解码蒙版一次：转灰度 ``'L'``，并按最近邻精确对齐到参考图宽高。"""
-    return decode_mask_image_impl(mask, size=size)
+    """执行期完整解码蒙版一次：转灰度 ``'L'``、对齐参考图宽高并校验不是空蒙版。"""
+    return decode_mask_image_impl(mask, size=size, limits_for=_limit_spec)
 
 
-def feather_mask_image(mask):  # noqa: ANN001, ANN201
-    """把二值蒙版做「外扩 + 羽化」：硬边在 4 通道 inpaint 路径上会留下可见接缝。"""
-    return feather_mask_image_impl(mask)
+def feather_mask_image(mask, coverage=None):  # noqa: ANN001, ANN201
+    """把二值蒙版做「外扩 + 羽化」：半径按蒙版覆盖率自适应，硬边会留下可见接缝。"""
+    return feather_mask_image_impl(mask, coverage=coverage)
 
 
 def composite_inpaint_image(generated, original, mask):  # noqa: ANN001, ANN201
@@ -901,7 +905,9 @@ def run_task(  # noqa: ANN001
     ``reference_image`` 非空时走图生图分支（M3）：用惰性复用的 img2img 管线与它自己的
     ``__call__`` 签名过滤参数，不再传 width / height（出图尺寸跟随参考图）。
     ``mask_image`` 非空时再走局部重绘分支（Inpaint）：换成惰性复用的 inpaint 管线，
-    参数为 ``image`` + ``mask_image`` + ``strength``，同样不传 width / height。
+    参数为 ``image`` + ``mask_image`` + ``strength``；宽高显式取参考图实际送入模型的尺寸
+    并按 8 对齐（不支持 width/height 的管线由 ``filter_call_kwargs`` 丢弃）。专用 9 通道
+    inpaint 模型在非正方形参考图下若按缺省方形推理，出图再被 composite 拉回会畸变。
     """
     import torch
 
@@ -921,12 +927,18 @@ def run_task(  # noqa: ANN001
         target_pipe = ensure_inpaint_pipeline()
         with STATE_LOCK:
             sig = set(STATE.inpaint_sig_params)
-        strength = _coerce_strength(reference_strength)
+        strength = _coerce_strength(reference_strength, has_mask=True)
+        # 参考图实际送入模型的尺寸（执行期可能已缩到 maxEdge）：对齐到 8 的倍数再显式
+        # 下传，让专用 inpaint 模型按参考图比例推理；composite 兜底保持不变（尺寸不一致
+        # 时仍会把生成图缩放回参考图尺寸）。
+        ref_width, ref_height = reference_image.size
         call_kwargs = {
             "prompt": task["prompt"],
             "image": reference_image,
             "mask_image": mask_image,
             "strength": strength,
+            "width": int(ref_width) // 8 * 8,
+            "height": int(ref_height) // 8 * 8,
             "num_inference_steps": task["steps"],
             "guidance_scale": task["cfg"],
             "generator": generator,
@@ -1139,14 +1151,21 @@ def execute_job(job: Job) -> None:
         reference_strength = None
         if job.reference is not None:
             # 图生图 / 局部重绘：参考图与蒙版完整解码各只做一次（整批 count 共用），且放在
-            # 加载模型之前——图片本身损坏/截断时不必先下载、加载几十 GB 权重。
+            # 加载模型之前——图片本身损坏/截断或蒙版为空时不必先下载、加载几十 GB 权重。
             reference_image = decode_reference_image(job.reference)
-            reference_strength = _coerce_strength(job.reference.get("strength"))
-            if job.reference.get("mask_bytes") is not None:
+            has_mask = job.reference.get("mask_bytes") is not None
+            # 带蒙版时 strength 上限是 inpaintMax（与提交期放行口径一致，不能在这里被
+            # 重新钳回 img2img 的 max）。
+            reference_strength = _coerce_strength(
+                job.reference.get("strength"), has_mask=has_mask
+            )
+            if has_mask:
                 # 蒙版对齐到参考图实际送入模型的宽高（解码后可能已缩小到 maxEdge）。
                 mask_image = decode_mask_image(job.reference, reference_image.size)
-                # 再外扩 + 羽化：硬边蒙版在 4 通道 inpaint 路径上会留下矩形接缝。
-                feathered = feather_mask_image(mask_image)
+                # 解码时已统计白色覆盖率：低于契约 minCoverage 的空蒙版在这里（加载模型前）
+                # 抛 invalid_request；合法蒙版直接用该覆盖率挑羽化档位，不重复扫像素。
+                coverage = getattr(mask_image, "_imagen_coverage", None)
+                feathered = feather_mask_image(mask_image, coverage=coverage)
                 if feathered is not mask_image:
                     close_fn = getattr(mask_image, "close", None)
                     if callable(close_fn):
@@ -1155,6 +1174,10 @@ def execute_job(job: Job) -> None:
                         except Exception:  # pragma: no cover
                             pass
                     mask_image = feathered
+                if coverage is not None:
+                    radius = getattr(mask_image, "_imagen_feather_radius", None)
+                    suffix = f" 羽化半径 {radius}px" if radius is not None else ""
+                    log(f"[gen] inpaint 蒙版覆盖率 {coverage:.2%}{suffix}")
             # 解码完成后释放队列里保留的原始字节（job 公开视图不含参考图/蒙版）。
             JOB_STORE.clear_reference(job)
         pipe, load_seconds = ensure_pipeline(job.pipeline)

@@ -362,6 +362,11 @@ var zh = {
   "studio.toast.recalled": "参数已回填",
   // 胶卷点击遇到未提交的手动修改：只换预览、保留草稿。
   "studio.toast.draftKept": "已保留当前草稿",
+  // 胶卷点击遇到参考图 / 蒙版：只换预览，参考图与蒙版原样保留。
+  "studio.toast.referenceKept": "已保留当前参考图与蒙版",
+  "studio.toast.referenceImageKept": "已保留当前参考图",
+  // 失败重试：原任务蒙版无法还原，只把参考图填回表单。
+  "studio.toast.maskLost": "原任务的蒙版已无法恢复，请重新涂抹后再生成",
   "studio.toast.newCreation": "已开始新的创作",
   "studio.toast.favorited": "已加入收藏",
   "studio.toast.unfavorited": "已取消收藏",
@@ -471,6 +476,19 @@ var zh = {
   "studio.reference.applied": "已设为参考图，可调整重绘强度。",
   "studio.reference.unavailable": "当前宿主版本不支持垫图重绘，无法把作品设为参考图。",
   "studio.reference.noPath": "这张作品没有可用的文件路径，无法作为参考图。",
+  // 还没放参考图时的引导：专用局部重绘模型给两步说明，普通垫图模型只给单行入口。
+  "studio.reference.emptyTitle": "先选一张参考图",
+  "studio.reference.emptyHint": "从作品画廊选一张图，再涂抹要重绘的区域",
+  "studio.reference.emptySimple": "可挂一张参考图做垫图重绘",
+  "studio.reference.emptyAction": "从作品画廊选择",
+  // 参考图已就位：蒙版覆盖率、继续涂抹 / 清空蒙版与页脚来源标注。
+  "studio.reference.maskCoverage": "已涂抹 {percent}%",
+  "studio.reference.maskEmpty": "尚未涂抹蒙版",
+  "studio.reference.continuePaint": "继续涂抹",
+  "studio.reference.clearMask": "清空蒙版",
+  "studio.reference.basedOn": "本次基于 {name} 重绘",
+  // 助手 / 变体强制纯文生图：当前预设只支持局部重绘时本次改用兜底预设。
+  "studio.reference.autoText2Image": "当前预设只支持局部重绘，本次已改用 {preset} 文生图",
   // ── 局部涂抹（Inpaint） ──────────────────────────────────────
   "studio.mask.toggle": "局部涂抹",
   "studio.mask.title": "局部重绘",
@@ -487,6 +505,9 @@ var zh = {
   "studio.mask.kept": "已涂抹的蒙版会保留，切回支持局部重绘的模型后可继续使用。",
   "studio.mask.tooLarge": "蒙版体积超过上限，未保存；请减少涂抹面积后重试。",
   "studio.mask.canvasLabel": "局部涂抹画布：方向键移动画笔，空格键或回车键落笔，Esc 完成涂抹。",
+  // 续绘闭环：把当前结果设为新参考图并进入涂抹。
+  "studio.mask.continueFromResult": "以此结果继续重绘",
+  "studio.mask.continueHint": "已设为参考图，请涂抹要重绘的区域",
   // ── 创作助手 ─────────────────────────────────────────────────
   "studio.chat.assistant": "创作助手",
   "studio.chat.parsing": "正在解析你的描述…",
@@ -859,6 +880,11 @@ var en = {
   "studio.toast.recalled": "Settings restored",
   // Filmstrip click with unsaved manual edits: preview switches, draft stays.
   "studio.toast.draftKept": "Current draft kept",
+  // Filmstrip click with a reference image / mask: preview switches, both stay.
+  "studio.toast.referenceKept": "Kept the current reference image and mask",
+  "studio.toast.referenceImageKept": "Kept the current reference image",
+  // Retry: the original mask cannot be restored, so only the reference is filled back.
+  "studio.toast.maskLost": "The original mask cannot be restored; paint it again before generating",
   "studio.toast.newCreation": "Started a new creation",
   "studio.toast.favorited": "Added to favorites",
   "studio.toast.unfavorited": "Removed from favorites",
@@ -968,6 +994,19 @@ var en = {
   "studio.reference.applied": "Set as the reference image; adjust the redraw strength.",
   "studio.reference.unavailable": "The installed host does not support image-to-image, so this work cannot be used as a reference.",
   "studio.reference.noPath": "This work has no usable file path and cannot be used as a reference.",
+  // Empty reference slot: dedicated inpainting models get two steps, other models a single line.
+  "studio.reference.emptyTitle": "Pick a reference image first",
+  "studio.reference.emptyHint": "Choose a work from the gallery, then paint the area to redraw",
+  "studio.reference.emptySimple": "Attach a reference image for image-to-image",
+  "studio.reference.emptyAction": "Choose from gallery",
+  // Reference ready: mask coverage, keep painting / clear mask and the footer source note.
+  "studio.reference.maskCoverage": "{percent}% painted",
+  "studio.reference.maskEmpty": "Not painted yet",
+  "studio.reference.continuePaint": "Keep painting",
+  "studio.reference.clearMask": "Clear mask",
+  "studio.reference.basedOn": "Redrawing from {name}",
+  // Assistant / variant force text-to-image: an inpaint-only preset switches for this request.
+  "studio.reference.autoText2Image": "The current preset only supports inpainting; this request uses {preset} for text-to-image",
   // ── Partial redraw (Inpaint) ──────────────────────────────────
   "studio.mask.toggle": "Paint mask",
   "studio.mask.title": "Partial redraw",
@@ -984,6 +1023,9 @@ var en = {
   "studio.mask.kept": "Your painted mask is kept and will work again once you switch back to a supported model.",
   "studio.mask.tooLarge": "The mask exceeds the size limit and was not saved. Paint a smaller area and try again.",
   "studio.mask.canvasLabel": "Mask painting canvas: use arrow keys to move the brush, Space or Enter to paint, Esc to finish.",
+  // Redraw chain: set the current result as the new reference and start painting.
+  "studio.mask.continueFromResult": "Redraw from this result",
+  "studio.mask.continueHint": "Set as reference; paint the area to redraw",
   // ── Creation assistant ────────────────────────────────────────
   "studio.chat.assistant": "Assistant",
   "studio.chat.parsing": "Reading your description…",
@@ -1614,11 +1656,17 @@ var LIMITS = {
   // 按比例缩小（不超过 minEdge 的图直接拒绝），避免小图放大出噪点、大图占显存。
   reference: { maxBytes: 8 * 1024 * 1024, maxEdge: 1536, minEdge: 128 },
   // 重绘强度：越小越贴近原图，越大越放飞；首期只对 SDXL 家族（supportsImg2Img）开放。
-  strength: { min: 0.2, max: 0.9, step: 0.05, default: 0.6 },
+  // 上限按场景区分：`max` 是普通垫图（img2img）的保守上限，避免把原图丢得太狠；
+  // `inpaintMax` 是带蒙版局部重绘的上限——9 通道 inpaint 模型在全重绘时需要更高替换力度，
+  // 只放宽这一档，img2img 行为完全不变。
+  strength: { min: 0.2, max: 0.9, inpaintMax: 1, step: 0.05, default: 0.6 },
   // 局部重绘（Inpaint）蒙版：客户端导出的黑白 PNG（白 = 重绘区域，黑 = 保留区域），
-  // 与参考图一起提交；尺寸由远端按参考图精确对齐，因此这里只管字节上限。
+  // 与参考图一起提交；尺寸由远端按参考图精确对齐，因此这里只管字节上限与最小覆盖率。
+  // `minCoverage` 是「白色重绘像素占全图的最小比例」：低于它的蒙版视为空蒙版直接拒绝
+  // （错误码 invalid_request，远端在加载模型前失败），全白（整图重绘）必须放行。
+  // 0.0005 = 0.05%：挡掉误传全黑蒙版这类「整图重绘但实际没有涂抹区域」的请求。
   // 单独成项而不挂在 reference 下：远端 limit_spec() 只按「单层数值键」合并兜底值。
-  mask: { maxBytes: 2 * 1024 * 1024 },
+  mask: { maxBytes: 2 * 1024 * 1024, minCoverage: 5e-4 },
   // Kaggle / torch 侧接受 32 位有符号正整数；两端必须用同一个上界，否则用户输入的
   // seed 会被宿主静默取模改写，导致「带回参数」复现不出同一张图。
   seed: { max: 2147483647 },
@@ -2476,10 +2524,10 @@ var guidance_default = '/* ── 异常指引 ───────────
 var drawers_default = '/* ── 右侧抽屉共用骨架（LogsDrawer / SettingsDrawer） ──────────── */\n.ofs-logs,\n.ofs-settings {\n  position: fixed;\n  inset: 0;\n  z-index: 100;\n  display: flex;\n  justify-content: flex-end;\n  background: rgb(16 16 18 / 38%);\n  backdrop-filter: blur(2px);\n  -webkit-backdrop-filter: blur(2px);\n  animation: ofs-fade-in 160ms ease;\n}\n\n.ofs-logs-panel,\n.ofs-settings-panel {\n  display: flex;\n  flex-direction: column;\n  height: 100%;\n  border-left: 1px solid var(--ofs-window-border);\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-window);\n  animation: ofs-slide-in 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-logs-panel {\n  width: min(560px, 100%);\n}\n\n/* 设置项是短表单，不需要日志那样的整屏宽度。 */\n.ofs-settings-panel {\n  width: min(440px, 100%);\n}\n\n.ofs-logs-head,\n.ofs-settings-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  padding: 12px 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-logs-head {\n  flex-wrap: wrap;\n}\n\n.ofs-logs-title,\n.ofs-settings-title {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n.ofs-logs-body,\n.ofs-settings-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-logs-body::-webkit-scrollbar,\n.ofs-settings-body::-webkit-scrollbar {\n  width: 8px;\n}\n\n.ofs-logs-body::-webkit-scrollbar-thumb,\n.ofs-settings-body::-webkit-scrollbar-thumb {\n  border: 2px solid transparent;\n  border-radius: 8px;\n  background: var(--ofs-ink-4);\n  background-clip: content-box;\n}\n\n.ofs-logs-note,\n.ofs-settings-note {\n  margin: 0;\n  padding: 18px 16px;\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n  line-height: 1.6;\n}\n\n@keyframes ofs-slide-in {\n  from {\n    opacity: 0;\n    transform: translateX(18px);\n  }\n  to {\n    opacity: 1;\n    transform: translateX(0);\n  }\n}\n\n/* ── 运行日志抽屉专属规则 ───────────────────────────────────── */\n/* 远端 / Host 双视图切换：紧凑胶囊，与 header 里的复制按钮同一视觉语言。 */\n.ofs-logs-tabs {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n}\n\n.ofs-logs-tab {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11.5px;\n}\n\n.ofs-logs-copy {\n  height: 30px;\n}\n\n.ofs-logs-body {\n  background: var(--ofs-sunken);\n}\n\n.ofs-logs-lines {\n  margin: 0;\n  padding: 14px 16px 22px;\n  color: var(--ofs-ink-2);\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  line-height: 1.65;\n  font-variant-numeric: tabular-nums;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.ofs-logs-note.is-warn {\n  color: var(--ofs-warn);\n}\n\n/* 自动兜底提示：远端没有日志、已切到 Host 本地日志时说明来源。 */\n.ofs-logs-fallback {\n  margin: 0;\n  padding: 9px 16px;\n  border-bottom: 1px solid color-mix(in oklab, var(--ofs-accent) 22%, transparent);\n  background: color-mix(in oklab, var(--ofs-accent) 10%, transparent);\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n/* ── 运行设置抽屉专属规则 ───────────────────────────────────── */\n/* 读取失败：不白屏，给原因 + 重试。 */\n.ofs-settings-error-state {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 10px;\n  padding: 18px 16px;\n}\n\n.ofs-settings-form {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 4px 16px 16px;\n}\n\n/* 生效提示：温和的暖色窄条，说明改动要等下次唤醒。 */\n.ofs-settings-effective {\n  margin: 10px 0 2px;\n  padding: 8px 10px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n  border-radius: 10px;\n  background: var(--ofs-warn-soft);\n  color: var(--ofs-warn);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n.ofs-settings-section {\n  display: flex;\n  flex-direction: column;\n  gap: 9px;\n  padding: 13px 0;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-settings-section:last-of-type {\n  border-bottom: 0;\n}\n\n.ofs-settings-section-title {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-settings-row {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ofs-settings-label {\n  font-size: 11.5px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-settings-quick {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-settings-quick-item {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11.5px;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-settings-field {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.ofs-settings-input,\n.ofs-settings-textarea {\n  width: 100%;\n  padding: 0 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-settings-input {\n  height: 32px;\n}\n\n.ofs-settings-textarea {\n  min-height: 66px;\n  padding: 8px 10px;\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-settings-input:focus-visible,\n.ofs-settings-textarea:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-settings-options {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n/* 加速器单选：原生 radio 收进 label 里，视觉仍是轻量卡片。 */\n.ofs-settings-option {\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 32px;\n  padding: 0 12px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-settings-option:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-settings-option input {\n  margin: 0;\n  accent-color: var(--ofs-accent);\n}\n\n.ofs-settings-option.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-settings-inline {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ofs-settings-muted {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-settings-clear {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11px;\n}\n\n/* 高级折叠头：一行标题 + 箭头，默认收起，不占表单纵向空间。 */\n.ofs-settings-advanced-toggle {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-settings-advanced-toggle:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-settings-advanced {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  padding-top: 9px;\n}\n\n.ofs-settings-hint {\n  font-size: 10.5px;\n  line-height: 1.5;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-settings-errors {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.ofs-settings-error-item {\n  color: var(--ofs-error);\n  font-size: 11px;\n  line-height: 1.5;\n  overflow-wrap: anywhere;\n}\n\n.ofs-settings-error {\n  margin: 0;\n  color: var(--ofs-error);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n/* 底部操作条：滚动时贴住抽屉底部，保存按钮始终可点。 */\n.ofs-settings-foot {\n  position: sticky;\n  bottom: 0;\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n  margin-top: 4px;\n  padding: 12px 0 4px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-settings-save {\n  height: 32px;\n  padding: 0 16px;\n  font-size: 12.5px;\n}\n';
 
 // src/styles/panel.css
-var panel_default = "/*\n * 左侧创作面板（表单 / 对话两种形态共用的卡片容器与表单控件）。\n */\n\n.ofs-panel {\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n  min-width: 0;\n  margin: 14px 0 14px 14px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  overflow: hidden;\n}\n\n.ofs-panel-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 15px 15px 11px;\n}\n\n.ofs-panel-head h2 {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-panel-scroll {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 0 15px 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 0;\n  scroll-behavior: smooth;\n}\n\n/* ── 微调来源与新建创作 ────────────────────────────────────── */\n/* 面板顶部一条轻量状态行：左侧「正在微调：某张作品」，右侧「新建创作」重置入口。 */\n.ofs-tuning {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 0 15px 10px;\n}\n\n.ofs-tuning.is-idle {\n  justify-content: flex-end;\n}\n\n.ofs-tuning-source {\n  min-width: 0;\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.4;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-tuning-new {\n  flex: 0 0 auto;\n  height: 25px;\n  padding: 0 10px;\n  font-size: 11px;\n}\n\n/* ── 分区 ───────────────────────────────────────────────────── */\n.ofs-fieldset {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding: 8px 0;\n}\n\n.ofs-fieldset:first-child {\n  padding-top: 2px;\n}\n\n.ofs-fieldset + .ofs-fieldset {\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-fieldset-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-fieldset-head h3 {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n/* ── 提示词输入 ─────────────────────────────────────────────── */\n.ofs-composer {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  padding: 10px 10px 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-sunken) 100%);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: 0 0 0 3px rgb(20 20 22 / 10%);\n}\n\n.ofs-composer-input {\n  width: 100%;\n  min-height: 60px;\n  resize: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  line-height: 1.62;\n}\n\n.ofs-composer-input:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-composer-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-composer-foot {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-counter {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-text-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  padding: 3px 7px;\n  border: 0;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transition: background-color 150ms ease;\n}\n\n.ofs-text-action:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-text-action:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* ── 建议 chips ─────────────────────────────────────────────── */\n.ofs-suggestions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-suggestion {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  max-width: 100%;\n  height: 24px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-suggestion:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-suggestion.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n}\n\n/* ── 灵感与润色 ─────────────────────────────────────────────── */\n.ofs-inspire {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  padding-top: 2px;\n}\n\n.ofs-inspire-label,\n.ofs-refine-head,\n.ofs-refine-dim {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-refine {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 9px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-sunken);\n}\n\n.ofs-refine-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  color: var(--ofs-ink-2);\n  font-weight: 600;\n}\n\n/* 头部右侧：来源说明 + 收起/展开，弱化处理，不与标题抢层级。 */\n.ofs-refine-head-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  min-width: 0;\n}\n\n.ofs-refine-toggle {\n  padding: 2px 4px;\n  font-size: 11px;\n  font-weight: 550;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-refine-toggle:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n.ofs-refine-group {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n/* ── 画面比例 ───────────────────────────────────────────────── */\n.ofs-ratio-row {\n  display: flex;\n  gap: 8px;\n}\n\n.ofs-ratio {\n  appearance: none;\n  flex: 1 1 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 5px;\n  padding: 8px 0 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-3);\n  cursor: pointer;\n  transition:\n    border-color 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-ratio:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-ratio.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-ratio-glyph {\n  display: block;\n  border: 1.5px solid currentColor;\n  border-radius: 3px;\n}\n\n.ofs-ratio-glyph--1-1 { width: 19px; height: 19px; }\n.ofs-ratio-glyph--16-9 { width: 25px; height: 14px; }\n.ofs-ratio-glyph--9-16 { width: 14px; height: 25px; }\n.ofs-ratio-glyph--4-3 { width: 22px; height: 17px; }\n.ofs-ratio-glyph--3-4 { width: 17px; height: 22px; }\n\n.ofs-ratio-label {\n  font-size: 11px;\n  font-weight: 550;\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 高级设置行 ─────────────────────────────────────────────── */\n.ofs-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-row {\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  overflow: hidden;\n  transition: border-color 160ms ease;\n}\n\n.ofs-row.is-open,\n.ofs-row:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-row-head {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  padding: 9px 12px;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n}\n\n.ofs-row-toggle {\n  appearance: none;\n  flex: 1 1 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  min-width: 0;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-row-head:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-chevron {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-4);\n  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-chevron.is-open {\n  transform: rotate(180deg);\n}\n\n.ofs-row-textarea {\n  display: block;\n  width: calc(100% - 20px);\n  min-height: 64px;\n  margin: 0 10px 10px;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-grid2 {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 8px;\n  padding: 0 10px 10px;\n}\n\n.ofs-field {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ofs-field > span {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field-label {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n/* 种子字段占满两列：输入框与「恢复随机」并排 */\n.ofs-field--wide {\n  grid-column: 1 / -1;\n}\n\n.ofs-seed-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-seed-row input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ofs-seed-reset {\n  flex: 0 0 auto;\n  padding: 2px 4px;\n  font-size: 11px;\n  font-weight: 550;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-seed-reset:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n.ofs-field input,\n.ofs-field select,\n.ofs-size-custom-field input {\n  width: 100%;\n  height: 30px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-field input:focus-visible,\n.ofs-field select:focus-visible,\n.ofs-size-custom-field input:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n/* 步数按模型分治：连续滑块与档位刻度覆盖通用 .ofs-field input 盒子样式 */\n.ofs-step-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-step-readout {\n  font-size: 11px;\n  font-weight: 600;\n  color: var(--ofs-accent);\n}\n\n.ofs-step-readout.is-fixed {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field input.ofs-step-slider {\n  height: 18px;\n  padding: 0;\n  border: none;\n  background: transparent;\n  box-shadow: none;\n  accent-color: var(--ofs-accent);\n  cursor: pointer;\n}\n\n.ofs-field input.ofs-step-slider:disabled {\n  opacity: 0.55;\n  cursor: default;\n}\n\n.ofs-step-ticks {\n  display: grid;\n  grid-template-columns: repeat(3, minmax(0, 1fr));\n  gap: 4px;\n}\n\n.ofs-step-tick {\n  appearance: none;\n  padding: 2px 4px;\n  border: 1px solid transparent;\n  border-radius: 6px;\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 500;\n  text-align: center;\n  cursor: pointer;\n  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;\n}\n\n.ofs-step-tick:hover {\n  color: var(--ofs-ink);\n  background: var(--ofs-card);\n}\n\n.ofs-step-tick.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  font-weight: 600;\n}\n\n/* ── 底部生成：张数分段 / 主按钮 / 规格摘要 ───────────────────── */\n.ofs-qty-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ofs-qty-label {\n  flex: 0 0 auto;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-qty {\n  flex: 1 1 auto;\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 4px;\n}\n\n.ofs-qty-option {\n  appearance: none;\n  height: 28px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-qty-option:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-qty-option.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: inset 0 0 0 1px var(--ofs-accent);\n}\n\n/* 规格摘要：尺寸 · 比例 · 张数（有参考图补一项），等宽数字不抖动 */\n.ofs-spec-summary {\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n/* ── 底部生成 ───────────────────────────────────────────────── */\n.ofs-panel-foot {\n  position: relative;\n  z-index: 1;\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding: 10px 15px 12px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card);\n  box-shadow: 0 -16px 20px -18px rgb(16 16 20 / 20%);\n}\n\n.ofs-generate {\n  position: relative;\n  overflow: hidden;\n  width: 100%;\n  height: 42px;\n  border-radius: 14px;\n  font-size: 13.5px;\n  letter-spacing: 0.02em;\n}\n\n/* 主操作上的一道扫光：光从相纸表面扫过去，只出现在悬停与提交中 */\n.ofs-generate::after {\n  content: '';\n  position: absolute;\n  inset: -34% -40%;\n  background: linear-gradient(102deg, transparent 42%, rgb(255 255 255 / 17%) 50%, transparent 58%);\n  opacity: 0;\n  transform: translateX(-72%);\n  pointer-events: none;\n}\n\n.ofs-generate:hover:not(:disabled)::after {\n  animation: ofs-light-sweep 820ms cubic-bezier(0.3, 0.8, 0.35, 1) 1;\n}\n\n.ofs-generate.is-busy::after {\n  animation: ofs-light-sweep 2600ms cubic-bezier(0.45, 0, 0.55, 1) infinite;\n}\n\n@keyframes ofs-light-sweep {\n  from {\n    opacity: 0;\n    transform: translateX(-72%);\n  }\n  16% {\n    opacity: 1;\n  }\n  to {\n    opacity: 0;\n    transform: translateX(72%);\n  }\n}\n\n.ofs-hint {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  text-align: center;\n}\n\n/* ── 提示词动作（英译 / 润色并列，实心操作仍只有底部生成） ─────── */\n.ofs-composer-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n/* 英译是次级动作：默认用静色，悬停或含中文建议翻译时提到强调色，不另占一行说明。 */\n.ofs-translate-action {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-translate-action.is-suggested {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-translate-action:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n/* ── 画面设置：画幅比例 / 1:1 推荐尺寸 / 自定义宽高 三段同构 ───── */\n.ofs-frame-group {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ofs-frame-label {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n/* 标题栏右侧的实时读数：等宽数字，位数变化时不左右跳动 */\n.ofs-frame-readout {\n  flex: 0 0 auto;\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n/* 高级设置折叠态的读数摘要：一眼看清将用什么参数生成 */\n.ofs-row-readout {\n  flex: 0 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n/* 紧凑一行两列：宽 [1024] × 高 [1024]（不复用带卡片内边距的 .ofs-grid2） */\n.ofs-size-custom {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-size-custom-field {\n  display: flex;\n  flex: 1 1 0;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-size-custom-field > span {\n  flex: 0 0 auto;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-size-custom-field input {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-size-custom-times {\n  flex: 0 0 auto;\n  color: var(--ofs-ink-4);\n  font-size: 11px;\n}\n\n/* ── 自定义宽高（默认折叠，按需展开精调） ────────────────────── */\n.ofs-custom-toggle {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-custom-toggle:hover {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-custom-body {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding-top: 2px;\n}\n\n.ofs-link {\n  appearance: none;\n  margin-left: 6px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: inherit;\n  cursor: pointer;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}\n\n/* ── 参考图槽位与重绘强度（只在已有参考图时出现） ─────────────── */\n.ofs-reference {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  padding: 9px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-sunken);\n}\n\n/* 当前预设不支持垫图：整块置灰，一眼看出这次生成会被拦下 */\n.ofs-reference.is-unsupported {\n  opacity: 0.55;\n  filter: grayscale(0.4);\n}\n\n.ofs-reference-thumb {\n  flex: 0 0 auto;\n  display: grid;\n  place-items: center;\n  width: 58px;\n  height: 58px;\n  overflow: hidden;\n  border: 1px solid var(--ofs-print-edge);\n  border-radius: 10px;\n  background: var(--ofs-print-paper);\n  color: var(--ofs-ink-4);\n}\n\n.ofs-reference-thumb img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n.ofs-reference-meta {\n  flex: 1 1 auto;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n  justify-content: center;\n  gap: 7px;\n}\n\n.ofs-reference-name {\n  overflow: hidden;\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n.ofs-reference-strength {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n}\n\n.ofs-reference-strength-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-reference-strength-head b {\n  color: var(--ofs-ink-2);\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-reference-range {\n  width: 100%;\n  height: 16px;\n  margin: 0;\n  accent-color: var(--ofs-accent);\n}\n\n.ofs-reference-range:disabled {\n  cursor: default;\n}\n\n.ofs-reference-remove {\n  color: var(--ofs-ink-3);\n  font-weight: 550;\n}\n\n.ofs-reference-remove:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n.ofs-reference-warn {\n  color: var(--ofs-warn);\n  text-align: left;\n}\n\n.ofs-reference-hint {\n  text-align: left;\n}\n/* 专用局部重绘模型的常驻说明：放在面板滚动区顶部，缺蒙版时出现。 */\n.ofs-rail-note {\n  margin: 0 0 10px;\n  padding: 8px 10px;\n  border-radius: var(--ofs-r-sm, 8px);\n  background: var(--ofs-warn-soft, #f7f0e4);\n  color: var(--ofs-warn, #a96a18);\n  line-height: 1.5;\n}\n";
+var panel_default = "/*\n * 左侧创作面板（表单 / 对话两种形态共用的卡片容器与表单控件）。\n */\n\n.ofs-panel {\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n  min-width: 0;\n  margin: 14px 0 14px 14px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  overflow: hidden;\n}\n\n.ofs-panel-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 15px 15px 11px;\n}\n\n.ofs-panel-head h2 {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-panel-scroll {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 0 15px 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 0;\n  scroll-behavior: smooth;\n}\n\n/* ── 微调来源与新建创作 ────────────────────────────────────── */\n/* 面板顶部一条轻量状态行：左侧「正在微调：某张作品」，右侧「新建创作」重置入口。 */\n.ofs-tuning {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 0 15px 10px;\n}\n\n.ofs-tuning.is-idle {\n  justify-content: flex-end;\n}\n\n.ofs-tuning-source {\n  min-width: 0;\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.4;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-tuning-new {\n  flex: 0 0 auto;\n  height: 25px;\n  padding: 0 10px;\n  font-size: 11px;\n}\n\n/* ── 分区 ───────────────────────────────────────────────────── */\n.ofs-fieldset {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding: 8px 0;\n}\n\n.ofs-fieldset:first-child {\n  padding-top: 2px;\n}\n\n.ofs-fieldset + .ofs-fieldset {\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-fieldset-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-fieldset-head h3 {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n/* ── 提示词输入 ─────────────────────────────────────────────── */\n.ofs-composer {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  padding: 10px 10px 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-sunken) 100%);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: 0 0 0 3px rgb(20 20 22 / 10%);\n}\n\n.ofs-composer-input {\n  width: 100%;\n  min-height: 60px;\n  resize: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  line-height: 1.62;\n}\n\n.ofs-composer-input:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-composer-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-composer-foot {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-counter {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-text-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  padding: 3px 7px;\n  border: 0;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transition: background-color 150ms ease;\n}\n\n.ofs-text-action:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-text-action:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* ── 建议 chips ─────────────────────────────────────────────── */\n.ofs-suggestions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-suggestion {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  max-width: 100%;\n  height: 24px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-suggestion:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-suggestion.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n}\n\n/* ── 灵感与润色 ─────────────────────────────────────────────── */\n.ofs-inspire {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  padding-top: 2px;\n}\n\n.ofs-inspire-label,\n.ofs-refine-head,\n.ofs-refine-dim {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-refine {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 9px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-sunken);\n}\n\n.ofs-refine-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  color: var(--ofs-ink-2);\n  font-weight: 600;\n}\n\n/* 头部右侧：来源说明 + 收起/展开，弱化处理，不与标题抢层级。 */\n.ofs-refine-head-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  min-width: 0;\n}\n\n.ofs-refine-toggle {\n  padding: 2px 4px;\n  font-size: 11px;\n  font-weight: 550;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-refine-toggle:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n.ofs-refine-group {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n/* ── 画面比例 ───────────────────────────────────────────────── */\n.ofs-ratio-row {\n  display: flex;\n  gap: 8px;\n}\n\n.ofs-ratio {\n  appearance: none;\n  flex: 1 1 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 5px;\n  padding: 8px 0 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-3);\n  cursor: pointer;\n  transition:\n    border-color 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-ratio:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-ratio.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-ratio-glyph {\n  display: block;\n  border: 1.5px solid currentColor;\n  border-radius: 3px;\n}\n\n.ofs-ratio-glyph--1-1 { width: 19px; height: 19px; }\n.ofs-ratio-glyph--16-9 { width: 25px; height: 14px; }\n.ofs-ratio-glyph--9-16 { width: 14px; height: 25px; }\n.ofs-ratio-glyph--4-3 { width: 22px; height: 17px; }\n.ofs-ratio-glyph--3-4 { width: 17px; height: 22px; }\n\n.ofs-ratio-label {\n  font-size: 11px;\n  font-weight: 550;\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 高级设置行 ─────────────────────────────────────────────── */\n.ofs-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-row {\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  overflow: hidden;\n  transition: border-color 160ms ease;\n}\n\n.ofs-row.is-open,\n.ofs-row:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-row-head {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  padding: 9px 12px;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n}\n\n.ofs-row-toggle {\n  appearance: none;\n  flex: 1 1 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  min-width: 0;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-row-head:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-chevron {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-4);\n  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-chevron.is-open {\n  transform: rotate(180deg);\n}\n\n.ofs-row-textarea {\n  display: block;\n  width: calc(100% - 20px);\n  min-height: 64px;\n  margin: 0 10px 10px;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-grid2 {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 8px;\n  padding: 0 10px 10px;\n}\n\n.ofs-field {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ofs-field > span {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field-label {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n/* 种子字段占满两列：输入框与「恢复随机」并排 */\n.ofs-field--wide {\n  grid-column: 1 / -1;\n}\n\n.ofs-seed-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-seed-row input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ofs-seed-reset {\n  flex: 0 0 auto;\n  padding: 2px 4px;\n  font-size: 11px;\n  font-weight: 550;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-seed-reset:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n.ofs-field input,\n.ofs-field select,\n.ofs-size-custom-field input {\n  width: 100%;\n  height: 30px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-field input:focus-visible,\n.ofs-field select:focus-visible,\n.ofs-size-custom-field input:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n/* 步数按模型分治：连续滑块与档位刻度覆盖通用 .ofs-field input 盒子样式 */\n.ofs-step-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-step-readout {\n  font-size: 11px;\n  font-weight: 600;\n  color: var(--ofs-accent);\n}\n\n.ofs-step-readout.is-fixed {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field input.ofs-step-slider {\n  height: 18px;\n  padding: 0;\n  border: none;\n  background: transparent;\n  box-shadow: none;\n  accent-color: var(--ofs-accent);\n  cursor: pointer;\n}\n\n.ofs-field input.ofs-step-slider:disabled {\n  opacity: 0.55;\n  cursor: default;\n}\n\n.ofs-step-ticks {\n  display: grid;\n  grid-template-columns: repeat(3, minmax(0, 1fr));\n  gap: 4px;\n}\n\n.ofs-step-tick {\n  appearance: none;\n  padding: 2px 4px;\n  border: 1px solid transparent;\n  border-radius: 6px;\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 500;\n  text-align: center;\n  cursor: pointer;\n  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;\n}\n\n.ofs-step-tick:hover {\n  color: var(--ofs-ink);\n  background: var(--ofs-card);\n}\n\n.ofs-step-tick.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  font-weight: 600;\n}\n\n/* ── 底部生成：张数分段 / 主按钮 / 规格摘要 ───────────────────── */\n.ofs-qty-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ofs-qty-label {\n  flex: 0 0 auto;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-qty {\n  flex: 1 1 auto;\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 4px;\n}\n\n.ofs-qty-option {\n  appearance: none;\n  height: 28px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-qty-option:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-qty-option.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: inset 0 0 0 1px var(--ofs-accent);\n}\n\n/* 规格摘要：尺寸 · 比例 · 张数（有参考图补一项），等宽数字不抖动 */\n.ofs-spec-summary {\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n/* ── 底部生成 ───────────────────────────────────────────────── */\n.ofs-panel-foot {\n  position: relative;\n  z-index: 1;\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding: 10px 15px 12px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card);\n  box-shadow: 0 -16px 20px -18px rgb(16 16 20 / 20%);\n}\n\n.ofs-generate {\n  position: relative;\n  overflow: hidden;\n  width: 100%;\n  height: 42px;\n  border-radius: 14px;\n  font-size: 13.5px;\n  letter-spacing: 0.02em;\n}\n\n/* 主操作上的一道扫光：光从相纸表面扫过去，只出现在悬停与提交中 */\n.ofs-generate::after {\n  content: '';\n  position: absolute;\n  inset: -34% -40%;\n  background: linear-gradient(102deg, transparent 42%, rgb(255 255 255 / 17%) 50%, transparent 58%);\n  opacity: 0;\n  transform: translateX(-72%);\n  pointer-events: none;\n}\n\n.ofs-generate:hover:not(:disabled)::after {\n  animation: ofs-light-sweep 820ms cubic-bezier(0.3, 0.8, 0.35, 1) 1;\n}\n\n.ofs-generate.is-busy::after {\n  animation: ofs-light-sweep 2600ms cubic-bezier(0.45, 0, 0.55, 1) infinite;\n}\n\n@keyframes ofs-light-sweep {\n  from {\n    opacity: 0;\n    transform: translateX(-72%);\n  }\n  16% {\n    opacity: 1;\n  }\n  to {\n    opacity: 0;\n    transform: translateX(72%);\n  }\n}\n\n.ofs-hint {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  text-align: center;\n}\n\n/* ── 提示词动作（英译 / 润色并列，实心操作仍只有底部生成） ─────── */\n.ofs-composer-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n/* 英译是次级动作：默认用静色，悬停或含中文建议翻译时提到强调色，不另占一行说明。 */\n.ofs-translate-action {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-translate-action.is-suggested {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-translate-action:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n/* ── 画面设置：画幅比例 / 1:1 推荐尺寸 / 自定义宽高 三段同构 ───── */\n.ofs-frame-group {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ofs-frame-label {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n/* 标题栏右侧的实时读数：等宽数字，位数变化时不左右跳动 */\n.ofs-frame-readout {\n  flex: 0 0 auto;\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n/* 高级设置折叠态的读数摘要：一眼看清将用什么参数生成 */\n.ofs-row-readout {\n  flex: 0 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n/* 紧凑一行两列：宽 [1024] × 高 [1024]（不复用带卡片内边距的 .ofs-grid2） */\n.ofs-size-custom {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-size-custom-field {\n  display: flex;\n  flex: 1 1 0;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-size-custom-field > span {\n  flex: 0 0 auto;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-size-custom-field input {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-size-custom-times {\n  flex: 0 0 auto;\n  color: var(--ofs-ink-4);\n  font-size: 11px;\n}\n\n/* ── 自定义宽高（默认折叠，按需展开精调） ────────────────────── */\n.ofs-custom-toggle {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-custom-toggle:hover {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-custom-body {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding-top: 2px;\n}\n\n.ofs-link {\n  appearance: none;\n  margin-left: 6px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: inherit;\n  cursor: pointer;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}\n\n/* ── 参考图槽位与重绘强度（只在已有参考图时出现） ─────────────── */\n.ofs-reference {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  padding: 9px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-sunken);\n}\n\n/* 当前预设不支持垫图：整块置灰，一眼看出这次生成会被拦下 */\n.ofs-reference.is-unsupported {\n  opacity: 0.55;\n  filter: grayscale(0.4);\n}\n\n.ofs-reference-thumb {\n  flex: 0 0 auto;\n  display: grid;\n  place-items: center;\n  width: 58px;\n  height: 58px;\n  overflow: hidden;\n  border: 1px solid var(--ofs-print-edge);\n  border-radius: 10px;\n  background: var(--ofs-print-paper);\n  color: var(--ofs-ink-4);\n}\n\n.ofs-reference-thumb img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n.ofs-reference-meta {\n  flex: 1 1 auto;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n  justify-content: center;\n  gap: 7px;\n}\n\n.ofs-reference-name {\n  overflow: hidden;\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n.ofs-reference-strength {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n}\n\n.ofs-reference-strength-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-reference-strength-head b {\n  color: var(--ofs-ink-2);\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-reference-range {\n  width: 100%;\n  height: 16px;\n  margin: 0;\n  accent-color: var(--ofs-accent);\n}\n\n.ofs-reference-range:disabled {\n  cursor: default;\n}\n\n.ofs-reference-remove {\n  color: var(--ofs-ink-3);\n  font-weight: 550;\n}\n\n.ofs-reference-remove:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n.ofs-reference-warn {\n  color: var(--ofs-warn);\n  text-align: left;\n}\n\n.ofs-reference-hint {\n  text-align: left;\n}\n\n/* ── 参考图空槽位（首次使用引导） ───────────────────────────── */\n/*\n * 无参考图且当前模型支持垫图时出现：\n *  - 普通垫图模型：一行轻量入口，不打断纯文生图流程；\n *  - 专用局部重绘模型：虚线框 + 两步说明，明确「先选图再涂抹」的顺序。\n */\n.ofs-reference-entry {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-sunken);\n}\n\n.ofs-reference-entry-hint {\n  margin: 0;\n  text-align: left;\n}\n\n.ofs-reference-empty {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 6px;\n  padding: 16px 12px;\n  border: 1px dashed var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: color-mix(in oklab, var(--ofs-sunken) 70%, transparent);\n  text-align: center;\n}\n\n.ofs-reference-empty-title {\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ofs-reference-empty-hint {\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n/* 空槽位的「从作品画廊选择」按钮：虚线框内唯一的实心动作。 */\n.ofs-reference-pick {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n  margin-top: 2px;\n  padding: 0 12px;\n  border: 1px solid var(--ofs-accent-soft-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  font-weight: 600;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-reference-pick:hover {\n  border-color: var(--ofs-accent);\n}\n\n/* 参考图已就位：蒙版覆盖率读数与「继续涂抹 / 清空蒙版」。 */\n.ofs-reference-mask {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 0 2px;\n}\n\n.ofs-reference-mask-readout {\n  margin: 0;\n  text-align: left;\n}\n\n.ofs-reference-mask-actions {\n  display: inline-flex;\n  gap: 6px;\n}\n\n.ofs-reference-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  padding: 0 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-reference-action:hover:not(:disabled) {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-reference-action:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* 页脚：本次基于哪张参考图重绘（连续局部重绘时避免误读来源）。 */\n.ofs-reference-based {\n  text-align: center;\n  font-variant-numeric: tabular-nums;\n}\n/* 专用局部重绘模型的常驻说明：放在面板滚动区顶部，缺蒙版时出现。 */\n.ofs-rail-note {\n  margin: 0 0 10px;\n  padding: 8px 10px;\n  border-radius: var(--ofs-r-sm, 8px);\n  background: var(--ofs-warn-soft, #f7f0e4);\n  color: var(--ofs-warn, #a96a18);\n  line-height: 1.5;\n}\n";
 
 // src/styles/stage.css
-var stage_default = "/*\n * 画面预览：光桌上的相纸。\n *\n * 舞台（.ofs-figure）不是又一张白卡，而是一张下凹的光桌：中性灰表面、顶部一层\n * 柔光、发丝描边、内阴影。图落在桌上时是一张相纸（11px 纸边 + 偏移柔影），\n * 等待出图时桌上只有一只按当前比例画出的取景框和四角裁切标记。\n *\n * 相纸与取景框的尺寸都用容器单位算（cqw / cqh），因为「按比例装进剩余空间」\n * 用百分比 + aspect-ratio 在非替换元素上收不回宽度（实测 1:1 会变成 526×326）。\n *\n * 深色值在 tokens.css 与 tools/preview.mjs 的 DARK_TOKENS 里各有一份，改要同步。\n */\n\n.ofs-stage {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.ofs-figure {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(76% 58% at 50% 34%, var(--ofs-mat-lit) 0%, transparent 72%),\n    var(--ofs-mat);\n  box-shadow: var(--ofs-mat-inner);\n  overflow: hidden;\n  /* 相纸 / 取景框的容器查询基准：cqw 是这块光桌的内容盒宽度 */\n  container-type: size;\n}\n\n/* ── 相纸 ───────────────────────────────────────────────────── */\n.ofs-print {\n  appearance: none;\n  display: block;\n  /* 比例来自远端下发的图片像素；环形纸边靠阴影画，不占布局 */\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-print-r, 1)));\n  aspect-ratio: var(--ofs-print-r, 1);\n  padding: 0;\n  border: 0;\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  cursor: zoom-in;\n  transition:\n    box-shadow 220ms ease,\n    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-print:hover {\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow-hover);\n  transform: translateY(-2px);\n}\n\n.ofs-print:focus-visible {\n  outline: none;\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 14px var(--ofs-accent),\n    var(--ofs-print-shadow);\n}\n\n.ofs-image {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  border-radius: 3px;\n}\n\n/*\n * 落定：新出的图从潜影显到清晰，只播一次。\n * fill-mode 用 backwards——结束时回到基础样式，悬停抬升才不会被动画终帧钉住。\n */\n.ofs-print.is-developing {\n  animation: ofs-paper-settle 720ms cubic-bezier(0.22, 1, 0.36, 1) backwards;\n}\n\n.ofs-print.is-developing .ofs-image {\n  animation: ofs-develop 760ms cubic-bezier(0.3, 0.9, 0.3, 1) backwards;\n}\n\n@keyframes ofs-paper-settle {\n  from {\n    opacity: 0.42;\n    transform: translateY(10px) scale(0.99);\n  }\n  55% {\n    opacity: 1;\n  }\n  to {\n    opacity: 1;\n    transform: none;\n  }\n}\n\n@keyframes ofs-develop {\n  from {\n    filter: blur(18px) grayscale(1) contrast(0.5) brightness(1.22);\n  }\n  55% {\n    filter: blur(7px) grayscale(0.75) contrast(0.82) brightness(1.08);\n  }\n  to {\n    filter: none;\n  }\n}\n\n/* ── 浮动工具 ───────────────────────────────────────────────── */\n.ofs-figure-tools {\n  position: absolute;\n  top: 14px;\n  right: 14px;\n  z-index: 2;\n  display: flex;\n  gap: 6px;\n}\n\n.ofs-glass-btn {\n  appearance: none;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: 11px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 68%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  color: var(--ofs-ink-2);\n  cursor: pointer;\n  transition:\n    color 150ms ease,\n    background-color 150ms ease,\n    border-color 150ms ease,\n    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-glass-btn:hover {\n  color: var(--ofs-accent);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-glass-btn:active {\n  transform: scale(0.95);\n}\n\n.ofs-glass-btn.is-on {\n  color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n/* ── 等待出图：一只按比例画出的取景框 ───────────────────────── */\n/*\n * 空态与等待出图时，桌上是一张还没曝光的空白相纸：比例跟当前画幅走，\n * 出图时同一位置换成显影完成的相纸——所以纸边、投影与 .ofs-print 同一套材质。\n * 外框负责按比例定尺寸（裁切标记贴它的四角），内框负责裁掉溢出的内容。\n */\n.ofs-frame {\n  position: relative;\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-frame-r, 1)));\n  aspect-ratio: var(--ofs-frame-r, 1);\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 1px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  animation: ofs-frame-in 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;\n}\n\n.ofs-frame-body {\n  position: absolute;\n  inset: 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  padding: 20px 22px;\n  border-radius: 3px;\n  overflow: hidden;\n}\n\n@keyframes ofs-frame-in {\n  from {\n    opacity: 0;\n    transform: scale(0.994);\n  }\n  to {\n    opacity: 1;\n    transform: none;\n  }\n}\n\n/* 四角裁切标记：纸上要被框住的那块区域 */\n.ofs-marks {\n  position: absolute;\n  inset: -12px;\n  pointer-events: none;\n}\n\n.ofs-marks span {\n  position: absolute;\n  width: 15px;\n  height: 15px;\n  border: 0 solid var(--ofs-mark);\n}\n\n.ofs-marks span:nth-child(1) {\n  top: 0;\n  left: 0;\n  border-top-width: 1px;\n  border-left-width: 1px;\n}\n\n.ofs-marks span:nth-child(2) {\n  top: 0;\n  right: 0;\n  border-top-width: 1px;\n  border-right-width: 1px;\n}\n\n.ofs-marks span:nth-child(3) {\n  bottom: 0;\n  left: 0;\n  border-bottom-width: 1px;\n  border-left-width: 1px;\n}\n\n.ofs-marks span:nth-child(4) {\n  bottom: 0;\n  right: 0;\n  border-bottom-width: 1px;\n  border-right-width: 1px;\n}\n\n/* ── 进度胶囊 ───────────────────────────────────────────────── */\n.ofs-stage-progress {\n  position: absolute;\n  left: 50%;\n  bottom: 16px;\n  z-index: 2;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  padding: 7px 13px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 74%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  transform: translateX(-50%);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  white-space: nowrap;\n}\n\n.ofs-progress-label {\n  font-variant-numeric: tabular-nums;\n}\n\n/* 还没有图时，胶囊落在这只空取景框的正中：像正在曝光的那一格。 */\n.ofs-stage-progress.is-inside {\n  bottom: 50%;\n  transform: translate(-50%, 50%);\n}\n\n.ofs-shimmer {\n  display: block;\n  width: 54px;\n  height: 4px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(\n    90deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 70%, transparent) 50%,\n    transparent 100%\n  );\n  background-size: 220% 100%;\n  animation: ofs-shimmer 1.5s linear infinite;\n}\n\n/* ── 图片下的信息与动作 ─────────────────────────────────────── */\n.ofs-stage-foot {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 16px;\n  padding: 0 4px;\n  min-width: 0;\n}\n\n.ofs-stage-prompt {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n/* 题注按印相室的标签写：小一号、拉开字距、齐宽数字 */\n.ofs-stage-meta {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 10.5px;\n  font-weight: 500;\n  letter-spacing: 0.07em;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n.ofs-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-dock-button {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 30px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-dock-button:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-dock-button.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 空态 ───────────────────────────────────────────────────── */\n.ofs-figure--empty {\n  background:\n    radial-gradient(64% 54% at 50% 40%, var(--ofs-mat-lit) 0%, transparent 76%),\n    var(--ofs-mat);\n}\n\n.ofs-empty-card {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 9px;\n  width: 100%;\n  max-width: 400px;\n  text-align: center;\n}\n\n.ofs-empty-title {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n}\n\n.ofs-examples {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: center;\n  gap: 6px;\n  margin-top: 4px;\n}\n\n.ofs-examples-label {\n  width: 100%;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-example {\n  appearance: none;\n  padding: 5px 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* 曝光单：这条桌子上的机器大概多久出一张，先给个准话 */\n.ofs-exposure {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  width: 100%;\n  max-width: 260px;\n  margin-top: 6px;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  letter-spacing: 0.04em;\n  white-space: nowrap;\n}\n\n.ofs-exposure-rule {\n  flex: 1 1 auto;\n  height: 1px;\n  background: var(--ofs-mark);\n}\n\n/*\n * 纸上的辅助文字：纸面比卡片亮一档，固定用 ink-3 在深色下只有 4.3:1。\n * 这里按墨色与纸色混合取一档「纸面次级文字色」，浅深两套主题各自都 ≥ 4.5:1。\n */\n.ofs-frame .ofs-muted,\n.ofs-frame .ofs-examples-label,\n.ofs-frame .ofs-exposure {\n  color: color-mix(in oklab, var(--ofs-ink) 62%, var(--ofs-print-paper));\n}\n\n/* ── 窄屏排队胶囊 ───────────────────────────────────────────── */\n/* 默认不占位：宽屏由胶片条展示队列，≤820px 时 responsive.css 打开这里。 */\n.ofs-queue-pill {\n  display: none;\n}\n\n/* ── 放大层 ─────────────────────────────────────────────────── */\n.ofs-lightbox {\n  position: absolute;\n  inset: -14px;\n  z-index: 80;\n  display: grid;\n  place-items: center;\n  padding: 3vw;\n  background: rgb(16 16 18 / 72%);\n  backdrop-filter: blur(16px);\n  -webkit-backdrop-filter: blur(16px);\n  animation: ofs-fade-in 180ms ease;\n}\n\n.ofs-lightbox img {\n  max-width: 94%;\n  max-height: 92%;\n  border-radius: 12px;\n  box-shadow: 0 40px 90px -30px rgb(0 0 0 / 70%);\n}\n\n.ofs-lightbox-close {\n  position: absolute;\n  top: 18px;\n  right: 18px;\n  display: grid;\n  place-items: center;\n  width: 36px;\n  height: 36px;\n  border: 1px solid rgb(255 255 255 / 26%);\n  border-radius: 11px;\n  background: rgb(255 255 255 / 12%);\n  color: rgb(255 255 255 / 88%);\n  cursor: pointer;\n}\n\n.ofs-lightbox-close:hover {\n  background: rgb(255 255 255 / 20%);\n  color: #fff;\n}\n\n/* 大图预览底部的主操作：以此为参考图重绘 */\n.ofs-lightbox-action {\n  position: absolute;\n  bottom: 26px;\n  left: 50%;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 36px;\n  padding: 0 16px;\n  border: 1px solid rgb(255 255 255 / 30%);\n  border-radius: var(--ofs-r-pill);\n  background: rgb(20 20 22 / 66%);\n  color: #fff;\n  font-size: 12.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transform: translateX(-50%);\n  backdrop-filter: blur(8px);\n  -webkit-backdrop-filter: blur(8px);\n}\n\n.ofs-lightbox-action:hover {\n  background: rgb(20 20 22 / 84%);\n}\n\n/* ── 局部重绘：涂抹蒙版 ─────────────────────────────────────── */\n/*\n * 涂抹态占满整块光桌：上面一行标题与覆盖率读数，中间是参考图与蒙版画布，\n * 下面一排画笔、橡皮擦、清空、反选与完成。\n * 画布外框的比例、光标圆圈的位置与直径都由运行时按参考图像素写进内联样式，\n * 这里只固定静态排版。\n */\n.ofs-mask-editor {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 10px;\n  width: 100%;\n  height: 100%;\n  padding: 12px;\n  overflow: auto;\n}\n\n.ofs-mask-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  width: min(100%, 560px);\n}\n\n.ofs-mask-title {\n  font-size: 12.5px;\n  font-weight: 600;\n}\n\n/* 画布外框：比例来自参考图像素，由内联 aspect-ratio 给出。 */\n.ofs-mask-stage {\n  position: relative;\n  width: min(100%, 560px);\n  max-height: 100%;\n  border-radius: 6px;\n  overflow: hidden;\n  background: #000;\n  box-shadow: var(--ofs-print-shadow);\n}\n\n/* 参考图按 fill 铺满画布：导出的蒙版与参考图同比例，这里不能留 contain 的边。 */\n.ofs-mask-photo {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  object-fit: fill;\n  user-select: none;\n}\n\n/* 蒙版层是透明底白色笔迹，叠在参考图上用 screen 混色只提亮涂过的地方。 */\n.ofs-mask-canvas {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  touch-action: none;\n  cursor: crosshair;\n  mix-blend-mode: screen;\n  opacity: 0.85;\n}\n\n/* 画笔光标圈：left / top / width / height 由指针或键盘移动时直接写内联样式。 */\n.ofs-mask-cursor {\n  position: absolute;\n  border: 1px solid var(--ofs-accent);\n  border-radius: 50%;\n  transform: translate(-50%, -50%);\n  pointer-events: none;\n  display: none;\n}\n\n.ofs-mask-tools {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  width: 100%;\n}\n\n/* 画笔大小：滑块与工具栏同高、宽度固定，拖动时不带着整行抖动。 */\n.ofs-mask-brush {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 44px;\n  padding: 0 10px;\n  font-size: 11.5px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-mask-range {\n  width: 120px;\n  height: 44px;\n}\n\n/* 说明文字与画布同宽（画布宽度也是 min(100%, 560px)）；字号与颜色沿用 .ofs-hint。 */\n.ofs-mask-hint {\n  width: min(100%, 560px);\n}\n\n/* 涂抹入口行：读数与提示并排，窄屏自动换行。 */\n.ofs-mask-bar {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 10px;\n}\n\n/* 蒙版读数与能力说明：外边距归零，字号与颜色沿用 .ofs-hint / .ofs-muted。 */\n.ofs-mask-hint,\n.ofs-mask-status,\n.ofs-mask-warn {\n  margin: 0;\n}\n/* 涂抹提示：操作要点与少步模型的能力提醒（两行弱提示，不抢视觉）。 */\n.ofs-mask-guide,\n.ofs-mask-fast {\n  max-width: min(100%, 560px);\n  margin: 0;\n  line-height: 1.5;\n}\n\n.ofs-mask-fast {\n  color: var(--ofs-warn, #b45309);\n}\n";
+var stage_default = "/*\n * 画面预览：光桌上的相纸。\n *\n * 舞台（.ofs-figure）不是又一张白卡，而是一张下凹的光桌：中性灰表面、顶部一层\n * 柔光、发丝描边、内阴影。图落在桌上时是一张相纸（11px 纸边 + 偏移柔影），\n * 等待出图时桌上只有一只按当前比例画出的取景框和四角裁切标记。\n *\n * 相纸与取景框的尺寸都用容器单位算（cqw / cqh），因为「按比例装进剩余空间」\n * 用百分比 + aspect-ratio 在非替换元素上收不回宽度（实测 1:1 会变成 526×326）。\n *\n * 深色值在 tokens.css 与 tools/preview.mjs 的 DARK_TOKENS 里各有一份，改要同步。\n */\n\n.ofs-stage {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.ofs-figure {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(76% 58% at 50% 34%, var(--ofs-mat-lit) 0%, transparent 72%),\n    var(--ofs-mat);\n  box-shadow: var(--ofs-mat-inner);\n  overflow: hidden;\n  /* 相纸 / 取景框的容器查询基准：cqw 是这块光桌的内容盒宽度 */\n  container-type: size;\n}\n\n/* ── 相纸 ───────────────────────────────────────────────────── */\n.ofs-print {\n  appearance: none;\n  display: block;\n  /* 比例来自远端下发的图片像素；环形纸边靠阴影画，不占布局 */\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-print-r, 1)));\n  aspect-ratio: var(--ofs-print-r, 1);\n  padding: 0;\n  border: 0;\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  cursor: zoom-in;\n  transition:\n    box-shadow 220ms ease,\n    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-print:hover {\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow-hover);\n  transform: translateY(-2px);\n}\n\n.ofs-print:focus-visible {\n  outline: none;\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 14px var(--ofs-accent),\n    var(--ofs-print-shadow);\n}\n\n.ofs-image {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  border-radius: 3px;\n}\n\n/*\n * 落定：新出的图从潜影显到清晰，只播一次。\n * fill-mode 用 backwards——结束时回到基础样式，悬停抬升才不会被动画终帧钉住。\n */\n.ofs-print.is-developing {\n  animation: ofs-paper-settle 720ms cubic-bezier(0.22, 1, 0.36, 1) backwards;\n}\n\n.ofs-print.is-developing .ofs-image {\n  animation: ofs-develop 760ms cubic-bezier(0.3, 0.9, 0.3, 1) backwards;\n}\n\n@keyframes ofs-paper-settle {\n  from {\n    opacity: 0.42;\n    transform: translateY(10px) scale(0.99);\n  }\n  55% {\n    opacity: 1;\n  }\n  to {\n    opacity: 1;\n    transform: none;\n  }\n}\n\n@keyframes ofs-develop {\n  from {\n    filter: blur(18px) grayscale(1) contrast(0.5) brightness(1.22);\n  }\n  55% {\n    filter: blur(7px) grayscale(0.75) contrast(0.82) brightness(1.08);\n  }\n  to {\n    filter: none;\n  }\n}\n\n/* ── 浮动工具 ───────────────────────────────────────────────── */\n.ofs-figure-tools {\n  position: absolute;\n  top: 14px;\n  right: 14px;\n  z-index: 2;\n  display: flex;\n  gap: 6px;\n}\n\n.ofs-glass-btn {\n  appearance: none;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: 11px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 68%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  color: var(--ofs-ink-2);\n  cursor: pointer;\n  transition:\n    color 150ms ease,\n    background-color 150ms ease,\n    border-color 150ms ease,\n    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-glass-btn:hover {\n  color: var(--ofs-accent);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-glass-btn:active {\n  transform: scale(0.95);\n}\n\n.ofs-glass-btn.is-on {\n  color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n/* ── 等待出图：一只按比例画出的取景框 ───────────────────────── */\n/*\n * 空态与等待出图时，桌上是一张还没曝光的空白相纸：比例跟当前画幅走，\n * 出图时同一位置换成显影完成的相纸——所以纸边、投影与 .ofs-print 同一套材质。\n * 外框负责按比例定尺寸（裁切标记贴它的四角），内框负责裁掉溢出的内容。\n */\n.ofs-frame {\n  position: relative;\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-frame-r, 1)));\n  aspect-ratio: var(--ofs-frame-r, 1);\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 1px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  animation: ofs-frame-in 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;\n}\n\n.ofs-frame-body {\n  position: absolute;\n  inset: 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  padding: 20px 22px;\n  border-radius: 3px;\n  overflow: hidden;\n}\n\n@keyframes ofs-frame-in {\n  from {\n    opacity: 0;\n    transform: scale(0.994);\n  }\n  to {\n    opacity: 1;\n    transform: none;\n  }\n}\n\n/* 四角裁切标记：纸上要被框住的那块区域 */\n.ofs-marks {\n  position: absolute;\n  inset: -12px;\n  pointer-events: none;\n}\n\n.ofs-marks span {\n  position: absolute;\n  width: 15px;\n  height: 15px;\n  border: 0 solid var(--ofs-mark);\n}\n\n.ofs-marks span:nth-child(1) {\n  top: 0;\n  left: 0;\n  border-top-width: 1px;\n  border-left-width: 1px;\n}\n\n.ofs-marks span:nth-child(2) {\n  top: 0;\n  right: 0;\n  border-top-width: 1px;\n  border-right-width: 1px;\n}\n\n.ofs-marks span:nth-child(3) {\n  bottom: 0;\n  left: 0;\n  border-bottom-width: 1px;\n  border-left-width: 1px;\n}\n\n.ofs-marks span:nth-child(4) {\n  bottom: 0;\n  right: 0;\n  border-bottom-width: 1px;\n  border-right-width: 1px;\n}\n\n/* ── 进度胶囊 ───────────────────────────────────────────────── */\n.ofs-stage-progress {\n  position: absolute;\n  left: 50%;\n  bottom: 16px;\n  z-index: 2;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  padding: 7px 13px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 74%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  transform: translateX(-50%);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  white-space: nowrap;\n}\n\n.ofs-progress-label {\n  font-variant-numeric: tabular-nums;\n}\n\n/* 还没有图时，胶囊落在这只空取景框的正中：像正在曝光的那一格。 */\n.ofs-stage-progress.is-inside {\n  bottom: 50%;\n  transform: translate(-50%, 50%);\n}\n\n.ofs-shimmer {\n  display: block;\n  width: 54px;\n  height: 4px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(\n    90deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 70%, transparent) 50%,\n    transparent 100%\n  );\n  background-size: 220% 100%;\n  animation: ofs-shimmer 1.5s linear infinite;\n}\n\n/* ── 图片下的信息与动作 ─────────────────────────────────────── */\n.ofs-stage-foot {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 16px;\n  padding: 0 4px;\n  min-width: 0;\n}\n\n.ofs-stage-prompt {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n/* 题注按印相室的标签写：小一号、拉开字距、齐宽数字 */\n.ofs-stage-meta {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 10.5px;\n  font-weight: 500;\n  letter-spacing: 0.07em;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n.ofs-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-dock-button {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 30px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-dock-button:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-dock-button.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* 续绘闭环的主入口：以此结果继续重绘，强调一档但不抢生成按钮。 */\n.ofs-continue-inpaint {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-continue-inpaint:hover {\n  border-color: var(--ofs-accent);\n  color: var(--ofs-accent);\n}\n\n/* ── 空态 ───────────────────────────────────────────────────── */\n.ofs-figure--empty {\n  background:\n    radial-gradient(64% 54% at 50% 40%, var(--ofs-mat-lit) 0%, transparent 76%),\n    var(--ofs-mat);\n}\n\n.ofs-empty-card {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 9px;\n  width: 100%;\n  max-width: 400px;\n  text-align: center;\n}\n\n.ofs-empty-title {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n}\n\n.ofs-examples {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: center;\n  gap: 6px;\n  margin-top: 4px;\n}\n\n.ofs-examples-label {\n  width: 100%;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-example {\n  appearance: none;\n  padding: 5px 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* 曝光单：这条桌子上的机器大概多久出一张，先给个准话 */\n.ofs-exposure {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  width: 100%;\n  max-width: 260px;\n  margin-top: 6px;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  letter-spacing: 0.04em;\n  white-space: nowrap;\n}\n\n.ofs-exposure-rule {\n  flex: 1 1 auto;\n  height: 1px;\n  background: var(--ofs-mark);\n}\n\n/*\n * 纸上的辅助文字：纸面比卡片亮一档，固定用 ink-3 在深色下只有 4.3:1。\n * 这里按墨色与纸色混合取一档「纸面次级文字色」，浅深两套主题各自都 ≥ 4.5:1。\n */\n.ofs-frame .ofs-muted,\n.ofs-frame .ofs-examples-label,\n.ofs-frame .ofs-exposure {\n  color: color-mix(in oklab, var(--ofs-ink) 62%, var(--ofs-print-paper));\n}\n\n/* ── 窄屏排队胶囊 ───────────────────────────────────────────── */\n/* 默认不占位：宽屏由胶片条展示队列，≤820px 时 responsive.css 打开这里。 */\n.ofs-queue-pill {\n  display: none;\n}\n\n/* ── 放大层 ─────────────────────────────────────────────────── */\n.ofs-lightbox {\n  position: absolute;\n  inset: -14px;\n  z-index: 80;\n  display: grid;\n  place-items: center;\n  padding: 3vw;\n  background: rgb(16 16 18 / 72%);\n  backdrop-filter: blur(16px);\n  -webkit-backdrop-filter: blur(16px);\n  animation: ofs-fade-in 180ms ease;\n}\n\n.ofs-lightbox img {\n  max-width: 94%;\n  max-height: 92%;\n  border-radius: 12px;\n  box-shadow: 0 40px 90px -30px rgb(0 0 0 / 70%);\n}\n\n.ofs-lightbox-close {\n  position: absolute;\n  top: 18px;\n  right: 18px;\n  display: grid;\n  place-items: center;\n  width: 36px;\n  height: 36px;\n  border: 1px solid rgb(255 255 255 / 26%);\n  border-radius: 11px;\n  background: rgb(255 255 255 / 12%);\n  color: rgb(255 255 255 / 88%);\n  cursor: pointer;\n}\n\n.ofs-lightbox-close:hover {\n  background: rgb(255 255 255 / 20%);\n  color: #fff;\n}\n\n/* 大图预览底部的主操作：以此为参考图重绘 */\n.ofs-lightbox-action {\n  position: absolute;\n  bottom: 26px;\n  left: 50%;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 36px;\n  padding: 0 16px;\n  border: 1px solid rgb(255 255 255 / 30%);\n  border-radius: var(--ofs-r-pill);\n  background: rgb(20 20 22 / 66%);\n  color: #fff;\n  font-size: 12.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transform: translateX(-50%);\n  backdrop-filter: blur(8px);\n  -webkit-backdrop-filter: blur(8px);\n}\n\n.ofs-lightbox-action:hover {\n  background: rgb(20 20 22 / 84%);\n}\n\n/* ── 局部重绘：涂抹蒙版 ─────────────────────────────────────── */\n/*\n * 涂抹态占满整块光桌：上面一行标题与覆盖率读数，中间是参考图与蒙版画布，\n * 下面一排画笔、橡皮擦、清空、反选与完成。\n * 画布外框的比例、光标圆圈的位置与直径都由运行时按参考图像素写进内联样式，\n * 这里只固定静态排版。\n */\n.ofs-mask-editor {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  /* 内容超出（矮窗口 / 竖图）时从顶部开始滚动，不被居中的 flex 裁掉上半截。 */\n  justify-content: center;\n  justify-content: safe center;\n  gap: 10px;\n  width: 100%;\n  height: 100%;\n  padding: 12px;\n  overflow: auto;\n}\n\n.ofs-mask-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  width: min(100%, 560px);\n}\n\n.ofs-mask-title {\n  font-size: 12.5px;\n  font-weight: 600;\n}\n\n/*\n * 画布外框：比例来自参考图像素（内联 aspect-ratio 与 --ofs-mask-r）。\n *\n * 宽度同时受容器宽与可用高度约束：与 .ofs-frame / .ofs-print 一样用容器单位算，\n * 竖图或矮窗口下按比例整体缩小，而不是被 max-height 单独压扁。\n * 200px 是上方标题、下方工具栏与两行提示的大致占位；画布保比例优先，必要时编辑器滚动。\n */\n.ofs-mask-stage {\n  position: relative;\n  flex: 0 0 auto;\n  width: min(\n    calc(100cqw - 24px),\n    560px,\n    max(120px, calc((100cqh - 200px) * var(--ofs-mask-r, 1)))\n  );\n  aspect-ratio: var(--ofs-mask-r, 1);\n  border-radius: 6px;\n  overflow: hidden;\n  background: #000;\n  box-shadow: var(--ofs-print-shadow);\n}\n\n/* 参考图按 fill 铺满画布：导出的蒙版与参考图同比例，这里不能留 contain 的边。 */\n.ofs-mask-photo {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  object-fit: fill;\n  user-select: none;\n}\n\n/* 蒙版层是透明底白色笔迹，叠在参考图上用 screen 混色只提亮涂过的地方。 */\n.ofs-mask-canvas {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  touch-action: none;\n  cursor: crosshair;\n  mix-blend-mode: screen;\n  opacity: 0.85;\n}\n\n/* 画笔光标圈：left / top / width / height 由指针或键盘移动时直接写内联样式。 */\n.ofs-mask-cursor {\n  position: absolute;\n  border: 1px solid var(--ofs-accent);\n  border-radius: 50%;\n  transform: translate(-50%, -50%);\n  pointer-events: none;\n  display: none;\n}\n\n.ofs-mask-tools {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  width: 100%;\n}\n\n/* 画笔大小：滑块与工具栏同高、宽度固定，拖动时不带着整行抖动。 */\n.ofs-mask-brush {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 44px;\n  padding: 0 10px;\n  font-size: 11.5px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-mask-range {\n  width: 120px;\n  height: 44px;\n}\n\n/* 说明文字与画布同宽（画布宽度也是 min(100%, 560px)）；字号与颜色沿用 .ofs-hint。 */\n.ofs-mask-hint {\n  width: min(100%, 560px);\n}\n\n/* 涂抹入口行：读数与提示并排，窄屏自动换行。 */\n.ofs-mask-bar {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 10px;\n}\n\n/* 蒙版读数与能力说明：外边距归零，字号与颜色沿用 .ofs-hint / .ofs-muted。 */\n.ofs-mask-hint,\n.ofs-mask-status,\n.ofs-mask-warn {\n  margin: 0;\n}\n/* 涂抹提示：操作要点与少步模型的能力提醒（两行弱提示，不抢视觉）。 */\n.ofs-mask-guide,\n.ofs-mask-fast {\n  max-width: min(100%, 560px);\n  margin: 0;\n  line-height: 1.5;\n}\n\n.ofs-mask-fast {\n  color: var(--ofs-warn, #b45309);\n}\n";
 
 // src/styles/filmstrip.css
 var filmstrip_default = "/*\n * 底部最近生成栏：悬浮玻璃条，左边是批次缩略图流，右边去画廊。\n */\n\n.ofs-filmstrip {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  margin: 0 14px 14px;\n  padding: 10px 12px;\n  min-height: 92px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(18px);\n  -webkit-backdrop-filter: blur(18px);\n}\n\n.ofs-roll {\n  flex: 1 1 auto;\n  min-width: 0;\n  display: flex;\n  align-items: stretch;\n  gap: 16px;\n  overflow-x: auto;\n  overflow-y: hidden;\n  padding-bottom: 2px;\n}\n\n.ofs-batch {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.ofs-batch-thumbs {\n  display: flex;\n  gap: 3px;\n}\n\n.ofs-thumb {\n  appearance: none;\n  flex: 0 0 auto;\n  display: block;\n  width: 62px;\n  height: 62px;\n  padding: 0;\n  border: 2px solid transparent;\n  border-radius: 12px;\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  cursor: pointer;\n  transition:\n    transform 170ms cubic-bezier(0.22, 1, 0.36, 1),\n    border-color 170ms ease,\n    box-shadow 170ms ease;\n}\n\n.ofs-thumb img {\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n.ofs-thumb:hover {\n  transform: translateY(-2px);\n}\n\n.ofs-thumb.is-on {\n  border-color: var(--ofs-accent);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 20%, transparent);\n}\n\n.ofs-batch-meta {\n  display: flex;\n  align-items: center;\n  justify-content: flex-start;\n  gap: 6px;\n  font-size: 10px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-batch-meta em {\n  font-style: normal;\n  font-size: 9px;\n  letter-spacing: 0.06em;\n  text-transform: uppercase;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n/* 进行中的暗房计时卡：一格还在显影的相纸 + 阶段与已用时间 */\n.ofs-ghost {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 12px 8px 8px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 14px;\n  background: color-mix(in oklab, var(--ofs-card) 70%, transparent);\n}\n\n.ofs-ghost-frame {\n  position: relative;\n  flex: 0 0 auto;\n  display: grid;\n  place-items: center;\n  width: 46px;\n  height: 46px;\n  overflow: hidden;\n  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 30%, transparent);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n}\n\n/* 一道从下往上推的显影光，说明这一格还在出 */\n.ofs-ghost-bar {\n  width: 100%;\n  height: 100%;\n  background: linear-gradient(\n    180deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 18%, transparent) 46%,\n    color-mix(in oklab, var(--ofs-accent) 4%, transparent) 100%\n  );\n  background-size: 100% 240%;\n  animation: ofs-develop-scan 2.8s ease-in-out infinite;\n}\n\n@keyframes ofs-develop-scan {\n  0% {\n    background-position: 0 110%;\n  }\n  100% {\n    background-position: 0 -130%;\n  }\n}\n\n/* 排队中的卡：这一格还没开始显影，取景框里写位次，旁边写已排队时长 */\n.ofs-ghost.is-queued {\n  background: color-mix(in oklab, var(--ofs-card) 52%, transparent);\n}\n\n.ofs-ghost.is-queued .ofs-ghost-frame {\n  border-color: var(--ofs-sunken-border);\n}\n\n.ofs-ghost-slot {\n  font-size: 14px;\n  font-weight: 600;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-ghost.is-queued .ofs-ghost-label {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-ghost-text {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  min-width: 0;\n}\n\n.ofs-ghost-label {\n  max-width: 168px;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  font-size: 11px;\n  color: var(--ofs-ink-2);\n  white-space: nowrap;\n}\n\n.ofs-ghost-time {\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n/* 取消：排队卡立即出队，运行中的卡当前这张画完后停止 */\n.ofs-ghost-cancel {\n  appearance: none;\n  flex: 0 0 auto;\n  height: 24px;\n  padding: 0 9px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-ghost-cancel:hover:not(:disabled) {\n  border-color: color-mix(in oklab, var(--ofs-error) 34%, transparent);\n  background: var(--ofs-error-soft);\n  color: var(--ofs-error);\n}\n\n.ofs-ghost-cancel:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* 取消中的卡：显影光停下，只保留阶段文案说明「正在停止…」 */\n.ofs-ghost.is-cancelling {\n  border-color: color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n}\n\n.ofs-ghost.is-cancelling .ofs-ghost-bar {\n  animation: none;\n  opacity: 0.45;\n}\n\n.ofs-ghost.is-cancelling .ofs-ghost-label {\n  color: var(--ofs-ink-3);\n}\n\n/* 空态 */\n.ofs-filmstrip-empty {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  flex: 1 1 auto;\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n}\n\n.ofs-slots {\n  display: flex;\n  gap: 6px;\n}\n\n.ofs-slot {\n  display: block;\n  width: 46px;\n  height: 46px;\n  border: 1px dashed var(--ofs-sunken-border);\n  border-radius: 12px;\n  background: color-mix(in oklab, var(--ofs-card) 60%, transparent);\n}\n\n/* 去画廊 */\n.ofs-filmstrip-side {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  align-self: stretch;\n  padding-left: 12px;\n  border-left: 1px solid var(--ofs-hairline);\n}\n\n.ofs-filmstrip-link {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  padding: 8px 10px;\n  border: 0;\n  border-radius: 10px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-filmstrip-link:hover {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}";
@@ -5139,15 +5187,6 @@ function clampSize(value) {
   const { min, max, step } = LIMITS.width;
   return Math.min(max, Math.max(min, Math.round(number / step) * step));
 }
-function clampStrength(value) {
-  const { min, max, step, default: fallback } = LIMITS.strength;
-  if (value === null || value === void 0 || value === "" || typeof value === "boolean") return fallback;
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  const clamped = Math.min(max, Math.max(min, number));
-  const aligned = min + Math.round((clamped - min) / step) * step;
-  return Math.round(aligned * 1e3) / 1e3;
-}
 function parseSeed(text) {
   const raw = String(text ?? "").trim();
   if (!raw) return -1;
@@ -5156,6 +5195,682 @@ function parseSeed(text) {
   const int = Math.trunc(value);
   if (int < 0) return -1;
   return Math.min(int, LIMITS.seed.max);
+}
+
+// src/logic/mask.js
+var MASK_BRUSH = Object.freeze({ min: 8, max: 96, step: 4, default: 40 });
+var MASK_MIN_COVERAGE = 5e-4;
+var MASK_DATA_URL_PREFIX = "data:image/png;base64,";
+var MASK_KEY_STEP = 32;
+var MASK_STRENGTH_DEFAULT = 0.8;
+var MASK_STRENGTH_NATIVE = 0.9;
+function maskStrengthTargetOf(native) {
+  return native === true ? MASK_STRENGTH_NATIVE : MASK_STRENGTH_DEFAULT;
+}
+function maskStrengthPatch(current, options = {}) {
+  const target = maskStrengthTargetOf(options.native === true);
+  const auto = options.auto === true;
+  const number = Number(current);
+  if (auto) return { strength: target };
+  if (!Number.isFinite(number)) return { strength: target };
+  if (Math.abs(number - LIMITS.strength.default) > 1e-9) return null;
+  return { strength: target };
+}
+function maskStrengthPresetPatch(strengthAuto, options = {}) {
+  if (strengthAuto !== true) return null;
+  return { strength: maskStrengthTargetOf(options.native === true) };
+}
+function strengthMaxOf(hasMask) {
+  const max = Number(LIMITS.strength.max);
+  if (!hasMask) return max;
+  const inpaintMax = Number(LIMITS.strength.inpaintMax);
+  if (!Number.isFinite(inpaintMax)) return max;
+  return Math.max(max, inpaintMax);
+}
+function clampMaskStrength(value, hasMask) {
+  const { min, step, default: fallback } = LIMITS.strength;
+  const max = strengthMaxOf(hasMask);
+  if (value === null || value === void 0 || value === "" || typeof value === "boolean") return fallback;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  const clamped = Math.min(max, Math.max(min, number));
+  const aligned = min + Math.round((clamped - min) / step) * step;
+  return Math.round(aligned * 1e3) / 1e3;
+}
+var MASK_CANVAS_EDGE = 1024;
+function clampBrushSize(value) {
+  if (value === null || value === void 0) return MASK_BRUSH.default;
+  if (typeof value === "string" && value.trim() === "") return MASK_BRUSH.default;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return MASK_BRUSH.default;
+  const clamped = Math.min(MASK_BRUSH.max, Math.max(MASK_BRUSH.min, number));
+  const aligned = MASK_BRUSH.min + Math.round((clamped - MASK_BRUSH.min) / MASK_BRUSH.step) * MASK_BRUSH.step;
+  return Math.min(MASK_BRUSH.max, Math.max(MASK_BRUSH.min, aligned));
+}
+function brushStateOf(partial) {
+  const input = partial && typeof partial === "object" ? partial : {};
+  return { size: clampBrushSize(input.size), eraser: input.eraser === true };
+}
+function toggleEraser(state) {
+  const current = brushStateOf(state);
+  return { size: current.size, eraser: !current.eraser };
+}
+function coverageOf(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return 0;
+  if (number >= 1) return 1;
+  return Number(number.toFixed(6));
+}
+function maskStateOf(partial) {
+  const input = partial && typeof partial === "object" ? partial : {};
+  return { coverage: coverageOf(input.coverage) };
+}
+function emptyMaskState() {
+  return { coverage: 0 };
+}
+function clearMaskState() {
+  return emptyMaskState();
+}
+function invertMaskState(state) {
+  const { coverage } = maskStateOf(state);
+  return { coverage: coverage > 0 ? coverageOf(1 - coverage) : 1 };
+}
+function maskHasInk(state) {
+  return maskStateOf(state).coverage >= MASK_MIN_COVERAGE;
+}
+function maskCoverageOf(inkPixels, totalPixels) {
+  const ink = Number(inkPixels);
+  const total = Number(totalPixels);
+  if (!Number.isFinite(ink) || !Number.isFinite(total) || total <= 0 || ink <= 0) return 0;
+  return coverageOf(ink / total);
+}
+function maskCanvasSizeOf(width, height, edge = MASK_CANVAS_EDGE) {
+  const limit = Number.isFinite(Number(edge)) && Number(edge) >= 64 ? Math.round(Number(edge)) : MASK_CANVAS_EDGE;
+  const w = Number(width);
+  const h2 = Number(height);
+  if (!Number.isFinite(w) || !Number.isFinite(h2) || w <= 0 || h2 <= 0) {
+    return { width: limit, height: limit };
+  }
+  const scale = limit / Math.max(w, h2);
+  return {
+    width: Math.max(48, Math.round(w * scale)),
+    height: Math.max(48, Math.round(h2 * scale))
+  };
+}
+function base64BytesOf(text) {
+  const value = typeof text === "string" ? text.trim() : "";
+  if (!value) return 0;
+  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor(value.length * 3 / 4) - padding);
+}
+function normalizeMaskData(data) {
+  if (typeof data !== "string") return "";
+  let text = data.trim();
+  if (text.toLowerCase().startsWith(MASK_DATA_URL_PREFIX)) text = text.slice(MASK_DATA_URL_PREFIX.length);
+  text = text.replace(/\s+/g, "");
+  if (!text || text.length % 4 !== 0) return "";
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(text)) return "";
+  return text;
+}
+function referenceMaskOf(reference) {
+  const mask = reference && typeof reference === "object" ? reference.mask : null;
+  if (!mask) return null;
+  const raw = typeof mask === "string" ? { data: mask } : mask;
+  const data = normalizeMaskData(raw.data);
+  if (!data) return null;
+  return {
+    data,
+    coverage: maskStateOf({ coverage: raw.coverage }).coverage,
+    digest: maskDigestOf(data)
+  };
+}
+function referenceMaskDataOf(reference) {
+  const mask = referenceMaskOf(reference);
+  return mask ? mask.data : "";
+}
+function referenceMaskForSubmit(reference) {
+  const data = referenceMaskDataOf(reference);
+  if (!data) return "";
+  const bytes = base64BytesOf(data);
+  if (bytes <= 0 || bytes > LIMITS.mask.maxBytes) return "";
+  return data;
+}
+function referenceWithoutMask(reference) {
+  if (!reference || typeof reference !== "object") return reference ?? null;
+  if (!reference.mask) return reference;
+  const next = { ...reference };
+  delete next.mask;
+  return next;
+}
+function maskExportVerdict(data, coverage) {
+  const normalized = normalizeMaskData(data);
+  if (!normalized) return { ok: false, reason: "invalid" };
+  const state = maskStateOf({ coverage });
+  if (!maskHasInk(state)) return { ok: false, reason: "empty" };
+  const bytes = base64BytesOf(normalized);
+  if (bytes <= 0) return { ok: false, reason: "invalid" };
+  if (bytes > LIMITS.mask.maxBytes) return { ok: false, reason: "too_large" };
+  return { ok: true, data: normalized, coverage: state.coverage, bytes };
+}
+function maskDigestOf(data) {
+  const normalized = normalizeMaskData(data);
+  if (!normalized) return "";
+  let hash = 2166136261;
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash ^= normalized.charCodeAt(index);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return `${hash.toString(16)}-${normalized.length}`;
+}
+
+// shared/models-guide.js
+function effectiveCfgOf(preset, cfg) {
+  const value = Number(cfg);
+  if (Number.isFinite(value)) return value;
+  const recommended = Number(preset && preset.cfg);
+  return Number.isFinite(recommended) ? recommended : 0;
+}
+function negativePromptActive(preset, cfg) {
+  const effective = effectiveCfgOf(preset, cfg);
+  if (!preset || typeof preset !== "object") return effective > 0;
+  const capable = typeof preset.supportsNegative === "boolean" ? preset.supportsNegative : typeof preset.negativeHint === "string" && preset.negativeHint.trim() !== "";
+  if (!capable || effective <= 0) return false;
+  const hint = typeof preset.negativeHint === "string" ? preset.negativeHint.trim() : "";
+  if (hint) return true;
+  const recommended = Number(preset.cfg);
+  return Number.isFinite(recommended) && effective > recommended;
+}
+function stepModeOf(preset) {
+  const r = preset && typeof preset === "object" ? preset.stepRange : null;
+  if (preset && preset.tier === "usable" && r && typeof r === "object" && Number.isFinite(Number(r.min)) && Number.isFinite(Number(r.max)) && Number.isFinite(Number(r.fast)) && Number.isFinite(Number(r.balanced)) && Number.isFinite(Number(r.fine)) && Number(r.min) < Number(r.max)) {
+    return "range";
+  }
+  return "fixed";
+}
+function stepTierOf(preset, steps) {
+  if (stepModeOf(preset) !== "range") return "fixed";
+  const r = preset.stepRange;
+  const val = Number(steps);
+  if (!Number.isFinite(val)) return "balanced";
+  const fastMid = (Number(r.fast) + Number(r.balanced)) / 2;
+  const fineMid = (Number(r.balanced) + Number(r.fine)) / 2;
+  if (val < fastMid) return "fast";
+  if (val <= fineMid) return "balanced";
+  return "fine";
+}
+function safeResetPatch(preset) {
+  const rawSize = Number(preset?.size);
+  const size = Number.isFinite(rawSize) && rawSize > 0 ? Math.min(Math.max(Math.round(rawSize / LIMITS.width.step) * LIMITS.width.step, LIMITS.width.min), LIMITS.width.max) : 1024;
+  const rawSteps = Number(preset?.steps);
+  const steps = Number.isFinite(rawSteps) ? Math.min(Math.max(Math.round(rawSteps), LIMITS.steps.min), LIMITS.steps.max) : 4;
+  const rawCfg = Number(preset?.cfg);
+  const cfg = Number.isFinite(rawCfg) ? Math.min(Math.max(rawCfg, LIMITS.cfg.min), LIMITS.cfg.max) : 1;
+  return { width: size, height: size, steps, cfg };
+}
+
+// src/logic/prompt.js
+var NEGATIVE_LAYER_ORDER = ["model", "user"];
+function emptyNegativeLayers() {
+  return { model: "", user: "" };
+}
+function layerText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+function normalizeNegativeLayers(layers) {
+  const source = layers && typeof layers === "object" ? layers : {};
+  const next = emptyNegativeLayers();
+  for (const name of NEGATIVE_LAYER_ORDER) next[name] = layerText(source[name]);
+  return next;
+}
+function splitNegativeTerms(text) {
+  return String(text ?? "").split(/[,，、;；]/).map((term) => term.trim()).filter(Boolean);
+}
+function mergeNegativeLayers(layers) {
+  const source = normalizeNegativeLayers(layers);
+  const seen = /* @__PURE__ */ new Set();
+  const terms = [];
+  for (const name of NEGATIVE_LAYER_ORDER) {
+    for (const term of splitNegativeTerms(source[name])) {
+      const key = term.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      terms.push(term);
+    }
+  }
+  return terms.join(", ");
+}
+function resolveNegativeLayers(form, presets) {
+  const input = form && typeof form === "object" ? form : {};
+  if (input.negativeLayers && typeof input.negativeLayers === "object") {
+    return normalizeNegativeLayers(input.negativeLayers);
+  }
+  const negative = layerText(input.negative);
+  if (!negative) return emptyNegativeLayers();
+  const list = Array.isArray(presets) ? presets : [];
+  const previous = list.find((item) => item && item.id === input.presetId);
+  const hint = previous && typeof previous.negativeHint === "string" ? previous.negativeHint.trim() : "";
+  if (hint && negative === hint) return { model: negative, user: "" };
+  return { model: "", user: negative };
+}
+function negativeLayersPatch(layers) {
+  const next = normalizeNegativeLayers(layers);
+  return { negativeLayers: next, negative: mergeNegativeLayers(next) };
+}
+function negativePromptOf(form) {
+  const input = form && typeof form === "object" ? form : {};
+  if (input.negativeLayers && typeof input.negativeLayers === "object") {
+    return mergeNegativeLayers(input.negativeLayers);
+  }
+  return layerText(input.negative);
+}
+function negativeForSubmit(form, active) {
+  if (active === false) return "";
+  return negativePromptOf(form);
+}
+function translateOutcomeOf(data) {
+  const holder = data && typeof data === "object" ? data : null;
+  const prompt = holder && typeof holder.prompt === "string" ? holder.prompt.trim() : "";
+  if (!holder || holder.source !== "model" || !prompt) return { ok: false, prompt: "" };
+  return { ok: true, prompt };
+}
+function applyNegativePatch(form, partial) {
+  const prev = form && typeof form === "object" ? form : {};
+  const patch = partial && typeof partial === "object" ? partial : {};
+  if (patch.negativeLayers && typeof patch.negativeLayers === "object") {
+    const layers = normalizeNegativeLayers(patch.negativeLayers);
+    return {
+      ...prev,
+      ...patch,
+      negativeLayers: layers,
+      negative: typeof patch.negative === "string" ? patch.negative : mergeNegativeLayers(layers)
+    };
+  }
+  if (typeof patch.negative === "string") {
+    return {
+      ...prev,
+      ...patch,
+      negativeLayers: { model: "", user: patch.negative }
+    };
+  }
+  return { ...prev, ...patch };
+}
+
+// src/logic/preset.js
+function detectCjk(text) {
+  return /[\u3400-\u9fff]/.test(String(text ?? ""));
+}
+function gcd(left, right) {
+  let a = Math.abs(left);
+  let b = Math.abs(right);
+  while (b) {
+    const next = a % b;
+    a = b;
+    b = next;
+  }
+  return a || 1;
+}
+function ratioIdOf(width, height) {
+  const w = Math.round(Number(width));
+  const h2 = Math.round(Number(height));
+  if (!Number.isFinite(w) || !Number.isFinite(h2) || w <= 0 || h2 <= 0) return "";
+  const divisor = gcd(w, h2);
+  const id = `${w / divisor}:${h2 / divisor}`;
+  return RATIO_IDS.includes(id) ? id : "";
+}
+function presetNeedsEnglish(preset) {
+  if (!preset || typeof preset !== "object") return true;
+  if (preset.supportsChinese === true || preset.promptStyle === "chinese") return false;
+  return true;
+}
+function hintOf(preset) {
+  return preset && typeof preset.negativeHint === "string" ? preset.negativeHint.trim() : "";
+}
+function customSizePatch(partial) {
+  const input = partial && typeof partial === "object" ? partial : {};
+  const patch = {};
+  if (Object.prototype.hasOwnProperty.call(input, "width")) patch.width = clampSize(input.width);
+  if (Object.prototype.hasOwnProperty.call(input, "height")) patch.height = clampSize(input.height);
+  return patch;
+}
+function supportsImg2Img(preset) {
+  return Boolean(preset && preset.supportsImg2Img === true);
+}
+function supportsInpaint(preset) {
+  return Boolean(preset && preset.supportsInpaint === true);
+}
+function inpaintOnlyOf(preset) {
+  return Boolean(preset && preset.inpaintOnly === true);
+}
+function referencePresetOf(presets) {
+  const list = Array.isArray(presets) ? presets.filter((item) => item && item.id && !inpaintOnlyOf(item)) : [];
+  const preferred = list.find((item) => item.id === DEFAULT_PRESET);
+  if (preferred && supportsImg2Img(preferred)) return preferred;
+  return list.find(supportsImg2Img) || null;
+}
+function presetSelectPatch(next, current, presets) {
+  const target = next && typeof next === "object" && next.id ? next : null;
+  if (!target) return {};
+  const form = current && typeof current === "object" ? current : {};
+  const hasActiveSize = Boolean(form.presetId) && Number(form.width) > 0 && Number(form.height) > 0;
+  const patch = {
+    presetId: target.id
+  };
+  if (!hasActiveSize) {
+    patch.width = clampSize(target.size || form.width);
+    patch.height = clampSize(target.size || form.height);
+  } else {
+    const options = Array.isArray(target.sizeOptions) ? target.sizeOptions.map(Number).filter((n) => Number.isFinite(n) && n > 0) : [];
+    const minSafe = options.length > 0 ? Math.min(...options) : 0;
+    const curW = Number(form.width);
+    const curH = Number(form.height);
+    const curLong = Math.max(curW, curH);
+    const targetSize = clampSize(target.size || minSafe);
+    if (minSafe > 0 && curLong > 0 && curLong < minSafe && targetSize > curLong) {
+      const scale = targetSize / curLong;
+      patch.width = clampSize(curW * scale);
+      patch.height = clampSize(curH * scale);
+    }
+  }
+  const steps = clampInt(target.steps, LIMITS.steps.min, LIMITS.steps.max, null);
+  if (steps !== null) patch.steps = steps;
+  const cfg = clampNumber(target.cfg, LIMITS.cfg.min, LIMITS.cfg.max, null);
+  if (cfg !== null) patch.cfg = cfg;
+  const list = Array.isArray(presets) ? presets : [];
+  const layers = resolveNegativeLayers(form, list);
+  const effectiveCfg = cfg !== null ? cfg : form.cfg;
+  const nextLayers = {
+    ...layers,
+    model: negativePromptActive(target, effectiveCfg) ? hintOf(target) : ""
+  };
+  Object.assign(patch, negativeLayersPatch(nextLayers));
+  return patch;
+}
+
+// src/logic/generate.js
+function referenceFileName(path) {
+  const value = String(path ?? "").trim();
+  if (!value) return "";
+  const parts = value.split(/[\\/]/);
+  return parts[parts.length - 1] || value;
+}
+function referenceUrlOf(path) {
+  const value = String(path ?? "").trim();
+  if (!value) return "";
+  return `${ROUTES.file.path}?path=${encodeURIComponent(value)}`;
+}
+function referencePathOf(form) {
+  const input = form && typeof form === "object" ? form : {};
+  const reference = input.reference && typeof input.reference === "object" ? input.reference : null;
+  return reference && typeof reference.path === "string" ? reference.path.trim() : "";
+}
+function buildGenerateBody(form, options = {}) {
+  const input = form || {};
+  const overrides = options.overrides && typeof options.overrides === "object" ? options.overrides : null;
+  const negativeActive = options.negativeActive !== false;
+  const explicit = overrides && typeof overrides.prompt === "string" ? overrides.prompt : null;
+  const maxPromptChars = LIMITS.prompt.maxChars;
+  const prompt = explicit !== null ? explicit.trim().slice(0, maxPromptChars) : String(input.prompt ?? "").trim().slice(0, maxPromptChars);
+  const body = {
+    prompt,
+    negativePrompt: negativeForSubmit(input, negativeActive),
+    width: clampSize(input.width),
+    height: clampSize(input.height),
+    steps: clampInt(input.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
+    cfg: clampNumber(input.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
+    seed: parseSeed(input.seed),
+    count: clampInt(input.count, LIMITS.count.min, LIMITS.count.max, 1),
+    waitSeconds: 0,
+    autoStart: true
+  };
+  const presetId = input.presetId || options.defaultPreset || "";
+  if (presetId) body.presetId = presetId;
+  const hasOverride = (key) => overrides !== null && Object.prototype.hasOwnProperty.call(overrides, key);
+  const reference = hasOverride("reference") ? overrides.reference : input.reference;
+  const referencePath = referencePathOf({ reference });
+  if (referencePath) {
+    const strength = hasOverride("strength") ? overrides.strength : input.strength;
+    const mask = options.maskActive === false ? "" : referenceMaskForSubmit(reference);
+    body.reference = { path: referencePath, strength: clampMaskStrength(strength, Boolean(mask)) };
+    if (mask) body.reference.mask = mask;
+  }
+  if (overrides) {
+    for (const [key, value] of Object.entries(overrides)) {
+      if (key === "prompt" || key === "reference" || key === "strength") continue;
+      body[key] = value;
+    }
+  }
+  if (!negativeActive) body.negativePrompt = "";
+  return body;
+}
+var GENERATE_SOURCES = Object.freeze(["form", "assistant", "variant", "retry"]);
+function normalizeGenerateSource(value) {
+  const source = typeof value === "string" ? value.trim() : "";
+  return GENERATE_SOURCES.includes(source) ? source : "form";
+}
+function presetLabelOf(preset) {
+  if (!preset || typeof preset !== "object") return "";
+  if (typeof preset.label === "string" && preset.label.trim()) return preset.label.trim();
+  if (typeof preset.short === "string" && preset.short.trim()) return preset.short.trim();
+  return typeof preset.id === "string" ? preset.id : "";
+}
+function effectivePresetOf(overrides, preset, presets) {
+  const list = Array.isArray(presets) ? presets : [];
+  const input = overrides && typeof overrides === "object" ? overrides : null;
+  const id = input && typeof input.presetId === "string" ? input.presetId.trim() : "";
+  if (id) {
+    const found = list.find((item) => item && item.id === id);
+    if (found) return found;
+  }
+  return preset && typeof preset === "object" ? preset : null;
+}
+function generateSourcePolicy(source, options = {}) {
+  const normalized = normalizeGenerateSource(source);
+  const overrides = options.overrides && typeof options.overrides === "object" ? { ...options.overrides } : {};
+  const presets = Array.isArray(options.presets) ? options.presets : [];
+  const preset = options.preset && typeof options.preset === "object" ? options.preset : null;
+  const policy = { source: normalized, ok: true, overrides, notice: null, blockedKey: "" };
+  if (normalized !== "assistant" && normalized !== "variant") return policy;
+  overrides.reference = null;
+  const effective = effectivePresetOf(overrides, preset, presets);
+  if (!inpaintOnlyOf(effective)) return policy;
+  const fallback = referencePresetOf(presets);
+  if (!fallback) {
+    policy.ok = false;
+    policy.blockedKey = "studio.reference.blocked";
+    return policy;
+  }
+  overrides.presetId = fallback.id;
+  policy.notice = {
+    key: "studio.reference.autoText2Image",
+    params: { preset: presetLabelOf(fallback) }
+  };
+  return policy;
+}
+function generateCapabilityOf(options = {}) {
+  const preset = options.preset && typeof options.preset === "object" ? options.preset : null;
+  const presets = Array.isArray(options.presets) ? options.presets : [];
+  const reference = options.reference && typeof options.reference === "object" ? options.reference : null;
+  const result = { ok: true, reason: "", noticeKey: "" };
+  if (presets.length > 0 && referencePathOf({ reference }) && !supportsImg2Img(preset)) {
+    result.ok = false;
+    result.reason = "reference";
+    result.noticeKey = "studio.reference.blocked";
+    return result;
+  }
+  if (inpaintOnlyOf(preset) && !referenceMaskOf(reference)) {
+    result.ok = false;
+    result.reason = "mask";
+    result.noticeKey = "studio.mask.onlyHint";
+  }
+  return result;
+}
+function frozenReferenceOf(source) {
+  const holder = source && typeof source === "object" ? source : null;
+  if (!holder) return null;
+  const params = holder.params && typeof holder.params === "object" ? holder.params : holder;
+  const raw = params && params.reference && typeof params.reference === "object" ? params.reference : null;
+  if (!raw) return null;
+  const path = typeof raw.sourcePath === "string" ? raw.sourcePath.trim() : typeof raw.path === "string" ? raw.path.trim() : "";
+  const strength = finiteNumber(raw.strength);
+  const mask = raw.mask === true || typeof raw.mask === "string" || Boolean(raw.mask && typeof raw.mask === "object");
+  return { path, strength, mask };
+}
+function submittedReferenceOf(body) {
+  const input = body && typeof body === "object" ? body : null;
+  const reference = input && input.reference && typeof input.reference === "object" ? input.reference : null;
+  return reference ? { ...reference } : null;
+}
+function retryReferencePlan(source, options = {}) {
+  const overrides = retryOverrides(source);
+  if (!overrides) return null;
+  const frozen = frozenReferenceOf(source);
+  const plan = {
+    overrides,
+    restored: "none",
+    maskLost: false,
+    fillReference: null,
+    requestPaint: false,
+    noticeKey: ""
+  };
+  if (!frozen || !frozen.path) {
+    overrides.reference = null;
+    return plan;
+  }
+  const pending = submittedReferenceOf(options.pendingRef);
+  const sameSource = Boolean(pending && referencePathOf({ reference: pending }) === frozen.path);
+  const pendingMask = sameSource ? referenceMaskForSubmit(pending) : "";
+  if (sameSource && frozen.mask && pendingMask) {
+    overrides.reference = { ...pending, path: frozen.path };
+    plan.restored = "mask";
+  } else if (sameSource && !frozen.mask) {
+    overrides.reference = referenceWithoutMask({ ...pending, path: frozen.path });
+    plan.restored = "reference";
+  } else if (frozen.mask) {
+    plan.maskLost = true;
+    plan.fillReference = { path: frozen.path, url: referenceUrlOf(frozen.path) };
+    plan.requestPaint = true;
+    plan.noticeKey = "studio.toast.maskLost";
+    overrides.reference = null;
+    return plan;
+  } else {
+    overrides.reference = { path: frozen.path, url: referenceUrlOf(frozen.path) };
+    plan.restored = "reference";
+  }
+  const strength = frozen.strength ?? (sameSource && pending ? finiteNumber(pending.strength) : null);
+  if (strength !== null) overrides.strength = strength;
+  return plan;
+}
+function previewRecallOf(options = {}) {
+  const reference = options.reference && typeof options.reference === "object" ? options.reference : null;
+  if (referencePathOf({ reference })) {
+    return {
+      action: "reference",
+      noticeKey: referenceMaskOf(reference) ? "studio.toast.referenceKept" : "studio.toast.referenceImageKept"
+    };
+  }
+  if (options.dirty === true) return { action: "draft", noticeKey: "studio.toast.draftKept" };
+  const patch = options.patch && typeof options.patch === "object" ? options.patch : {};
+  if (Object.keys(patch).length === 0) return { action: "idle", noticeKey: "" };
+  return { action: "recall", noticeKey: "studio.toast.recalled" };
+}
+function formSummaryOf(body) {
+  const input = body && typeof body === "object" ? body : {};
+  const width = positiveSize(input.width);
+  const height = positiveSize(input.height);
+  const count = finiteNumber(input.count);
+  const seed = finiteNumber(input.seed);
+  return {
+    presetId: typeof input.presetId === "string" ? input.presetId : "",
+    ratioId: ratioIdOf(width, height),
+    width,
+    height,
+    count: count === null ? 1 : Math.min(LIMITS.count.max, Math.max(LIMITS.count.min, Math.round(count))),
+    hasReference: Boolean(referencePathOf(input)),
+    seed: seed !== null && seed >= 0 ? Math.trunc(seed) : null
+  };
+}
+function finiteNumber(value) {
+  if (value === null || value === void 0 || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+function positiveSize(value) {
+  const number = finiteNumber(value);
+  if (number === null || number <= 0) return null;
+  return Math.round(number);
+}
+function presetOf(presets, id) {
+  if (!id || !Array.isArray(presets)) return null;
+  return presets.find((item) => item && item.id === id) || null;
+}
+function recallOf(entry, presets) {
+  const image = entry && entry.image || null;
+  const item = entry && entry.item || null;
+  const params = item && item.params || null;
+  const presetId = item && item.presetId || "";
+  const preset = presetOf(presets, presetId);
+  const prompt = item && typeof item.prompt === "string" && item.prompt || params && typeof params.prompt === "string" && params.prompt || "";
+  const width = positiveSize(image && image.width) ?? positiveSize(params && params.width) ?? positiveSize(preset && preset.size);
+  const height = positiveSize(image && image.height) ?? positiveSize(params && params.height) ?? positiveSize(preset && preset.size);
+  const steps = finiteNumber(params && params.steps) ?? finiteNumber(preset && preset.steps);
+  const cfg = finiteNumber(params && params.cfg) ?? finiteNumber(preset && preset.cfg);
+  const seed = finiteNumber(image && image.seed) ?? finiteNumber(params && params.seed);
+  const negative = params && typeof params.negativePrompt === "string" ? params.negativePrompt : null;
+  return { image, item, params, presetId, prompt, width, height, steps, cfg, seed, negative };
+}
+function iteratePatch(entry, form, presets) {
+  const base = form || {};
+  const recall = recallOf(entry, presets);
+  const patch = {};
+  const prompt = recall.prompt.trim();
+  if (prompt) patch.prompt = prompt;
+  if (recall.negative !== null) patch.negative = recall.negative;
+  if (recall.width !== null) patch.width = recall.width;
+  if (recall.height !== null) patch.height = recall.height;
+  if (recall.steps !== null) patch.steps = recall.steps;
+  if (recall.cfg !== null) patch.cfg = recall.cfg;
+  if (recall.seed !== null && recall.seed >= 0) patch.seed = String(Math.trunc(recall.seed));
+  if (recall.presetId) patch.presetId = recall.presetId;
+  if (Object.keys(patch).length > 0) {
+    if (!Object.prototype.hasOwnProperty.call(patch, "seed")) patch.seed = "";
+    patch.reference = null;
+  }
+  return patch;
+}
+function rerollOverrides(entry, presets) {
+  const recall = recallOf(entry, presets);
+  const prompt = recall.prompt.trim();
+  if (!prompt) return null;
+  const overrides = { prompt, seed: -1, count: 1 };
+  if (recall.negative !== null) overrides.negativePrompt = recall.negative;
+  if (recall.width !== null) overrides.width = recall.width;
+  if (recall.height !== null) overrides.height = recall.height;
+  if (recall.steps !== null) overrides.steps = recall.steps;
+  if (recall.cfg !== null) overrides.cfg = recall.cfg;
+  if (recall.presetId) overrides.presetId = recall.presetId;
+  return overrides;
+}
+function retryOverrides(source) {
+  const holder = source && typeof source === "object" ? source : null;
+  if (!holder) return null;
+  const params = holder.params && typeof holder.params === "object" ? holder.params : holder;
+  const prompt = typeof params.prompt === "string" ? params.prompt.trim() : "";
+  if (!prompt) return null;
+  const overrides = { prompt, seed: -1 };
+  const count = finiteNumber(params.count);
+  if (count !== null) overrides.count = Math.min(4, Math.max(1, Math.round(count)));
+  const width = positiveSize(params.width);
+  const height = positiveSize(params.height);
+  if (width !== null) overrides.width = width;
+  if (height !== null) overrides.height = height;
+  const steps = finiteNumber(params.steps);
+  const cfg = finiteNumber(params.cfg);
+  if (steps !== null) overrides.steps = steps;
+  if (cfg !== null) overrides.cfg = cfg;
+  if (typeof params.negativePrompt === "string") overrides.negativePrompt = params.negativePrompt;
+  const presetId = holder.presetId || params.presetId || "";
+  if (presetId) overrides.presetId = presetId;
+  return overrides;
 }
 
 // src/studio/rail/FrameSection.jsx
@@ -5300,51 +6015,6 @@ function FrameSection({
 
 // src/studio/rail/ParamsSection.jsx
 var import_react18 = __toESM(require("react"), 1);
-
-// shared/models-guide.js
-function effectiveCfgOf(preset, cfg) {
-  const value = Number(cfg);
-  if (Number.isFinite(value)) return value;
-  const recommended = Number(preset && preset.cfg);
-  return Number.isFinite(recommended) ? recommended : 0;
-}
-function negativePromptActive(preset, cfg) {
-  const effective = effectiveCfgOf(preset, cfg);
-  if (!preset || typeof preset !== "object") return effective > 0;
-  const capable = typeof preset.supportsNegative === "boolean" ? preset.supportsNegative : typeof preset.negativeHint === "string" && preset.negativeHint.trim() !== "";
-  if (!capable || effective <= 0) return false;
-  const hint = typeof preset.negativeHint === "string" ? preset.negativeHint.trim() : "";
-  if (hint) return true;
-  const recommended = Number(preset.cfg);
-  return Number.isFinite(recommended) && effective > recommended;
-}
-function stepModeOf(preset) {
-  const r = preset && typeof preset === "object" ? preset.stepRange : null;
-  if (preset && preset.tier === "usable" && r && typeof r === "object" && Number.isFinite(Number(r.min)) && Number.isFinite(Number(r.max)) && Number.isFinite(Number(r.fast)) && Number.isFinite(Number(r.balanced)) && Number.isFinite(Number(r.fine)) && Number(r.min) < Number(r.max)) {
-    return "range";
-  }
-  return "fixed";
-}
-function stepTierOf(preset, steps) {
-  if (stepModeOf(preset) !== "range") return "fixed";
-  const r = preset.stepRange;
-  const val = Number(steps);
-  if (!Number.isFinite(val)) return "balanced";
-  const fastMid = (Number(r.fast) + Number(r.balanced)) / 2;
-  const fineMid = (Number(r.balanced) + Number(r.fine)) / 2;
-  if (val < fastMid) return "fast";
-  if (val <= fineMid) return "balanced";
-  return "fine";
-}
-function safeResetPatch(preset) {
-  const rawSize = Number(preset?.size);
-  const size = Number.isFinite(rawSize) && rawSize > 0 ? Math.min(Math.max(Math.round(rawSize / LIMITS.width.step) * LIMITS.width.step, LIMITS.width.min), LIMITS.width.max) : 1024;
-  const rawSteps = Number(preset?.steps);
-  const steps = Number.isFinite(rawSteps) ? Math.min(Math.max(Math.round(rawSteps), LIMITS.steps.min), LIMITS.steps.max) : 4;
-  const rawCfg = Number(preset?.cfg);
-  const cfg = Number.isFinite(rawCfg) ? Math.min(Math.max(rawCfg, LIMITS.cfg.min), LIMITS.cfg.max) : 1;
-  return { width: size, height: size, steps, cfg };
-}
 
 // src/components/Tooltip.jsx
 var import_react17 = __toESM(require("react"), 1);
@@ -5773,493 +6443,63 @@ function PromptSection({
 
 // src/studio/rail/ReferenceSection.jsx
 var import_react20 = __toESM(require("react"), 1);
-
-// src/logic/mask.js
-var MASK_BRUSH = Object.freeze({ min: 8, max: 96, step: 4, default: 40 });
-var MASK_MIN_COVERAGE = 5e-4;
-var MASK_DATA_URL_PREFIX = "data:image/png;base64,";
-var MASK_KEY_STEP = 32;
-var MASK_STRENGTH_DEFAULT = 0.8;
-var MASK_STRENGTH_NATIVE = 0.9;
-function maskStrengthPatch(current, options = {}) {
-  const target = options.native === true ? MASK_STRENGTH_NATIVE : MASK_STRENGTH_DEFAULT;
-  const number = Number(current);
-  if (!Number.isFinite(number)) return { strength: target };
-  if (Math.abs(number - LIMITS.strength.default) > 1e-9) return null;
-  return { strength: target };
-}
-var MASK_CANVAS_EDGE = 1024;
-function clampBrushSize(value) {
-  if (value === null || value === void 0) return MASK_BRUSH.default;
-  if (typeof value === "string" && value.trim() === "") return MASK_BRUSH.default;
-  const number = Number(value);
-  if (!Number.isFinite(number)) return MASK_BRUSH.default;
-  const clamped = Math.min(MASK_BRUSH.max, Math.max(MASK_BRUSH.min, number));
-  const aligned = MASK_BRUSH.min + Math.round((clamped - MASK_BRUSH.min) / MASK_BRUSH.step) * MASK_BRUSH.step;
-  return Math.min(MASK_BRUSH.max, Math.max(MASK_BRUSH.min, aligned));
-}
-function brushStateOf(partial) {
-  const input = partial && typeof partial === "object" ? partial : {};
-  return { size: clampBrushSize(input.size), eraser: input.eraser === true };
-}
-function toggleEraser(state) {
-  const current = brushStateOf(state);
-  return { size: current.size, eraser: !current.eraser };
-}
-function coverageOf(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return 0;
-  if (number >= 1) return 1;
-  return Number(number.toFixed(6));
-}
-function maskStateOf(partial) {
-  const input = partial && typeof partial === "object" ? partial : {};
-  return { coverage: coverageOf(input.coverage) };
-}
-function emptyMaskState() {
-  return { coverage: 0 };
-}
-function clearMaskState() {
-  return emptyMaskState();
-}
-function invertMaskState(state) {
-  const { coverage } = maskStateOf(state);
-  return { coverage: coverage > 0 ? coverageOf(1 - coverage) : 1 };
-}
-function maskHasInk(state) {
-  return maskStateOf(state).coverage >= MASK_MIN_COVERAGE;
-}
-function maskCoverageOf(inkPixels, totalPixels) {
-  const ink = Number(inkPixels);
-  const total = Number(totalPixels);
-  if (!Number.isFinite(ink) || !Number.isFinite(total) || total <= 0 || ink <= 0) return 0;
-  return coverageOf(ink / total);
-}
-function maskCanvasSizeOf(width, height, edge = MASK_CANVAS_EDGE) {
-  const limit = Number.isFinite(Number(edge)) && Number(edge) >= 64 ? Math.round(Number(edge)) : MASK_CANVAS_EDGE;
-  const w = Number(width);
-  const h2 = Number(height);
-  if (!Number.isFinite(w) || !Number.isFinite(h2) || w <= 0 || h2 <= 0) {
-    return { width: limit, height: limit };
-  }
-  const scale = limit / Math.max(w, h2);
-  return {
-    width: Math.max(48, Math.round(w * scale)),
-    height: Math.max(48, Math.round(h2 * scale))
-  };
-}
-function base64BytesOf(text) {
-  const value = typeof text === "string" ? text.trim() : "";
-  if (!value) return 0;
-  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
-  return Math.max(0, Math.floor(value.length * 3 / 4) - padding);
-}
-function normalizeMaskData(data) {
-  if (typeof data !== "string") return "";
-  let text = data.trim();
-  if (text.toLowerCase().startsWith(MASK_DATA_URL_PREFIX)) text = text.slice(MASK_DATA_URL_PREFIX.length);
-  text = text.replace(/\s+/g, "");
-  if (!text || text.length % 4 !== 0) return "";
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(text)) return "";
-  return text;
-}
-function referenceMaskOf(reference) {
-  const mask = reference && typeof reference === "object" ? reference.mask : null;
-  if (!mask) return null;
-  const raw = typeof mask === "string" ? { data: mask } : mask;
-  const data = normalizeMaskData(raw.data);
-  if (!data) return null;
-  return {
-    data,
-    coverage: maskStateOf({ coverage: raw.coverage }).coverage,
-    digest: maskDigestOf(data)
-  };
-}
-function referenceMaskDataOf(reference) {
-  const mask = referenceMaskOf(reference);
-  return mask ? mask.data : "";
-}
-function referenceMaskForSubmit(reference) {
-  const data = referenceMaskDataOf(reference);
-  if (!data) return "";
-  const bytes = base64BytesOf(data);
-  if (bytes <= 0 || bytes > LIMITS.mask.maxBytes) return "";
-  return data;
-}
-function referenceWithoutMask(reference) {
-  if (!reference || typeof reference !== "object") return reference ?? null;
-  if (!reference.mask) return reference;
-  const next = { ...reference };
-  delete next.mask;
-  return next;
-}
-function maskExportVerdict(data, coverage) {
-  const normalized = normalizeMaskData(data);
-  if (!normalized) return { ok: false, reason: "invalid" };
-  const state = maskStateOf({ coverage });
-  if (!maskHasInk(state)) return { ok: false, reason: "empty" };
-  const bytes = base64BytesOf(normalized);
-  if (bytes <= 0) return { ok: false, reason: "invalid" };
-  if (bytes > LIMITS.mask.maxBytes) return { ok: false, reason: "too_large" };
-  return { ok: true, data: normalized, coverage: state.coverage, bytes };
-}
-function maskDigestOf(data) {
-  const normalized = normalizeMaskData(data);
-  if (!normalized) return "";
-  let hash = 2166136261;
-  for (let index = 0; index < normalized.length; index += 1) {
-    hash ^= normalized.charCodeAt(index);
-    hash = Math.imul(hash, 16777619) >>> 0;
-  }
-  return `${hash.toString(16)}-${normalized.length}`;
-}
-
-// src/logic/prompt.js
-var NEGATIVE_LAYER_ORDER = ["model", "user"];
-function emptyNegativeLayers() {
-  return { model: "", user: "" };
-}
-function layerText(value) {
-  return typeof value === "string" ? value.trim() : "";
-}
-function normalizeNegativeLayers(layers) {
-  const source = layers && typeof layers === "object" ? layers : {};
-  const next = emptyNegativeLayers();
-  for (const name of NEGATIVE_LAYER_ORDER) next[name] = layerText(source[name]);
-  return next;
-}
-function splitNegativeTerms(text) {
-  return String(text ?? "").split(/[,，、;；]/).map((term) => term.trim()).filter(Boolean);
-}
-function mergeNegativeLayers(layers) {
-  const source = normalizeNegativeLayers(layers);
-  const seen = /* @__PURE__ */ new Set();
-  const terms = [];
-  for (const name of NEGATIVE_LAYER_ORDER) {
-    for (const term of splitNegativeTerms(source[name])) {
-      const key = term.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      terms.push(term);
-    }
-  }
-  return terms.join(", ");
-}
-function resolveNegativeLayers(form, presets) {
-  const input = form && typeof form === "object" ? form : {};
-  if (input.negativeLayers && typeof input.negativeLayers === "object") {
-    return normalizeNegativeLayers(input.negativeLayers);
-  }
-  const negative = layerText(input.negative);
-  if (!negative) return emptyNegativeLayers();
-  const list = Array.isArray(presets) ? presets : [];
-  const previous = list.find((item) => item && item.id === input.presetId);
-  const hint = previous && typeof previous.negativeHint === "string" ? previous.negativeHint.trim() : "";
-  if (hint && negative === hint) return { model: negative, user: "" };
-  return { model: "", user: negative };
-}
-function negativeLayersPatch(layers) {
-  const next = normalizeNegativeLayers(layers);
-  return { negativeLayers: next, negative: mergeNegativeLayers(next) };
-}
-function negativePromptOf(form) {
-  const input = form && typeof form === "object" ? form : {};
-  if (input.negativeLayers && typeof input.negativeLayers === "object") {
-    return mergeNegativeLayers(input.negativeLayers);
-  }
-  return layerText(input.negative);
-}
-function negativeForSubmit(form, active) {
-  if (active === false) return "";
-  return negativePromptOf(form);
-}
-function translateOutcomeOf(data) {
-  const holder = data && typeof data === "object" ? data : null;
-  const prompt = holder && typeof holder.prompt === "string" ? holder.prompt.trim() : "";
-  if (!holder || holder.source !== "model" || !prompt) return { ok: false, prompt: "" };
-  return { ok: true, prompt };
-}
-function applyNegativePatch(form, partial) {
-  const prev = form && typeof form === "object" ? form : {};
-  const patch = partial && typeof partial === "object" ? partial : {};
-  if (patch.negativeLayers && typeof patch.negativeLayers === "object") {
-    const layers = normalizeNegativeLayers(patch.negativeLayers);
-    return {
-      ...prev,
-      ...patch,
-      negativeLayers: layers,
-      negative: typeof patch.negative === "string" ? patch.negative : mergeNegativeLayers(layers)
-    };
-  }
-  if (typeof patch.negative === "string") {
-    return {
-      ...prev,
-      ...patch,
-      negativeLayers: { model: "", user: patch.negative }
-    };
-  }
-  return { ...prev, ...patch };
-}
-
-// src/logic/preset.js
-function detectCjk(text) {
-  return /[\u3400-\u9fff]/.test(String(text ?? ""));
-}
-function gcd(left, right) {
-  let a = Math.abs(left);
-  let b = Math.abs(right);
-  while (b) {
-    const next = a % b;
-    a = b;
-    b = next;
-  }
-  return a || 1;
-}
-function ratioIdOf(width, height) {
-  const w = Math.round(Number(width));
-  const h2 = Math.round(Number(height));
-  if (!Number.isFinite(w) || !Number.isFinite(h2) || w <= 0 || h2 <= 0) return "";
-  const divisor = gcd(w, h2);
-  const id = `${w / divisor}:${h2 / divisor}`;
-  return RATIO_IDS.includes(id) ? id : "";
-}
-function presetNeedsEnglish(preset) {
-  if (!preset || typeof preset !== "object") return true;
-  if (preset.supportsChinese === true || preset.promptStyle === "chinese") return false;
-  return true;
-}
-function hintOf(preset) {
-  return preset && typeof preset.negativeHint === "string" ? preset.negativeHint.trim() : "";
-}
-function customSizePatch(partial) {
-  const input = partial && typeof partial === "object" ? partial : {};
-  const patch = {};
-  if (Object.prototype.hasOwnProperty.call(input, "width")) patch.width = clampSize(input.width);
-  if (Object.prototype.hasOwnProperty.call(input, "height")) patch.height = clampSize(input.height);
-  return patch;
-}
-function supportsImg2Img(preset) {
-  return Boolean(preset && preset.supportsImg2Img === true);
-}
-function supportsInpaint(preset) {
-  return Boolean(preset && preset.supportsInpaint === true);
-}
-function inpaintOnlyOf(preset) {
-  return Boolean(preset && preset.inpaintOnly === true);
-}
-function referencePresetOf(presets) {
-  const list = Array.isArray(presets) ? presets.filter((item) => item && item.id && !inpaintOnlyOf(item)) : [];
-  const preferred = list.find((item) => item.id === DEFAULT_PRESET);
-  if (preferred && supportsImg2Img(preferred)) return preferred;
-  return list.find(supportsImg2Img) || null;
-}
-function presetSelectPatch(next, current, presets) {
-  const target = next && typeof next === "object" && next.id ? next : null;
-  if (!target) return {};
-  const form = current && typeof current === "object" ? current : {};
-  const hasActiveSize = Boolean(form.presetId) && Number(form.width) > 0 && Number(form.height) > 0;
-  const patch = {
-    presetId: target.id
-  };
-  if (!hasActiveSize) {
-    patch.width = clampSize(target.size || form.width);
-    patch.height = clampSize(target.size || form.height);
-  } else {
-    const options = Array.isArray(target.sizeOptions) ? target.sizeOptions.map(Number).filter((n) => Number.isFinite(n) && n > 0) : [];
-    const minSafe = options.length > 0 ? Math.min(...options) : 0;
-    const curW = Number(form.width);
-    const curH = Number(form.height);
-    const curLong = Math.max(curW, curH);
-    const targetSize = clampSize(target.size || minSafe);
-    if (minSafe > 0 && curLong > 0 && curLong < minSafe && targetSize > curLong) {
-      const scale = targetSize / curLong;
-      patch.width = clampSize(curW * scale);
-      patch.height = clampSize(curH * scale);
-    }
-  }
-  const steps = clampInt(target.steps, LIMITS.steps.min, LIMITS.steps.max, null);
-  if (steps !== null) patch.steps = steps;
-  const cfg = clampNumber(target.cfg, LIMITS.cfg.min, LIMITS.cfg.max, null);
-  if (cfg !== null) patch.cfg = cfg;
-  const list = Array.isArray(presets) ? presets : [];
-  const layers = resolveNegativeLayers(form, list);
-  const effectiveCfg = cfg !== null ? cfg : form.cfg;
-  const nextLayers = {
-    ...layers,
-    model: negativePromptActive(target, effectiveCfg) ? hintOf(target) : ""
-  };
-  Object.assign(patch, negativeLayersPatch(nextLayers));
-  return patch;
-}
-
-// src/logic/generate.js
-function referenceFileName(path) {
-  const value = String(path ?? "").trim();
-  if (!value) return "";
-  const parts = value.split(/[\\/]/);
-  return parts[parts.length - 1] || value;
-}
-function referencePathOf(form) {
-  const input = form && typeof form === "object" ? form : {};
-  const reference = input.reference && typeof input.reference === "object" ? input.reference : null;
-  return reference && typeof reference.path === "string" ? reference.path.trim() : "";
-}
-function buildGenerateBody(form, options = {}) {
-  const input = form || {};
-  const overrides = options.overrides && typeof options.overrides === "object" ? options.overrides : null;
-  const negativeActive = options.negativeActive !== false;
-  const explicit = overrides && typeof overrides.prompt === "string" ? overrides.prompt : null;
-  const maxPromptChars = LIMITS.prompt.maxChars;
-  const prompt = explicit !== null ? explicit.trim().slice(0, maxPromptChars) : String(input.prompt ?? "").trim().slice(0, maxPromptChars);
-  const body = {
-    prompt,
-    negativePrompt: negativeForSubmit(input, negativeActive),
-    width: clampSize(input.width),
-    height: clampSize(input.height),
-    steps: clampInt(input.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
-    cfg: clampNumber(input.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
-    seed: parseSeed(input.seed),
-    count: clampInt(input.count, LIMITS.count.min, LIMITS.count.max, 1),
-    waitSeconds: 0,
-    autoStart: true
-  };
-  const presetId = input.presetId || options.defaultPreset || "";
-  if (presetId) body.presetId = presetId;
-  const hasOverride = (key) => overrides !== null && Object.prototype.hasOwnProperty.call(overrides, key);
-  const reference = hasOverride("reference") ? overrides.reference : input.reference;
-  const referencePath = referencePathOf({ reference });
-  if (referencePath) {
-    const strength = hasOverride("strength") ? overrides.strength : input.strength;
-    body.reference = { path: referencePath, strength: clampStrength(strength) };
-    const mask = options.maskActive === false ? "" : referenceMaskForSubmit(reference);
-    if (mask) body.reference.mask = mask;
-  }
-  if (overrides) {
-    for (const [key, value] of Object.entries(overrides)) {
-      if (key === "prompt" || key === "reference" || key === "strength") continue;
-      body[key] = value;
-    }
-  }
-  if (!negativeActive) body.negativePrompt = "";
-  return body;
-}
-function formSummaryOf(body) {
-  const input = body && typeof body === "object" ? body : {};
-  const width = positiveSize(input.width);
-  const height = positiveSize(input.height);
-  const count = finiteNumber(input.count);
-  const seed = finiteNumber(input.seed);
-  return {
-    presetId: typeof input.presetId === "string" ? input.presetId : "",
-    ratioId: ratioIdOf(width, height),
-    width,
-    height,
-    count: count === null ? 1 : Math.min(LIMITS.count.max, Math.max(LIMITS.count.min, Math.round(count))),
-    hasReference: Boolean(referencePathOf(input)),
-    seed: seed !== null && seed >= 0 ? Math.trunc(seed) : null
-  };
-}
-function finiteNumber(value) {
-  if (value === null || value === void 0 || value === "") return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-function positiveSize(value) {
-  const number = finiteNumber(value);
-  if (number === null || number <= 0) return null;
-  return Math.round(number);
-}
-function presetOf(presets, id) {
-  if (!id || !Array.isArray(presets)) return null;
-  return presets.find((item) => item && item.id === id) || null;
-}
-function recallOf(entry, presets) {
-  const image = entry && entry.image || null;
-  const item = entry && entry.item || null;
-  const params = item && item.params || null;
-  const presetId = item && item.presetId || "";
-  const preset = presetOf(presets, presetId);
-  const prompt = item && typeof item.prompt === "string" && item.prompt || params && typeof params.prompt === "string" && params.prompt || "";
-  const width = positiveSize(image && image.width) ?? positiveSize(params && params.width) ?? positiveSize(preset && preset.size);
-  const height = positiveSize(image && image.height) ?? positiveSize(params && params.height) ?? positiveSize(preset && preset.size);
-  const steps = finiteNumber(params && params.steps) ?? finiteNumber(preset && preset.steps);
-  const cfg = finiteNumber(params && params.cfg) ?? finiteNumber(preset && preset.cfg);
-  const seed = finiteNumber(image && image.seed) ?? finiteNumber(params && params.seed);
-  const negative = params && typeof params.negativePrompt === "string" ? params.negativePrompt : null;
-  return { image, item, params, presetId, prompt, width, height, steps, cfg, seed, negative };
-}
-function iteratePatch(entry, form, presets) {
-  const base = form || {};
-  const recall = recallOf(entry, presets);
-  const patch = {};
-  const prompt = recall.prompt.trim();
-  if (prompt) patch.prompt = prompt;
-  if (recall.negative !== null) patch.negative = recall.negative;
-  if (recall.width !== null) patch.width = recall.width;
-  if (recall.height !== null) patch.height = recall.height;
-  if (recall.steps !== null) patch.steps = recall.steps;
-  if (recall.cfg !== null) patch.cfg = recall.cfg;
-  if (recall.seed !== null && recall.seed >= 0) patch.seed = String(Math.trunc(recall.seed));
-  if (recall.presetId) patch.presetId = recall.presetId;
-  if (Object.keys(patch).length > 0) {
-    if (!Object.prototype.hasOwnProperty.call(patch, "seed")) patch.seed = "";
-    patch.reference = null;
-  }
-  return patch;
-}
-function rerollOverrides(entry, presets) {
-  const recall = recallOf(entry, presets);
-  const prompt = recall.prompt.trim();
-  if (!prompt) return null;
-  const overrides = { prompt, seed: -1, count: 1 };
-  if (recall.negative !== null) overrides.negativePrompt = recall.negative;
-  if (recall.width !== null) overrides.width = recall.width;
-  if (recall.height !== null) overrides.height = recall.height;
-  if (recall.steps !== null) overrides.steps = recall.steps;
-  if (recall.cfg !== null) overrides.cfg = recall.cfg;
-  if (recall.presetId) overrides.presetId = recall.presetId;
-  return overrides;
-}
-function retryOverrides(source) {
-  const holder = source && typeof source === "object" ? source : null;
-  if (!holder) return null;
-  const params = holder.params && typeof holder.params === "object" ? holder.params : holder;
-  const prompt = typeof params.prompt === "string" ? params.prompt.trim() : "";
-  if (!prompt) return null;
-  const overrides = { prompt, seed: -1 };
-  const count = finiteNumber(params.count);
-  if (count !== null) overrides.count = Math.min(4, Math.max(1, Math.round(count)));
-  const width = positiveSize(params.width);
-  const height = positiveSize(params.height);
-  if (width !== null) overrides.width = width;
-  if (height !== null) overrides.height = height;
-  const steps = finiteNumber(params.steps);
-  const cfg = finiteNumber(params.cfg);
-  if (steps !== null) overrides.steps = steps;
-  if (cfg !== null) overrides.cfg = cfg;
-  if (typeof params.negativePrompt === "string") overrides.negativePrompt = params.negativePrompt;
-  const presetId = holder.presetId || params.presetId || "";
-  if (presetId) overrides.presetId = presetId;
-  return overrides;
-}
-
-// src/studio/rail/ReferenceSection.jsx
 var import_jsx_runtime18 = require("react/jsx-runtime");
+var MASK_HIT_STYLE = { minHeight: 44, minWidth: 44 };
+function percentOf(coverage) {
+  const value = Number(coverage);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  const percent = Math.min(100, value * 100);
+  return percent >= 10 ? Math.round(percent) : Math.round(percent * 10) / 10;
+}
 function ReferenceSection({
   t,
   referenceImage,
+  referenceSupported,
   strength,
+  strengthMax,
+  mask,
+  inpaintOnly,
+  inpaintSupported,
   referenceBlocked,
   applyStrength,
-  removeReference
+  removeReference,
+  onBeginPaint,
+  onClearMask,
+  onPickFromGallery
 }) {
-  if (!referenceImage) return null;
+  const supported = referenceSupported === true;
+  const hasReference = Boolean(referenceImage);
+  const pickFromGallery = typeof onPickFromGallery === "function" ? onPickFromGallery : () => {
+  };
+  if (!hasReference) {
+    if (!supported) return null;
+    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Fieldset, { title: t("studio.reference.title"), children: inpaintOnly ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-reference-empty", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "ofs-reference-empty-title", children: t("studio.reference.emptyTitle") }),
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "ofs-reference-empty-hint", children: t("studio.reference.emptyHint") }),
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("button", { type: "button", className: "ofs-reference-pick", style: MASK_HIT_STYLE, onClick: pickFromGallery, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Icon, { name: "images", size: 15 }),
+        t("studio.reference.emptyAction")
+      ] })
+    ] }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-reference-entry", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "ofs-hint ofs-reference-entry-hint", children: t("studio.reference.emptySimple") }),
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("button", { type: "button", className: "ofs-reference-pick", style: MASK_HIT_STYLE, onClick: pickFromGallery, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Icon, { name: "images", size: 15 }),
+        t("studio.reference.emptyAction")
+      ] })
+    ] }) });
+  }
   const referenceName = referenceFileName(referenceImage.path);
   const strengthValue = Number.isFinite(Number(strength)) ? Number(strength) : LIMITS.strength.default;
+  const strengthLimit = Number.isFinite(Number(strengthMax)) ? Number(strengthMax) : LIMITS.strength.max;
   const onRemoveReference = typeof removeReference === "function" ? removeReference : () => {
   };
   const onStrengthChange = typeof applyStrength === "function" ? applyStrength : () => {
   };
+  const onBeginPaintAction = typeof onBeginPaint === "function" ? onBeginPaint : () => {
+  };
+  const onClearMaskAction = typeof onClearMask === "function" ? onClearMask : () => {
+  };
+  const showMask = inpaintSupported === true;
   return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
     Fieldset,
     {
@@ -6281,7 +6521,7 @@ function ReferenceSection({
                   type: "range",
                   className: "ofs-reference-range",
                   min: LIMITS.strength.min,
-                  max: LIMITS.strength.max,
+                  max: strengthLimit,
                   step: LIMITS.strength.step,
                   value: strengthValue,
                   disabled: Boolean(referenceBlocked),
@@ -6292,6 +6532,32 @@ function ReferenceSection({
             ] })
           ] })
         ] }),
+        showMask ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-reference-mask", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: mask ? "ofs-hint ofs-reference-mask-readout" : "ofs-muted ofs-reference-mask-readout", children: mask ? formatText(t("studio.reference.maskCoverage"), { percent: percentOf(mask.coverage) }) : t("studio.reference.maskEmpty") }),
+          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-reference-mask-actions", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              "button",
+              {
+                type: "button",
+                className: "ofs-reference-action ofs-reference-paint",
+                style: MASK_HIT_STYLE,
+                onClick: onBeginPaintAction,
+                children: t("studio.reference.continuePaint")
+              }
+            ),
+            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              "button",
+              {
+                type: "button",
+                className: "ofs-reference-action ofs-reference-clear",
+                style: MASK_HIT_STYLE,
+                onClick: onClearMaskAction,
+                disabled: !mask,
+                children: t("studio.reference.clearMask")
+              }
+            )
+          ] })
+        ] }) : null,
         referenceBlocked ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "ofs-hint ofs-reference-warn", children: t("studio.reference.unsupported") }) : null
       ]
     }
@@ -6338,9 +6604,16 @@ function Rail(props) {
     englishPromptHint,
     reference,
     strength,
+    // 参考图能力与蒙版状态：空槽位 / 强度上限 / 覆盖率读数都按这几项门控。
+    referenceSupported,
+    strengthMax,
+    mask,
+    inpaintOnly,
+    inpaintSupported,
     referenceBlocked,
     applyStrength,
     removeReference,
+    clearMask,
     // 微调来源（从胶卷 / 画廊回填而来）与「新建创作」重置入口。
     tuning,
     newCreation,
@@ -6364,6 +6637,12 @@ function Rail(props) {
   const referenceWidth = referenceImage ? finiteSize(referenceImage.width) : null;
   const referenceHeight = referenceImage ? finiteSize(referenceImage.height) : null;
   const referenceSize = referenceWidth && referenceHeight ? `${referenceWidth} × ${referenceHeight}` : "";
+  const requestPaint = ui && typeof ui.requestPaint === "function" ? ui.requestPaint : null;
+  const beginPaint = requestPaint ? () => requestPaint() : null;
+  const clearMaskAction = typeof clearMask === "function" ? clearMask : null;
+  const removeMask = clearMaskAction ? () => clearMaskAction() : null;
+  const setView = ui && typeof ui.setView === "function" ? ui.setView : null;
+  const pickFromGallery = setView ? () => setView("gallery") : null;
   const countValue = Number.isFinite(Number(fields.count)) ? Math.round(Number(fields.count)) : 1;
   const specParts = [
     frameSizeText,
@@ -6402,10 +6681,18 @@ function Rail(props) {
         {
           t,
           referenceImage,
+          referenceSupported,
           strength,
+          strengthMax,
+          mask,
+          inpaintOnly,
+          inpaintSupported,
           referenceBlocked,
           applyStrength,
-          removeReference
+          removeReference,
+          onBeginPaint: beginPaint,
+          onClearMask: removeMask,
+          onPickFromGallery: pickFromGallery
         }
       ),
       /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
@@ -6468,6 +6755,7 @@ function Rail(props) {
           ]
         }
       ),
+      referenceImage ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "ofs-hint ofs-reference-based", children: formatText(t("studio.reference.basedOn"), { name: referenceFileName(referenceImage.path) }) }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "ofs-hint ofs-spec-summary", children: specParts.join(" · ") })
     ] })
   ] });
@@ -7029,7 +7317,7 @@ function SettingsDrawer(props) {
 var import_react25 = __toESM(require("react"), 1);
 var import_jsx_runtime23 = require("react/jsx-runtime");
 var FRESH_MS = 6e4;
-var MASK_HIT_STYLE = { minHeight: 44, minWidth: 44 };
+var MASK_HIT_STYLE2 = { minHeight: 44, minWidth: 44 };
 function isFreshItem(item, now) {
   const finishedAt = Date.parse(String(item && item.finishedAt || ""));
   if (!Number.isFinite(finishedAt)) return false;
@@ -7043,7 +7331,7 @@ function ratioOf(width, height) {
   if (!Number.isFinite(w) || !Number.isFinite(h2) || w <= 0 || h2 <= 0) return 1;
   return w / h2;
 }
-function percentOf(coverage) {
+function percentOf2(coverage) {
   const value = Number(coverage);
   if (!Number.isFinite(value) || value <= 0) return 0;
   const percent = Math.min(100, value * 100);
@@ -7092,6 +7380,10 @@ function Stage(props) {
   const restoreRef = import_react25.default.useRef(mask);
   restoreRef.current = mask;
   const referenceIdentity = reference ? `${reference.path || ""}|${reference.url || ""}|${referenceWidth || ""}|${referenceHeight || ""}` : "";
+  const paintRequest = ui && Number.isFinite(Number(ui.paintRequest)) ? Number(ui.paintRequest) : 0;
+  const clearPaintRequest = ui && typeof ui.clearPaintRequest === "function" ? ui.clearPaintRequest : null;
+  const selectedIdentity = selected && selected.image ? `${selected.image.path || ""}|${selected.image.file || ""}|${selected.image.url || ""}` : "";
+  const selectedIdentityRef = import_react25.default.useRef(selectedIdentity);
   function canvasContext() {
     const canvas = canvasRef.current;
     if (!canvas || typeof canvas.getContext !== "function") return null;
@@ -7106,6 +7398,16 @@ function Stage(props) {
     return {
       x: ((Number(event && event.clientX) || 0) - rect.left) * (canvas.width / rect.width),
       y: ((Number(event && event.clientY) || 0) - rect.top) * (canvas.height / rect.height)
+    };
+  }
+  function canvasScaleOf(canvas) {
+    if (!canvas || typeof canvas.getBoundingClientRect !== "function") return null;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect || !(rect.width > 0) || !(rect.height > 0) || !(canvas.width > 0) || !(canvas.height > 0)) return null;
+    return {
+      rect,
+      scaleX: rect.width / canvas.width,
+      scaleY: rect.height / canvas.height
     };
   }
   function paintDot(ctx, x, y, eraser) {
@@ -7228,21 +7530,27 @@ function Stage(props) {
     paintDot(geometry.ctx, point.x, point.y, brush.eraser);
     drawingRef.current = { x: point.x, y: point.y };
     keyboardCursorRef.current = { x: point.x, y: point.y };
-    const canvas = geometry.canvas;
-    if (typeof canvas.getBoundingClientRect === "function") {
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width > 0) placeMaskCursor((Number(event.clientX) || 0) - rect.left, (Number(event.clientY) || 0) - rect.top, rect.width / canvas.width);
+    const scale = canvasScaleOf(geometry.canvas);
+    if (scale) {
+      placeMaskCursor(
+        (Number(event.clientX) || 0) - scale.rect.left,
+        (Number(event.clientY) || 0) - scale.rect.top,
+        Math.min(scale.scaleX, scale.scaleY)
+      );
     }
   }
   function onMaskPointerMove(event) {
     const geometry = canvasContext();
     if (!geometry) return;
-    const canvas = geometry.canvas;
     const point = canvasPointOf(event);
     if (!point) return;
-    if (typeof canvas.getBoundingClientRect === "function") {
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width > 0) placeMaskCursor((Number(event.clientX) || 0) - rect.left, (Number(event.clientY) || 0) - rect.top, rect.width / canvas.width);
+    const scale = canvasScaleOf(geometry.canvas);
+    if (scale) {
+      placeMaskCursor(
+        (Number(event.clientX) || 0) - scale.rect.left,
+        (Number(event.clientY) || 0) - scale.rect.top,
+        Math.min(scale.scaleX, scale.scaleY)
+      );
     }
     const previous = drawingRef.current;
     if (!previous) return;
@@ -7269,7 +7577,10 @@ function Stage(props) {
     const geometry = canvasContext();
     if (!geometry) return;
     const canvas = geometry.canvas;
-    const scale = typeof canvas.getBoundingClientRect === "function" && canvas.width > 0 ? canvas.getBoundingClientRect().width / canvas.width : 1;
+    const scale = canvasScaleOf(canvas);
+    const scaleX = scale ? scale.scaleX : 1;
+    const scaleY = scale ? scale.scaleY : 1;
+    const cursorScale = Math.min(scaleX, scaleY);
     const current = keyboardCursorRef.current || { x: canvas.width / 2, y: canvas.height / 2 };
     const point = { x: current.x, y: current.y };
     if (key === "ArrowLeft") point.x -= MASK_KEY_STEP;
@@ -7279,7 +7590,7 @@ function Stage(props) {
     else if (key === " " || key === "Spacebar" || key === "Enter") {
       paintDot(geometry.ctx, point.x, point.y, brush.eraser);
       keyboardCursorRef.current = { x: point.x, y: point.y };
-      placeMaskCursor(point.x * scale, point.y * scale, scale);
+      placeMaskCursor(point.x * scaleX, point.y * scaleY, cursorScale);
       if (event && typeof event.preventDefault === "function") event.preventDefault();
       commitMask();
       return;
@@ -7290,7 +7601,7 @@ function Stage(props) {
     point.x = Math.min(canvas.width, Math.max(0, point.x));
     point.y = Math.min(canvas.height, Math.max(0, point.y));
     keyboardCursorRef.current = { x: point.x, y: point.y };
-    placeMaskCursor(point.x * scale, point.y * scale, scale);
+    placeMaskCursor(point.x * scaleX, point.y * scaleY, cursorScale);
   }
   function clearMaskCanvas() {
     const geometry = canvasContext();
@@ -7341,6 +7652,16 @@ function Stage(props) {
   import_react25.default.useEffect(() => {
     if (!canPaint) setPainting(false);
   }, [canPaint]);
+  import_react25.default.useEffect(() => {
+    if (selectedIdentityRef.current === selectedIdentity) return;
+    selectedIdentityRef.current = selectedIdentity;
+    setPainting(false);
+  }, [selectedIdentity]);
+  import_react25.default.useEffect(() => {
+    if (paintRequest <= 0 || !canPaint) return;
+    openMaskEditor();
+    if (clearPaintRequest) clearPaintRequest();
+  }, [paintRequest, canPaint]);
   const maskLayoutKey = `${painting ? 1 : 0}|${canvasSize.width}x${canvasSize.height}`;
   import_react25.default.useEffect(() => {
     const canvas = canvasRef.current;
@@ -7376,6 +7697,121 @@ function Stage(props) {
     returnFocusRef: zoomOpenerRef,
     onClose: () => setZoom(false)
   });
+  const referencePreviewUrl = reference && reference.url ? reference.url : "";
+  const referenceAlt = prompt || referenceFileName(reference && reference.path) || t("studio.reference.title");
+  const editorAspect = naturalSize.width > 0 && naturalSize.height > 0 ? `${naturalSize.width} / ${naturalSize.height}` : "1";
+  const maskRatio = naturalSize.width > 0 && naturalSize.height > 0 ? naturalSize.width / naturalSize.height : 1;
+  const maskPercent = percentOf2(maskState.coverage);
+  const paintingActive = painting && canPaint;
+  const fastModel = Number(form && form.activePreset && form.activePreset.steps) <= 8;
+  const maskEditor = /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-editor", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-head", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-mask-title", children: t("studio.mask.title") }),
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-mask-coverage ofs-muted", children: formatText(t("studio.mask.coverage"), { percent: maskPercent }) })
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
+      "div",
+      {
+        className: "ofs-mask-stage",
+        style: { "--ofs-mask-r": String(maskRatio), aspectRatio: editorAspect },
+        children: [
+          referencePreviewUrl ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+            "img",
+            {
+              src: referencePreviewUrl,
+              alt: referenceAlt,
+              draggable: false,
+              onLoad: onReferencePreviewLoad,
+              className: "ofs-mask-photo"
+            }
+          ) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+            "canvas",
+            {
+              ref: canvasRef,
+              className: "ofs-mask-canvas",
+              role: "application",
+              tabIndex: 0,
+              "aria-label": t("studio.mask.canvasLabel"),
+              onPointerDown: onMaskPointerDown,
+              onPointerMove: onMaskPointerMove,
+              onPointerUp: onMaskPointerUp,
+              onPointerCancel: onMaskPointerUp,
+              onPointerLeave: hideMaskCursor,
+              onKeyDown: onMaskKeyDown,
+              onBlur: hideMaskCursor
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+            "span",
+            {
+              ref: cursorRef,
+              className: "ofs-mask-cursor",
+              "aria-hidden": "true",
+              style: { left: 0, top: 0, width: 0, height: 0 }
+            }
+          )
+        ]
+      }
+    ),
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-tools", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("label", { className: "ofs-mask-brush", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { children: t("studio.mask.brush") }),
+        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+          "input",
+          {
+            type: "range",
+            className: "ofs-mask-range",
+            min: MASK_BRUSH.min,
+            max: MASK_BRUSH.max,
+            step: MASK_BRUSH.step,
+            value: brush.size,
+            "aria-label": t("studio.mask.brush"),
+            onChange: (event) => setBrush((prev) => brushStateOf({ ...prev, size: clampBrushSize(event.target.value) }))
+          }
+        ),
+        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("b", { children: brush.size })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        "button",
+        {
+          type: "button",
+          className: brush.eraser ? "ofs-dock-button is-on" : "ofs-dock-button",
+          style: MASK_HIT_STYLE2,
+          "aria-pressed": brush.eraser,
+          onClick: () => setBrush((prev) => toggleEraser(prev)),
+          children: t("studio.mask.eraser")
+        }
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-dock-button", style: MASK_HIT_STYLE2, onClick: clearMaskCanvas, children: t("studio.mask.clear") }),
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-dock-button", style: MASK_HIT_STYLE2, onClick: invertMaskCanvas, children: t("studio.mask.invert") }),
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-dock-button ofs-mask-close", style: MASK_HIT_STYLE2, onClick: closeMaskEditor, children: t("studio.mask.close") })
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-hint", children: t("studio.mask.hint") }),
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-guide", children: t("studio.mask.guide") }),
+    fastModel ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-fast", children: t("studio.mask.fastModelHint") }) : null
+  ] });
+  const paintBar = reference && inpaintSupported && !paintingActive ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-bar", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
+      "button",
+      {
+        type: "button",
+        className: "ofs-dock-button ofs-mask-toggle",
+        style: MASK_HIT_STYLE2,
+        "aria-pressed": false,
+        onClick: openMaskEditor,
+        children: [
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "focus", size: 15 }),
+          t("studio.mask.toggle")
+        ]
+      }
+    ),
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: mask ? "ofs-hint ofs-mask-status" : "ofs-muted ofs-mask-status", children: mask ? formatText(t("studio.mask.applied"), { percent: percentOf2(mask.coverage) }) : t("studio.mask.empty") })
+  ] }) : null;
+  const unsupportedNote = reference && !inpaintSupported ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-unsupported", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-warn", children: t("studio.mask.unsupported") }),
+    mask ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-warn", children: t("studio.mask.kept") }) : null
+  ] }) : null;
   if (!image) {
     const stopped = Boolean(compute.status && compute.status.stopped);
     const jobParams = activeJob && activeJob.params || {};
@@ -7383,136 +7819,50 @@ function Stage(props) {
     const frameRatio = ratioOf(jobParams.width || fields.width, jobParams.height || fields.height);
     const preset = (compute.presets || []).find((option) => option && option.id === fields.presetId) || null;
     const steady = preset && Number.isFinite(Number(preset.steadySeconds)) ? Number(preset.steadySeconds) : null;
-    return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("section", { className: "ofs-stage", children: /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-figure ofs-figure--empty", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-frame", style: { "--ofs-frame-r": String(frameRatio) }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("span", { className: "ofs-marks", "aria-hidden": "true", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {})
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "ofs-frame-body", children: activeJob ? null : /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-empty-card", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.empty") }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-muted", children: stopped ? t("studio.stage.stoppedHint") : t("studio.stage.emptyHint") }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-examples", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
-            INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
+    return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("section", { className: "ofs-stage", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "ofs-figure ofs-figure--empty", children: paintingActive ? maskEditor : /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(import_jsx_runtime23.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-frame", style: { "--ofs-frame-r": String(frameRatio) }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("span", { className: "ofs-marks", "aria-hidden": "true", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {}),
+            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {}),
+            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {}),
+            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {})
           ] }),
-          steady !== null ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("p", { className: "ofs-exposure", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" }),
-            t("studio.stage.steady"),
-            " ",
-            formatSeconds(t, steady),
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" })
-          ] }) : null
-        ] }) })
-      ] }),
-      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-stage-progress is-inside", "aria-hidden": "true", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-progress-label", children: progressText })
-      ] }) : null
-    ] }) });
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "ofs-frame-body", children: activeJob ? null : /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-empty-card", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.empty") }),
+            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-muted", children: stopped ? t("studio.stage.stoppedHint") : t("studio.stage.emptyHint") }),
+            /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-examples", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
+              INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
+            ] }),
+            steady !== null ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("p", { className: "ofs-exposure", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" }),
+              t("studio.stage.steady"),
+              " ",
+              formatSeconds(t, steady),
+              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" })
+            ] }) : null
+          ] }) })
+        ] }),
+        activeJob ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-stage-progress is-inside", "aria-hidden": "true", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-progress-label", children: progressText })
+        ] }) : null
+      ] }) }),
+      paintBar,
+      unsupportedNote
+    ] });
   }
   const favorite = isFavorite(image.path || image.file);
   const copyTarget = image.absolute || image.path || image.file;
   const imageKey = image.path || image.file || image.url;
   const printRatio = ratioOf(image.width, image.height);
   const developing = isFreshItem(item, now);
-  const referencePreviewUrl = reference && reference.url ? reference.url : "";
-  const referenceAlt = prompt || referenceFileName(reference && reference.path) || t("studio.reference.title");
-  const editorAspect = naturalSize.width > 0 && naturalSize.height > 0 ? `${naturalSize.width} / ${naturalSize.height}` : "1";
-  const maskPercent = percentOf(maskState.coverage);
-  const paintingActive = painting && canPaint;
-  const fastModel = Number(form && form.activePreset && form.activePreset.steps) <= 8;
+  const continueInpaint = actions && typeof actions.continueInpaint === "function" ? actions.continueInpaint : null;
+  const canContinueInpaint = Boolean(image && inpaintSupported && continueInpaint);
   return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("section", { className: "ofs-stage", children: [
     /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("figure", { className: "ofs-figure", children: [
-      paintingActive ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-editor", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-head", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-mask-title", children: t("studio.mask.title") }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-mask-coverage ofs-muted", children: formatText(t("studio.mask.coverage"), { percent: maskPercent }) })
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
-          "div",
-          {
-            className: "ofs-mask-stage",
-            style: { aspectRatio: editorAspect },
-            children: [
-              referencePreviewUrl ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
-                "img",
-                {
-                  src: referencePreviewUrl,
-                  alt: referenceAlt,
-                  draggable: false,
-                  onLoad: onReferencePreviewLoad,
-                  className: "ofs-mask-photo"
-                }
-              ) : null,
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
-                "canvas",
-                {
-                  ref: canvasRef,
-                  className: "ofs-mask-canvas",
-                  role: "application",
-                  tabIndex: 0,
-                  "aria-label": t("studio.mask.canvasLabel"),
-                  onPointerDown: onMaskPointerDown,
-                  onPointerMove: onMaskPointerMove,
-                  onPointerUp: onMaskPointerUp,
-                  onPointerCancel: onMaskPointerUp,
-                  onPointerLeave: hideMaskCursor,
-                  onKeyDown: onMaskKeyDown,
-                  onBlur: hideMaskCursor
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
-                "span",
-                {
-                  ref: cursorRef,
-                  className: "ofs-mask-cursor",
-                  "aria-hidden": "true",
-                  style: { left: 0, top: 0, width: 0, height: 0 }
-                }
-              )
-            ]
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-tools", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("label", { className: "ofs-mask-brush", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { children: t("studio.mask.brush") }),
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
-              "input",
-              {
-                type: "range",
-                className: "ofs-mask-range",
-                min: MASK_BRUSH.min,
-                max: MASK_BRUSH.max,
-                step: MASK_BRUSH.step,
-                value: brush.size,
-                "aria-label": t("studio.mask.brush"),
-                onChange: (event) => setBrush((prev) => brushStateOf({ ...prev, size: clampBrushSize(event.target.value) }))
-              }
-            ),
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("b", { children: brush.size })
-          ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
-            "button",
-            {
-              type: "button",
-              className: brush.eraser ? "ofs-dock-button is-on" : "ofs-dock-button",
-              style: MASK_HIT_STYLE,
-              "aria-pressed": brush.eraser,
-              onClick: () => setBrush((prev) => toggleEraser(prev)),
-              children: t("studio.mask.eraser")
-            }
-          ),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-dock-button", style: MASK_HIT_STYLE, onClick: clearMaskCanvas, children: t("studio.mask.clear") }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-dock-button", style: MASK_HIT_STYLE, onClick: invertMaskCanvas, children: t("studio.mask.invert") }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-dock-button ofs-mask-close", style: MASK_HIT_STYLE, onClick: closeMaskEditor, children: t("studio.mask.close") })
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-hint", children: t("studio.mask.hint") }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-guide", children: t("studio.mask.guide") }),
-        fastModel ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-fast", children: t("studio.mask.fastModelHint") }) : null
-      ] }) : /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(import_jsx_runtime23.Fragment, { children: [
+      paintingActive ? maskEditor : /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(import_jsx_runtime23.Fragment, { children: [
         /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
           "button",
           {
@@ -7547,27 +7897,8 @@ function Stage(props) {
         /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-progress-label", children: progressText })
       ] }) : null
     ] }),
-    reference && inpaintSupported && !paintingActive ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-bar", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
-        "button",
-        {
-          type: "button",
-          className: "ofs-dock-button ofs-mask-toggle",
-          style: MASK_HIT_STYLE,
-          "aria-pressed": paintingActive,
-          onClick: openMaskEditor,
-          children: [
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "focus", size: 15 }),
-            t("studio.mask.toggle")
-          ]
-        }
-      ),
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: mask ? "ofs-hint ofs-mask-status" : "ofs-muted ofs-mask-status", children: mask ? formatText(t("studio.mask.applied"), { percent: percentOf(mask.coverage) }) : t("studio.mask.empty") })
-    ] }) : null,
-    reference && !inpaintSupported ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-unsupported", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-warn", children: t("studio.mask.unsupported") }),
-      mask ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-warn", children: t("studio.mask.kept") }) : null
-    ] }) : null,
+    paintBar,
+    unsupportedNote,
     /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-stage-foot", children: [
       /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-stage-prompt", title: prompt || void 0, children: prompt }),
       /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-stage-meta", children: [
@@ -7587,6 +7918,10 @@ function Stage(props) {
       ] })
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-dock", children: [
+      canContinueInpaint ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("button", { type: "button", className: "ofs-dock-button ofs-continue-inpaint", onClick: () => continueInpaint(selected), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "image", size: 15 }),
+        t("studio.mask.continueFromResult")
+      ] }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => iterate(selected), children: [
         /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "focus", size: 15 }),
         t("studio.action.iterate")
@@ -8332,6 +8667,7 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
   const [panelMode, setPanelMode] = import_react30.default.useState(initialPanelMode);
   const [zoom, setZoom] = import_react30.default.useState(false);
   const [logsOpen, setLogsOpen] = import_react30.default.useState(false);
+  const [paintRequest, setPaintRequest] = import_react30.default.useState(0);
   const logsReturnRef = import_react30.default.useRef(null);
   const [settingsOpen, setSettingsOpen] = import_react30.default.useState(false);
   const settingsReturnRef = import_react30.default.useRef(null);
@@ -8414,6 +8750,12 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
     settingsReturnRef.current = null;
     if (target && typeof target.focus === "function" && target.isConnected !== false) target.focus();
   }
+  function requestPaint() {
+    setPaintRequest((prev) => prev + 1);
+  }
+  function clearPaintRequest() {
+    setPaintRequest(0);
+  }
   return {
     view,
     setView,
@@ -8442,7 +8784,11 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
     closeLogs,
     settingsOpen,
     openSettings,
-    closeSettings
+    closeSettings,
+    // 涂抹请求信号：Stage 通过 paintRequest 的计数变化进入涂抹，消费后调用 clearPaintRequest。
+    paintRequest,
+    requestPaint,
+    clearPaintRequest
   };
 }
 function useCompletionNotice({ t, ui, job, activeJob }) {
@@ -8661,7 +9007,7 @@ function useChatThread({ t, isEn, alive, state, form, generate }) {
     if (seed !== null) overrides.seed = seed;
     const patch = intentFormPatch(message, DEFAULT_RATIOS, { negativeActive });
     if (Object.keys(patch).length > 0) form.patchForm(patch);
-    const ok = await generate(overrides, { pushUser: false });
+    const ok = await generate(overrides, { pushUser: false, source: "assistant" });
     if (ok && typeof form.markClean === "function") form.markClean();
   }
   function handoffIntent(message) {
@@ -9252,6 +9598,7 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const [refineSource, setRefineSource] = import_react34.default.useState("");
   const [enhancing, setEnhancing] = import_react34.default.useState(false);
   const [translating, setTranslating] = import_react34.default.useState(false);
+  const [strengthAuto, setStrengthAuto] = import_react34.default.useState(false);
   const [cleanBaseline, setCleanBaseline] = import_react34.default.useState("");
   const [tuning, setTuning] = import_react34.default.useState(null);
   const formRef = import_react34.default.useRef(form);
@@ -9289,7 +9636,12 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   }
   function selectPreset(next) {
     if (!next || !next.id) return;
-    setForm((prev) => applyNegativePatch(prev, presetSelectPatch(next, prev, presets)));
+    setForm((prev) => {
+      const patch = presetSelectPatch(next, prev, presets);
+      const strengthPatch = maskStrengthPresetPatch(strengthAuto, { native: inpaintOnlyOf(next) });
+      if (strengthPatch) Object.assign(patch, strengthPatch);
+      return applyNegativePatch(prev, patch);
+    });
   }
   function markClean(submitted) {
     if (submitted && formRef.current !== submitted) return false;
@@ -9313,12 +9665,21 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     setForm(next);
     setCleanBaseline(formSnapshotOf(next));
     setTuning(null);
+    setStrengthAuto(false);
     ui.showToast(t("studio.toast.newCreation"));
   }
-  function buildBody(overrides) {
+  function buildBody(overrides, options = {}) {
+    const presetOverride = options.preset && typeof options.preset === "object" ? options.preset : null;
+    const effectivePreset = presetOverride || activePreset;
+    const effectiveCfg = overrides && Object.prototype.hasOwnProperty.call(overrides, "cfg") ? overrides.cfg : form.cfg;
     return buildGenerateBody(
       { ...form, negative: negativePromptOf(form) },
-      { defaultPreset, overrides, negativeActive, maskActive: inpaintSupported }
+      {
+        defaultPreset,
+        overrides,
+        negativeActive: negativePromptActive(effectivePreset, effectiveCfg),
+        maskActive: supportsInpaint(effectivePreset)
+      }
     );
   }
   function applyRatio(id) {
@@ -9369,11 +9730,13 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     patchForm(customSizePatch(partial));
   }
   function applyStrength(value) {
-    patchForm({ strength: clampStrength(value) });
+    setStrengthAuto(false);
+    patchForm({ strength: clampMaskStrength(value, Boolean(mask)) });
   }
   function beginMaskEdit() {
-    const patch = maskStrengthPatch(formRef.current.strength, { native: inpaintOnly });
+    const patch = maskStrengthPatch(formRef.current.strength, { native: inpaintOnly, auto: strengthAuto });
     if (!patch) return false;
+    setStrengthAuto(true);
     patchForm(patch);
     return true;
   }
@@ -9524,7 +9887,11 @@ ${value}` : value });
     applyIntent,
     // 图生图：参考图 / 重绘强度与它们的能力判断、动作。
     reference,
-    strength: clampStrength(form.strength),
+    strength: clampMaskStrength(form.strength, Boolean(mask)),
+    // 强度滑块上限：有蒙版时用契约 inpaintMax（局部重绘允许更强替换），否则通用 max。
+    strengthMax: strengthMaxOf(Boolean(mask)),
+    // 强度是否处于自动档：自动档下切预设跟随推荐档，用户手调后为 false。
+    strengthAuto,
     referenceSupported,
     referenceBlocked,
     applyStrength,
@@ -9857,19 +10224,35 @@ function useStudio(props) {
   };
   async function generate(overrides, options = {}) {
     if (sending) return false;
-    if (form.referenceBlocked) {
-      ui.showToast(t("studio.reference.blocked"));
+    const policy = generateSourcePolicy(options.source, {
+      overrides,
+      preset: form.activePreset,
+      presets
+    });
+    if (!policy.ok) {
+      ui.showToast(t(policy.blockedKey));
       return false;
     }
-    if (form.maskRequiredBlocked) {
-      ui.showToast(t("studio.mask.onlyHint"));
+    const effectivePreset = effectivePresetOf(policy.overrides, form.activePreset, presets);
+    const hasReferenceOverride = Boolean(policy.overrides) && Object.prototype.hasOwnProperty.call(policy.overrides, "reference");
+    const effectiveReference = hasReferenceOverride ? policy.overrides.reference : form.reference;
+    const capability = generateCapabilityOf({
+      preset: effectivePreset,
+      presets,
+      reference: effectiveReference
+    });
+    if (!capability.ok) {
+      ui.showToast(t(capability.noticeKey));
       return false;
     }
-    const body = form.buildBody(overrides);
+    const body = form.buildBody(policy.overrides, { preset: effectivePreset });
     if (!body.prompt) {
       ui.fail("need_prompt", "");
       return false;
     }
+    const showPolicyNotice = () => {
+      if (policy.notice) ui.showToast(formatText(t(policy.notice.key), policy.notice.params));
+    };
     const submittedForm = form.form;
     pendingRef.current = body;
     setSending(true);
@@ -9894,8 +10277,10 @@ function useStudio(props) {
         if (options.pushUser !== false) form.markClean(submittedForm);
         host.refresh();
         ui.showToast(t("studio.toast.submitted"));
+        showPolicyNotice();
         return true;
       }
+      showPolicyNotice();
       ui.fail(result.code, result.message);
     } finally {
       setSending(false);
@@ -9924,14 +10309,11 @@ function useStudio(props) {
     const target = entry && entry.image ? entry : null;
     if (!target) return;
     library.selectImage(target);
-    if (form.dirty) {
-      ui.showToast(t("studio.toast.draftKept"));
-      return;
-    }
     const patch = iteratePatch(target, form.form, presets);
-    if (Object.keys(patch).length === 0) return;
+    const decision = previewRecallOf({ reference: form.reference, dirty: form.dirty, patch });
+    if (decision.noticeKey) ui.showToast(t(decision.noticeKey));
+    if (decision.action !== "recall") return;
     form.applyRecall(patch, target);
-    ui.showToast(t("studio.toast.recalled"));
   }
   function referenceImage(entry) {
     const target = entry || library.selected;
@@ -9944,6 +10326,8 @@ function useStudio(props) {
     ui.setView("studio");
     ui.setPanelMode("form");
     ui.setZoom(false);
+    const effectivePreset = result.switchedPreset || form.activePreset;
+    if (inpaintOnlyOf(effectivePreset)) ui.requestPaint();
     if (result.switchedPreset) {
       const preset = result.switchedPreset;
       const label = preset.label || preset.short || preset.id;
@@ -9952,13 +10336,43 @@ function useStudio(props) {
     }
     ui.showToast(t("studio.reference.applied"));
   }
+  function continueInpaint(entry) {
+    const target = entry || library.selected;
+    const result = form.applyReference(target);
+    if (!result || !result.ok) {
+      const failedKey = result && result.reason === "no_path" ? "studio.reference.noPath" : "studio.reference.unavailable";
+      ui.showToast(t(failedKey));
+      return false;
+    }
+    ui.setView("studio");
+    ui.setPanelMode("form");
+    ui.setZoom(false);
+    ui.requestPaint();
+    ui.showToast(t("studio.mask.continueHint"));
+    return true;
+  }
   function retryFocusedJob() {
-    const overrides = retryOverrides(control.focusedJob) || (pendingRef.current ? retryOverrides(pendingRef.current) : null);
-    if (!overrides) {
+    const pending = pendingRef.current;
+    let plan = retryReferencePlan(control.focusedJob, { pendingRef: pending });
+    if (!plan && pending) plan = retryReferencePlan(pending, { pendingRef: pending });
+    if (!plan) {
       ui.showToast(t("workbench.needPrompt"));
       return;
     }
-    generate(overrides, { source: "retry" });
+    if (plan.maskLost) {
+      const applied = form.applyReference({ image: plan.fillReference });
+      if (!applied || !applied.ok) {
+        const failedKey = applied && applied.reason === "no_path" ? "studio.reference.noPath" : "studio.reference.unavailable";
+        ui.showToast(t(failedKey));
+        return;
+      }
+      ui.setView("studio");
+      ui.setPanelMode("form");
+      if (plan.requestPaint) ui.requestPaint();
+      ui.showToast(t(plan.noticeKey));
+      return;
+    }
+    generate(plan.overrides, { source: "retry" });
   }
   function resetToSafe() {
     const safe = safeResetPatch(form.activePreset);
@@ -9992,7 +10406,7 @@ function useStudio(props) {
     chat,
     library,
     guidance: { kind: guidanceKind, code: guidanceCode, surface: guidanceSurface, detail: guidanceDetail, key: guidanceKey, dismiss: dismissGuidance },
-    actions: { sending, generate, previewWork, reroll, iterate, referenceImage, retryFocusedJob, resetToSafe }
+    actions: { sending, generate, previewWork, reroll, iterate, referenceImage, continueInpaint, retryFocusedJob, resetToSafe }
   };
 }
 

@@ -106,12 +106,25 @@ FALLBACK_CONTRACT = {
         "prompt": {"maxChars": 2000},
         "negativePrompt": {"maxChars": 1000},
         "reference": {"maxBytes": 8 * 1024 * 1024, "maxEdge": 1536, "minEdge": 128},
-        "strength": {"min": 0.2, "max": 0.9, "step": 0.05, "default": 0.6},
-        # 局部重绘蒙版：黑白 PNG（白 = 重绘区域，黑 = 保留区域），尺寸由远端对齐参考图。
-        "mask": {"maxBytes": 2 * 1024 * 1024},
+        # strength.max 是纯 img2img 上限；带蒙版局部重绘放宽到 inpaintMax（只放宽这一档）。
+        "strength": {"min": 0.2, "max": 0.9, "inpaintMax": 1.0, "step": 0.05, "default": 0.6},
+        # 局部重绘蒙版：黑白 PNG（白 = 重绘区域，黑 = 保留区域），尺寸由远端对齐参考图；
+        # minCoverage 是白色区域最小占比（低于它按空蒙版拒绝，全白允许）。
+        "mask": {"maxBytes": 2 * 1024 * 1024, "minCoverage": 0.0005},
     },
 }
-_LIMIT_NUMERIC_KEYS = ("min", "max", "step", "maxChars", "default", "maxBytes", "maxEdge", "minEdge")
+_LIMIT_NUMERIC_KEYS = (
+    "min",
+    "max",
+    "step",
+    "maxChars",
+    "default",
+    "maxBytes",
+    "maxEdge",
+    "minEdge",
+    "inpaintMax",
+    "minCoverage",
+)
 
 CONTRACT: dict = {}
 # HTTP 路由路径是 daemon 协议的一部分（与 remote/daemon.py 一致），不从契约文件读取。
@@ -683,11 +696,13 @@ def _int_param(value, field: str, low: int, high: int) -> int:  # noqa: ANN001
     return number
 
 
-def _coerce_strength(value) -> float:  # noqa: ANN001
-    """重绘强度归一到 ``contract.limits.strength``：非法/缺失回退默认值，越界钳制。"""
+def _coerce_strength(value, has_mask: bool = False) -> float:  # noqa: ANN001
+    """重绘强度归一到 ``contract.limits.strength``：带蒙版时上限取 ``inpaintMax``。"""
     limits = _limit("strength")
     low = float(limits.get("min", 0.0))
     high = float(limits.get("max", 1.0))
+    if has_mask:
+        high = float(limits.get("inpaintMax", high))
     default = float(limits.get("default", 0.6))
     if value is None or isinstance(value, bool):
         return default
@@ -840,8 +855,9 @@ def parse_reference_spec(raw, pipeline_spec: dict) -> dict | None:  # noqa: ANN0
     if not isinstance(raw, dict):
         raise ValueError("reference 必须是对象")
     loader = str(pipeline_spec.get("loader") or "").strip()
+    has_mask = raw.get("mask_b64") is not None
     # 带蒙版时用户意图是局部重绘，先给「不支持局部重绘」的精确文案（与 daemon 同一口径）。
-    if raw.get("mask_b64") is not None and loader not in SUPPORTED_INPAINT_LOADERS:
+    if has_mask and loader not in SUPPORTED_INPAINT_LOADERS:
         raise ValueError(
             f"该模型不支持局部重绘（首期仅开放 SDXL 家族，当前 loader={loader or '未知'}）"
         )
@@ -864,7 +880,8 @@ def parse_reference_spec(raw, pipeline_spec: dict) -> dict | None:  # noqa: ANN0
     _fmt, width, height = _probe_reference_image(data)
     spec = {
         "image_bytes": data,
-        "strength": _coerce_strength(raw.get("strength")),
+        # 带蒙版时按 inpaintMax 归一（与 remote/inference/reference_codec.py 同一口径）。
+        "strength": _coerce_strength(raw.get("strength"), has_mask=has_mask),
         "width": int(width),
         "height": int(height),
     }

@@ -318,6 +318,11 @@ export const en = {
   'studio.toast.recalled': 'Settings restored',
   // Filmstrip click with unsaved manual edits: preview switches, draft stays.
   'studio.toast.draftKept': 'Current draft kept',
+  // Filmstrip click with a reference image / mask: preview switches, both stay.
+  'studio.toast.referenceKept': 'Kept the current reference image and mask',
+  'studio.toast.referenceImageKept': 'Kept the current reference image',
+  // Retry: the original mask cannot be restored, so only the reference is filled back.
+  'studio.toast.maskLost': 'The original mask cannot be restored; paint it again before generating',
   'studio.toast.newCreation': 'Started a new creation',
   'studio.toast.favorited': 'Added to favorites',
   'studio.toast.unfavorited': 'Removed from favorites',
@@ -431,6 +436,19 @@ export const en = {
   'studio.reference.applied': 'Set as the reference image; adjust the redraw strength.',
   'studio.reference.unavailable': 'The installed host does not support image-to-image, so this work cannot be used as a reference.',
   'studio.reference.noPath': 'This work has no usable file path and cannot be used as a reference.',
+  // Empty reference slot: dedicated inpainting models get two steps, other models a single line.
+  'studio.reference.emptyTitle': 'Pick a reference image first',
+  'studio.reference.emptyHint': 'Choose a work from the gallery, then paint the area to redraw',
+  'studio.reference.emptySimple': 'Attach a reference image for image-to-image',
+  'studio.reference.emptyAction': 'Choose from gallery',
+  // Reference ready: mask coverage, keep painting / clear mask and the footer source note.
+  'studio.reference.maskCoverage': '{percent}% painted',
+  'studio.reference.maskEmpty': 'Not painted yet',
+  'studio.reference.continuePaint': 'Keep painting',
+  'studio.reference.clearMask': 'Clear mask',
+  'studio.reference.basedOn': 'Redrawing from {name}',
+  // Assistant / variant force text-to-image: an inpaint-only preset switches for this request.
+  'studio.reference.autoText2Image': 'The current preset only supports inpainting; this request uses {preset} for text-to-image',
 
   // ── Partial redraw (Inpaint) ──────────────────────────────────
   'studio.mask.toggle': 'Paint mask',
@@ -448,6 +466,9 @@ export const en = {
   'studio.mask.kept': 'Your painted mask is kept and will work again once you switch back to a supported model.',
   'studio.mask.tooLarge': 'The mask exceeds the size limit and was not saved. Paint a smaller area and try again.',
   'studio.mask.canvasLabel': 'Mask painting canvas: use arrow keys to move the brush, Space or Enter to paint, Esc to finish.',
+  // Redraw chain: set the current result as the new reference and start painting.
+  'studio.mask.continueFromResult': 'Redraw from this result',
+  'studio.mask.continueHint': 'Set as reference; paint the area to redraw',
 
   // ── Creation assistant ────────────────────────────────────────
   'studio.chat.assistant': 'Assistant',

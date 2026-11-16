@@ -30,6 +30,9 @@ export function useStudioUi({ t, initialView, initialPanelMode }) {
   const [panelMode, setPanelMode] = React.useState(initialPanelMode)
   const [zoom, setZoom] = React.useState(false)
   const [logsOpen, setLogsOpen] = React.useState(false)
+  // 涂抹请求计数：Stage 可能因视图切换而重新挂载，用自增计数而不是一次性布尔，
+  // 保证「自动进入涂抹」这类跨视图请求在重新挂载后仍能被消费一次。
+  const [paintRequest, setPaintRequest] = React.useState(0)
   // 打开日志抽屉前的焦点位置：关闭后还回去（通常是顶栏算力按钮）。
   const logsReturnRef = React.useRef(null)
   // 运行设置抽屉与日志抽屉同一套焦点归还约定，两者独立开关。
@@ -139,6 +142,16 @@ export function useStudioUi({ t, initialView, initialPanelMode }) {
     if (target && typeof target.focus === 'function' && target.isConnected !== false) target.focus()
   }
 
+  /** 请求舞台进入涂抹态（专用局部重绘预设 / 「以结果继续重绘」用）。 */
+  function requestPaint() {
+    setPaintRequest((prev) => prev + 1)
+  }
+
+  /** Stage 消费完涂抹请求后归零，避免下次挂载重复进入涂抹。 */
+  function clearPaintRequest() {
+    setPaintRequest(0)
+  }
+
   return {
     view,
     setView,
@@ -168,6 +181,10 @@ export function useStudioUi({ t, initialView, initialPanelMode }) {
     settingsOpen,
     openSettings,
     closeSettings,
+    // 涂抹请求信号：Stage 通过 paintRequest 的计数变化进入涂抹，消费后调用 clearPaintRequest。
+    paintRequest,
+    requestPaint,
+    clearPaintRequest,
   }
 }
 

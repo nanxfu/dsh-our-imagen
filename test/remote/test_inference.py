@@ -434,6 +434,8 @@ class RunTaskInpaintTest(DaemonUnitTest):
         "image",
         "mask_image",
         "strength",
+        "width",
+        "height",
         "num_inference_steps",
         "guidance_scale",
         "generator",
@@ -478,14 +480,15 @@ class RunTaskInpaintTest(DaemonUnitTest):
         strength=0.75,
         sig=None,
         image_size=(1536, 768),
+        reference_size=None,
     ):
         task = dict(TASKS[0] if task is None else task)
         pipe = self.make_inpaint_pipe(image_size)
         d.STATE.pipe = object()
         d.STATE.inpaint_pipe = pipe
         d.STATE.inpaint_sig_params = set(self.INPAINT_SIG if sig is None else sig)
-        reference = self.make_reference()
-        mask = self.make_mask()
+        reference = self.make_reference(reference_size or (1536, 768))
+        mask = self.make_mask(aligned=tuple(reference.size))
         # 真实运行时会把生成图按羽化蒙版与原图合成；这里记录调用，断言「确实做了合成」。
         self.composite_calls = []
 
@@ -515,12 +518,26 @@ class RunTaskInpaintTest(DaemonUnitTest):
         self.assertEqual(kwargs["strength"], 0.75)
         self.assertEqual(kwargs["num_inference_steps"], TASKS[0]["steps"])
         self.assertEqual(kwargs["guidance_scale"], TASKS[0]["cfg"])
-        # inpaint 不传 width / height：出图尺寸跟随参考图。
-        self.assertNotIn("width", kwargs)
-        self.assertNotIn("height", kwargs)
+        # inpaint 显式传参考图实际送入模型的宽高（按 8 对齐）：专用 9 通道模型在非正方形
+        # 参考图下不再按缺省 1024² 推理再被 composite 拉回。
+        self.assertEqual((kwargs["width"], kwargs["height"]), (1536, 768))
         # cfg=0 时 negative_prompt 无意义，不传。
         self.assertNotIn("negative_prompt", kwargs)
         self.assertEqual(kwargs["generator"].seed, TASKS[0]["seed"])
+
+    def test_non_square_reference_size_is_aligned_for_inpaint_kwargs(self) -> None:
+        # 1500×700 不是 8 的倍数：显式宽高按 8 向下对齐（1500→1496、700→696）。
+        pipe, _result, _reference, _mask = self.run_inpaint(
+            image_size=(1500, 700), reference_size=(1500, 700)
+        )
+        self.assertEqual(pipe.calls[0]["width"], 1496)
+        self.assertEqual(pipe.calls[0]["height"], 696)
+
+    def test_inpaint_strength_uses_inpaint_max_with_mask(self) -> None:
+        # 带蒙版时提交期已按 inpaintMax 放行 1.0；执行期重归一不能把它钳回 img2img 的 0.9。
+        _pipe, result, _reference, _mask = self.run_inpaint(strength=1.0)
+        self.assertEqual(result["strength"], 1.0)
+        self.assertIn("[gen] inpaint 01 strength=1.0", self.logs())
 
     def test_negative_prompt_is_kept_when_cfg_positive(self) -> None:
         task = dict(TASKS[0], cfg=5.0, negative_prompt="blurry")
@@ -666,6 +683,33 @@ class ExecuteJobReferenceTest(DaemonUnitTest):
         self.assertEqual(job.status, d.JOB_STATUS_DONE)
         self.assertIsNone(job.reference, "解码后应释放队列里保留的原始字节")
 
+    def test_unmasked_strength_still_clamped_to_img2img_max(self) -> None:
+        # 纯图生图（无蒙版）：执行期重归一仍按契约 max，不带蒙版不会被放宽到 inpaintMax。
+        reference = {"image_bytes": b"data", "strength": 1.0, "width": 10, "height": 10}
+        job, _created = self.submit_job_with(reference)
+        captured: dict = {}
+
+        def fake_run_tasks(  # noqa: ANN001, ANN202
+            pipe,
+            tasks,
+            on_progress=None,
+            reference_image=None,
+            reference_strength=None,
+            mask_image=None,
+        ):
+            captured["reference_strength"] = reference_strength
+            return []
+
+        with mock.patch.object(
+            d, "decode_reference_image", return_value=FakePILImage((1536, 768))
+        ), mock.patch.object(
+            d, "ensure_pipeline", return_value=("pipe", 0.0)
+        ), mock.patch.object(
+            d, "run_tasks", side_effect=fake_run_tasks
+        ):
+            d.execute_job(job)
+        self.assertEqual(captured["reference_strength"], CONTRACT["limits"]["strength"]["max"])
+
     def test_text2img_still_calls_run_tasks_without_reference_kwargs(self) -> None:
         job, _created = self.submit_job_with(None)
         captured: dict = {}
@@ -774,6 +818,8 @@ class ExecuteJobMaskTest(DaemonUnitTest):
 
     def test_decoded_mask_is_feathered_before_run_tasks(self) -> None:
         # 解码后的二值蒙版要先外扩 + 羽化，再传给 run_tasks；原始蒙版随之释放。
+        # 覆盖率由 decode_mask_image 统计（挂在 `_imagen_coverage` 上），execute_job 直接
+        # 传给羽化（不重复扫像素）并写进日志。
         reference = {
             "image_bytes": b"data",
             "strength": 0.7,
@@ -785,7 +831,9 @@ class ExecuteJobMaskTest(DaemonUnitTest):
         }
         job, _created = self.submit_job_with(reference)
         decoded_mask = FakePILImage((1536, 768), mode="L")
+        decoded_mask._imagen_coverage = 0.0123
         feathered_mask = FakePILImage((1536, 768), mode="L")
+        feathered_mask._imagen_feather_radius = 4
         captured: dict = {}
 
         def fake_run_tasks(  # noqa: ANN001, ANN202
@@ -813,9 +861,55 @@ class ExecuteJobMaskTest(DaemonUnitTest):
             d.execute_job(job)
         self.assertEqual(feather.call_count, 1, "解码后的蒙版必须羽化一次")
         self.assertIs(feather.call_args.args[0], decoded_mask)
+        self.assertEqual(
+            feather.call_args.kwargs.get("coverage"),
+            0.0123,
+            "羽化应复用 decode_mask_image 算好的覆盖率，不重复扫像素",
+        )
         self.assertIs(captured["mask_image"], feathered_mask, "run_tasks 应收到羽化后的蒙版")
         self.assertTrue(decoded_mask.closed, "羽化后应释放解码出的原始蒙版")
         self.assertTrue(feathered_mask.closed, "任务收尾应关闭羽化后的蒙版")
+        self.assertIn("蒙版覆盖率 1.23% 羽化半径 4px", self.logs())
+        self.assertEqual(job.status, d.JOB_STATUS_DONE)
+
+    def test_masked_strength_keeps_inpaint_max(self) -> None:
+        # 带蒙版时执行期重归一的强度上限是 inpaintMax：1.0 不能被钳回 0.9。
+        reference = {
+            "image_bytes": b"data",
+            "strength": 1.0,
+            "width": 10,
+            "height": 10,
+            "mask_bytes": b"mask",
+            "mask_width": 5,
+            "mask_height": 5,
+        }
+        job, _created = self.submit_job_with(reference)
+        captured: dict = {}
+
+        def fake_run_tasks(  # noqa: ANN001, ANN202
+            pipe,
+            tasks,
+            on_progress=None,
+            reference_image=None,
+            reference_strength=None,
+            mask_image=None,
+        ):
+            captured["reference_strength"] = reference_strength
+            return []
+
+        with mock.patch.object(
+            d, "decode_reference_image", return_value=FakePILImage((1536, 768))
+        ), mock.patch.object(
+            d, "decode_mask_image", return_value=FakePILImage((1536, 768), mode="L")
+        ), mock.patch.object(
+            d, "feather_mask_image", side_effect=lambda mask, **_kwargs: mask
+        ), mock.patch.object(
+            d, "ensure_pipeline", return_value=("pipe", 0.0)
+        ), mock.patch.object(
+            d, "run_tasks", side_effect=fake_run_tasks
+        ):
+            d.execute_job(job)
+        self.assertEqual(captured["reference_strength"], 1.0)
         self.assertEqual(job.status, d.JOB_STATUS_DONE)
 
     def test_reference_without_mask_skips_mask_decode(self) -> None:

@@ -2651,6 +2651,317 @@ await check('更新提示：只在 hasUpdate 时派生，链接与字段做归�
   assert.equal(fallbackFields.checkedAt, null)
 })
 
+// 生成来源策略：form 沿用表单，assistant / variant 强制纯文生图，retry 只透传恢复计划。
+await check('生成来源策略：助手与变体强制纯文生图，inpaintOnly 切兜底预设', () => {
+  const lightning = { id: 'sdxl-lightning', label: 'SDXL Lightning', supportsImg2Img: true, supportsInpaint: true }
+  const native = { id: 'sdxl-inpaint', label: 'SDXL Inpaint', supportsImg2Img: true, supportsInpaint: true, inpaintOnly: true }
+  const flux = { id: 'flux2-klein-4b', label: 'FLUX.2 Klein', supportsImg2Img: false }
+  const presets = [flux, native, lightning]
+
+  // 来源归一：缺省与未知值都按表单来源处理，旧调用方行为不变。
+  assert.deepEqual(logic.GENERATE_SOURCES, ['form', 'assistant', 'variant', 'retry'])
+  assert.equal(logic.normalizeGenerateSource(undefined), 'form')
+  assert.equal(logic.normalizeGenerateSource(' retry '), 'retry')
+  assert.equal(logic.normalizeGenerateSource('bogus'), 'form')
+
+  // form：覆盖项原样透传，参考图继续由表单提供。
+  const formPolicy = logic.generateSourcePolicy('form', { overrides: { prompt: 'a' }, preset: lightning, presets })
+  assert.equal(formPolicy.ok, true)
+  assert.deepEqual(formPolicy.overrides, { prompt: 'a' })
+  assert.equal(Object.prototype.hasOwnProperty.call(formPolicy.overrides, 'reference'), false, 'form 不覆盖参考图')
+  assert.equal(formPolicy.notice, null)
+
+  // assistant / variant：无论调用方带了什么，本次都显式纯文生图。
+  for (const source of ['assistant', 'variant']) {
+    const policy = logic.generateSourcePolicy(source, {
+      overrides: { prompt: 'a', reference: { path: 'imagen-output/a.png' } },
+      preset: lightning,
+      presets,
+    })
+    assert.equal(policy.overrides.reference, null, `${source} 必须显式清空参考图`)
+    assert.equal(policy.overrides.prompt, 'a')
+    assert.equal(policy.notice, null)
+  }
+
+  // 当前有效预设是 inpaintOnly：仅本次切到参考图兜底预设并轻提示，预设对象本身不改。
+  const assistant = logic.generateSourcePolicy('assistant', { overrides: { prompt: 'a' }, preset: native, presets })
+  assert.equal(assistant.ok, true)
+  assert.equal(assistant.overrides.presetId, 'sdxl-lightning', '兜底预设优先 sdxl-lightning')
+  assert.equal(assistant.notice.key, 'studio.reference.autoText2Image')
+  assert.equal(assistant.notice.params.preset, 'SDXL Lightning', '提示里的预设用展示名')
+  assert.equal(native.id, 'sdxl-inpaint', '左栏预设对象不能被本次覆盖项修改')
+
+  // variant 的覆盖项可能带作品自己的预设（例如 inpaint 模型生成的图）：按有效预设判断。
+  const variant = logic.generateSourcePolicy('variant', {
+    overrides: { prompt: 'a', presetId: 'sdxl-inpaint' },
+    preset: lightning,
+    presets,
+  })
+  assert.equal(variant.overrides.reference, null)
+  assert.equal(variant.overrides.presetId, 'sdxl-lightning', '作品预设是 inpaintOnly 时本次改用兜底预设')
+
+  // 一个可做文生图的预设都没有：拦下，交给调用方提示切模型。
+  const noFallback = logic.generateSourcePolicy('assistant', { overrides: { prompt: 'a' }, preset: native, presets: [native] })
+  assert.equal(noFallback.ok, false)
+  assert.equal(noFallback.blockedKey, 'studio.reference.blocked')
+
+  // retry：参考图由恢复计划决定，策略只透传覆盖项。
+  const retry = logic.generateSourcePolicy('retry', { overrides: { prompt: 'a', reference: null }, preset: native, presets })
+  assert.equal(retry.overrides.reference, null)
+  assert.equal(retry.notice, null)
+
+  // 有效预设解析：覆盖项优先，未知 id 回落到表单预设。
+  assert.equal(logic.effectivePresetOf({ presetId: 'sdxl-inpaint' }, lightning, presets), native)
+  assert.equal(logic.effectivePresetOf({}, lightning, presets), lightning)
+  assert.equal(logic.effectivePresetOf({ presetId: 'gone' }, lightning, presets), lightning)
+  assert.equal(logic.effectivePresetOf(null, null, presets), null)
+  assert.equal(logic.presetLabelOf(lightning), 'SDXL Lightning')
+  assert.equal(logic.presetLabelOf({ id: 'x', short: 'S' }), 'S')
+  assert.equal(logic.presetLabelOf({ id: 'x' }), 'x')
+  assert.equal(logic.presetLabelOf(null), '')
+})
+
+// 失败重试：任务参数只冻结参考图出处与「是否带蒙版」，完整蒙版只能从同源提交体恢复。
+await check('失败重试参考图恢复：无参考图 / 普通参考图 / 同源蒙版 / 蒙版不可恢复', () => {
+  const maskPath = 'imagen-output/job-1/07.png'
+  const pendingBody = {
+    prompt: '局部改成红灯笼',
+    reference: { path: maskPath, strength: 0.8, mask: { data: MASK_PNG_B64, coverage: 0.2 } },
+  }
+  const maskJob = {
+    id: 'j-mask',
+    presetId: 'sdxl-inpaint',
+    params: { prompt: '局部改成红灯笼', reference: { sourcePath: maskPath, strength: 0.95, mask: true } },
+  }
+
+  // 连提示词都没有：返回 null，由调用方提示「缺少提示词」。
+  assert.equal(logic.retryReferencePlan(null), null)
+  assert.equal(logic.retryReferencePlan({ params: { prompt: '  ' } }), null)
+
+  // 失败任务没有参考图：必须显式 reference: null，不得继承表单 / 上一次提交体的参考图。
+  const plainJob = { id: 'j-plain', presetId: 'sdxl-lightning', params: { prompt: '失败', width: 1024, height: 1024 } }
+  const plain = logic.retryReferencePlan(plainJob, { pendingRef: pendingBody })
+  assert.equal(plain.restored, 'none')
+  assert.equal(plain.maskLost, false)
+  assert.equal(plain.overrides.reference, null, '没有参考图的任务重试时不得静默带上表单里的参考图')
+  assert.equal(Object.prototype.hasOwnProperty.call(plain.overrides, 'reference'), true, 'reference 必须显式写出')
+
+  // 普通参考图（无蒙版）：按冻结的出处与强度恢复，并补出同口径缩略图地址。
+  const img2imgJob = {
+    id: 'j-img2img',
+    presetId: 'sdxl-base',
+    params: { prompt: '失败', width: 1024, height: 1024, reference: { sourcePath: 'imagen-output/job-2/01.png', strength: 0.75 } },
+  }
+  const img2img = logic.retryReferencePlan(img2imgJob)
+  assert.equal(img2img.restored, 'reference')
+  assert.equal(img2img.maskLost, false)
+  assert.equal(img2img.overrides.reference.path, 'imagen-output/job-2/01.png')
+  assert.equal(
+    img2img.overrides.reference.url,
+    `/imagen-api/file?path=${encodeURIComponent('imagen-output/job-2/01.png')}`,
+    '缩略图地址与 lib/output.js 的 fileUrl 同口径',
+  )
+  assert.equal(img2img.overrides.strength, 0.75, '强度跟失败任务走')
+  assert.equal(img2img.overrides.presetId, 'sdxl-base')
+  assert.equal(img2img.requestPaint, false)
+
+  // 同源提交体还留着完整蒙版：恢复原参数直接重试。
+  const recovered = logic.retryReferencePlan(maskJob, { pendingRef: pendingBody })
+  assert.equal(recovered.restored, 'mask')
+  assert.equal(recovered.maskLost, false)
+  assert.equal(recovered.overrides.reference.path, maskPath)
+  assert.equal(recovered.overrides.reference.mask.data, MASK_PNG_B64, '同源提交体的完整蒙版要恢复')
+  assert.equal(recovered.overrides.strength, 0.95, '强度以失败任务冻结值为准')
+
+  // 同源但蒙版已不可恢复（提交体只剩参考图）：只填回参考图 + 请求涂抹，不自动提交。
+  const lost = logic.retryReferencePlan(maskJob, {
+    pendingRef: { prompt: '局部改成红灯笼', reference: { path: maskPath, strength: 0.9 } },
+  })
+  assert.equal(lost.maskLost, true)
+  assert.equal(lost.restored, 'none')
+  assert.equal(lost.requestPaint, true)
+  assert.equal(lost.noticeKey, 'studio.toast.maskLost')
+  assert.equal(lost.overrides.reference, null, '蒙版不可恢复时不自动提交带参考图的请求')
+  assert.equal(lost.fillReference.path, maskPath)
+  assert.equal(lost.fillReference.url, `/imagen-api/file?path=${encodeURIComponent(maskPath)}`)
+
+  // 提交体不同源 / 没有提交体：蒙版同样不可恢复。
+  const otherSource = logic.retryReferencePlan(maskJob, {
+    pendingRef: { prompt: '别的图', reference: { path: 'imagen-output/other.png', mask: { data: MASK_PNG_B64, coverage: 0.2 } } },
+  })
+  assert.equal(otherSource.maskLost, true, '蒙版只能从同源提交体恢复，不能挪用到别的图')
+  assert.equal(logic.retryReferencePlan(maskJob).maskLost, true, '没有上一次提交体时蒙版同样不可恢复')
+
+  // 失败任务是普通图生图，但同源提交体带着更晚一次涂抹的蒙版：不能凭它变成局部重绘。
+  const samePathMasked = { prompt: 'x', reference: { path: 'imagen-output/job-2/01.png', strength: 0.6, mask: { data: MASK_PNG_B64, coverage: 0.2 } } }
+  const stripped = logic.retryReferencePlan(img2imgJob, { pendingRef: samePathMasked })
+  assert.equal(stripped.restored, 'reference')
+  assert.equal('mask' in stripped.overrides.reference, false)
+
+  // 没有失败任务时直接用上一次提交体作为来源（带完整蒙版也能恢复）。
+  const fromBody = logic.retryReferencePlan(pendingBody, { pendingRef: pendingBody })
+  assert.equal(fromBody.restored, 'mask')
+  assert.equal(fromBody.overrides.reference.mask.data, MASK_PNG_B64)
+  assert.equal(fromBody.overrides.strength, 0.8)
+
+  // 缩略图地址纯函数：空值返回空串，相对路径做一次 URL 编码。
+  assert.equal(logic.referenceUrlOf(''), '')
+  assert.equal(logic.referenceUrlOf(null), '')
+  assert.equal(logic.referenceUrlOf(' imagen-output/a b.png '), `/imagen-api/file?path=${encodeURIComponent('imagen-output/a b.png')}`)
+})
+
+// 能力预检必须用「有效预设 + 有效参考图」，不能用左栏当前预设误拦重试恢复的任务。
+await check('生成能力预检：有效预设下校验参考图与蒙版', () => {
+  const lightning = { id: 'sdxl-lightning', supportsImg2Img: true, supportsInpaint: true }
+  const flux = { id: 'flux2-klein-4b', supportsImg2Img: false }
+  const native = { id: 'sdxl-inpaint', supportsImg2Img: true, supportsInpaint: true, inpaintOnly: true }
+  const presets = [flux, lightning, native]
+  const reference = { path: 'imagen-output/a.png', strength: 0.6 }
+  const masked = { ...reference, mask: { data: MASK_PNG_B64, coverage: 0.2 } }
+
+  // 不支持垫图的预设 + 参考图 → 拦下并提示切模型。
+  const blocked = logic.generateCapabilityOf({ preset: flux, presets, reference })
+  assert.equal(blocked.ok, false)
+  assert.equal(blocked.reason, 'reference')
+  assert.equal(blocked.noticeKey, 'studio.reference.blocked')
+  // 预设列表还没拿到（启动瞬间 / 旧宿主）不拦截，交给宿主判断。
+  assert.equal(logic.generateCapabilityOf({ preset: flux, presets: [], reference }).ok, true)
+  // 没有参考图时纯文生图一律放行。
+  assert.equal(logic.generateCapabilityOf({ preset: flux, presets, reference: null }).ok, true)
+
+  // inpaintOnly 缺蒙版 → 拦下；带有效蒙版放行。
+  const missingMask = logic.generateCapabilityOf({ preset: native, presets, reference })
+  assert.equal(missingMask.ok, false)
+  assert.equal(missingMask.reason, 'mask')
+  assert.equal(missingMask.noticeKey, 'studio.mask.onlyHint')
+  assert.equal(logic.generateCapabilityOf({ preset: native, presets, reference: masked }).ok, true)
+
+  // 重试恢复的任务按自己的预设判断：表单当前预设不支持垫图也不会误拦。
+  assert.equal(logic.generateCapabilityOf({ preset: lightning, presets, reference: masked }).ok, true)
+  // 蒙版数据不合法（空 / 超限）等同于没有蒙版，专用模型仍拦下。
+  assert.equal(logic.generateCapabilityOf({ preset: native, presets, reference: { ...reference, mask: { data: 'not base64!' } } }).ok, false)
+})
+
+// 胶片条保护优先级：参考图（含蒙版）> 脏草稿 > 干净回填。
+await check('胶片条点击判定：参考图保护优先于脏草稿，干净才回填', () => {
+  const maskedReference = { path: 'imagen-output/a.png', mask: { data: MASK_PNG_B64, coverage: 0.2 } }
+  const plainReference = { path: 'imagen-output/a.png', url: '/imagen-api/file?path=x' }
+  const patch = { prompt: '作品提示词', reference: null }
+
+  const keptMask = logic.previewRecallOf({ reference: maskedReference, dirty: true, patch })
+  assert.equal(keptMask.action, 'reference')
+  assert.equal(keptMask.noticeKey, 'studio.toast.referenceKept', '带蒙版提示保留参考图与蒙版')
+  const keptImage = logic.previewRecallOf({ reference: plainReference, dirty: true, patch })
+  assert.equal(keptImage.action, 'reference')
+  assert.equal(keptImage.noticeKey, 'studio.toast.referenceImageKept', '无蒙版提示只保留参考图')
+  // 参考图保护排在 dirty 判断之前：表单刚提交变干净、但还挂着参考图时同样不回填。
+  assert.equal(logic.previewRecallOf({ reference: plainReference, dirty: false, patch: {} }).action, 'reference')
+
+  assert.deepEqual(logic.previewRecallOf({ reference: null, dirty: true, patch }), { action: 'draft', noticeKey: 'studio.toast.draftKept' })
+  assert.deepEqual(logic.previewRecallOf({ reference: null, dirty: false, patch }), { action: 'recall', noticeKey: 'studio.toast.recalled' })
+  assert.deepEqual(logic.previewRecallOf({ reference: null, dirty: false, patch: {} }), { action: 'idle', noticeKey: '' })
+  // 没有 path 的残缺参考图不算有效参考图，不触发保护。
+  assert.equal(logic.previewRecallOf({ reference: { url: '/x' }, dirty: false, patch }).action, 'recall')
+})
+
+// 强度自动档：初始进入涂抹抬档 → 用户手调退出 → 切预设时自动档才跟随。
+await check('重绘强度自动档：进入涂抹抬档、手调退出、切预设跟随', () => {
+  // 初始（自动档未开启、强度仍是契约默认 0.6）进入涂抹：抬到当前预设的推荐档。
+  assert.deepEqual(
+    logic.maskStrengthPatch(LIMITS.strength.default, { native: false, auto: false }),
+    { strength: logic.MASK_STRENGTH_DEFAULT },
+    '通用模型进入涂抹抬到 0.8',
+  )
+  assert.deepEqual(
+    logic.maskStrengthPatch(LIMITS.strength.default, { native: true, auto: false }),
+    { strength: logic.MASK_STRENGTH_NATIVE },
+    '专用 inpaint 权重进入涂抹抬到 0.9',
+  )
+
+  // 自动档下即使当前值已是上一轮推荐档（≠ 契约默认），也跟随新预设推荐档。
+  assert.deepEqual(
+    logic.maskStrengthPatch(logic.MASK_STRENGTH_DEFAULT, { native: true, auto: true }),
+    { strength: logic.MASK_STRENGTH_NATIVE },
+    '通用 0.8 切到专用模型：跟随到 0.9',
+  )
+  assert.deepEqual(
+    logic.maskStrengthPatch(logic.MASK_STRENGTH_NATIVE, { native: false, auto: true }),
+    { strength: logic.MASK_STRENGTH_DEFAULT },
+    '专用 0.9 切回通用模型：跟随到 0.8',
+  )
+
+  // 用户手调过（auto=false 且强度不等于契约默认值）：进入涂抹不再覆盖。
+  assert.equal(logic.maskStrengthPatch(0.7, { native: false, auto: false }), null)
+  assert.equal(logic.maskStrengthPatch(0.7, { native: true, auto: false }), null)
+  // 旧调用点不传 auto 时保留原有语义（只在契约默认值上抬档）。
+  assert.deepEqual(logic.maskStrengthPatch(LIMITS.strength.default), { strength: logic.MASK_STRENGTH_DEFAULT })
+  assert.equal(logic.maskStrengthPatch(0.7), null)
+
+  // 切预设联动：自动档按新预设推荐档更新，手调过一律不动。
+  assert.deepEqual(logic.maskStrengthPresetPatch(true, { native: true }), { strength: logic.MASK_STRENGTH_NATIVE })
+  assert.deepEqual(logic.maskStrengthPresetPatch(true, { native: false }), { strength: logic.MASK_STRENGTH_DEFAULT })
+  assert.equal(logic.maskStrengthPresetPatch(false, { native: true }), null, '手调过强度：切预设不动')
+  assert.equal(logic.maskStrengthPresetPatch(undefined, { native: true }), null)
+
+  // 推荐档必须落在契约区间内。
+  assert.ok(logic.MASK_STRENGTH_DEFAULT >= LIMITS.strength.min && logic.MASK_STRENGTH_DEFAULT <= LIMITS.strength.max)
+  assert.ok(logic.MASK_STRENGTH_NATIVE >= LIMITS.strength.min && logic.MASK_STRENGTH_NATIVE <= logic.strengthMaxOf(true))
+})
+
+// mask-aware 强度钳制：带蒙版放宽到契约 inpaintMax，img2img 维持 max。
+await check('强度 mask-aware 钳制：带蒙版放宽到 inpaintMax，请求体同步', () => {
+  const inpaintMax = Number.isFinite(Number(LIMITS.strength.inpaintMax))
+    ? Number(LIMITS.strength.inpaintMax)
+    : LIMITS.strength.max
+  assert.equal(logic.strengthMaxOf(false), LIMITS.strength.max)
+  assert.equal(logic.strengthMaxOf(true), inpaintMax, '带蒙版上限来自契约 inpaintMax（缺省回落 max）')
+  assert.ok(inpaintMax >= LIMITS.strength.max)
+
+  // 无蒙版：与 clampStrength 同一口径（旧调用点行为不变）。
+  for (const value of [0.6, 0.35, 3, 0.01, 'x', undefined]) {
+    assert.equal(logic.clampMaskStrength(value, false), logic.clampStrength(value), `无蒙版 ${value} 钳制口径应一致`)
+  }
+  // 有蒙版：上限放宽，下界与步长不变。
+  assert.equal(logic.clampMaskStrength(3, true), inpaintMax)
+  assert.equal(logic.clampMaskStrength(inpaintMax, true), inpaintMax)
+  assert.equal(logic.clampMaskStrength(LIMITS.strength.min, true), LIMITS.strength.min)
+  assert.equal(logic.clampMaskStrength('x', true), LIMITS.strength.default)
+  if (inpaintMax > LIMITS.strength.max) {
+    // 0.9 + 0.05 带浮点尾巴，期望值按同一套取整口径算。
+    const oneStepAbove = Math.round((LIMITS.strength.max + LIMITS.strength.step) * 1000) / 1000
+    assert.equal(
+      logic.clampMaskStrength(oneStepAbove, true),
+      oneStepAbove,
+      '带蒙版可超过 img2img 上限一档',
+    )
+  }
+
+  // 请求体：带有效蒙版时按 inpaintMax 归一；无蒙版 / 蒙版被能力门控掉时仍按 max。
+  const base = { prompt: '局部', width: 1024, height: 1024, steps: 4, cfg: 0, count: 1, seed: '', strength: 3 }
+  const masked = { ...base, reference: { path: 'imagen-output/a.png', mask: { data: MASK_PNG_B64, coverage: 0.2 } } }
+  assert.equal(logic.buildGenerateBody(masked).reference.strength, inpaintMax, '带蒙版的请求体按 inpaintMax 归一')
+  assert.equal(logic.buildGenerateBody({ ...base, reference: { path: 'imagen-output/a.png' } }).reference.strength, LIMITS.strength.max)
+  assert.equal(logic.buildGenerateBody(masked, { maskActive: false }).reference.strength, LIMITS.strength.max)
+  const override = logic.buildGenerateBody(base, {
+    overrides: { prompt: '重试', reference: { path: 'imagen-output/a.png', mask: { data: MASK_PNG_B64, coverage: 0.2 } }, strength: inpaintMax },
+  })
+  assert.equal(override.reference.strength, inpaintMax, '覆盖项（重试恢复的带蒙版任务）同样走 mask-aware 归一')
+})
+
+// 新增状态信号文案由 client-ui 维护字典，这里只锁键名两侧都存在。
+await check('状态流转新增文案键：中英文两侧齐全', () => {
+  for (const key of [
+    'studio.toast.referenceKept',
+    'studio.toast.referenceImageKept',
+    'studio.toast.maskLost',
+    'studio.mask.continueHint',
+    'studio.reference.autoText2Image',
+  ]) {
+    assert.ok(typeof DICT.zh[key] === 'string' && DICT.zh[key].length > 0, `${key} 缺少中文文案`)
+    assert.ok(typeof DICT.en[key] === 'string' && DICT.en[key].length > 0, `${key} 缺少英文文案`)
+  }
+})
+
 const failed = results.filter((item) => !item.ok)
 console.log(`\n${results.length - failed.length}/${results.length} 通过`)
 if (failed.length > 0) process.exitCode = 1

@@ -116,6 +116,14 @@ export function Stage(props) {
   const referenceIdentity = reference
     ? `${reference.path || ''}|${reference.url || ''}|${referenceWidth || ''}|${referenceHeight || ''}`
     : ''
+  // 组合层的「进入涂抹」请求计数：大于 0 时由 Stage 消费一次并打开画布。
+  const paintRequest = ui && Number.isFinite(Number(ui.paintRequest)) ? Number(ui.paintRequest) : 0
+  const clearPaintRequest = ui && typeof ui.clearPaintRequest === 'function' ? ui.clearPaintRequest : null
+  // 选中作品标识：涂抹中切换胶卷作品要退出涂抹态，让预览跟随选中作品。
+  const selectedIdentity = selected && selected.image
+    ? `${selected.image.path || ''}|${selected.image.file || ''}|${selected.image.url || ''}`
+    : ''
+  const selectedIdentityRef = React.useRef(selectedIdentity)
 
   /**
    * 画布上下文：渲染测试的假 DOM 里 canvas 没有 getContext，所有绘制入口都从
@@ -128,7 +136,7 @@ export function Stage(props) {
     return ctx ? { canvas, ctx } : null
   }
 
-  /** 事件坐标 → 画布像素坐标（画布可能被 CSS 缩放过）。 */
+  /** 事件坐标 → 画布像素坐标（画布可能被 CSS 缩放过）。宽高分别换算，压扁时笔迹不变形。 */
   function canvasPointOf(event) {
     const canvas = canvasRef.current
     if (!canvas || typeof canvas.getBoundingClientRect !== 'function') return null
@@ -137,6 +145,23 @@ export function Stage(props) {
     return {
       x: ((Number(event && event.clientX) || 0) - rect.left) * (canvas.width / rect.width),
       y: ((Number(event && event.clientY) || 0) - rect.top) * (canvas.height / rect.height),
+    }
+  }
+
+  /**
+   * 画布在页面上的缩放系数：宽、高分别计算。
+   *
+   * 正常情况下两者相等；容器被压矮或窄屏时 CSS 仍会保住画布比例，这里按两轴
+   * 分别换算，指针落点与光标定位都不依赖「正方形缩放」的假设。
+   */
+  function canvasScaleOf(canvas) {
+    if (!canvas || typeof canvas.getBoundingClientRect !== 'function') return null
+    const rect = canvas.getBoundingClientRect()
+    if (!rect || !(rect.width > 0) || !(rect.height > 0) || !(canvas.width > 0) || !(canvas.height > 0)) return null
+    return {
+      rect,
+      scaleX: rect.width / canvas.width,
+      scaleY: rect.height / canvas.height,
     }
   }
 
@@ -288,22 +313,28 @@ export function Stage(props) {
     paintDot(geometry.ctx, point.x, point.y, brush.eraser)
     drawingRef.current = { x: point.x, y: point.y }
     keyboardCursorRef.current = { x: point.x, y: point.y }
-    const canvas = geometry.canvas
-    if (typeof canvas.getBoundingClientRect === 'function') {
-      const rect = canvas.getBoundingClientRect()
-      if (rect.width > 0) placeMaskCursor((Number(event.clientX) || 0) - rect.left, (Number(event.clientY) || 0) - rect.top, rect.width / canvas.width)
+    const scale = canvasScaleOf(geometry.canvas)
+    if (scale) {
+      placeMaskCursor(
+        (Number(event.clientX) || 0) - scale.rect.left,
+        (Number(event.clientY) || 0) - scale.rect.top,
+        Math.min(scale.scaleX, scale.scaleY),
+      )
     }
   }
 
   function onMaskPointerMove(event) {
     const geometry = canvasContext()
     if (!geometry) return
-    const canvas = geometry.canvas
     const point = canvasPointOf(event)
     if (!point) return
-    if (typeof canvas.getBoundingClientRect === 'function') {
-      const rect = canvas.getBoundingClientRect()
-      if (rect.width > 0) placeMaskCursor((Number(event.clientX) || 0) - rect.left, (Number(event.clientY) || 0) - rect.top, rect.width / canvas.width)
+    const scale = canvasScaleOf(geometry.canvas)
+    if (scale) {
+      placeMaskCursor(
+        (Number(event.clientX) || 0) - scale.rect.left,
+        (Number(event.clientY) || 0) - scale.rect.top,
+        Math.min(scale.scaleX, scale.scaleY),
+      )
     }
     const previous = drawingRef.current
     if (!previous) return
@@ -334,9 +365,10 @@ export function Stage(props) {
     const geometry = canvasContext()
     if (!geometry) return
     const canvas = geometry.canvas
-    const scale = typeof canvas.getBoundingClientRect === 'function' && canvas.width > 0
-      ? canvas.getBoundingClientRect().width / canvas.width
-      : 1
+    const scale = canvasScaleOf(canvas)
+    const scaleX = scale ? scale.scaleX : 1
+    const scaleY = scale ? scale.scaleY : 1
+    const cursorScale = Math.min(scaleX, scaleY)
     // 键盘光标从上次位置继续，首次按方向键时先落在画布中心。
     const current = keyboardCursorRef.current || { x: canvas.width / 2, y: canvas.height / 2 }
     const point = { x: current.x, y: current.y }
@@ -347,7 +379,7 @@ export function Stage(props) {
     else if (key === ' ' || key === 'Spacebar' || key === 'Enter') {
       paintDot(geometry.ctx, point.x, point.y, brush.eraser)
       keyboardCursorRef.current = { x: point.x, y: point.y }
-      placeMaskCursor(point.x * scale, point.y * scale, scale)
+      placeMaskCursor(point.x * scaleX, point.y * scaleY, cursorScale)
       if (event && typeof event.preventDefault === 'function') event.preventDefault()
       commitMask()
       return
@@ -358,7 +390,7 @@ export function Stage(props) {
     point.x = Math.min(canvas.width, Math.max(0, point.x))
     point.y = Math.min(canvas.height, Math.max(0, point.y))
     keyboardCursorRef.current = { x: point.x, y: point.y }
-    placeMaskCursor(point.x * scale, point.y * scale, scale)
+    placeMaskCursor(point.x * scaleX, point.y * scaleY, cursorScale)
   }
 
   /** 清空蒙版：画布归零并清掉表单里已保存的蒙版（回到整图重绘）。 */
@@ -421,6 +453,21 @@ export function Stage(props) {
     if (!canPaint) setPainting(false)
   }, [canPaint])
 
+  // 涂抹中切换胶卷作品：退出涂抹态，让预览跟随选中作品；已涂蒙版留在表单里，不丢。
+  React.useEffect(() => {
+    if (selectedIdentityRef.current === selectedIdentity) return
+    selectedIdentityRef.current = selectedIdentity
+    setPainting(false)
+  }, [selectedIdentity])
+
+  // 组合层请求进入涂抹态（专用模型「以此图重绘」、失败重试恢复参考图、以此结果续绘）：
+  // 计数变化时消费一次；从画廊跨视图切回时 Stage 才挂载，effect 首次执行同样生效。
+  React.useEffect(() => {
+    if (paintRequest <= 0 || !canPaint) return
+    openMaskEditor()
+    if (clearPaintRequest) clearPaintRequest()
+  }, [paintRequest, canPaint])
+
   // 进入涂抹态 / 画布尺寸变化：重建画布并把已有蒙版还原上去。
   const maskLayoutKey = `${painting ? 1 : 0}|${canvasSize.width}x${canvasSize.height}`
   React.useEffect(() => {
@@ -460,6 +507,134 @@ export function Stage(props) {
     onClose: () => setZoom(false),
   })
 
+  // 涂抹态：预览画布里的参考图（不一定是舞台上正在陈列的那张作品，涂抹对象始终是参考图）。
+  const referencePreviewUrl = reference && reference.url ? reference.url : ''
+  const referenceAlt = prompt || referenceFileName(reference && reference.path) || t('studio.reference.title')
+  const editorAspect = naturalSize.width > 0 && naturalSize.height > 0
+    ? `${naturalSize.width} / ${naturalSize.height}`
+    : '1'
+  // CSS 宽度公式用的比例数字：与内联 aspect-ratio 配合，竖图 / 矮窗口下整体缩放而不压扁。
+  const maskRatio = naturalSize.width > 0 && naturalSize.height > 0
+    ? naturalSize.width / naturalSize.height
+    : 1
+  const maskPercent = percentOf(maskState.coverage)
+  const paintingActive = painting && canPaint
+  // 少步快速模型（4~8 步蒸馏）局部重绘的改动幅度有限：给一条换多步模型的弱提示。
+  const fastModel = Number(form && form.activePreset && form.activePreset.steps) <= 8
+
+  // 涂抹编辑器在「有选中作品」与「空舞台」两种分支复用：空舞台也能直接涂抹已有参考图。
+  const maskEditor = (
+    <div className="ofs-mask-editor">
+      <div className="ofs-mask-head">
+        <span className="ofs-mask-title">{t('studio.mask.title')}</span>
+        <span className="ofs-mask-coverage ofs-muted">{formatText(t('studio.mask.coverage'), { percent: maskPercent })}</span>
+      </div>
+
+      <div
+        className="ofs-mask-stage"
+        style={{ '--ofs-mask-r': String(maskRatio), aspectRatio: editorAspect }}
+      >
+        {referencePreviewUrl ? (
+          <img
+            src={referencePreviewUrl}
+            alt={referenceAlt}
+            draggable={false}
+            onLoad={onReferencePreviewLoad}
+            className="ofs-mask-photo"
+          />
+        ) : null}
+        <canvas
+          ref={canvasRef}
+          className="ofs-mask-canvas"
+          role="application"
+          tabIndex={0}
+          aria-label={t('studio.mask.canvasLabel')}
+          onPointerDown={onMaskPointerDown}
+          onPointerMove={onMaskPointerMove}
+          onPointerUp={onMaskPointerUp}
+          onPointerCancel={onMaskPointerUp}
+          onPointerLeave={hideMaskCursor}
+          onKeyDown={onMaskKeyDown}
+          onBlur={hideMaskCursor}
+        />
+        <span
+          ref={cursorRef}
+          className="ofs-mask-cursor"
+          aria-hidden="true"
+          style={{ left: 0, top: 0, width: 0, height: 0 }}
+        />
+      </div>
+
+      <div className="ofs-mask-tools">
+        <label className="ofs-mask-brush">
+          <span>{t('studio.mask.brush')}</span>
+          <input
+            type="range"
+            className="ofs-mask-range"
+            min={MASK_BRUSH.min}
+            max={MASK_BRUSH.max}
+            step={MASK_BRUSH.step}
+            value={brush.size}
+            aria-label={t('studio.mask.brush')}
+            onChange={(event) => setBrush((prev) => brushStateOf({ ...prev, size: clampBrushSize(event.target.value) }))}
+          />
+          <b>{brush.size}</b>
+        </label>
+        <button
+          type="button"
+          className={brush.eraser ? 'ofs-dock-button is-on' : 'ofs-dock-button'}
+          style={MASK_HIT_STYLE}
+          aria-pressed={brush.eraser}
+          onClick={() => setBrush((prev) => toggleEraser(prev))}
+        >
+          {t('studio.mask.eraser')}
+        </button>
+        <button type="button" className="ofs-dock-button" style={MASK_HIT_STYLE} onClick={clearMaskCanvas}>
+          {t('studio.mask.clear')}
+        </button>
+        <button type="button" className="ofs-dock-button" style={MASK_HIT_STYLE} onClick={invertMaskCanvas}>
+          {t('studio.mask.invert')}
+        </button>
+        <button type="button" className="ofs-dock-button ofs-mask-close" style={MASK_HIT_STYLE} onClick={closeMaskEditor}>
+          {t('studio.mask.close')}
+        </button>
+      </div>
+
+      <p className="ofs-hint ofs-mask-hint">
+        {t('studio.mask.hint')}
+      </p>
+      <p className="ofs-hint ofs-mask-guide">{t('studio.mask.guide')}</p>
+      {fastModel ? <p className="ofs-hint ofs-mask-fast">{t('studio.mask.fastModelHint')}</p> : null}
+    </div>
+  )
+
+  // 局部涂抹入口：参考图存在且模型支持时出现；空舞台同样显示，便于先涂抹再切回。
+  const paintBar = reference && inpaintSupported && !paintingActive ? (
+    <div className="ofs-mask-bar">
+      <button
+        type="button"
+        className="ofs-dock-button ofs-mask-toggle"
+        style={MASK_HIT_STYLE}
+        aria-pressed={false}
+        onClick={openMaskEditor}
+      >
+        <Icon name="focus" size={15} />
+        {t('studio.mask.toggle')}
+      </button>
+      <span className={mask ? 'ofs-hint ofs-mask-status' : 'ofs-muted ofs-mask-status'}>
+        {mask ? formatText(t('studio.mask.applied'), { percent: percentOf(mask.coverage) }) : t('studio.mask.empty')}
+      </span>
+    </div>
+  ) : null
+
+  // 模型不支持局部重绘时保留已涂蒙版并说明，不静默丢弃。
+  const unsupportedNote = reference && !inpaintSupported ? (
+    <div className="ofs-mask-unsupported">
+      <p className="ofs-hint ofs-mask-warn">{t('studio.mask.unsupported')}</p>
+      {mask ? <p className="ofs-hint ofs-mask-warn">{t('studio.mask.kept')}</p> : null}
+    </div>
+  ) : null
+
   if (!image) {
     // 手动关闭云端后不能再说「点击生成即可出图」：生成会被宿主拒绝，先提示唤醒。
     const stopped = Boolean(compute.status && compute.status.stopped)
@@ -473,46 +648,52 @@ export function Stage(props) {
     return (
       <section className="ofs-stage">
         <div className="ofs-figure ofs-figure--empty">
-          <div className="ofs-frame" style={{ '--ofs-frame-r': String(frameRatio) }}>
-            <span className="ofs-marks" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-              <span />
-            </span>
+          {paintingActive ? maskEditor : (
+            <>
+              <div className="ofs-frame" style={{ '--ofs-frame-r': String(frameRatio) }}>
+                <span className="ofs-marks" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                </span>
 
-            <div className="ofs-frame-body">
-              {activeJob ? null : (
-                <div className="ofs-empty-card">
-                  <p className="ofs-empty-title">{t('studio.stage.empty')}</p>
-                  <p className="ofs-muted">{stopped ? t('studio.stage.stoppedHint') : t('studio.stage.emptyHint')}</p>
-                  <div className="ofs-examples">
-                    <span className="ofs-examples-label">{t('studio.stage.examples')}</span>
-                    {INSPIRE_KEYS.map((key) => (
-                      <button type="button" key={key} className="ofs-example" onClick={() => useInspiration(t(key))} title={t(key)}>
-                        {t(`${key}.label`)}
-                      </button>
-                    ))}
-                  </div>
-                  {steady !== null ? (
-                    <p className="ofs-exposure">
-                      <span className="ofs-exposure-rule" aria-hidden="true" />
-                      {t('studio.stage.steady')} {formatSeconds(t, steady)}
-                      <span className="ofs-exposure-rule" aria-hidden="true" />
-                    </p>
-                  ) : null}
+                <div className="ofs-frame-body">
+                  {activeJob ? null : (
+                    <div className="ofs-empty-card">
+                      <p className="ofs-empty-title">{t('studio.stage.empty')}</p>
+                      <p className="ofs-muted">{stopped ? t('studio.stage.stoppedHint') : t('studio.stage.emptyHint')}</p>
+                      <div className="ofs-examples">
+                        <span className="ofs-examples-label">{t('studio.stage.examples')}</span>
+                        {INSPIRE_KEYS.map((key) => (
+                          <button type="button" key={key} className="ofs-example" onClick={() => useInspiration(t(key))} title={t(key)}>
+                            {t(`${key}.label`)}
+                          </button>
+                        ))}
+                      </div>
+                      {steady !== null ? (
+                        <p className="ofs-exposure">
+                          <span className="ofs-exposure-rule" aria-hidden="true" />
+                          {t('studio.stage.steady')} {formatSeconds(t, steady)}
+                          <span className="ofs-exposure-rule" aria-hidden="true" />
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
 
-          {activeJob ? (
-            <div className="ofs-stage-progress is-inside" aria-hidden="true">
-              <span className="ofs-shimmer" aria-hidden="true" />
-              <span className="ofs-progress-label">{progressText}</span>
-            </div>
-          ) : null}
+              {activeJob ? (
+                <div className="ofs-stage-progress is-inside" aria-hidden="true">
+                  <span className="ofs-shimmer" aria-hidden="true" />
+                  <span className="ofs-progress-label">{progressText}</span>
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
+        {paintBar}
+        {unsupportedNote}
       </section>
     )
   }
@@ -524,105 +705,14 @@ export function Stage(props) {
   const printRatio = ratioOf(image.width, image.height)
   // 刚落定的图才播一次显影；翻历史作品直接陈列。
   const developing = isFreshItem(item, now)
-
-  // 涂抹态：预览画布里的参考图（不一定是舞台上正在陈列的那张作品，涂抹对象始终是参考图）。
-  const referencePreviewUrl = reference && reference.url ? reference.url : ''
-  const referenceAlt = prompt || referenceFileName(reference && reference.path) || t('studio.reference.title')
-  const editorAspect = naturalSize.width > 0 && naturalSize.height > 0
-    ? `${naturalSize.width} / ${naturalSize.height}`
-    : '1'
-  const maskPercent = percentOf(maskState.coverage)
-  const paintingActive = painting && canPaint
-  // 少步快速模型（4~8 步蒸馏）局部重绘的改动幅度有限：给一条换多步模型的弱提示。
-  const fastModel = Number(form && form.activePreset && form.activePreset.steps) <= 8
+  // 续绘闭环：当前结果存在且模型支持局部重绘时，可一键设为新参考图并进入涂抹。
+  const continueInpaint = actions && typeof actions.continueInpaint === 'function' ? actions.continueInpaint : null
+  const canContinueInpaint = Boolean(image && inpaintSupported && continueInpaint)
 
   return (
     <section className="ofs-stage">
       <figure className="ofs-figure">
-        {paintingActive ? (
-          <div className="ofs-mask-editor">
-            <div className="ofs-mask-head">
-              <span className="ofs-mask-title">{t('studio.mask.title')}</span>
-              <span className="ofs-mask-coverage ofs-muted">{formatText(t('studio.mask.coverage'), { percent: maskPercent })}</span>
-            </div>
-
-            <div
-              className="ofs-mask-stage"
-              style={{ aspectRatio: editorAspect }}
-            >
-              {referencePreviewUrl ? (
-                <img
-                  src={referencePreviewUrl}
-                  alt={referenceAlt}
-                  draggable={false}
-                  onLoad={onReferencePreviewLoad}
-                  className="ofs-mask-photo"
-                />
-              ) : null}
-              <canvas
-                ref={canvasRef}
-                className="ofs-mask-canvas"
-                role="application"
-                tabIndex={0}
-                aria-label={t('studio.mask.canvasLabel')}
-                onPointerDown={onMaskPointerDown}
-                onPointerMove={onMaskPointerMove}
-                onPointerUp={onMaskPointerUp}
-                onPointerCancel={onMaskPointerUp}
-                onPointerLeave={hideMaskCursor}
-                onKeyDown={onMaskKeyDown}
-                onBlur={hideMaskCursor}
-              />
-              <span
-                ref={cursorRef}
-                className="ofs-mask-cursor"
-                aria-hidden="true"
-                style={{ left: 0, top: 0, width: 0, height: 0 }}
-              />
-            </div>
-
-            <div className="ofs-mask-tools">
-              <label className="ofs-mask-brush">
-                <span>{t('studio.mask.brush')}</span>
-                <input
-                  type="range"
-                  className="ofs-mask-range"
-                  min={MASK_BRUSH.min}
-                  max={MASK_BRUSH.max}
-                  step={MASK_BRUSH.step}
-                  value={brush.size}
-                  aria-label={t('studio.mask.brush')}
-                  onChange={(event) => setBrush((prev) => brushStateOf({ ...prev, size: clampBrushSize(event.target.value) }))}
-                />
-                <b>{brush.size}</b>
-              </label>
-              <button
-                type="button"
-                className={brush.eraser ? 'ofs-dock-button is-on' : 'ofs-dock-button'}
-                style={MASK_HIT_STYLE}
-                aria-pressed={brush.eraser}
-                onClick={() => setBrush((prev) => toggleEraser(prev))}
-              >
-                {t('studio.mask.eraser')}
-              </button>
-              <button type="button" className="ofs-dock-button" style={MASK_HIT_STYLE} onClick={clearMaskCanvas}>
-                {t('studio.mask.clear')}
-              </button>
-              <button type="button" className="ofs-dock-button" style={MASK_HIT_STYLE} onClick={invertMaskCanvas}>
-                {t('studio.mask.invert')}
-              </button>
-              <button type="button" className="ofs-dock-button ofs-mask-close" style={MASK_HIT_STYLE} onClick={closeMaskEditor}>
-                {t('studio.mask.close')}
-              </button>
-            </div>
-
-            <p className="ofs-hint ofs-mask-hint">
-              {t('studio.mask.hint')}
-            </p>
-            <p className="ofs-hint ofs-mask-guide">{t('studio.mask.guide')}</p>
-            {fastModel ? <p className="ofs-hint ofs-mask-fast">{t('studio.mask.fastModelHint')}</p> : null}
-          </div>
-        ) : (
+        {paintingActive ? maskEditor : (
           <>
             <button
               type="button"
@@ -664,30 +754,8 @@ export function Stage(props) {
         ) : null}
       </figure>
 
-      {/* 局部涂抹入口：只在参考图存在时出现；模型不支持时显示说明并保留已涂蒙版，不静默丢弃。 */}
-      {reference && inpaintSupported && !paintingActive ? (
-        <div className="ofs-mask-bar">
-          <button
-            type="button"
-            className="ofs-dock-button ofs-mask-toggle"
-            style={MASK_HIT_STYLE}
-            aria-pressed={paintingActive}
-            onClick={openMaskEditor}
-          >
-            <Icon name="focus" size={15} />
-            {t('studio.mask.toggle')}
-          </button>
-          <span className={mask ? 'ofs-hint ofs-mask-status' : 'ofs-muted ofs-mask-status'}>
-            {mask ? formatText(t('studio.mask.applied'), { percent: percentOf(mask.coverage) }) : t('studio.mask.empty')}
-          </span>
-        </div>
-      ) : null}
-      {reference && !inpaintSupported ? (
-        <div className="ofs-mask-unsupported">
-          <p className="ofs-hint ofs-mask-warn">{t('studio.mask.unsupported')}</p>
-          {mask ? <p className="ofs-hint ofs-mask-warn">{t('studio.mask.kept')}</p> : null}
-        </div>
-      ) : null}
+      {paintBar}
+      {unsupportedNote}
 
       <div className="ofs-stage-foot">
         <p className="ofs-stage-prompt" title={prompt || undefined}>{prompt}</p>
@@ -705,6 +773,12 @@ export function Stage(props) {
       </div>
 
       <div className="ofs-dock">
+        {canContinueInpaint ? (
+          <button type="button" className="ofs-dock-button ofs-continue-inpaint" onClick={() => continueInpaint(selected)}>
+            <Icon name="image" size={15} />
+            {t('studio.mask.continueFromResult')}
+          </button>
+        ) : null}
         <button type="button" className="ofs-dock-button" onClick={() => iterate(selected)}>
           <Icon name="focus" size={15} />
           {t('studio.action.iterate')}

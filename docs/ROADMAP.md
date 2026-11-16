@@ -219,10 +219,70 @@
   - **追加：9 通道专用权重预设（`sdxl-inpaint`）**：通用底座的 `from_pipe` 路径边界融合有限，因此新增 `models/sdxl-inpaint.json`（`diffusers/stable-diffusion-xl-1.0-inpainting-0.1`），用 `inpaintOnly` + `pipeline.nativeInpaint` 标记「只能带蒙版使用、加载后即为 inpaint 管线」；daemon 用 `AutoPipelineForInpainting.from_pretrained` 加载并直接复用底座，Host / daemon 双层拦截无蒙版请求，客户端缺蒙版时拦下生成并提示、默认强度取 0.9、参考图兜底预设跳过它。真机验收（2×T4）：40% 中心蒙版 + 「蓝色大象」提示词下象头明确生成（蒙版内平均差异 41.9/35.7/30.9，通用模型同用例约 25），保留区逐像素不变（0.00），边界融合更自然；整图蒙版可完整按提示词成图；小蒙版（约 2.5% 面积）时上下文补全压过提示词，属模型行为，已在 UI 提示与文档中说明。1024² / 30 步单张 20.9~24.9s。  - **真机验收（2026-11-16，4 轮通过）**：`node test/gpu-live.mjs --preset sdxl-lightning --inpaint` 在 Kaggle 2×Tesla T4（diffusers 0.43.0 / torch 2.11.0）验证：文生图 9.96~12.34s → 局部重绘 9.25~9.88s，`load_seconds=0`（`from_pipe` 复用已加载底座），出图 1024×1024 与参考图、蒙版尺寸一致；重绘前后 `allocated_mb` 7000→7000、`reserved_mb` 10776→10780（+4 MiB 噪声）、`max_allocated_mb` 不变，**零显存增量**确认。像素对比：蒙版内平均绝对差约 9.7/255，完全落在黑色保留区的边框带仅约 1.5/255（VAE 往返噪声）；换提示词后强度 0.6 只跑 2 步、变化约 3.8/255（偏弱），≥0.76 跑 3 步、变化约 25/255（明显重写），0.8 与 0.9 因 `int(steps × strength)` 量化输出逐字节相同。据此把「进入涂抹模式时的默认强度」定为 0.8（用户调过的值不覆盖），契约区间不变；大面积蒙版在高强度下边界会出现硬接缝（4 通道混回分支的固有表现），实际笔刷小区域更自然，已记入 [CHANGELOG](../CHANGELOG.md)。验收脚本同时补齐：默认直连推 Kernel、`--inpaint-prompt` 对照提示词、`--max-queue-minutes` / `--max-replace` 排队超时自动换新实例重排（本轮第二次验收即靠它从卡住的 QUEUED 恢复）。产物见 `bench-results/gpu-live/`（`01.png` / `02-inpaint.png` / `report.json`）。
 ---
 
-## 十一、 状态流转与局部重绘可用性修复（规划中）
+## 十一、 状态流转与局部重绘可用性修复
 
-> **状态**：📝 规划中（2026-11-17）。完整问题清单、已拍板的交互决策与分批方案见 [STUDIO_STATE_FLOW_AND_INPAINT_FIX_PLAN.md](STUDIO_STATE_FLOW_AND_INPAINT_FIX_PLAN.md)。
+> **状态**：✅ 已在 0.12.0 落地（2026-11-17）。完整问题清单、已拍板的交互决策与分批方案见 [STUDIO_STATE_FLOW_AND_INPAINT_FIX_PLAN.md](STUDIO_STATE_FLOW_AND_INPAINT_FIX_PLAN.md)，交互规范见 [SPEC.md](SPEC.md) §5.16。
 
 - **背景**：0.12.0 局部重绘上线后的代码审计发现 13 项问题，其中 11 项确认属实（2 项状态流转冲突、5 项可用性闭环、画布比例/空舞台/强度档位等），1 项需真机核实（非正方形参考图在 9 通道模型下的推理尺寸），1 项属契约权衡（`strength` 上限 0.9 对 9 通道偏保守）。
 - **已拍板**：表单有参考图/蒙版时胶片条只切预览；助手与变体强制纯文生图、`inpaintOnly` 缺省时自动切普通预设；重试恢复原任务参考图；蒙版场景 `strength` 放宽到 1.0；羽化半径自适应；远端拦截空蒙版。
-- **批次**：P0-a 状态安全 → P0-b 首次使用与续绘闭环 → P1 正确性（画布比例、空舞台、强度联动）→ P2 远端收敛（空蒙版、羽化分档、strength 1.0、非正方形宽高），每批自带离线断言，P2 后做一轮真机复验再提交。
+- **实现**：
+  - **P0-a 状态安全**：`src/logic/generate.js` 新增来源策略（`generateSourcePolicy` / `effectivePresetOf` / `generateCapabilityOf`）与重试恢复计划（`retryReferencePlan`），`useStudio.generate()` 按 `source`（form / assistant / variant / retry）统一消费，助手与变体显式 `reference: null`、`inpaintOnly` 预设本次请求切兜底预设；胶片条点击优先级改为「参考图保护 → 草稿保护 → 回填」；失败重试恢复参考图与同源蒙版，蒙版不可恢复时只把参考图填回表单并请求重涂（不自动提交）。
+  - **P0-b 首次使用与续绘**：`useStudioUi` 新增 `paintRequest` 计数信号（`Stage` 消费后归零，跨视图挂载有效）；`ReferenceSection` 空槽位三形态（`inpaintOnly` 两步引导 / 普通模型单行入口 / 不支持垫图隐藏）+ 蒙版覆盖率与「继续涂抹 / 清空蒙版」；舞台新增「以此结果继续重绘」闭环（设为新参考图、清蒙版、自动涂抹）；页脚标注「本次基于 <文件名> 重绘」。
+  - **P1 正确性**：`.ofs-mask-stage` 比例改用容器单位公式（不再被 `max-height` 压扁），指针 / 键盘光标按 rect 宽高两轴换算；空舞台复用蒙版编辑器；涂抹中点胶卷退出涂抹态；强度自动档随 `inpaintOnly` 预设联动、带蒙版上限 1.0。
+  - **P2 远端收敛**：契约新增 `LIMITS.strength.inpaintMax = 1.0` 与 `LIMITS.mask.minCoverage = 0.0005`（`remote/contract.json` 同步、`remote/config.py` 登记注入键）；Host 与 daemon 的强度口径按「是否带蒙版」切换；daemon 解码后校验蒙版覆盖率（空蒙版在加载模型前 `invalid_request`，全白放行）；羽化半径按覆盖率分档（2 / 4 / 6~8px）；局部重绘显式下传按 8 对齐的参考图宽高，修复非正方形畸变。
+- **测试**：`check-client-logic` 84 项、`check-client-render` 99 项、`check-client-locale` zh/en 各 477 键、`host-e2e` 50 项、`jobs-wait` 26 项、`test/remote/run.py` 390 项、`check-contract` 12 项；`npm test` 全绿。
+- **真机验收（2026-11-17，Kaggle 2×Tesla T4，diffusers 0.43.0 / torch 2.11.0）**：
+  - **非正方形（9 通道 `sdxl-inpaint`）**：1024×768 源图 + 3% 圆形蒙版，出图 **1024×768**、参考图与蒙版尺寸一致，日志 `kw` 含 `width/height`、`[gen] inpaint 蒙版覆盖率 3.00% 羽化半径 4px`——不再被缺省方形推理后拉回，也没有拉伸畸变；单张 20.1 / 22.7s，`/health.gpu_memory` 的 `max_allocated_mb` 保持 9465 不变。
+  - **精细小蒙版**：3% 覆盖率落在「< 5%」档，羽化半径 4px（此前固定 8px）。
+  - **强度 0.9 vs 1.0**：同一蒙版、同一提示词（红唇 → 蓝唇）下蒙版内平均差异 26.46 vs 21.92，两次输出不同（882437 / 893187 字节）说明 1.0 有独立效果；差异值不随强度单调递增——「替换更强」不等于「像素差更大」，0.9 与 1.0 均按新提示词重写。
+  - **连续两轮局部重绘（通用底座 `from_pipe`）**：`sdxl-lightning` + 1024×768 + 25% 蒙版连跑 2 轮，第 2 轮以第 1 轮出图为参考图（`referenceRole=previous-round`）；两轮 `load_seconds=0`（复用底座）、蒙版内平均差异 16.44 → 21.29（对上轮）/ 32.81（对首轮源图），单张 6.53 / 6.52s；显存 `allocated_mb` 7000→7000、`reserved_mb` +4 MiB、`max_allocated_mb` 不变（零额外占用）。
+  - **无遗留 Kernel**：两轮验收结束 `session.stop()` 均返回 `absent`；复验 `GetKernelSessionStatus` 最终 Kernel 为 `COMPLETE`，三次「排队超时换新实例」产生的旧 Kernel 均已删除（403 → missing），无 `RUNNING` / `QUEUED` 条目。
+
+
+---
+
+## 十二、 舞台图片处理工具栏与交互解耦（规划中）
+
+> **状态**：📝 规划中（2026-11-17）。接续第十一阶段完成后启动，完整设计与交互规格见 [STAGE_IMAGE_TOOLS_PLAN.md](STAGE_IMAGE_TOOLS_PLAN.md)。
+
+- **背景**：当前把参考图与蒙版挂在左栏全局表单上，导致「选图→挂参考图→点涂抹→回左栏生成」链路过长，且容易与文生图表单、胶片条回填、对话助手产生状态串台；同时缺少统一的舞台图片后处理入口（如未来的高清化、扩图）。
+- **核心设计（方案 B）**：
+  1. **状态彻底解耦**：左栏主表单回归纯粹文生图；抽离独立 `useImageTool` 状态域管理舞台图片处理动作，提交不经过/不污染左栏表单。
+  2. **舞台动作坞（`.ofs-dock`）**：围绕当前展示作品提供 **`局部涂抹`**、**`整图重绘`** 等一步直达入口，并预留「高清放大 / 扩图」扩展位（统一 `instant / inline / canvas` 三类交互形态）。
+  3. **原地闭环**：点「局部涂抹」直接以当前作品为底图打开画布并内置轻量 Prompt / 强度 / 提交栏，复用第十一阶段沉淀的契约与远端推理底座。
+
+---
+
+## 十三、 显式新建绘图、多作品草稿与树状版本管理（规划中）
+
+> **状态**：📝 规划中（2026-11-17）。接续第十二阶段（方案 B 舞台工具解耦）完成后启动，完整设计与状态模型见 [WORKSPACE_DRAFTS_AND_VERSIONING_PLAN.md](WORKSPACE_DRAFTS_AND_VERSIONING_PLAN.md)。
+
+- **背景**：将创作体验从「表单为中心」进一步升级为「以作品和草稿为中心」的工作区——明确区分「新建绘图」与「基于已有作品迭代」，支持多图切换保留编辑草稿、同批候选图各自独立派生树状版本。
+- **核心设计**：
+  1. **显式新建绘图态**：点击「新建绘图」时舞台切入模糊动态背景与取景框，底部作品条左端插入「新建草稿卡」；提交入队后转成排队卡，等待期间可自由切换浏览与编辑其它作品。
+  2. **多作品草稿 + 圆点标记**：按 `workKey` 缓存未提交的涂抹蒙版与重绘微调（带 LRU 上限），作品条缩略图及版本节点以圆点提示改动项，避免切图丢稿。
+  3. **批与树状版本管理**：同一批提交的 1~4 张候选图各自作为独立迭代起点（`v1`），记录 `sourceImage` + `rootImage` 形成树状版本链；作品条按根折叠并展示 `⎇ N` 角标，支持延迟 hover / 点击固定展开「版本派生树面板」（含草稿圆点与在途幽灵节点）。
+
+---
+
+## 十四、 Google Colab（重点 Colab Pro）后端接入（规划中）
+
+> **状态**：📝 调研完成、待排期验证（2026-11-17）。完整协议与架构蓝图见 [COLAB_BACKEND_RESEARCH.md](COLAB_BACKEND_RESEARCH.md)。
+
+- **背景**：新增 **Google Colab（重点适配 Colab Pro）** 无头计算后端，沿用纯 Node.js 原生直连控制面路线（零本机 Python/CLI 依赖），以支持 `L4`（24GB）/ `A100`（40GB/80GB）/ `HIGH_RAM` 等单卡大显存规格，突破 Kaggle 双 T4 分片与 20GB 磁盘只读限制。
+- **排期与里程碑**（后端算力线，与前端十二/十三阶段解耦，可并行或在十一收口后穿插推进）：
+  1. **M0 — 真机探针验证（前置门禁，编码前必做）**：运行 3 个独立最小 Node.js 探针脚本，依次验证 ① OAuth `localhost` 回调与 `ccu-info` / `assign(L4)` / `unassign` 控制面返回；② Jupyter Contents 上传 + Kernel WebSocket 启动与 **30s 心跳防回收（过 35 分钟验证）** + `cloudflared` URL 回传；③ 探索 Colab Runtime Proxy 能否替代 `cloudflared`（不阻塞主线）。
+  2. **M1 — 算力 Provider 抽象抽离**：将 `lib/session.js` 中与 Kaggle 耦合的生命周期抽为 `ComputeProvider` 契约（`authenticate` / `probe` / `provision` / `pollEndpoint` / `keepAlive` / `teardown`），现有逻辑收敛为 `KaggleProvider`，回归全套 `session-*` 测试零退化。
+  3. **M2 — `ColabProvider` 与 `remote/` 容器适配**：实现 `lib/colab/{oauth,client,jupyter}.js`（OAuth 原子存盘、XSSI 剥离、30s Kernel WS 心跳 + 60s TFE ping + Proxy Token 刷新）；消除 `remote/` 中 `/kaggle/working`、`/kaggle/input` 与双卡 `device_map="balanced"` 等硬编码假设，适配 `/content` 与单卡大显存。
+  4. **M3 — 契约、UI 接线与真机验收**：`shared/contract.js` 扩展 `provider: 'kaggle' | 'colab'`、GPU 型号（`T4/L4/A100`）与 `highRam` 设置项；状态栏展示 Colab CCU 余额与消耗速率、空闲关机可靠触发 `unassign`；完成 Colab Pro 真机开机出图 + 35 分钟保活 + 关机释放验收。
+
+---
+
+## 后续阶段排期总览
+
+| 阶段 | 主题 | 所属条线 | 前置依赖 | 预计定位 |
+| :--- | :--- | :--- | :--- | :--- |
+| **十一** | 状态流转与局部重绘可用性修复（P0-a ~ P2） | 前端 + 远端收敛 | 0.12.0 基线 | **✅ 已完成（0.12.0）** |
+| **十二** | 舞台图片处理工具栏与交互解耦（方案 B） | 前端交互重构 | 十一完成收口 | 紧接十一后（`0.13.0` 前半段） |
+| **十三** | 显式新建绘图、多作品草稿圆点与树状版本管理 | 前端 + Host 元数据 | 十二（方案 B 底座） | 紧接十二后（`0.13.0` / `0.14.0`） |
+| **十四** | Google Colab（Colab Pro）后端接入 | Host 算力扩展 + `remote/` 适配 | 十一收口后可与十二/十三并行（需先过 M0 探针） | 独立后端里程碑（与界面解耦） |

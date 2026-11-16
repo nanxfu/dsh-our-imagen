@@ -16,6 +16,7 @@ import React from 'react'
 import { COUNT_OPTIONS } from '../constants.js'
 import { clampSize } from '../logic/clamp.js'
 import { formatText } from '../logic/format.js'
+import { referenceFileName } from '../logic/generate.js'
 import { Icon } from './icons.jsx'
 import { PanelModeTabs } from './PanelModeTabs.jsx'
 import { FrameSection } from './rail/FrameSection.jsx'
@@ -66,9 +67,16 @@ export function Rail(props) {
     englishPromptHint,
     reference,
     strength,
+    // 参考图能力与蒙版状态：空槽位 / 强度上限 / 覆盖率读数都按这几项门控。
+    referenceSupported,
+    strengthMax,
+    mask,
+    inpaintOnly,
+    inpaintSupported,
     referenceBlocked,
     applyStrength,
     removeReference,
+    clearMask,
     // 微调来源（从胶卷 / 画廊回填而来）与「新建创作」重置入口。
     tuning,
     newCreation,
@@ -97,11 +105,18 @@ export function Rail(props) {
     ? `${negativeHint.slice(0, 60)}…`
     : (negativeHint || t('studio.negativePlaceholder'))
 
-  // 参考图：没有参考图时整块不渲染，文生图界面与改造前一致。
+  // 参考图：没有参考图时按模型能力决定是否给空槽位；文生图界面与改造前一致。
   const referenceImage = reference && typeof reference === 'object' ? reference : null
   const referenceWidth = referenceImage ? finiteSize(referenceImage.width) : null
   const referenceHeight = referenceImage ? finiteSize(referenceImage.height) : null
   const referenceSize = referenceWidth && referenceHeight ? `${referenceWidth} × ${referenceHeight}` : ''
+  // 参考图区的三个动作：进入涂抹（由 Stage 消费 paintRequest）、清空蒙版、去画廊换参考图。
+  const requestPaint = ui && typeof ui.requestPaint === 'function' ? ui.requestPaint : null
+  const beginPaint = requestPaint ? () => requestPaint() : null
+  const clearMaskAction = typeof clearMask === 'function' ? clearMask : null
+  const removeMask = clearMaskAction ? () => clearMaskAction() : null
+  const setView = ui && typeof ui.setView === 'function' ? ui.setView : null
+  const pickFromGallery = setView ? () => setView('gallery') : null
 
   // 页脚规格摘要：尺寸 · 比例 · 张数；有参考图时补一项「参考图」。
   const countValue = Number.isFinite(Number(fields.count)) ? Math.round(Number(fields.count)) : 1
@@ -150,10 +165,18 @@ export function Rail(props) {
         <ReferenceSection
           t={t}
           referenceImage={referenceImage}
+          referenceSupported={referenceSupported}
           strength={strength}
+          strengthMax={strengthMax}
+          mask={mask}
+          inpaintOnly={inpaintOnly}
+          inpaintSupported={inpaintSupported}
           referenceBlocked={referenceBlocked}
           applyStrength={applyStrength}
           removeReference={removeReference}
+          onBeginPaint={beginPaint}
+          onClearMask={removeMask}
+          onPickFromGallery={pickFromGallery}
         />
 
         <FrameSection
@@ -211,6 +234,12 @@ export function Rail(props) {
           <Icon name="sparkles" size={16} />
           {sending ? t('studio.generating') : t('studio.generate')}
         </button>
+        {/* 连续重绘时先说清这次基于哪张参考图：生成按钮旁标注来源，避免误以为在画当前舞台作品。 */}
+        {referenceImage ? (
+          <p className="ofs-hint ofs-reference-based">
+            {formatText(t('studio.reference.basedOn'), { name: referenceFileName(referenceImage.path) })}
+          </p>
+        ) : null}
         <p className="ofs-hint ofs-spec-summary">
           {specParts.join(' · ')}
         </p>

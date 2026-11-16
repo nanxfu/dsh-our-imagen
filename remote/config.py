@@ -302,7 +302,20 @@ def _read_builtin_contract() -> dict:
 BUILTIN_CONTRACT = _read_builtin_contract()
 BUILTIN_LIMITS: dict[str, dict] = BUILTIN_CONTRACT["limits"]
 # 契约 limits 里可能出现的数值型键：合并兜底值时只认数字（bool 不算数字）。
-LIMIT_NUMERIC_KEYS = ("min", "max", "step", "maxChars", "default", "maxBytes", "maxEdge", "minEdge")
+# 新参数（如局部重绘的 inpaintMax / mask.minCoverage）必须登记在这里，否则注入契约给了
+# 新值也会被内置 contract.json 的兜底静默覆盖——「注入契约优先」的口径就不成立了。
+LIMIT_NUMERIC_KEYS = (
+    "min",
+    "max",
+    "step",
+    "maxChars",
+    "default",
+    "maxBytes",
+    "maxEdge",
+    "minEdge",
+    "inpaintMax",
+    "minCoverage",
+)
 
 
 def contract_limits() -> dict | None:

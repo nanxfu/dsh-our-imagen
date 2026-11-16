@@ -29,6 +29,11 @@ import { createFakeContext, json, startHost } from './helpers/fake-context.mjs'
 const PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
 
+// 8×8 全黑灰度 PNG：充当「空蒙版」的字节载荷。Host 只做 PNG 魔数预检（形状合法），
+// 真实 daemon 在执行期解码后按覆盖率拒绝；下面的 mock daemon 用这个常量模拟该拒绝点。
+const EMPTY_MASK_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAAAAADhZOFXAAAADElEQVR4nGNgoA4AAABIAAEuuDx+AAAAAElFTkSuQmCC'
+
 const DEV_TOKEN = 'dev-token-test'
 
 /**
@@ -92,6 +97,25 @@ function startMockDaemon() {
         state.lastBody = body
         state.generateBodies.push(body)
         const jobId = String(body.jobId || `mock-job-${state.generateCalls}`)
+        // 空蒙版在执行期（加载模型前）被真 daemon 按覆盖率拦截，HTTP 层仍是 202 入队成功；
+        // 这里模拟同一个拒绝点：返回 failed job + invalid_request，用于断言 Host 把它折叠成
+        // 「异步任务终态 failed + invalid_request」的透传语义（不是 400 入队拒绝）。
+        if (body.reference?.mask_b64 === EMPTY_MASK_B64) {
+          state.jobs.set(jobId, {
+            status: 'failed',
+            job_id: jobId,
+            model_id: body.modelId,
+            progress: { done: 0, total: 1 },
+            load_seconds: 0,
+            results: null,
+            error: {
+              code: 'invalid_request',
+              message: '蒙版是空的：没有涂抹任何区域（请在参考图上涂抹需要重绘的区域后重试）',
+            },
+          })
+          send(202, { status: 'accepted', job_id: jobId, model_id: body.modelId })
+          return
+        }
         // Host 改为逐张提交：正常情况下每个远端 job 的 tasks 只有 1 项。
         const results = body.tasks.map((task) => ({
           name: task.name,
@@ -1509,6 +1533,80 @@ async function main() {
       assert.equal(invalid.body.error.code, 'invalid_request')
       assert.ok(invalid.body.error.message.includes('蒙版'), invalid.body.error.message)
     }
+  })
+
+  await check('局部重绘：蒙版场景 strength 1.0 全链路透传，纯 img2img 仍钳到 0.9', async () => {
+    const dir = join(workspace, 'imagen-output', '20260101-000000-inpaint-strength')
+    await mkdir(dir, { recursive: true })
+    const sourcePath = 'imagen-output/20260101-000000-inpaint-strength/01.png'
+    await writeFile(join(dir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+
+    const submitted = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        prompt: '夜空换成极光',
+        presetId: 'sdxl-lightning',
+        // 带蒙版时上限放宽到 LIMITS.strength.inpaintMax=1.0。
+        reference: { path: sourcePath, strength: 1.0, mask: PNG_B64 },
+        waitSeconds: 15,
+      }),
+    })
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body))
+    const job = submitted.body
+    assert.equal(job.status, 'done')
+    assert.deepEqual(job.params.reference, { sourcePath, strength: 1.0, mask: true })
+
+    const call = mock.state.lastBody
+    assert.deepEqual(
+      call.reference,
+      { image_b64: PNG_B64, strength: 1.0, mask_b64: PNG_B64 },
+      '远端载荷必须原样带归一后的 1.0 强度',
+    )
+    const meta = JSON.parse(await readFile(join(workspace, job.output.dir, 'meta.json'), 'utf8'))
+    assert.equal(meta.strength, 1.0, 'meta.json 必须记录实际使用的 1.0 强度')
+    assert.equal(meta.inpaint, true)
+
+    // 对照：没有蒙版时同一条 1.0 请求仍被钳到 img2img 的 max（0.9），行为不变。
+    const plain = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        prompt: '无蒙版参考图',
+        presetId: 'sdxl-lightning',
+        reference: { path: sourcePath, strength: 1.0 },
+        waitSeconds: 15,
+      }),
+    })
+    assert.equal(plain.status, 200, JSON.stringify(plain.body))
+    assert.equal(plain.body.params.reference.strength, LIMITS.strength.max)
+    assert.equal(mock.state.lastBody.reference.strength, LIMITS.strength.max)
+  })
+
+  await check('局部重绘：空蒙版在执行期被远端拦截 → 异步任务终态 failed + invalid_request', async () => {
+    const dir = join(workspace, 'imagen-output', '20260101-000000-inpaint-empty')
+    await mkdir(dir, { recursive: true })
+    const sourcePath = 'imagen-output/20260101-000000-inpaint-empty/01.png'
+    await writeFile(join(dir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+
+    const submitted = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        prompt: '空蒙版',
+        presetId: 'sdxl-lightning',
+        // 全黑 PNG：Host 只做 PNG 魔数预检，请求合法并被远端 202 接单；
+        // 真 daemon 在执行期解码后按 minCoverage 拒绝（加载模型前），只在这里模拟同一个拒绝点。
+        reference: { path: sourcePath, strength: 0.8, mask: EMPTY_MASK_B64 },
+        waitSeconds: 15,
+      }),
+    })
+    assert.equal(submitted.status, 200, `空蒙版不是入队期 400：${JSON.stringify(submitted.body)}`)
+    const job = submitted.body
+    assert.equal(job.status, 'failed', JSON.stringify(job))
+    assert.equal(job.error?.code, 'invalid_request')
+    assert.ok(job.error?.message.includes('蒙版是空的'), job.error?.message)
+    assert.equal(job.output, null, '失败任务不应落产物目录')
   })
 
   await check('局部重绘：参考图 + 蒙版接近上限时不被请求体闸门拒掉', async () => {

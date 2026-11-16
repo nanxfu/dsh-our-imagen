@@ -17,6 +17,7 @@
  *   j. remote/contract.json 与 shared/contract.js 的 daemonContract() 一致，且下发对象只含
  *      version + limits（Host/Client 专有的路由、health phase、ntfy 事件、错误码不再下发远端；P10 生成物）
  *   k. models/*.json 与 shared/models.generated.js 同步（模型资产的唯一来源是 models/）
+ *   l. 局部重绘契约键（LIMITS.strength.inpaintMax / LIMITS.mask.minCoverage）存在并已下发远端
  *
  * 运行：node test/check-contract.mjs
  */
@@ -31,6 +32,7 @@ import {
   ERROR_CODES,
   PRESETS,
   PROTOCOL,
+  LIMITS,
   daemonContract,
   hostErrorCodes,
 } from '../shared/contract.js'
@@ -529,6 +531,52 @@ async function checkModelAssets() {
   }
 }
 
+// ── l. 局部重绘契约键（inpaintMax / minCoverage）──────────────────────────
+// 这两个键是 Host / Client / Daemon 三端共同消费的接口约定（客户端直接读 LIMITS 决定滑块
+// 上限与空蒙版文案），键名或取值漂移会让「带蒙版 1.0、纯 img2img 0.9」的放宽静默失效。
+async function checkInpaintContract() {
+  const strength = LIMITS.strength
+  const mask = LIMITS.mask
+  const details = []
+  if (strength.max !== 0.9) {
+    details.push(`LIMITS.strength.max=${strength.max}（img2img 保守上限应保持 0.9）`)
+  }
+  if (strength.inpaintMax !== 1.0) {
+    details.push(`LIMITS.strength.inpaintMax=${strength.inpaintMax}（蒙版场景上限应为 1.0）`)
+  }
+  if (!(strength.inpaintMax > strength.max)) details.push('inpaintMax 必须大于 max（只放宽蒙版场景）')
+  if (mask.minCoverage !== 0.0005) {
+    details.push(`LIMITS.mask.minCoverage=${mask.minCoverage}（空蒙版阈值应为 0.0005）`)
+  }
+  if (!(mask.minCoverage > 0 && mask.minCoverage < 1)) details.push('minCoverage 必须在 (0, 1) 之间')
+
+  const sent = daemonContract().limits
+  if (sent.strength?.inpaintMax !== strength.inpaintMax) details.push('daemonContract() 未下发 strength.inpaintMax')
+  if (sent.mask?.minCoverage !== mask.minCoverage) details.push('daemonContract() 未下发 mask.minCoverage')
+
+  let remote = null
+  try {
+    remote = JSON.parse(await readText('remote/contract.json'))
+  } catch {
+    details.push('remote/contract.json 不可读（先运行 npm run contract:gen）')
+  }
+  if (remote) {
+    if (remote?.limits?.strength?.inpaintMax !== strength.inpaintMax) {
+      details.push('remote/contract.json 缺 limits.strength.inpaintMax')
+    }
+    if (remote?.limits?.mask?.minCoverage !== mask.minCoverage) {
+      details.push('remote/contract.json 缺 limits.mask.minCoverage')
+    }
+  }
+
+  if (details.length) return fail('l', '局部重绘契约键未闭环', details)
+  pass(
+    'l',
+    '局部重绘契约键齐备并已下发远端',
+    `inpaintMax=${strength.inpaintMax} / minCoverage=${mask.minCoverage}`,
+  )
+}
+
 // ── main ──────────────────────────────────────────────────────────────────
 const CHECKS = [
   checkPackageVersion,
@@ -542,6 +590,7 @@ const CHECKS = [
   checkPresetsMoved,
   checkRemoteContract,
   checkModelAssets,
+  checkInpaintContract,
 ]
 
 async function main() {

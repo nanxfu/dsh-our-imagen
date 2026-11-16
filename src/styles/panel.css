@@ -904,6 +904,136 @@
 .ofs-reference-hint {
   text-align: left;
 }
+
+/* ── 参考图空槽位（首次使用引导） ───────────────────────────── */
+/*
+ * 无参考图且当前模型支持垫图时出现：
+ *  - 普通垫图模型：一行轻量入口，不打断纯文生图流程；
+ *  - 专用局部重绘模型：虚线框 + 两步说明，明确「先选图再涂抹」的顺序。
+ */
+.ofs-reference-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-md);
+  background: var(--ofs-sunken);
+}
+
+.ofs-reference-entry-hint {
+  margin: 0;
+  text-align: left;
+}
+
+.ofs-reference-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px;
+  border: 1px dashed var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-md);
+  background: color-mix(in oklab, var(--ofs-sunken) 70%, transparent);
+  text-align: center;
+}
+
+.ofs-reference-empty-title {
+  color: var(--ofs-ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ofs-reference-empty-hint {
+  color: var(--ofs-ink-3);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* 空槽位的「从作品画廊选择」按钮：虚线框内唯一的实心动作。 */
+.ofs-reference-pick {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 0 12px;
+  border: 1px solid var(--ofs-accent-soft-border);
+  border-radius: var(--ofs-r-pill);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.ofs-reference-pick:hover {
+  border-color: var(--ofs-accent);
+}
+
+/* 参考图已就位：蒙版覆盖率读数与「继续涂抹 / 清空蒙版」。 */
+.ofs-reference-mask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.ofs-reference-mask-readout {
+  margin: 0;
+  text-align: left;
+}
+
+.ofs-reference-mask-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.ofs-reference-action {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-pill);
+  background: var(--ofs-card);
+  color: var(--ofs-ink-2);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.ofs-reference-action:hover:not(:disabled) {
+  border-color: var(--ofs-accent-soft-border);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+}
+
+.ofs-reference-action:disabled {
+  color: var(--ofs-ink-4);
+  cursor: default;
+}
+
+/* 页脚：本次基于哪张参考图重绘（连续局部重绘时避免误读来源）。 */
+.ofs-reference-based {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 /* 专用局部重绘模型的常驻说明：放在面板滚动区顶部，缺蒙版时出现。 */
 .ofs-rail-note {
   margin: 0 0 10px;
