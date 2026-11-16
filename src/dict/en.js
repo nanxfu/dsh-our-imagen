@@ -139,6 +139,27 @@ export const en = {
   'studio.progress.generatingCount': 'Generating image {done} of {total}',
   'studio.session.elapsed': 'Waiting for',
 
+  // ── Generation pipeline ──────────────────────────────────────
+  // Top node strip: cloud session + job stages folded into five fixed nodes (see SPEC §5.13).
+  'studio.pipeline.label': 'Generation pipeline',
+  'studio.pipeline.node.push': 'Push kernel',
+  'studio.pipeline.node.queue': 'Kaggle queue',
+  'studio.pipeline.node.tunnel': 'Open tunnel',
+  'studio.pipeline.node.model': 'Prepare model',
+  'studio.pipeline.node.generate': 'Generate',
+  'studio.pipeline.node.ready': 'Cloud ready',
+  'studio.pipeline.node.done': 'Image ready',
+  'studio.pipeline.node.failed': 'Generation failed',
+  'studio.pipeline.node.closing': 'Shutting the cloud down…',
+  'studio.pipeline.hint.generate': 'Generating images one by one; single-image jobs hide the counter.',
+  'studio.pipeline.hint.ready': 'This run reuses the cloud session that is already ready.',
+  'studio.pipeline.count': 'Image {done}/{total}',
+  'studio.pipeline.busy': '{count} more queued',
+  'studio.pipeline.slow': 'Slower than usual',
+  'studio.pipeline.queued': 'Waiting to generate…',
+  'studio.pipeline.elapsed': 'Elapsed',
+  'studio.pipeline.elapsedDone': 'Took',
+
   // ── Prompt ────────────────────────────────────────────────────
   'studio.promptHint': 'Write a description first',
   'studio.preset': 'Model preset',

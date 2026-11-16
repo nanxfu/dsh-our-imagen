@@ -198,7 +198,7 @@ function stageCodeOf(job) {
  * 分张进度：宿主只给「已完成张数」，这里换算成「正在出第几张」并夹在 1..total。
  * 单张任务不显示计数（宿主同样只在 total > 1 时给阶段追加计数）。
  */
-function progressOf(job) {
+export function jobCountOf(job) {
   const progress = job && job.progress
   if (!progress || typeof progress !== 'object') return null
   const done = Number(progress.done)
@@ -207,6 +207,16 @@ function progressOf(job) {
   const count = Math.floor(total)
   if (count <= 1) return null
   return { done: Math.min(Math.max(0, Math.floor(done)) + 1, count), total: count }
+}
+
+/**
+ * 「第 N/M 张」文案：流水线生成节点与舞台进度胶囊共用同一份口径，
+ * 单张或没有进度时返回空串。
+ */
+export function jobCountText(t, job) {
+  const count = jobCountOf(job)
+  if (!count) return ''
+  return formatText(localized(t, 'studio.pipeline.count'), count)
 }
 
 /**
@@ -228,7 +238,7 @@ export function jobProgressText(t, job, sessionState) {
   if (stage === 'cancelled') return jobStatusText(t, 'cancelled')
   if (job.cancelRequested === true) return localized(t, 'studio.job.cancelling') || ''
   if (stage === 'running') {
-    const progress = progressOf(job)
+    const progress = jobCountOf(job)
     if (progress) {
       const text = formatText(localized(t, 'studio.progress.generatingCount'), progress)
       if (text) return text

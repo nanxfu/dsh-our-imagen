@@ -1,5 +1,5 @@
 /**
- * 生图工作台（Studio）：顶栏 + 单轨创作面板 + 画面预览 + 最近生成 + 画廊。
+ * 生图工作台（Studio）：顶栏 + 顶部生图流水线 + 单轨创作面板 + 画面预览 + 最近生成 + 画廊。
  *
  * 挂载在宿主 shell 的 main 插槽上，作为独立整页视图；
  * 侧栏入口由 index.js 通过 sidebar.panellist 注册。
@@ -14,16 +14,15 @@ import React from 'react'
 import { CSS } from '../styles.js'
 import { useNow } from '../hooks/useNow.js'
 import { guidanceSurfaceOf } from '../logic/guidance.js'
-import { sessionElapsedMs } from '../logic/status.js'
+import { pipelineHoldOf, pipelineViewOf } from '../logic/pipeline.js'
 import { ChatPanel } from './ChatPanel.jsx'
 import { Filmstrip } from './Filmstrip.jsx'
 import { Gallery } from './Gallery.jsx'
 import { GuidanceCard } from './GuidanceCard.jsx'
 import { LogsDrawer } from './LogsDrawer.jsx'
+import { PipelineBar } from './PipelineBar.jsx'
 import { QueueNotice } from './QueueNotice.jsx'
-import { QueuePill } from './QueuePill.jsx'
 import { Rail } from './Rail.jsx'
-import { SessionBar } from './SessionBar.jsx'
 import { SettingsDrawer } from './SettingsDrawer.jsx'
 import { Stage } from './Stage.jsx'
 import { Toast } from './Toast.jsx'
@@ -40,13 +39,25 @@ const StudioStyles = React.memo(function StudioStyles() {
 export function Studio(props) {
   const { t, isEn, ui, compute, form, chat, library, guidance, actions } = useStudio(props)
   const status = compute.status
-  // 有任务或云端处于过渡态时每秒刷新，进度文案与各任务的已等待时长都能走字。
-  const now = useNow(Boolean(compute.activeJob) || status.transient)
-  const sessionElapsed = status.transient ? sessionElapsedMs(compute.session, now) : null
+  // 完成态还要保留一会儿：宿主 2 秒轮询一次，任务真正完成的时刻客户端最晚 2 秒后才知道，
+  // 只靠「有活动任务」会停表，完成节点就闪不出来。失败态没有时间变化，不需要额外刷新。
+  const pipelineHold = pipelineHoldOf(compute.focusedJob, Date.now())
+  const now = useNow(Boolean(compute.activeJob) || status.transient || pipelineHold)
   const chatMode = ui.panelMode === 'chat'
   // 日志抽屉只在打开时轮询；完成提醒在页面隐藏期间用标签页标题提示。
   const logs = useStudioLogs(ui.logsOpen)
   useCompletionNotice({ t, ui, job: compute.focusedJob, activeJob: compute.activeJob })
+
+  // 生图流水线：失败态在指引提示被收起时一起收起，同一条错误只占一条位置。
+  const pipeline = pipelineViewOf(t, {
+    session: compute.session,
+    activeJob: compute.activeJob,
+    focusedJob: compute.focusedJob,
+    pendingCount: compute.pendingJobs.length,
+    queuePolicy: compute.queue.policy,
+    failureDismissed: Boolean(guidance.key) && ui.dismissed === guidance.key,
+    now: Date.now(),
+  })
 
   const panel = chatMode
     ? <ChatPanel t={t} ui={ui} form={form} chat={chat} library={library} actions={actions} />
@@ -66,7 +77,8 @@ export function Studio(props) {
       <div className="ofs-app">
         <TopBar t={t} isEn={isEn} ui={ui} compute={compute} form={form} library={library} defaultModelOpen={props.defaultModelOpen} />
 
-        <SessionBar t={t} status={status} elapsedMs={sessionElapsed} />
+        {/* 顶部生图流水线：替换原先的一行云端状态条，五节点展示等待流程。 */}
+        <PipelineBar view={pipeline} />
 
         {/* 排队卡住（10 分钟档）是非错误提示：横幅给「换新实例重排」，不阻挡工作区。 */}
         <QueueNotice t={t} notice={compute.queueNotice} />
@@ -102,11 +114,7 @@ export function Studio(props) {
                 }}
               />
             ) : (
-              <>
-                {/* 窄屏胶片条收起后，这里补一个只读的排队状态入口；宽屏由 CSS 隐藏。 */}
-                <QueuePill t={t} compute={compute} />
-                <Stage t={t} ui={ui} compute={compute} form={form} library={library} actions={actions} now={now} />
-              </>
+              <Stage t={t} ui={ui} compute={compute} form={form} library={library} actions={actions} now={now} />
             )}
           </div>
         </div>

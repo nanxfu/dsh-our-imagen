@@ -9,6 +9,7 @@ export const STYLE_FILES = [
   'tokens.css',
   'base.css',
   'shell.css',
+  'pipeline.css',
   'model-picker.css',
   'guidance.css',
   'drawers.css',

@@ -139,6 +139,27 @@ export const zh = {
   'studio.progress.generatingCount': '正在生成第 {done}/{total} 张',
   'studio.session.elapsed': '已等待',
 
+  // ── 生图流水线 ───────────────────────────────────────────────
+  // 顶部节点条：会话段 + 生成段折算成固定五节点（行为见 docs/SPEC.md §5.13）。
+  'studio.pipeline.label': '生图流水线',
+  'studio.pipeline.node.push': '推送内核',
+  'studio.pipeline.node.queue': 'Kaggle 排队',
+  'studio.pipeline.node.tunnel': '建立隧道',
+  'studio.pipeline.node.model': '准备模型',
+  'studio.pipeline.node.generate': '生成',
+  'studio.pipeline.node.ready': '云端已就绪',
+  'studio.pipeline.node.done': '出图完成',
+  'studio.pipeline.node.failed': '生成失败',
+  'studio.pipeline.node.closing': '正在关闭云端…',
+  'studio.pipeline.hint.generate': '正在逐张出图；单张任务不显示张数。',
+  'studio.pipeline.hint.ready': '这次生成复用了已经就绪的云端会话。',
+  'studio.pipeline.count': '第 {done}/{total} 张',
+  'studio.pipeline.busy': '另有 {count} 个排队',
+  'studio.pipeline.slow': '比平时久',
+  'studio.pipeline.queued': '排队等待出图…',
+  'studio.pipeline.elapsed': '已等待',
+  'studio.pipeline.elapsedDone': '用时',
+
   // ── 提示词 ───────────────────────────────────────────────────
   'studio.promptHint': '先写画面描述',
   'studio.preset': '模型预设',

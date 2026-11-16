@@ -5,7 +5,7 @@ import React from 'react'
 import { INSPIRE_KEYS } from '../constants.js'
 import { Icon } from './icons.jsx'
 import { formatSeconds } from '../logic/format.js'
-import { jobProgressText } from '../logic/status.js'
+import { jobCountText } from '../logic/status.js'
 import { useFocusTrap } from './hooks/useFocusTrap.js'
 
 /** 出图后一分钟内才算「刚落定」，超过就当历史作品直接陈列。 */
@@ -31,9 +31,9 @@ function ratioOf(width, height) {
 export function Stage(props) {
   const { t, ui, compute, form, library, actions, now } = props
   const { zoom, setZoom, copyPath } = ui
-  const { activeJob, sessionState } = compute
-  // 进度文案区分「等云端就绪」与「等前一张图」：就绪后排队不能再写成申请 GPU。
-  const progressText = activeJob ? jobProgressText(t, activeJob, sessionState) : ''
+  const { activeJob } = compute
+  // 舞台胶囊只保留「还在动 + 第 N/M 张」：阶段名与已等待由顶部生图流水线负责，不重复说两遍。
+  const progressText = activeJob ? jobCountText(t, activeJob) : ''
   const { useInspiration } = form
   const { selected, isFavorite, toggleFavorite } = library
   const { iterate, reroll, referenceImage } = actions
@@ -110,7 +110,7 @@ export function Stage(props) {
           </div>
 
           {activeJob ? (
-            <div className="ofs-stage-progress is-inside" role="status">
+            <div className="ofs-stage-progress is-inside" aria-hidden="true">
               <span className="ofs-shimmer" aria-hidden="true" />
               <span className="ofs-progress-label">{progressText}</span>
             </div>
@@ -162,7 +162,7 @@ export function Stage(props) {
         </div>
 
         {activeJob ? (
-          <div className="ofs-stage-progress" role="status">
+          <div className="ofs-stage-progress" aria-hidden="true">
             <span className="ofs-shimmer" aria-hidden="true" />
             <span className="ofs-progress-label">{progressText}</span>
           </div>

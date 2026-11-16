@@ -145,6 +145,8 @@ const scenarios = {
         'ofs-thumb': 2,
         'ofs-image': 1,
         'ofs-dock': 1,
+        // 就绪且没有任务：流水线只保留收起的外壳，不渲染节点。
+        'ofs-pipeline': 1,
       },
       forbidden: [
         'ofs-guidance',
@@ -154,6 +156,8 @@ const scenarios = {
         'ofs-toast',
         'ofs-stage-progress',
         'ofs-queue-pill',
+        'ofs-sessionbar',
+        'ofs-pl-node',
         // 0.10.0 删掉的风格试印条，以及默认配置（CFG=0）下不应出现的负向词行 / 参考图跟随。
         'ofs-tile',
         'ofs-row-textarea',
@@ -321,8 +325,17 @@ const scenarios = {
     },
     history: { items: [historyItem] },
     props: {},
-    // 胶囊跟随 phase 显示「排队」，进度位说明在等云端；两者不再是同一个词。
-    expect: ['正在排队等 GPU', '正在等待 Kaggle 分配 GPU', '等待云端就绪…', '已等待'],
+    // 顶部流水线展示五节点，排队节点是当前节点；已等待从这次会话开始时刻算。
+    expect: [
+      '正在排队等 GPU',
+      '推送内核',
+      'Kaggle 排队',
+      '建立隧道',
+      '准备模型',
+      '生成',
+      '已等待',
+      '2:00',
+    ],
     reject: ['正在装载模型', '云端正在排队'],
     structure: {
       required: {
@@ -331,24 +344,25 @@ const scenarios = {
         'ofs-topbar': 1,
         'ofs-body': 1,
         'ofs-stage': 1,
+        'ofs-pipeline': 1,
+        'ofs-pl-rail': 1,
+        'ofs-pl-node': 5,
+        'ofs-pl-link': 4,
+        'ofs-pl-label': 5,
+        'ofs-pl-time': 1,
+        // 舞台胶囊只保留扫光与分张计数：这里没有计数，标签为空。
         'ofs-stage-progress': 1,
         'ofs-progress-label': 1,
-        'ofs-sessionbar': 1,
-        'ofs-sessionbar-label': 1,
-        'ofs-sessionbar-hint': 1,
-        'ofs-sessionbar-time': 1,
         'ofs-ghost': 1,
         'ofs-ghost-label': 1,
         'ofs-ghost-time': 1,
-        // 窄屏胶片条收起后，队列状态由预览区的迷你胶囊兜底（宽屏由 CSS 隐藏）。
-        'ofs-queue-pill': 1,
         'ofs-batch': 1,
         'ofs-image': 1,
       },
-      forbidden: ['ofs-guidance', 'ofs-figure--empty', 'ofs-toast'],
+      forbidden: ['ofs-guidance', 'ofs-figure--empty', 'ofs-toast', 'ofs-sessionbar', 'ofs-queue-pill'],
     },
   },
-  // 排队慢档（约 3 分钟）：只在状态条提示「排队比平时久」，不弹卡片、不影响工作区。
+  // 排队慢档（约 3 分钟）：排队节点转琥珀并标「比平时久」，不弹卡片、不影响工作区。
   queueSlow: {
     state: {
       defaultPreset: 'sdxl-lightning',
@@ -365,15 +379,16 @@ const scenarios = {
     },
     history: { items: [] },
     props: {},
-    expect: ['正在排队等 GPU', '排队比平时久', '几十秒', '已等待'],
+    expect: ['正在排队等 GPU', '比平时久', '推送内核', '已等待', '3:20'],
     reject: ['排队超过 10 分钟', '换新实例重排'],
     structure: {
       required: {
-        'ofs-sessionbar': 1,
-        'ofs-sessionbar-hint': 1,
-        'ofs-queue-pill': 1,
+        'ofs-pipeline': 1,
+        'ofs-pl-node': 5,
+        // 慢档只给排队节点加一个「比平时久」的文字标记，不垫色底。
+        'ofs-pl-tag': 1,
       },
-      forbidden: ['ofs-queue-notice', 'ofs-guidance', 'ofs-toast'],
+      forbidden: ['ofs-queue-notice', 'ofs-guidance', 'ofs-toast', 'ofs-sessionbar', 'ofs-queue-pill'],
     },
   },
   // 排队卡住档（约 10 分钟，旧快照没有 queuePolicy）：顶部横幅给「换新实例重排」+「继续等待」。
@@ -426,7 +441,8 @@ const scenarios = {
     },
     history: { items: [] },
     props: {},
-    expect: ['正在生成…', '排队等待出图…', '8.0秒', '5.0秒', '另有 1 张排队'],
+    // 云端已就绪：前四节点折叠成「云端已就绪」，右侧报后续排队数。
+    expect: ['正在生成…', '排队等待出图…', '8.0秒', '5.0秒', '云端已就绪', '另有 1 个排队', '0:30'],
     reject: ['等待云端就绪…'],
     structure: {
       required: {
@@ -436,14 +452,17 @@ const scenarios = {
         'ofs-ghost-label': 2,
         'ofs-ghost-time': 2,
         'ofs-stage-progress': 1,
-        // 迷你胶囊只报「当前任务 + 后续排队数」：1 个在跑、1 个排队。
-        'ofs-queue-pill': 1,
-        'ofs-queue-pill-count': 1,
+        // 折叠态：只剩「云端已就绪 → 生成」两个锚点，连接线不拉满整行。
+        'ofs-pipeline': 1,
+        'ofs-pl-rail': 1,
+        'is-folded': 1,
+        'ofs-pl-node': 2,
+        'ofs-pl-queue': 1,
       },
-      forbidden: ['ofs-filmstrip-empty', 'ofs-batch', 'ofs-guidance'],
+      forbidden: ['ofs-filmstrip-empty', 'ofs-batch', 'ofs-guidance', 'ofs-queue-pill'],
     },
   },
-  // 宿主新下发的 stageCode + progress：进度位必须显示「正在生成第 k/总数 张」，
+  // 宿主新下发的 stageCode + progress：生成节点与舞台胶囊共用「第 k/总数 张」口径，
   // 而不是笼统的「正在生成…」，也不能把宿主硬编码的中文 stage 直接搬上界面。
   progress: {
     state: {
@@ -465,17 +484,19 @@ const scenarios = {
     },
     history: { items: [historyItem] },
     props: {},
-    expect: ['正在生成第 2/4 张'],
+    expect: ['正在生成第 2/4 张', '第 2/4 张', '云端已就绪', '已等待'],
     reject: ['生成中 2/4'],
     structure: {
       required: {
         'ofs-stage-progress': 1,
         'ofs-progress-label': 1,
         'ofs-ghost': 1,
-        'ofs-queue-pill': 1,
+        'ofs-pipeline': 1,
+        'ofs-pl-node': 2,
+        'ofs-pl-sub': 1,
         'ofs-image': 1,
       },
-      forbidden: ['ofs-guidance', 'ofs-figure--empty', 'ofs-toast'],
+      forbidden: ['ofs-guidance', 'ofs-figure--empty', 'ofs-toast', 'ofs-queue-pill'],
     },
   },
   warming: {
@@ -489,16 +510,18 @@ const scenarios = {
     },
     history: { items: [historyItem] },
     props: {},
-    expect: ['正在准备模型', '正在安装运行环境并加载模型权重', '等待云端就绪…'],
+    expect: ['正在准备模型', '准备模型'],
     reject: ['正在装载模型', '正在申请 GPU', '已等待'],
     structure: {
       required: {
-        'ofs-sessionbar': 1,
-        'ofs-sessionbar-label': 1,
+        'ofs-pipeline': 1,
+        'ofs-pl-node': 5,
+        'ofs-pl-label': 5,
         'ofs-stage-progress': 1,
         'ofs-ghost': 1,
       },
-      forbidden: ['ofs-sessionbar-time', 'ofs-guidance', 'ofs-figure--empty'],
+      // 重连沿用旧的会话开始时间：流水线不显示计时，也不该退回旧状态条。
+      forbidden: ['ofs-sessionbar', 'ofs-guidance', 'ofs-figure--empty', 'ofs-pl-time'],
     },
   },
   stopped: {
@@ -515,8 +538,8 @@ const scenarios = {
     expect: ['云端已关闭', '云端已关闭，先点「唤醒」再生成'],
     reject: ['云端未启动', '云端尚未启动', '点击生成即可开始出图'],
     structure: {
-      required: { 'ofs-topbar': 1, 'ofs-filmstrip': 1, 'ofs-figure--empty': 1 },
-      forbidden: ['ofs-sessionbar', 'ofs-guidance'],
+      required: { 'ofs-topbar': 1, 'ofs-filmstrip': 1, 'ofs-figure--empty': 1, 'ofs-pipeline': 1 },
+      forbidden: ['ofs-sessionbar', 'ofs-guidance', 'ofs-pl-node'],
     },
   },
   cli: {
@@ -1188,8 +1211,8 @@ await check('渲染：历史首屏按契约页长与 offset 请求', async () =>
   assert.ok(!client.fetches.includes('/imagen-api/history?limit=60'), '不应再写死旧的 60 张上限')
 })
 
-// 英文界面：窄屏队列胶囊走本地化，不能出现宿主硬编码的中文 stage。
-await check('渲染：英文界面的窄屏队列胶囊', async () => {
+// 英文界面：流水线节点文案走本地化，不能出现宿主硬编码的中文 stage。
+await check('渲染：英文界面的生图流水线', async () => {
   const client = await loadClient({
     now: NOW,
     locale: 'en-US',
@@ -1217,9 +1240,10 @@ await check('渲染：英文界面的窄屏队列胶囊', async () => {
   const tree = await client.mountRaw(client.components.Studio, {})
   client.unmount()
   const text = collectText(tree).join(' | ')
-  assert.ok(text.includes('Generating image 2 of 3'), `[queue-pill] 英文分张进度应本地化：${text}`)
-  assert.ok(text.includes('1 more queued'), '[queue-pill] 英文排队数量应本地化')
-  assert.ok(!text.includes('另有'), '[queue-pill] 英文界面不应出现中文队列文案')
+  assert.ok(text.includes('Cloud ready'), `[pipeline] 英文节点文案应本地化：${text}`)
+  assert.ok(text.includes('Image 2/3'), '[pipeline] 英文分张进度应本地化')
+  assert.ok(text.includes('1 more queued'), '[pipeline] 英文排队数量应本地化')
+  assert.ok(!text.includes('另有'), '[pipeline] 英文界面不应出现中文队列文案')
 })
 
 await check('渲染：日志抽屉（就绪 / 空态 / 不可用）', async () => {

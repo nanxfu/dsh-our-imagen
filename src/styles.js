@@ -7,6 +7,7 @@
 import tokens from './styles/tokens.css'
 import base from './styles/base.css'
 import shell from './styles/shell.css'
+import pipeline from './styles/pipeline.css'
 import modelPicker from './styles/model-picker.css'
 import guidance from './styles/guidance.css'
 import drawers from './styles/drawers.css'
@@ -21,6 +22,7 @@ export const CSS = [
   tokens,
   base,
   shell,
+  pipeline,
   modelPicker,
   guidance,
   drawers,

@@ -426,6 +426,149 @@ await check('分张进度来自宿主结构化字段，不解析中文 stage', (
   assert.equal(logic.jobProgressText(t, { status: 'failed', stageCode: 'failed' }, 'ready'), t('job.status.failed'))
 })
 
+await check('生图流水线：五节点映射、折叠、失败与收尾', () => {
+  const pipeline = logic.pipelineViewOf
+  const node = (view, index) => view.nodes[index]
+  const labels = (view) => view.nodes.map((item) => item.label)
+  const states = (view) => view.nodes.map((item) => item.state)
+
+  // 冷启动排队：推送走完，排队是当前节点；已等待从这次会话开始时刻算。
+  const queued = pipeline(t, {
+    session: { state: 'provisioning', phase: 'queue', startedAt: at(-120), error: null },
+    activeJob: { id: 'job-1', status: 'waiting-session', createdAt: at(-110) },
+    pendingCount: 1,
+    now: NOW,
+  })
+  assert.equal(queued.visible, true)
+  assert.equal(queued.mode, 'waiting')
+  assert.deepEqual(labels(queued), ['推送内核', 'Kaggle 排队', '建立隧道', '准备模型', '生成'])
+  assert.deepEqual(states(queued), ['done', 'active', 'pending', 'pending', 'pending'])
+  assert.equal(queued.timeText, '2:00')
+  assert.equal(queued.queueText, '')
+  // 等云端时不重复给生成节点挂说明：上一段节点已经在讲这件事。
+  assert.equal(node(queued, 4).sub, undefined)
+
+  // 慢档：排队节点标「比平时久」，但不改节点状态。
+  const slow = pipeline(t, {
+    session: { state: 'provisioning', phase: 'queue', startedAt: at(-200) },
+    now: NOW,
+  })
+  assert.equal(node(slow, 1).warn, true)
+  assert.equal(node(slow, 1).tag, '比平时久')
+
+  // 连接与准备模型阶段没有可信起点：不显示计时（重连沿用旧 startedAt，读数会虚高）。
+  const warming = pipeline(t, {
+    session: { state: 'warming', phase: 'warm', startedAt: at(-3600) },
+    now: NOW,
+  })
+  assert.equal(warming.visible, true)
+  assert.deepEqual(states(warming), ['done', 'done', 'done', 'active', 'pending'])
+  assert.equal(warming.timeText, '')
+
+  // 出现阈值：等待不足 1.5 秒时不闪条。
+  const quick = pipeline(t, {
+    session: { state: 'provisioning', phase: 'push', startedAt: at(-1) },
+    now: NOW,
+  })
+  assert.equal(quick.visible, false)
+
+  // 云端已就绪：前四节点折叠成「云端已就绪」，生成节点带分张进度与后续排队数。
+  const warm = pipeline(t, {
+    session: { state: 'ready' },
+    activeJob: { id: 'job-2', status: 'running', progress: { done: 1, total: 4 }, createdAt: at(-30) },
+    pendingCount: 2,
+    now: NOW,
+  })
+  assert.deepEqual(labels(warm), ['云端已就绪', '生成'])
+  assert.deepEqual(states(warm), ['done', 'active'])
+  assert.equal(node(warm, 1).sub, '第 2/4 张')
+  assert.equal(warm.queueText, '另有 1 个排队')
+  assert.equal(warm.timeText, '0:30')
+
+  // 完成态：最后节点读出图完成，计时冻结为耗时；只有刚完成的记录才会亮条。
+  const doneJob = { id: 'job-3', status: 'done', startedAt: at(-10), finishedAt: at(-1), seconds: 6 }
+  const done = pipeline(t, { session: { state: 'ready' }, focusedJob: doneJob, now: NOW })
+  assert.equal(done.mode, 'complete')
+  assert.equal(node(done, 1).label, '出图完成')
+  assert.equal(done.timeLabel, '用时')
+  assert.equal(done.timeText, '0:06')
+  assert.equal(logic.pipelineHoldOf(doneJob, NOW), true)
+  assert.equal(logic.pipelineHoldOf(doneJob, NOW + 10000), false, '页面重开时旧完成记录不应重新亮条')
+
+  // 失败：停在生成失败节点；指引提示被收起后整条一起收起。
+  const failedJob = {
+    id: 'job-4',
+    status: 'failed',
+    createdAt: at(-120),
+    startedAt: at(-100),
+    finishedAt: at(-2),
+    error: { code: 'generation_failed' },
+  }
+  const failed = pipeline(t, { session: { state: 'ready' }, focusedJob: failedJob, now: NOW })
+  assert.equal(failed.mode, 'failed')
+  assert.equal(node(failed, 1).label, '生成失败')
+  assert.deepEqual(states(failed), ['done', 'failed'])
+  const dismissed = pipeline(t, {
+    session: { state: 'ready' },
+    focusedJob: failedJob,
+    failureDismissed: true,
+    now: NOW,
+  })
+  assert.equal(dismissed.visible, false, '收起指引提示后流水线应一起收起')
+
+  // 会话异常：从错误码反推停在哪一段（这里卡在排队）。
+  const errored = pipeline(t, {
+    session: { state: 'error', phase: null, error: { code: 'queue_timeout' }, startedAt: at(-300) },
+    now: NOW,
+  })
+  assert.equal(errored.mode, 'failed')
+  assert.equal(node(errored, 1).state, 'failed')
+
+  // 环境前置错误（没装 CLI / 没登录）：红点落在第一段，而不是冒充「准备模型失败」。
+  const cliError = pipeline(t, {
+    session: { state: 'error', error: { code: 'cli_missing', message: '未找到 kaggle CLI' } },
+    now: NOW,
+  })
+  assert.equal(cliError.mode, 'failed')
+  assert.equal(node(cliError, 0).state, 'failed')
+  assert.equal(cliError.timeText, '', '会话级失败没有可信起点，不显示计时')
+
+  // 会话自然结束不属于某一段失败：流水线隐藏，交给指引卡去「唤醒」。
+  assert.equal(
+    pipeline(t, { session: { state: 'error', error: { code: 'session_ended' } }, now: NOW }).visible,
+    false,
+  )
+
+  // 关闭云端：只留一行提示，不画节点。
+  const closing = pipeline(t, { session: { state: 'stopping' }, now: NOW })
+  assert.equal(closing.mode, 'closing')
+  assert.equal(closing.nodes.length, 1)
+  assert.equal(closing.nodes[0].label, '正在关闭云端…')
+
+  // 没有任何等待：整条隐藏。
+  assert.equal(pipeline(t, { session: { state: 'ready' }, now: NOW }).visible, false)
+
+  // 英文界面：节点与计时标签都走字典。
+  assert.deepEqual(
+    labels(pipeline(te, { session: { state: 'provisioning', phase: 'tunnel', startedAt: at(-30) }, now: NOW })),
+    ['Push kernel', 'Kaggle queue', 'Open tunnel', 'Prepare model', 'Generate'],
+  )
+
+  // 分秒计时口径。
+  assert.equal(logic.clockOf(0), '0:00')
+  assert.equal(logic.clockOf(125000), '2:05')
+})
+
+await check('指引卡色调：硬错误红窄条，环境前置与状态提示琥珀窄条', () => {
+  for (const kind of ['oom', 'session', 'network', 'generate', 'generic']) {
+    assert.equal(logic.guidanceToneOf(kind), 'error', `${kind} 应是红色窄条`)
+  }
+  for (const kind of ['auth', 'cli', 'gpu', 'sleep', 'closed']) {
+    assert.equal(logic.guidanceToneOf(kind), 'warn', `${kind} 应是琥珀窄条`)
+  }
+  assert.equal(logic.guidanceToneOf(''), '')
+})
+
 await check('计数文案占位替换', () => {
   assert.equal(logic.formatText('第 {done}/{total} 张', { done: 2, total: 4 }), '第 2/4 张')
   assert.equal(logic.formatText('{count} more queued', { count: 2 }), '2 more queued')

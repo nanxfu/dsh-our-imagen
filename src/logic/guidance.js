@@ -106,6 +106,18 @@ export function guidanceSurfaceOf(kind) {
   return BANNER_KINDS.has(kind) ? 'banner' : 'toast'
 }
 
+/** 硬错误类别：横幅用红色窄条；其余（环境前置、状态提示）用琥珀窄条。 */
+const ERROR_TONE_KINDS = new Set(['oom', 'session', 'network', 'generate', 'generic'])
+
+/**
+ * 指引卡的语义色调：只决定横幅左缘那条 2px 窄条的颜色，不改变布局与动作。
+ * 配色立场见 tokens.css——语义色以小圆点或窄条出现，不做大面积色底。
+ */
+export function guidanceToneOf(kind) {
+  if (!kind) return ''
+  return ERROR_TONE_KINDS.has(kind) ? 'error' : 'warn'
+}
+
 /** 折叠空白并截断，避免日志尾巴把卡片撑坏。 */
 export function shortText(value, max = 240) {
   if (typeof value !== 'string') return ''

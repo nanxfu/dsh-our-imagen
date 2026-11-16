@@ -1,14 +1,25 @@
 /* ── 异常指引 ───────────────────────────────────────────────── */
+/*
+ * 中性卡片 + 左缘 2px 窄条：与生图流水线、创作面板同一套材质。
+ * tokens.css 的立场是「语义色只以小圆点或窄条出现，不参与大面积装饰」，
+ * 所以不再用整块琥珀/红底——等待与环境前置用琥珀窄条，硬错误用红窄条。
+ */
 .ofs-guidance {
   display: flex;
   align-items: flex-start;
   gap: 10px;
   margin: 12px 16px 0;
   padding: 10px 12px;
-  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);
+  border: 1px solid var(--ofs-hairline);
+  border-left: 2px solid var(--ofs-warn);
   border-radius: 14px;
-  background: var(--ofs-warn-soft);
+  background: var(--ofs-card);
   animation: ofs-fade-in 220ms ease;
+}
+
+/* 硬错误（显存不足、连接中断、会话异常、生成失败…）：只把窄条换成红色。 */
+.ofs-guidance.is-error {
+  border-left-color: var(--ofs-error);
 }
 
 .ofs-guidance-icon {
@@ -18,8 +29,8 @@
   width: 28px;
   height: 28px;
   border-radius: 9px;
-  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);
-  color: var(--ofs-warn);
+  background: var(--ofs-sunken);
+  color: var(--ofs-ink-3);
 }
 
 .ofs-guidance-body {
@@ -41,20 +52,14 @@
 }
 
 /* ── 排队卡住提示（10 分钟档，非错误态）──────────────────────── */
-/* 沿用指引卡的布局，但色调更接近「等待」而不是「异常」，避免和真正的报错混淆。 */
-.ofs-queue-notice {
-  border-color: color-mix(in oklab, var(--ofs-warn) 18%, transparent);
-  background: color-mix(in oklab, var(--ofs-warn-soft) 72%, transparent);
-}
+/* 沿用指引卡布局；色调用默认的琥珀窄条，和真正的报错（红窄条）区分开。 */
 
-.ofs-queue-notice .ofs-guidance-icon {
-  background: color-mix(in oklab, var(--ofs-warn) 12%, transparent);
-}
-
+/* 横幅主操作：墨黑实心胶囊（工作台自己的主操作语言），靠层级而不是颜色抢注意力。 */
 .ofs-guidance-actions .ofs-chip.is-on {
-  background: color-mix(in oklab, var(--ofs-warn) 16%, transparent);
-  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);
-  color: var(--ofs-warn);
+  border-color: transparent;
+  background: var(--ofs-accent);
+  color: var(--ofs-accent-ink);
+  font-weight: 600;
   text-decoration: none;
 }
 

@@ -263,7 +263,7 @@ export function useStudio(props) {
     form,
     chat,
     library,
-    guidance: { kind: guidanceKind, code: guidanceCode, surface: guidanceSurface, detail: guidanceDetail, dismiss: dismissGuidance },
+    guidance: { kind: guidanceKind, code: guidanceCode, surface: guidanceSurface, detail: guidanceDetail, key: guidanceKey, dismiss: dismissGuidance },
     actions: { sending, generate, reroll, iterate, referenceImage, retryFocusedJob, resetToSafe },
   }
 }

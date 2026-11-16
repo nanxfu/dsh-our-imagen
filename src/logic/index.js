@@ -2,6 +2,7 @@
 export * from './clamp.js'
 export * from './format.js'
 export * from './status.js'
+export * from './pipeline.js'
 export * from './queue.js'
 export * from './color.js'
 export * from './error.js'

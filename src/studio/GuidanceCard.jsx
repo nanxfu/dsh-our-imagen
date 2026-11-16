@@ -39,6 +39,7 @@ import {
 } from '../logic/guidance.js'
 import { formatText } from '../logic/format.js'
 import { buildDiagnostics, readLogsPayload } from '../logic/logs.js'
+import { guidanceToneOf } from '../logic/guidance.js'
 import { DirectLoginCard } from './guidance/DirectLoginCard.jsx'
 
 /** 带「查看日志 / 复制诊断信息」次级动作的报错类别。 */
@@ -206,7 +207,7 @@ export function GuidanceCard(props) {
   }
 
   return (
-    <div className="ofs-guidance" role="alert">
+    <div className={guidanceToneOf(kind) === 'error' ? 'ofs-guidance is-error' : 'ofs-guidance'} role="alert">
       <span className="ofs-guidance-icon">
         <Icon name="alert" size={15} />
       </span>

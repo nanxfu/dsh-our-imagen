@@ -1,0 +1,235 @@
+/*
+ * 生图流水线：顶栏下方一条 40px 高的单行节点条。
+ *
+ * 左边是固定五段的节点序列（申请 GPU 的四段 + 生成），右边是排队数与总等待时长。
+ * 只在有等待时出现，由组合层决定内容；这里只管形态：中性卡片、小圆点、连接线与克制的动效。
+ *
+ * 配色立场（见 tokens.css）：语义色只以小圆点与窄条出现——
+ *   已完成 = ok 绿点；当前 = 墨黑点 + 1.5 秒呼吸；
+ *   排队变慢 = 琥珀点 + 琥珀文字；失败 = 红点；待开始 = 空心灰点。
+ */
+
+.ofs-pipeline {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  margin: 12px 16px 0;
+  padding: 0 12px;
+  border: 1px solid var(--ofs-hairline);
+  border-radius: var(--ofs-r-md);
+  background: var(--ofs-card);
+  color: var(--ofs-ink-2);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  animation: ofs-fade-in 220ms ease;
+  /* 出现/消失用高度过渡：等待超过 1.5 秒才出现，快速出图不闪条。 */
+  transition:
+    height 200ms ease,
+    margin-top 200ms ease,
+    opacity 180ms ease,
+    border-color 200ms ease;
+}
+
+/* 收起态：高度归零但不移除节点（外层常驻，避免工作区上下跳动）。 */
+.ofs-pipeline.is-hidden {
+  height: 0;
+  margin-top: 0;
+  border-color: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── 左侧：节点与连接线 ─────────────────────────────────────── */
+.ofs-pl-rail {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ofs-pl-node {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: var(--ofs-r-pill);
+}
+
+/* 当前节点：一枚浅浅的底，让「现在在这一格」不靠颜色也能读出来。 */
+.ofs-pl-node.is-active {
+  background: var(--ofs-accent-soft);
+}
+
+.ofs-pl-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ofs-ink-4);
+}
+
+.ofs-pl-node.is-done .ofs-pl-dot {
+  background: var(--ofs-ok);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-ok) 16%, transparent);
+}
+
+.ofs-pl-node.is-active .ofs-pl-dot {
+  background: var(--ofs-accent);
+  animation: ofs-pl-breathe 1.5s ease-in-out infinite;
+}
+
+.ofs-pl-node.is-warn .ofs-pl-dot {
+  background: var(--ofs-warn);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-warn) 18%, transparent);
+  animation: ofs-warn-pulse 2.2s ease-out infinite;
+}
+
+.ofs-pl-node.is-failed .ofs-pl-dot {
+  background: var(--ofs-error);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-error) 18%, transparent);
+}
+
+.ofs-pl-label {
+  color: var(--ofs-ink-3);
+  white-space: nowrap;
+}
+
+.ofs-pl-node.is-done .ofs-pl-label {
+  color: var(--ofs-ink-2);
+}
+
+.ofs-pl-node.is-active .ofs-pl-label {
+  color: var(--ofs-ink);
+  font-weight: 650;
+}
+
+.ofs-pl-node.is-warn .ofs-pl-label {
+  color: var(--ofs-warn);
+  font-weight: 600;
+}
+
+.ofs-pl-node.is-failed .ofs-pl-label {
+  color: var(--ofs-error);
+  font-weight: 600;
+}
+
+/* 生成节点的分张计数：跟着当前节点，不另开一行。 */
+.ofs-pl-sub {
+  margin-left: 1px;
+  color: var(--ofs-ink-2);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 「比平时久」：只给文字上色，不垫色底。 */
+.ofs-pl-tag {
+  margin-left: 1px;
+  color: var(--ofs-warn);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ofs-pl-tag::before {
+  content: "·";
+  margin-right: 5px;
+  color: var(--ofs-ink-4);
+  font-weight: 400;
+}
+
+/* 连接线：走完的段是实线，正在走的那一段有一道很慢的流光。 */
+.ofs-pl-link {
+  position: relative;
+  flex: 1 1 12px;
+  min-width: 14px;
+  height: 1px;
+  background: var(--ofs-hairline);
+  overflow: hidden;
+}
+
+.ofs-pl-link.is-filled {
+  background: color-mix(in oklab, var(--ofs-ink) 20%, transparent);
+}
+
+.ofs-pl-link.is-flowing::after {
+  content: "";
+  position: absolute;
+  inset: -0.5px 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklab, var(--ofs-ink) 42%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation: ofs-pl-flow 2.6s linear infinite;
+}
+
+/* 折叠态（云端已就绪 → 生成）：只剩两个锚点时不要拉满整行，
+   否则那条长线会被读成「还有很长一段进度要走」。 */
+.ofs-pl-rail.is-folded .ofs-pl-link {
+  flex: 0 0 26px;
+}
+
+/* ── 右侧：排队数与总等待 ───────────────────────────────────── */
+.ofs-pl-meta {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-left: 14px;
+  border-left: 1px solid var(--ofs-hairline);
+  color: var(--ofs-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ofs-pl-queue {
+  font-variant-numeric: tabular-nums;
+}
+
+.ofs-pl-time {
+  color: var(--ofs-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 完成态：最后节点亮一次（一次显影），整条随后淡出。 */
+.ofs-pipeline.is-complete .ofs-pl-node.is-done:last-child .ofs-pl-dot {
+  animation: ofs-pl-develop 800ms cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
+.ofs-pipeline.is-complete .ofs-pl-node.is-done:last-child .ofs-pl-label {
+  color: var(--ofs-ok);
+  font-weight: 600;
+}
+
+/* 关闭云端：不属于生成流程，只留一行「正在关闭云端…」，不画节点。 */
+.ofs-pipeline.is-closing .ofs-pl-meta {
+  display: none;
+}
+
+/* ── 动效 ───────────────────────────────────────────────────── */
+@keyframes ofs-pl-breathe {
+  0%, 100% { box-shadow: 0 0 0 2px color-mix(in oklab, var(--ofs-accent) 16%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-accent) 3%, transparent); }
+}
+
+@keyframes ofs-pl-flow {
+  from { background-position: 220% 0; }
+  to { background-position: -120% 0; }
+}
+
+@keyframes ofs-pl-develop {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok) 55%, transparent); }
+  100% { box-shadow: 0 0 0 12px color-mix(in oklab, var(--ofs-ok) 0%, transparent); }
+}
