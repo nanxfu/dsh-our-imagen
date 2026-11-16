@@ -326,14 +326,17 @@ export function useStudio(props) {
       return
     }
     if (plan.maskLost) {
-      const applied = form.applyReference({ image: plan.fillReference })
-      if (!applied || !applied.ok) {
-        const failedKey = applied && applied.reason === 'no_path' ? 'studio.reference.noPath' : 'studio.reference.unavailable'
+      // 蒙版不可恢复：把失败任务的预设、提示词与参数一起填回表单（而不是只塞参考图），
+      // 用户重新涂抹后点生成即等价重试；这里不提交、不伪造蒙版。
+      const restored = form.restoreRetryTask(plan)
+      if (!restored || !restored.ok) {
+        const failedKey = restored && restored.reason === 'no_path' ? 'studio.reference.noPath' : 'studio.reference.unavailable'
         ui.showToast(t(failedKey))
         return
       }
       ui.setView('studio')
       ui.setPanelMode('form')
+      ui.setZoom(false)
       if (plan.requestPaint) ui.requestPaint()
       ui.showToast(t(plan.noticeKey))
       return

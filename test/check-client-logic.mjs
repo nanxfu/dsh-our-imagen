@@ -2810,6 +2810,84 @@ await check('失败重试参考图恢复：无参考图 / 普通参考图 / 同�
   assert.equal(logic.referenceUrlOf(' imagen-output/a b.png '), `/imagen-api/file?path=${encodeURIComponent('imagen-output/a b.png')}`)
 })
 
+await check('蒙版不可恢复的重试回填：恢复失败任务的预设、提示词与参数', () => {
+  const presets = [
+    { id: 'sdxl-lightning', supportsImg2Img: true, supportsInpaint: true, size: 1024, steps: 4, cfg: 0 },
+    { id: 'sdxl-inpaint', supportsImg2Img: true, supportsInpaint: true, inpaintOnly: true, size: 1024, steps: 30, cfg: 8 },
+    { id: 'flux2-klein-4b', supportsImg2Img: false, supportsInpaint: false },
+  ]
+  const maskJob = {
+    id: 'j-mask',
+    presetId: 'sdxl-inpaint',
+    params: {
+      prompt: '局部改成红灯笼',
+      negativePrompt: 'blurry, low quality',
+      width: 1152,
+      height: 768,
+      steps: 30,
+      cfg: 8,
+      count: 2,
+      reference: { sourcePath: 'imagen-output/job-1/07.png', strength: 0.95, mask: true },
+    },
+  }
+  const plan = logic.retryReferencePlan(maskJob)
+  const restore = logic.retryRestoreOf(plan, presets)
+  assert.equal(restore.ok, true)
+  assert.equal(restore.reason, '')
+  assert.equal(restore.preset.id, 'sdxl-inpaint', '优先恢复失败任务原本使用的预设')
+  assert.equal(restore.patch.prompt, '局部改成红灯笼')
+  assert.equal(restore.patch.width, 1152)
+  assert.equal(restore.patch.height, 768)
+  assert.equal(restore.patch.steps, 30)
+  assert.equal(restore.patch.cfg, 8)
+  assert.equal(restore.patch.count, 2)
+  assert.equal(restore.patch.strength, 0.95)
+  assert.equal(restore.patch.negative, 'blurry, low quality', '任务的合并负向词整体进入 user 层')
+  assert.equal(restore.patch.reference.path, 'imagen-output/job-1/07.png')
+  assert.equal(restore.patch.reference.mask, undefined, '不得伪造蒙版')
+  assert.equal(
+    restore.patch.reference.url,
+    `/imagen-api/file?path=${encodeURIComponent('imagen-output/job-1/07.png')}`,
+    '缩略图地址与 fileUrl 同口径',
+  )
+
+  // 任务原本的预设已被删除：退回垫图兜底预设，但提示词等参数仍按任务值回填。
+  const gonePlan = logic.retryReferencePlan({
+    ...maskJob,
+    presetId: 'removed-preset',
+    params: { ...maskJob.params, presetId: 'removed-preset' },
+  })
+  const gone = logic.retryRestoreOf(gonePlan, presets)
+  assert.equal(gone.ok, true)
+  assert.equal(gone.preset.id, 'sdxl-lightning', '预设不可用时按能力兜底')
+  assert.equal(gone.patch.prompt, '局部改成红灯笼', '兜底预设也要恢复任务参数')
+  assert.equal(gone.patch.reference.path, 'imagen-output/job-1/07.png')
+
+  // 任务预设是不支持垫图的 flux2：不能把参考图塞给它，同样走兜底。
+  const fluxPlan = logic.retryReferencePlan({
+    ...maskJob,
+    presetId: 'flux2-klein-4b',
+    params: { ...maskJob.params, presetId: 'flux2-klein-4b' },
+  })
+  assert.equal(logic.retryRestoreOf(fluxPlan, presets).preset.id, 'sdxl-lightning')
+
+  // 一个可用垫图预设都没有（旧宿主）：明确失败，由组合层提示，不把参考图塞给不支持的模型。
+  const unsupported = logic.retryRestoreOf(plan, [presets[2]])
+  assert.equal(unsupported.ok, false)
+  assert.equal(unsupported.reason, 'unsupported')
+  assert.equal(logic.retryRestoreOf({ fillReference: null, overrides: {} }, presets).reason, 'no_path')
+
+  // 参数回填的边界钳制与负向词两层结构。
+  const clamped = logic.retryFormPatch({ prompt: '  x  ', width: 99999, steps: 999, count: 99, strength: 5, negativePrompt: 'a' })
+  assert.equal(clamped.prompt, 'x')
+  assert.equal(clamped.steps, LIMITS.steps.max)
+  assert.equal(clamped.count, LIMITS.count.max)
+  assert.equal(clamped.strength, LIMITS.strength.inpaintMax, '带蒙版的重试强度按 inpaintMax 钳制')
+  assert.equal(clamped.negative, 'a')
+  assert.equal(clamped.negativeLayers.user, 'a')
+  assert.equal(clamped.width, LIMITS.width.max)
+})
+
 // 能力预检必须用「有效预设 + 有效参考图」，不能用左栏当前预设误拦重试恢复的任务。
 await check('生成能力预检：有效预设下校验参考图与蒙版', () => {
   const lightning = { id: 'sdxl-lightning', supportsImg2Img: true, supportsInpaint: true }

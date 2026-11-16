@@ -19,7 +19,7 @@ import {
   referenceWithoutMask,
 } from './mask.js'
 import { inpaintOnlyOf, ratioIdOf, referencePresetOf, supportsImg2Img } from './preset.js'
-import { negativeForSubmit } from './prompt.js'
+import { negativeForSubmit, negativeLayersPatch, normalizeNegativeLayers } from './prompt.js'
 
 /** 参考图的文件名：路径只用于向宿主定位作品，界面只显示文件名。 */
 export function referenceFileName(path) {
@@ -289,6 +289,10 @@ export function retryReferencePlan(source, options = {}) {
   const pending = submittedReferenceOf(options.pendingRef)
   const sameSource = Boolean(pending && referencePathOf({ reference: pending }) === frozen.path)
   const pendingMask = sameSource ? referenceMaskForSubmit(pending) : ''
+  // 强度跟失败任务走；任务参数缺强度时退回同源提交体里的值。必须在分支判定之前写入：
+  // maskLost 分支会提前 return，而「把任务参数填回表单」同样需要这份强度。
+  const strength = frozen.strength ?? (sameSource && pending ? finiteNumber(pending.strength) : null)
+  if (strength !== null) overrides.strength = strength
   if (sameSource && frozen.mask && pendingMask) {
     // 同源提交体还留着完整蒙版：直接恢复原参数重试。
     overrides.reference = { ...pending, path: frozen.path }
@@ -308,10 +312,74 @@ export function retryReferencePlan(source, options = {}) {
     overrides.reference = { path: frozen.path, url: referenceUrlOf(frozen.path) }
     plan.restored = 'reference'
   }
-  // 强度跟失败任务走；任务参数缺强度时退回同源提交体里的值。
-  const strength = frozen.strength ?? (sameSource && pending ? finiteNumber(pending.strength) : null)
-  if (strength !== null) overrides.strength = strength
   return plan
+}
+
+/**
+ * 失败重试「蒙版不可恢复」的表单回填补丁：把失败任务的参数整理成表单字段。
+ *
+ * 只回填与复现任务直接相关的项——提示词、排除项、宽高、步数、CFG、张数与强度；
+ * 种子不回填（重试语义是重新抽一张，沿用固定种子反而可能复现失败原因）；
+ * 参考图由 `retryRestoreOf()` 与预设一起写入，这里不碰。
+ *
+ * 排除项走两层结构：任务里冻结的是合并后的文本，整体放进 user 层，保证「提交什么就是什么」
+ * 而不是被当前预设的推荐负向词重新拼一遍。
+ */
+export function retryFormPatch(overrides) {
+  const input = overrides && typeof overrides === 'object' ? overrides : {}
+  const patch = {}
+  if (typeof input.prompt === 'string' && input.prompt.trim()) {
+    patch.prompt = input.prompt.trim().slice(0, LIMITS.prompt.maxChars)
+  }
+  if (typeof input.negativePrompt === 'string') {
+    const negative = input.negativePrompt.slice(0, LIMITS.negativePrompt.maxChars)
+    const layers = normalizeNegativeLayers({ user: negative })
+    Object.assign(patch, negativeLayersPatch(layers))
+  }
+  const width = positiveSize(input.width)
+  const height = positiveSize(input.height)
+  if (width !== null) patch.width = clampSize(width)
+  if (height !== null) patch.height = clampSize(height)
+  const steps = finiteNumber(input.steps)
+  if (steps !== null) patch.steps = clampInt(steps, LIMITS.steps.min, LIMITS.steps.max, 4)
+  const cfg = finiteNumber(input.cfg)
+  if (cfg !== null) patch.cfg = clampNumber(cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0)
+  const count = finiteNumber(input.count)
+  if (count !== null) patch.count = clampInt(count, LIMITS.count.min, LIMITS.count.max, 1)
+  const strength = finiteNumber(input.strength)
+  if (strength !== null) patch.strength = clampMaskStrength(strength, true)
+  return patch
+}
+
+/**
+ * 「蒙版不可恢复」重试的表单回填计划：解析目标预设 + 组装参考图与参数补丁。
+ *
+ * 预设优先恢复失败任务原本使用的那个（必须支持垫图，不能把参考图塞给不支持的模型）；
+ * 该预设已被删除或不支持垫图时退回 `referencePresetOf()` 兜底预设，与「以此图重绘」的
+ * 降级规则一致。一个可用预设都没有（旧宿主）时返回失败，由调用方明确提示。
+ *
+ * @param {object} plan `retryReferencePlan()` 的返回值（maskLost 分支）
+ * @param {Array<object>} presets 宿主下发的预设列表
+ * @returns {{ ok: boolean, reason: ''|'no_path'|'unsupported', preset: object|null, patch: object }}
+ */
+export function retryRestoreOf(plan, presets) {
+  const holder = plan && typeof plan === 'object' ? plan : {}
+  const fill = holder.fillReference && typeof holder.fillReference === 'object' ? holder.fillReference : null
+  const path = fill && typeof fill.path === 'string' ? fill.path.trim() : ''
+  if (!path) return { ok: false, reason: 'no_path', preset: null, patch: {} }
+  const list = Array.isArray(presets) ? presets : []
+  const overrides = holder.overrides && typeof holder.overrides === 'object' ? holder.overrides : {}
+  const wanted = typeof overrides.presetId === 'string' ? overrides.presetId.trim() : ''
+  const candidate = wanted ? list.find((item) => item && item.id === wanted) || null : null
+  const preset = candidate && supportsImg2Img(candidate) ? candidate : referencePresetOf(list)
+  const patch = retryFormPatch(overrides)
+  // 缩略图沿用失败任务恢复计划里的同口径 url；旧调用方没带时按同一规则补出来。
+  patch.reference = {
+    path,
+    url: fill && typeof fill.url === 'string' && fill.url ? fill.url : referenceUrlOf(path),
+  }
+  if (!preset) return { ok: false, reason: 'unsupported', preset: null, patch }
+  return { ok: true, reason: '', preset, patch }
 }
 
 /**

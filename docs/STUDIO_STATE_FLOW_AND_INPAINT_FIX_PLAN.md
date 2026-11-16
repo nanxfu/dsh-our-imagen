@@ -5,7 +5,7 @@
 > **触发**：0.12.0 局部重绘上线后的逐条代码审计  
 > **文档性质**：问题清单 + 已拍板的交互决策 + 分批修复方案 + 落地结果。行为规格同步到 [`docs/SPEC.md`](SPEC.md) §5.16 / §2.2，变更明细记入 [`CHANGELOG.md`](../CHANGELOG.md)。
 >
-> **落地摘要**：13 项问题全部处理——11 项属实项修复、1 项真机确认后修复（非正方形参考图）、1 项契约权衡按场景放宽（带蒙版 `strength` 1.0）。离线断言全绿（客户端 logic 84 / render 99、host-e2e 50、jobs-wait 26、远端 390、契约 12）；真机 2×Tesla T4 复验通过（非正方形 1024×768、3% 精细小蒙版羽化 4px、强度 0.9/1.0 对比、连续两轮重绘、无遗留 Kernel），结果见 §六。
+> **落地摘要**：13 项问题全部处理——11 项属实项修复、1 项真机确认后修复（非正方形参考图）、1 项契约权衡按场景放宽（带蒙版 `strength` 1.0）。离线断言全绿（客户端 logic 85 / render 99、host-e2e 50、jobs-wait 26、远端 390、契约 12）；真机 2×Tesla T4 复验通过（非正方形 1024×768、3% 精细小蒙版羽化 4px、强度 0.9/1.0 对比、连续两轮重绘、无遗留 Kernel），结果见 §六。
 
 ---
 
@@ -122,8 +122,8 @@
 ### P0-a 状态安全 ✅
 
 - 胶片条保护、来源策略纯函数 + `generate()` 接线、重试参考图恢复。
-- **落地**：`src/logic/generate.js` 新增 `GENERATE_SOURCES` / `normalizeGenerateSource` / `generateSourcePolicy` / `effectivePresetOf` / `generateCapabilityOf` / `retryReferencePlan` / `previewRecallOf` / `referenceUrlOf`，`buildGenerateBody` 的强度归一改为 mask-aware；`useStudio.generate()` 先消费来源策略再用「有效预设 + 有效参考图」做能力预检；`previewWork()` 按「参考图保护 → 草稿保护 → 回填」判定；`retryFocusedJob()` 按恢复计划分支（同源 pendingRef 恢复完整蒙版；蒙版不可恢复时只填回参考图 + 请求涂抹，不提交）；`actions.continueInpaint` 新增。
-- 测试：`check-client-logic` 覆盖来源策略表（含 `pendingRef`、蒙版不可恢复分支）、能力预检、胶片条保护优先级（77 → 84 项）；`check-client-render` 覆盖三种来源的实际请求体（无 `reference` / 带 `reference.mask` / 自动切预设）与重试分支。
+- **落地**：`src/logic/generate.js` 新增 `GENERATE_SOURCES` / `normalizeGenerateSource` / `generateSourcePolicy` / `effectivePresetOf` / `generateCapabilityOf` / `retryReferencePlan` / `retryFormPatch` / `retryRestoreOf` / `previewRecallOf` / `referenceUrlOf`，`buildGenerateBody` 的强度归一改为 mask-aware；`useStudio.generate()` 先消费来源策略再用「有效预设 + 有效参考图」做能力预检；`previewWork()` 按「参考图保护 → 草稿保护 → 回填」判定；`retryFocusedJob()` 按恢复计划分支——同源 pendingRef 恢复完整蒙版；蒙版不可恢复时把失败任务的预设（校验垫图能力，不可用则退回兜底预设）、提示词、宽高、步数、CFG、张数、排除项与强度整体填回表单，再请求进入涂抹，不提交；`actions.continueInpaint` 新增。
+- 测试：`check-client-logic` 覆盖来源策略表（含 `pendingRef`、蒙版不可恢复分支与回填计划）、能力预检、胶片条保护优先级、蒙版不可恢复的重试回填（77 → 85 项）；`check-client-render` 覆盖三种来源的实际请求体（无 `reference` / 带 `reference.mask` / 自动切预设）与重试分支（含恢复任务预设/提示词/参数断言）。
 
 ### P0-b 首次使用与续绘闭环 ✅
 
@@ -134,7 +134,7 @@
 ### P1 正确性 ✅
 
 - 画布比例（`flex-shrink: 0` 或 `max-width/height + width:auto` 联动）、指针两轴映射与光标尺寸、空舞台涂抹入口、涂抹中切图退出、强度档位联动。
-- **落地**：`.ofs-mask-stage` 宽度改为 `min(容器宽, 560px, max(120px, (可用高 - 200px) × 参考图比例))` + `aspect-ratio`（与 `.ofs-frame` / `.ofs-print` 同用容器单位），不再被 `max-height` 单独压扁；`Stage.canvasScaleOf()` 按 rect 宽/高分别换算指针与光标；空舞台复用同一蒙版编辑器；选中作品变化时退出涂抹态（蒙版保留）；`useStudioForm` 新增 `strengthAuto` / `strengthMax`，`beginMaskEdit` 套推荐档并标记自动、`applyStrength` 退出自动档、`selectPreset` 自动档跟随新预设。
+- **落地**：`.ofs-mask-stage` 宽度改为 `min(容器宽, 560px, max(120px, (可用高 - 200px) × 参考图比例))` + `aspect-ratio`（与 `.ofs-frame` / `.ofs-print` 同用容器单位），不再被 `max-height` 单独压扁；`Stage.canvasScaleOf()` 按 rect 宽/高分别换算指针与光标；空舞台复用同一蒙版编辑器；选中作品变化时退出涂抹态（蒙版保留）；「参考图变化」与「进入涂抹请求」合并为**同一个 effect** 的判定链（先判请求再决定是否收起），不再隐式依赖两个 effect 的声明顺序；`useStudioForm` 新增 `strengthAuto` / `strengthMax`，`beginMaskEdit` 套推荐档并标记自动、`applyStrength` 退出自动档、`selectPreset` 自动档跟随新预设。
 - 测试：渲染结构断言与 `--ofs-mask-r` 比例变量；CSS 变化未改既有类名。
 
 ### P2 远端收敛 ✅

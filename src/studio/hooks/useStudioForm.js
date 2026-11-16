@@ -17,7 +17,7 @@ import { negativePromptActive } from '../../../shared/models-guide.js'
 import { enhancePromptRequest } from '../../api/resources.js'
 import { clampInt, clampNumber } from '../../logic/clamp.js'
 import { formSnapshotOf, isFormDirty, newCreationPatch } from '../../logic/form.js'
-import { buildGenerateBody } from '../../logic/generate.js'
+import { buildGenerateBody, retryRestoreOf } from '../../logic/generate.js'
 import {
   clampMaskStrength,
   maskDigestOf,
@@ -412,6 +412,29 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     return { ok: true, switchedPreset: target, reason: '' }
   }
 
+  /**
+   * 失败重试的「蒙版不可恢复」回填：把失败任务的预设与参数写回表单并放回参考图，等用户重涂。
+   *
+   * 与「以此图重绘」不同，这里的目标是把表单尽量还原成失败任务本身：预设做能力校验
+   * （失败任务原来的预设可用就用它，否则退回兜底预设），提示词 / 尺寸 / 步数 / CFG /
+   * 张数 / 排除项 / 强度按任务冻结值回填——重涂后点生成即等价重试，不会拿左栏里的旧参数
+   * 去跑一个不同任务。不标记干净基准、不提交：表单此时是等待补全蒙版的草稿。
+   *
+   * @param {object} plan `retryReferencePlan()` 的 maskLost 分支
+   * @returns {{ ok: boolean, reason: string, preset: object|null, patch: object }}
+   */
+  function restoreRetryTask(plan) {
+    const restored = retryRestoreOf(plan, presets)
+    if (!restored.ok) return restored
+    setForm((prev) => applyNegativePatch(prev, {
+      ...presetSelectPatch(restored.preset, prev, presets),
+      ...restored.patch,
+    }))
+    // 回填的是任务实际使用的强度：退出自动档，之后切预设不再覆盖它。
+    setStrengthAuto(false)
+    return restored
+  }
+
   async function enhance() {
     if (enhancing) return
     if (!form.prompt.trim()) {
@@ -539,6 +562,8 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     applyStrength,
     removeReference,
     applyReference,
+    // 失败重试的「蒙版不可恢复」回填：恢复任务预设与参数 + 参考图，等用户重新涂抹。
+    restoreRetryTask,
     // 局部重绘：蒙版挂在参考图上；能力判断、当前蒙版与写入/清空动作。
     mask,
     inpaintSupported,

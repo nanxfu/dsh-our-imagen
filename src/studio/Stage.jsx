@@ -437,16 +437,31 @@ export function Stage(props) {
   }
 
   // 换参考图 / 移除参考图：收起涂抹态并重置画布读数（蒙版随 reference 一起被表单清掉）。
+  // 「打开涂抹」请求也在同一个 effect 里消费：重试恢复参考图、以此结果续绘都会同时改参考图
+  // 并请求涂抹，拆成两个 effect 就会隐式依赖声明顺序（先收起再打开）；合并后只有一条判定链，
+  // 顺序写反也不会把刚打开的编辑器再关掉。
+  const referenceChangedRef = React.useRef(referenceIdentity)
   React.useEffect(() => {
-    setPainting(false)
-    const width = Number(reference && reference.width)
-    const height = Number(reference && reference.height)
-    setNaturalSize({
-      width: Number.isFinite(width) && width > 0 ? Math.round(width) : 0,
-      height: Number.isFinite(height) && height > 0 ? Math.round(height) : 0,
-    })
-    setMaskState(maskStateOf({ coverage: mask ? mask.coverage : 0 }))
-  }, [referenceIdentity])
+    const referenceChanged = referenceChangedRef.current !== referenceIdentity
+    referenceChangedRef.current = referenceIdentity
+    if (referenceChanged) {
+      const width = Number(reference && reference.width)
+      const height = Number(reference && reference.height)
+      setNaturalSize({
+        width: Number.isFinite(width) && width > 0 ? Math.round(width) : 0,
+        height: Number.isFinite(height) && height > 0 ? Math.round(height) : 0,
+      })
+      setMaskState(maskStateOf({ coverage: mask ? mask.coverage : 0 }))
+    }
+    // 组合层请求进入涂抹态（专用模型「以此图重绘」、失败重试恢复参考图、以此结果续绘）：
+    // 计数变化时消费一次；从画廊跨视图切回时 Stage 才挂载，effect 首次执行同样生效。
+    if (paintRequest > 0 && canPaint) {
+      openMaskEditor()
+      if (clearPaintRequest) clearPaintRequest()
+      return
+    }
+    if (referenceChanged) setPainting(false)
+  }, [referenceIdentity, paintRequest, canPaint])
 
   // 能力被切走（例如手动换到不支持 Inpaint 的模型）时收起涂抹态；蒙版本身保留在表单里。
   React.useEffect(() => {
@@ -459,14 +474,6 @@ export function Stage(props) {
     selectedIdentityRef.current = selectedIdentity
     setPainting(false)
   }, [selectedIdentity])
-
-  // 组合层请求进入涂抹态（专用模型「以此图重绘」、失败重试恢复参考图、以此结果续绘）：
-  // 计数变化时消费一次；从画廊跨视图切回时 Stage 才挂载，effect 首次执行同样生效。
-  React.useEffect(() => {
-    if (paintRequest <= 0 || !canPaint) return
-    openMaskEditor()
-    if (clearPaintRequest) clearPaintRequest()
-  }, [paintRequest, canPaint])
 
   // 进入涂抹态 / 画布尺寸变化：重建画布并把已有蒙版还原上去。
   const maskLayoutKey = `${painting ? 1 : 0}|${canvasSize.width}x${canvasSize.height}`

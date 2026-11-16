@@ -6445,33 +6445,43 @@ await check('渲染：生成来源策略——表单带蒙版提交，助手与�
   }
 })
 
-await check('渲染：失败重试恢复参考图与蒙版，蒙版不可恢复时只填回参考图并要求重涂', async () => {
+await check('渲染：失败重试恢复参考图与蒙版；蒙版不可恢复时恢复任务预设与参数并要求重涂', async () => {
   const sourcePath = historyItem.images[0].path
   const failedJob = {
     id: 'job-retry',
     status: 'failed',
     createdAt: at(-60),
     finishedAt: at(-10),
-    presetId: 'sdxl-lightning',
+    // 失败任务用的是专用局部重绘预设：蒙版不可恢复时也必须恢复到这个预设，
+    // 而不是被「以此图重绘」的兜底规则切成 sdxl-lightning。
+    presetId: 'sdxl-inpaint',
     params: {
       prompt: '失败的局部重绘',
-      presetId: 'sdxl-lightning',
-      width: 1024,
-      height: 1024,
-      steps: 4,
-      cfg: 0,
+      negativePrompt: 'blurry',
+      presetId: 'sdxl-inpaint',
+      width: 1152,
+      height: 768,
+      steps: 30,
+      cfg: 8,
+      count: 1,
       reference: { sourcePath, strength: 0.8, mask: true },
     },
     error: { code: 'generation_failed', message: '远端生成失败' },
   }
   const responses = {
-    '/imagen-api/state': { ...readyState, presets: [inpaintPreset], defaultPreset: 'sdxl-lightning', lastJob: failedJob },
+    '/imagen-api/state': {
+      ...readyState,
+      presets: [inpaintPreset, nativeInpaintPreset],
+      defaultPreset: 'sdxl-lightning',
+      lastJob: failedJob,
+    },
     '/imagen-api/history': { items: [historyItem] },
     '/imagen-api/library': { favorites: [], deleted: [] },
     '/imagen-api/generate': { id: 'job-retried', status: 'queued' },
   }
 
-  // 分支一：没有同源提交体，蒙版不可恢复 → 不自动提交，填回参考图并请求进入涂抹。
+  // 分支一：没有同源提交体，蒙版不可恢复 → 不自动提交；把失败任务的预设、提示词与参数
+  // 填回表单并请求进入涂抹，用户重涂后点生成即等价重试。
   let harness = await mountStudioHarness(responses)
   try {
     const form = () => harness.latest.studio.form
@@ -6481,6 +6491,16 @@ await check('渲染：失败重试恢复参考图与蒙版，蒙版不可恢复�
     await harness.client.rerenderRaw()
     assert.equal(form().form.reference.path, sourcePath, '重试应按失败任务恢复参考图')
     assert.equal(form().form.reference.mask, undefined, '蒙版不可恢复时不得伪造蒙版')
+    assert.equal(form().form.presetId, 'sdxl-inpaint', '应恢复失败任务原本的预设，而不是切到兜底预设')
+    assert.equal(form().inpaintOnly, true)
+    assert.equal(form().form.prompt, '失败的局部重绘', '应恢复失败任务的提示词')
+    assert.equal(form().form.strength, 0.8, '应恢复失败任务的重绘强度')
+    assert.equal(form().form.width, 1152, '应恢复失败任务的宽高')
+    assert.equal(form().form.height, 768)
+    assert.equal(form().form.steps, 30, '应恢复失败任务的步数')
+    assert.equal(form().form.cfg, 8, '应恢复失败任务的引导强度')
+    assert.equal(form().form.negative, 'blurry', '应恢复失败任务的排除项')
+    assert.equal(form().maskRequiredBlocked, true, '恢复到专用预设后仍需补涂蒙版')
     assert.ok(harness.latest.studio.ui.paintRequest > 0, '恢复参考图后应请求舞台进入涂抹')
     assert.ok(
       harness.latest.studio.ui.toast && harness.latest.studio.ui.toast.text.includes('原任务的蒙版已无法恢复'),

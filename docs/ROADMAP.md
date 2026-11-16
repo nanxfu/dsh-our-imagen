@@ -230,7 +230,7 @@
   - **P0-b 首次使用与续绘**：`useStudioUi` 新增 `paintRequest` 计数信号（`Stage` 消费后归零，跨视图挂载有效）；`ReferenceSection` 空槽位三形态（`inpaintOnly` 两步引导 / 普通模型单行入口 / 不支持垫图隐藏）+ 蒙版覆盖率与「继续涂抹 / 清空蒙版」；舞台新增「以此结果继续重绘」闭环（设为新参考图、清蒙版、自动涂抹）；页脚标注「本次基于 <文件名> 重绘」。
   - **P1 正确性**：`.ofs-mask-stage` 比例改用容器单位公式（不再被 `max-height` 压扁），指针 / 键盘光标按 rect 宽高两轴换算；空舞台复用蒙版编辑器；涂抹中点胶卷退出涂抹态；强度自动档随 `inpaintOnly` 预设联动、带蒙版上限 1.0。
   - **P2 远端收敛**：契约新增 `LIMITS.strength.inpaintMax = 1.0` 与 `LIMITS.mask.minCoverage = 0.0005`（`remote/contract.json` 同步、`remote/config.py` 登记注入键）；Host 与 daemon 的强度口径按「是否带蒙版」切换；daemon 解码后校验蒙版覆盖率（空蒙版在加载模型前 `invalid_request`，全白放行）；羽化半径按覆盖率分档（2 / 4 / 6~8px）；局部重绘显式下传按 8 对齐的参考图宽高，修复非正方形畸变。
-- **测试**：`check-client-logic` 84 项、`check-client-render` 99 项、`check-client-locale` zh/en 各 477 键、`host-e2e` 50 项、`jobs-wait` 26 项、`test/remote/run.py` 390 项、`check-contract` 12 项；`npm test` 全绿。
+- **测试**：`check-client-logic` 85 项、`check-client-render` 99 项、`check-client-locale` zh/en 各 477 键、`host-e2e` 50 项、`jobs-wait` 26 项、`test/remote/run.py` 390 项、`check-contract` 12 项；`npm test` 全绿。
 - **真机验收（2026-11-17，Kaggle 2×Tesla T4，diffusers 0.43.0 / torch 2.11.0）**：
   - **非正方形（9 通道 `sdxl-inpaint`）**：1024×768 源图 + 3% 圆形蒙版，出图 **1024×768**、参考图与蒙版尺寸一致，日志 `kw` 含 `width/height`、`[gen] inpaint 蒙版覆盖率 3.00% 羽化半径 4px`——不再被缺省方形推理后拉回，也没有拉伸畸变；单张 20.1 / 22.7s，`/health.gpu_memory` 的 `max_allocated_mb` 保持 9465 不变。
   - **精细小蒙版**：3% 覆盖率落在「< 5%」档，羽化半径 4px（此前固定 8px）。

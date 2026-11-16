@@ -5739,6 +5739,8 @@ function retryReferencePlan(source, options = {}) {
   const pending = submittedReferenceOf(options.pendingRef);
   const sameSource = Boolean(pending && referencePathOf({ reference: pending }) === frozen.path);
   const pendingMask = sameSource ? referenceMaskForSubmit(pending) : "";
+  const strength = frozen.strength ?? (sameSource && pending ? finiteNumber(pending.strength) : null);
+  if (strength !== null) overrides.strength = strength;
   if (sameSource && frozen.mask && pendingMask) {
     overrides.reference = { ...pending, path: frozen.path };
     plan.restored = "mask";
@@ -5756,9 +5758,50 @@ function retryReferencePlan(source, options = {}) {
     overrides.reference = { path: frozen.path, url: referenceUrlOf(frozen.path) };
     plan.restored = "reference";
   }
-  const strength = frozen.strength ?? (sameSource && pending ? finiteNumber(pending.strength) : null);
-  if (strength !== null) overrides.strength = strength;
   return plan;
+}
+function retryFormPatch(overrides) {
+  const input = overrides && typeof overrides === "object" ? overrides : {};
+  const patch = {};
+  if (typeof input.prompt === "string" && input.prompt.trim()) {
+    patch.prompt = input.prompt.trim().slice(0, LIMITS.prompt.maxChars);
+  }
+  if (typeof input.negativePrompt === "string") {
+    const negative = input.negativePrompt.slice(0, LIMITS.negativePrompt.maxChars);
+    const layers = normalizeNegativeLayers({ user: negative });
+    Object.assign(patch, negativeLayersPatch(layers));
+  }
+  const width = positiveSize(input.width);
+  const height = positiveSize(input.height);
+  if (width !== null) patch.width = clampSize(width);
+  if (height !== null) patch.height = clampSize(height);
+  const steps = finiteNumber(input.steps);
+  if (steps !== null) patch.steps = clampInt(steps, LIMITS.steps.min, LIMITS.steps.max, 4);
+  const cfg = finiteNumber(input.cfg);
+  if (cfg !== null) patch.cfg = clampNumber(cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0);
+  const count = finiteNumber(input.count);
+  if (count !== null) patch.count = clampInt(count, LIMITS.count.min, LIMITS.count.max, 1);
+  const strength = finiteNumber(input.strength);
+  if (strength !== null) patch.strength = clampMaskStrength(strength, true);
+  return patch;
+}
+function retryRestoreOf(plan, presets) {
+  const holder = plan && typeof plan === "object" ? plan : {};
+  const fill = holder.fillReference && typeof holder.fillReference === "object" ? holder.fillReference : null;
+  const path = fill && typeof fill.path === "string" ? fill.path.trim() : "";
+  if (!path) return { ok: false, reason: "no_path", preset: null, patch: {} };
+  const list = Array.isArray(presets) ? presets : [];
+  const overrides = holder.overrides && typeof holder.overrides === "object" ? holder.overrides : {};
+  const wanted = typeof overrides.presetId === "string" ? overrides.presetId.trim() : "";
+  const candidate = wanted ? list.find((item) => item && item.id === wanted) || null : null;
+  const preset = candidate && supportsImg2Img(candidate) ? candidate : referencePresetOf(list);
+  const patch = retryFormPatch(overrides);
+  patch.reference = {
+    path,
+    url: fill && typeof fill.url === "string" && fill.url ? fill.url : referenceUrlOf(path)
+  };
+  if (!preset) return { ok: false, reason: "unsupported", preset: null, patch };
+  return { ok: true, reason: "", preset, patch };
 }
 function previewRecallOf(options = {}) {
   const reference = options.reference && typeof options.reference === "object" ? options.reference : null;
@@ -7639,16 +7682,26 @@ function Stage(props) {
     if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
     setNaturalSize((prev) => prev.width === width && prev.height === height ? prev : { width, height });
   }
+  const referenceChangedRef = import_react25.default.useRef(referenceIdentity);
   import_react25.default.useEffect(() => {
-    setPainting(false);
-    const width = Number(reference && reference.width);
-    const height = Number(reference && reference.height);
-    setNaturalSize({
-      width: Number.isFinite(width) && width > 0 ? Math.round(width) : 0,
-      height: Number.isFinite(height) && height > 0 ? Math.round(height) : 0
-    });
-    setMaskState(maskStateOf({ coverage: mask ? mask.coverage : 0 }));
-  }, [referenceIdentity]);
+    const referenceChanged = referenceChangedRef.current !== referenceIdentity;
+    referenceChangedRef.current = referenceIdentity;
+    if (referenceChanged) {
+      const width = Number(reference && reference.width);
+      const height = Number(reference && reference.height);
+      setNaturalSize({
+        width: Number.isFinite(width) && width > 0 ? Math.round(width) : 0,
+        height: Number.isFinite(height) && height > 0 ? Math.round(height) : 0
+      });
+      setMaskState(maskStateOf({ coverage: mask ? mask.coverage : 0 }));
+    }
+    if (paintRequest > 0 && canPaint) {
+      openMaskEditor();
+      if (clearPaintRequest) clearPaintRequest();
+      return;
+    }
+    if (referenceChanged) setPainting(false);
+  }, [referenceIdentity, paintRequest, canPaint]);
   import_react25.default.useEffect(() => {
     if (!canPaint) setPainting(false);
   }, [canPaint]);
@@ -7657,11 +7710,6 @@ function Stage(props) {
     selectedIdentityRef.current = selectedIdentity;
     setPainting(false);
   }, [selectedIdentity]);
-  import_react25.default.useEffect(() => {
-    if (paintRequest <= 0 || !canPaint) return;
-    openMaskEditor();
-    if (clearPaintRequest) clearPaintRequest();
-  }, [paintRequest, canPaint]);
   const maskLayoutKey = `${painting ? 1 : 0}|${canvasSize.width}x${canvasSize.height}`;
   import_react25.default.useEffect(() => {
     const canvas = canvasRef.current;
@@ -9789,6 +9837,16 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     }));
     return { ok: true, switchedPreset: target, reason: "" };
   }
+  function restoreRetryTask(plan) {
+    const restored = retryRestoreOf(plan, presets);
+    if (!restored.ok) return restored;
+    setForm((prev) => applyNegativePatch(prev, {
+      ...presetSelectPatch(restored.preset, prev, presets),
+      ...restored.patch
+    }));
+    setStrengthAuto(false);
+    return restored;
+  }
   async function enhance() {
     if (enhancing) return;
     if (!form.prompt.trim()) {
@@ -9897,6 +9955,8 @@ ${value}` : value });
     applyStrength,
     removeReference,
     applyReference,
+    // 失败重试的「蒙版不可恢复」回填：恢复任务预设与参数 + 参考图，等用户重新涂抹。
+    restoreRetryTask,
     // 局部重绘：蒙版挂在参考图上；能力判断、当前蒙版与写入/清空动作。
     mask,
     inpaintSupported,
@@ -10360,14 +10420,15 @@ function useStudio(props) {
       return;
     }
     if (plan.maskLost) {
-      const applied = form.applyReference({ image: plan.fillReference });
-      if (!applied || !applied.ok) {
-        const failedKey = applied && applied.reason === "no_path" ? "studio.reference.noPath" : "studio.reference.unavailable";
+      const restored = form.restoreRetryTask(plan);
+      if (!restored || !restored.ok) {
+        const failedKey = restored && restored.reason === "no_path" ? "studio.reference.noPath" : "studio.reference.unavailable";
         ui.showToast(t(failedKey));
         return;
       }
       ui.setView("studio");
       ui.setPanelMode("form");
+      ui.setZoom(false);
       if (plan.requestPaint) ui.requestPaint();
       ui.showToast(t(plan.noticeKey));
       return;
