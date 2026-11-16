@@ -56,6 +56,14 @@ class LoaderRegistry:
         """支持垫图重绘的 loader 名（由策略的 ``supports_img2img`` 推导）。"""
         return tuple(name for name, loader in self._loaders.items() if loader.supports_img2img)
 
+    def inpaint_names(self) -> tuple[str, ...]:
+        """支持局部重绘（inpaint）的 loader 名（由策略的 ``supports_inpaint`` 推导）。
+
+        与 ``img2img_names`` 相互独立：首期两者都只登记 SDXL 家族，但判定不共用一份名单，
+        以后放开某个家族时不会顺带把另一个能力也放开。
+        """
+        return tuple(name for name, loader in self._loaders.items() if loader.supports_inpaint)
+
     def get(self, name, *, error_cls=RequestError) -> ModelLoader:  # noqa: ANN001
         key = str(name or "").strip()
         loader = self._loaders.get(key)

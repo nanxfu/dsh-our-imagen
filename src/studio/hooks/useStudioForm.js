@@ -16,16 +16,27 @@ import { negativePromptActive } from '../../../shared/models-guide.js'
 
 import { enhancePromptRequest } from '../../api/resources.js'
 import { clampInt, clampNumber, clampStrength } from '../../logic/clamp.js'
+import { formSnapshotOf, isFormDirty, newCreationPatch } from '../../logic/form.js'
 import { buildGenerateBody } from '../../logic/generate.js'
+import {
+  maskDigestOf,
+  maskExportVerdict,
+  maskStateOf,
+  maskStrengthPatch,
+  referenceMaskOf,
+  referenceWithoutMask,
+} from '../../logic/mask.js'
 import {
   customSizePatch,
   detectCjk,
   hintOf,
+  inpaintOnlyOf,
   presetNeedsEnglish,
   presetSelectPatch,
   ratioIdOf,
   referencePresetOf,
   supportsImg2Img,
+  supportsInpaint,
 } from '../../logic/preset.js'
 import {
   applyNegativePatch,
@@ -50,6 +61,7 @@ const EMPTY_FORM = {
   seed: '',
   count: 1,
   // 图生图：参考图来自画廊「以此图重绘」（{ path, url, width?, height? }），strength 是重绘强度。
+  // 局部重绘的蒙版挂在 `reference.mask`（{ data, coverage, digest }）上，换/移除参考图时一起清掉。
   reference: null,
   strength: LIMITS.strength.default,
 }
@@ -64,6 +76,15 @@ function referenceOf(image, path) {
   return next
 }
 
+/** 微调来源提示用的一句描述：优先作品提示词，没有提示词时退回文件名。 */
+function tuningSourceOf(entry, prompt) {
+  const text = typeof prompt === 'string' ? prompt.trim() : ''
+  if (text) return { prompt: text }
+  const image = entry && entry.image ? entry.image : null
+  const file = image && typeof image.file === 'string' ? image.file.trim() : ''
+  return { prompt: file }
+}
+
 export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const { presets, defaultPreset } = preset
   const [form, setForm] = React.useState(() => ({
@@ -74,6 +95,15 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const [refineSource, setRefineSource] = React.useState('')
   const [enhancing, setEnhancing] = React.useState(false)
   const [translating, setTranslating] = React.useState(false)
+  // 干净基准快照：最近一次「生成提交 / 从作品回填 / 新建创作 / 初始预设同步」时的表单，
+  // 与当前表单不一致即为 dirty（胶卷点击时据此保护草稿）。
+  const [cleanBaseline, setCleanBaseline] = React.useState('')
+  // 微调来源：当前表单是哪张作品回填来的；新建创作时清空。只用于面板的轻量提示。
+  const [tuning, setTuning] = React.useState(null)
+  // 事件回调里要读最新表单（不依赖渲染闭包），异步动作与快照计算都用它。
+  const formRef = React.useRef(form)
+  formRef.current = form
+  const dirty = isFormDirty(form, cleanBaseline)
 
   // 比例由当前尺寸反推（按约分后的长宽比，而不是像素精确相等）：
   // 768×768 与 1024×1024 都算 1:1，800×600 算 4:3；切换预设改变宽高时也不会停在旧值上。
@@ -93,6 +123,16 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   // 预设列表还没拿到时不做拦截，交给宿主判断，避免启动瞬间误拦文生图。
   const referenceBlocked = Boolean(reference && presets.length > 0 && !referenceSupported)
 
+  // 局部重绘能力与蒙版：蒙版挂在参考图上，没有参考图时不可能有蒙版。
+  // 旧宿主 / 非 SDXL 家族缺 supportsInpaint 时按不支持处理，Stage 只显示说明、不显示涂抹入口。
+  const inpaintSupported = supportsInpaint(activePreset)
+  const mask = referenceMaskOf(reference)
+  // 有能力但有蒙版却切到了不支持的模型：保留蒙版不静默丢弃，本次提交按整图重绘处理。
+  const maskBlocked = Boolean(mask && presets.length > 0 && !inpaintSupported)
+  // 专用局部重绘模型（9 通道 inpaint 权重）：只能带蒙版使用，不能文生图 / 纯图生图。
+  const inpaintOnly = inpaintOnlyOf(activePreset)
+  const maskRequiredBlocked = inpaintOnly && !mask
+
   // 预设同步：只在用户没手动改过时套用推荐值（初始预设同样回填负向模型层）。
   React.useEffect(() => {
     if (presets.length === 0) return
@@ -105,6 +145,13 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     })
   }, [presets.length, defaultPreset])
 
+  // 预设同步落定后建立干净基准：启动瞬间的空表单与随后套用的推荐值都算「未改过」。
+  // 之后基准只在生成提交、作品回填、新建创作时更新，手动修改不再动它。
+  React.useEffect(() => {
+    if (cleanBaseline || !form.presetId) return
+    setCleanBaseline(formSnapshotOf(form))
+  }, [cleanBaseline, form.presetId])
+
   /** 表单补丁统一入口：负向层数据与展示文本在这里保持同步。 */
   function patchForm(partial) {
     setForm((prev) => applyNegativePatch(prev, partial))
@@ -116,11 +163,57 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     setForm((prev) => applyNegativePatch(prev, presetSelectPatch(next, prev, presets)))
   }
 
+  /**
+   * 生成提交成功：把当前表单记为新的干净基准。
+   *
+   * 传入提交时的表单对象时先做一次同一性检查：等待期间用户若继续改表单（React 每次
+   * 修改都会产生新对象），新改动没有提交，仍是 dirty，不能被这次成功提示洗白。
+   */
+  function markClean(submitted) {
+    if (submitted && formRef.current !== submitted) return false
+    setCleanBaseline(formSnapshotOf(formRef.current))
+    return true
+  }
+
+  /**
+   * 从作品回填（胶卷点击 / 画廊「带回参数」）：套用纯逻辑算好的补丁并记录微调来源。
+   *
+   * 回填属于「刚从另一张图加载完」，本身不算手动修改，所以同时更新干净基准；
+   * 补丁里的 `reference: null` 负责清掉上一轮残留的参考图。
+   */
+  function applyRecall(patch, entry) {
+    const partial = patch && typeof patch === 'object' ? { ...patch } : {}
+    if (Object.keys(partial).length === 0) return false
+    // 回填是整块替换参考图：上一轮涂抹的蒙版不能跟到新作品的参数里。
+    if (Object.prototype.hasOwnProperty.call(partial, 'reference')) {
+      partial.reference = referenceWithoutMask(partial.reference)
+    }
+    const next = applyNegativePatch(formRef.current, partial)
+    setForm(next)
+    setCleanBaseline(formSnapshotOf(next))
+    setTuning(tuningSourceOf(entry, next.prompt))
+    return true
+  }
+
+  /**
+   * 新建创作：清空提示词 / 参考图 / 固定种子，负向层回到当前预设默认推荐状态。
+   *
+   * 当前模型预设与画幅比例是下一张仍要用的常用设置，保留不动；微调来源与 dirty 一起清掉。
+   */
+  function newCreation() {
+    const next = applyNegativePatch(formRef.current, newCreationPatch(formRef.current, activePreset))
+    setForm(next)
+    setCleanBaseline(formSnapshotOf(next))
+    setTuning(null)
+    ui.showToast(t('studio.toast.newCreation'))
+  }
+
   function buildBody(overrides) {
     // 提交值以两层合并结果为准，并按 negativeActive 门控（不可用时置空串）。
+    // 局部重绘同理：当前模型不支持 Inpaint 时不提交蒙版，蒙版本身保留在表单里。
     return buildGenerateBody(
       { ...form, negative: negativePromptOf(form) },
-      { defaultPreset, overrides, negativeActive },
+      { defaultPreset, overrides, negativeActive, maskActive: inpaintSupported },
     )
   }
 
@@ -195,9 +288,61 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     patchForm({ strength: clampStrength(value) })
   }
 
+  /**
+   * 进入涂抹模式：把「还没调过」的重绘强度抬到局部重绘的默认档。
+   *
+   * 真机验收结论：4 步极速模型在契约默认 0.6 下蒙版区改动偏弱，0.8 才有可见重写。
+   * 用户手动调过的强度（不等于契约默认值）保持不动，避免覆盖明确选择。
+   */
+  function beginMaskEdit() {
+    const patch = maskStrengthPatch(formRef.current.strength, { native: inpaintOnly })
+    if (!patch) return false
+    patchForm(patch)
+    return true
+  }
+
   /** 移除参考图：后续生成回到纯文生图，当前预设保持用户选择不变。 */
   function removeReference() {
+    // reference 是整体置空：挂在上面的蒙版也一并清掉，不会残留到下一轮。
     patchForm({ reference: null })
+  }
+
+  /**
+   * 应用涂抹蒙版：Stage 导出黑底白字 PNG base64 后写进 `reference.mask`。
+   *
+   * 返回值 `{ ok, reason }`：`no_reference` / `unsupported` / `empty` / `too_large` /
+   * `invalid` 由 Stage 转成可见提示，不静默丢数据。
+   * 当前模型不支持局部重绘时不写入：涂抹入口本来就不会出现，这里再兜一层兜底。
+   */
+  function applyMask(input) {
+    const candidate = input && typeof input === 'object' ? input : { data: input }
+    const currentReference = formRef.current.reference
+    if (!currentReference || typeof currentReference !== 'object' || !currentReference.path) {
+      return { ok: false, reason: 'no_reference' }
+    }
+    const currentPreset = presets.find((item) => item && item.id === formRef.current.presetId) || null
+    if (!supportsInpaint(currentPreset)) return { ok: false, reason: 'unsupported' }
+    const verdict = maskExportVerdict(candidate.data, candidate.coverage)
+    if (!verdict.ok) return { ok: false, reason: verdict.reason }
+    patchForm({
+      reference: {
+        ...currentReference,
+        mask: {
+          data: verdict.data,
+          coverage: verdict.coverage,
+          digest: maskDigestOf(verdict.data),
+        },
+      },
+    })
+    return { ok: true }
+  }
+
+  /** 清空蒙版：只去掉 reference.mask，参考图本身保留（本次回到整图重绘）。 */
+  function clearMask() {
+    const currentReference = formRef.current.reference
+    if (!currentReference || typeof currentReference !== 'object' || !currentReference.mask) return false
+    patchForm({ reference: referenceWithoutMask(currentReference) })
+    return true
   }
 
   /**
@@ -330,6 +475,12 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     buildBody,
     ratioId,
     activePreset,
+    // 草稿保护与微调来源：dirty 决定胶卷点击能否覆盖；tuning 给面板的来源提示。
+    dirty,
+    tuning,
+    markClean,
+    applyRecall,
+    newCreation,
     // 排除项：是否可用 / 模型推荐词（供显隐、占位与配置抬升时自动补词）。
     negativeActive,
     negativeHint,
@@ -348,6 +499,15 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     applyStrength,
     removeReference,
     applyReference,
+    // 局部重绘：蒙版挂在参考图上；能力判断、当前蒙版与写入/清空动作。
+    mask,
+    inpaintSupported,
+    inpaintOnly,
+    maskBlocked,
+    maskRequiredBlocked,
+    applyMask,
+    clearMask,
+    beginMaskEdit,
     refineGroups: refineGroups.map((group) => ({
       ...group,
       options: group.options.map((option) => ({ ...option, applied: isRefineApplied(form.prompt, option.text) })),

@@ -103,6 +103,8 @@ CONTRACT = {
         # 图生图边界同样从生成物读取：用例一律以契约值为准，不写死数值。
         "reference": CONTRACT_DOC["limits"]["reference"],
         "strength": CONTRACT_DOC["limits"]["strength"],
+        # 局部重绘蒙版上限（与参考图一起下发；请求体上限公式也按它推导）。
+        "mask": CONTRACT_DOC["limits"]["mask"],
     },
 }
 
@@ -290,7 +292,9 @@ def fake_pil_modules(open_impl):  # noqa: ANN001, ANN201
     """构造可注入 sys.modules 的假 PIL 包（PIL / PIL.Image）。"""
     image_module = types.ModuleType("PIL.Image")
     image_module.LANCZOS = "LANCZOS"
-    image_module.Resampling = types.SimpleNamespace(LANCZOS="LANCZOS")
+    # 蒙版对齐用最近邻：二值图不能走插值，否则边界会出灰边。
+    image_module.NEAREST = "NEAREST"
+    image_module.Resampling = types.SimpleNamespace(LANCZOS="LANCZOS", NEAREST="NEAREST")
     image_module.UnidentifiedImageError = FakeUnidentifiedImageError
     image_module.DecompressionBombError = FakeDecompressionBombError
     image_module.open = open_impl
@@ -316,17 +320,40 @@ def fake_pil_raising(exc: Exception):  # noqa: ANN001, ANN201
     return fake_pil_modules(fake_open)
 
 
+def fake_pil_sequence(items):  # noqa: ANN001, ANN201
+    """按调用次序返回不同的假图 / 抛不同异常：局部重绘用例里第 1 张是参考图、第 2 张是蒙版。"""
+
+    queue = list(items)
+
+    def fake_open(_stream):  # noqa: ANN001, ANN202
+        if not queue:
+            raise AssertionError("PIL.open 调用次数超出用例预期")
+        item = queue.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        return item
+
+    return fake_pil_modules(fake_open)
+
+
 def make_reference_b64(payload: bytes = b"fake-image-bytes") -> str:
     """参考图请求里的 image_b64：假 PIL 不真正解析内容，只关心 base64 是否合法。"""
     return base64.b64encode(payload).decode("ascii")
 
 
-def make_reference(image_b64: str | None = None, strength=None) -> dict:  # noqa: ANN001
-    """构造 job 级 reference 请求体；strength 缺省时不写该键（走契约默认值）。"""
+def make_reference(image_b64: str | None = None, strength=None, mask_b64: str | None = None) -> dict:  # noqa: ANN001
+    """构造 job 级 reference 请求体；strength / mask_b64 缺省时不写对应键。"""
     payload = {"image_b64": make_reference_b64() if image_b64 is None else image_b64}
     if strength is not None:
         payload["strength"] = strength
+    if mask_b64 is not None:
+        payload["mask_b64"] = mask_b64
     return payload
+
+
+def make_mask_b64(payload: bytes = b"fake-mask-bytes") -> str:
+    """局部重绘蒙版请求里的 mask_b64：假 PIL 不真正解析内容，只关心 base64 是否合法。"""
+    return base64.b64encode(payload).decode("ascii")
 
 
 class FakeTorchGenerator:

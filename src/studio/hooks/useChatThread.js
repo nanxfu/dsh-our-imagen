@@ -62,6 +62,9 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
   const messageSeq = React.useRef(0)
   // 同一 tick 内连按两次回车时，用 ref 挡住第二次解析请求。
   const interpretingRef = React.useRef(false)
+  // 线程代次：每次「新建对话」自增。解析请求发出时记下代次，返回时对不上就整条丢弃，
+  // 保证旧请求永远不会写进新线程（否则新上下文会凭空多出一张旧确认卡）。
+  const threadSeq = React.useRef(0)
 
   // 助手气泡跟着任务状态走，只反映真实进度。
   // 队列串行执行但可能同时有多个待执行任务：每个气泡按自己的任务更新，
@@ -106,6 +109,7 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     // previousPrompt 留给不认 history 的旧宿主。
     const history = intentHistory(messages)
     const previousPrompt = lastIntentPrompt(messages)
+    const generation = threadSeq.current
     pushMessages([{ role: 'user', text: value }])
     setInterpreting(true)
     const result = await alive(parseIntentRequest({
@@ -117,6 +121,8 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
       cfg: form.form.cfg,
       history,
     }))
+    // 解析期间点了「新建对话」：这次请求属于旧线程，结果直接丢弃，也不复位新线程的状态。
+    if (generation !== threadSeq.current) return
     interpretingRef.current = false
     if (!result) return
     setInterpreting(false)
@@ -206,7 +212,9 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     if (seed !== null) overrides.seed = seed
     const patch = intentFormPatch(message, DEFAULT_RATIOS, { negativeActive })
     if (Object.keys(patch).length > 0) form.patchForm(patch)
-    await generate(overrides, { pushUser: false })
+    const ok = await generate(overrides, { pushUser: false })
+    // 确认卡提交成功后表单就是这次生成的内容：补记干净基准，随后点胶卷不会误报「保留草稿」。
+    if (ok && typeof form.markClean === 'function') form.markClean()
   }
 
   /**
@@ -226,7 +234,16 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     }))
   }
 
-  function clearThread() {
+  /**
+   * 新建对话：清空当前线程、开启新的对话上下文。
+   *
+   * 解析中点击时同样安全：代次自增让在途请求的返回作废，并把解析中状态就地复位，
+   * 用户不必等旧请求回来才能继续输入。
+   */
+  function newChat() {
+    threadSeq.current += 1
+    interpretingRef.current = false
+    setInterpreting(false)
     setMessages([])
   }
 
@@ -242,7 +259,7 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     toggleIntentLockSeed,
     // 上一张图没有可复用种子时，确认卡上的锁种开关置灰。
     canLockSeed: lastSeedOf(state && state.lastJob) !== null,
-    clearThread,
+    newChat,
     pushMessages,
   }
 }

@@ -33,6 +33,7 @@
   "runtime": "default",
   "supportsChinese": false,
   "supportsImg2Img": true,
+  "supportsInpaint": true,
   "supportsNegative": true,
   "pipeline": {
     "loader": "sdxl",

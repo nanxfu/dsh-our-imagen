@@ -90,11 +90,35 @@ export function supportsImg2Img(preset) {
 }
 
 /**
+ * 预设是否支持局部重绘（Inpaint）。
+ *
+ * `supportsInpaint` 由宿主 `/state.presets` 下发（首期仅 SDXL 家族为 true），旧宿主
+ * 没有这个字段一律按不支持处理：不显示涂抹入口、不提交蒙版，文生图与整图图生图不受影响。
+ */
+export function supportsInpaint(preset) {
+  return Boolean(preset && preset.supportsInpaint === true)
+}
+
+/**
+ * 预设是否是「专用局部重绘」权重（只能带蒙版使用）。
+ *
+ * `inpaintOnly` 由宿主 `/state.presets` 下发：这类底座（9 通道 inpaint 权重）不能文生图、
+ * 也不能只放参考图做整图重绘；缺蒙版时客户端直接拦下并提示，宿主的入队校验还会兜一层。
+ * 旧宿主没有该字段一律按普通模型处理，不影响既有流程。
+ */
+export function inpaintOnlyOf(preset) {
+  return Boolean(preset && preset.inpaintOnly === true)
+}
+
+/**
  * 参考图兜底预设：优先 `sdxl-lightning`，否则列表里第一个支持图生图的预设。
+ * 跳过 inpaintOnly（专用局部重绘）预设：它必须带蒙版，不适合当整图重绘的兜底。
  * 一个都没有（旧宿主 / 预设都没声明能力）时返回 null，由调用方明确提示。
  */
 export function referencePresetOf(presets) {
-  const list = Array.isArray(presets) ? presets.filter((item) => item && item.id) : []
+  const list = Array.isArray(presets)
+    ? presets.filter((item) => item && item.id && !inpaintOnlyOf(item))
+    : []
   const preferred = list.find((item) => item.id === DEFAULT_PRESET)
   if (preferred && supportsImg2Img(preferred)) return preferred
   return list.find(supportsImg2Img) || null

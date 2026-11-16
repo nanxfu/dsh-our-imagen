@@ -72,9 +72,9 @@
 
 ### 3.1 资产规格
 
-1. 9 个模型各一张 56×56 海报；源文件为方形 WebP（112×112 或 96×96，quality 55–75），放在 `src/studio/posters/<model-id>.webp`。
+1. 每个模型一张 56×56 海报；源文件为方形 WebP（112×112 或 96×96，quality 55–75），放在 `src/studio/posters/<model-id>.webp`。`sdxl-inpaint` 复用 SDXL 家族海报（`sdxl-base.webp`），不单独占一份图片资产。
 2. `build.mjs` 为 esbuild 增加 `.webp: 'dataurl'` loader，构建期把图片内联为 data URL；运行时零网络请求，单文件分发不裂图。
-3. 9 张 data URL 的 base64 总量预算 ≤20KB（实测 20116 字符，含 `data:image/webp;base64,` 前缀为 20323 字符）；组件、样式与文案代码不计入这个图片预算，客户端 Bundle 总增量约 35KB。
+3. 9 张独立海报的 data URL base64 总量预算 ≤20KB（实测 20116 字符，含 `data:image/webp;base64,` 前缀为 20323 字符）；`sdxl-inpaint` 复用 SDXL Base 海报、不新增字节。组件、样式与文案代码不计入这个图片预算，客户端 Bundle 总增量约 35KB。
 4. 来源只用 Pexels / Unsplash 等可商用图库，逐张记录页面 URL、直链、作者、许可到 `src/studio/posters/SOURCES.md`。
 5. 海报是「概念示意」，不是该模型的出图样例；面板底部必须写明这一点。
 
@@ -158,7 +158,7 @@
 ## 6. 验收标准
 
 1. **视觉一致性**：彻底清除系统原生白底 `<select>`，浮层风格与云端算力弹层（`ofs-popover`）完全同构。
-2. **血统透明**：用户进入界面即可明确区分 FLUX（`FLUX.2 Klein 4B`）、SDXL 系列与 Anima（`Anima Light Lavender`）三类底座，不再误解为单一模型；9 个模型都能在列表中看到并选中。
-3. **资产纯净**：9 张海报随构建内联为 data URL，无任何外部图片 HTTP 请求；海报资源 base64 合计 20116 字符（含前缀 20323 字符），低于 20KB 预算。
+2. **血统透明**：用户进入界面即可明确区分 FLUX（`FLUX.2 Klein 4B`）、SDXL 系列与 Anima（`Anima Light Lavender`）三类底座，不再误解为单一模型；10 个模型（含专用 `SDXL Inpaint`）都能在列表中看到并选中。
+3. **资产纯净**：9 张独立海报随构建内联为 data URL（`sdxl-inpaint` 复用 SDXL 家族海报），无任何外部图片 HTTP 请求；海报资源 base64 合计 20116 字符（含前缀 20323 字符），低于 20KB 预算。
 4. **功能兼容**：切换模型后，画布尺寸、CFG、步数等推荐值联动更新，历史出图的 Recall / Variant 逻辑不受影响。
 5. **回归**：`npm test` 全绿；`tools/preview.mjs` 的深色 / 浅色 / 窄屏截图通过人工核对；键盘与 `prefers-reduced-motion` 验证通过。

@@ -16,7 +16,7 @@ import { useHostState } from '../hooks/useHostState.js'
 import { translator } from '../i18n.js'
 import { guidanceDetailOf, guidanceKindOf, guidanceSurfaceOf, isConnectionCode } from '../logic/guidance.js'
 import { formatText } from '../logic/format.js'
-import { iteratePatch, rerollOverrides, retryOverrides } from '../logic/generate.js'
+import { iteratePatch, formSummaryOf, rerollOverrides, retryOverrides } from '../logic/generate.js'
 import { safeResetPatch } from '../../shared/models-guide.js'
 import { accountStatusOf } from '../logic/probe.js'
 import { useChatThread } from './hooks/useChatThread.js'
@@ -117,41 +117,62 @@ export function useStudio(props) {
   }
 
   async function generate(overrides, options = {}) {
-    if (sending) return
+    if (sending) return false
     // 参考图与当前预设的能力不匹配时拦下本次生成：既不能悄悄丢掉参考图当文生图发出去，
     // 也不该把注定失败的请求交给宿主。提示里写明下一步（切模型或移除参考图）。
     if (form.referenceBlocked) {
       ui.showToast(t('studio.reference.blocked'))
-      return
+      return false
+    }
+    // 专用局部重绘模型必须带蒙版：缺参考图或没涂抹时直接拦下并说明下一步。
+    if (form.maskRequiredBlocked) {
+      ui.showToast(t('studio.mask.onlyHint'))
+      return false
     }
     const body = form.buildBody(overrides)
     if (!body.prompt) {
       ui.fail('need_prompt', '')
-      return
+      return false
     }
+    // 提交时的表单对象：成功回来后只有它仍是当前表单，才记为干净基准。
+    const submittedForm = form.form
     pendingRef.current = body
     setSending(true)
     ui.setError(null)
     try {
       const result = await alive(submitGenerate(body))
-      if (!result) return
+      if (!result) return false
       if (result.ok && result.data && result.data.id) {
         const jobId = result.data.id
         const entries = []
-        if (options.pushUser !== false) entries.push({ role: 'user', text: body.prompt })
+        // 表单提交同步进助手：除了提示词，再带一份结构化参数摘要（界面渲染成胶囊）。
+        // 记录带 kind='form'：与普通用户气泡区分，且不进 intentHistory（见 logic/intent.js）。
+        if (options.pushUser !== false) {
+          entries.push({
+            role: 'user',
+            kind: 'form',
+            source: options.source || 'form',
+            text: body.prompt,
+            summary: formSummaryOf(body),
+          })
+        }
         entries.push({ role: 'assistant', kind: 'job', jobId, stage: 'pending', text: t('studio.chat.pending') })
         chat.pushMessages(entries)
+        // 刚提交的内容就是当前的干净版本：之后手动改动才算 dirty。
+        // 等 chat 确认卡提交（pushUser=false）由 generateIntent 在表单补丁落地后再标记。
+        if (options.pushUser !== false) form.markClean(submittedForm)
         host.refresh()
         // 历史只在任务完成后刷新（见 useWorkLibrary 的 lastJob effect）：
         // 刚提交的任务还没有产物，这里再拉一次会把已加载的分页重置回第一页。
         ui.showToast(t('studio.toast.submitted'))
-        return
+        return true
       }
       ui.fail(result.code, result.message)
     } finally {
       // 卸载导致 alive 返回 null、或后续逻辑抛错时也必须复位，否则按钮永远停在「提交中」。
       setSending(false)
     }
+    return false
   }
 
   /** 生成变体：基于当前选中的作品，而不是左侧表单。 */
@@ -162,17 +183,40 @@ export function useStudio(props) {
       ui.showToast(t('workbench.needPrompt'))
       return
     }
-    generate(overrides)
+    generate(overrides, { source: 'variant' })
   }
 
-  /** 带回参数：提示词与尺寸来自作品本身，steps/cfg 才用 params 或预设推荐值。 */
+  /**
+   * 带回参数：提示词与尺寸来自作品本身，steps/cfg 才用 params 或预设推荐值。
+   * 回填同时清掉残留参考图，并把表单标记为「正在微调这张作品」。
+   */
   function iterate(entry) {
     const target = entry || library.selected
     const patch = iteratePatch(target, form.form, presets)
     if (Object.keys(patch).length === 0) return
-    form.patchForm(patch)
+    form.applyRecall(patch, target)
     ui.setView('studio')
     ui.setPanelMode('form')
+    ui.showToast(t('studio.toast.recalled'))
+  }
+
+  /**
+   * 创作区胶卷点击：始终切换右侧预览；表单干净时把该作品参数回填到左侧面板。
+   *
+   * 表单有未提交的手动修改（dirty）时不覆盖草稿，只给轻提示——用户仍可通过大图上的
+   * 「带回参数」显式覆写。画廊视图不接这个动作，保持纯浏览。
+   */
+  function previewWork(entry) {
+    const target = entry && entry.image ? entry : null
+    if (!target) return
+    library.selectImage(target)
+    if (form.dirty) {
+      ui.showToast(t('studio.toast.draftKept'))
+      return
+    }
+    const patch = iteratePatch(target, form.form, presets)
+    if (Object.keys(patch).length === 0) return
+    form.applyRecall(patch, target)
     ui.showToast(t('studio.toast.recalled'))
   }
 
@@ -212,7 +256,7 @@ export function useStudio(props) {
       ui.showToast(t('workbench.needPrompt'))
       return
     }
-    generate(overrides)
+    generate(overrides, { source: 'retry' })
   }
 
   /** OOM 指引卡上的「重置参数」：表单回到当前活跃预设的安全默认档，并清掉当前错误。 */
@@ -264,6 +308,6 @@ export function useStudio(props) {
     chat,
     library,
     guidance: { kind: guidanceKind, code: guidanceCode, surface: guidanceSurface, detail: guidanceDetail, key: guidanceKey, dismiss: dismissGuidance },
-    actions: { sending, generate, reroll, iterate, referenceImage, retryFocusedJob, resetToSafe },
+    actions: { sending, generate, previewWork, reroll, iterate, referenceImage, retryFocusedJob, resetToSafe },
   }
 }

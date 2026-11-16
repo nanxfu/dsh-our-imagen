@@ -37,6 +37,7 @@
   "runtime": "default",
   "supportsChinese": false,
   "supportsImg2Img": false,
+  "supportsInpaint": false,
   "supportsNegative": true,
   "pipeline": {
     "loader": "anima",

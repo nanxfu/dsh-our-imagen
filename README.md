@@ -46,7 +46,7 @@
 <td width="48%">
 
 ### 1. 独立工作台
-* **内置 9 款开源模型**：涵盖极速出图（`SDXL Lightning`、`Hyper-SDXL`、`SDXL Turbo`）、写实与通用（`SDXL Base`、`RealVisXL`、`Playground v2.5`）、动漫专项（`Animagine XL 3.1`、`Anima Light Lavender`）以及 `FLUX.2 Klein 4B`。
+* **内置 10 款开源模型**：涵盖极速出图（`SDXL Lightning`、`Hyper-SDXL`、`SDXL Turbo`）、写实与通用（`SDXL Base`、`RealVisXL`、`Playground v2.5`）、动漫专项（`Animagine XL 3.1`、`Anima Light Lavender`）、`FLUX.2 Klein 4B`，以及局部重绘专用权重 `SDXL Inpaint`。
 * **干净的参数面板**：提示词、画幅比例、分辨率、步数、引导强度和随机种子集中在一个面板里，生成张数（1~4）常驻页脚。
 * **只显示生效参数**：例如 `4 步极速模型` 和 `FLUX.2 Klein 4B` 会自动隐藏无效的排除项；有参考图时，尺寸说明会直接切换为跟随参考图。
 * **快捷词缀**：光影、材质、构图、氛围四类常用英文短语一键追加（界面显示中文标签），支持收起/展开。
@@ -68,9 +68,9 @@
 <td width="48%">
 
 ### 2. 对话生图与创作助手
-* **对话直接调用**：宿主自动挂载 `imagen_generate`、`imagen_session`、`imagen_history` 等工具，在聊天窗口里直接说需求就能出图。
+* **对话直接调用**：宿主自动挂载 `imagen_generate`、`imagen_batch`、`imagen_recipes`、`imagen_session`、`imagen_history` 等工具，在聊天窗口里直接说需求就能出图；一句话可以规划一组配图或分镜，配方库只提供可见的提示词模板，不做暗箱拼接。
 * **先确认再执行**：内置助手会把自然语言翻译成英文提示词、推断比例并检查当前模型的参数限制，先给出确认卡片，点确定后再跑。
-* **模型适配提醒**：助手了解 9 款模型的提示词习惯与专长，如果当前模型不太适合你的描述，会给出提示。
+* **模型适配提醒**：助手了解 10 款模型的提示词习惯与专长，如果当前模型不太适合你的描述，会给出提示。
 * **工作台联动**：确认卡可以一键带入参数面板继续精调；聊天里生成的图片也可以直接在工作台里打开做二次编辑。
 
 </td>
@@ -121,7 +121,7 @@
 
 <div align="center">
   <img src="docs/assets/model-picker-dark.png" alt="生图工作台 深色主题模型选择卡" width="100%" />
-  <p><sub>深色主题模型选择卡：9 款内置模型对比与实测耗时</sub></p>
+  <p><sub>深色主题模型选择卡：10 款内置模型对比与实测耗时</sub></p>
 </div>
 
 </td>
@@ -365,6 +365,7 @@ kaggle auth login
 - `SDXL Turbo`（极速草图）
 - `Playground v2.5`（色彩与美感表现较好）
 - `SDXL Base 1.0`（经典标准底模）
+- `SDXL Inpaint`（局部重绘专用 9 通道权重，只能带蒙版使用）
 - `RealVisXL V5.0`（写实人像与摄影）
 - `FLUX.2 Klein 4B`（轻量新一代扩散架构）
 - `Animagine XL 3.1`（二次元与动漫）

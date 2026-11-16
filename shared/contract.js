@@ -74,6 +74,10 @@ export const LIMITS = {
   reference: { maxBytes: 8 * 1024 * 1024, maxEdge: 1536, minEdge: 128 },
   // 重绘强度：越小越贴近原图，越大越放飞；首期只对 SDXL 家族（supportsImg2Img）开放。
   strength: { min: 0.2, max: 0.9, step: 0.05, default: 0.6 },
+  // 局部重绘（Inpaint）蒙版：客户端导出的黑白 PNG（白 = 重绘区域，黑 = 保留区域），
+  // 与参考图一起提交；尺寸由远端按参考图精确对齐，因此这里只管字节上限。
+  // 单独成项而不挂在 reference 下：远端 limit_spec() 只按「单层数值键」合并兜底值。
+  mask: { maxBytes: 2 * 1024 * 1024 },
   // Kaggle / torch 侧接受 32 位有符号正整数；两端必须用同一个上界，否则用户输入的
   // seed 会被宿主静默取模改写，导致「带回参数」复现不出同一张图。
   seed: { max: 2147483647 },
@@ -85,6 +89,9 @@ export const LIMITS = {
   jobs: { defaultLimit: 20, maxLimit: 100 },
   historyTool: { defaultLimit: 5, maxLimit: 30 },
   libraryDelete: { maxPaths: 200 },
+  // Agent 批量创作（imagen_batch）：单次对话最多规划多少条任务。
+  // 队列本身另有 maxPending 上限，两者叠加后不会把云端排队撑爆。
+  batch: { maxItems: 8 },
   intentText: { maxChars: 2000 },
   // 对话多轮上下文：客户端只回传最近若干条消息，Host 路由再裁剪一次，
   // 避免把整段聊天记录塞进模型（也约束请求体大小）。
@@ -448,6 +455,8 @@ export function daemonContract() {
       // 图生图的参考图边界与重绘强度：daemon 依此校验请求（来源与 Host 同一份契约）。
       reference: LIMITS.reference,
       strength: LIMITS.strength,
+      // 局部重绘蒙版边界（与参考图一起下发；daemon 请求体上限也按它推导）。
+      mask: LIMITS.mask,
     },
   }
 }

@@ -227,15 +227,40 @@ async function main() {
 
   await check('工具已注册', () => {
     const names = fake.tools.map((tool) => tool.name)
-    assert.deepEqual(names.sort(), ['imagen_cancel', 'imagen_generate', 'imagen_history', 'imagen_session'])
+    assert.deepEqual(names.sort(), [
+      'imagen_batch',
+      'imagen_cancel',
+      'imagen_generate',
+      'imagen_history',
+      'imagen_recipes',
+      'imagen_session',
+    ])
     for (const tool of fake.tools) {
       assert.ok(tool.output?.render, `${tool.name} 缺少 output.render`)
       assert.ok(tool.parameters?.type === 'object', `${tool.name} 参数根必须是 object`)
+      assert.equal(tool.parameters.additionalProperties, false, `${tool.name} 参数必须禁止未知字段`)
     }
     const cancel = fake.tools.find((tool) => tool.name === 'imagen_cancel')
     assert.deepEqual(cancel.parameters.required, ['jobId'], 'imagen_cancel 必须要求 jobId')
     assert.equal(cancel.parameters.properties.jobId.type, 'string')
     assert.equal(cancel.parameters.additionalProperties, false)
+
+    // 批量创作：条数上限与等待预算都取自契约 LIMITS。
+    const batch = fake.tools.find((tool) => tool.name === 'imagen_batch')
+    assert.deepEqual(batch.parameters.required, ['items'], 'imagen_batch 必须要求 items')
+    assert.equal(batch.parameters.properties.items.maxItems, LIMITS.batch.maxItems, '批量上限应引用契约')
+    assert.deepEqual(batch.parameters.properties.items.items.required, ['prompt'], '批量条目必须要求 prompt')
+    assert.equal(batch.parameters.properties.waitSeconds.type, 'integer')
+    assert.match(batch.parameters.properties.waitSeconds.description, /总等待预算/, 'waitSeconds 应是整批总预算')
+
+    // 风格配方：只读检索，无必填参数；可先检索再由 Agent 显式组装 prompt。
+    const recipes = fake.tools.find((tool) => tool.name === 'imagen_recipes')
+    assert.equal(recipes.parameters.required, undefined, 'imagen_recipes 的过滤条件都可选')
+    assert.equal(recipes.parameters.properties.limit.type, 'integer')
+    assert.ok(
+      fake.tools.find((tool) => tool.name === 'imagen_generate').description.includes('imagen_recipes'),
+      'imagen_generate 描述应引导先检索配方',
+    )
   })
 
   await check('Agent 工具描述注入模型库知识', () => {
@@ -1429,6 +1454,93 @@ async function main() {
     })
     assert.equal(invalid.status, 400, '越界参考图必须在入队前被拒绝')
     assert.equal(invalid.body.error.code, 'invalid_path')
+  })
+
+  await check('局部重绘：参考图 + 蒙版走 /generate 全链路，请求体带 mask_b64、meta 记 inpaint', async () => {
+    const dir = join(workspace, 'imagen-output', '20260101-000000-inpaint')
+    await mkdir(dir, { recursive: true })
+    const sourcePath = 'imagen-output/20260101-000000-inpaint/01.png'
+    await writeFile(join(dir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+
+    const submitted = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        prompt: '把天空换成晚霞',
+        presetId: 'sdxl-lightning',
+        // data URL 前缀由 Host 归一：远端只收到裸 base64。
+        reference: { path: sourcePath, strength: 0.8, mask: `data:image/png;base64,${PNG_B64}` },
+        waitSeconds: 15,
+      }),
+    })
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body))
+    const job = submitted.body
+    assert.equal(job.status, 'done')
+    // 公开视图只回出处、强度与「是否带蒙版」，不回任何二进制。
+    assert.deepEqual(job.params.reference, { sourcePath, strength: 0.8, mask: true })
+    assert.ok(!JSON.stringify(job).includes(PNG_B64), '任务视图不得回传参考图/蒙版二进制')
+
+    const call = mock.state.lastBody
+    assert.deepEqual(
+      call.reference,
+      { image_b64: PNG_B64, strength: 0.8, mask_b64: PNG_B64 },
+      '远端载荷必须带归一后的 mask_b64',
+    )
+
+    const meta = JSON.parse(await readFile(join(workspace, job.output.dir, 'meta.json'), 'utf8'))
+    assert.equal(meta.inpaint, true, 'meta.json 必须记 inpaint 标记')
+    assert.equal(meta.sourceImage, sourcePath)
+    assert.equal(meta.strength, 0.8)
+    assert.equal(meta.params.reference.mask, true)
+
+    // 非法蒙版（非 PNG / base64 不合法 / 带蒙版却没有参考图）必须在入队前 400。
+    const invalidMasks = [
+      { reference: { path: sourcePath, mask: 'not-base64!!' } },
+      { reference: { path: sourcePath, mask: Buffer.from('not a png').toString('base64') } },
+      { reference: { mask: PNG_B64 } },
+    ]
+    for (const payload of invalidMasks) {
+      const invalid = await json(host.origin, '/imagen-api/generate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: '非法蒙版', ...payload }),
+      })
+      assert.equal(invalid.status, 400, JSON.stringify(payload))
+      assert.equal(invalid.body.error.code, 'invalid_request')
+      assert.ok(invalid.body.error.message.includes('蒙版'), invalid.body.error.message)
+    }
+  })
+
+  await check('局部重绘：参考图 + 蒙版接近上限时不被请求体闸门拒掉', async () => {
+    // 只按参考图推导请求体上限（修复前）时，这个请求会在路由层被 invalid_body 拒掉：
+    // 参考图 8MiB + 蒙版 2MiB 的 base64 体积是 14MB 量级，而旧上限约 11.2MB。
+    const paddedPngB64 = (size) => {
+      const buffer = Buffer.alloc(size)
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buffer, 0)
+      return buffer.toString('base64')
+    }
+    const referenceB64 = paddedPngB64(7.5 * 1024 * 1024)
+    const maskB64 = paddedPngB64(1.5 * 1024 * 1024)
+    const body = JSON.stringify({
+      prompt: '大图局部重绘',
+      presetId: 'sdxl-lightning',
+      reference: { image: referenceB64, strength: 0.6, mask: maskB64 },
+      waitSeconds: 15,
+    })
+    const oldLimit =
+      Math.ceil((LIMITS.reference.maxBytes * 4) / 3) + 64 * 1024
+    assert.ok(
+      Buffer.byteLength(body) > oldLimit,
+      `构造的请求体必须超过「只按参考图推导」的旧上限，否则这条用例失去意义（${Buffer.byteLength(body)} vs ${oldLimit}）`,
+    )
+    const submitted = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+    })
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body))
+    assert.equal(submitted.body.status, 'done')
+    assert.equal(submitted.body.params.reference.mask, true)
   })
 
   await check('打开产物目录（dryRun 只解析路径）', async () => {

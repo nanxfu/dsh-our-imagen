@@ -37,6 +37,12 @@ user-invocable: true
   `promptStyle` 只允许 `danbooru` / `natural` / `concise`，`qualityPrefix` 没有质量词前缀时写空串；
 - `supportsImg2Img` 默认 `false`。只有 loader 属于 `sdxl` / `sdxl-lora`（首期仅 SDXL 家族）、且真机验证过
   `AutoPipelineForImage2Image.from_pipe` 复用底座可出图时才标 `true`；不确定就保持 false，宁缺毋滥；
+- `supportsInpaint` 默认 `false`。局部重绘要在 `supportsImg2Img` 为 `true` 的基础上再验证
+  `AutoPipelineForInpainting.from_pipe` 能复用同一底座（参考图 + 黑白蒙版出图正常）才标 `true`；
+  它不能脱离 `supportsImg2Img` 单独为 true，`npm run models:check` 会拦下这种组合；
+- 专用 inpaint 权重（9 通道，如 `diffusers/stable-diffusion-xl-1.0-inpainting-0.1`）还要额外标
+  `"inpaintOnly": true` 与 `pipeline.nativeInpaint: true`：前者表示只能带蒙版使用（不能文生图 /
+  纯图生图），后者让 daemon 用 `AutoPipelineForInpainting.from_pretrained` 加载；两个字段必须成对出现；
 - `supportsNegative` 必填布尔值，语义是「模型管线是否真的消费 `negative_prompt`」，不是「CFG 是否大于 0」。
   只有 loader 的生成管线 `__call__` 接受 `negative_prompt` 才标 `true`（`sdxl` / `sdxl-lora` / `anima` 为 true，
   `flux2` 的 `Flux2Pipeline.__call__` 没有该参数，必须 `false`）；判断不了填 `false`，标错会让界面多出无效输入框、
@@ -143,6 +149,8 @@ npm test
   "sizeOptions": [768, 1024],
   "runtime": "default",
   "supportsImg2Img": false,
+  "supportsInpaint": false,
+  "inpaintOnly": false,
   "supportsNegative": false,
   "pipeline": {
     "loader": "sdxl",

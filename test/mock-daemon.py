@@ -76,7 +76,11 @@ VERSION = "0.11.0-mock"
 LOG_MAX_LINES = 400
 SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2", "anima")
 SUPPORTED_IMG2IMG_LOADERS = ("sdxl", "sdxl-lora")
+# 局部重绘白名单：与 remote/inference/registry.py 的 inpaint_names() 同值（首期仅 SDXL 家族）。
+SUPPORTED_INPAINT_LOADERS = ("sdxl", "sdxl-lora")
 REFERENCE_IMAGE_FORMATS = ("PNG", "JPEG")
+# 蒙版只接受 PNG：与 remote/inference/reference_codec.py 的 MASK_IMAGE_FORMATS 同值。
+MASK_IMAGE_FORMATS = ("PNG",)
 FAIL_CHOICES = ("none", "oom", "load_failed", "invalid_request", "generation_failed")
 FAIL_GENERATE_CHOICES = ("none", "400", "500")
 # --fail-job：入队成功、worker 执行阶段失败（用于 Host 的 job 失败分支回归）。
@@ -103,6 +107,8 @@ FALLBACK_CONTRACT = {
         "negativePrompt": {"maxChars": 1000},
         "reference": {"maxBytes": 8 * 1024 * 1024, "maxEdge": 1536, "minEdge": 128},
         "strength": {"min": 0.2, "max": 0.9, "step": 0.05, "default": 0.6},
+        # 局部重绘蒙版：黑白 PNG（白 = 重绘区域，黑 = 保留区域），尺寸由远端对齐参考图。
+        "mask": {"maxBytes": 2 * 1024 * 1024},
     },
 }
 _LIMIT_NUMERIC_KEYS = ("min", "max", "step", "maxChars", "default", "maxBytes", "maxEdge", "minEdge")
@@ -201,15 +207,24 @@ def _limit(name: str) -> dict:
     return merged
 
 
-def _request_body_limit() -> int:
-    """请求体字节上限：按参考图边界的 base64 膨胀推导，下限 8MB。
+def _limit_max_bytes(name: str) -> int:
+    """取某个 limits 项的 ``maxBytes``；缺失 / 非正数按 0 处理（与 daemon 的取数口径一致）。"""
+    value = _limit(name).get("maxBytes")
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        return 0
+    return int(value)
 
-    与 remote/config.py 的 `request_body_limit()` 同一条公式：reference 缺失时用兜底契约的
-    同名字段（Batch 3 之前这里直接返回 8MB，真 daemon 却是 11.7MB，两边的拒绝点不同）。
+
+def _request_body_limit() -> int:
+    """请求体字节上限：按「参考图 + 蒙版」边界的 base64 膨胀推导，下限 8MB。
+
+    与 remote/config.py 的 `request_body_limit()` 同一条公式：reference / mask 缺失时用兜底
+    契约的同名字段（Batch 3 之前这里直接返回 8MB，真 daemon 却是 11.7MB，两边的拒绝点不同；
+    局部重绘再加一张 ≤2MiB 的蒙版后是约 15MB）。
     """
     base = 8 * 1024 * 1024
-    max_bytes = _limit("reference").get("maxBytes")
-    if isinstance(max_bytes, bool) or not isinstance(max_bytes, (int, float)) or max_bytes <= 0:
+    max_bytes = _limit_max_bytes("reference") + _limit_max_bytes("mask")
+    if max_bytes <= 0:
         return base
     return max(base, 4 * ((int(max_bytes) + 2) // 3) + 1024 * 1024)
 
@@ -585,9 +600,13 @@ def _execute_job(job: dict) -> None:
         ref = job.get("reference")
         ref_size = None
         ref_strength = None
+        ref_mask = None
         if ref is not None:
             ref_size = _scaled_reference_size(ref["width"], ref["height"])
             ref_strength = _coerce_strength(ref.get("strength"))
+            if ref.get("mask_bytes") is not None:
+                # 局部重绘：回显客户端蒙版原始尺寸，出图尺寸仍跟随（缩放后的）参考图。
+                ref_mask = (int(ref.get("mask_width") or 0), int(ref.get("mask_height") or 0))
         with _GEN_LOCK:
             results = []
             for task in job["tasks"]:
@@ -611,9 +630,14 @@ def _execute_job(job: dict) -> None:
                     item["strength"] = ref_strength
                     item["referenceWidth"] = int(ref_size[0])
                     item["referenceHeight"] = int(ref_size[1])
+                if ref_mask is not None:
+                    item["inpaint"] = True
+                    item["maskWidth"] = int(ref_mask[0])
+                    item["maskHeight"] = int(ref_mask[1])
                 results.append(item)
+                scene = "inpaint " if ref_mask is not None else ("img2img " if ref_size is not None else "")
                 log(
-                    f"[mock] {'img2img ' if ref_size is not None else ''}生成 {task['name']} "
+                    f"[mock] {scene}生成 {task['name']} "
                     f"seed={task['seed']} {out_w}x{out_h} {len(png)} 字节"
                 )
                 with _JOB_LOCK:
@@ -751,13 +775,76 @@ def _scaled_reference_size(width: int, height: int) -> tuple[int, int]:
     return (int(width), int(height))
 
 
+def _probe_mask_image(image_bytes: bytes) -> tuple[int, int]:
+    """校验蒙版格式（只接受 PNG）并返回 (width, height)；不校验最小长边（执行期再对齐）。"""
+    expected = " 或 ".join(MASK_IMAGE_FORMATS)
+    if _HAS_PILLOW:
+        from PIL import UnidentifiedImageError
+
+        bomb_error = getattr(Image, "DecompressionBombError", None)
+        try:
+            image = Image.open(io.BytesIO(image_bytes))
+        except UnidentifiedImageError:
+            raise ValueError(f"蒙版必须是 {expected} 图片") from None
+        except Exception as exc:  # noqa: BLE001
+            if bomb_error is not None and isinstance(exc, bomb_error):
+                raise ValueError("蒙版分辨率过大，无法处理") from None
+            raise ValueError(f"蒙版无法解析：{type(exc).__name__}") from None
+        try:
+            image_format = str(getattr(image, "format", "") or "").upper()
+            if image_format not in MASK_IMAGE_FORMATS:
+                raise ValueError(f"蒙版必须是 {expected}（收到 {image_format or '未知格式'}）")
+            width, height = image.size
+        finally:
+            try:
+                image.close()
+            except Exception:
+                pass
+    else:
+        if not (
+            image_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+            and len(image_bytes) >= 24
+            and image_bytes[12:16] == b"IHDR"
+        ):
+            raise ValueError(f"蒙版必须是 {expected} 图片")
+        width, height = struct.unpack(">II", image_bytes[16:24])
+    if width <= 0 or height <= 0:
+        raise ValueError("蒙版尺寸非法")
+    return int(width), int(height)
+
+
+def _decode_mask_b64(encoded) -> bytes:  # noqa: ANN001
+    """解码 reference.mask_b64：base64 合法性 + 体积上限（口径与 daemon 一致）。"""
+    if not isinstance(encoded, str) or not encoded.strip():
+        raise ValueError("reference.mask_b64 必须是非空字符串")
+    max_bytes = int(_limit("mask").get("maxBytes") or 0)
+    try:
+        data = base64.b64decode(encoded.strip(), validate=True)
+    except (binascii.Error, ValueError):
+        raise ValueError("reference.mask_b64 不是合法 base64") from None
+    if not data:
+        raise ValueError("reference.mask_b64 解码后为空")
+    if max_bytes > 0 and len(data) > max_bytes:
+        raise ValueError(f"蒙版体积 {len(data)} 字节，超过上限 {max_bytes} 字节")
+    return data
+
+
 def parse_reference_spec(raw, pipeline_spec: dict) -> dict | None:  # noqa: ANN001
-    """与 remote/daemon.py 对齐的图生图参考图校验，失败抛 ValueError（-> 400 invalid_request）。"""
+    """与 remote/daemon.py 对齐的图生图参考图校验，失败抛 ValueError（-> 400 invalid_request）。
+
+    ``reference.mask_b64`` 存在时按局部重绘再校验一遍：loader 必须在 inpaint 白名单里、
+    蒙版只接受 PNG 且体积不超过 ``limits.mask.maxBytes``。
+    """
     if raw is None:
         return None
     if not isinstance(raw, dict):
         raise ValueError("reference 必须是对象")
     loader = str(pipeline_spec.get("loader") or "").strip()
+    # 带蒙版时用户意图是局部重绘，先给「不支持局部重绘」的精确文案（与 daemon 同一口径）。
+    if raw.get("mask_b64") is not None and loader not in SUPPORTED_INPAINT_LOADERS:
+        raise ValueError(
+            f"该模型不支持局部重绘（首期仅开放 SDXL 家族，当前 loader={loader or '未知'}）"
+        )
     if loader not in SUPPORTED_IMG2IMG_LOADERS:
         raise ValueError(
             f"该模型不支持垫图重绘（首期仅开放 SDXL 家族，当前 loader={loader or '未知'}）"
@@ -775,12 +862,21 @@ def parse_reference_spec(raw, pipeline_spec: dict) -> dict | None:  # noqa: ANN0
     if max_bytes > 0 and len(data) > max_bytes:
         raise ValueError(f"参考图体积 {len(data)} 字节，超过上限 {max_bytes} 字节")
     _fmt, width, height = _probe_reference_image(data)
-    return {
+    spec = {
         "image_bytes": data,
         "strength": _coerce_strength(raw.get("strength")),
         "width": int(width),
         "height": int(height),
     }
+    mask_encoded = raw.get("mask_b64")
+    if mask_encoded is not None:
+        # 白名单已在入口按「带蒙版」判定过；这里只校验蒙版载荷本身（base64 / PNG / 体积）。
+        mask_bytes = _decode_mask_b64(mask_encoded)
+        mask_width, mask_height = _probe_mask_image(mask_bytes)
+        spec["mask_bytes"] = mask_bytes
+        spec["mask_width"] = int(mask_width)
+        spec["mask_height"] = int(mask_height)
+    return spec
 
 
 def validate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001

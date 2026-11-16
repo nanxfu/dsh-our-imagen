@@ -1,6 +1,6 @@
 # Agent 批量创作、风格配方检索与画布局部重绘规划
 
-> **状态**：📝 规划中（2026-11-16）  
+> **状态**：✅ 已在 0.12.0 落地（离线全绿；局部重绘真机显存与画质验收待执行）。实现说明见 [ROADMAP.md](ROADMAP.md) 第十条与 [CHANGELOG](../CHANGELOG.md) 的「未发布」条目。  
 > **前置基线**：v0.11.0（已具备 `AutoPipelineForImage2Image.from_pipe` 显存复用与 `shared/models-guide.js` 模型知识口径）
 
 ---

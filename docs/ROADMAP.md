@@ -193,20 +193,30 @@
 
 ---
 
-## 九、 工作台双向同步与创作流转（规划中）
+## 九、 工作台双向同步与创作流转
 
-> **状态**：📝 规划中。设计参考与边界约定见 [STUDIO_SYNC_AND_ITERATION_DESIGN.md](STUDIO_SYNC_AND_ITERATION_DESIGN.md)。
+> **状态**：✅ 已在 0.12.0 落地。设计参考与边界约定见 [STUDIO_SYNC_AND_ITERATION_DESIGN.md](STUDIO_SYNC_AND_ITERATION_DESIGN.md)，交互规范见 [SPEC.md](SPEC.md) §5.14。
 
 - **目标**：理顺参数表单、创作助手与胶卷之间的流转边界——「清空对话」改为「新建对话」（开启新上下文）；表单生成同步到助手时展示细粒度参数摘要且不污染多轮 `intentHistory`；创作区点击胶卷自动带入原图参数（保留 Seed、保护未提交草稿），并明确「版本微调」与「新建创作」的重置边界。
+- **实现**：
+  - **新建对话**：`useChatThread.clearThread` 改为 `newChat` 并引入线程代次守卫——解析中点击会就地复位解析态，旧请求返回整条丢弃；按钮同时清空输入草稿。
+  - **表单提交同步**：`generate()` 提交成功后写入 `kind='form'` 的参数同步记录（`formSummaryOf` 提供模型 / 比例与像素 / 张数 / 是否含参考图 / 种子策略），助手面板用白卡 + 胶囊渲染；`intentHistory()` 跳过带 `kind` 的用户记录，表单提交不再污染意图模型的多轮上下文。
+  - **胶卷回填与草稿保护**：新增 `<studio>.actions.previewWork`，始终切换预览；表单干净时用 `iteratePatch` 回填（含原图 Seed、清理残留 reference），脏时保留草稿并提示「已保留当前草稿」；画廊保持纯浏览。
+  - **微调 / 新建创作边界**：新增 `src/logic/form.js`（`formSnapshotOf` / `isFormDirty` / `newCreationPatch`）与表单域的 `dirty` / `tuning` / `markClean` / `applyRecall` / `newCreation`；参数面板顶部显示「正在微调：<作品提示词>」与常驻「新建创作」，重置只清绑定上一张作品的状态，保留当前模型与画幅。
+  - **测试**：`check-client-logic` 与 `check-client-render` 覆盖代次守卫、上下文隔离、草稿保护、胶卷接线与新建创作边界；文案 zh/en 严格同构。
 
 ---
 
-## 十、 Agent 批量创作、风格配方检索与画布局部重绘 (Inpaint)（规划中）
+## 十、 Agent 批量创作、风格配方检索与画布局部重绘 (Inpaint)
 
-> **状态**：📝 规划中。简要方案与验收标准见 [AGENT_BATCH_AND_INPAINT_PLAN.md](AGENT_BATCH_AND_INPAINT_PLAN.md)。
+> **状态**：✅ 已在 0.12.0 落地（离线全绿；局部重绘真机验收通过，并追加 9 通道专用权重预设 `sdxl-inpaint`）。方案与验收标准见 [AGENT_BATCH_AND_INPAINT_PLAN.md](AGENT_BATCH_AND_INPAINT_PLAN.md)，交互规范见 [SPEC.md](SPEC.md) §3.2 / §3.3 / §5.15。
 
 - **阶段一（Agent 批量与风格配方）**：在 `lib/tools.js` 新增 `imagen_batch`（基于 `lib/jobs/queue.js` 逐项入队、单条失败隔离与统一汇总）与只读检索工具 `imagen_recipes`（提供透明、适配开源模型写法的风格模板，不做暗箱拼接）。
+  - **实现**：`imagen_batch` 单次 1~`LIMITS.batch.maxItems`（8）条、每条固定 1 张，`waitSeconds` 是整批总等待预算（预算用尽停止等待但不取消任务，返回 `jobId` 供轮询）；条目数超限整批拒绝，`saveTo` 逐项走交付校验并检测重复，单条异常只影响该条。新增 `shared/recipes.js`（8 条配方、按 `promptStyle` 分键的 `promptTemplate`、`searchRecipes` / `templateFor` / `validateRecipes` 纯函数），工具只返回可见文本与检索建议。离线断言 17 项见 `test/agent-batch.mjs`。
 - **阶段二（画布涂抹局部重绘）**：扩展 `shared/contract.js` 的 `reference.mask` 契约，在 `remote/daemon.py` 通过 `AutoPipelineForInpainting.from_pipe` 复用 SDXL 底座实现零显存增量局部重绘，并在 `src/studio/Stage.jsx` 增加轻量涂抹蒙版层。
+  - **实现**：契约新增 `LIMITS.mask = { maxBytes: 2 MiB }` 并随 `daemonContract()` 下发（`remote/contract.json` 同步）；模型资产新增 `supportsInpaint`（SDXL 家族 7 个 true，`build-assets` 校验它不能脱离 `supportsImg2Img`）。Host 在 `normalizeReference` 做 PNG 魔数 / 体积 / 无参考图拦截，执行期把 `{ image_b64, strength, mask_b64 }` 透传远端，出图路由请求体上限改为按「参考图 + 蒙版」推导，产物 `meta.json` 记 `inpaint: true`。远端新增 `SUPPORTED_INPAINT_LOADERS` 与 `ensure_inpaint_pipeline()`（`from_pipe` 惰性复用、随切模型 / `release_pipeline()` 清空），`decode_mask_image()` 执行期解码一次、转灰度 `'L'` 并按最近邻对齐参考图宽高，`run_task` 走 `image` + `mask_image` + `strength` 分支（出图尺寸跟随参考图）。客户端新增 `src/logic/mask.js` 纯逻辑与 Stage 涂抹层（画笔大小 / 橡皮擦 / 清空 / 反选，触控 + 键盘，热区 ≥44px），表单按 `supportsInpaint` 门控并在换图 / 回填 / 新建创作时清蒙版，蒙版指纹纳入脏判定。
+  - **离线验收**：`test/remote/run.py` 371 项（+18 专用权重分支）、`test/jobs-wait.mjs` 25 项、`test/host-e2e.mjs` 48 项（含参考图 + 蒙版接近上限不被 `invalid_body` 拦截的边界用例）、客户端 logic 77 项 / render 89 项全绿。
+  - **追加：9 通道专用权重预设（`sdxl-inpaint`）**：通用底座的 `from_pipe` 路径边界融合有限，因此新增 `models/sdxl-inpaint.json`（`diffusers/stable-diffusion-xl-1.0-inpainting-0.1`），用 `inpaintOnly` + `pipeline.nativeInpaint` 标记「只能带蒙版使用、加载后即为 inpaint 管线」；daemon 用 `AutoPipelineForInpainting.from_pretrained` 加载并直接复用底座，Host / daemon 双层拦截无蒙版请求，客户端缺蒙版时拦下生成并提示、默认强度取 0.9、参考图兜底预设跳过它。真机验收（2×T4）：40% 中心蒙版 + 「蓝色大象」提示词下象头明确生成（蒙版内平均差异 41.9/35.7/30.9，通用模型同用例约 25），保留区逐像素不变（0.00），边界融合更自然；整图蒙版可完整按提示词成图；小蒙版（约 2.5% 面积）时上下文补全压过提示词，属模型行为，已在 UI 提示与文档中说明。1024² / 30 步单张 20.9~24.9s。  - **真机验收（2026-11-16，4 轮通过）**：`node test/gpu-live.mjs --preset sdxl-lightning --inpaint` 在 Kaggle 2×Tesla T4（diffusers 0.43.0 / torch 2.11.0）验证：文生图 9.96~12.34s → 局部重绘 9.25~9.88s，`load_seconds=0`（`from_pipe` 复用已加载底座），出图 1024×1024 与参考图、蒙版尺寸一致；重绘前后 `allocated_mb` 7000→7000、`reserved_mb` 10776→10780（+4 MiB 噪声）、`max_allocated_mb` 不变，**零显存增量**确认。像素对比：蒙版内平均绝对差约 9.7/255，完全落在黑色保留区的边框带仅约 1.5/255（VAE 往返噪声）；换提示词后强度 0.6 只跑 2 步、变化约 3.8/255（偏弱），≥0.76 跑 3 步、变化约 25/255（明显重写），0.8 与 0.9 因 `int(steps × strength)` 量化输出逐字节相同。据此把「进入涂抹模式时的默认强度」定为 0.8（用户调过的值不覆盖），契约区间不变；大面积蒙版在高强度下边界会出现硬接缝（4 通道混回分支的固有表现），实际笔刷小区域更自然，已记入 [CHANGELOG](../CHANGELOG.md)。验收脚本同时补齐：默认直连推 Kernel、`--inpaint-prompt` 对照提示词、`--max-queue-minutes` / `--max-replace` 排队超时自动换新实例重排（本轮第二次验收即靠它从卡住的 QUEUED 恢复）。产物见 `bench-results/gpu-live/`（`01.png` / `02-inpaint.png` / `report.json`）。
 
 
 

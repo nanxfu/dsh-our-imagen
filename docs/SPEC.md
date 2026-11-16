@@ -455,9 +455,9 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | `count` | integer | 1~4，默认 1 |
 | `waitSeconds` | integer | 0~600：>0 时该请求最多等待任务结束 N 秒再返回（默认 0，立即返回） |
 | `autoStart` | boolean | 默认 `true`；`false` 时不自动唤醒会话 |
-| `reference` | object | 可选。图生图参考图（M3）：`{ path?, image?, strength? }`，`path` 与 `image` 二选一；详见下方「图生图参考图」 |
+| `reference` | object | 可选。图生图 / 局部重绘参考图（M3 / 0.12.0）：`{ path?, image?, strength?, mask? }`，`path` 与 `image` 二选一，`mask` 可叠加；详见下方「图生图参考图」 |
 
-**图生图参考图（M3）**：
+**图生图参考图（M3）与局部重绘蒙版（0.12.0）**：
 
 - `reference.path`：`imagen-output/` 内作品的工作区相对路径（与 `/imagen-api/file?path=` 同一口径，
   严格限定在输出目录内、拒绝绝对路径与 `..`）；`reference.image`：前端上传/缩放后的 base64
@@ -465,13 +465,24 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 - 体积上限 `LIMITS.reference.maxBytes`（8 MiB 原始字节），只接受 PNG / JPEG；长边上限
   `LIMITS.reference.maxEdge`（1536）由远端解码后等比缩小，小于 `LIMITS.reference.minEdge` 的图直接拒绝。
 - `reference.strength`：重绘强度，按契约 `LIMITS.strength`（0.2~0.9，步长 0.05）钳制并对齐，默认 `0.6`。
-- 首期只对 `supportsImg2Img = true` 的模型（SDXL 家族）开放；远端对不支持的 loader 返回
+- `reference.mask`：可选，局部重绘蒙版。PNG base64（可带 `data:image/png;base64,` 前缀），
+  黑白二值图：**白色为重绘区域、黑色为保留区域**；体积上限 `LIMITS.mask.maxBytes`（2 MiB）。
+  只允许 PNG（蒙版是程序生成的二值图，JPEG 的压缩噪声会让边界不可控）。带 `mask` 时必须同时有
+  `path` / `image` 之一（没有参考图就无从重绘），否则 `400 invalid_request`。远端解码后转灰度 `'L'`
+  并用最近邻对齐到参考图精确宽高；未涂抹时不传该字段，请求体与纯图生图逐字一致。
+  只对 `supportsInpaint = true` 的模型（SDXL 家族）开放，其它 loader 由远端按白名单返回
+  `400 invalid_request`（文案明确「该模型不支持局部重绘」）。
+- 首期只对 `supportsImg2Img = true` 的模型（SDXL 家族）开放参考图；远端对不支持的 loader 返回
   `400 invalid_request`。参考图是 job 级参数：一张参考图跑整批 `count`（每张 seed 递增）。
+- 专用局部重绘预设（`inpaintOnly = true`，如 `sdxl-inpaint`）：只用于带蒙版的局部重绘，
+  **必须同时提供参考图与蒙版**；缺任一项时客户端拦下生成、Host 入队返回 `400 invalid_request`、
+  daemon 提交期同样拒绝。这类预设生成的图与普通预设一样落盘、可回填参数。
 - 校验失败：路径/文件问题 → `400 invalid_path`；格式、体积、强度或模型能力问题 →
   `400 invalid_request`（执行阶段发现的问题让任务以 `invalid_path` / `invalid_request` 失败，
   不占用 GPU 加载模型）。
 - 远端任务结果项在原有字段外带 `strength` / `referenceWidth` / `referenceHeight`（送入模型的参考图
-  实际尺寸）；Host 只透传不消费，产物 `meta.json` 用 Host 自己的 `sourceImage` / `strength` 记录出处。
+  实际尺寸）；局部重绘再带 `inpaint: true` / `maskWidth` / `maskHeight`（客户端原始蒙版尺寸）。
+  Host 只透传不消费，产物 `meta.json` 用 Host 自己的 `sourceImage` / `strength` / `inpaint` 记录出处。
 
 - **响应**：**裸 `Job` 对象**（不是 `{ ok, job }` 包装）。`waitSeconds > 0` 时返回的是等待结束后的快照，
   任务可能仍在 `queued` / `running`。
@@ -839,7 +850,9 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 
 ## 3. DSH 会话 Agent 工具规范
 
-插件向 DSH 会话模型注入 4 个标准 Tool，支持对话中直接出图：
+插件向 DSH 会话模型注入 6 个标准 Tool，支持对话中直接出图：`imagen_generate`（单张/多张）、
+`imagen_batch`（一次规划一组任务）、`imagen_recipes`（只读检索风格配方模板）、`imagen_session`、
+`imagen_history`、`imagen_cancel`。
 
 ### 3.1 `imagen_generate`
 
@@ -881,19 +894,60 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 - **返回**：文本（`{ "text": string }`），内容为任务状态 / 参数摘要 / 产物路径（完成时提示可用
   `![描述](URL)` 展示图片；交付过的副本单独列出）。
 
-### 3.2 `imagen_session`
+### 3.2 `imagen_batch`
+
+- **描述**：按一组提示词批量出图（单次 1–8 条，适合文章配图、分镜与系列插画）。全部条目共享
+  `presetId` / `width` / `height` / `steps` / `cfg`，逐条提交到同一串行队列，每条任务只出 1 张图。
+  单条校验不通过或生成失败只影响该条；汇总给出成功产物路径与 URL、失败原因、未完成任务 `jobId`。
+  需要风格参考时先用 `imagen_recipes` 检索模板，再把模板显式改写进各条 `prompt`（工具不会追加风格后缀）。
+- **输入参数**（`additionalProperties: false`，必填 `items`）：
+
+| 参数 | 类型 | 必填 | 说明 |
+| :--- | :--- | :---: | :--- |
+| `items` | array | 是 | 任务列表，1–`LIMITS.batch.maxItems`（8）条；每项 `{ prompt(必填), negativePrompt?, seed?, saveTo? }`，`additionalProperties: false` |
+| `presetId` | string | 否 | 公共预设 id（枚举来自契约 `PRESETS`），默认 `sdxl-lightning` |
+| `width` / `height` | integer | 否 | 公共宽高 256–1536，默认取预设 |
+| `steps` | integer | 否 | 公共采样步数 1–60，默认取预设 |
+| `cfg` | number | 否 | 公共 CFG 0–20，默认取预设 |
+| `waitSeconds` | integer | 否 | **本次调用的总等待预算**（0–600，默认 90），不是每条任务的预算；预算用尽后返回未完成任务 `jobId`，任务仍在后台继续 |
+
+- **行为**：条目数超过上限 → 整批拒绝、一条都不提交；`saveTo` 逐项走同一套交付校验（含软链接逃逸），
+  非法或重复的条目只标记该条失败；`queue.submit` 抛异常也只影响该条。所有任务共享一个 deadline，
+  按提交顺序串行等待，预算用尽即停止等待且**不取消**任务。
+- **返回**：文本汇总，首行是「共 N 条，成功 X，失败 Y，未完成 Z」，随后逐条给出产物路径 / 尺寸 / seed / URL
+  （成功）、`error.code: message`（失败）或 `jobId + 状态`（未完成），末尾给出用 `imagen_history` 轮询与
+  `imagen_cancel` 取消的指引。
+
+### 3.3 `imagen_recipes`
+
+- **描述**：只读检索透明风格配方库，按关键词、风格分类、标签或 `presetId` 查找可读的提示词模板与适配模型。
+  配方只返回可见文本（模板里用 `{subject}` 占位），不会替用户拼接任何样式后缀；无匹配时返回可执行的检索建议。
+- **输入参数**（`additionalProperties: false`，全部可选）：
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `keyword` | string | 风格关键词（如 `日系` / `赛博霓虹` / `极简海报`），多词用空格或逗号分隔，需全部命中 |
+| `category` | string | 风格分类，枚举来自 `shared/recipes.js` 的 `RECIPE_CATEGORIES` |
+| `presetId` | string | 按适配的模型预设过滤（枚举来自契约 `PRESETS`） |
+| `tags` | array | 标签数组，需全部命中 |
+| `limit` | integer | 返回条数 1–配方总数，默认 5 |
+
+- **返回**：匹配配方的 `id` / 标题 / 分类 / 标签 / 适配预设 / 推荐比例 / 提示词模板（按目标模型的
+  `promptStyle` 给出对应写法）/ 推荐负向词；无匹配时给出可执行的替代检索建议。
+
+### 3.4 `imagen_session`
 
 - **描述**：管理云端 GPU 会话（查询状态、主动开机、主动关机）。
 - **输入参数**：`action`（必填，枚举 `start` / `stop` / `status`）、`presetId`（可选，枚举来自契约 `PRESETS`）。
 - **返回**：会话状态摘要文本。
 
-### 3.3 `imagen_history`
+### 3.5 `imagen_history`
 
 - **描述**：获取当前工作区最近生成的图片文件列表与参数信息。
 - **输入参数**：`limit`（可选，1–30，默认 5）。
 - **返回**：最近生成的条目文本（时间、预设、提示词摘要、图片路径）。
 
-### 3.4 `imagen_cancel`
+### 3.6 `imagen_cancel`
 
 - **描述**：取消一个已提交的生图任务（排队任务立即出队失效；生成中任务合作式停止，当前这张出完后不再提交
   批内剩余张数，已出的图片仍保留）。
@@ -932,6 +986,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | **`sdxl-turbo`** | `stabilityai/sdxl-turbo` | 512（512 / 768 / 1024） | 4 步 / 0 | 4.0s / 1.87s | 7666 MB | 6.62 GB | 1 | fast | 支持（默认隐藏） |
 | **`playground-v2.5`** | `playgroundai/playground-v2.5-1024px-aesthetic` | 1024（768 / 1024） | 30 步 / 3 | 5.7s / 28.34s | 9967 MB | 6.46 GB | 1 | usable | 支持 |
 | **`sdxl-base`** | `stabilityai/stable-diffusion-xl-base-1.0` | 1024（768 / 1024 / 1152） | 25 步 / 7.5 | 5.8s / 27.8s | 9966 MB | 6.78 GB | 1 | usable | 支持 |
+| **`sdxl-inpaint`** *(专用局部重绘)* | `diffusers/stable-diffusion-xl-1.0-inpainting-0.1`（9 通道 UNet，`nativeInpaint`） | 1024（768 / 1024 / 1152） | 30 步 / 8 | 待实测 / 22.4s | 待实测 | 7.0 GB | 1 | quality | 支持 |
 | **`realvis-v5`** | `SG161222/RealVisXL_V5.0` | 1024（768 / 1024） | 25 步 / 5 | 5.2s / 24.53s | 9967 MB | 6.46 GB | 1 | usable | 支持 |
 | **`flux2-klein-4b`** *(实验)* | `black-forest-labs/FLUX.2-klein-4B` | 1024（768 / 1024） | 4 步 / 1.0 | 28.2s / 10.24s | 7929 MB | 15.2 GB | 2 | fast | 不支持 |
 | **`animagine-xl-3.1`** | `cagliostrolab/animagine-xl-3.1` | 1024（768 / 1024） | 28 步 / 7 | 4.8s / 26.17s | 9176 MB | 6.46 GB | 1 | usable | 支持 |
@@ -1173,3 +1228,50 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
 4. **窄屏（≤820px）**：只保留当前节点文字，其余节点收成圆点；队列胶囊信息并入这一行。
 5. **无障碍**：阶段切换时用 `role="status"` + `aria-live="polite"` 播报一次；每秒走字的计时与舞台胶囊不重复播报。
 
+### 5.14 第十批交互补充（工作台双向同步与创作流转，0.12.0）
+
+> 设计依据：[STUDIO_SYNC_AND_ITERATION_DESIGN.md](STUDIO_SYNC_AND_ITERATION_DESIGN.md)。
+
+1. **「新建对话」取代「清空对话」**：助手面板底部按钮语义是「开一个新上下文」，不是删记录。点击后清空线程与输入草稿；正在解析意图时点击，旧请求返回会被线程代次守卫整条丢弃，不会写进新上下文。
+2. **表单提交同步进助手但不出现在模型上下文里**：从参数面板点生成后，助手线程出现一张参数同步卡（模型、比例与像素、张数、是否含参考图、种子策略，用胶囊呈现），与普通用户气泡在结构上区分；点击生成变体 / 重试来源的卡片各有标题。这类记录带 `kind='form'`，`intentHistory()` 会跳过，**不进入**发给意图模型的多轮上下文——在表单里顺手跑一张别的题材不会带偏后续对话。
+3. **胶卷点击自动回填参数（仅创作视图）**：底部胶卷缩略图点击时，除了切换画面预览，还会把该作品参数回填进左侧表单（提示词、排除项、宽高、步数、CFG、预设，并保留原图的 Seed；作品没有有效 Seed 时恢复随机），同时清掉上一轮残留的参考图。画廊（Gallery）保持纯浏览心智，不改写表单。
+4. **草稿保护**：表单与「干净基准快照」逐字段比较判断是否有未提交的手动修改（改回原样会重新变干净）。有草稿时点胶卷仍然切预览，但保留左侧草稿并提示「已保留当前草稿」；要从作品参数覆盖草稿，仍用大图上的「带回参数」。
+5. **「版本微调」与「新建创作」边界**：回填后参数面板顶部显示「正在微调：<作品提示词>」并常驻「新建创作」按钮。新建创作只清掉绑定到上一张作品的状态（提示词、参考图、固定 Seed、微调来源与脏状态），排除项回到当前 CFG 下的预设推荐值；当前模型预设与画幅尺寸保留，避免每次重置都被打回默认。
+6. **测试**：纯逻辑 `src/logic/form.js`（`formSnapshotOf` / `isFormDirty` / `newCreationPatch`）与 `src/logic/generate.js` 的 `formSummaryOf`、`iteratePatch` 增强；`check-client-logic` 71 项、`check-client-render` 86 项覆盖代次守卫、上下文隔离、草稿保护与新建创作边界。
+
+### 5.15 第十一批交互补充（画布局部重绘 Inpaint，0.12.0）
+
+> 设计依据：[AGENT_BATCH_AND_INPAINT_PLAN.md](AGENT_BATCH_AND_INPAINT_PLAN.md) §三。
+
+1. **入口与能力门控**：用「以此图重绘」挂上参考图后，画面预览出现「局部涂抹」；只有当前预设
+   `supportsInpaint = true`（首期 SDXL 家族）才渲染入口，不支持的模型隐藏入口并说明原因。切到不支持
+   的模型时**保留已画的蒙版**并提示会保留，切回支持的模型可继续用，不静默丢弃。
+2. **涂抹层**：透明 canvas 蒙版叠在参考图上（screen 混合显示白色笔迹），画布按参考图比例缩放（长边
+   1024，避免几 MB 的蒙版）；工具栏提供画笔大小（8~96，步长 4）、橡皮擦、清空蒙版、反选区域与完成。
+   指针 / 触控用 Pointer Events + pointer capture，键盘用方向键移动、Space/Enter 落笔、Esc 完成，工具
+   热区 ≥44px。
+3. **导出与提交**：每笔结束把画布导出为黑底白字 PNG（`canvas.toDataURL()`），剥掉 data URL 前缀后写入
+   表单 `reference.mask = { data, coverage, digest }`；提交体为 `reference.mask`（裸 base64，≤
+   `LIMITS.mask.maxBytes`）。未涂抹 / 涂抹面积低于最小有效比例（0.05%）时**不出现** `mask` 字段，请求体
+   与纯图生图逐字一致。
+4. **清理语义**：换参考图、移除参考图、胶卷回填、新建创作都会清掉蒙版（`reference` 整块替换或置空）；
+   生成变体 / 重试沿用当前参考图与蒙版；蒙版指纹纳入表单脏判定（`formSnapshotOf` 用 FNV-1a 指纹而不是
+   把几 MB base64 拼进快照），画过一笔即视为有未提交修改，胶卷点击走草稿保护。
+5. **降级**：当前数据里 `supportsInpaint = false` 的模型同时 `supportsImg2Img = false`，会被既有的
+   「参考图与预设能力不匹配」拦下；若将来出现「支持垫图但不支持局部重绘」的模型，`buildBody` 不提交
+   `mask`，界面提示会保留蒙版。
+6. **测试**：`src/logic/mask.js` 纯逻辑（画笔 / 状态归一、画布比例、导出前置校验、指纹）与 `src/logic/preset.js`
+   的 `supportsInpaint` 进 `check-client-logic`；`check-client-render` 覆盖入口按能力显隐、工具栏键盘 / 触控
+   结构、导出后按 `reference.mask` 提交与清理入口。真机显存与画质验收见 ROADMAP 第十条。
+7. **专用局部重绘预设（`sdxl-inpaint`）**：9 通道 inpaint 专用权重，加载后即为局部重绘管线
+   （不走 `from_pipe`）。它是 `inpaintOnly` 预设：只能带参考图 + 蒙版使用，缺任一项时生成按钮旁给出
+   说明并拦下提交；参考图兜底预设与「以此图重绘」的自动切换会跳过它。真机验收（2026-11-16）
+   结论：整图蒙版 + 提示词时文本遵循完整（如「蓝色大象」可完整生成）；**小蒙版时强度需要接近上限
+   才会明显替换**（0.8 下原图上下文压过提示词），因此涂抹模式对这类预设的默认强度取 0.9。
+8. **重绘强度默认值与量化**：打开涂抹模式时，如果重绘强度仍是契约默认值（`LIMITS.strength.default`，0.6），
+   前端自动抬到局部重绘默认档 `MASK_STRENGTH_DEFAULT`（0.8）；用户手动调过的值不覆盖，契约区间 0.2~0.9
+   与步长不变。依据是 2026-11-16 真机验收：4 步 SDXL Lightning 下 `strength=0.6` 只跑 2 步、蒙版区变化
+   约 3.8/255（偏弱）；`≥0.76` 跑 3 步、约 25/255（明显重写）。注意 diffusers 的
+   `int(num_inference_steps × strength)` 会量化有效步数：4 步模型上 0.76~1.0 都落到同一档（0.8 与 0.9
+   输出逐字节相同），所以「强度再往上调」在这类模型上没有额外效果。大面积蒙版在高强度下边界可能有可见
+   硬接缝（底座走 4 通道「每步混回未涂抹区」分支的固有表现），实际笔刷小区域更自然。

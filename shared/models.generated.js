@@ -32,6 +32,8 @@ export const PUBLIC_PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       768,
@@ -68,6 +70,8 @@ export const PUBLIC_PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       768,
@@ -103,6 +107,8 @@ export const PUBLIC_PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       512,
@@ -146,6 +152,8 @@ export const PUBLIC_PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       768,
@@ -188,6 +196,46 @@ export const PUBLIC_PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
+    "supportsNegative": true,
+    "sizeOptions": [
+      768,
+      1024,
+      1152
+    ]
+  },
+  {
+    "id": "sdxl-inpaint",
+    "label": "SDXL Inpaint",
+    "family": "SDXL",
+    "short": "Inpaint",
+    "description": {
+      "zh": "局部重绘专用权重（9 通道），涂抹边界融合最自然",
+      "en": "Dedicated 9-channel inpainting weights for seamless local repaints"
+    },
+    "repo": "diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
+    "params": "3.5B",
+    "license": "OpenRAIL++",
+    "licenseKind": "open",
+    "gated": false,
+    "gpus": 1,
+    "downloadGb": null,
+    "size": 1024,
+    "steps": 30,
+    "stepRange": null,
+    "cfg": 8,
+    "peakVramMb": null,
+    "loadSeconds": null,
+    "steadySeconds": 22.4,
+    "tier": "quality",
+    "negativeHint": "blurry, low quality, deformed, extra limbs",
+    "promptStyle": "natural",
+    "qualityPrefix": "",
+    "supportsChinese": false,
+    "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": true,
     "supportsNegative": true,
     "sizeOptions": [
       768,
@@ -231,6 +279,8 @@ export const PUBLIC_PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       768,
@@ -266,6 +316,8 @@ export const PUBLIC_PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": true,
     "supportsImg2Img": false,
+    "supportsInpaint": false,
+    "inpaintOnly": false,
     "supportsNegative": false,
     "sizeOptions": [
       768,
@@ -308,6 +360,8 @@ export const PUBLIC_PRESETS = [
     "qualityPrefix": "masterpiece, best quality, highres",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       768,
@@ -350,6 +404,8 @@ export const PUBLIC_PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": false,
+    "supportsInpaint": false,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       768,
@@ -389,6 +445,8 @@ export const PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       768,
@@ -447,6 +505,8 @@ export const PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       768,
@@ -504,6 +564,8 @@ export const PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       512,
@@ -563,6 +625,8 @@ export const PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       768,
@@ -624,6 +688,8 @@ export const PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       768,
@@ -644,6 +710,55 @@ export const PRESETS = [
         "**/*.txt",
         "**/*.fp16.safetensors"
       ],
+      "deviceMap": null
+    }
+  },
+  {
+    "id": "sdxl-inpaint",
+    "label": "SDXL Inpaint",
+    "family": "SDXL",
+    "short": "Inpaint",
+    "description": {
+      "zh": "局部重绘专用权重（9 通道），涂抹边界融合最自然",
+      "en": "Dedicated 9-channel inpainting weights for seamless local repaints"
+    },
+    "repo": "diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
+    "params": "3.5B",
+    "license": "OpenRAIL++",
+    "licenseKind": "open",
+    "gated": false,
+    "gpus": 1,
+    "downloadGb": null,
+    "size": 1024,
+    "steps": 30,
+    "stepRange": null,
+    "cfg": 8,
+    "peakVramMb": null,
+    "loadSeconds": null,
+    "steadySeconds": 22.4,
+    "tier": "quality",
+    "negativeHint": "blurry, low quality, deformed, extra limbs",
+    "promptStyle": "natural",
+    "qualityPrefix": "",
+    "supportsChinese": false,
+    "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": true,
+    "supportsNegative": true,
+    "sizeOptions": [
+      768,
+      1024,
+      1152
+    ],
+    "pipeline": {
+      "loader": "sdxl",
+      "base": "diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
+      "lora": null,
+      "scheduler": null,
+      "variant": "fp16",
+      "nativeInpaint": true,
+      "downloadGb": 7,
+      "allowPatterns": null,
       "deviceMap": null
     }
   },
@@ -683,6 +798,8 @@ export const PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       768,
@@ -739,6 +856,8 @@ export const PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": true,
     "supportsImg2Img": false,
+    "supportsInpaint": false,
+    "inpaintOnly": false,
     "supportsNegative": false,
     "sizeOptions": [
       768,
@@ -791,6 +910,8 @@ export const PRESETS = [
     "qualityPrefix": "masterpiece, best quality, highres",
     "supportsChinese": false,
     "supportsImg2Img": true,
+    "supportsInpaint": true,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       768,
@@ -852,6 +973,8 @@ export const PRESETS = [
     "qualityPrefix": "",
     "supportsChinese": false,
     "supportsImg2Img": false,
+    "supportsInpaint": false,
+    "inpaintOnly": false,
     "supportsNegative": true,
     "sizeOptions": [
       768,

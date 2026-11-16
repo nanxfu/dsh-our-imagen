@@ -316,6 +316,9 @@ export const zh = {
   'studio.toast.copied': '已复制文件绝对路径',
   'studio.toast.submitted': '已提交生图任务',
   'studio.toast.recalled': '参数已回填',
+  // 胶卷点击遇到未提交的手动修改：只换预览、保留草稿。
+  'studio.toast.draftKept': '已保留当前草稿',
+  'studio.toast.newCreation': '已开始新的创作',
   'studio.toast.favorited': '已加入收藏',
   'studio.toast.unfavorited': '已取消收藏',
   'studio.toast.deleted': '已删除',
@@ -412,6 +415,10 @@ export const zh = {
   'studio.rail.advanced': '高级设置',
   'studio.rail.params': '步数 / 引导强度 / 随机种子',
   'studio.rail.followReference': '跟随参考图',
+  // 版本微调：当前表单参数来自哪张作品；「新建创作」清掉这层绑定回到干净起点。
+  'studio.rail.tuning': '正在微调：{prompt}',
+  'studio.rail.tuningUnknown': '当前作品',
+  'studio.rail.newCreation': '新建创作',
 
   // ── 参考图与垫图重绘 ─────────────────────────────────────────
   'studio.reference.title': '参考图',
@@ -424,6 +431,23 @@ export const zh = {
   'studio.reference.applied': '已设为参考图，可调整重绘强度。',
   'studio.reference.unavailable': '当前宿主版本不支持垫图重绘，无法把作品设为参考图。',
   'studio.reference.noPath': '这张作品没有可用的文件路径，无法作为参考图。',
+
+  // ── 局部涂抹（Inpaint） ──────────────────────────────────────
+  'studio.mask.toggle': '局部涂抹',
+  'studio.mask.title': '局部重绘',
+  'studio.mask.hint': '在图上涂抹要重绘的区域；未涂抹的区域保持不变。',
+  'studio.mask.brush': '画笔大小',
+  'studio.mask.eraser': '橡皮擦',
+  'studio.mask.clear': '清空蒙版',
+  'studio.mask.invert': '反选区域',
+  'studio.mask.close': '完成涂抹',
+  'studio.mask.coverage': '已涂抹 {percent}%',
+  'studio.mask.applied': '已涂抹 {percent}%，生成时只重绘这部分区域。',
+  'studio.mask.empty': '还没有涂抹区域，生成时仍按整图重绘。',
+  'studio.mask.unsupported': '当前模型不支持局部重绘，请切换到 SDXL 系列模型。',
+  'studio.mask.kept': '已涂抹的蒙版会保留，切回支持局部重绘的模型后可继续使用。',
+  'studio.mask.tooLarge': '蒙版体积超过上限，未保存；请减少涂抹面积后重试。',
+  'studio.mask.canvasLabel': '局部涂抹画布：方向键移动画笔，空格键或回车键落笔，Esc 完成涂抹。',
 
   // ── 创作助手 ─────────────────────────────────────────────────
   'studio.chat.assistant': '创作助手',
@@ -451,7 +475,15 @@ export const zh = {
   'studio.chat.done': '已生成，点击缩略图放大。',
   'studio.chat.empty': '描述你想要的画面，Enter 发送。',
   'studio.chat.placeholder': '描述你想看到的画面…',
-  'studio.chat.clear': '清空对话',
+  'studio.chat.newChat': '新建对话',
+  // 表单提交同步到助手：记录标题 + 参数胶囊标签（记录本身不进意图上下文）。
+  'studio.chat.formSync.form': '来自参数表单',
+  'studio.chat.formSync.variant': '生成变体',
+  'studio.chat.formSync.retry': '重试上次参数',
+  'studio.chat.formSync.reference': '含参考图',
+  'studio.chat.formSync.textOnly': '文生图',
+  'studio.chat.formSync.seed': '种子 {seed}',
+  'studio.chat.formSync.seedRandom': '随机种子',
 
   // ── 第二批：任务取消 / 英译 / 尺寸档位 / 分页 / 日志诊断 ──────────────
   'job.status.cancelled': '已取消',
@@ -482,4 +514,7 @@ export const zh = {
   'studio.update.hint': '可在 DSH 设置 → 插件管理里更新，或按 README 的安装方式重新安装并重启 DSH。',
   'studio.update.notes': '查看更新说明',
   'studio.update.requiresDsh': '新版本要求 DSH {range}，请先升级 DSH。',
+  'studio.mask.guide': '小技巧：蒙版要包住要替换的整个物体（含边缘），一次只改一个物体；大面积整块涂抹容易出现接缝。',
+  'studio.mask.fastModelHint': '当前是少步快速模型，局部重绘的改动幅度有限；需要明显改写时建议换 SDXL Base / RealVis 等多步模型。',
+  'studio.mask.onlyHint': '当前是局部重绘专用模型：请先「以此图重绘」并涂抹蒙版后再生成。',
 }

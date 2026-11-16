@@ -36,8 +36,9 @@ export function lastIntentPrompt(messages) {
 /**
  * 对话消息 → 意图请求的多轮上下文。
  *
- * 只取用户原话与助手意图卡上的英文提示词：任务气泡、错误气泡与结果缩略图
- * 不进模型上下文。空内容丢弃，单条按契约截断，最后保留最近
+ * 只取用户原话与助手意图卡上的英文提示词：任务气泡、错误气泡、结果缩略图与
+ * 表单提交同步记录（`kind='form'`，只是界面展示，不是用户说过的话）都不进模型上下文。
+ * 空内容丢弃，单条按契约截断，最后保留最近
  * `LIMITS.intentHistory.maxMessages` 条（首尾顺序不变）。
  */
 export function intentHistory(messages) {
@@ -48,6 +49,8 @@ export function intentHistory(messages) {
     let role = ''
     let content = ''
     if (message.role === 'user') {
+      // 带 kind 的用户记录（如 kind='form' 的表单提交同步）不是用户原话，不传给意图模型。
+      if (message.kind) continue
       role = 'user'
       content = typeof message.text === 'string' ? message.text.trim() : ''
     } else if (message.role === 'assistant' && message.kind === 'intent') {

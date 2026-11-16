@@ -45,6 +45,53 @@ function modelLabelOf(presetId) {
   return preset ? (preset.label || preset.short || preset.id) : ''
 }
 
+/** 表单提交同步记录的小标题：普通表单提交 / 生成变体 / 重试上次参数。 */
+function formSyncTitle(t, source) {
+  if (source === 'variant') return t('studio.chat.formSync.variant')
+  if (source === 'retry') return t('studio.chat.formSync.retry')
+  return t('studio.chat.formSync.form')
+}
+
+/**
+ * 表单提交的参数摘要 → 紧凑胶囊。
+ *
+ * 展示顺序固定：模型 → 画幅比例与像素 → 张数 → 是否带参考图 → 种子策略，
+ * 与表单提交时的请求体一一对应，用户不用回参数面板就能看懂这次是怎么生成的。
+ */
+function formSyncChips(t, message) {
+  const summary = message && message.summary && typeof message.summary === 'object' ? message.summary : null
+  if (!summary) return []
+  const chips = []
+  const model = modelLabelOf(summary.presetId) || (typeof summary.presetId === 'string' ? summary.presetId : '')
+  if (model) chips.push({ key: 'model', text: model })
+  const width = Number(summary.width)
+  const height = Number(summary.height)
+  if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) {
+    const size = `${Math.round(width)} × ${Math.round(height)}`
+    chips.push({
+      key: 'size',
+      text: typeof summary.ratioId === 'string' && summary.ratioId ? `${summary.ratioId} · ${size}` : size,
+    })
+  }
+  const count = Number(summary.count)
+  if (Number.isFinite(count) && count > 0) {
+    chips.push({ key: 'count', text: `${Math.round(count)} ${t('unit.image')}` })
+  }
+  chips.push({
+    key: 'reference',
+    text: summary.hasReference === true ? t('studio.chat.formSync.reference') : t('studio.chat.formSync.textOnly'),
+  })
+  const seedValue = summary.seed
+  // Number(null) === 0，不能直接 Number()：没有固定种子时 summary.seed 是 null。
+  const seed = seedValue === null || seedValue === undefined || seedValue === '' ? NaN : Number(seedValue)
+  if (Number.isFinite(seed) && seed >= 0) {
+    chips.push({ key: 'seed', text: formatText(t('studio.chat.formSync.seed'), { seed: Math.trunc(seed) }) })
+  } else {
+    chips.push({ key: 'seed', text: t('studio.chat.formSync.seedRandom') })
+  }
+  return chips
+}
+
 export function ChatPanel(props) {
   const { t, ui, form, chat, library, actions } = props
   const { panelMode: mode, setPanelMode: setMode } = ui
@@ -58,7 +105,7 @@ export function ChatPanel(props) {
     toggleIntentLockSeed,
     canLockSeed,
     resolveClarify,
-    clearThread,
+    newChat,
   } = chat
   const { openMessage: openImage } = library
   const { sending } = actions
@@ -83,6 +130,12 @@ export function ChatPanel(props) {
     interpret(text)
   }
 
+  /** 新建对话：清空线程与输入草稿；解析中的在途请求由 useChatThread 的代次守卫丢弃。 */
+  function startNewChat() {
+    if (typeof newChat === 'function') newChat()
+    setDraft('')
+  }
+
   function openMessage(message) {
     if (message.onOpen) message.onOpen()
     else if (message.imagePath) openImage(message.imagePath)
@@ -94,6 +147,30 @@ export function ChatPanel(props) {
     if (!handoffIntent(message)) return
     if (typeof setMode === 'function') setMode('form')
     if (ui && typeof ui.showToast === 'function') ui.showToast(t('studio.chat.intent.handoffDone'))
+  }
+
+  /**
+   * 表单提交同步记录：与普通用户气泡区分——白卡 + 标题 + 参数胶囊。
+   * 记录只用于回看这次提交是怎么发出去的，不进入意图上下文（见 logic/intent.js）。
+   */
+  function renderFormSync(message) {
+    const chips = formSyncChips(t, message)
+    const prompt = typeof message.text === 'string' ? message.text : ''
+    return (
+      <div className="ofs-msg ofs-form-sync" key={message.id}>
+        <div className="ofs-msg-card ofs-form-sync-card">
+          <span className="ofs-form-sync-title">{formSyncTitle(t, message.source)}</span>
+          {prompt ? <p className="ofs-form-sync-prompt" title={prompt}>{prompt}</p> : null}
+          {chips.length > 0 ? (
+            <div className="ofs-form-sync-chips">
+              {chips.map((chip) => (
+                <span className="ofs-chip ofs-form-sync-chip" key={chip.key}>{chip.text}</span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    )
   }
 
   /** 通用澄清卡：问题 + 2~4 个选项 + 「先按当前设置」。 */
@@ -298,12 +375,17 @@ export function ChatPanel(props) {
           </div>
         ) : null}
 
-        {messages.map((message) => (
-          message.role === 'user' ? (
-            <div className="ofs-msg ofs-msg--user" key={message.id}>
-              <p>{message.text}</p>
-            </div>
-          ) : (
+        {messages.map((message) => {
+          if (message.role === 'user') {
+            // 表单提交同步记录走独立卡片，与自然语言用户气泡区分开。
+            if (message.kind === 'form') return renderFormSync(message)
+            return (
+              <div className="ofs-msg ofs-msg--user" key={message.id}>
+                <p>{message.text}</p>
+              </div>
+            )
+          }
+          return (
             <div className="ofs-msg ofs-msg--assistant" key={message.id}>
               {message.kind === 'intent' || message.kind === 'error' ? null : (
                 <div className="ofs-chat-author">
@@ -314,7 +396,7 @@ export function ChatPanel(props) {
               {renderAssistant(message)}
             </div>
           )
-        ))}
+        })}
 
         {interpreting ? (
           <div className="ofs-msg ofs-msg--assistant">
@@ -328,8 +410,9 @@ export function ChatPanel(props) {
 
       <div className="ofs-chat-dock">
         <div className="ofs-chat-tools">
-          <button type="button" className="ofs-chip" onClick={clearThread} disabled={messages.length === 0}>
-            {t('studio.chat.clear')}
+          {/* 语义是「开一个新话题」，不是删记录：清空线程并复位解析中状态。 */}
+          <button type="button" className="ofs-chip ofs-chat-new" onClick={startNewChat} disabled={messages.length === 0}>
+            {t('studio.chat.newChat')}
           </button>
         </div>
 

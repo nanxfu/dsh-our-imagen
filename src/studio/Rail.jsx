@@ -15,6 +15,7 @@ import React from 'react'
 
 import { COUNT_OPTIONS } from '../constants.js'
 import { clampSize } from '../logic/clamp.js'
+import { formatText } from '../logic/format.js'
 import { Icon } from './icons.jsx'
 import { PanelModeTabs } from './PanelModeTabs.jsx'
 import { FrameSection } from './rail/FrameSection.jsx'
@@ -68,6 +69,11 @@ export function Rail(props) {
     referenceBlocked,
     applyStrength,
     removeReference,
+    // 微调来源（从胶卷 / 画廊回填而来）与「新建创作」重置入口。
+    tuning,
+    newCreation,
+    // 专用局部重绘模型：缺蒙版时常驻一条「需要先涂抹」的说明。
+    maskRequiredBlocked,
   } = form
   const { sending, generate } = actions
 
@@ -75,6 +81,15 @@ export function Rail(props) {
   const currentWidth = clampSize(fields.width)
   const currentHeight = clampSize(fields.height)
   const frameSizeText = `${currentWidth} × ${currentHeight}`
+
+  // 微调来源：当前参数来自哪张作品；提示只说明状态，不拦截任何操作。
+  const tuningPrompt = tuning && typeof tuning === 'object' && typeof tuning.prompt === 'string'
+    ? tuning.prompt.trim()
+    : ''
+  const tuningText = formatText(t('studio.rail.tuning'), {
+    prompt: tuningPrompt || t('studio.rail.tuningUnknown'),
+  })
+  const startNewCreation = typeof newCreation === 'function' ? newCreation : () => {}
 
   // 排除项：只有当前模型 + CFG 真的消费负向词时才出现（Host 与 Client 共用同一判定）。
   const showNegative = negativeActive === true
@@ -101,7 +116,21 @@ export function Rail(props) {
     <aside className="ofs-panel ofs-panel--form">
       <PanelModeTabs t={t} mode={mode} setMode={setMode} />
 
+      {/* 版本微调与新建创作的边界：有微调来源时说明基于哪张作品，右侧随时可开新创作。 */}
+      <div className={tuning ? 'ofs-tuning' : 'ofs-tuning is-idle'}>
+        {tuning ? (
+          <p className="ofs-tuning-source" title={tuningPrompt || undefined}>{tuningText}</p>
+        ) : null}
+        <button type="button" className="ofs-chip ofs-tuning-new" onClick={startNewCreation}>
+          {t('studio.rail.newCreation')}
+        </button>
+      </div>
+
       <div className="ofs-panel-scroll">
+        {maskRequiredBlocked ? (
+          <p className="ofs-hint ofs-rail-note">{t('studio.mask.onlyHint')}</p>
+        ) : null}
+
         <PromptSection
           t={t}
           prompt={fields.prompt}

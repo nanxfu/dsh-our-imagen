@@ -41,6 +41,7 @@
   "sizeOptions": [768, 1024, 1152],
   "runtime": "default",
   "supportsImg2Img": true,
+  "supportsInpaint": true,
   "supportsNegative": true,
   "pipeline": {
     "loader": "sdxl-lora",
@@ -82,6 +83,8 @@
 | `promptStyle` / `qualityPrefix` | 提示词配方：提示词的书写口径与质量词前缀，见 §2.1 |
 | `runtime` | 运行时底座。当前只允许 `"default"`（统一验证过的环境） |
 | `supportsImg2Img` | 图生图（垫图重绘）能力。可缺省，缺省按 `false`；只有能用 `AutoPipelineForImage2Image.from_pipe` 复用整管的模型才能标 `true`，见 §2.2 |
+| `supportsInpaint` | 局部重绘（涂抹蒙版）能力。可缺省，缺省按 `false`；只有能用 `AutoPipelineForInpainting.from_pipe` 复用同一底座的模型才能标 `true`，且必须同时 `supportsImg2Img = true`，见 §2.2 |
+| `inpaintOnly` | 专用局部重绘权重：只能带蒙版使用，不能文生图 / 纯图生图。可缺省，缺省按 `false`；标 `true` 时 `supportsInpaint` 必须为 `true` 且 `pipeline.nativeInpaint` 必须为 `true`，见 §2.2 |
 | `supportsNegative` | 负向提示词能力：模型管线是否真的消费 `negative_prompt`。必填布尔值，见 §2.3 |
 | `pipeline` | 下发给远端 Daemon 的加载描述；`downloadGb` 用于下载前磁盘预检 |
 | `measured` | 靶场实测指标：峰值显存、加载耗时、稳态耗时、实际下载量。未实测的字段填 `null` |
@@ -112,26 +115,54 @@
 
 校验：`tools/build-assets.mjs` 要求两个字段必须存在，且 `promptStyle` 必须在上表枚举内；`npm run models:check` 会一并校验。
 
-### 2.2 图生图能力（supportsImg2Img）
+### 2.2 图生图与局部重绘能力（supportsImg2Img / supportsInpaint）
+
+图生图与局部重绘共用同一条「复用已加载底座」的零显存路径，因此放在一起说明。
+
+`supportsImg2Img`：
 
 | 取值 | 含义 |
 | :--- | :--- |
 | `true` | 支持垫图重绘：客户端可以放参考图，远端用 `AutoPipelineForImage2Image.from_pipe()` 复用已加载的文生图底座，不额外占显存 |
 | `false`（缺省） | 不支持：客户端参考图槽位不可用（自动切到支持的预设）；远端对带 `reference` 的请求返回 `invalid_request`，文案为「该模型不支持垫图重绘」 |
 
+`supportsInpaint`：
+
+| 取值 | 含义 |
+| :--- | :--- |
+| `true` | 支持局部重绘：参考图上可以附带黑白蒙版（白 = 重绘区域、黑 = 保留区域），远端用 `AutoPipelineForInpainting.from_pipe()` 复用同一底座，不额外占显存 |
+| `false`（缺省） | 不支持：客户端不显示涂抹入口；远端对带 `reference.mask` 的请求返回 `invalid_request`，文案明确「该模型不支持局部重绘」 |
+
 判定标准：
 
-- 模型必须是可被 diffusers 整管复用的模型（当前 `pipeline.loader` 为 `sdxl` / `sdxl-lora`），其组件能被 `AutoPipelineForImage2Image.from_pipe()` 直接复用；
-- M3 首期只开放 SDXL 家族（含 SDXL + LoRA 组合）；`flux2` / `anima` 等特殊 loader 暂不支持，标 `false`；
-- 标 `true` 前必须在真机用一张参考图跑通一次重绘，并按 §3 的验证流程记录结果。
+- 模型必须是可被 diffusers 整管复用的模型（当前 `pipeline.loader` 为 `sdxl` / `sdxl-lora`），其组件能被 `AutoPipelineForImage2Image.from_pipe()` / `AutoPipelineForInpainting.from_pipe()` 直接复用；
+- 首期（0.12.0）只开放 SDXL 家族（含 SDXL + LoRA 组合）；`flux2` / `anima` 等特殊 loader 暂不支持，两者都标 `false`；
+- `supportsInpaint = true` 必须同时 `supportsImg2Img = true`（蒙版叠在参考图上，没有参考图就无从重绘），`tools/build-assets.mjs` 会校验这条联合约束；
+- 标 `true` 前必须在真机用一张参考图（局部重绘还要加一张蒙版）跑通一次，并按 §3 的验证流程记录结果。
 
-消费方：
+**专用局部重绘权重（`inpaintOnly` + `pipeline.nativeInpaint`）**：
 
-- 客户端：`shared/contract.js` 的 `publicPresets()` 只剔除 `pipeline`，`supportsImg2Img` 随预设公开视图下发；参考图槽位与画廊「以此图重绘」按该字段决定是否可用，不支持时自动切到支持预设。
-- Host：提交 `/generate` 前校验参考图的来源、格式、体积与 `strength` 边界；参考图二进制不进任务公开视图，只把 `sourcePath` / `strength` 记进产物 meta。
-- daemon：`SUPPORTED_IMG2IMG_LOADERS`（`sdxl` / `sdxl-lora`）是最后一道兜底，其它 loader 一律按 `invalid_request` 拒绝（文案「该模型不支持垫图重绘」）。
+通用底座（4 通道 UNet）的局部重绘靠 `from_pipe` 派生，走的是「每步把未涂抹区域混回」的兼容路径，边界融合质量有限。
+对「只做局部重绘」的专用权重（9 通道 UNet，如 `diffusers/stable-diffusion-xl-1.0-inpainting-0.1`）：
 
-校验：`tools/build-assets.mjs` 要求该字段若存在必须是布尔值；缺省按 `false` 归一后写入 `shared/models.generated.js`（`npm run models:check` 会一并校验生成物同步）。
+| 字段 | 取值 | 说明 |
+| :--- | :--- | :--- |
+| `inpaintOnly` | `true` | 模型只能带蒙版使用：客户端缺蒙版时拦下生成并提示，Host 入队前拒绝，daemon 提交期再兜一层 |
+| `pipeline.nativeInpaint` | `true` | 告诉 daemon 用 `AutoPipelineForInpainting.from_pretrained` 加载（而不是文生图工厂）；加载后的底座本身就是 inpaint 管线，`ensure_inpaint_pipeline()` 直接复用、不再 `from_pipe` |
+
+约束与消费方：
+
+- `inpaintOnly = true` 时 `supportsInpaint` 必须为 `true`、`pipeline.nativeInpaint` 必须为 `true`，`supportsImg2Img` 仍建议标 `true`（界面据此保留参考图槽位）；
+- 客户端：`inpaintOnlyOf()` 判断专用模型；缺参考图或蒙版时 `maskRequiredBlocked` 置位，生成被拦下并提示先「以此图重绘」+ 涂抹；参考图兜底预设（`referencePresetOf`）跳过这类模型；
+- Host：`JobQueue.submit` 在入队前拒绝「专用模型 + 无蒙版」的请求（`invalid_request`）；
+- daemon：提交期 `parse_reference_spec` 拒绝无蒙版的文生图/纯图生图请求；执行期 `run_task` 有同等兜底；这类模型不参与 `img2img_loaders` 的 `from_pipe` 路径。
+
+通用能力字段（`supportsImg2Img` / `supportsInpaint`）的消费方：
+- 客户端：`shared/contract.js` 的 `publicPresets()` 只剔除 `pipeline`，能力字段随预设公开视图下发；参考图槽位、画廊「以此图重绘」与涂抹入口按字段决定是否可用，不支持时自动切到支持预设或置灰提示。
+- Host：提交 `/generate` 前校验参考图与蒙版的来源、格式、体积、尺寸边界与 `strength`；二进制不进任务公开视图，只把 `sourcePath` / `strength` / 是否带蒙版记进产物 meta。
+- daemon：`SUPPORTED_IMG2IMG_LOADERS` / `SUPPORTED_INPAINT_LOADERS`（均为 `sdxl` / `sdxl-lora`）是最后一道兜底，其它 loader 一律按 `invalid_request` 拒绝，不信任客户端标记。
+
+校验：`tools/build-assets.mjs` 要求两个字段若存在必须是布尔值，且 `supportsInpaint` 不能脱离 `supportsImg2Img`；缺省按 `false` 归一后写入 `shared/models.generated.js`（`npm run models:check` 会一并校验生成物同步）。
 
 ### 2.3 负向提示词能力（supportsNegative）
 
@@ -142,7 +173,7 @@
 | `true` | 管线接受负向提示词：`negative_prompt` 会参与条件编码（SDXL 家族在 `cfg > 0` 时生效，`anima` 运行时在 CFG > 1 时作为无条件分支参与引导，推荐 CFG=4） |
 | `false` | 管线没有负向词输入，传了也会被丢弃；客户端与助手应隐藏「排除项」，避免用户填写无效参数 |
 
-当前 9 个预设中只有 `flux2-klein-4b` 为 `false`：diffusers 的 `Flux2Pipeline.__call__` 没有 `negative_prompt` 参数，`remote/daemon.py` 的 `run_task()` 按 `__call__` 签名（`STATE.sig_params`）过滤参数，即使请求里带了负向词也不会传进管线。其余 8 个（`sdxl-lightning` / `hyper-sdxl-8step` / `sdxl-turbo` / `playground-v2.5` / `sdxl-base` / `realvis-v5` / `animagine-xl-3.1` / `anima-light-lavender`）为 `true`：SDXL 家族走 diffusers 的 `negative_prompt` 形参；`anima-light-lavender` 的自定义运行时显式接收并使用负向词。
+当前 10 个预设中只有 `flux2-klein-4b` 为 `false`：diffusers 的 `Flux2Pipeline.__call__` 没有 `negative_prompt` 参数，`remote/daemon.py` 的 `run_task()` 按 `__call__` 签名（`STATE.sig_params`）过滤参数，即使请求里带了负向词也不会传进管线。其余 9 个（`sdxl-lightning` / `hyper-sdxl-8step` / `sdxl-turbo` / `playground-v2.5` / `sdxl-base` / `sdxl-inpaint` / `realvis-v5` / `animagine-xl-3.1` / `anima-light-lavender`）为 `true`：SDXL 家族走 diffusers 的 `negative_prompt` 形参（专用 inpaint 权重同样支持）；`anima-light-lavender` 的自定义运行时显式接收并使用负向词。
 
 判定标准：
 

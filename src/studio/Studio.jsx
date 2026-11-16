@@ -120,7 +120,7 @@ export function Studio(props) {
         </div>
 
         {ui.view === 'studio' ? (
-          <Filmstrip t={t} ui={ui} compute={compute} library={library} now={now} />
+          <Filmstrip t={t} ui={ui} compute={compute} library={library} actions={actions} now={now} />
         ) : null}
       </div>
 

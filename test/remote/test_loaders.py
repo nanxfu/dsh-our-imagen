@@ -34,11 +34,14 @@ class LoaderRegistryBoundaryTest(DaemonUnitTest):
             remote_registry.default_registry(),
             "daemon 与 pipeline_loader 必须是同一份注册表，否则白名单会出现两个版本",
         )
-        # 白名单与垫图能力是注册表的只读投影，不是第二份常量。
+        # 白名单与垫图 / 局部重绘能力是注册表的只读投影，不是第二份常量。
         self.assertEqual(d.SUPPORTED_LOADERS, d.LOADERS.names())
         self.assertEqual(d.SUPPORTED_IMG2IMG_LOADERS, d.LOADERS.img2img_names())
+        self.assertEqual(d.SUPPORTED_INPAINT_LOADERS, d.LOADERS.inpaint_names())
         self.assertEqual(d.SUPPORTED_LOADERS, ("sdxl", "sdxl-lora", "flux2", "anima"))
         self.assertEqual(d.SUPPORTED_IMG2IMG_LOADERS, ("sdxl", "sdxl-lora"))
+        # 首期局部重绘只对 SDXL 家族开放：与垫图名单独立登记，互不连坐。
+        self.assertEqual(d.SUPPORTED_INPAINT_LOADERS, ("sdxl", "sdxl-lora"))
 
     def test_daemon_no_longer_branches_on_loader_names(self) -> None:
         source = DAEMON_PATH.read_text(encoding="utf-8")
@@ -355,6 +358,62 @@ class LoaderFamilyBuildTest(DaemonUnitTest):
             d.build_pipeline({"loader": "anima", "base": "org/anima", "allowPatterns": ["*.safetensors"]})
         self.assertEqual(calls, ["capacity", "prefetch"])
 
+class NativeInpaintLoaderTest(DaemonUnitTest):
+    """sdxl loader 的 nativeInpaint 分支：用 AutoPipelineForInpainting 加载专用权重。"""
+
+    def _build(self, pipeline_spec: dict):  # noqa: ANN202
+        used_factories: list[str] = []
+
+        class FakePipe:
+            def __init__(self) -> None:
+                self.scheduler = types.SimpleNamespace(config={"num_train_timesteps": 1000})
+                self.device = None
+
+            def to(self, device: str):
+                self.device = device
+                return self
+
+        def factory(name: str):
+            class FakeFactory:
+                @staticmethod
+                def from_pretrained(source, **_kwargs):
+                    used_factories.append(name)
+                    return FakePipe()
+
+            return FakeFactory
+
+        fake_torch = types.ModuleType("torch")
+        fake_torch.float16 = "float16"
+        fake_diffusers = types.ModuleType("diffusers")
+        fake_diffusers.AutoPipelineForText2Image = factory("text2img")
+        fake_diffusers.AutoPipelineForInpainting = factory("inpaint")
+
+        with (
+            mock.patch.dict(sys.modules, {"torch": fake_torch, "diffusers": fake_diffusers}),
+            mock.patch.object(d.CACHE, "resolve_local_model", return_value=None),
+            mock.patch.object(d.CACHE, "ensure_disk_capacity"),
+            mock.patch.object(d.CACHE, "prefetch_weights"),
+        ):
+            pipe, loaded = d.build_pipeline(pipeline_spec)
+        return pipe, loaded, used_factories
+
+    def test_native_inpaint_uses_inpainting_factory(self) -> None:
+        pipe, loaded, factories = self._build(
+            {
+                "loader": "sdxl",
+                "base": "diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
+                "nativeInpaint": True,
+            }
+        )
+        self.assertEqual(factories, ["inpaint"], "nativeInpaint 必须用 AutoPipelineForInpainting")
+        self.assertEqual(loaded, "sdxl:diffusers/stable-diffusion-xl-1.0-inpainting-0.1")
+        self.assertEqual(pipe.device, "cuda")
+
+    def test_regular_sdxl_still_uses_text2img_factory(self) -> None:
+        _pipe, _loaded, factories = self._build(
+            {"loader": "sdxl", "base": "stabilityai/stable-diffusion-xl-base-1.0"}
+        )
+        self.assertEqual(factories, ["text2img"], "普通 sdxl 底座仍走文生图工厂")
 
 if __name__ == "__main__":
     import unittest

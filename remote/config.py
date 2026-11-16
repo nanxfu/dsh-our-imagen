@@ -342,15 +342,26 @@ def max_tasks() -> int:
     return value if value > 0 else int(BUILTIN_LIMITS["count"]["max"])
 
 
-def request_body_limit() -> int:
-    """请求体字节上限：按参考图边界的 base64 膨胀推导，下限 8MB。
+def _limit_max_bytes(name: str) -> int:
+    """取某个 limits 项的 ``maxBytes``；缺失 / 非正数按 0 处理（不参与上限推导）。"""
+    value = limit_spec(name).get("maxBytes")
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        return 0
+    return int(value)
 
-    8MiB 原图 base64 后约 10.7MB：不下发 ``reference`` 的旧 Host 走内置契约的同一条公式，
-    因此也能通过；文生图请求（结构上远小于 1MB）不受影响。
+
+def request_body_limit() -> int:
+    """请求体字节上限：按「参考图 + 蒙版」边界的 base64 膨胀推导，下限 8MB。
+
+    8MiB 参考图 base64 后约 10.7MB；局部重绘还会再带一张 ≤2MiB 的蒙版（base64 后约
+    2.7MB），两者同时顶格约 13.5MB。只按参考图推导会让「参考图 + 蒙版」的合法请求
+    在 `_read_json` 这一层就被体积上限拒掉（表现为 invalid_request / 请求体超过上限）。
+    不下发 ``reference`` 的旧 Host 走内置契约的同一条公式，因此也能通过；文生图请求
+    （结构上远小于 1MB）不受影响。
     """
     base = 8 * 1024 * 1024
-    max_bytes = limit_spec("reference").get("maxBytes")
-    if isinstance(max_bytes, bool) or not isinstance(max_bytes, (int, float)) or max_bytes <= 0:
+    max_bytes = _limit_max_bytes("reference") + _limit_max_bytes("mask")
+    if max_bytes <= 0:
         return base
     # base64 每 3 字节膨胀成 4 字符；再留 1MB 给 tasks / prompt / jobId 等 JSON 字段。
     return max(base, 4 * ((int(max_bytes) + 2) // 3) + 1024 * 1024)

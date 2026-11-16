@@ -31,6 +31,8 @@ const POSTERS = {
   'sdxl-turbo': posterTurbo,
   'playground-v2.5': posterPlayground,
   'sdxl-base': posterBase,
+  // 专用 inpaint 权重沿用 SDXL 家族海报（同一底座血统，不单独占一份图片资产）。
+  'sdxl-inpaint': posterBase,
   'realvis-v5': posterRealvis,
   'flux2-klein-4b': posterFlux,
   'animagine-xl-3.1': posterAnimagine,

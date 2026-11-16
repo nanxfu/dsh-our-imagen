@@ -13,6 +13,9 @@
       "min": 256,
       "step": 8
     },
+    "mask": {
+      "maxBytes": 2097152
+    },
     "negativePrompt": {
       "maxChars": 1000
     },

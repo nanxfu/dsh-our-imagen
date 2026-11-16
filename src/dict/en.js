@@ -316,6 +316,9 @@ export const en = {
   'studio.toast.copied': 'Absolute path copied',
   'studio.toast.submitted': 'Generation submitted',
   'studio.toast.recalled': 'Settings restored',
+  // Filmstrip click with unsaved manual edits: preview switches, draft stays.
+  'studio.toast.draftKept': 'Current draft kept',
+  'studio.toast.newCreation': 'Started a new creation',
   'studio.toast.favorited': 'Added to favorites',
   'studio.toast.unfavorited': 'Removed from favorites',
   'studio.toast.deleted': 'Deleted',
@@ -412,6 +415,10 @@ export const en = {
   'studio.rail.advanced': 'Advanced',
   'studio.rail.params': 'Steps / guidance / seed',
   'studio.rail.followReference': 'Follows reference',
+  // Version tuning: which work the current form comes from; "New creation" clears that tie.
+  'studio.rail.tuning': 'Tuning from: {prompt}',
+  'studio.rail.tuningUnknown': 'current work',
+  'studio.rail.newCreation': 'New creation',
 
   // ── Reference image and image-to-image ────────────────────────
   'studio.reference.title': 'Reference image',
@@ -424,6 +431,23 @@ export const en = {
   'studio.reference.applied': 'Set as the reference image; adjust the redraw strength.',
   'studio.reference.unavailable': 'The installed host does not support image-to-image, so this work cannot be used as a reference.',
   'studio.reference.noPath': 'This work has no usable file path and cannot be used as a reference.',
+
+  // ── Partial redraw (Inpaint) ──────────────────────────────────
+  'studio.mask.toggle': 'Paint mask',
+  'studio.mask.title': 'Partial redraw',
+  'studio.mask.hint': 'Paint the area to redraw; untouched areas stay unchanged.',
+  'studio.mask.brush': 'Brush size',
+  'studio.mask.eraser': 'Eraser',
+  'studio.mask.clear': 'Clear mask',
+  'studio.mask.invert': 'Invert selection',
+  'studio.mask.close': 'Done painting',
+  'studio.mask.coverage': 'Painted {percent}%',
+  'studio.mask.applied': 'Painted {percent}%; only this area will be redrawn.',
+  'studio.mask.empty': 'Nothing painted yet; generation will redraw the whole image.',
+  'studio.mask.unsupported': 'This model does not support partial redraw. Switch to an SDXL model.',
+  'studio.mask.kept': 'Your painted mask is kept and will work again once you switch back to a supported model.',
+  'studio.mask.tooLarge': 'The mask exceeds the size limit and was not saved. Paint a smaller area and try again.',
+  'studio.mask.canvasLabel': 'Mask painting canvas: use arrow keys to move the brush, Space or Enter to paint, Esc to finish.',
 
   // ── Creation assistant ────────────────────────────────────────
   'studio.chat.assistant': 'Assistant',
@@ -451,7 +475,15 @@ export const en = {
   'studio.chat.done': 'Done. Click the thumbnail to enlarge.',
   'studio.chat.empty': 'Describe the image you want; press Enter to send.',
   'studio.chat.placeholder': 'Describe the image you want…',
-  'studio.chat.clear': 'Clear chat',
+  'studio.chat.newChat': 'New chat',
+  // Form submissions synced into the assistant: record title + parameter chip labels.
+  'studio.chat.formSync.form': 'From the form',
+  'studio.chat.formSync.variant': 'Variant',
+  'studio.chat.formSync.retry': 'Retry last params',
+  'studio.chat.formSync.reference': 'With reference',
+  'studio.chat.formSync.textOnly': 'Text to image',
+  'studio.chat.formSync.seed': 'Seed {seed}',
+  'studio.chat.formSync.seedRandom': 'Random seed',
 
   // ── Batch 2: job cancel / translation / size options / paging / log diagnostics ──
   'job.status.cancelled': 'Cancelled',
@@ -482,4 +514,7 @@ export const en = {
   'studio.update.hint': 'Update it in DSH Settings → Plugins, or reinstall following the README and restart DSH.',
   'studio.update.notes': 'Release notes',
   'studio.update.requiresDsh': 'The new version requires DSH {range}; upgrade DSH first.',
+  'studio.mask.guide': 'Tip: cover the whole object you want to repaint (including its edges) and change one object at a time; large block masks tend to show seams.',
+  'studio.mask.fastModelHint': 'This is a few-step fast model, so local repaints change less; switch to a multi-step model (SDXL Base / RealVis) when you need a bigger rewrite.',
+  'studio.mask.onlyHint': 'This is a dedicated inpainting model: attach a reference image and paint a mask before generating.',
 }

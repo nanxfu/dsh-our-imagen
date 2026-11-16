@@ -12,6 +12,8 @@
 
 import { LIMITS } from '../../shared/contract.js'
 import { clampInt, clampNumber, clampSize, clampStrength, parseSeed } from './clamp.js'
+import { referenceMaskForSubmit } from './mask.js'
+import { ratioIdOf } from './preset.js'
 import { negativeForSubmit } from './prompt.js'
 
 /** 参考图的文件名：路径只用于向宿主定位作品，界面只显示文件名。 */
@@ -41,6 +43,8 @@ export function referencePathOf(form) {
  * @param {string} [options.defaultPreset] 预设兜底 id
  * @param {boolean} [options.negativeActive] `negativePromptActive()` 的结果；
  *   显式 false 时提交体 `negativePrompt` 恒为空串（含覆盖项里的负向词）
+ * @param {boolean} [options.maskActive] `supportsInpaint()` 的结果；显式 false 时
+ *   不提交 `reference.mask`（当前模型不支持局部重绘，蒙版保留在表单里）
  * @param {object} [options.overrides] 显式覆盖项（对话输入 / 生成变体 / 重试）
  * @returns {object} POST /generate（路径由 shared/contract.js 提供）的请求体
  */
@@ -72,12 +76,16 @@ export function buildGenerateBody(form, options = {}) {
   // 图生图：只有表单里确实有参考图才输出 reference；否则请求体与纯文生图逐字一致。
   // 覆盖项也能改这两个字段（重试 / 变体链路），走同一套归一规则。
   const hasOverride = (key) => overrides !== null && Object.prototype.hasOwnProperty.call(overrides, key)
-  const referencePath = referencePathOf({
-    reference: hasOverride('reference') ? overrides.reference : input.reference,
-  })
+  const reference = hasOverride('reference') ? overrides.reference : input.reference
+  const referencePath = referencePathOf({ reference })
   if (referencePath) {
     const strength = hasOverride('strength') ? overrides.strength : input.strength
     body.reference = { path: referencePath, strength: clampStrength(strength) }
+    // 局部重绘：参考图上带蒙版且当前模型消费 Inpaint 时才提交 reference.mask。
+    // `maskActive === false` 表示当前模型不支持局部重绘（或调用方显式要求整图重绘）：
+    // 蒙版仍留在表单里，只是这次不提交，避免把必被远端拒绝的字段发出去。
+    const mask = options.maskActive === false ? '' : referenceMaskForSubmit(reference)
+    if (mask) body.reference.mask = mask
   }
 
   if (overrides) {
@@ -91,6 +99,29 @@ export function buildGenerateBody(form, options = {}) {
   // 统一清空，保证请求体不出现无效参数。
   if (!negativeActive) body.negativePrompt = ''
   return body
+}
+
+/**
+ * 表单提交的请求体 → 助手里的参数摘要。
+ *
+ * 只提取结构数据，不做语言拼装：模型名由界面按 `presetId` 本地化，标签文案由
+ * ChatPanel 组装成胶囊。未指定种子（提交体里是 -1）归一为 null，表示本次随机。
+ */
+export function formSummaryOf(body) {
+  const input = body && typeof body === 'object' ? body : {}
+  const width = positiveSize(input.width)
+  const height = positiveSize(input.height)
+  const count = finiteNumber(input.count)
+  const seed = finiteNumber(input.seed)
+  return {
+    presetId: typeof input.presetId === 'string' ? input.presetId : '',
+    ratioId: ratioIdOf(width, height),
+    width,
+    height,
+    count: count === null ? 1 : Math.min(LIMITS.count.max, Math.max(LIMITS.count.min, Math.round(count))),
+    hasReference: Boolean(referencePathOf(input)),
+    seed: seed !== null && seed >= 0 ? Math.trunc(seed) : null,
+  }
 }
 
 // ---- 历史回填 -------------------------------------------------------------
@@ -143,6 +174,10 @@ function recallOf(entry, presets) {
  * 「带回参数」→ 表单补丁。
  * prompt 用作品自己的提示词；尺寸用产物像素（不再用最近任务兜底）；
  * steps/cfg 优先作品 params，其次预设推荐值。
+ *
+ * 普通作品回填时同时清掉上一轮残留的参考图：从「垫图微调」切到一张纯文生图作品时，
+ * 旧参考图不该继续挂在新作品的参数里。作品没有记录有效 seed 时把种子恢复为随机，
+ * 避免上一张作品的固定种子串到这张图上。没有可回填字段时返回空补丁。
  */
 export function iteratePatch(entry, form, presets) {
   const base = form || {}
@@ -158,6 +193,10 @@ export function iteratePatch(entry, form, presets) {
   if (recall.cfg !== null) patch.cfg = recall.cfg
   if (recall.seed !== null && recall.seed >= 0) patch.seed = String(Math.trunc(recall.seed))
   if (recall.presetId) patch.presetId = recall.presetId
+  if (Object.keys(patch).length > 0) {
+    if (!Object.prototype.hasOwnProperty.call(patch, 'seed')) patch.seed = ''
+    patch.reference = null
+  }
   return patch
 }
 

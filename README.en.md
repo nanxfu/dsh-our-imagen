@@ -44,7 +44,7 @@ Not every machine has a high-VRAM GPU, and setting up PyTorch, CUDA, and ComfyUI
 <td width="48%">
 
 ### 1. Standalone Workbench
-* **9 Built-in Models**: Fast models (`SDXL Lightning`, `Hyper-SDXL`, `SDXL Turbo`), general/photorealistic (`SDXL Base`, `RealVisXL`, `Playground v2.5`), anime (`Animagine XL 3.1`, `Anima Light Lavender`), and `FLUX.2 Klein 4B`.
+* **10 Built-in Models**: Fast models (`SDXL Lightning`, `Hyper-SDXL`, `SDXL Turbo`), general/photorealistic (`SDXL Base`, `RealVisXL`, `Playground v2.5`), anime (`Animagine XL 3.1`, `Anima Light Lavender`), `FLUX.2 Klein 4B`, and the dedicated `SDXL Inpaint` weights for local repaints.
 * **Focused Controls**: Prompt, aspect ratio, resolution, steps, CFG scale, and seed in one panel, with batch count (1–4) pinned in the footer.
 * **Effective Parameters Only**: Unused fields (such as negative prompts on 4-step models or `FLUX.2 Klein 4B`) are hidden and omitted from requests. When a reference image is attached, output dimensions follow the reference image.
 * **Quick Modifiers**: Collapsible one-click English tags for lighting, material, composition, and mood (with localized UI labels).
@@ -66,9 +66,9 @@ Not every machine has a high-VRAM GPU, and setting up PyTorch, CUDA, and ComfyUI
 <td width="48%">
 
 ### 2. Chat Integration & Assistant
-* **Direct Tool Calls**: Registers `imagen_generate`, `imagen_session`, and `imagen_history` so you can generate images directly from chat.
+* **Direct Tool Calls**: Registers `imagen_generate`, `imagen_batch`, `imagen_recipes`, `imagen_session`, `imagen_history`, and `imagen_cancel`, so you can generate images directly from chat. `imagen_batch` plans a whole set of images in one call, and `imagen_recipes` only returns visible prompt templates — no hidden style suffixes.
 * **Confirm Before Running**: Translates natural-language requests into English prompts, infers aspect ratios, checks model constraints, and shows a confirmation card before starting inference.
-* **Model Awareness**: Understands prompt conventions and strengths across all 9 models and suggests a better match when appropriate.
+* **Model Awareness**: Understands prompt conventions and strengths across all 10 models and suggests a better match when appropriate.
 * **Workbench Sync**: Load confirmation cards into the workbench for fine-tuning, or open chat-generated images in the workbench for further editing.
 
 </td>
@@ -120,7 +120,7 @@ Not every machine has a high-VRAM GPU, and setting up PyTorch, CUDA, and ComfyUI
 
 <div align="center">
   <img src="docs/assets/model-picker-dark.png" alt="Dark Theme Model Picker" width="100%" />
-  <p><sub>Dark theme model picker: 9 built-in models with measured generation times</sub></p>
+  <p><sub>Dark theme model picker: 10 built-in models with measured generation times</sub></p>
 </div>
 
 </td>
@@ -319,6 +319,7 @@ Model configs live in [`models/*.json`](models/):
 - `SDXL Turbo` (ultra-fast drafts)
 - `Playground v2.5` (rich colors & aesthetics)
 - `SDXL Base 1.0` (standard SDXL base)
+- `SDXL Inpaint` (dedicated 9-channel weights, local repaints only)
 - `RealVisXL V5.0` (photorealistic portraits)
 - `FLUX.2 Klein 4B` (lightweight next-gen architecture)
 - `Animagine XL 3.1` (anime)

@@ -8,7 +8,7 @@ import { isJobCancellable, isJobCancelling, jobCardClass } from '../logic/jobs.j
 import { jobProgressText } from '../logic/status.js'
 
 /**
- * 接收 { t, ui, compute, library, now }；now 由 Studio 用 useNow 算好传入。
+ * 接收 { t, ui, compute, library, actions, now }；now 由 Studio 用 useNow 算好传入。
  *
  * 队列串行执行，但待执行的任务可能不止一个：每个任务各占一张卡，按真实执行顺序
  * 从左到右排列。第一张是正在跑的（带显影扫描光与已用时间），其余是排队中的
@@ -17,13 +17,18 @@ import { jobProgressText } from '../logic/status.js'
  * 每张卡带取消按钮：queued / waiting-session 立即出队，running 合作式停止
  * （当前这张画完后不再提交剩余张数）。取消请求发出后按钮显示「正在停止…」并禁用，
  * 避免重复提交。
+ *
+ * 缩略图点击由组合层的 `actions.previewWork` 接管：切换预览，并在表单干净时
+ * 把该作品参数回填到左侧面板；只在没有该动作（预览 / 测试替身）时退回纯选图。
  */
 export function Filmstrip(props) {
-  const { t, ui, compute, library, now } = props
+  const { t, ui, compute, library, actions, now } = props
   const { setView } = ui
   const { pendingJobs, sessionState, startSession, status, cancelJob, cancellingIds } = compute
   const stopped = Boolean(status && status.stopped)
   const { batches, selected, selectImage } = library
+  const previewWork = actions && typeof actions.previewWork === 'function' ? actions.previewWork : null
+  const openWork = previewWork || selectImage
 
   const selectedPath = selected && selected.image ? selected.image.path : ''
   const stripRef = React.useRef(null)
@@ -126,7 +131,7 @@ export function Filmstrip(props) {
                     type="button"
                     key={path}
                     className={active ? 'ofs-thumb is-on' : 'ofs-thumb'}
-                    onClick={() => selectImage(entry)}
+                    onClick={() => openWork(entry)}
                     title={batch.prompt || path}
                   >
                     <img src={entry.image.url} alt={batch.prompt || entry.image.file || t('studio.image.alt')} loading="lazy" />

@@ -43,6 +43,38 @@
   scroll-behavior: smooth;
 }
 
+/* ── 微调来源与新建创作 ────────────────────────────────────── */
+/* 面板顶部一条轻量状态行：左侧「正在微调：某张作品」，右侧「新建创作」重置入口。 */
+.ofs-tuning {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 15px 10px;
+}
+
+.ofs-tuning.is-idle {
+  justify-content: flex-end;
+}
+
+.ofs-tuning-source {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ofs-ink-3);
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ofs-tuning-new {
+  flex: 0 0 auto;
+  height: 25px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
 /* ── 分区 ───────────────────────────────────────────────────── */
 .ofs-fieldset {
   display: flex;
@@ -871,4 +903,13 @@
 
 .ofs-reference-hint {
   text-align: left;
+}
+/* 专用局部重绘模型的常驻说明：放在面板滚动区顶部，缺蒙版时出现。 */
+.ofs-rail-note {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: var(--ofs-r-sm, 8px);
+  background: var(--ofs-warn-soft, #f7f0e4);
+  color: var(--ofs-warn, #a96a18);
+  line-height: 1.5;
 }

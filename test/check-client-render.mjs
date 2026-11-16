@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url'
 import { bundle } from '../build.mjs'
 import { loadClient, serializeTree, TEST_ARTIFACT } from './load-client.mjs'
 import { KAGGLE_LOGIN, LIMITS } from '../shared/contract.js'
+import { MASK_BRUSH } from '../src/logic/mask.js'
 // 资源层直接 import 源码：渲染测试已经覆盖 UI，这里补「客户端请求形状」的离线断言。
 import {
   cancelJob as cancelJobRequest,
@@ -195,7 +196,7 @@ const scenarios = {
     state: readyState,
     history: { items: [historyItem] },
     props: { panelMode: 'chat' },
-    expect: ['创作助手', '描述你想要的画面', '清空对话'],
+    expect: ['创作助手', '描述你想要的画面', '新建对话'],
     reject: [],
     structure: {
       required: {
@@ -2737,6 +2738,86 @@ await check('渲染：参考图与预设能力不匹配时生成被拦下（useS
   }
 })
 
+// 专用局部重绘模型（inpaintOnly）：缺蒙版时拦下生成并说明，补上参考图 + 蒙版后可正常提交。
+const MASK_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+await check('渲染：专用局部重绘模型缺蒙版时拦下生成，补蒙版后按 reference.mask 提交', async () => {
+  const native = {
+    ...preset,
+    id: 'sdxl-inpaint',
+    label: 'SDXL Inpaint',
+    short: 'Inpaint',
+    supportsImg2Img: true,
+    supportsInpaint: true,
+    inpaintOnly: true,
+  }
+  const lightning = { ...preset, supportsImg2Img: true }
+  const responses = {
+    '/imagen-api/state': { ...readyState, presets: [lightning, native], defaultPreset: 'sdxl-lightning' },
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    '/imagen-api/generate': { id: 'job-native', status: 'queued' },
+  }
+  const client = await loadClient({ now: NOW, responses, testBuild: true })
+  const React = client.react
+  const h = React.createElement
+  const latest = {}
+  function Harness() {
+    const studio = client.hooks.useStudio({ t: client.internals.i18n.fallbackTranslate('zh') })
+    latest.studio = studio
+    return h('div', { className: 'ofs-native-harness' }, String(studio.form.maskRequiredBlocked))
+  }
+  try {
+    await client.mountRaw(Harness, {})
+    await client.settle()
+    latest.studio.form.patchForm({ prompt: '局部改成红灯笼' })
+    await client.rerenderRaw()
+
+    // 切到专用模型：没有参考图 / 蒙版时标记阻塞。
+    latest.studio.form.selectPreset(native)
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.inpaintOnly, true)
+    assert.equal(latest.studio.form.maskRequiredBlocked, true, '专用模型缺蒙版应标记阻塞')
+
+    // 生成被拦下：不发生成请求，toast 说明需要蒙版。
+    let before = client.requests.filter((item) => item.path === '/imagen-api/generate').length
+    const blocked = await latest.studio.actions.generate()
+    await client.settle()
+    await client.rerenderRaw()
+    assert.equal(blocked, false, '被拦下时 generate 返回 false')
+    assert.equal(
+      client.requests.filter((item) => item.path === '/imagen-api/generate').length,
+      before,
+      '缺蒙版时不得提交生成请求',
+    )
+    assert.ok(
+      latest.studio.ui.toast && latest.studio.ui.toast.text.includes('局部重绘专用模型'),
+      '拦下时要 toast 说明是专用模型',
+    )
+
+    // 补上参考图与蒙版：阻塞解除，提交体带 reference.mask。
+    const applied = latest.studio.form.applyReference({ image: historyItem.images[0], item: historyItem })
+    assert.equal(applied.ok, true)
+    await client.rerenderRaw()
+    const maskResult = latest.studio.form.applyMask({ data: MASK_PNG_B64, coverage: 0.2 })
+    assert.equal(maskResult.ok, true, JSON.stringify(maskResult))
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.maskRequiredBlocked, false, '有蒙版后不再阻塞')
+    before = client.requests.filter((item) => item.path === '/imagen-api/generate').length
+    await latest.studio.actions.generate()
+    await client.settle()
+    const submitted = client.requests.filter((item) => item.path === '/imagen-api/generate').pop()
+    assert.equal(
+      client.requests.filter((item) => item.path === '/imagen-api/generate').length,
+      before + 1,
+      '补上蒙版后应正常提交',
+    )
+    assert.ok(submitted && submitted.body.reference, '提交体应带参考图')
+    assert.equal(submitted.body.reference.mask, MASK_PNG_B64, '提交体应带裸 base64 蒙版')
+  } finally {
+    client.unmount()
+  }
+})
 // 旧宿主兼容：/state.presets 没有 supportsImg2Img 时按不支持处理，但纯文生图不受任何影响。
 await check('渲染：旧宿主没有 supportsImg2Img 时文生图不回归', async () => {
   const responses = {
@@ -2823,6 +2904,270 @@ await check('渲染：大图预览里的以此图重绘', async () => {
   }
 })
 
+// ── 局部重绘（Inpaint）：Stage 涂抹入口 + canvas 蒙版层 + 请求体透传 ──
+
+// 涂抹入口按模型能力显隐：支持时出现「局部涂抹」；不支持时只给说明，已涂蒙版保留不静默丢弃。
+await check('渲染：局部涂抹入口按模型能力显隐，工具栏可键盘 / 触控使用', async () => {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const selected = { image: historyItem.images[0], item: historyItem }
+  const reference = {
+    path: historyItem.images[0].path,
+    url: historyItem.images[0].url,
+    width: 1024,
+    height: 1024,
+  }
+  // Stage 的测试替身：表单域只提供局部涂抹相关的字段与动作。
+  const stageProps = (form) => ({
+    t,
+    ui: { zoom: false, setZoom: () => {}, copyPath: () => {}, showToast: () => {} },
+    compute: { activeJob: null },
+    form: {
+      useInspiration: () => {},
+      reference,
+      mask: null,
+      inpaintSupported: true,
+      applyMask: () => ({ ok: true }),
+      clearMask: () => {},
+      ...form,
+    },
+    library: { selected, isFavorite: () => false, toggleFavorite: () => {} },
+    actions: { iterate: () => {}, reroll: () => {}, referenceImage: () => {} },
+  })
+  try {
+    // 1) 支持局部重绘：入口出现，未涂抹时明确说明仍按整图重绘。
+    let tree = await client.mountRaw(client.components.Stage, stageProps({}))
+    const toggle = findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && typeof node.props?.className === 'string'
+        && node.props.className.split(/\s+/).includes('ofs-mask-toggle'),
+    )[0]
+    assert.ok(toggle, '参考图 + 支持 Inpaint 时应有「局部涂抹」入口')
+    assert.ok(collectText(toggle).join('').includes('局部涂抹'))
+    assert.equal(toggle.props['aria-pressed'], false)
+    assert.ok(Number(toggle.props.style.minHeight) >= 44, '涂抹入口热区高度不小于 44px')
+    assert.ok(Number(toggle.props.style.minWidth) >= 44, '涂抹入口热区宽度不小于 44px')
+    let text = collectText(tree).join(' | ')
+    assert.ok(text.includes('还没有涂抹区域'), '未涂抹时说明生成仍按整图重绘')
+    assert.ok(!('ofs-mask-editor' in collectClasses(tree)), '未打开涂抹态时不挂载画布')
+
+    // 打开涂抹态：canvas、光标圈与工具栏齐全，热区不小于 44px。
+    toggle.props.onClick()
+    tree = await client.rerenderRaw()
+    assertStructure('mask-editor', tree, {
+      required: { 'ofs-mask-editor': 1, 'ofs-mask-canvas': 1, 'ofs-mask-tools': 1, 'ofs-mask-cursor': 1, 'ofs-mask-guide': 1 },
+      forbidden: ['ofs-mask-toggle', 'ofs-print'],
+    })
+    const canvas = findNodes(tree, (node) => node.type === 'canvas')[0]
+    assert.ok(canvas, '涂抹态应挂载 canvas 蒙版层')
+    assert.equal(canvas.props.role, 'application')
+    assert.equal(canvas.props.tabIndex, 0, '画布可键盘聚焦')
+    assert.equal(typeof canvas.props.onPointerDown, 'function', '画布支持指针 / 触控绘制')
+    assert.equal(typeof canvas.props.onKeyDown, 'function', '画布支持键盘绘制')
+    assert.ok(
+      typeof canvas.props['aria-label'] === 'string' && canvas.props['aria-label'].includes('方向键'),
+      '画布要给出键盘操作说明',
+    )
+    const range = findNodes(tree, (node) => node.type === 'input' && node.props?.type === 'range')[0]
+    assert.ok(range, '涂抹态应提供画笔大小滑块')
+    assert.equal(range.props.min, MASK_BRUSH.min)
+    assert.equal(range.props.max, MASK_BRUSH.max)
+    assert.equal(range.props.step, MASK_BRUSH.step)
+    assert.equal(range.props.value, MASK_BRUSH.default)
+    for (const label of ['橡皮擦', '清空蒙版', '反选区域', '完成涂抹']) {
+      const button = findNodes(tree, (node) => node.type === 'button' && collectText(node).join('').includes(label))[0]
+      assert.ok(button, `涂抹工具栏缺少「${label}」`)
+      assert.ok(Number(button.props.style.minHeight) >= 44, `「${label}」热区高度应不小于 44px`)
+    }
+    // 完成涂抹收起画布，已写入表单的蒙版不受影响。
+    findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && typeof node.props?.className === 'string'
+        && node.props.className.split(/\s+/).includes('ofs-mask-close'),
+    )[0].props.onClick()
+    tree = await client.rerenderRaw()
+    assertStructure('mask-editor-closed', tree, { required: { 'ofs-mask-toggle': 1 }, forbidden: ['ofs-mask-editor'] })
+
+    // 少步快速模型：涂抹态额外给出「换多步模型」的弱提示；多步模型不显示该提示。
+    tree = await client.mountRaw(client.components.Stage, stageProps({ activePreset: { steps: 4 } }))
+    findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && typeof node.props?.className === 'string'
+        && node.props.className.split(/\s+/).includes('ofs-mask-toggle'),
+    )[0].props.onClick()
+    tree = await client.rerenderRaw()
+    text = collectText(tree).join(' | ')
+    assert.ok(text.includes('一次只改一个物体'), '涂抹态要给出蒙版操作要点')
+    assert.ok(text.includes('少步快速模型'), '少步模型要提示换多步模型')
+    tree = await client.mountRaw(client.components.Stage, stageProps({ activePreset: { steps: 25 } }))
+    findNodes(
+      tree,
+      (node) => node.type === 'button'
+        && typeof node.props?.className === 'string'
+        && node.props.className.split(/\s+/).includes('ofs-mask-toggle'),
+    )[0].props.onClick()
+    tree = await client.rerenderRaw()
+    text = collectText(tree).join(' | ')
+    assert.ok(!text.includes('少步快速模型'), '多步模型不应出现换模型提示')
+
+    // 2) 已涂抹：入口旁给出覆盖率读数。
+    tree = await client.mountRaw(client.components.Stage, stageProps({
+      mask: { data: 'AAAA', coverage: 0.12, digest: 'd-1' },
+    }))
+    text = collectText(tree).join(' | ')
+    assert.ok(text.includes('已涂抹 12%'), '已涂抹时显示覆盖率读数')
+
+    // 3) 模型不支持局部重绘：不出现涂抹入口，显示能力说明；已涂蒙版保留并说明。
+    tree = await client.mountRaw(client.components.Stage, stageProps({ inpaintSupported: false }))
+    assert.ok(!('ofs-mask-toggle' in collectClasses(tree)), '不支持 Inpaint 时不得出现涂抹入口')
+    text = collectText(tree).join(' | ')
+    assert.ok(text.includes('当前模型不支持局部重绘'), '不支持时要明确提示能力')
+    assert.ok(!text.includes('已涂抹的蒙版会保留'), '没有蒙版时不需要保留提示')
+
+    tree = await client.mountRaw(client.components.Stage, stageProps({
+      inpaintSupported: false,
+      mask: { data: 'AAAA', coverage: 0.12, digest: 'd-1' },
+    }))
+    text = collectText(tree).join(' | ')
+    assert.ok(text.includes('已涂抹的蒙版会保留'), '切到不支持模型时蒙版保留并说明，不静默丢弃')
+  } finally {
+    client.unmount()
+  }
+})
+
+// 涂抹导出的 PNG base64 随 reference.mask 提交；能力切换与各入口清理按约定生效。
+await check('渲染：局部涂抹导出后按 reference.mask 提交，切换能力与清理入口', async () => {
+  const inpaintPreset = { ...preset, supportsImg2Img: true, supportsInpaint: true }
+  const flux = {
+    ...preset,
+    id: 'flux2-klein-4b',
+    label: 'Klein 4B',
+    short: 'Klein 4B',
+    family: 'FLUX.2',
+    supportsImg2Img: false,
+    supportsInpaint: false,
+    supportsNegative: false,
+    negativeHint: '',
+  }
+  const responses = {
+    '/imagen-api/state': { ...readyState, presets: [inpaintPreset, flux], defaultPreset: 'sdxl-lightning' },
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    '/imagen-api/generate': { id: 'job-inpaint', status: 'queued' },
+  }
+  const client = await loadClient({ now: NOW, responses, testBuild: true })
+  const React = client.react
+  const h = React.createElement
+  const latest = {}
+  function Harness() {
+    const studio = client.hooks.useStudio({
+      t: client.internals.i18n.fallbackTranslate('zh'),
+      initialPrompt: '雨夜街景',
+    })
+    latest.studio = studio
+    return h('div', { className: 'ofs-studio-harness' }, String(studio.form.inpaintSupported))
+  }
+  // canvas.toDataURL('image/png') 的真实输出形态：带 data URL 前缀的黑底白字 PNG。
+  const maskPng = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  try {
+    await client.mountRaw(Harness, {})
+    await client.settle()
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.form.presetId, 'sdxl-lightning')
+    assert.equal(latest.studio.form.inpaintSupported, true, 'SDXL 预设应支持局部重绘')
+    assert.equal(latest.studio.form.mask, null)
+
+    // 以此图重绘 → 涂抹（画布导出 data URL + 覆盖率）→ 写进表单 reference.mask。
+    const applied = latest.studio.form.applyReference({ image: historyItem.images[0], item: historyItem })
+    assert.equal(applied.ok, true)
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.form.reference.path, historyItem.images[0].path)
+    // 空蒙版 / 超限蒙版在进入表单前就被拦下，不产生半成品字段。
+    assert.deepEqual(latest.studio.form.applyMask({ data: maskPng, coverage: 0 }), { ok: false, reason: 'empty' })
+    const huge = 'A'.repeat(Math.ceil((LIMITS.mask.maxBytes + 1) / 3) * 4)
+    assert.equal(latest.studio.form.applyMask({ data: huge, coverage: 0.5 }).reason, 'too_large')
+    const accepted = latest.studio.form.applyMask({ data: `data:image/png;base64,${maskPng}`, coverage: 0.05 })
+    assert.deepEqual(accepted, { ok: true })
+    await client.rerenderRaw()
+    let formNow = latest.studio.form
+    assert.equal(formNow.form.reference.mask.data, maskPng, '表单里的蒙版是去掉前缀的裸 base64')
+    assert.ok(formNow.form.reference.mask.digest, '表单保存蒙版指纹供脏判定使用')
+    assert.equal(formNow.mask.coverage, 0.05)
+    assert.equal(formNow.dirty, true, '涂抹属于未提交的手动修改')
+    assert.equal(formNow.maskBlocked, false)
+
+    // 提交：请求体 reference.mask 与参考图一起下发，且不再带缩略图 url。
+    await latest.studio.actions.generate()
+    await client.settle()
+    const submitted = client.requests.filter((item) => item.path === '/imagen-api/generate').pop()
+    assert.ok(submitted, '应提交生成请求')
+    assert.deepEqual(submitted.body.reference, {
+      path: historyItem.images[0].path,
+      strength: LIMITS.strength.default,
+      mask: maskPng,
+    }, '请求体应带裸 base64 蒙版')
+    // 提交成功后蒙版保留（可连续迭代），表单回到干净状态。
+    await client.rerenderRaw()
+    formNow = latest.studio.form
+    assert.equal(formNow.mask.data, maskPng, '提交后保留蒙版方便连续迭代')
+    assert.equal(formNow.dirty, false, '提交成功即回到干净基准（含蒙版指纹）')
+
+    // 切到不支持 Inpaint 的模型：蒙版保留、标记阻塞，提交体不带 mask（按整图重绘）。
+    latest.studio.form.selectPreset(flux)
+    await client.rerenderRaw()
+    formNow = latest.studio.form
+    assert.equal(formNow.inpaintSupported, false)
+    assert.equal(formNow.maskBlocked, true, '不支持时标记蒙版阻塞但不丢弃')
+    assert.equal(formNow.mask.data, maskPng)
+    assert.equal(formNow.applyMask({ data: maskPng, coverage: 0.2 }).reason, 'unsupported', '不把蒙版写进不支持 Inpaint 的模型')
+    const gated = formNow.buildBody()
+    assert.equal(gated.reference.path, historyItem.images[0].path, '参考图仍按整图重绘提交')
+    assert.ok(!('mask' in gated.reference), '不支持 Inpaint 时请求体不带 mask')
+
+    // 切回支持模型：蒙版仍在，可继续提交。
+    latest.studio.form.selectPreset(inpaintPreset)
+    await client.rerenderRaw()
+    formNow = latest.studio.form
+    assert.equal(formNow.inpaintSupported, true)
+    assert.equal(formNow.maskBlocked, false)
+    assert.equal(formNow.mask.data, maskPng, '切回支持模型后蒙版可继续使用')
+
+    // 清空蒙版：字段消失，回到整图 img2img。
+    assert.equal(latest.studio.form.clearMask(), true)
+    await client.rerenderRaw()
+    formNow = latest.studio.form
+    assert.equal(formNow.mask, null)
+    assert.equal(formNow.dirty, true, '清空蒙版同样算未提交修改')
+    assert.ok(!('mask' in formNow.buildBody().reference), '清空后请求体不带 mask')
+
+    // 各入口清理：换参考图 / 移除参考图 / 回填 / 新建创作都不能残留蒙版。
+    latest.studio.form.applyMask({ data: maskPng, coverage: 0.2 })
+    latest.studio.form.applyReference({ image: historyItem.images[1], item: historyItem })
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.form.reference.mask, undefined, '换参考图清空蒙版')
+    latest.studio.form.applyMask({ data: maskPng, coverage: 0.2 })
+    latest.studio.form.removeReference()
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.form.reference, null, '移除参考图同时清空蒙版')
+    latest.studio.form.applyReference({ image: historyItem.images[0], item: historyItem })
+    latest.studio.form.applyMask({ data: maskPng, coverage: 0.2 })
+    latest.studio.form.newCreation()
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.form.reference, null, '新建创作清空参考图与蒙版')
+    assert.equal(latest.studio.form.mask, null)
+    latest.studio.form.applyReference({ image: historyItem.images[0], item: historyItem })
+    latest.studio.form.applyMask({ data: maskPng, coverage: 0.2 })
+    latest.studio.form.applyRecall({ prompt: '回填的作品', reference: null }, { image: historyItem.images[0], item: historyItem })
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.mask, null, '回填参数清空上一轮蒙版')
+  } finally {
+    client.unmount()
+  }
+})
+
 // ── 对话确认卡 v2（0.10.0：摘要优先 / 张数 / 模型建议 / 带入参数面板 / 通用澄清） ──
 
 /** 按类名收集节点：ChatPanel 用例只看稳定的结构类名，不锁内部组件拆分。 */
@@ -2873,7 +3218,7 @@ async function mountChatPanel(options = {}) {
     toggleIntentLockSeed: (id) => calls.locked.push(id),
     canLockSeed: options.canLockSeed !== false,
     resolveClarify: (id, option) => calls.resolved.push({ id, option }),
-    clearThread: () => calls.cleared.push(true),
+    newChat: () => calls.cleared.push(true),
   }
   const t = client.internals.i18n.fallbackTranslate(options.locale ?? 'zh')
   try {
@@ -3139,6 +3484,39 @@ await check('渲染：空态示例只填对话草稿，不改参数表单', asyn
   }
 })
 
+// 新建对话：清空线程与输入草稿；空线程时按钮禁用（没有可开启的新上下文）。
+await check('渲染：新建对话清空线程与输入草稿', async () => {
+  const mounted = await mountChatPanel({ messages: [{ id: 1, role: 'user', text: '画一只橘猫' }] })
+  try {
+    const { client, calls, t } = mounted
+    const button = findClass(mounted.tree, 'ofs-chat-new')[0]
+    assert.ok(button, '[new-chat] 缺少新建对话按钮')
+    assert.equal(collectText(button).join(''), t('studio.chat.newChat'))
+    assert.equal(collectText(button).join(''), '新建对话')
+    assert.equal(button.props.disabled, false, '有消息时按钮可用')
+    // 先在输入区写点草稿：新建对话后草稿也应清空。
+    const composer = findNodes(mounted.tree, (node) => node.type === 'textarea')[0]
+    composer.props.onChange({ target: { value: '还没发出去的话' } })
+    const tree = await client.rerenderRaw()
+    assert.equal(findNodes(tree, (node) => node.type === 'textarea')[0].props.value, '还没发出去的话')
+    findClass(tree, 'ofs-chat-new')[0].props.onClick()
+    assert.deepEqual(calls.cleared, [true], '点击应把「新建对话」交给 useChatThread')
+    const after = await client.rerenderRaw()
+    assert.equal(findNodes(after, (node) => node.type === 'textarea')[0].props.value, '', '新建对话应清空输入草稿')
+  } finally {
+    mounted.client.unmount()
+  }
+
+  const empty = await mountChatPanel({ messages: [] })
+  try {
+    const button = findClass(empty.tree, 'ofs-chat-new')[0]
+    assert.equal(button.props.disabled, true, '空线程时按钮禁用')
+    assert.ok(!collectText(empty.tree).join(' | ').includes('清空对话'), '旧「清空对话」文案应已移除')
+  } finally {
+    empty.client.unmount()
+  }
+})
+
 // 意图 v2 的真实状态流转：直接挂载 useChatThread，断言请求参数、消息字段、
 // 张数钳制、负向词门控、多轮 history、通用澄清与带入参数面板。
 await check('渲染：意图 v2 状态流（cfg / history / 张数 / 负向词门控 / 澄清 / 带入面板）', async () => {
@@ -3335,6 +3713,100 @@ await check('渲染：意图 v2 状态流（cfg / history / 张数 / 负向词�
   }
 })
 
+// 新建对话的代次守卫：解析中的旧请求返回后绝不能写进新线程。
+await check('渲染：新建对话丢弃解析中的旧请求结果', async () => {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const React = client.react
+  const h = React.createElement
+  const { useChatThread } = client.hooks
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const latest = { chat: null }
+  // alive 由测试决定何时放行，模拟「请求还在路上」。
+  const pending = []
+  function alive(promise) {
+    // 真实请求照常发出（fake fetch 立即返回），但 hook 等待的是这里手控的 Promise。
+    Promise.resolve(promise).catch(() => {})
+    return new Promise((resolve) => pending.push(resolve))
+  }
+  const form = {
+    form: { presetId: 'sdxl-lightning', cfg: 0, seed: '' },
+    negativeActive: false,
+    patchForm: () => {},
+    applyIntent: () => true,
+  }
+  function Harness(props) {
+    const chat = useChatThread({
+      t,
+      isEn: false,
+      alive,
+      state: { lastJob: null },
+      form,
+      generate: async () => {},
+    })
+    props.latest.chat = chat
+    return h('div', { className: 'ofs-newchat-harness' }, String(chat.messages.length))
+  }
+  try {
+    await client.mountRaw(Harness, { latest })
+    await client.settle()
+
+    latest.chat.interpret('旧主题的请求')
+    await client.rerenderRaw()
+    assert.equal(latest.chat.interpreting, true, '解析中应显示解析状态')
+    assert.equal(latest.chat.messages.length, 1, '解析中先落一条用户消息')
+
+    // 解析中点新建对话：线程清空、解析态就地复位，不必等旧请求回来。
+    latest.chat.newChat()
+    await client.rerenderRaw()
+    assert.equal(latest.chat.messages.length, 0, '新建对话应清空线程')
+    assert.equal(latest.chat.interpreting, false, '新建对话应复位解析中状态')
+
+    // 旧请求现在才返回：结果整条丢弃，不改新线程。
+    pending[0]({
+      ok: true,
+      data: {
+        prompt: 'stale prompt',
+        summary: '旧主题',
+        ratioId: '1:1',
+        negative: '',
+        clarify: null,
+        modelHint: null,
+        source: 'model',
+      },
+    })
+    await client.settle()
+    await client.rerenderRaw()
+    assert.equal(latest.chat.messages.length, 0, '旧请求返回不得写入新线程')
+    assert.equal(latest.chat.interpreting, false, '旧请求不得把新线程重新标记为解析中')
+
+    // 新线程继续可用：下一次解析正常落地。
+    latest.chat.interpret('新主题')
+    await client.rerenderRaw()
+    assert.equal(pending.length, 2, '新线程应能再次发起解析')
+    pending[1]({
+      ok: true,
+      data: {
+        prompt: 'fresh prompt',
+        summary: '新主题',
+        ratioId: '',
+        negative: '',
+        clarify: null,
+        modelHint: null,
+        source: 'model',
+      },
+    })
+    await client.settle()
+    await client.rerenderRaw()
+    const messages = latest.chat.messages
+    assert.equal(messages.length, 2, '新线程应有用户消息 + 确认卡')
+    assert.equal(messages[0].text, '新主题')
+    assert.equal(messages[1].kind, 'intent')
+    assert.equal(messages[1].prompt, 'fresh prompt')
+  } finally {
+    client.unmount()
+  }
+})
+
 // 带入参数面板的端到端粘合：useChatThread.handoffIntent → useStudioForm.applyIntent，
 // 确认卡内容真的写进工作台表单（而不是只在 ChatPanel 的测试替身里记录）。
 await check('渲染：带入参数面板写入真实表单（useStudio + handoffIntent）', async () => {
@@ -3387,6 +3859,312 @@ await check('渲染：带入参数面板写入真实表单（useStudio + handoff
   }
 })
 
+// 表单提交同步进助手：除提示词外带结构化参数摘要，且这类记录不进入意图上下文。
+await check('渲染：表单提交同步进助手带参数摘要且不进意图上下文', async () => {
+  const responses = {
+    '/imagen-api/state': readyState,
+    '/imagen-api/history': { items: [] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    '/imagen-api/generate': { id: 'job-sync', status: 'queued' },
+  }
+  const client = await loadClient({ now: NOW, responses, testBuild: true })
+  const React = client.react
+  const h = React.createElement
+  const latest = {}
+  function Harness() {
+    const studio = client.hooks.useStudio({ t: client.internals.i18n.fallbackTranslate('zh') })
+    latest.studio = studio
+    return h('div', { className: 'ofs-sync-harness' }, String(studio.chat.messages.length))
+  }
+  try {
+    await client.mountRaw(Harness, {})
+    await client.settle()
+    latest.studio.form.patchForm({ prompt: '雨夜街景', width: 1280, height: 720, count: 2, seed: '42' })
+    await client.rerenderRaw()
+    await latest.studio.actions.generate()
+    await client.settle()
+    await client.rerenderRaw()
+
+    const messages = latest.studio.chat.messages
+    const sync = messages.find((message) => message.kind === 'form')
+    assert.ok(sync, '生成提交后应在助手线程里留下参数摘要记录')
+    assert.equal(sync.role, 'user', '参数摘要记录挂在用户侧（但带 kind 以示区分）')
+    assert.equal(sync.source, 'form', '表单提交的来源标记')
+    assert.equal(sync.text, '雨夜街景')
+    assert.deepEqual(sync.summary, {
+      presetId: 'sdxl-lightning',
+      ratioId: '16:9',
+      width: 1280,
+      height: 720,
+      count: 2,
+      hasReference: false,
+      seed: 42,
+    }, '参数摘要应覆盖模型 / 比例像素 / 张数 / 参考图 / 种子策略')
+    const syncIndex = messages.indexOf(sync)
+    assert.equal(messages[syncIndex + 1] && messages[syncIndex + 1].kind, 'job', '先参数摘要、后任务气泡')
+    // 上下文隔离：参数摘要与任务气泡都不能进意图模型的多轮历史。
+    assert.deepEqual(client.PURE.intentHistory(messages), [], '表单同步记录不得进入 intentHistory')
+  } finally {
+    client.unmount()
+  }
+})
+
+// 参数摘要的界面呈现：白卡 + 胶囊，与普通用户气泡结构不同；中英文都可用。
+await check('渲染：表单同步记录用参数胶囊与普通用户气泡区分', async () => {
+  const syncMessage = {
+    id: 1,
+    role: 'user',
+    kind: 'form',
+    source: 'form',
+    text: '雨夜街景',
+    summary: {
+      presetId: 'sdxl-lightning',
+      ratioId: '16:9',
+      width: 1280,
+      height: 720,
+      count: 2,
+      hasReference: true,
+      seed: 42,
+    },
+  }
+  const mounted = await mountChatPanel({
+    messages: [syncMessage, { id: 2, role: 'user', text: '再亮一点' }],
+  })
+  try {
+    const { tree } = mounted
+    assertStructure('form-sync', tree, {
+      required: {
+        'ofs-form-sync': 1,
+        'ofs-form-sync-card': 1,
+        'ofs-form-sync-title': 1,
+        'ofs-form-sync-prompt': 1,
+        'ofs-form-sync-chips': 1,
+        'ofs-form-sync-chip': 5,
+        'ofs-msg--user': 1,
+      },
+      forbidden: [],
+    })
+    const text = collectText(tree).join(' | ')
+    for (const needle of [
+      '来自参数表单',
+      '雨夜街景',
+      'SDXL Lightning',
+      '16:9 · 1280 × 720',
+      '2 张',
+      '含参考图',
+      '种子 42',
+      '再亮一点',
+    ]) {
+      assert.ok(text.includes(needle), `[form-sync] 缺少：${needle}`)
+    }
+    // 普通用户消息仍走气泡结构，不能被参数卡片吞掉。
+    assert.equal(findClass(tree, 'ofs-msg--user').length, 1)
+  } finally {
+    mounted.client.unmount()
+  }
+
+  // 变体提交：标题与「文生图 / 随机种子」两组胶囊都要正确。
+  const variant = await mountChatPanel({
+    messages: [{
+      id: 3,
+      role: 'user',
+      kind: 'form',
+      source: 'variant',
+      text: '荷花池塘',
+      summary: { presetId: 'sdxl-lightning', ratioId: '1:1', width: 1024, height: 1024, count: 1, hasReference: false, seed: null },
+    }],
+  })
+  try {
+    const text = collectText(variant.tree).join(' | ')
+    assert.ok(text.includes('生成变体'), '[form-sync] 变体提交应有独立标题')
+    assert.ok(text.includes('文生图'), '[form-sync] 无参考图时应显式标注文生图')
+    assert.ok(text.includes('随机种子'), '[form-sync] 无固定种子时应标注随机种子')
+    assert.ok(text.includes('1024 × 1024'), '[form-sync] 自定义画幅只显示像素')
+  } finally {
+    variant.client.unmount()
+  }
+})
+
+// 等待出图期间继续改表单：这些改动没有提交，生成成功也不能把它们洗成「干净」。
+await check('渲染：生成等待期间的手动修改仍算脏', async () => {
+  const responses = {
+    '/imagen-api/state': readyState,
+    '/imagen-api/history': { items: [] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    '/imagen-api/generate': { id: 'job-wait', status: 'queued' },
+  }
+  const client = await loadClient({ now: NOW, responses, testBuild: true })
+  const React = client.react
+  const h = React.createElement
+  const latest = {}
+  function Harness() {
+    const studio = client.hooks.useStudio({ t: client.internals.i18n.fallbackTranslate('zh') })
+    latest.studio = studio
+    return h('div', { className: 'ofs-wait-harness' }, String(studio.form.dirty))
+  }
+  try {
+    await client.mountRaw(Harness, {})
+    await client.settle()
+    latest.studio.form.patchForm({ prompt: '第一版提示词' })
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.dirty, true)
+
+    // 不 await：先让请求在路上，再模拟用户在等待期间继续输入。
+    const pending = latest.studio.actions.generate()
+    latest.studio.form.patchForm({ prompt: '等待期间的新草稿' })
+    await client.rerenderRaw()
+    const ok = await pending
+    await client.settle()
+    await client.rerenderRaw()
+
+    assert.equal(ok, true, '生成应成功')
+    assert.equal(latest.studio.form.form.prompt, '等待期间的新草稿', '等待期间的输入不能被回滚')
+    assert.equal(latest.studio.form.dirty, true, '等待期间的修改没有提交，仍应算脏')
+  } finally {
+    client.unmount()
+  }
+})
+
+// 胶卷点击的双向同步：干净表单自动回填（含原图 seed、清参考图），脏表单只换预览；
+// 新建创作清掉绑定上一张作品的状态，但保留当前模型预设与画幅比例。
+await check('渲染：胶卷点击回填参数、草稿保护与新建创作边界', async () => {
+  const img2imgPreset = { ...preset, supportsImg2Img: true }
+  const state = {
+    defaultPreset: 'sdxl-lightning',
+    presets: [img2imgPreset],
+    session: { state: 'ready', modelId: 'sdxl-lightning', device: 'Tesla T4', idleTimeoutSec: 1800, error: null },
+    jobs: [],
+    lastJob: null,
+    probe: probeOk,
+  }
+  const responses = {
+    '/imagen-api/state': state,
+    '/imagen-api/history': { items: [historyItem] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    '/imagen-api/generate': { id: 'job-flow', status: 'queued' },
+  }
+  const client = await loadClient({ now: NOW, responses, testBuild: true })
+  const React = client.react
+  const h = React.createElement
+  const latest = {}
+  function Harness() {
+    const studio = client.hooks.useStudio({ t: client.internals.i18n.fallbackTranslate('zh') })
+    latest.studio = studio
+    return h('div', { className: 'ofs-flow-harness' }, String(studio.form.dirty))
+  }
+  const form = () => latest.studio.form
+  const thumbA = { image: historyItem.images[0], item: historyItem }
+  const thumbB = { image: historyItem.images[1], item: historyItem }
+  try {
+    await client.mountRaw(Harness, {})
+    await client.settle()
+    assert.equal(form().dirty, false, '刚打开时表单是干净的')
+    assert.equal(form().form.presetId, 'sdxl-lightning', '初始预设应已同步')
+
+    // 先挂一张参考图，模拟上一轮垫图状态残留。
+    const applied = form().applyReference(thumbA)
+    await client.rerenderRaw()
+    assert.equal(applied.ok, true)
+    assert.equal(form().form.reference.path, thumbA.image.path)
+
+    // 手动改提示词但不点生成 → dirty。
+    form().patchForm({ prompt: '我自己的草稿' })
+    await client.rerenderRaw()
+    assert.equal(form().dirty, true, '手动修改后应标记为脏')
+
+    // 脏时点胶卷：预览照常切换，草稿与参考图都保留，并给轻提示。
+    latest.studio.actions.previewWork(thumbB)
+    await client.rerenderRaw()
+    assert.equal(latest.studio.library.selected.image.path, thumbB.image.path, '预览应切到被点的图')
+    assert.equal(form().form.prompt, '我自己的草稿', '脏表单不得被覆盖')
+    assert.equal(form().form.reference.path, thumbA.image.path, '脏表单的参考图也保留')
+    assert.ok(
+      latest.studio.ui.toast && latest.studio.ui.toast.text.includes('已保留当前草稿'),
+      '脏表单应提示「已保留当前草稿」',
+    )
+
+    // 生成提交成功后表单回到干净状态（干净基准更新到刚提交的内容）。
+    await latest.studio.actions.generate()
+    await client.settle()
+    await client.rerenderRaw()
+    assert.equal(form().dirty, false, '刚生成完应回到干净状态')
+
+    // 干净时再点胶卷：完整回填该作品参数，保留原图 seed，并清掉残留参考图。
+    latest.studio.actions.previewWork(thumbB)
+    await client.rerenderRaw()
+    assert.equal(form().form.prompt, '测试用的荷花池塘', '提示词来自作品')
+    assert.equal(form().form.width, 1024, '尺寸用产物像素')
+    assert.equal(form().form.height, 1024)
+    assert.equal(form().form.steps, 4, '没有 params 时回落到预设推荐值')
+    assert.equal(form().form.cfg, 0)
+    assert.equal(form().form.presetId, 'sdxl-lightning', '预设来自作品')
+    assert.equal(form().form.seed, '8', '无有效 seed 才随机；有则保留原图 seed')
+    assert.equal(form().form.reference, null, '回填普通作品要清掉上一轮参考图')
+    assert.equal(form().tuning && form().tuning.prompt, '测试用的荷花池塘', '面板应记录微调来源')
+    assert.equal(form().dirty, false, '回填后仍是干净状态')
+    assert.ok(
+      latest.studio.ui.toast && latest.studio.ui.toast.text.includes('参数已回填'),
+      '回填成功应给轻提示',
+    )
+
+    // 新建创作：清提示词 / 参考图 / 固定 seed，负向层回到当前预设默认，保留模型与画幅。
+    form().applyRatio('16:9')
+    await client.rerenderRaw()
+    assert.equal(form().form.width, 1280)
+    form().newCreation()
+    await client.rerenderRaw()
+    assert.equal(form().form.prompt, '', '新建创作清空提示词')
+    assert.equal(form().form.seed, '', '新建创作把种子恢复为随机')
+    assert.equal(form().form.reference, null, '新建创作清空参考图')
+    assert.equal(form().form.negative, '', 'CFG=0 的预设默认不启用负向词')
+    assert.deepEqual(form().form.negativeLayers, { model: '', user: '' })
+    assert.equal(form().form.presetId, 'sdxl-lightning', '保留当前模型预设')
+    assert.equal(form().form.width, 1280, '保留当前画幅比例（宽）')
+    assert.equal(form().form.height, 720, '保留当前画幅比例（高）')
+    assert.equal(form().tuning, null, '清除微调来源标记')
+    assert.equal(form().dirty, false, '新建创作后是干净状态')
+    assert.ok(
+      latest.studio.ui.toast && latest.studio.ui.toast.text.includes('已开始新的创作'),
+      '新建创作应给轻提示',
+    )
+  } finally {
+    client.unmount()
+  }
+})
+
+// 胶片条缩略图点击要交给组合层：换预览 + （表单干净时）回填参数；没有该动作时退回纯选图。
+await check('渲染：胶片条缩略图点击交由组合层回填参数', async () => {
+  const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
+  const picked = []
+  const tree = await client.mountRaw(client.components.Filmstrip, {
+    t: client.internals.i18n.fallbackTranslate('zh'),
+    ui: { setView: () => {} },
+    compute: { pendingJobs: [], sessionState: 'ready', startSession: () => {}, status: { stopped: false }, cancellingIds: [] },
+    library: {
+      batches: [{
+        key: 'batch-1',
+        presetId: 'sdxl-lightning',
+        prompt: '作品提示词',
+        entries: [{ image: { path: 'imagen-output/a/01.png', url: '/imagen-api/file?path=a' }, item: {} }],
+      }],
+      selected: null,
+      selectImage: () => picked.push('selectImage'),
+    },
+    actions: { previewWork: (entry) => picked.push(entry.image.path) },
+    now: NOW,
+  })
+  client.unmount()
+  const thumb = findNodes(
+    tree,
+    (node) => node.type === 'button'
+      && typeof node.props?.className === 'string'
+      && node.props.className.split(/\s+/).includes('ofs-thumb'),
+  )[0]
+  assert.ok(thumb, '缺少胶卷缩略图按钮')
+  thumb.props.onClick()
+  assert.deepEqual(picked, ['imagen-output/a/01.png'], '有 previewWork 时应交给组合层（换预览 + 回填参数）')
+})
+
 // 意图纯函数：多轮历史裁剪、通用澄清与模型建议归一；不依赖 React，离线断言。
 await check('渲染：意图纯函数（history / 澄清 / 模型建议归一）', async () => {
   const client = await loadClient({ now: NOW, responses: {}, testBuild: true })
@@ -3409,6 +4187,19 @@ await check('渲染：意图纯函数（history / 澄清 / 模型建议归一）
     assert.deepEqual(history[0], { role: 'user', content: '第 2 句' })
     assert.deepEqual(history.at(-1), { role: 'assistant', content: 'prompt 7' })
     assert.equal(history.some((item) => item.content.includes('正在生成')), false, '任务气泡不进上下文')
+    // 表单提交同步记录（kind='form'）只是界面展示，不进入意图上下文。
+    assert.deepEqual(
+      pure.intentHistory([
+        { role: 'user', text: '画一只橘猫' },
+        { role: 'user', kind: 'form', text: '另一个题材的提示词', summary: { presetId: 'sdxl-lightning' } },
+        { role: 'assistant', kind: 'intent', prompt: 'an orange cat' },
+      ]),
+      [
+        { role: 'user', content: '画一只橘猫' },
+        { role: 'assistant', content: 'an orange cat' },
+      ],
+      '表单提交同步记录不进意图上下文',
+    )
     assert.deepEqual(
       pure.intentHistory([
         { role: 'user', text: '画一只橘猫' },

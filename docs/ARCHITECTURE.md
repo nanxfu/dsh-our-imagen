@@ -227,8 +227,8 @@ Windows 上也不依赖 Python `Scripts` 目录进 PATH。
 `KAGGLE_LOGIN.timeoutMs` 超时；任何阶段的 token / 授权码都不写日志。`GET/POST /imagen-api/kaggle/login`
 只暴露状态与（manual 模式下的）授权链接。
 
-### 2.18 图生图（垫图重绘，M3）
-链路分三段，参考图只在 Host 与远端内存里短暂存在，不进 `/state` 轮询：
+### 2.18 图生图与局部重绘（M3 / 0.12.0）
+链路分三段，参考图与蒙版只在 Host 与远端内存里短暂存在，不进 `/state` 轮询：
 
 1. **Host 入队校验**（`lib/jobs/`）：`reference` 支持 `path`（`imagen-output/` 内作品）或 `image`
    （base64，可带 data URL 前缀）二选一；入队前做词法校验（相对路径、拒绝 `..`/绝对路径）、
@@ -246,9 +246,30 @@ Windows 上也不依赖 Python `Scripts` 目录进 PATH。
    惰性创建（`STATE.img2img_pipe`，切换模型或 `release_pipeline()` 时清空），因此不重复加载权重、
    不额外占显存；img2img 的 `__call__` 签名单独缓存。
 
-模型能力由 `models/*.json` 的 `supportsImg2Img` 标记（首期仅 SDXL 家族为 true），经生成资产下发到
-客户端用于置灰与提示；daemon 不信任该标记，按 loader 白名单独立兜底。请求体上限方面：daemon 按
-`contract.limits.reference.maxBytes` 推导（base64 膨胀后约 12 MB），Host 的出图路由也单独放宽到同一量级，
+**局部重绘（Inpaint，0.12.0）** 复用同一条链路，只多一个可选蒙版：
+
+- 契约 `LIMITS.mask = { maxBytes: 2 MiB }`，蒙版是客户端生成的 PNG base64（白 = 重绘区域、
+  黑 = 保留区域），与 `reference` 一起提交；`reference.mask` 缺省时请求体与纯图生图逐字一致。
+- Host 只做词法与字节级预检（PNG 魔数、体积、无参考图时带蒙版直接拒绝），并把
+  `reference: { image_b64, strength, mask_b64? }` 透传给远端；产物 `meta.json` 加 `inpaint: true`。
+  出图路由的请求体上限按「参考图 + 蒙版」一起推导（`lib/routes/jobs.js`），否则两张图同时顶格时
+  会在路由层被 `invalid_body` 拦掉。
+- 远端 `ensure_inpaint_pipeline()` 用 `AutoPipelineForInpainting.from_pipe(STATE.pipe)` 惰性创建
+  （`STATE.inpaint_pipe`，与 img2img 一样随切模型 / `release_pipeline()` 清空）；`decode_mask_image()`
+  执行期完整解码一次、转灰度 `'L'` 并用最近邻对齐到参考图精确宽高，`run_task()` 走
+  `image` + `mask_image` + `strength` 分支（不传 width/height，出图尺寸跟随参考图）。
+- 能力声明：模型资产 `supportsInpaint`（首期仅 SDXL 家族 true，且必须同时 `supportsImg2Img`），
+  daemon 侧由 loader 白名单 `SUPPORTED_INPAINT_LOADERS` 独立兜底，不信任客户端标记。
+- **专用 inpaint 权重（0.12.0）**：`models/sdxl-inpaint.json` 用 `pipeline.nativeInpaint: true` +
+  `inpaintOnly: true` 声明「加载出来就是 9 通道 inpaint 管线」。`SdxlLoader.construct` 在
+  `nativeInpaint` 时改用 `AutoPipelineForInpainting.from_pretrained` 加载；`ensure_pipeline()` 把该标记
+  写进 `STATE.native_inpaint`，`ensure_inpaint_pipeline()` 遇到它直接复用 `STATE.pipe`（不再 `from_pipe`）。
+  这类底座不能文生图 / 纯图生图：Host 入队前拒绝、daemon 提交期 `parse_reference_spec` 与执行期
+  `run_task` 各兜一层；客户端 `inpaintOnlyOf()` 据此在缺蒙版时拦下生成并提示。
+
+模型能力由 `models/*.json` 的 `supportsImg2Img` / `supportsInpaint` 标记（首期仅 SDXL 家族为 true），
+经生成资产下发到客户端用于置灰与提示；daemon 不信任该标记，按 loader 白名单独立兜底。请求体上限方面：
+daemon 与 Host 出图路由都按 `reference.maxBytes + mask.maxBytes` 推导（base64 膨胀后约 13.5 MB），
 其余路由仍是 256 KiB。
 
 ### 2.19 模型知识单一来源（`shared/models-guide.js`）
@@ -298,6 +319,22 @@ Windows 上也不依赖 Python `Scripts` 目录进 PATH。
 3. **开关**：开发模式（`devEndpoint`）或插件配置 `updateCheck: false` 时不发起任何请求（离线测试同样走这个开关）。`package.json` 的 `engines.dsh` 供 DSH 插件管理在安装 / 更新时校验运行版本。
 
 比较口径是主版本号三段（`shared/version.js` 纯函数）：只在远端版本更高时提示，同版本 / 更旧 / 不可解析都不提示；不引入 semver 依赖。
+
+### 2.22 Agent 批量创作与透明风格配方（0.12.0）
+免费算力不按张数计费，所以「一句话规划一组图」比单张重复调用更划算；同时 0.10.0 已删除静态风格后缀，
+风格知识必须以**可见模板**的形式交给模型，而不是在服务端偷偷拼接。
+
+- **`imagen_batch`（`lib/tools.js`）**：公共参数（预设、宽高、步数、CFG）对整批生效，`items` 每项只描述
+  本条的画面（`prompt` 必填，可选 `negativePrompt` / `seed` / `saveTo`），单次 1~`LIMITS.batch.maxItems`（8）条。
+  每条独立走 `queue.submit`，因此参数钳制、`saveTo` 交付校验（含软链接逃逸）与队列上限全部复用同一条入口；
+  单条失败只影响该条。`waitSeconds` 是**整批共享的总等待预算**：按提交顺序串行等待，预算用尽即停止等待，
+  但不取消任务，返回未完成任务的 `jobId` 供 `imagen_history` 轮询。
+- **`imagen_recipes`（`shared/recipes.js`）**：配方是纯数据 + 纯函数检索，每条给出 `tags`、适配预设、
+  推荐比例、按 `promptStyle`（danbooru / natural / concise）分键的 `promptTemplate` 与推荐负向词，
+  用 `{subject}` 作为唯一占位符。工具只读、只返回文本，由模型显式改写进 `prompt`；无匹配时返回
+  可执行的替代检索建议（换关键词 / 换分类 / 换预设）。
+- **契约与测试**：条数上限进 `LIMITS.batch`；`test/agent-batch.mjs` 用假 `queue` / `ctx.tools` 覆盖
+  上限拒绝、失败隔离、总预算、`saveTo` 逐项校验与配方检索过滤，不依赖网络与 GPU。
 
 ---
 

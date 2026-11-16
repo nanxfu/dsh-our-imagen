@@ -173,6 +173,27 @@ export async function loadModels(modelsDir = MODELS_DIR) {
     if ('supportsChinese' in model && typeof model.supportsChinese !== 'boolean') {
       fail(`${where} 的 supportsChinese 必须是布尔值（缺省按 false 处理）`)
     }
+    // 局部重绘（Inpaint）能力：能否用 AutoPipelineForInpainting.from_pipe 复用同一底座。
+    // 首期只对 SDXL 家族开放，且必须同时支持图生图（蒙版叠在参考图上）。
+    if ('supportsInpaint' in model && typeof model.supportsInpaint !== 'boolean') {
+      fail(`${where} 的 supportsInpaint 必须是布尔值（缺省按 false 处理）`)
+    }
+    if (model.supportsInpaint === true && model.supportsImg2Img !== true) {
+      fail(`${where} 标了 supportsInpaint 却没标 supportsImg2Img：局部重绘必须基于参考图`)
+    }
+    // 专用 inpaint 权重（inpaintOnly）：只用于局部重绘，不能文生图/纯图生图。
+    // 必须同时声明 supportsInpaint，且 pipeline 里要标 nativeInpaint（daemon 据此加载专用管线）。
+    if ('inpaintOnly' in model && typeof model.inpaintOnly !== 'boolean') {
+      fail(`${where} 的 inpaintOnly 必须是布尔值（缺省按 false 处理）`)
+    }
+    if (model.inpaintOnly === true) {
+      if (model.supportsInpaint !== true) {
+        fail(`${where} 标了 inpaintOnly 却没标 supportsInpaint`)
+      }
+      if (!model.pipeline || model.pipeline.nativeInpaint !== true) {
+        fail(`${where} 标了 inpaintOnly 时 pipeline.nativeInpaint 必须为 true`)
+      }
+    }
     // 可调步数档位范围：fast 模型通常固定步数可省略或为 null；usable 模型提供 { min, max, step, fast, balanced, fine }。
     if (model.stepRange !== undefined && model.stepRange !== null) {
       const r = model.stepRange
@@ -230,6 +251,10 @@ function projectPresets(models) {
     supportsChinese: model.supportsChinese === true,
     // 图生图（垫图重绘）能力：客户端据此决定是否允许放参考图；daemon 侧还会按 loader 兜底。
     supportsImg2Img: model.supportsImg2Img === true,
+    // 局部重绘（Inpaint）能力：客户端据此决定是否开放涂抹蒙版；daemon 侧同样按 loader 兜底。
+    supportsInpaint: model.supportsInpaint === true,
+    // 专用局部重绘权重：只能带蒙版使用（不做文生图 / 纯图生图），客户端与 daemon 都要拦。
+    inpaintOnly: model.inpaintOnly === true,
     // 负向提示词能力：客户端据此显隐「排除项」、助手据此决定是否输出 negative。
     supportsNegative: model.supportsNegative === true,
     sizeOptions: model.sizeOptions,

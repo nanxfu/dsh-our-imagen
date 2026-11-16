@@ -72,10 +72,15 @@ class DiffusersLoader(ModelLoader):
 
 
 class SdxlLoader(DiffusersLoader):
-    """SDXL 底座：``AutoPipelineForText2Image`` + 按 spec 替换调度器。"""
+    """SDXL 底座：``AutoPipelineForText2Image`` + 按 spec 替换调度器。
+
+    ``spec.nativeInpaint`` 为真时改用 ``AutoPipelineForInpainting`` 加载专用 inpaint 权重
+    （9 通道 UNet）：这类底座只能带蒙版出图，daemon 的 run_task 会按同一标记拦截文生图请求。
+    """
 
     name = "sdxl"
     supports_img2img = True
+    supports_inpaint = True
 
     def construct(  # noqa: ANN001, ANN201 - 签名与基类一致，参数不逐个标注
         self,
@@ -88,10 +93,18 @@ class SdxlLoader(DiffusersLoader):
         error_cls=RuntimeError,
         request_error_cls=ValueError,
     ):
-        from diffusers import AutoPipelineForText2Image
+        native_inpaint = spec.get("nativeInpaint") is True
+        if native_inpaint:
+            from diffusers import AutoPipelineForInpainting
 
+            factory = AutoPipelineForInpainting
+            log("[load] sdxl 专用局部重绘底座：AutoPipelineForInpainting.from_pretrained")
+        else:
+            from diffusers import AutoPipelineForText2Image
+
+            factory = AutoPipelineForText2Image
         pipe = from_pretrained_with_variant_fallback(
-            AutoPipelineForText2Image, source, self._base_kwargs(spec), self.name, log=log, error_cls=error_cls
+            factory, source, self._base_kwargs(spec), self.name, log=log, error_cls=error_cls
         )
         apply_scheduler(pipe, spec, log=log)
         return pipe.to("cuda")
@@ -102,6 +115,7 @@ class SdxlLoraLoader(DiffusersLoader):
 
     name = "sdxl-lora"
     supports_img2img = True
+    supports_inpaint = True
 
     def local_lora_weight(self, spec: dict, ctx: LoadContext) -> str | None:
         lora = spec.get("lora") or {}

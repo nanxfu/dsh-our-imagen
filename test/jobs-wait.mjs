@@ -30,6 +30,7 @@ import { join } from 'node:path'
 
 import { JobQueue } from '../lib/jobs.js'
 import { submitGenerate, waitForJob } from '../lib/remote.js'
+import { LIMITS, PRESETS } from '../shared/contract.js'
 
 const PRESET = 'sdxl-turbo'
 // 1×1 透明 PNG：走真实的 saveJobOutput 落盘路径。
@@ -948,6 +949,125 @@ async function main() {
       const meta = JSON.parse(await readFile(join(workspace, done.output.dir, 'meta.json'), 'utf8'))
       assert.equal(meta.sourceImage, null, '上传来源没有工作区路径')
       assert.equal(meta.strength, 0.9)
+    } finally {
+      queue.dispose()
+      await remote.close()
+    }
+  })
+
+  // ── 局部重绘（Inpaint）：参考图 + 蒙版入队校验 / 远端载荷 / meta 标记 ──────
+  await check('局部重绘：蒙版入队校验、远端 mask_b64 透传与 meta.inpaint', async () => {
+    const remote = await startFlakyRemote()
+    remote.state.onGenerate = (state, count) => {
+      const body = state.generateCalls[count - 1]
+      state.jobs.set(body.jobId, doneJob(body.jobId, 1))
+    }
+    const seedDir = join(workspace, 'imagen-output', '20260101-000000-inpaint-seed')
+    await mkdir(seedDir, { recursive: true })
+    const seedPath = 'imagen-output/20260101-000000-inpaint-seed/01.png'
+    await writeFile(join(seedDir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+    const queue = new JobQueue({
+      ctx: makeCtx(),
+      session: makeSession({ connection: () => ({ endpoint: remote.endpoint, token: 'test-token' }) }),
+      defaultPreset: PRESET,
+      options: { generateTimeoutMs: 5000, pollMs: 20 },
+    })
+    try {
+      // 蒙版脱离参考图没有意义：入队前直接拒绝，不占队列、不触发远端提交。
+      const orphan = queue.submit({ prompt: '只有蒙版', reference: { mask: PNG_B64 } })
+      assert.equal(orphan.ok, false)
+      assert.equal(orphan.code, 'invalid_request')
+      assert.ok(orphan.message.includes('带蒙版时必须同时提供参考图'), orphan.message)
+
+      // 非法蒙版：base64 不合法 / 非 PNG 魔数 / 超过契约体积上限。
+      const invalidMasks = [
+        'not-base64!!',
+        Buffer.from('not a png image').toString('base64'),
+        Buffer.alloc(LIMITS.mask.maxBytes + 1, 1).toString('base64'),
+      ]
+      for (const mask of invalidMasks) {
+        const result = queue.submit({ prompt: '非法蒙版', reference: { path: seedPath, mask } })
+        assert.equal(result.ok, false, '非法蒙版必须入队前拒绝')
+        assert.equal(result.code, 'invalid_request')
+        assert.ok(result.message.includes('蒙版'), `错误文案应指明蒙版：${result.message}`)
+      }
+      assert.equal(remote.state.generateCalls.length, 0, '非法蒙版不得触发远端提交')
+
+      // data URL 前缀归一后与裸 base64 等价；params 只记「是否带蒙版」，不落 base64。
+      const submitted = queue.submit({
+        prompt: '把天空换成晚霞',
+        reference: { path: seedPath, strength: 0.75, mask: `data:image/png;base64,${PNG_B64}` },
+      })
+      assert.equal(submitted.ok, true, JSON.stringify(submitted))
+      assert.deepEqual(submitted.job.params.reference, {
+        sourcePath: seedPath,
+        strength: 0.75,
+        mask: true,
+      })
+      assert.ok(!JSON.stringify(submitted.job).includes(PNG_B64), 'publicView 不得包含蒙版 base64')
+
+      const done = await queue.waitFor(submitted.job.id, 10)
+      assert.equal(done.status, 'done', JSON.stringify(done.error))
+      const call = remote.state.generateCalls.at(-1)
+      assert.deepEqual(call.reference, { image_b64: PNG_B64, strength: 0.75, mask_b64: PNG_B64 })
+      assert.equal(call.tasks.length, 1)
+
+      const meta = JSON.parse(await readFile(join(workspace, done.output.dir, 'meta.json'), 'utf8'))
+      assert.equal(meta.inpaint, true, 'meta 必须记 inpaint 标记')
+      assert.equal(meta.sourceImage, seedPath)
+      assert.equal(meta.strength, 0.75)
+      assert.equal(meta.params.reference.mask, true)
+    } finally {
+      queue.dispose()
+      await remote.close()
+    }
+  })
+
+  await check('专用局部重绘模型（inpaintOnly）：缺蒙版拒绝入队，带蒙版放行', async () => {
+    const preset = PRESETS.find((item) => item.id === 'sdxl-inpaint')
+    assert.ok(preset, '契约里应有 sdxl-inpaint 预设')
+    assert.equal(preset.inpaintOnly, true, 'sdxl-inpaint 应标记 inpaintOnly')
+    const remote = await startFlakyRemote()
+    remote.state.onGenerate = (state, count) => {
+      const body = state.generateCalls[count - 1]
+      state.jobs.set(body.jobId, doneJob(body.jobId, 1))
+    }
+    const seedDir = join(workspace, 'imagen-output', '20260101-000000-inpaint-only')
+    await mkdir(seedDir, { recursive: true })
+    const seedPath = 'imagen-output/20260101-000000-inpaint-only/01.png'
+    await writeFile(join(seedDir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+    const queue = new JobQueue({
+      ctx: makeCtx(),
+      session: makeSession({ connection: () => ({ endpoint: remote.endpoint, token: 'test-token' }) }),
+      defaultPreset: PRESET,
+      options: { generateTimeoutMs: 5000, pollMs: 20 },
+    })
+    try {
+      // 1) 纯文生图：直接拒绝（不占队列、不触发远端）。
+      const plain = queue.submit({ prompt: '文生图', presetId: 'sdxl-inpaint' })
+      assert.equal(plain.ok, false, 'inpaintOnly 预设不能文生图')
+      assert.equal(plain.code, 'invalid_request')
+      assert.ok(plain.message.includes('只支持局部重绘'), plain.message)
+
+      // 2) 只有参考图、没有蒙版：同样拒绝（纯图生图也不行）。
+      const img2img = queue.submit({
+        prompt: '纯图生图',
+        presetId: 'sdxl-inpaint',
+        reference: { path: seedPath },
+      })
+      assert.equal(img2img.ok, false)
+      assert.equal(img2img.code, 'invalid_request')
+      assert.ok(img2img.message.includes('涂抹蒙版'), img2img.message)
+
+      // 3) 参考图 + 蒙版：放行并走远端。
+      const ok = queue.submit({
+        prompt: '局部重绘',
+        presetId: 'sdxl-inpaint',
+        reference: { path: seedPath, strength: 0.8, mask: PNG_B64 },
+      })
+      assert.equal(ok.ok, true, JSON.stringify(ok))
+      const done = await queue.waitFor(ok.job.id, 10)
+      assert.equal(done.status, 'done', JSON.stringify(done.error))
     } finally {
       queue.dispose()
       await remote.close()

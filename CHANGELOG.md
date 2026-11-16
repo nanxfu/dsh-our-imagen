@@ -57,6 +57,56 @@
   - 新增 `src/logic/pipeline.js` 节点派生逻辑（纯函数，`src/studio/PipelineBar.jsx` 只负责画）与 `check-client-logic` 单测，覆盖节点映射、就绪折叠、完成 / 失败 / 取消 / 关闭生命周期。
   - `check-client-render` 更新排队 / 排队变慢 / 排队卡住 / 准备模型 / 就绪 / 停止等场景的断言，并补充窄屏与英文用例。
 
+### Agent 批量创作与透明风格配方
+
+> 对应 ROADMAP 第十条阶段一：发挥免费算力不按张数计费的优势，同时延续 0.10.0 删除静态风格后缀的决策，不做暗箱拼接。
+
+- **对话批量生图（`imagen_batch`）**：接收公共默认参数（`presetId` / `width` / `height` / `steps` / `cfg`）与 `items` 数组（每项 `prompt` 必填，可选 `negativePrompt` / `seed` / `saveTo`），单次 1~`LIMITS.batch.maxItems`（8）条，每条固定出 1 张。逐条经 `queue.submit` 入队：条目数超限整批拒绝、一条都不提交；`saveTo` 逐项走交付校验（含软链接逃逸）并检测重复；单条提交异常或生成失败只影响该条。`waitSeconds` 是整批的**总等待预算**（0~600，默认 90），预算用尽即停止等待但**不取消**任务，汇总里给出未完成任务的 `jobId` 与 `imagen_history` / `imagen_cancel` 指引。
+- **透明风格配方库（`imagen_recipes`）**：新增 `shared/recipes.js`，8 条配方覆盖日系二次元、赛博霓虹、写实人像、极简海报、水墨水彩、产品静物、绘本与概念场景。每条含 `id` / `title` / `category` / `tags` / `recommendedPresets`（全部为契约内的真实预设）/ `ratioId` / 按 `promptStyle`（danbooru / natural / concise）分键的 `promptTemplate`（唯一占位符 `{subject}`）/ 推荐负向词。只读工具按关键词、分类、标签或 `presetId` 检索，返回可读模板并显式提示「自行改写进 prompt」；无匹配时给出可执行的替代检索建议。
+- **工具描述引导**：`imagen_generate` / `imagen_batch` 的描述加入「先检索配方、再把模板显式改写进 prompt，工具不会自动追加风格后缀」。
+- **契约**：`shared/contract.js` 新增 `LIMITS.batch = { maxItems: 8 }`（条数上限与队列 `maxPending` 叠加，不会把云端排队撑爆）。
+- **测试**：新增 `test/agent-batch.mjs`（17 项：schema 边界来自契约、批量上限、单条失败隔离、部分成功汇总、saveTo 逐项校验与重复检测、总预算有界、`waitSeconds` 钳制、空 items、配方检索过滤与预设合法性、空结果提示）；`test/host-e2e.mjs` 的工具注册断言扩到 6 个工具并补两个新工具的 schema 断言。
+
+### 工作台双向同步与创作流转
+
+> 对应 ROADMAP 第九条，设计依据见 [docs/STUDIO_SYNC_AND_ITERATION_DESIGN.md](docs/STUDIO_SYNC_AND_ITERATION_DESIGN.md)。
+
+- **「新建对话」取代「清空对话」**：按钮语义从「删记录」改为「开新上下文」，点击清空线程与输入草稿；解析中点击时用线程代次守卫丢弃旧请求结果，不会写进新线程。
+- **表单提交同步进助手**：参数面板提交生成后，助手线程出现一张参数同步卡，用胶囊展示模型、比例与像素、张数、是否含参考图、种子策略（模型名本地化），与普通用户气泡在结构上区分；生成变体 / 重试来源各有标题。记录带 `kind='form'`，`intentHistory()` 会跳过，**不进入**发给意图模型的多轮上下文。
+- **胶卷点击自动回填参数（仅创作视图）**：点击底部胶卷缩略图除切换预览外，还把该作品参数回填进左侧表单（提示词、排除项、宽高、步数、CFG、预设，保留原图 Seed；无有效 Seed 时恢复随机），并清掉上一轮残留参考图。画廊（Gallery）保持纯浏览，不改写表单。
+- **草稿保护**：以「干净基准快照」逐字段比较判断是否有未提交手动修改（改回原样会重新变干净）。有草稿时点胶卷仍切预览、但保留左侧草稿并提示「已保留当前草稿」；要覆盖草稿仍用大图上的「带回参数」。
+- **版本微调 / 新建创作边界**：回填后参数面板顶部显示「正在微调：<作品提示词>」并常驻「新建创作」按钮。新建创作只清掉绑定上一张作品的状态（提示词、参考图、固定 Seed、微调来源与脏状态），排除项回到当前 CFG 下的预设推荐值；当前模型预设与画幅尺寸保留。
+- **字典**：`studio.chat.clear` 改名 `studio.chat.newChat`，新增 12 个键（微调状态行 3 个、表单同步卡 7 个、轻提示 2 个），zh/en 各 444 键严格同构。
+- **测试**：新增纯逻辑 `src/logic/form.js`（`formSnapshotOf` / `isFormDirty` / `newCreationPatch`）与 `generate.js` 的 `formSummaryOf`、`iteratePatch` 增强；`check-client-logic` 71 项、`check-client-render` 86 项覆盖代次守卫、上下文隔离、草稿保护与新建创作边界。
+
+### 画布局部重绘 Inpaint
+
+> 对应 ROADMAP 第十条阶段二：沿用 `from_pipe` 零显存增量思路，把「整图重绘」扩展成「只改涂抹区域」。
+
+- **契约与模型能力**：`shared/contract.js` 新增 `LIMITS.mask = { maxBytes: 2 MiB }` 并随 `daemonContract()` 下发（`remote/contract.json` 同步）；模型资产新增 `supportsInpaint`（SDXL 家族 7 个 `true`，`flux2` / `anima` 为 `false`），`tools/build-assets.mjs` 校验「标了局部重绘必须同时支持图生图」，公开预设视图自动带给客户端。
+- **请求契约**：`POST /imagen-api/generate` 的 `reference` 增加可选 `mask`（PNG base64，可带 data URL 前缀；白 = 重绘区域、黑 = 保留区域）。Host 在 `normalizeReference` 做 PNG 魔数 / `LIMITS.mask.maxBytes` / 「无参考图时带蒙版直接拒绝」的预检；出图路由的请求体上限改为按「参考图 + 蒙版」一起推导，避免两项同时顶格时被 `invalid_body` 拦掉；任务公开视图只记 `params.reference.mask = true`，二进制不进 `/state`。
+- **Host 执行期**：`resolveReferencePayload()` 把蒙版以 `mask_b64` 原样随 job 级参考图下发；产物 `meta.json` 增加 `inpaint: true`（`sourceImage` / `strength` 语义不变）。
+- **远端推理**：`remote/inference/loaders/` 新增 `supports_inpaint` 能力声明与 `registry.inpaint_names()`（daemon 侧 `SUPPORTED_INPAINT_LOADERS` 独立兜底，flux2 / anima 带蒙版请求直接 `400 invalid_request`）；`ensure_inpaint_pipeline()` 用 `AutoPipelineForInpainting.from_pipe(STATE.pipe)` 惰性复用底座（`STATE.inpaint_pipe`，随切模型 / `release_pipeline()` 清空），`decode_mask_image()` 执行期解码一次、转灰度 `'L'` 并按最近邻精确对齐参考图宽高，`run_task()` 走 `image` + `mask_image` + `strength` 分支（出图尺寸跟随参考图），结果项补 `inpaint` / `maskWidth` / `maskHeight`。`request_body_limit()` 与 mock daemon 同步计入蒙版。
+- **客户端画布**：新增 `src/logic/mask.js`（画笔边界与状态归一、画布比例、base64 归一与字节校验、最小有效涂抹面积、导出前置校验、FNV-1a 蒙版指纹）；`src/logic/preset.js` 增加 `supportsInpaint()`；`buildGenerateBody` 只在有参考图 + 有蒙版 + 模型支持时输出 `reference.mask`。`Stage.jsx` 增加「局部涂抹」开关与透明 canvas 蒙版层（画笔大小 / 橡皮擦 / 清空 / 反选 / 完成，Pointer Events 触控、方向键 + Space/Enter + Esc 键盘操作、热区 ≥44px），表单承载 `reference.mask` 并在换图 / 移除 / 回填 / 新建创作时清理，蒙版指纹纳入脏判定。
+- **字典**：新增 15 个 `studio.mask.*` 文案（zh/en 各 459 键同构）。
+- **测试**：`python test/remote/run.py` 353 项（蒙版校验、白名单拦截、解码对齐、inpaint 管线与 execute_job 分支）；`test/jobs-wait.mjs` 24 项、`test/host-e2e.mjs` 48 项（含带蒙版全链路与「参考图 + 蒙版接近上限不被请求体闸门拦截」）；客户端 `check-client-logic` 76 项 / `check-client-render` 88 项新增蒙版纯逻辑与交互覆盖（后续专用预设批次补到 77 / 89）；`test/gpu-live.mjs` 新增 `--inpaint` 分支（程序化灰度蒙版，供真机验收，本机未执行）。
+- **真机验收（2026-11-16，4 轮）**：`node test/gpu-live.mjs --preset sdxl-lightning --inpaint` 在 Kaggle 2×Tesla T4（diffusers 0.43.0 / torch 2.11.0 / transformers 5.23.0）跑通 4 轮，结论：
+  - **结构与显存**：文生图 9.96~12.34s → 局部重绘 9.25~9.88s，`load_seconds=0`（`from_pipe` 复用底座），出图 1024×1024、`maskWidth/Height` 与参考图对齐；`/health.gpu_memory` 重绘前后 `allocated_mb` 7000→7000、`reserved_mb` 10776→10780（+4 MiB 噪声）、`max_allocated_mb` 不变——**零显存增量**，与 img2img 验收结论一致。
+  - **蒙版生效范围**：文生图与重绘用同一提示词时，蒙版内平均绝对差约 9.7/255、完全落在黑色保留区的边框带仅约 1.5/255（4 通道路径的 VAE 往返噪声），说明重绘只作用于涂抹区。
+  - **强度影响**：4 步 SDXL Lightning 下 `strength=0.6` 只跑 2 步、换提示词时蒙版区平均变化仅约 3.8/255（肉眼偏弱）；`strength≥0.76` 跑 3 步、蒙版区平均变化约 25/255，才有明显重写；`0.8` 与 `0.9` 输出**逐字节相同**（`int(steps × strength)` 量化到同一档）。
+  - **结论落地**：涂抹模式打开时，若重绘强度仍是契约默认 0.6，前端自动抬到局部重绘默认档 **0.8**（`MASK_STRENGTH_DEFAULT`，用户手动调过的值不覆盖）；契约区间 0.2~0.9 与步长不变。已知限制：大面积蒙版（如 40% 画布）在高强度下边界会有可见硬接缝，这是底座走 4 通道混回分支的固有表现；实际使用的笔刷小区域明显更自然。
+  - **验收工具**：`test/gpu-live.mjs` 默认改用直连 Kaggle（`lib/kaggle-direct.js`）推送 Kernel，不再依赖本机 `kaggle` CLI；新增 `--inpaint-prompt`（重绘用单独提示词）、`--max-queue-minutes` / `--max-replace`（排队超时自动换新实例重排，本轮第二次验收就是靠它从卡住的 QUEUED 里恢复的）。产物见 `bench-results/gpu-live/`（每轮 `01.png` / `02-inpaint.png` / `report.json`）。
+
+### SDXL Inpaint 专用局部重绘预设
+
+> 通用 SDXL 底座走 `from_pipe` 派生只在 4 通道「混回未涂抹区」的兼容路径上，边界融合与大改画面质量有限；这一批直接接入 9 通道 inpaint 专用权重。
+
+- **模型资产**：新增 `models/sdxl-inpaint.json`（`diffusers/stable-diffusion-xl-1.0-inpainting-0.1`，9 通道 UNet，order 32，1024² / 30 步 / CFG 8，档位 quality），并新增两个能力标记：`inpaintOnly`（只能带蒙版使用，不能文生图 / 纯图生图）与 `pipeline.nativeInpaint`（让 daemon 用 `AutoPipelineForInpainting.from_pretrained` 加载）。`tools/build-assets.mjs` 校验两个标记必须成对、且 `inpaintOnly` 不能脱离 `supportsInpaint`；公开预设视图自动下发。
+- **daemon**：`SdxlLoader.construct` 在 `nativeInpaint` 时改用 inpaint 工厂；`ensure_pipeline()` 记录 `STATE.native_inpaint`，`ensure_inpaint_pipeline()` 遇到专用底座直接复用 `STATE.pipe`（不再 `from_pipe`）；`parse_reference_spec` 与 `run_task` 对「专用模型 + 无蒙版」的请求返回 `invalid_request`（文案「该模型只支持局部重绘」）。
+- **Host**：`JobQueue.submit` 在入队前拒绝「`inpaintOnly` 预设 + 无蒙版」的请求，不占队列与 GPU。
+- **客户端**：新增 `inpaintOnlyOf()` 与表单 `maskRequiredBlocked`——缺参考图或蒙版时生成被拦下并 toast 说明，参数面板常驻「需要先以此图重绘并涂抹蒙版」提示；参考图兜底预设（`referencePresetOf`）跳过专用模型；进入涂抹模式时专用模型的默认重绘强度取 **0.9**（通用模型 0.8）；模型选择卡复用 SDXL Base 海报，不新增图片资产。
+- **测试**：远端单测 371 项（+18：native 加载分支、`ensure_inpaint_pipeline` 复用、无蒙版拦截、提交期校验）；`jobs-wait.mjs` 25 项（+1：专用预设缺蒙版拒绝入队、带蒙版放行）；客户端逻辑与渲染新增 `inpaintOnlyOf`、兜底预设跳过、专用模型拦截与补蒙版后按 `reference.mask` 提交的断言（最终 logic 77 / render 89）。
+- **真机验收（2026-11-16，2×Tesla T4）**：kernel 预热即加载 `sdxl:diffusers/stable-diffusion-xl-1.0-inpainting-0.1`；40% 中心蒙版 + 「蓝色大象」提示词下象头明确生成（蒙版内平均差异 41.9/35.7/30.9 vs 通用模型同用例 24.6/27.3/25.2），黑色保留区逐像素不变（0.00），边界融合明显更自然；整图蒙版可完整按提示词成图。**已知行为**：小蒙版（约 2.5% 面积）时上下文补全压过提示词，想插入新物体建议涂抹更大区域或换用更强强度；1024² / 30 步单张 20.9~24.9s。产物见 `bench-results/gpu-live/`。
 ## 0.11.0 — 2026-11-15
 
 > 本版完成架构重构 Batch 0–3（打包器、Host 模块边界、远端包化与测试领域化），新增画廊单张删除，切换 npm 包名并打通 Trusted Publishing 发布链，同时更新官网与成片资产。各批都只改内部模块边界、依赖方向与打包形态，`docs/SPEC.md` 定义的 HTTP 路由、报文、错误码与配置注入契约保持向后兼容（详见 [docs/REFACTOR_ARCHITECTURE_SPEC.md](docs/REFACTOR_ARCHITECTURE_SPEC.md)）。

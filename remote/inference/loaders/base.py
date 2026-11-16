@@ -37,14 +37,17 @@ class LoadContext:
 
 
 class ModelLoader:
-    """模型家族策略：声明名字 / 垫图能力 / 依赖仓库 / 如何构建管线。
+    """模型家族策略：声明名字 / 垫图与局部重绘能力 / 依赖仓库 / 如何构建管线。
 
     子类只覆写有差异的部分。``name`` 必须与请求里的 ``pipeline.loader`` 完全一致——它同时
-    是白名单文本、img2img 判定的键与 ``loaded`` 标识的前缀。
+    是白名单文本、img2img / inpaint 判定的键与 ``loaded`` 标识的前缀。
     """
 
     name = ""
     supports_img2img = False
+    # 局部重绘（inpaint）能力：首期只对 SDXL 家族开放。它与 supports_img2img 相互独立
+    # （能垫图的家族不一定能局部重绘），提交期各查各的白名单，见 reference_codec。
+    supports_inpaint = False
 
     def required_repos(self, spec: dict) -> list[str]:
         """该 spec 依赖的 HF 仓库（切模型 keep_set 用）。

@@ -532,3 +532,134 @@
 .ofs-lightbox-action:hover {
   background: rgb(20 20 22 / 84%);
 }
+
+/* ── 局部重绘：涂抹蒙版 ─────────────────────────────────────── */
+/*
+ * 涂抹态占满整块光桌：上面一行标题与覆盖率读数，中间是参考图与蒙版画布，
+ * 下面一排画笔、橡皮擦、清空、反选与完成。
+ * 画布外框的比例、光标圆圈的位置与直径都由运行时按参考图像素写进内联样式，
+ * 这里只固定静态排版。
+ */
+.ofs-mask-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  overflow: auto;
+}
+
+.ofs-mask-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(100%, 560px);
+}
+
+.ofs-mask-title {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* 画布外框：比例来自参考图像素，由内联 aspect-ratio 给出。 */
+.ofs-mask-stage {
+  position: relative;
+  width: min(100%, 560px);
+  max-height: 100%;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+  box-shadow: var(--ofs-print-shadow);
+}
+
+/* 参考图按 fill 铺满画布：导出的蒙版与参考图同比例，这里不能留 contain 的边。 */
+.ofs-mask-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  user-select: none;
+}
+
+/* 蒙版层是透明底白色笔迹，叠在参考图上用 screen 混色只提亮涂过的地方。 */
+.ofs-mask-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+  mix-blend-mode: screen;
+  opacity: 0.85;
+}
+
+/* 画笔光标圈：left / top / width / height 由指针或键盘移动时直接写内联样式。 */
+.ofs-mask-cursor {
+  position: absolute;
+  border: 1px solid var(--ofs-accent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: none;
+}
+
+.ofs-mask-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* 画笔大小：滑块与工具栏同高、宽度固定，拖动时不带着整行抖动。 */
+.ofs-mask-brush {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  color: var(--ofs-ink-2);
+}
+
+.ofs-mask-range {
+  width: 120px;
+  height: 44px;
+}
+
+/* 说明文字与画布同宽（画布宽度也是 min(100%, 560px)）；字号与颜色沿用 .ofs-hint。 */
+.ofs-mask-hint {
+  width: min(100%, 560px);
+}
+
+/* 涂抹入口行：读数与提示并排，窄屏自动换行。 */
+.ofs-mask-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* 蒙版读数与能力说明：外边距归零，字号与颜色沿用 .ofs-hint / .ofs-muted。 */
+.ofs-mask-hint,
+.ofs-mask-status,
+.ofs-mask-warn {
+  margin: 0;
+}
+/* 涂抹提示：操作要点与少步模型的能力提醒（两行弱提示，不抢视觉）。 */
+.ofs-mask-guide,
+.ofs-mask-fast {
+  max-width: min(100%, 560px);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.ofs-mask-fast {
+  color: var(--ofs-warn, #b45309);
+}

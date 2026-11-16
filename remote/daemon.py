@@ -52,6 +52,12 @@
     ``contract.limits.reference.maxEdge`` 时等比 LANCZOS 缩小、转 RGB。图生图管线用
     ``AutoPipelineForImage2Image.from_pipe`` 复用已加载的 txt2img 底座，不重复加载、
     不额外占显存，随 ``STATE.pipeline_key`` 切换与 ``release_pipeline()`` 一起清理。
+15. **局部重绘（Inpaint）**：在图生图之上再带可选 ``reference.mask_b64``——客户端导出的
+    黑白 PNG（白 = 重绘区域，黑 = 保留区域）。提交期除参考图校验外还查 ``inpaint``
+    loader 白名单（首期仅 SDXL 家族，服务端独立兜底）与蒙版 PNG / ``limits.mask.maxBytes``；
+    执行期（``decode_mask_image``）完整解码一次，转灰度 ``'L'`` 并按最近邻精确对齐到参考图
+    宽高。管线用 ``AutoPipelineForInpainting.from_pipe(STATE.pipe)`` 复用同一批底座组件，
+    缓存与释放规则同 ``ensure_img2img_pipeline``；出图尺寸跟随参考图。
 
 文件边界（Batch 2 切片⑥f 之后）：本文件只留**配置注入点、ntfy 会合、模型加载的装配与出图
 执行、job 执行、/health 取样、以及三处装配块**（HTTP_API / TUNNEL / APP）。HTTP 传输层在
@@ -590,10 +596,12 @@ from remote.infra.cache import CacheManager  # noqa: E402
 # 先于 CACHE 构造——缓存闸门要用它的 required_repos 推导"切模型时哪些仓库不能删"。
 LOADERS = default_registry()
 
-# `d.SUPPORTED_LOADERS` / `d.SUPPORTED_IMG2IMG_LOADERS` 是注册表的只读投影（旧引用面）：
-# 白名单与垫图能力不再在本文件维护，新增 loader 只改 remote/inference/registry.py。
+# `d.SUPPORTED_LOADERS` / `d.SUPPORTED_IMG2IMG_LOADERS` / `d.SUPPORTED_INPAINT_LOADERS`
+# 是注册表的只读投影（旧引用面）：白名单与垫图 / 局部重绘能力不再在本文件维护，
+# 新增 loader 只改 remote/inference/registry.py。
 SUPPORTED_LOADERS = LOADERS.names()
 SUPPORTED_IMG2IMG_LOADERS = LOADERS.img2img_names()
+SUPPORTED_INPAINT_LOADERS = LOADERS.inpaint_names()
 
 # 磁盘与缓存的门面：构造一次；config 传活对象（注入契约在启动期原地回填，见 config.py）。
 CACHE = CacheManager(
@@ -634,10 +642,13 @@ def release_pipeline() -> None:
         STATE.model_id = None
         STATE.loaded = []
         STATE.sig_params = set()
-        # 图生图管线与 txt2img 共用组件，这里只清引用；下面释放 pipe 后由 GC 一次性回收，
-        # 不会重复卸载权重，也不会留下指向旧模型的悬空句柄。
+        # 图生图 / 局部重绘管线与 txt2img 共用组件，这里只清引用；下面释放 pipe 后由 GC
+        # 一次性回收，不会重复卸载权重，也不会留下指向旧模型的悬空句柄。
         STATE.img2img_pipe = None
         STATE.img2img_sig_params = set()
+        STATE.inpaint_pipe = None
+        STATE.inpaint_sig_params = set()
+        STATE.native_inpaint = False
     if pipe is not None:
         # anima 运行时持有文本 embedding 缓存，卸载前先显式清掉。
         release = getattr(pipe, "release", None)
@@ -692,6 +703,7 @@ def ensure_pipeline(pipeline_spec: dict) -> tuple[object, float]:
         STATE.model_id = str(pipeline_spec.get("base"))
         STATE.loaded = [identity]
         STATE.sig_params = sig_params
+        STATE.native_inpaint = pipeline_spec.get("nativeInpaint") is True
     set_phase("ready")
     log(f"[load] 模型就绪，用时 {elapsed}s（{identity}）")
     return pipe, elapsed
@@ -728,6 +740,48 @@ def ensure_img2img_pipeline():
     return pipe
 
 
+def ensure_inpaint_pipeline():
+    """惰性创建局部重绘管线：复用 STATE.pipe 的组件，不重复加载、不额外占显存。
+
+    首次用到蒙版时通过 ``AutoPipelineForInpainting.from_pipe`` 生成，缓存到
+    ``STATE.inpaint_pipe``；``release_pipeline()`` 与切换底座时会清空（见该函数）。
+    inpaint 管线的 ``__call__`` 签名与 txt2img / img2img 不同（多 ``mask_image``），
+    因此单独缓存 ``inpaint_sig_params``。
+
+    SDXL 家族走 ``StableDiffusionXLInpaintPipeline``：底座 UNet 是 4 通道，diffusers 在
+    ``prepare_latents`` 里按 ``unet.config.in_channels`` 自动选 4 通道分支（不拼接 mask /
+    masked_image，改为每步把未涂抹区域的原图 latent 混回去），所以不会出现 9 通道 UNet
+    才有的维度不匹配，也不需要额外下载 inpaint 专用权重。
+    """
+    with STATE_LOCK:
+        # 专用 inpaint 底座（9 通道）本身就是 inpaint 管线：直接复用，不再 from_pipe 派生。
+        if STATE.native_inpaint and STATE.pipe is not None:
+            if not STATE.inpaint_sig_params:
+                STATE.inpaint_sig_params = set(STATE.sig_params)
+            return STATE.pipe
+        pipe = STATE.inpaint_pipe
+        if pipe is not None:
+            return pipe
+        base_pipe = STATE.pipe
+    if base_pipe is None:
+        raise RequestError("局部重绘需要先加载模型底座")
+    from diffusers import AutoPipelineForInpainting
+
+    log("[load] 首次局部重绘：从已加载底座复用组件创建 inpaint 管线（不额外占显存）")
+    try:
+        pipe = AutoPipelineForInpainting.from_pipe(base_pipe)
+    except Exception as exc:
+        if _is_oom(exc):
+            raise
+        raise LoadError(f"局部重绘管线创建失败：{short(exc)}") from exc
+    sig_params = pipe_signature_params(pipe)
+    with STATE_LOCK:
+        STATE.inpaint_pipe = pipe
+        STATE.inpaint_sig_params = sig_params
+    log("[load] 局部重绘管线就绪")
+    return pipe
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 请求校验与生成
 # ─────────────────────────────────────────────────────────────────────────────
@@ -758,7 +812,10 @@ def ensure_img2img_pipeline():
 from remote.inference.reference_codec import (  # noqa: E402
     _coerce_strength as _coerce_strength_impl,
     _open_reference_image as _open_reference_image_impl,
+    composite_inpaint_image as composite_inpaint_image_impl,
+    decode_mask_image as decode_mask_image_impl,
     decode_reference_image as decode_reference_image_impl,
+    feather_mask_image as feather_mask_image_impl,
     parse_reference_spec as parse_reference_spec_impl,
 )
 from remote.transport.validator import validate_generate_spec as validate_generate_spec_impl  # noqa: E402
@@ -775,18 +832,38 @@ def _open_reference_image(image_bytes: bytes):  # noqa: ANN202
 
 
 def parse_reference_spec(raw, pipeline_spec: dict) -> dict | None:  # noqa: ANN001
-    """提交期校验 job 级参考图，归一成 ``{image_bytes, strength, width, height}``。"""
+    """提交期校验 job 级参考图与可选蒙版。
+
+    归一成 ``{image_bytes, strength, width, height}``；带蒙版时另含 ``mask_bytes`` /
+    ``mask_width`` / ``mask_height``。
+    """
     return parse_reference_spec_impl(
         raw,
         pipeline_spec,
         limits_for=_limit_spec,
         img2img_loaders=SUPPORTED_IMG2IMG_LOADERS,
+        inpaint_loaders=SUPPORTED_INPAINT_LOADERS,
     )
 
 
 def decode_reference_image(reference: dict) -> object:
     """执行期完整解码参考图一次：转 RGB，长边超过 ``maxEdge`` 时等比 LANCZOS 缩小。"""
     return decode_reference_image_impl(reference, limits_for=_limit_spec)
+
+
+def decode_mask_image(mask: dict, size: tuple[int, int]) -> object:
+    """执行期完整解码蒙版一次：转灰度 ``'L'``，并按最近邻精确对齐到参考图宽高。"""
+    return decode_mask_image_impl(mask, size=size)
+
+
+def feather_mask_image(mask):  # noqa: ANN001, ANN201
+    """把二值蒙版做「外扩 + 羽化」：硬边在 4 通道 inpaint 路径上会留下可见接缝。"""
+    return feather_mask_image_impl(mask)
+
+
+def composite_inpaint_image(generated, original, mask):  # noqa: ANN001, ANN201
+    """按羽化蒙版把生成图与原图合成：白区取生成结果，黑区保留原图像素。"""
+    return composite_inpaint_image_impl(generated, original, mask)
 
 
 def validate_generate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
@@ -812,7 +889,9 @@ def _sync_cuda() -> None:
         pass
 
 
-def run_task(pipe, task: dict, reference_image=None, reference_strength=None) -> dict:  # noqa: ANN001
+def run_task(  # noqa: ANN001
+    pipe, task: dict, reference_image=None, reference_strength=None, mask_image=None
+) -> dict:
     """执行单个出图任务，返回与旧 ``/generate`` 完全一致的 results 项。
 
     ``width`` / ``height`` 一律回传 **实际出图尺寸**（PIL ``image.size``），不是请求值：
@@ -821,13 +900,38 @@ def run_task(pipe, task: dict, reference_image=None, reference_strength=None) ->
 
     ``reference_image`` 非空时走图生图分支（M3）：用惰性复用的 img2img 管线与它自己的
     ``__call__`` 签名过滤参数，不再传 width / height（出图尺寸跟随参考图）。
+    ``mask_image`` 非空时再走局部重绘分支（Inpaint）：换成惰性复用的 inpaint 管线，
+    参数为 ``image`` + ``mask_image`` + ``strength``，同样不传 width / height。
     """
     import torch
 
     generator_device = "cuda" if torch.cuda.is_available() else "cpu"
     generator = torch.Generator(device=generator_device).manual_seed(task["seed"])
     use_reference = reference_image is not None
-    if use_reference:
+    use_inpaint = use_reference and mask_image is not None
+    if mask_image is not None and reference_image is None:
+        # 防御性约束：蒙版脱离参考图无法定位重绘区域；execute_job 不会构造这种组合。
+        raise RequestError("局部重绘必须同时提供参考图")
+    with STATE_LOCK:
+        native_inpaint = bool(STATE.native_inpaint)
+    if native_inpaint and not use_inpaint:
+        # 专用 inpaint 底座不能文生图 / 纯图生图：少了蒙版就没有可重绘的区域。
+        raise RequestError("该模型只支持局部重绘（需要参考图与蒙版），不能文生图或纯图生图")
+    if use_inpaint:
+        target_pipe = ensure_inpaint_pipeline()
+        with STATE_LOCK:
+            sig = set(STATE.inpaint_sig_params)
+        strength = _coerce_strength(reference_strength)
+        call_kwargs = {
+            "prompt": task["prompt"],
+            "image": reference_image,
+            "mask_image": mask_image,
+            "strength": strength,
+            "num_inference_steps": task["steps"],
+            "guidance_scale": task["cfg"],
+            "generator": generator,
+        }
+    elif use_reference:
         target_pipe = ensure_img2img_pipeline()
         with STATE_LOCK:
             sig = set(STATE.img2img_sig_params)
@@ -860,7 +964,26 @@ def run_task(pipe, task: dict, reference_image=None, reference_strength=None) ->
         cfg=task["cfg"],
     )
 
-    if use_reference:
+    if use_inpaint:
+        source = getattr(reference_image, "_imagen_source_size", reference_image.size)
+        mask_source = getattr(mask_image, "_imagen_source_size", mask_image.size)
+        log(
+            f"[gen] inpaint {task['name']} strength={strength} seed={task['seed']} "
+            f"steps={task['steps']} cfg={task['cfg']} promptLen={len(task['prompt'])} "
+            f"kw={','.join(sorted(call_kwargs))}"
+        )
+        if "prompt" not in call_kwargs:
+            log("[gen] WARN inpaint 调用的 kwargs 缺少 prompt（__call__ 签名过滤异常）")
+        log(
+            f"[gen] inpaint 参考图 {source[0]}x{source[1]} → "
+            f"{reference_image.size[0]}x{reference_image.size[1]}"
+        )
+        if mask_image.size != tuple(mask_source):
+            log(
+                f"[gen] inpaint 蒙版 {mask_source[0]}x{mask_source[1]} → "
+                f"{mask_image.size[0]}x{mask_image.size[1]}（最近邻对齐参考图）"
+            )
+    elif use_reference:
         source = getattr(reference_image, "_imagen_source_size", reference_image.size)
         log(
             f"[gen] img2img {task['name']} strength={strength} seed={task['seed']} "
@@ -876,7 +999,24 @@ def run_task(pipe, task: dict, reference_image=None, reference_strength=None) ->
             f"steps={task['steps']} cfg={task['cfg']}"
         )
     started = time.time()
-    image = target_pipe(**call_kwargs).images[0]
+    generated = target_pipe(**call_kwargs).images[0]
+    image = generated
+    if use_inpaint:
+        # 4 通道 inpaint 路径会把整张图过一遍 VAE，未涂抹区也有 1~2/255 的往返噪声；
+        # 这里按羽化蒙版做像素级合成，保证保留区真的不变、边界过渡自然。
+        try:
+            image = composite_inpaint_image(generated, reference_image, mask_image)
+        except Exception as exc:  # noqa: BLE001 - 合成失败退回生成结果，不影响出图
+            log(f"[gen] inpaint {task['name']} 合成失败，使用生成结果：{short(exc)}")
+            image = generated
+        if image is not generated:
+            close_fn = getattr(generated, "close", None)
+            if callable(close_fn):
+                try:
+                    close_fn()
+                except Exception:  # pragma: no cover
+                    pass
+            log(f"[gen] inpaint {task['name']} 已按蒙版合成：未涂抹区域保留原图像素")
     try:
         _sync_cuda()
         seconds = round(time.time() - started, 2)
@@ -913,6 +1053,13 @@ def run_task(pipe, task: dict, reference_image=None, reference_strength=None) ->
         result["strength"] = strength
         result["referenceWidth"] = int(reference_image.size[0])
         result["referenceHeight"] = int(reference_image.size[1])
+    if use_inpaint:
+        # 局部重绘再补三个标记：inpaint=true 让 Host 记 meta，maskWidth/maskHeight 是
+        # 客户端导出的蒙版原始尺寸（执行期可能已被最近邻缩放到参考图宽高，便于排障）。
+        mask_source = getattr(mask_image, "_imagen_source_size", mask_image.size)
+        result["inpaint"] = True
+        result["maskWidth"] = int(mask_source[0])
+        result["maskHeight"] = int(mask_source[1])
     return result
 
 
@@ -922,10 +1069,12 @@ def run_tasks(
     on_progress=None,  # noqa: ANN001
     reference_image=None,  # noqa: ANN001
     reference_strength=None,  # noqa: ANN001
+    mask_image=None,  # noqa: ANN001
 ) -> list[dict]:
     """串行跑完一批任务；``on_progress`` 拿到「已完成的结果列表」副本，用于刷新 job 进度。
 
-    ``reference_image`` 非空时整批任务共用同一张参考图（job 级，execute_job 只解码一次）。
+    ``reference_image`` 非空时整批任务共用同一张参考图（job 级，execute_job 只解码一次）；
+    ``mask_image`` 非空时走局部重绘，同样是整批共用（已对齐到参考图宽高）。
     """
     results: list[dict] = []
     for task in tasks:
@@ -940,6 +1089,7 @@ def run_tasks(
                     task,
                     reference_image=reference_image,
                     reference_strength=reference_strength,
+                    mask_image=mask_image,
                 )
             )
         if on_progress is not None:
@@ -983,15 +1133,29 @@ def execute_job(job: Job) -> None:
         STATE.last_active = time.time()
     GEN_LOCK.acquire()
     reference_image = None
+    mask_image = None
     try:
         started = time.time()
         reference_strength = None
         if job.reference is not None:
-            # 图生图：参考图完整解码只做一次（整批 count 共用），且放在加载模型之前——
-            # 图片本身损坏/截断时不必先下载、加载几十 GB 权重。
+            # 图生图 / 局部重绘：参考图与蒙版完整解码各只做一次（整批 count 共用），且放在
+            # 加载模型之前——图片本身损坏/截断时不必先下载、加载几十 GB 权重。
             reference_image = decode_reference_image(job.reference)
             reference_strength = _coerce_strength(job.reference.get("strength"))
-            # 解码完成后释放队列里保留的原始字节（job 公开视图不含参考图）。
+            if job.reference.get("mask_bytes") is not None:
+                # 蒙版对齐到参考图实际送入模型的宽高（解码后可能已缩小到 maxEdge）。
+                mask_image = decode_mask_image(job.reference, reference_image.size)
+                # 再外扩 + 羽化：硬边蒙版在 4 通道 inpaint 路径上会留下矩形接缝。
+                feathered = feather_mask_image(mask_image)
+                if feathered is not mask_image:
+                    close_fn = getattr(mask_image, "close", None)
+                    if callable(close_fn):
+                        try:
+                            close_fn()
+                        except Exception:  # pragma: no cover
+                            pass
+                    mask_image = feathered
+            # 解码完成后释放队列里保留的原始字节（job 公开视图不含参考图/蒙版）。
             JOB_STORE.clear_reference(job)
         pipe, load_seconds = ensure_pipeline(job.pipeline)
         JOB_STORE.record_loaded(job, load_seconds)
@@ -1010,6 +1174,7 @@ def execute_job(job: Job) -> None:
                 on_progress=lambda partial: _update_job_progress(job, partial),
                 reference_image=reference_image,
                 reference_strength=reference_strength,
+                mask_image=mask_image,
             )
         JOB_STORE.set_results(job, results)
         with STATE_LOCK:
@@ -1031,6 +1196,13 @@ def execute_job(job: Job) -> None:
     finally:
         if reference_image is not None:
             close_fn = getattr(reference_image, "close", None)
+            if callable(close_fn):
+                try:
+                    close_fn()
+                except Exception:
+                    pass
+        if mask_image is not None:
+            close_fn = getattr(mask_image, "close", None)
             if callable(close_fn):
                 try:
                     close_fn()

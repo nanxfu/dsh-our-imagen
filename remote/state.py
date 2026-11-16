@@ -51,6 +51,13 @@ class RuntimeState:
     # 与 txt2img 共用组件（不额外加载权重、不额外占显存）；切换/释放底座时一并清空。
     img2img_pipe: object | None = None
     img2img_sig_params: set = field(default_factory=set)
+    # 局部重绘管线：同理用 AutoPipelineForInpainting.from_pipe(STATE.pipe) 惰性创建。
+    # 与 img2img 只在各自缓存里存在一份，两者都指向同一批底座组件。
+    inpaint_pipe: object | None = None
+    inpaint_sig_params: set = field(default_factory=set)
+    # 当前底座是否本身就是 inpaint 专用权重（9 通道）：此时 STATE.pipe 已经是 inpaint 管线，
+    # 不需要再 from_pipe 派生，也不能跑文生图 / 纯图生图。
+    native_inpaint: bool = False
     booted: bool = False
     shutting_down: bool = False
 

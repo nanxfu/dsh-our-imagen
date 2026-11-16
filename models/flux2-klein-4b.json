@@ -25,6 +25,7 @@
   "runtime": "default",
   "supportsChinese": true,
   "supportsImg2Img": false,
+  "supportsInpaint": false,
   "supportsNegative": false,
   "pipeline": {
     "loader": "flux2",
