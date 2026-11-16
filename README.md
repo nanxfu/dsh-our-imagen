@@ -2,6 +2,8 @@
 
 # 生图工作台 (dsh-our-imagen)
 
+<img src="docs/assets/banner.png" alt="banner" width="100%">
+
 **DeepSeek Harness 的开源文生图工作台与视觉 Agent 插件。**<br/>
 默认使用 Kaggle 免费云端双卡 GPU（每周 30 小时），不占本机显存，生成的图片直接保存在本地。
 
@@ -9,7 +11,7 @@
 [![DeepSeek Harness](https://img.shields.io/badge/DSH-Plugin-0066FF?style=flat-square)](https://github.com/deepseek-ai/DeepSeek-Harness)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=flat-square)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/nanxfu/dsh-our-imagen?style=flat-square)](https://github.com/nanxfu/dsh-our-imagen)
-
+ <a href="https://linux.do/"><img src="https://img.shields.io/badge/LINUX%20DO-社区友链-555?style=flat-square" alt="LINUX DO" /></a>
 > **当前处于 Preview 阶段**：目前默认内置 Kaggle 免费双卡 GPU 驱动，Colab、本地 GPU 及自建 Worker 支持正在陆续接入。
 
 [快速上手](#三步上手) · [算力后端](#算力后端支持) · [核心功能](#核心功能) · [常见问答](#常见问答) · [开发与测试](#开发与测试) · [English](README.en.md)
@@ -109,7 +111,6 @@
 </td>
 </tr>
 </table>
-
 ---
 
 ## 界面速览
@@ -134,6 +135,7 @@
 </td>
 </tr>
 </table>
+
 
 ---
 
@@ -205,6 +207,50 @@
 </td>
 </tr>
 </table>
+
+<table>
+<tr>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/realvis-v5-blackhole-station.webp" alt="RealVisXL V5.0 生成的黑洞边缘观测站" width="100%" />
+  <p><sub>RealVisXL V5.0 · 黑洞边缘观测站 · 约 37.1 秒</sub></p>
+</div>
+</td>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/sdxl-base-dyson-sphere.webp" alt="SDXL Base 1.0 生成的垂死恒星旁的戴森球" width="100%" />
+  <p><sub>SDXL Base 1.0 · 垂死恒星旁的戴森球 · 约 27.6 秒</sub></p>
+</div>
+</td>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/flux2-klein-4b-storm-eye.webp" alt="FLUX.2 Klein 4B 生成的风暴云中的巨眼" width="100%" />
+  <p><sub>FLUX.2 Klein 4B · 风暴云中的巨眼 · 约 9.0 秒</sub></p>
+</div>
+</td>
+</tr>
+<tr>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/sdxl-base-alien-ocean-monster.webp" alt="SDXL Base 1.0 生成的冰层下的外星深海巨兽" width="100%" />
+  <p><sub>SDXL Base 1.0 · 冰层下的外星深海巨兽 · 约 26.7 秒</sub></p>
+</div>
+</td>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/realvis-v5-mountain-sunrise.webp" alt="RealVisXL V5.0 生成的日出层峦山脉" width="100%" />
+  <p><sub>RealVisXL V5.0 · 日出层峦山脉 · 约 33.3 秒</sub></p>
+</div>
+</td>
+<td width="33.3%">
+<div align="center">
+  <img src="docs/assets/showcase/sdxl-lightning-shanhaijing-dijiang.webp" alt="SDXL Lightning 生成的山海经帝江·洒金岩彩" width="100%" />
+  <p><sub>SDXL Lightning · 山海经帝江·洒金岩彩 · 约 6.2 秒</sub></p>
+</div>
+</td>
+</tr>
+</table>
+
 
 ---
 

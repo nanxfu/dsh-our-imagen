@@ -199,4 +199,14 @@
 
 - **目标**：理顺参数表单、创作助手与胶卷之间的流转边界——「清空对话」改为「新建对话」（开启新上下文）；表单生成同步到助手时展示细粒度参数摘要且不污染多轮 `intentHistory`；创作区点击胶卷自动带入原图参数（保留 Seed、保护未提交草稿），并明确「版本微调」与「新建创作」的重置边界。
 
+---
+
+## 十、 Agent 批量创作、风格配方检索与画布局部重绘 (Inpaint)（规划中）
+
+> **状态**：📝 规划中。简要方案与验收标准见 [AGENT_BATCH_AND_INPAINT_PLAN.md](AGENT_BATCH_AND_INPAINT_PLAN.md)。
+
+- **阶段一（Agent 批量与风格配方）**：在 `lib/tools.js` 新增 `imagen_batch`（基于 `lib/jobs/queue.js` 逐项入队、单条失败隔离与统一汇总）与只读检索工具 `imagen_recipes`（提供透明、适配开源模型写法的风格模板，不做暗箱拼接）。
+- **阶段二（画布涂抹局部重绘）**：扩展 `shared/contract.js` 的 `reference.mask` 契约，在 `remote/daemon.py` 通过 `AutoPipelineForInpainting.from_pipe` 复用 SDXL 底座实现零显存增量局部重绘，并在 `src/studio/Stage.jsx` 增加轻量涂抹蒙版层。
+
+
 
