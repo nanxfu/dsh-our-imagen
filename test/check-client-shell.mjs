@@ -563,6 +563,31 @@ await check('渲染：算力弹层配额回退、隧道通道与日志入口', a
     required: { 'ofs-popover': 1, 'ofs-popover-fallback': 1, 'ofs-popover-link': 1 },
     forbidden: [],
   })
+  // Colab 会话：顶栏应展示 CCU 余额（providerUsage 由保活时刷新）。
+  const ccuTree = await client.mountRaw(client.components.TopBar, {
+    t,
+    ui: { view: "studio", setView: () => {}, openLogs: () => {} },
+    compute: {
+      sessionState: "ready",
+      session: { ...fallbackState.session, provider: "colab", providerUsage: { balance: 198.1, rate: 1.83, assignments: 1 } },
+      quota: null,
+      presets: [preset],
+      busy: "",
+      probing: false,
+      probe: null,
+      probeReport: null,
+      startSession: () => {},
+      stopSession: () => {},
+      runProbe: () => {},
+      openFolder: () => {},
+    },
+    form: { form: { presetId: "sdxl-lightning", width: 1024, height: 1024, steps: 4, cfg: 0 }, patchForm: () => {}, selectPreset: () => {} },
+    library: { loadHistory: () => {} },
+    defaultOpen: false,
+  })
+  client.unmount()
+  assert.ok(collectText(ccuTree).join(" ").includes("CCU 198.1"), "[compute] Colab 会话应展示 CCU 余额")
+
   const link = findNodes(
     tree,
     (node) => node.type === 'a' && node.props && node.props.className === 'ofs-popover-link',

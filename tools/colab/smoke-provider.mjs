@@ -29,6 +29,7 @@ const argValue = (name) => {
   return index >= 0 && index + 1 < args.length ? args[index + 1] : null
 }
 const gpu = (argValue('--gpu') || 'L4').toUpperCase()
+const restart = args.includes('--restart')
 const presetId = argValue('--preset') || 'sdxl-lightning'
 const preset = presetById(presetId)
 const outDir = join(process.cwd(), '.tmp/colab')
@@ -156,6 +157,29 @@ async function main() {
       const file = join(outDir, `smoke-${Date.now()}.png`)
       await writeFile(file, image)
       console.log(`  已保存：${file}`)
+    }
+    if (restart) {
+      console.log('\n=== 模拟 Host 崩溃后 restore 接管 ===')
+      // 崩溃：只停本地定时器，不 dispose（dispose 会 unassign），也不清记录。
+      session.clearTimers()
+      session.disposed = true
+      const second = new SessionManager({
+        ctx: { workspace: process.cwd() },
+        defaultPreset: presetId,
+        deps: { log: sink },
+        options: { provider: 'colab', colabGpu: gpu, idleTimeoutSec: 600, provisionTimeoutMs: 25 * 60 * 1000 },
+      })
+      const restored = await second.restore()
+      check('restore 返回快照', Boolean(restored), restored?.state)
+      const snap2 = await second.ensureReady({ timeoutMs: 180000 })
+      check('restore 后重新 ready', snap2.state === 'ready', snap2.state)
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+      check(
+        '顶栏数据 providerUsage 可见',
+        Number.isFinite(second.session.providerUsage?.balance),
+        JSON.stringify(second.session.providerUsage),
+      )
+      await second.stop()
     }
   } catch (error) {
     console.log(`\n失败：${error?.message ?? error}`)
