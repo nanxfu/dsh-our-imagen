@@ -28,8 +28,10 @@
   - `client_secret`: `d-FL95Q19q7MQmFpd7hHD0Ty`
   - `auth_uri`: `https://accounts.google.com/o/oauth2/auth`
   - `token_uri`: `https://oauth2.googleapis.com/token`
-- **授权回调方式**：
-  - `google-colab-cli` 默认使用远程粘贴码落地页 `https://sdk.cloud.google.com/applicationdefaultauthcode.html`（配合 `token_usage=remote`），因为 `oauth_config.json` 中同时注册了 `http://localhost`，Node.js 端需实测确认能否复用与 [`lib/kaggle/oauth/callback-server.js`](../lib/kaggle/oauth/callback-server.js) 一致的本地回环回调（体验更好），若 Google 校验严格则退回粘贴授权码流。
+- **授权回调方式**（2026-11-17 实测更正）：
+  - `google-colab-cli` 源码使用远程粘贴码落地页 `https://sdk.cloud.google.com/applicationdefaultauthcode.html`（配合 `token_usage=remote`），但**该 redirect 当前已被 Google 拒绝**：同一 `client_id` 请求会直接返回 `Error 400: redirect_uri_mismatch`，且不影响登录页渲染，报错发生在授权页。
+  - 同一 `client_id` 的 `http://localhost:<任意端口>` 仍然有效（实测 `localhost:8765` + `openid/userinfo.profile/userinfo.email/colaboratory` 组合可正常进入登录页）。
+  - **结论：Node.js 端直接复用 `lib/kaggle/oauth/callback-server.js` 的本地回环回调即可，粘贴码流程仅作为无头环境的兜底**（且需要另寻可用的 redirect_uri，官方 CLI 那个已不可用）。
 - **Scopes**（`auth.py`）：
   - `PUBLIC_SCOPES` 包含 `openid`、`https://www.googleapis.com/auth/userinfo.profile`、`https://www.googleapis.com/auth/userinfo.email`、`https://www.googleapis.com/auth/colaboratory`（以及可选 Drive scope，若后续需要挂载 Google Drive 缓存权重）。
 - **Token 持久化**：
@@ -109,3 +111,47 @@
    - 验证 `cloudflared` 在 Colab 容器内启动耗时、拿到 URL 回传本机耗时，以及 **30s WS 心跳** 能否稳过 35 分钟不回收。
 3. **试验 3：Colab Runtime Proxy 能否直连替代 `cloudflared`（探索项）**
    - 容器内起一个测试 HTTP 服务（如 `:8000/health`），测试通过 `runtimeProxyInfo.url` 代理路径直接访问的连通性、大文件（PNG）传输表现与 Token 刷新行为。
+
+---
+
+## 6. M0 实测结果（2026-11-17，Colab Pro 账号）
+
+探针脚本：`tools/colab/probe-auth.mjs`、`probe-runtime.mjs`、`probe-proxy.mjs`（开发期工具，不进 npm 包）。
+
+**认证与授权**
+
+- 官方 CLI 的远端落地页 redirect 已被 Google 拒绝（`Error 400: redirect_uri_mismatch`）；同一 `client_id` 的 `http://localhost:<port>` 正常，回环回调可用。
+- 授权范围只需 `openid` + `userinfo.profile` + `userinfo.email` + `colaboratory`，未申请 `cloud-platform` 与 `drive.file` 也能调通控制面。
+
+**控制面**
+
+- 账号权益：`eligibleGpus = [G4, A100, L4, T4]`，`H100` 不在名单；CCU 初始 199.76。
+- `assign(L4)` 从 `POST` 到拿到 `endpoint` 仅 **3.2~4.1 秒**，无需排队；返回 `endpoint` 形如 `gpu-l4-s-ass....`，`runtimeProxyInfo.url` 形如 `https://8080-<endpoint>-<zone>.prod.r.colab.dev`，令牌 TTL 3600 秒。
+- `unassign` 正常释放，`ccu-info.assignmentsCount` 归零。
+
+**运行时**
+
+- Contents API（base64 单块上传）可用；Kernel 可直接 `POST /api/kernels` 创建，无需 notebook 文件。
+- Kernel WS 可用 Node 22 原生 `WebSocket`，令牌放 query 即可，无需自定义头；**刚创建 Kernel 后首次连接可能被拒（`Connection was closed before it was established`），退避重试 2~3 次即恢复**。
+- 容器环境：Python 3.13.16、torch 2.14.1+cu130、单卡 **NVIDIA L4**、`cwd=/`、`/`、`/content`、`/tmp` 同为 236 GiB overlay 且可写，`/content/drive` 未挂载，未预设 `HF_HOME`。
+
+**保活（关键结论）**
+
+- 30 秒一次 WS 心跳 + 60 秒一次 TFE ping，**连续 40 分钟 80 次心跳零失败、零重连**，实例始终在 `assignments` 中，Kernel 与容器服务均存活；21~35 分钟回收线未出现。
+- 第 20 分钟按计划重新拉 `assignments` 刷新代理令牌成功（TTL 3600s），长会话可无缝续期。
+
+**数据面（方案 B 判定）**
+
+- 同一实例下 `/api/contents` 返回 200，但端口 8000 的四种转发路径全部未命中：`/proxy/8000/` 与端口前缀子域名 20 秒无响应，`/8000/` 与 `/colab/proxy/8000/` 直接 404。
+- **结论：B 不成立，数据面按方案 A（容器内 cloudflared）实现。**
+
+**成本**
+
+- 整个 M0（约 43 分钟 L4 + 4 次短程实例）共消耗 **1.31 CU**，折算约 **1.83 CU/h**；200 CU 可支撑约 100 小时 L4 调试与验收。
+
+**对 M1 的直接影响**
+
+1. Kernel WS 客户端用原生 `WebSocket` + 3 次退避重试即可，不需要 `ws` 依赖；
+2. 工作目录用 `/content`（与 `/` 同一文件系统，但语义更贴近"用户盘"），`disk_usage_root()` 的回退逻辑可直接复用；
+3. 单卡设备，Flux.2 的 `device_map="balanced"` 需按卡数切换（1 卡时不走 balanced）；
+4. 保活本身不复杂，风险集中在 WS 断线重连与令牌刷新，二者都已有可复用的重试/刷新路径。
