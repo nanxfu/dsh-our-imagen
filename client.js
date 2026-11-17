@@ -13068,7 +13068,14 @@ function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
     setNewDraftPending(false);
     setNewDraftExplicit(false);
     setWorkspaceMode("work");
-    setSelectedPath(entry && entry.image ? entry.image.path : "");
+    const path = entry && entry.image ? entry.image.path : "";
+    setSelectedPath(path);
+    if (path && entry && entry.item && Array.isArray(entry.item.images) && entry.item.images.length > 0) {
+      setHistoryItems((prev) => {
+        const exists = prev.some((item) => Array.isArray(item.images) && item.images.some((img) => img && img.path === path));
+        return exists ? prev : mergeHistoryPages([entry.item], prev);
+      });
+    }
   }
   function openMessage(path) {
     if (!path) return;
@@ -13506,6 +13513,7 @@ function useStudio(props) {
       previewWork,
       reroll,
       openImageTool,
+      activateImport,
       restoreOriginal,
       retryFocusedJob,
       resetToSafe

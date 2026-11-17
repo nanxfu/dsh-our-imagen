@@ -270,7 +270,16 @@ export function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
     setNewDraftPending(false)
     setNewDraftExplicit(false)
     setWorkspaceMode('work')
-    setSelectedPath(entry && entry.image ? entry.image.path : '')
+    const path = entry && entry.image ? entry.image.path : ''
+    setSelectedPath(path)
+    // 本地导入刚落盘返回完整 item 时，在 /history 尚未完成新一轮拉取前先并入本地列表，
+    // 避免舞台在等待 /history 期间暂时回退成上一张旧图或空白。
+    if (path && entry && entry.item && Array.isArray(entry.item.images) && entry.item.images.length > 0) {
+      setHistoryItems((prev) => {
+        const exists = prev.some((item) => Array.isArray(item.images) && item.images.some((img) => img && img.path === path))
+        return exists ? prev : mergeHistoryPages([entry.item], prev)
+      })
+    }
   }
 
   function openMessage(path) {

@@ -25,6 +25,7 @@ import {
   normalizeImportDataUrl,
 } from '../src/logic/import.js'
 import { createCheckRunner } from './helpers/check.mjs'
+import { preset, probeOk, studioResponses } from './helpers/client-fixtures.mjs'
 import { collectText, createTestClient, findNodes } from './helpers/render.mjs'
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
@@ -525,6 +526,80 @@ async function main() {
       )
       assert.equal(harness.calls.imported.length, 1, '成功后应回调 activateImport')
       assert.deepEqual(harness.calls.imported[0], entry)
+    } finally {
+      client.unmount()
+      if (savedReader === undefined) delete globalThis.FileReader
+      else globalThis.FileReader = savedReader
+    }
+  })
+
+  await check('Studio 集成：useStudio 导出 activateImport，拖入后舞台切换至导入图并刷新历史', async () => {
+    const FILE_DATA_URL = `data:image/png;base64,${pngBase64(320, 320)}`
+    const savedReader = globalThis.FileReader
+    class FakeFileReader {
+      constructor() {
+        this.result = ''
+        this.onload = null
+        this.onerror = null
+      }
+
+      readAsDataURL() {
+        this.result = FILE_DATA_URL
+        if (typeof this.onload === 'function') this.onload()
+      }
+    }
+    globalThis.FileReader = FakeFileReader
+    const importedImage = {
+      path: 'imagen-output/20261118-000000-import-abc123/01.png',
+      file: '01.png',
+      url: '/imagen-api/file?path=imagen-output%2F20261118-000000-import-abc123%2F01.png',
+      width: 320,
+      height: 320,
+      seed: null,
+      seconds: null,
+    }
+    const importedItem = {
+      jobId: 'import-20261118-000000-import-abc123',
+      dir: 'imagen-output/20261118-000000-import-abc123',
+      prompt: 'studio-photo.png',
+      presetId: null,
+      source: 'import',
+      sourceImage: null,
+      rootImage: null,
+      finishedAt: new Date(NOW).toISOString(),
+      images: [importedImage],
+    }
+    const responses = studioResponses(
+      {
+        defaultPreset: 'sdxl-lightning',
+        presets: [{ ...preset, supportsImg2Img: true, supportsInpaint: true }],
+        session: { state: 'ready', modelId: 'sdxl-lightning', device: 'Tesla T4', idleTimeoutSec: 1800, error: null },
+        jobs: [],
+        lastJob: null,
+        probe: probeOk,
+      },
+      { items: [importedItem], hasMore: false },
+      {
+        '/imagen-api/import': { ok: true, entry: { image: importedImage, item: importedItem, generation: null } },
+      },
+    )
+    const client = await createTestClient({ now: NOW, responses, testBuild: true })
+    try {
+      await client.mountRaw(client.components.Studio, {})
+      await client.settle()
+      const tree = await client.rerenderRaw()
+      const beforeHistory = client.requests.filter((item) => item.path === '/imagen-api/history').length
+      const zone = nodesByClassToken(tree, 'ofs-import-zone')[0]
+      assert.ok(zone, 'Studio 工作台舞台应包裹在拖放层内')
+      zone.props.onDrop(fakeDragEvent([{ name: 'studio-photo.png', type: 'image/png', size: 2048 }]))
+      await client.settle()
+      const updated = await client.rerenderRaw()
+      const afterHistory = client.requests.filter((item) => item.path === '/imagen-api/history').length
+      assert.ok(afterHistory > beforeHistory, '导入成功后应刷新历史')
+      const stageImgs = findNodes(updated, (node) => node.type === 'img').map((node) => node.props.src)
+      assert.ok(stageImgs.includes(importedImage.url), '导入成功后舞台应切到新导入的图片')
+      const text = collectText(updated).join(' | ')
+      assert.ok(text.includes('图片已导入'), '导入成功后应显示已导入提示')
     } finally {
       client.unmount()
       if (savedReader === undefined) delete globalThis.FileReader

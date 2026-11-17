@@ -486,6 +486,7 @@ export function useStudio(props) {
       previewWork,
       reroll,
       openImageTool,
+      activateImport,
       restoreOriginal,
       retryFocusedJob,
       resetToSafe,
