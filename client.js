@@ -336,6 +336,7 @@ var zh = {
   "studio.settings.idle.label": "空闲自动关机",
   "studio.settings.idle.quick": "{minutes} 分钟",
   "studio.settings.idle.custom": "自定义分钟（{min}–{max}）",
+  "studio.compute.ccu": "CCU {balance}",
   "studio.settings.provider.label": "算力来源",
   "studio.settings.provider.kaggle": "Kaggle（免费 GPU）",
   "studio.settings.provider.colab": "Colab Pro（需授权）",
@@ -891,6 +892,7 @@ var en = {
   "studio.settings.idle.label": "Auto-shutdown when idle",
   "studio.settings.idle.quick": "{minutes} min",
   "studio.settings.idle.custom": "Custom minutes ({min}–{max})",
+  "studio.compute.ccu": "CCU {balance}",
   "studio.settings.provider.label": "Compute source",
   "studio.settings.provider.kaggle": "Kaggle (free GPU)",
   "studio.settings.provider.colab": "Colab Pro (authorization required)",
@@ -10041,6 +10043,7 @@ function TopBar(props) {
   }, [open]);
   const idleMinutes = session && session.idleTimeoutSec ? Math.round(session.idleTimeoutSec / 60) : 0;
   const idleShutdown = idleShutdownOf(session);
+  const providerUsage = session && session.provider === "colab" ? session.providerUsage : null;
   const quotaUsed = quota && Number.isFinite(quota.usedHours) ? quota.usedHours : null;
   const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null;
   const loadedPreset = presets.find((item) => item.id === (session && session.presetId)) || presets.find((item) => item.id === fields.presetId) || null;
@@ -10120,6 +10123,7 @@ function TopBar(props) {
               " ",
               t("unit.hour")
             ] }) : null,
+            providerUsage && Number.isFinite(providerUsage.balance) ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("em", { children: formatText(t("studio.compute.ccu"), { balance: providerUsage.balance.toFixed(1) }) }) : null,
             update ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
               "span",
               {

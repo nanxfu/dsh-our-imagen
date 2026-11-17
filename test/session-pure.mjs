@@ -619,6 +619,7 @@ async function main() {
   await scenarioHealth()
   await scenarioProvisioner()
   await scenarioRemotePort()
+  await scenarioProviderSwitch()
 
   console.log('')
   const failed = results.filter((item) => !item.ok).length
@@ -628,6 +629,27 @@ async function main() {
   } else {
     console.log(`结果：${results.length} 项全部通过`)
   }
+}
+
+
+/** 运行时切换：构造时 Kaggle，设置改成 colab 后下一次启动必须换 provider。 */
+async function scenarioProviderSwitch() {
+  let settings = { provider: "kaggle", colabGpu: "L4" }
+  const app = new SessionManager({
+    ctx: {},
+    defaultPreset: "sdxl-lightning",
+    deps: { getSettings: () => settings },
+  })
+  await check("默认构造为 KaggleProvider", app.provider.id === "kaggle", app.provider.id)
+  const before = app.effectiveSettings()
+  await check("effectiveSettings 读取 provider 字段", before.provider === "kaggle" && before.colabGpu === "L4")
+
+  settings = { provider: "colab", colabGpu: "A100", colabHighRam: true }
+  const after = app.effectiveSettings()
+  await check("effectiveSettings 跟随设置变化", after.provider === "colab" && after.colabGpu === "A100" && after.colabHighRam === true)
+  app.applyProviderSettings(after)
+  await check("下一次启动切换到 ColabProvider", app.provider.id === "colab", app.provider.id)
+  app.dispose()
 }
 
 main().catch((error) => {

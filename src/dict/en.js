@@ -290,6 +290,7 @@ export const en = {
   'studio.settings.idle.label': 'Auto-shutdown when idle',
   'studio.settings.idle.quick': '{minutes} min',
   'studio.settings.idle.custom': 'Custom minutes ({min}–{max})',
+  'studio.compute.ccu': 'CCU {balance}',
   'studio.settings.provider.label': 'Compute source',
   'studio.settings.provider.kaggle': 'Kaggle (free GPU)',
   'studio.settings.provider.colab': 'Colab Pro (authorization required)',

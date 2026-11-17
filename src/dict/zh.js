@@ -290,6 +290,7 @@ export const zh = {
   'studio.settings.idle.label': '空闲自动关机',
   'studio.settings.idle.quick': '{minutes} 分钟',
   'studio.settings.idle.custom': '自定义分钟（{min}–{max}）',
+  'studio.compute.ccu': 'CCU {balance}',
   'studio.settings.provider.label': '算力来源',
   'studio.settings.provider.kaggle': 'Kaggle（免费 GPU）',
   'studio.settings.provider.colab': 'Colab Pro（需授权）',
