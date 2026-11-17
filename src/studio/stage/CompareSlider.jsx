@@ -7,8 +7,11 @@
  *  - 键盘：聚焦后 ← / → 微调（4%），Home / End 到两端；
  *  - ARIA：容器是 `role="slider"`，`aria-valuenow` 报告分隔线百分比。
  *
- * props：{ t, beforeUrl, afterUrl, beforeLabel?, afterLabel?, ratio?, initialPosition? }
+ * props：{ t, beforeUrl, afterUrl, beforeContent?, beforeLabel?, afterLabel?, ratio?, initialPosition? }
  *  - ratio：画面宽高比（默认按 1:1 画）；
+ *  - beforeContent：扩图产物的原图内容框（归一化 0~1，`outpaintContent`）。有值时底图不再
+ *    铺满对比框，而是按该矩形放回它在扩图画布里的真实位置（`object-fit: fill` 不变形），
+ *    新增区域露出对比框的纸面背景；缺省时保持「底图铺满」的既有行为；
  *  - beforeLabel / afterLabel：缺省用字典 `studio.compare.before` / `studio.compare.after`。
  */
 
@@ -29,8 +32,28 @@ function ratioOf(value) {
   return number
 }
 
+/**
+ * 原图内容框归一：只接受四个有限数、面积为正的矩形；其余按「缺省」处理（底图铺满）。
+ * 越界不在渲染层兜（历史数据由 `normalizeOutpaintContent()` 清洗），这里只防脏数据崩布局。
+ */
+function regionOf(value) {
+  const source = value && typeof value === 'object' ? value : null
+  if (!source) return null
+  const keys = ['x', 'y', 'width', 'height']
+  for (const key of keys) {
+    if (typeof source[key] !== 'number' || !Number.isFinite(source[key])) return null
+  }
+  if (!(source.width > 0) || !(source.height > 0)) return null
+  return {
+    x: Math.min(1, Math.max(0, source.x)),
+    y: Math.min(1, Math.max(0, source.y)),
+    width: Math.min(1, source.width),
+    height: Math.min(1, source.height),
+  }
+}
+
 export function CompareSlider(props) {
-  const { t, beforeUrl, afterUrl, beforeLabel, afterLabel, ratio, initialPosition } = props
+  const { t, beforeUrl, afterUrl, beforeContent, beforeLabel, afterLabel, ratio, initialPosition } = props
   const [position, setPosition] = React.useState(() => clampPosition(initialPosition ?? 0.5))
   const [dragging, setDragging] = React.useState(false)
   const trackRef = React.useRef(null)
@@ -40,6 +63,17 @@ export function CompareSlider(props) {
   const afterText = afterLabel || label('studio.compare.after')
   const percent = Math.round(position * 100)
   const frameRatio = ratioOf(ratio)
+  // 扩图产物：底图按内容框定位；无值（普通派生作品）时保持整幅铺满。
+  const baseRegion = regionOf(beforeContent)
+  const baseClass = baseRegion ? 'ofs-compare-base is-region' : 'ofs-compare-base'
+  const baseStyle = baseRegion
+    ? {
+        left: `${baseRegion.x * 100}%`,
+        top: `${baseRegion.y * 100}%`,
+        width: `${baseRegion.width * 100}%`,
+        height: `${baseRegion.height * 100}%`,
+      }
+    : undefined
 
   /** 指针横坐标 → 0..1；取不到布局时返回 null（不强行跳位置）。 */
   function positionOfPointer(event) {
@@ -131,7 +165,7 @@ export function CompareSlider(props) {
       onKeyDown={onKeyDown}
       onDoubleClick={onDoubleClick}
     >
-      <img className="ofs-compare-base" src={beforeUrl} alt={beforeText} draggable={false} />
+      <img className={baseClass} style={baseStyle} src={beforeUrl} alt={beforeText} draggable={false} />
       <div className="ofs-compare-overlay" style={overlayStyle}>
         <img className="ofs-compare-image" src={afterUrl} alt={afterText} draggable={false} />
       </div>

@@ -34,6 +34,7 @@ import {
   toolStrengthMaxOf,
   workKeyOf,
 } from '../src/logic/imageTool.js'
+import { buildOutpaintContentBody, normalizeOutpaintContent } from '../src/logic/outpaint.js'
 import { createCheckRunner } from './helpers/check.mjs'
 
 const byId = (id) => PRESETS.find((preset) => preset.id === id) || null
@@ -386,11 +387,19 @@ async function main() {
     assert.equal(body.count, 1)
     assert.equal(body.waitSeconds, 0)
     assert.equal(body.autoStart, true)
-    assert.deepEqual(Object.keys(body.reference).sort(), ['image', 'mask', 'sourcePath', 'strength'])
+    assert.deepEqual(Object.keys(body.reference).sort(), ['image', 'mask', 'outpaintContent', 'sourcePath', 'strength'])
     assert.equal(body.reference.image, CANVAS_IMAGE)
     assert.equal(body.reference.mask, CANVAS_MASK)
     assert.equal(body.reference.sourcePath, 'imagen-output/job-1/07.png')
     assert.equal(body.reference.strength, OUTPAINT.strength, '扩图默认强度走满步（1.0）')
+    // 原图在画布里的位置（归一化 4 位小数），供 Host 落盘后「对比原图」拉帘对齐：
+    // 104 / 1232 ≈ 0.0844、1024 / 1232 ≈ 0.8312。
+    assert.deepEqual(body.reference.outpaintContent, {
+      x: 0.0844,
+      y: 0.0844,
+      width: 0.8312,
+      height: 0.8312,
+    })
     // 用户调过强度时尊重用户值（带蒙版上限内），负向词门控关闭时为空串。
     const tuned = buildOutpaintToolBody({
       targetPath: 'imagen-output/a/01.png',
@@ -449,6 +458,17 @@ async function main() {
       ...OUTPAINT_CANVAS,
       mask: 'A'.repeat(2 * (LIMITS.mask.maxBytes + 10)),
     }), null)
+  })
+
+  await check('outpaintContent：归一化内容框边界与请求体一致', () => {
+    const fromCanvas = buildOutpaintContentBody(OUTPAINT_CANVAS)
+    assert.deepEqual(fromCanvas, { x: 0.0844, y: 0.0844, width: 0.8312, height: 0.8312 })
+    // 缺失 / 非对象 / 越界 / 非数字都返回 null（Host 同规则，非法值不会进请求体）。
+    for (const bad of [null, {}, [], { x: 0, y: 0, width: 1 }, { x: 0.8, y: 0, width: 0.3, height: 1 },
+      { x: 0, y: 0, width: 1, height: 1.2 }, { x: '0', y: 0, width: 1, height: 1 }]) {
+      assert.equal(normalizeOutpaintContent(bad), null, `应判为非法：${JSON.stringify(bad)}`)
+    }
+    assert.equal(buildOutpaintContentBody({ width: 1232, height: 1232 }), null)
   })
 
   await check('imageToolBlockedKeyOf：拦截顺序与文案键', () => {

@@ -846,8 +846,16 @@ function encodePngRgb(width, height, pixels) {
 }
 
 /**
- * 构造扩图画布：白底 + 原图贴进居中内容区（白底是给 inpaint 的「未知区域」起点，
- * 真正的重建由模型完成；内容区像素逐字节保留，用于验证「扩图不改原图内容」）。
+ * 构造扩图画布：内容区贴原图，新增区域用「四边 1px 边缘像素延拓」填充（edge clamp）。
+ *
+ * 为什么不再用纯白/纯黑填底（FIXES-INTERFACES §B）：纯色底在 VAE latent 边界与内容区之间
+ * 制造亮度跳变，模型会把这段跳变当成真实画面去重画，成片在边界留下明显分界。边缘延拓让
+ * 新增区从原图边缘「拉出去」，模型只需要延续已有纹理。
+ *
+ * 实现与前端 `outpaintEdgeStripsOf` 的 8 条拉伸条带像素结果完全一致：
+ * 画布任意像素取内容框内最近边缘像素 `sx = clamp(x - content.x, 0, sw-1)`、
+ * `sy = clamp(y - content.y, 0, sh-1)`；内容框内部这个映射就是恒等映射，所以一次遍历
+ * 即可同时完成「延拓 + 贴内容区」，不需要另画条带再覆盖。
  */
 function buildOutpaintCanvas(sourcePng, canvas = OUTPAINT_CANVAS, content = OUTPAINT_CONTENT) {
   const source = decodePng(sourcePng)
@@ -857,12 +865,17 @@ function buildOutpaintCanvas(sourcePng, canvas = OUTPAINT_CANVAS, content = OUTP
       `outpaint：源图应为 ${content.width}x${content.height}，收到 ${source.width}x${source.height}`,
     )
   }
-  const pixels = Buffer.alloc(canvas.width * canvas.height * 3, 255)
-  for (let y = 0; y < content.height; y += 1) {
-    const sourceRow = y * source.width * source.channels
-    const targetRow = ((content.y + y) * canvas.width + content.x) * 3
-    for (let x = 0; x < content.width; x += 1) {
-      const sourceOffset = sourceRow + x * source.channels
+  const pixels = Buffer.alloc(canvas.width * canvas.height * 3)
+  const maxSourceX = source.width - 1
+  const maxSourceY = source.height - 1
+  for (let y = 0; y < canvas.height; y += 1) {
+    // 内容框外按最近边缘像素延拓（等价于 top/bottom 条带把首/末行拉伸出去）。
+    const sy = Math.min(Math.max(y - content.y, 0), maxSourceY)
+    const sourceRow = sy * source.width * source.channels
+    const targetRow = y * canvas.width * 3
+    for (let x = 0; x < canvas.width; x += 1) {
+      const sx = Math.min(Math.max(x - content.x, 0), maxSourceX)
+      const sourceOffset = sourceRow + sx * source.channels
       const targetOffset = targetRow + x * 3
       pixels[targetOffset] = source.pixels[sourceOffset]
       pixels[targetOffset + 1] =
@@ -877,6 +890,8 @@ function buildOutpaintCanvas(sourcePng, canvas = OUTPAINT_CANVAS, content = OUTP
     height: canvas.height,
     content: { ...content },
     sourceSize: { width: source.width, height: source.height },
+    // 可断言标记：report.outpaint.canvasFill 直接引用（FIXES-INTERFACES §B3）。
+    fill: 'edge-extend',
   }
 }
 
@@ -1103,6 +1118,8 @@ async function runOutpaint({ endpoint, token, presetId, sourcePng, prompt }) {
       canvasWidth: composed.width,
       canvasHeight: composed.height,
       content: composed.content,
+      // 画布新增区的填充方式：edge-extend = 四边 1px 边缘像素延拓（FIXES-INTERFACES §B3）。
+      canvasFill: composed.fill,
       coveragePercent: Number((mask.coverage * 100).toFixed(4)),
       loadSeconds: response.load_seconds ?? null,
       imageSeconds: result.seconds ?? null,

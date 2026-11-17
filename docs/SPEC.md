@@ -458,7 +458,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | `count` | integer | 1~4，默认 1 |
 | `waitSeconds` | integer | 0~600：>0 时该请求最多等待任务结束 N 秒再返回（默认 0，立即返回） |
 | `autoStart` | boolean | 默认 `true`；`false` 时不自动唤醒会话 |
-| `reference` | object | 可选。图生图 / 局部重绘参考图（M3 / 0.12.0）：`{ path?, image?, strength?, mask?, sourcePath? }`，`path` 与 `image` 二选一，`mask` 可叠加；`sourcePath` 是 `image` 来源的溯源路径（扩图用，见下方「本地画布来源」）；详见下方「图生图参考图」 |
+| `reference` | object | 可选。图生图 / 局部重绘参考图（M3 / 0.12.0）：`{ path?, image?, strength?, mask?, sourcePath?, outpaintContent? }`，`path` 与 `image` 二选一，`mask` 可叠加；`sourcePath` 是 `image` 来源的溯源路径（扩图用），`outpaintContent` 是 `image` 来源的原图内容框（扩图用，见下方「本地画布来源」）；详见下方「图生图参考图」 |
 
 **图生图参考图（M3）与局部重绘蒙版（0.12.0）**：
 
@@ -521,15 +521,20 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
   局部重绘提交（`presetId` 默认 `sdxl-inpaint`，复用已验证的 9 通道管线），远端看到的就是一次
   合法的 inpaint 请求。
 - 请求体与局部重绘相同，只是 `reference` 用**本地画布来源**：`{ image: <扩张后画布 PNG base64>,
-  mask: <白=新增区 PNG base64>, sourcePath: <原作品路径>, strength: 1.0 }`。画布尺寸写进
-  `width` / `height`（256~1536、8 对齐）；新增区域占比由客户端保证 ≥ 2%，空蒙版/无画布在 Host
-  与客户端双重拦截。
+  mask: <白=新增区 PNG base64>, sourcePath: <原作品路径>, outpaintContent: {...}, strength: 1.0 }`。
+  画布尺寸写进 `width` / `height`（256~1536、8 对齐）；新增区域占比由客户端保证 ≥ 2%，空蒙版/无画布
+  在 Host 与客户端双重拦截。
 - **本地画布来源（`reference.sourcePath`）**：`image` 来源新增可选溯源路径，校验规则与
   `reference.path` 完全一致（工作区相对、必须在 `imagen-output/` 内）；Host 用它写
   `meta.sourceImage` / `rootImage`，让扩图产物挂进原图版本树（`reference.path` 来源时即等于 `path`，
   老客户端不传时行为不变）。
-- 产物 `meta.json` 除 `inpaint: true` / `strength` 外再记 `outpaint: true`；历史条目透传
-  `outpaint` 标记，版本面板显示「扩图」类型。
+- **原图内容框（`reference.outpaintContent`）**：`image` 来源可带的归一化矩形
+  `{ x, y, width, height }`（各自 0~1、4 位小数、相对画布左上角），表示原图在扩张画布中的真实位置。
+  校验：四个有限数、各自 0~1、`x + width ≤ 1`、`y + height ≤ 1`、面积 > 0（浮点容差 1e-3），非法
+  `400 invalid_request`；`path` 来源携带该字段同样 400（内容框只属于本地画布来源）。Host 原样写入
+  `meta.outpaintContent` 并在 `/history` 透传，客户端「对比原图」拉帘据此把原图放回对应位置。
+- 产物 `meta.json` 除 `inpaint: true` / `strength` / `outpaint: true` 外再记 `outpaintContent`
+  （无内容框的旧数据不写）；历史条目透传 `outpaint` 与 `outpaintContent`，版本面板显示「扩图」类型。
 - **客户端画布口径**（`OUTPAINT`，契约唯一来源）：快捷比例为 `16:9` / `9:16` / `4:3` 与
   「四边扩 20%」（`expandRatio` = 1.2）；画布长边 ≤ `maxEdge`（1536）、总像素 ≤ `maxPixels`
   （1.6 MP）、各边 ≥ `minEdge`（256），宽高与内容框均按 8 对齐；内容框可按 anchor 拖动分配留白，
@@ -641,7 +646,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
   `items` 保持数组类型（旧客户端只读该字段即可向后兼容）；`hasMore=true` 表示还有更早的记录，
   客户端可在底部继续「加载更多」（前端每次取契约上限 `LIMITS.history.pageSize` = 100 条）。
 
-`HistoryItem`：`{ jobId, dir, createdAt, finishedAt, presetId, params, prompt, images[], source, sourceImage, rootImage, inpaint, strength, upscale, upscaleScale, outpaint }`；
+`HistoryItem`：`{ jobId, dir, createdAt, finishedAt, presetId, params, prompt, images[], source, sourceImage, rootImage, inpaint, strength, upscale, upscaleScale, outpaint, outpaintContent }`；
 `params` 是完整的生成参数（用于「带回参数」），`images[]` 每项：
 `{ file, path, absolute, url, width, height, seed, seconds }`（已按文件是否存在过滤，删除过的图不会出现）。
 `source` 是作品来源（阶段十五 Phase A）：`"ai"` 为 AI 生成，`"import"` 为用户本地导入（见 §2.3 `/import`，导入图不参与 AI 生成计数）。
@@ -651,6 +656,8 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 `sourceImage` 链回溯，回溯不到时退回 `sourceImage`）；`inpaint` 为局部重绘标记；`strength` 为重绘强度。
 `upscale` / `upscaleScale` / `outpaint` 是阶段十五 Phase B 的后处理标记（字段恒存在）：高清放大产物
 `upscale=true`、`upscaleScale` 为放大倍数（旧产物 `null`）；扩图产物 `outpaint=true`（同时 `inpaint=true`）。
+`outpaintContent` 是扩图产物原图在画布中的归一化内容框 `{ x, y, width, height }`（0~1、4 位小数，
+缺省 `null`），供舞台「对比原图」拉帘把原图放回真实位置；旧产物与其它类型均恒为 `null`。
 
 #### `GET /imagen-api/history/tree?root=<encodedPath>&limit=<n>`
 
@@ -1572,6 +1579,12 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
    任务走同一条生图流水线；完成后产物作为源图的子版本归档（`meta.upscale = true` /
    `upscaleScale` / `upscaleSource`），版本面板类型显示「高清放大」，支持「对比原图」拉帘与「重新生成」。
    高清放大没有强度 / 提示词语义，助手镜像记录只显示动作与底图（不显示强度胶囊）。
+   **回填与重新生成（第二轮补修）**：放大产物没有扩散参数（0 步 / 超分模型 id / 放大后尺寸），
+   点击胶片条回填或「重新生成」时先按 `item.sourceImage` 在已加载历史里回溯父作品的真实扩散参数
+   （最多 8 层、防成环；跳过裸导入父作品）；父作品不在已加载分页或被删除时走降级补丁——只保留
+   有效提示词 / 排除项、尺寸取 `upscaleSource`（或钳到契约上限）、步数 / CFG 取当前表单或第一个
+   可文生图预设的推荐值。**任何情况下都不会把 `realesrgan-x2plus`、`steps: 0` 或放大后
+   （>1536px）的尺寸写进左栏表单或发成「重新生成」请求。**
 2. **扩图画布（`outpaint`，canvas 形态）**：动作坞点「扩图」进入画布态（与局部涂抹互斥，一次只开一个工具）。
    - **比例胶囊**：顶部固定「四边扩 20%（默认）」「16:9」「9:16」「4:3」四项，切换即重算画布；
      四边扩 = 画布尺寸 ×1.2、通常四边都有留白；目标画幅模式下内容等比放入后只在一个轴上加留白，
@@ -1582,11 +1595,21 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
      全部按 8px 对齐，且受 `OUTPAINT.maxEdge`（1536）/ `maxPixels`（1.6 MP）/ `minEdge`（256）约束。
    - **提交栏**：模型默认 9 通道专用权重 `sdxl-inpaint`（也可切换其它支持局部重绘的模型）、
      修改描述留空时回退原作品提示词、强度默认 `1.0` 且上限 `1.0`（覆盖大面积新增区域需要满步数）。
-   - **提交与归档**：编辑器把画布导出为 `reference.image`（扩张后的画布，黑底 + 原图放进内容框）、
-     `reference.mask`（白 = 新增区域）与 `reference.sourcePath`（原作品路径）；Host 写
-     `meta.outpaint = true` 并把 `sourceImage` / `rootImage` 指回原作品，因此扩图产物直接挂在
-     原图版本树下（类型「扩图」，同时 `inpaint = true`）。提交后助手线程追加镜像动作与任务气泡，
-     完成后可用「对比原图」拉帘看新增边界。
+   - **提交与归档**：编辑器把画布导出为 `reference.image`（扩张后的画布 + 原图放进内容框）、
+     `reference.mask`（白 = 新增区域）、`reference.sourcePath`（原作品路径）与
+     `reference.outpaintContent`（原图在画布里的归一化内容框，见 §2.2）；Host 写
+     `meta.outpaint = true` / `meta.outpaintContent` 并把 `sourceImage` / `rootImage` 指回原作品，
+     因此扩图产物直接挂在原图版本树下（类型「扩图」，同时 `inpaint = true`）。提交后助手线程追加
+     镜像动作与任务气泡，完成后可用「对比原图」拉帘看新增边界。
+   - **画布填充（第二轮补修）**：新增区域不再用纯黑 / 纯白填充，改为把内容框四边 1px 边缘像素向
+     新增区拉伸延拓（等价于对源图做 edge clamp；左右/上下/四角共 8 条条带，纯逻辑在
+     `outpaintEdgeStripsOf`，`test/gpu-live.mjs` 用同一算法构造验收画布并做过逐像素一致性比对）。
+     这样内容区与新增区在边界两侧颜色连续，也给「4 通道 inpaint / strength < 1」这类会用到原图
+     latent 的路径留下更合理的起点；9 通道 + strength 1.0 的基线路径下填充色几乎不进入条件图，
+     真机成片差异在数值噪声级（见 CHANGELOG 0.13.0 修复条目）。
+   - **对比原图对齐（第二轮补修）**：扩图产物的「对比原图」拉帘不再把原图放大铺满——按
+     `outpaintContent` 把底图放回它在扩图画布中的真实位置（百分比定位、`object-fit: fill`），
+     框外露出纸面背景；常规整图重绘 / 局部涂抹 / 高清放大产物没有该字段，仍按整幅对比。
    - **编辑保护与失败恢复**：扩图编辑态拒绝导入替换底图（沿用 Phase A 的编辑态保护）；提交失败保留
      底图 / 比例 / 锚点 / 提示词，动作坞「继续编辑」按原参数重开；换作品 / 换工具 / 新建创作清空画布草稿。
      草稿圆点把「比例 / 锚点」变化计为参数改动（`params`），与局部涂抹的蒙版圆点口径一致。
@@ -1599,8 +1622,9 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
 4. **无障碍与响应式**：比例胶囊与「回中」按钮触控热区 ≥ 44px，`aria-pressed` 标记当前比例；
    画布预览 `role="img"` + 画布说明，内容框是独立可聚焦控件（方向键 / Home 可用）；
    ≤720px 时顶部「标题 + 覆盖率」与比例胶囊改为上下两行，画布按容器等比缩放不溢出。
-5. **测试**：新增 `test/outpaint.mjs`（16 项，比例 / 尺寸 / 8px 对齐 / anchor / 覆盖率 / 上限钳制）；
-   `image-tool` 19 → 25、`image-tool-render` 6 → 11、`lineage` 17 → 18、`check-client-logic` 83 → 84，
-   `check-client-locale` zh/en 各 566 → 586 键同构；Host `host-e2e` 56 → 60、`jobs-wait` 31 → 35、
+5. **测试**：新增 `test/outpaint.mjs`（20 项：比例 / 尺寸 / 8px 对齐 / anchor / 覆盖率 / 上限钳制 /
+   边缘延拓条带的覆盖与互斥 / 内容框归一化）；
+   `image-tool` 19 → 26、`image-tool-render` 6 → 12、`lineage` 17 → 18、`check-client-logic` 83 → 86，
+   `check-client-locale` zh/en 各 566 → 586 键同构；Host `host-e2e` 56 → 62、`jobs-wait` 31 → 36、
    `agent-batch` 17 → 18；远端 `test/remote/run.py` 391 → 440（新增 `test_upscale.py` 49 项）。
    `npm test` 38 步全绿。真机验收数据见 [CHANGELOG](../CHANGELOG.md) 的 0.13.0 条目。

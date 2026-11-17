@@ -172,6 +172,11 @@ export const OUTPAINT = {
   minEdge: 256,
   // 扩图覆盖面积大，默认走满步数；契约的带蒙版上限是 1.0。
   strength: 1.0,
+  // 扩图产物原图内容框（`outpaintContent`，归一化 0~1、相对画布左上角，4 位小数）：
+  // 随提交请求 → meta.json → HistoryItem 透传，供「对比原图」拉帘把原图放回它在
+  // 扩图画布里的真实位置（画布可能比原图更大、且原图位置可按锚点偏移）。
+  // 只属于 Host/Client，不经 `daemonContract()` 下发远端。
+  content: { fields: ['x', 'y', 'width', 'height'], precision: 4 },
 }
 
 /** `POST /imagen-api/generate` 的 `tool` 取值（宿主接受的三类请求）。 */

@@ -23,15 +23,22 @@
 
 ### 接口与配置
 
-- `shared/contract.js` 新增 `UPSCALE`（`id: realesrgan-x2plus` / `factor: 2` / `maxInputEdge: 1280` / `maxOutputEdge: 2560`）、`OUTPAINT`（比例 / 扩边比 / 上限 / 默认强度）、`REQUEST_TOOLS`（`generate | upscale | outpaint`）；`daemonContract().limits.upscale = UPSCALE` 随注入契约下发远端，`PROTOCOL.daemon.requestTools = ['generate', 'upscale']` 登记远端取值域；`remote/config.py` 的 `LIMIT_NUMERIC_KEYS` 补 `factor` / `maxInputEdge` / `maxOutputEdge`。
-- `POST /imagen-api/generate` 新增 `tool`（缺省 `generate`）；`upscale` 请求体只带源图与宽高，`outpaint` 为普通局部重绘请求体 + `reference.sourcePath`。Job 公开视图新增 `tool`；`/history` 条目新增 `upscale`（bool）/ `upscaleScale`（number|null）/ `outpaint`（bool），字段恒存在、旧产物无迁移。
-- SPEC 新增 §3.7 `imagen_upscale` 与 §5.20 交互规范，§2.2 补充 `tool`、高清放大 / 扩图、`reference.sourcePath` 与 Job / HistoryItem 字段。
+- `shared/contract.js` 新增 `UPSCALE`（`id: realesrgan-x2plus` / `factor: 2` / `maxInputEdge: 1280` / `maxOutputEdge: 2560`）、`OUTPAINT`（比例 / 扩边比 / 上限 / 默认强度 / 内容框字段与精度）、`REQUEST_TOOLS`（`generate | upscale | outpaint`）；`daemonContract().limits.upscale = UPSCALE` 随注入契约下发远端，`PROTOCOL.daemon.requestTools = ['generate', 'upscale']` 登记远端取值域；`remote/config.py` 的 `LIMIT_NUMERIC_KEYS` 补 `factor` / `maxInputEdge` / `maxOutputEdge`。`OUTPAINT.content` 只在 Host/Client 间消费，不下发远端。
+- `POST /imagen-api/generate` 新增 `tool`（缺省 `generate`）；`upscale` 请求体只带源图与宽高，`outpaint` 为普通局部重绘请求体 + `reference.sourcePath` + 可选 `reference.outpaintContent`（原图在画布中的归一化内容框，0~1、4 位小数；仅 `image` 来源可用，非法或 `path` 来源携带 → 400 `invalid_request`）。Job 公开视图新增 `tool`；`/history` 条目新增 `upscale`（bool）/ `upscaleScale`（number|null）/ `outpaint`（bool）/ `outpaintContent`（object|null），字段恒存在、旧产物无迁移。
+- SPEC 新增 §3.7 `imagen_upscale` 与 §5.20 交互规范，§2.2 补充 `tool`、高清放大 / 扩图、`reference.sourcePath` / `reference.outpaintContent` 与 Job / HistoryItem 字段。
+
+### 修复（检阅反馈，第二轮）
+
+- **高清放大产物的回填 / 重新生成参数污染**：放大产物的 `meta.json` 记的是非扩散参数（`presetId: realesrgan-x2plus`、`params.steps/cfg/seed: 0`、放大后像素宽高），此前点胶片条回填或「重新生成」会把这些直接写进左栏表单 / 请求体，宿主回退默认预设后把 `steps` 钳成 1 步，产出废图。现在 `src/logic/generate.js` 新增 `isNonDiffusionRecallOf` / `diffusionSourceOf`：`iteratePatch(entry, form, presets, items)` 与 `rerollOverrides(entry, presets, items, fallbackPreset)` 先沿 `item.sourceImage` 在已加载历史里找父作品的真实扩散参数（最多 8 层、防成环、跳过裸导入父作品）；父作品不在已加载分页或被删除时走降级补丁——保留有效提示词 / 排除项，尺寸取 `upscaleSource`（否则 `clampSize` 钳到契约上限），步数 / CFG 取当前表单或第一个可文生图预设的推荐值，种子恢复随机。**任何情况下都不会把超分模型 id、`steps: 0` 或 >1536px 的尺寸带进表单或发成生成请求。** 组合层 `useStudio` 的 `previewWork` / `reroll` 已接 `library.items`。
+- **扩图画布填充口径统一 + 边缘像素延拓**：前端导出画布此前用纯黑填底、`test/gpu-live.mjs` 用纯白填底，两者不一致且真机从未测过前端路径。现在 `src/logic/outpaint.js` 新增 `outpaintEdgeStripsOf(plan)`（8 条「内容框 1px 边缘 → 新增区」拉伸条带），`OutpaintEditor.exportCanvas()` 取消纯黑填底、按条带把原图边缘像素向新增区拉伸延拓；`test/gpu-live.mjs` 的 `buildOutpaintCanvas()` 用同一算法（逐像素 edge clamp，与条带实现做过全量逐像素比对），`report.outpaint.canvasFill = 'edge-extend'`。语义收益：内容区与新增区边界两侧颜色连续，对「4 通道 inpaint / strength < 1」这类会用到原图 latent 的路径是更合理的起点；对当前 9 通道 + strength 1.0 基线路径，实测填充色几乎不进入条件图（见下方真机复验），因此成片差异在数值噪声级，但前后端口径现已完全一致。
+- **扩图产物「对比原图」拉帘对齐**：此前 `CompareSlider` 把原图与扩图都按 `object-fit: contain` 铺满对比框，扩图产物（如 864×864 原图放进 1536×864 画布）拉帘时原图被放大撑满，位置与比例错位。现在提交时客户端按画布几何写入 `reference.outpaintContent`，Host 原样落盘 `meta.outpaintContent` 并随 `/history` 透传；`Stage` 把归一化内容框传给 `CompareSlider`，底图按该矩形百分比定位（`.ofs-compare-base.is-region`、`object-fit: fill`，框外露出纸面背景），拉帘滑过原图与扩图时像素位置严格对齐。常规整图重绘 / 局部涂抹 / 高清放大产物没有该字段，对比行为保持原样；旧产物 / 脏 meta 读取时归一失败降级为 `null`。
+
 
 ### 测试
 
-- 新增 `test/remote/test_upscale.py`（49 项：tool 归一、源图校验、权重下载 / SHA256 / 重试 / 备用源、checkpoint 三种形状解包、架构构造与前向、`execute_job` 放大分支与模型释放、幂等键）与 `test/outpaint.mjs`（16 项：两种模式尺寸 / 8px 对齐 / anchor / 覆盖率 / 上限钳制）。
-- 客户端：`image-tool` 19 → 25、`image-tool-render` 6 → 11、`lineage` 17 → 18、`check-client-logic` 83 → 84，`check-client-locale` zh/en 各 566 → 586 键同构（新增高清放大 / 扩图 / 版本类型 / 扩图画布文案）。
-- Host：`host-e2e` 56 → 60（放大全链路与 meta / history 透传、扩图 sourcePath 版本树归组、非法 tool / 超限源图 / 带蒙版 / 越界 sourcePath 400）、`jobs-wait` 31 → 35、`agent-batch` 17 → 18；远端 `test/remote/run.py` 391 → 440。
+- 新增 `test/remote/test_upscale.py`（49 项：tool 归一、源图校验、权重下载 / SHA256 / 重试 / 备用源、checkpoint 三种形状解包、架构构造与前向、`execute_job` 放大分支与模型释放、幂等键）与 `test/outpaint.mjs`（20 项：两种模式尺寸 / 8px 对齐 / anchor / 覆盖率 / 上限钳制 / 边缘延拓条带覆盖与互斥 / 内容框归一化）。
+- 客户端：`image-tool` 19 → 26、`image-tool-render` 6 → 12、`lineage` 17 → 18、`check-client-logic` 83 → 86（放大产物沿父作品回填 / 重生成、父作品缺失降级、链式回溯、普通作品回归），`check-client-locale` zh/en 各 566 → 586 键同构（新增高清放大 / 扩图 / 版本类型 / 扩图画布文案）。
+- Host：`host-e2e` 56 → 62（放大全链路与 meta / history 透传、扩图 sourcePath 版本树归组、非法 tool / 超限源图 / 带蒙版 / 越界 sourcePath 400、`outpaintContent` 透传与非法值 / path 来源 400）、`jobs-wait` 31 → 36（`outpaintContent` 归一化边界与全链路）、`agent-batch` 17 → 18；远端 `test/remote/run.py` 391 → 440。
 - 全量 `npm test` 38 步全绿（含契约 12 项、Python 远端 440 项）；`npm run contract:check`、`npm run models:check`、`npm run package` 通过。
 
 ### 真机验收（Kaggle 2×Tesla T4，diffusers 0.43.0 / torch 2.11.0）
@@ -40,6 +47,7 @@
 - **高清放大上限档**：1280×720 → 2560×1440（= `maxOutputEdge`）；加载 1.5s、推理 1.32s；`/job` 响应 base64 4.84 MB 在约 3.2s 内取回（`submitMs` 1670ms、`pollCount` 3、`maxPollGapMs` 3175ms），**低于 8s 单次轮询超时、无重试**；显存无残留。
 - **扩图（`sdxl-inpaint` 9 通道）**：864×864 内容 → 1536×864 画布（内容框 `(336,0)`，覆盖率 43.75%；画布 PNG 1.40 MB、蒙版 7,966 B），强度 1.0 / 30 步，单张 35.4s，输出 PNG 1.67 MB。内容保留：内容区平均差 0.11/255（去掉 16px 边界后核心区 **0.00/255**，最大差 91 只出现在羽化带）；边界两侧 8px 亮度跳变 1.18 / 2.82（全图相邻列均值 0.63），**无硬像素接缝**，右侧轻微明暗过渡属新区域光照差异、羽化带已软化。`gpu_memory` 前 `{7000, 9736, max 9348}` → 后 `{6625, 10306, max 9715}`，峰值 < 14.56 GB，无 OOM。
 - 3 个验收 Kernel 均 `COMPLETE`、脚本 finally 已 `stop`（state=absent），无 `RUNNING` / `QUEUED` 遗留；产物见 `bench-results/gpu-live/2026-11-17T19-35-08/`、`19-44-25/`、`19-49-22/`。
+- **第二轮真机复验（边缘延拓画布）**：新样张 `bench-results/gpu-live/2026-11-17T20-47-57/02-outpaint.png`（`report.outpaint.canvasFill = 'edge-extend'`）。布局与参数同上（864×864 内容 → 1536×864 画布、覆盖率 43.75%、`sdxl-inpaint` 30 步 / strength 1.0）：加载 3.5s、推理 **35.2s**、wall 44.4s，输出 PNG 1.67 MB；内容区核心差 **0.00/255**（全内容区 0.129/255）；显存 `max_allocated` **9715 MB**、无 OOM，Kernel `COMPLETE` 且已 stop、无 `RUNNING` / `QUEUED` 遗留。边界质量（同一指标口径，旧白底 → 新边缘延拓）：右边界两侧 8px 亮度跳变 **2.822 → 2.554**、右边界列间像素差 **3.42 → 2.72**；左边界 1.178 → 1.314、1.77 → 1.45（噪声级）；边界 ±12px 逐列亮度曲线平滑、无台阶、无硬接缝。新旧源图与蒙版字节完全相同，成片整体差异 mean 0.002/255（0.2% 像素非零、最大 3/255）——证实 9 通道 + strength 1.0 路径下填充色几乎不进入条件图；右边界残余约 6.5/255 的色调过渡来自生成新区域与原图内容的光照差异，属模型行为而非 composite 接缝，本轮不改 `reference_codec` 的羽化 / 合成（会波及普通 inpaint）。前端与 `gpu-live` 的扩图画布已做过逐像素一致性比对（3,981,312 字节 0 差异）。
 
 ## 0.12.0 — 2026-11-18
 

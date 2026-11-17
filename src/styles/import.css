@@ -174,6 +174,16 @@
   pointer-events: none;
 }
 
+/*
+ * 扩图对比：底图只占画布的一块区域（outpaintContent），不能再铺满对比框。
+ * 位置由内联 left/top/width/height 百分比给出；`object-fit: fill` 在内容框内
+ * 与该框宽高比一致（内容框由源图等比缩放生成），不会变形；框外露出纸面背景。
+ */
+.ofs-compare-base.is-region {
+  inset: auto;
+  object-fit: fill;
+}
+
 .ofs-compare-overlay {
   position: absolute;
   inset: 0;

@@ -2241,6 +2241,126 @@ async function main() {
     assert.equal(item.rootImage, rootPath)
   })
 
+  await check('扩图：outpaintContent 请求 → meta / history 透传，旧产物与脏 meta 为 null', async () => {
+    const content = { x: 0.1, y: 0.05, width: 0.8, height: 0.9 }
+    const submitted = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tool: 'outpaint',
+        presetId: 'sdxl-inpaint',
+        prompt: '向四周扩展并保持内容位置',
+        width: 1280,
+        height: 720,
+        waitSeconds: 15,
+        // 扩图画布来源（image）+ 原图在画布里的内容框（归一化 0~1，对比拉帘对齐用）。
+        reference: {
+          image: PNG_B64,
+          mask: PNG_B64,
+          sourcePath: tree.rootPath,
+          strength: 1.0,
+          outpaintContent: content,
+        },
+      }),
+    })
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body))
+    const job = submitted.body
+    assert.equal(job.status, 'done', JSON.stringify(job))
+    // 公开视图只暴露归一后的小对象；二进制仍不出现在任务视图里。
+    assert.deepEqual(job.params.reference, {
+      sourcePath: tree.rootPath,
+      strength: 1.0,
+      outpaintContent: content,
+      mask: true,
+    })
+    assert.ok(!JSON.stringify(job).includes(PNG_B64))
+    // 内容框只属于 Host/Client：远端收到的仍是普通 inpaint 载荷（没有 outpaintContent）。
+    const call = mock.state.lastBody
+    assert.equal(call.reference.outpaintContent, undefined, '内容框不下发远端')
+
+    const meta = JSON.parse(await readFile(join(workspace, job.output.dir, 'meta.json'), 'utf8'))
+    assert.deepEqual(meta.outpaintContent, content, 'meta 必须记录归一后的内容框')
+    assert.equal(meta.outpaint, true)
+
+    const history = await json(host.origin, `/imagen-api/history?limit=${LIMITS.history.maxLimit}`)
+    const item = history.body.items.find((entry) => entry.jobId === job.id)
+    assert.deepEqual(item.outpaintContent, content, '/history 必须透传 outpaintContent')
+    // 普通作品与旧产物：字段恒存在且为 null（客户端不必判断字段是否存在）。
+    const legacyItem = history.body.items.find((entry) => entry.jobId === firstJob.id)
+    assert.equal(legacyItem.outpaintContent, null, '旧产物 outpaintContent 为 null')
+
+    // 旧扩图产物（meta 没有该字段）与脏 meta（字段非法）：读取时一律归一成 null。
+    const oldDir = join(workspace, 'imagen-output', '20200103-000000-old-outpaint')
+    await mkdir(oldDir, { recursive: true })
+    await writeFile(join(oldDir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+    await writeFile(
+      join(oldDir, 'meta.json'),
+      JSON.stringify({
+        version: 1,
+        jobId: 'j_old_outpaint',
+        outpaint: true,
+        images: [{ file: '01.png', width: 1, height: 1 }],
+      }),
+      'utf8',
+    )
+    const dirtyDir = join(workspace, 'imagen-output', '20200103-000001-dirty-outpaint')
+    await mkdir(dirtyDir, { recursive: true })
+    await writeFile(join(dirtyDir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+    await writeFile(
+      join(dirtyDir, 'meta.json'),
+      JSON.stringify({
+        version: 1,
+        jobId: 'j_dirty_outpaint',
+        outpaint: true,
+        // 手改坏的字段：缺字段 / 越界，读取时必须降级为 null 而不是把脏数据回给客户端。
+        outpaintContent: { x: 0.1, width: 2 },
+        images: [{ file: '01.png', width: 1, height: 1 }],
+      }),
+      'utf8',
+    )
+    const after = await json(host.origin, `/imagen-api/history?limit=${LIMITS.history.maxLimit}`)
+    const oldItem = after.body.items.find((entry) => entry.jobId === 'j_old_outpaint')
+    assert.equal(oldItem.outpaintContent, null, '旧扩图 meta 没有内容框 → null')
+    const dirtyItem = after.body.items.find((entry) => entry.jobId === 'j_dirty_outpaint')
+    assert.equal(dirtyItem.outpaintContent, null, '被手改的非法内容框 → null（读取时归一）')
+  })
+
+  await check('扩图：非法 outpaintContent / path 来源携带内容框 → 400 invalid_request', async () => {
+    const post = (reference) =>
+      json(host.origin, '/imagen-api/generate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'outpaint',
+          presetId: 'sdxl-inpaint',
+          prompt: '非法内容框',
+          reference,
+        }),
+      })
+    const invalidContents = [
+      'not-an-object',
+      { x: 0, y: 0, width: 1 }, // 缺 height
+      { x: '0', y: 0, width: 1, height: 1 }, // 非数字
+      { x: 0, y: 0, width: 1.5, height: 1 }, // 越界
+      { x: 0.6, y: 0, width: 0.5, height: 1 }, // x+width > 1
+      { x: 0.2, y: 0.2, width: 0, height: 0.5 }, // 面积 0
+    ]
+    for (const outpaintContent of invalidContents) {
+      const result = await post({ image: PNG_B64, mask: PNG_B64, strength: 1.0, outpaintContent })
+      assert.equal(result.status, 400, `${JSON.stringify(outpaintContent)} → ${JSON.stringify(result.body)}`)
+      assert.equal(result.body.error.code, 'invalid_request')
+      assert.match(result.body.error.message, /outpaintContent/)
+    }
+    // path 来源没有画布坐标系：携带内容框直接 400（不静默丢弃，避免错位的对比拉帘）。
+    const pathWithContent = await post({
+      path: tree.rootPath,
+      outpaintContent: { x: 0, y: 0, width: 1, height: 1 },
+    })
+    assert.equal(pathWithContent.status, 400)
+    assert.equal(pathWithContent.body.error.code, 'invalid_request')
+    assert.match(pathWithContent.body.error.message, /outpaintContent/)
+  })
+
   await check('打开产物目录（dryRun 只解析路径）', async () => {
     const result = await json(host.origin, '/imagen-api/reveal', {
       method: 'POST',

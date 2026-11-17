@@ -314,3 +314,147 @@ export function outpaintPlanOf(input) {
   if (ratioId === OUTPAINT.expandId) return expandPlanOf(sourceWidth, sourceHeight, anchor)
   return ratioPlanOf(sourceWidth, sourceHeight, ratioId, anchor)
 }
+
+// ---- 新增区域填充：四边像素拉伸（edge clamp）------------------------------
+
+/**
+ * 版面 → 新增区域的 8 条拉伸条带（内容框坐标 / 画布坐标）。
+ *
+ * 纯黑填底会在新增区与内容区之间制造一条硬边界（VAE latent 边界跳变，可能被羽化混进
+ * 过渡带）。这里按「取内容框内最近边缘像素」的等价实现把新增区切成 8 条：
+ * 四角各 1 个内容像素、四边各 1px 边缘带，绘制时按 `sw/cw`、`sh/ch` 映射回源图像素。
+ *
+ * 条带互不重叠、并集恰好覆盖「画布 − 内容框」的全部像素；宽度或高度为 0 的条带跳过，
+ * 没有新增区域（或 plan 非法）时返回空数组。
+ *
+ * @param {object} plan `outpaintPlanOf()` 的成功结果
+ * @returns {Array<{ source: {x:number,y:number,width:number,height:number},
+ *   target: {x:number,y:number,width:number,height:number} }>}
+ */
+export function outpaintEdgeStripsOf(plan) {
+  const source = plan && typeof plan === 'object' && plan.ok === true ? plan : null
+  if (!source) return []
+  const width = Number(source.width)
+  const height = Number(source.height)
+  const content = source.content && typeof source.content === 'object' ? source.content : null
+  if (!content || !(width > 0) || !(height > 0)) return []
+  const contentWidth = Number(content.width)
+  const contentHeight = Number(content.height)
+  if (!(contentWidth > 0) || !(contentHeight > 0)) return []
+  const left = Number(content.x)
+  const top = Number(content.y)
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return []
+  const right = width - contentWidth - left
+  const bottom = height - contentHeight - top
+  if (!(right >= 0) || !(bottom >= 0)) return []
+  if (left <= 0 && right <= 0 && top <= 0 && bottom <= 0) return []
+
+  const strips = []
+  const push = (sx, sy, sw, sh, tx, ty, tw, th) => {
+    if (!(tw > 0) || !(th > 0)) return
+    strips.push({
+      source: { x: sx, y: sy, width: sw, height: sh },
+      target: { x: tx, y: ty, width: tw, height: th },
+    })
+  }
+  // 四角：各取内容框的 1 个角像素。
+  push(0, 0, 1, 1, 0, 0, left, top)
+  push(contentWidth - 1, 0, 1, 1, left + contentWidth, 0, right, top)
+  push(0, contentHeight - 1, 1, 1, 0, top + contentHeight, left, bottom)
+  push(contentWidth - 1, contentHeight - 1, 1, 1, left + contentWidth, top + contentHeight, right, bottom)
+  // 左右：取内容框整列边缘像素，横向拉伸到留白宽度。
+  push(0, 0, 1, contentHeight, 0, top, left, contentHeight)
+  push(contentWidth - 1, 0, 1, contentHeight, left + contentWidth, top, right, contentHeight)
+  // 上下：取内容框整行边缘像素，纵向拉伸到留白高度。
+  push(0, 0, contentWidth, 1, left, 0, contentWidth, top)
+  push(0, contentHeight - 1, contentWidth, 1, left, top + contentHeight, contentWidth, bottom)
+  return strips
+}
+
+// ---- 扩图内容框的归一化（Host / Client 同规则）-----------------------------
+
+/** 内容框字段名与精度以契约为唯一来源（`OUTPAINT.content`）。 */
+const CONTENT_FIELDS = Array.isArray(OUTPAINT.content && OUTPAINT.content.fields)
+  ? OUTPAINT.content.fields
+  : ['x', 'y', 'width', 'height']
+const CONTENT_PRECISION = Number.isFinite(Number(OUTPAINT.content && OUTPAINT.content.precision))
+  ? Math.max(0, Math.min(8, Math.floor(Number(OUTPAINT.content.precision))))
+  : 4
+/** 与 Host 一致的浮点容差：归一化值只允许 1e-3 量级的噪声越界。 */
+const CONTENT_TOLERANCE = 1e-3
+
+/** 非负整数；缺失 / 非法返回 null。 */
+function nonNegativeInt(value) {
+  if (value === null || value === undefined || value === '') return null
+  const number = Number(value)
+  if (!Number.isFinite(number) || number < 0) return null
+  return Math.round(number)
+}
+
+/** 四舍五入到契约精度（默认 4 位小数）。 */
+function roundContent(value) {
+  const factor = 10 ** CONTENT_PRECISION
+  return Math.round(Number(value) * factor) / factor
+}
+
+/**
+ * 扩图内容框归一化：`{ x, y, width, height }` 归一化到 0~1（相对画布左上角）。
+ *
+ * 规则与 Host 的校验一致：四个字段都是有限数、各自落在 0~1（负值容差 1e-3）、
+ * `width * height > 0`、`x + width ≤ 1`、`y + height ≤ 1`。非法 / 缺失返回 null，
+ * 合法时按契约精度（4 位小数）输出。供「对比原图」拉帘把底图放回它在扩图画布里的位置。
+ *
+ * @param {unknown} value 历史条目上的 `outpaintContent`（`/history` 透传）
+ * @returns {{ x:number, y:number, width:number, height:number } | null}
+ */
+export function normalizeOutpaintContent(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : null
+  if (!source) return null
+  const raw = {}
+  for (const field of CONTENT_FIELDS) {
+    const number = source[field]
+    if (typeof number !== 'number' || !Number.isFinite(number)) return null
+    raw[field] = number
+  }
+  const { x, y, width, height } = raw
+  if (width <= 0 || height <= 0) return null
+  if (x < -CONTENT_TOLERANCE || y < -CONTENT_TOLERANCE) return null
+  if (width > 1 + CONTENT_TOLERANCE || height > 1 + CONTENT_TOLERANCE) return null
+  const left = Math.max(0, x)
+  const top = Math.max(0, y)
+  if (left + width > 1 + CONTENT_TOLERANCE) return null
+  if (top + height > 1 + CONTENT_TOLERANCE) return null
+  return {
+    x: roundContent(Math.min(1, left)),
+    y: roundContent(Math.min(1, top)),
+    width: roundContent(Math.min(1, width)),
+    height: roundContent(Math.min(1, height)),
+  }
+}
+
+/**
+ * 合成的扩图画布 → 归一化内容框（`reference.outpaintContent` 的值）。
+ *
+ * @param {{ width:number, height:number, content:{x:number,y:number,width:number,height:number} }} canvas
+ * @returns {{ x:number, y:number, width:number, height:number } | null} 画布 / 内容框非法时 null
+ */
+export function buildOutpaintContentBody(canvas) {
+  const source = canvas && typeof canvas === 'object' && !Array.isArray(canvas) ? canvas : null
+  if (!source) return null
+  const width = positiveSize(source.width)
+  const height = positiveSize(source.height)
+  const content = source.content && typeof source.content === 'object' ? source.content : null
+  if (!width || !height || !content) return null
+  const contentWidth = positiveSize(content.width)
+  const contentHeight = positiveSize(content.height)
+  const x = nonNegativeInt(content.x)
+  const y = nonNegativeInt(content.y)
+  if (contentWidth === null || contentHeight === null || x === null || y === null) return null
+  if (x + contentWidth > width || y + contentHeight > height) return null
+  return normalizeOutpaintContent({
+    x: x / width,
+    y: y / height,
+    width: contentWidth / width,
+    height: contentHeight / height,
+  })
+}

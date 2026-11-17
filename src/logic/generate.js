@@ -14,7 +14,7 @@
  * 供 `buildImageToolBody()` 复用同一套请求体构造；表单域不再产出 reference 字段。
  */
 
-import { LIMITS, ROUTES } from '../../shared/contract.js'
+import { LIMITS, ROUTES, UPSCALE } from '../../shared/contract.js'
 import { clampInt, clampNumber, clampSize, parseSeed } from './clamp.js'
 import { clampMaskStrength, referenceMaskForSubmit } from './mask.js'
 import { inpaintOnlyOf, ratioIdOf, referencePresetOf } from './preset.js'
@@ -296,6 +296,185 @@ export function isBareImportOf(entry) {
   )
 }
 
+// ---- 非扩散产物（高清放大）的回填路径 ---------------------------------------
+//
+// 阶段十五 Phase B1 起 `/history` 里会出现高清放大产物：`item.upscale === true`、
+// `presetId: 'realesrgan-x2plus'`、`params.steps/cfg/seed` 全是占位 0、宽高是放大后的像素
+// （如 2048×2048）。这类记录**没有扩散参数**，直接回填 / 重新生成会把 0 步、超分模型 id
+// 和超限尺寸写进左栏表单，因此先沿 `sourceImage` 找到父作品的真实扩散参数，找不到时走降级补丁。
+
+/** 父链回溯层数上限：与 `logic/lineage.js` 的 rootImage 回溯保持一致，防异常数据成环。 */
+const DIFFUSION_LOOKBACK = 8
+
+/** 是否为高清放大产物：明确标记 `upscale`，或 `presetId` 就是契约里的超分模型 id。 */
+function isUpscaleItem(item) {
+  if (!item || typeof item !== 'object') return false
+  if (item.upscale === true) return true
+  return typeof item.presetId === 'string' && item.presetId.trim() === UPSCALE.id
+}
+
+/**
+ * 是否为「非扩散产物」：高清放大，或 `presetId` 不在当前扩散预设列表里的记录。
+ *
+ * 这类记录不能直接回填参数。预设列表还没拿到（启动瞬间）时不按「未知预设」判定，
+ * 只认 `upscale` / 超分模型 id 这两个明确信号，避免把正常作品误判成非扩散产物。
+ *
+ * @param {object} entry `{ image, item }`
+ * @param {Array<object>} [presets] 宿主下发的预设列表
+ * @returns {boolean}
+ */
+export function isNonDiffusionRecallOf(entry, presets) {
+  const item = entry && typeof entry === 'object' && entry.item ? entry.item : null
+  if (!item) return false
+  if (isUpscaleItem(item)) return true
+  const presetId = typeof item.presetId === 'string' ? item.presetId.trim() : ''
+  const list = Array.isArray(presets) ? presets.filter((preset) => preset && preset.id) : []
+  return Boolean(presetId && list.length > 0 && !presetOf(list, presetId))
+}
+
+/** `/history` 已加载条目 → 图片路径索引（同一张图重复出现时保留先到的一份）。 */
+function itemsByImagePathOf(items) {
+  const map = new Map()
+  if (!Array.isArray(items)) return map
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue
+    const images = Array.isArray(item.images) ? item.images : []
+    for (const image of images) {
+      const path = image && typeof image.path === 'string' ? image.path.trim() : ''
+      if (path && !map.has(path)) map.set(path, { item, image })
+    }
+  }
+  return map
+}
+
+/**
+ * 回填 / 重新生成前的「真实扩散来源」解析。
+ *
+ *  - 普通作品：返回 entry 自身（调用方据此走既有回填逻辑）；
+ *  - 非扩散产物（高清放大等）：沿 `item.sourceImage` 在已加载的 `items` 里向上找父作品
+ *    （最多 8 层、防成环；父作品若仍是放大记录继续向上），找到即返回父作品的 `{ image, item }`；
+ *  - 找不到父作品 / 父作品是无生成元数据的导入图：返回 null（调用方走降级补丁）。
+ *
+ * @param {object} entry `{ image, item }`
+ * @param {Array<object>} [items] `/history` 已加载条目（缺省时等同找不到父作品）
+ * @returns {{ image: object, item: object } | null}
+ */
+export function diffusionSourceOf(entry, items) {
+  const holder = entry && typeof entry === 'object' ? entry : null
+  if (!holder || !holder.item) return null
+  // 普通作品：自身就是扩散来源，调用方不需要向上找。
+  if (!isUpscaleItem(holder.item)) return holder
+  const byPath = itemsByImagePathOf(items)
+  const seen = new Set()
+  let current = holder
+  for (let depth = 0; depth < DIFFUSION_LOOKBACK; depth += 1) {
+    const item = current && current.item ? current.item : null
+    const sourceImage = item && typeof item.sourceImage === 'string' ? item.sourceImage.trim() : ''
+    if (!sourceImage || seen.has(sourceImage)) return null
+    seen.add(sourceImage)
+    const parent = byPath.get(sourceImage)
+    if (!parent) return null
+    const parentEntry = {
+      image: parent.image && typeof parent.image === 'object' ? parent.image : { path: sourceImage },
+      item: parent.item,
+    }
+    // 裸导入父作品没有生成元数据，不能当扩散参数来源。
+    if (isBareImportOf(parentEntry)) return null
+    if (!isUpscaleItem(parent.item)) return parentEntry
+    current = parentEntry
+  }
+  return null
+}
+
+/** 合法扩散预设：候选（预设对象 / id）在列表里且不是专用局部重绘权重；否则第一个可文生图预设。 */
+function legalDiffusionPresetOf(presets, candidate) {
+  const list = Array.isArray(presets) ? presets.filter((preset) => preset && preset.id) : []
+  const wanted = typeof candidate === 'string'
+    ? candidate.trim()
+    : (candidate && typeof candidate === 'object' && typeof candidate.id === 'string' ? candidate.id.trim() : '')
+  const found = wanted ? presetOf(list, wanted) : null
+  if (found && !inpaintOnlyOf(found)) return found
+  return list.find((preset) => !inpaintOnlyOf(preset)) || null
+}
+
+/**
+ * 降级补丁的模型参数：用合法扩散预设的推荐 steps / cfg。
+ *
+ * 步数只在推荐值 > 0 时写入（放大记录的 0 步是占位，绝不带回表单）；CFG 只在明确非零时
+ * 写入——0 在契约里是合法值，但这里宁可不覆盖表单里已有的 cfg，也不把「0」当回填结果。
+ */
+function fallbackTuningOf(preset) {
+  const patch = {}
+  if (!preset || typeof preset !== 'object' || !preset.id) return patch
+  patch.presetId = preset.id
+  const rawSteps = finiteNumber(preset.steps)
+  if (rawSteps !== null && rawSteps > 0) {
+    patch.steps = clampInt(rawSteps, LIMITS.steps.min, LIMITS.steps.max, LIMITS.steps.min)
+  }
+  const rawCfg = finiteNumber(preset.cfg)
+  if (rawCfg !== null && rawCfg > 0) {
+    patch.cfg = clampNumber(rawCfg, LIMITS.cfg.min, LIMITS.cfg.max, rawCfg)
+  }
+  return patch
+}
+
+/**
+ * 降级尺寸：优先放大记录里的源图宽高（`upscaleSource`），否则把记录尺寸钳到契约范围。
+ * 两者都没有时不写宽高（表单保持原值）。
+ */
+function fallbackSizeOf(entry) {
+  const item = entry && entry.item ? entry.item : null
+  const image = entry && entry.image ? entry.image : null
+  const params = item && item.params && typeof item.params === 'object' ? item.params : null
+  const upscaleSource = item && item.upscaleSource && typeof item.upscaleSource === 'object'
+    ? item.upscaleSource
+    : null
+  const width = positiveSize(upscaleSource && upscaleSource.width)
+    ?? positiveSize(image && image.width)
+    ?? positiveSize(params && params.width)
+  const height = positiveSize(upscaleSource && upscaleSource.height)
+    ?? positiveSize(image && image.height)
+    ?? positiveSize(params && params.height)
+  return {
+    width: width === null ? null : clampSize(width),
+    height: height === null ? null : clampSize(height),
+  }
+}
+
+/** 非扩散产物找不到父作品时的回填降级补丁（绝不带超分 id / 0 步 / 超限尺寸）。 */
+function degradedIteratePatch(entry, form, presets) {
+  const item = entry && entry.item ? entry.item : null
+  if (!item) return {}
+  const patch = {}
+  const prompt = typeof item.prompt === 'string' ? item.prompt.trim().slice(0, LIMITS.prompt.maxChars) : ''
+  if (prompt) patch.prompt = prompt
+  const params = item.params && typeof item.params === 'object' ? item.params : null
+  if (params && typeof params.negativePrompt === 'string') patch.negative = params.negativePrompt
+  const size = fallbackSizeOf(entry)
+  if (size.width !== null) patch.width = size.width
+  if (size.height !== null) patch.height = size.height
+  const preset = legalDiffusionPresetOf(presets, form && typeof form === 'object' ? form.presetId : '')
+  Object.assign(patch, fallbackTuningOf(preset))
+  if (Object.keys(patch).length > 0) patch.seed = ''
+  return patch
+}
+
+/** 非扩散产物找不到父作品时的「重新生成」降级覆盖项；没有提示词返回 null。 */
+function degradedRerollOverrides(entry, presets, fallbackPreset) {
+  const item = entry && entry.item ? entry.item : null
+  if (!item) return null
+  const prompt = typeof item.prompt === 'string' ? item.prompt.trim().slice(0, LIMITS.prompt.maxChars) : ''
+  if (!prompt) return null
+  const overrides = { prompt, seed: -1, count: 1 }
+  const params = item.params && typeof item.params === 'object' ? item.params : null
+  if (params && typeof params.negativePrompt === 'string') overrides.negativePrompt = params.negativePrompt
+  const size = fallbackSizeOf(entry)
+  if (size.width !== null) overrides.width = size.width
+  if (size.height !== null) overrides.height = size.height
+  Object.assign(overrides, fallbackTuningOf(legalDiffusionPresetOf(presets, fallbackPreset)))
+  return overrides
+}
+
 /**
  * 「带回参数」→ 表单补丁。
  * prompt 用作品自己的提示词；尺寸用产物像素（不再用最近任务兜底）；
@@ -303,9 +482,23 @@ export function isBareImportOf(entry) {
  *
  * 没有记录有效 seed 时把种子恢复为随机，避免上一张作品的固定种子串到这张图上。
  * 没有可回填字段时返回空补丁；无生成元数据的导入图直接返回空补丁（见 isBareImportOf）。
+ *
+ * 阶段十五 Phase B 补修：高清放大等非扩散产物不直接回填——先沿 `sourceImage` 在
+ * `items` 里找父作品的真实扩散参数；找不到时走降级补丁（尺寸来自源图 / 钳到契约范围，
+ * 步数 / CFG 用合法扩散预设推荐值），绝不把超分 id、0 步或放大后尺寸带进表单。
+ *
+ * @param {object} entry `{ image, item }`
+ * @param {object} form 当前表单（只读 presetId 用于降级选模）
+ * @param {Array<object>} [presets] 宿主下发的预设列表
+ * @param {Array<object>} [items] `/history` 已加载条目（旧 3 参调用保持既有行为）
  */
-export function iteratePatch(entry, form, presets) {
+export function iteratePatch(entry, form, presets, items) {
   if (isBareImportOf(entry)) return {}
+  if (isNonDiffusionRecallOf(entry, presets)) {
+    const source = diffusionSourceOf(entry, items)
+    if (source && source !== entry) return iteratePatch(source, form, presets, items)
+    return degradedIteratePatch(entry, form, presets)
+  }
   const recall = recallOf(entry, presets)
   const patch = {}
 
@@ -328,9 +521,22 @@ export function iteratePatch(entry, form, presets) {
  * 「重新生成」→ 生成参数覆盖项：保持该图的 prompt / 尺寸 / steps / cfg / 预设，
  * 只把 seed 换成随机（-1），并按「再画一张」把张数固定为 1。
  * 没有可用的提示词时返回 null，由调用方给可见提示；裸导入图同样返回 null。
+ *
+ * 非扩散产物（高清放大等）同样先解析父作品的真实扩散参数；父作品缺失时用降级覆盖项
+ * （`fallbackPreset` 通常是左栏当前预设，缺失时取第一个可文生图预设）。
+ *
+ * @param {object} entry `{ image, item }`
+ * @param {Array<object>} [presets] 宿主下发的预设列表
+ * @param {Array<object>} [items] `/history` 已加载条目
+ * @param {object|string} [fallbackPreset] 降级时的候选预设（当前表单预设）
  */
-export function rerollOverrides(entry, presets) {
+export function rerollOverrides(entry, presets, items, fallbackPreset) {
   if (isBareImportOf(entry)) return null
+  if (isNonDiffusionRecallOf(entry, presets)) {
+    const source = diffusionSourceOf(entry, items)
+    if (source && source !== entry) return rerollOverrides(source, presets, items, fallbackPreset)
+    return degradedRerollOverrides(entry, presets, fallbackPreset)
+  }
   const recall = recallOf(entry, presets)
   const prompt = recall.prompt.trim()
   if (!prompt) return null

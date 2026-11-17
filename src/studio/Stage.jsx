@@ -6,6 +6,7 @@ import { INSPIRE_KEYS } from '../constants.js'
 import { formatText, formatSeconds } from '../logic/format.js'
 import { referenceUrlOf } from '../logic/generate.js'
 import { IMAGE_TOOLS } from '../logic/imageTool.js'
+import { normalizeOutpaintContent } from '../logic/outpaint.js'
 import { jobCountText } from '../logic/status.js'
 import { Icon } from './icons.jsx'
 import { useFocusTrap } from './hooks/useFocusTrap.js'
@@ -100,6 +101,11 @@ export function Stage(props) {
     || (params && typeof params.sourceImage === 'string' && params.sourceImage)
     || ''
   const compareUrl = sourceImage ? referenceUrlOf(sourceImage) : ''
+  // 扩图产物：原图只占画布的一块区域，拉帘时按 outpaintContent 放回真实位置；
+  // 普通派生作品 / 旧记录没有该字段时为 null，CompareSlider 保持整幅底图的既有行为。
+  const compareContent = item && item.outpaintContent
+    ? normalizeOutpaintContent(item.outpaintContent)
+    : null
   // 切图时收起对比：拉帘不能停在上一张作品的原图上。
   // 用「上一张图的键」而不是首次挂载就关，避免助手胶囊先置 compareOpen=true 再挂载舞台时被立刻关掉。
   const compareKeyRef = React.useRef(imageKey)
@@ -378,6 +384,7 @@ export function Stage(props) {
                 t={t}
                 beforeUrl={compareUrl}
                 afterUrl={image.url}
+                beforeContent={compareContent}
                 beforeLabel={t('studio.compare.before')}
                 afterLabel={t('studio.compare.after')}
                 ratio={printRatio}

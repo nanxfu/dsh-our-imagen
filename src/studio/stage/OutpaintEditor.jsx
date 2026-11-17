@@ -19,6 +19,7 @@ import {
   OUTPAINT_EXPAND_ID,
   outpaintAnchorOf,
   outpaintAnchorShift,
+  outpaintEdgeStripsOf,
   outpaintPlanOf,
   outpaintRatioOptions,
 } from '../../logic/outpaint.js'
@@ -130,8 +131,13 @@ export function OutpaintEditor(props) {
     if (!imageCtx || !maskCtx) return
     if (typeof imageCanvas.toDataURL !== 'function' || typeof maskCanvas.toDataURL !== 'function') return
 
-    imageCtx.fillStyle = '#000000'
-    imageCtx.fillRect(0, 0, plan.width, plan.height)
+    // 新增区域不再用纯黑填底：纯黑会在内容区边界制造硬跳变，VAE 的 latent 边界可能把它
+    // 混进过渡带。改为把内容框四边 1px 边缘像素向新增区拉伸（edge clamp），边界两侧
+    // 颜色连续；内容区先画、条带后画，两者互不重叠，顺序不影响像素。
+    const sourceWidth = natural.width > 0 ? natural.width : plan.content.width
+    const sourceHeight = natural.height > 0 ? natural.height : plan.content.height
+    const scaleX = sourceWidth / plan.content.width
+    const scaleY = sourceHeight / plan.content.height
     try {
       imageCtx.drawImage(
         sourceImage,
@@ -140,6 +146,19 @@ export function OutpaintEditor(props) {
         plan.content.width,
         plan.content.height,
       )
+      for (const strip of outpaintEdgeStripsOf(plan)) {
+        imageCtx.drawImage(
+          sourceImage,
+          strip.source.x * scaleX,
+          strip.source.y * scaleY,
+          strip.source.width * scaleX,
+          strip.source.height * scaleY,
+          strip.target.x,
+          strip.target.y,
+          strip.target.width,
+          strip.target.height,
+        )
+      }
     } catch {
       // 底图还没解码好 / 画布被污染：等 onLoad 后的下一轮再导。
       return

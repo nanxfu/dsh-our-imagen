@@ -3,7 +3,8 @@
  *
  * tool-core 自测：mount 真实的 `useImageTool` + `Stage`，
  * 断言动作坞分组、涂抹画布 / 扩图画布 / 整图重绘条的挂载与退出、提交按钮的可用性、
- * 蒙版改变时强度上限的联动、高清放大点击即提交，以及一次真实的工具提交请求体。
+ * 蒙版改变时强度上限的联动、高清放大点击即提交、扩图对比拉帘的区域定位，
+ * 以及一次真实的工具提交请求体。
  *
  * 注意：
  *  - 树遍历 helper 与其它渲染测试共用 `test/helpers/render.mjs`；
@@ -101,14 +102,18 @@ const buttonByText = (tree, text) => {
   return button
 }
 
-function createUi() {
+function createUi(options = {}) {
   const toasts = []
   const failures = []
-  return {
+  const ui = {
     toasts,
     failures,
     zoom: false,
+    compareOpen: options.compareOpen === true,
     setZoom() {},
+    setCompareOpen(next) {
+      ui.compareOpen = Boolean(next)
+    },
     copyPath() {},
     setView() {},
     setPanelMode() {},
@@ -120,6 +125,7 @@ function createUi() {
       failures.push({ code, message })
     },
   }
+  return ui
 }
 
 async function main() {
@@ -169,7 +175,7 @@ async function main() {
 
   const mountStage = async (options = {}) => {
     client.unmount()
-    const ui = createUi()
+    const ui = createUi({ compareOpen: options.compareOpen })
     const harness = createHarness()
     const props = {
       t,
@@ -482,6 +488,61 @@ async function main() {
     assert.equal(byClass(next, 'ofs-dock-resume').length, 0, '成功后草稿清空，不再有继续编辑')
     assert.equal(harness.api().pendingTool.jobId, 'j_tool_1')
     assert.ok(ui.toasts.includes('已提交图片处理任务'))
+  })
+
+  await check('对比拉帘：扩图产物按 outpaintContent 定位底图，普通派生仍整幅铺满', async () => {
+    // 扩图产物：画布 1232²，原图 1024² 居中（outpaintContent 由历史条目透传，未归一化也可）。
+    const outpaintImage = {
+      ...image,
+      path: 'imagen-output/job-out/01.png',
+      file: '01.png',
+      url: '/imagen-api/file?path=imagen-output%2Fjob-out%2F01.png',
+      width: 1232,
+      height: 1232,
+      seed: 0,
+      seconds: 2.4,
+    }
+    const outpaintItem = {
+      ...item,
+      jobId: 'job-out',
+      prompt: '扩图后的荷花池塘',
+      presetId: 'sdxl-inpaint',
+      sourceImage: image.path,
+      outpaint: true,
+      outpaintContent: { x: 104 / 1232, y: 104 / 1232, width: 1024 / 1232, height: 1024 / 1232 },
+      images: [outpaintImage],
+    }
+    const extension = await mountStage({
+      selected: { image: outpaintImage, item: outpaintItem },
+      compareOpen: true,
+    })
+    let next = await extension.tree
+    assert.equal(byClass(next, 'ofs-compare').length, 1, '带 sourceImage 的派生作品应挂拉帘')
+    const base = byClassOne(next, 'ofs-compare-base')
+    assert.equal(base.props.className.split(/\s+/).includes('is-region'), true, '扩图底图应使用 .is-region')
+    const style = base.props.style || {}
+    const percentOf = (value) => {
+      const number = Number.parseFloat(String(value))
+      assert.ok(Number.isFinite(number), `style 应为百分比字符串，实际：${value}`)
+      return number
+    }
+    assert.ok(Math.abs(percentOf(style.left) - 8.44) < 0.01, `left 应为 8.44%，实际 ${style.left}`)
+    assert.ok(Math.abs(percentOf(style.top) - 8.44) < 0.01, `top 应为 8.44%，实际 ${style.top}`)
+    assert.ok(Math.abs(percentOf(style.width) - 83.12) < 0.01, `width 应为 83.12%，实际 ${style.width}`)
+    assert.ok(Math.abs(percentOf(style.height) - 83.12) < 0.01, `height 应为 83.12%，实际 ${style.height}`)
+    // after 图（扩图整幅）仍铺满对比框，不带区域定位。
+    const after = byClassOne(next, 'ofs-compare-image')
+    assert.equal(after.props.className, 'ofs-compare-image')
+    assert.equal(after.props.style, undefined)
+
+    // 普通派生作品（有 sourceImage、没有 outpaintContent）：底图保持整幅铺满，行为不变。
+    const ordinaryItem = { ...item, sourceImage: image.path, images: [image] }
+    const ordinary = await mountStage({ selected: { image, item: ordinaryItem }, compareOpen: true })
+    next = await ordinary.tree
+    assert.equal(byClass(next, 'ofs-compare').length, 1)
+    const ordinaryBase = byClassOne(next, 'ofs-compare-base')
+    assert.equal(ordinaryBase.props.className, 'ofs-compare-base')
+    assert.equal(ordinaryBase.props.style, undefined, '无 outpaintContent 时不得写内联定位')
   })
 
   client.unmount()

@@ -306,7 +306,8 @@ export function useStudio(props) {
   /** 重新生成：按当前选中作品的提示词与参数、换随机种子再抽一张纯文生图（产生新 v1）。 */
   function reroll(entry) {
     const target = entry || library.selected
-    const overrides = rerollOverrides(target, presets)
+    // 高清放大等非扩散产物的参数不可信：传入已加载条目与当前预设，让它回溯父作品的扩散参数。
+    const overrides = rerollOverrides(target, presets, library.items, form.activePreset)
     if (!overrides) {
       ui.showToast(t('workbench.needPrompt'))
       return
@@ -324,7 +325,8 @@ export function useStudio(props) {
   function previewWork(entry) {
     const target = entry && entry.image ? entry : null
     if (!target) return
-    const patch = iteratePatch(target, form.form, presets)
+    // 高清放大等非扩散产物不直接回填：沿 sourceImage 找到父作品的真实扩散参数（找不到走降级补丁）。
+    const patch = iteratePatch(target, form.form, presets, library.items)
     const decision = previewRecallOf({
       dirty: form.dirty,
       hasDraft: Boolean(form.draft),

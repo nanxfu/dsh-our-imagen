@@ -28,8 +28,15 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { JobQueue, normalizeReference, normalizeStrength, normalizeTool, normalizeUpscaleRequest } from '../lib/jobs.js'
-import { saveJobOutput } from '../lib/output.js'
+import {
+  JobQueue,
+  normalizeOutpaintContent,
+  normalizeReference,
+  normalizeStrength,
+  normalizeTool,
+  normalizeUpscaleRequest,
+} from '../lib/jobs.js'
+import { saveJobOutput, scanHistory } from '../lib/output.js'
 import { submitGenerate, waitForJob } from '../lib/remote.js'
 import { LIMITS, PRESETS, UPSCALE } from '../shared/contract.js'
 import { createCheckRunner } from './helpers/check.mjs'
@@ -1386,6 +1393,70 @@ async function main() {
     }
   })
 
+  await check('validator：outpaintContent 归一化、来源约束与非法值', () => {
+    // 缺失 = 不需要对比框（旧客户端行为）；合法值按契约精度归一。
+    assert.deepEqual(normalizeOutpaintContent(undefined), { ok: true, value: null })
+    assert.deepEqual(normalizeOutpaintContent(null), { ok: true, value: null })
+    const valid = normalizeOutpaintContent({ x: 0.1875, y: 0, width: 0.5625, height: 0.9 })
+    assert.equal(valid.ok, true, JSON.stringify(valid))
+    assert.deepEqual(valid.value, { x: 0.1875, y: 0, width: 0.5625, height: 0.9 })
+    // 4 位小数归一：客户端用除法算出来的浮点尾巴不进公开视图。
+    const rounded = normalizeOutpaintContent({ x: 0.12345, y: 0.00004, width: 0.3333333, height: 0.5 })
+    assert.equal(rounded.ok, true, JSON.stringify(rounded))
+    assert.deepEqual(rounded.value, { x: 0.1235, y: 0, width: 0.3333, height: 0.5 })
+    // 浮点容差：x+width 因除法误差略超 1 不拒绝；归一后保证自身不越界。
+    const tolerant = normalizeOutpaintContent({ x: 0.5, y: 0.25, width: 0.5004, height: 0.75 })
+    assert.equal(tolerant.ok, true, JSON.stringify(tolerant))
+    assert.ok(tolerant.value.x + tolerant.value.width <= 1 + 1e-9, JSON.stringify(tolerant.value))
+
+    const invalid = [
+      { x: 0, y: 0, width: 1 }, // 缺字段
+      { x: '0', y: 0, width: 1, height: 1 }, // 非数字
+      { x: 0, y: 0, width: 1.5, height: 1 }, // 越界
+      { x: -0.2, y: 0, width: 1, height: 1 }, // 负数越界
+      { x: 0.6, y: 0, width: 0.5, height: 1 }, // x+width > 1
+      { x: 0, y: 0.6, width: 1, height: 0.5 }, // y+height > 1
+      { x: 0.2, y: 0.2, width: 0, height: 0.5 }, // 面积 0
+      { x: 0.2, y: 0.2, width: -0.1, height: 0.5 }, // 负宽
+      [0, 0, 1, 1], // 数组
+      'not-an-object',
+    ]
+    for (const value of invalid) {
+      const result = normalizeOutpaintContent(value)
+      assert.equal(result.ok, false, JSON.stringify(value))
+      assert.equal(result.code, 'invalid_request')
+      assert.match(result.message, /outpaintContent/)
+    }
+
+    // 来源约束：path 来源没有画布坐标系，携带内容框 → 400；image 来源合法携带 → 归一后返回。
+    const pathWithContent = normalizeReference({
+      path: 'imagen-output/20260101-000000-a/01.png',
+      outpaintContent: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 },
+    })
+    assert.equal(pathWithContent.ok, false)
+    assert.equal(pathWithContent.code, 'invalid_request')
+    assert.match(pathWithContent.message, /outpaintContent/)
+    const imageWithContent = normalizeReference({
+      image: PNG_B64,
+      outpaintContent: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 },
+    })
+    assert.equal(imageWithContent.ok, true, JSON.stringify(imageWithContent))
+    assert.deepEqual(imageWithContent.value.outpaintContent, { x: 0.1, y: 0.1, width: 0.8, height: 0.8 })
+    // 未携带时恒为 null（调用方 / 客户端不必判断字段是否存在）。
+    assert.equal(normalizeReference({ image: PNG_B64 }).value.outpaintContent, null)
+    assert.equal(
+      normalizeReference({ path: 'imagen-output/20260101-000000-a/01.png' }).value.outpaintContent,
+      null,
+    )
+    // 非法内容框在 normalizeReference 里同样以 invalid_request 拒绝（不静默丢弃）。
+    const badReference = normalizeReference({
+      image: PNG_B64,
+      outpaintContent: { x: 0.9, y: 0, width: 0.5, height: 0.5 },
+    })
+    assert.equal(badReference.ok, false)
+    assert.equal(badReference.code, 'invalid_request')
+  })
+
   await check('扩图：tool=outpaint 记 outpaint/inpaint/sourcePath，远端载荷仍是普通局部重绘', async () => {
     const remote = await startFlakyRemote()
     remote.state.onGenerate = (state, count) => {
@@ -1400,6 +1471,9 @@ async function main() {
       options: { generateTimeoutMs: 5000, pollMs: 20 },
     })
     try {
+      // 画布 base64 由客户端合成；sourcePath 指回被扩的原作品（版本树归组用），
+      // outpaintContent 是原图在画布里的内容框（归一化 0~1，对比拉帘对齐用）。
+      const content = { x: 0.1, y: 0.05, width: 0.8, height: 0.9 }
       const submitted = queue.submit({
         tool: 'outpaint',
         presetId: 'sdxl-inpaint',
@@ -1409,13 +1483,18 @@ async function main() {
         steps: 8,
         cfg: 7,
         count: 1,
-        // 画布 base64 由客户端合成；sourcePath 指回被扩的原作品（版本树归组用）。
-        reference: { image: PNG_B64, mask: PNG_B64, sourcePath, strength: 1.0 },
+        reference: { image: PNG_B64, mask: PNG_B64, sourcePath, strength: 1.0, outpaintContent: content },
       })
       assert.equal(submitted.ok, true, JSON.stringify(submitted))
       assert.equal(submitted.job.tool, 'outpaint')
       assert.equal(submitted.job.presetId, 'sdxl-inpaint')
-      assert.deepEqual(submitted.job.params.reference, { sourcePath, strength: 1.0, mask: true })
+      // 公开视图只暴露归一后的小对象（不含二进制），内容框随 params 透传给客户端。
+      assert.deepEqual(submitted.job.params.reference, {
+        sourcePath,
+        strength: 1.0,
+        outpaintContent: content,
+        mask: true,
+      })
       assert.ok(!JSON.stringify(submitted.job).includes(PNG_B64), 'publicView 不得回传画布/蒙版二进制')
 
       const done = await queue.waitFor(submitted.job.id, 10)
@@ -1423,6 +1502,7 @@ async function main() {
       const call = remote.state.generateCalls.at(-1)
       assert.equal(call.tool, undefined, '远端看不到 outpaint：就是一次普通 inpaint 请求')
       assert.deepEqual(call.reference, { image_b64: PNG_B64, strength: 1.0, mask_b64: PNG_B64 })
+      assert.equal(call.reference.outpaintContent, undefined, '内容框只属于 Host/Client，不下发远端')
 
       const meta = JSON.parse(await readFile(join(workspace, done.output.dir, 'meta.json'), 'utf8'))
       assert.equal(meta.outpaint, true, 'meta 必须记 outpaint 标记')
@@ -1431,6 +1511,33 @@ async function main() {
       assert.equal(meta.rootImage, sourcePath, '来源图没有父 meta 时 rootImage 兜底为 sourcePath')
       assert.equal(meta.strength, 1.0)
       assert.equal(meta.params.reference.sourcePath, sourcePath)
+      assert.deepEqual(meta.outpaintContent, content, 'meta 必须记录归一后的内容框')
+
+      // /history 透传：合法对象原样回给客户端（读取时再归一一次）。
+      const { items } = await scanHistory(makeCtx(), { limit: LIMITS.history.maxLimit })
+      const historyItem = items.find((item) => item.jobId === submitted.job.id)
+      assert.ok(historyItem, '历史里应有刚完成的扩图')
+      assert.deepEqual(historyItem.outpaintContent, content)
+      assert.equal(historyItem.outpaint, true)
+
+      // 旧客户端（不带 outpaintContent）：meta 显式写 null，历史端该字段恒存在。
+      const legacy = queue.submit({
+        tool: 'outpaint',
+        presetId: 'sdxl-inpaint',
+        prompt: '不带内容框的扩图',
+        reference: { image: PNG_B64, mask: PNG_B64, sourcePath, strength: 1.0 },
+      })
+      assert.equal(legacy.ok, true, JSON.stringify(legacy))
+      assert.deepEqual(legacy.job.params.reference, { sourcePath, strength: 1.0, mask: true })
+      const legacyDone = await queue.waitFor(legacy.job.id, 10)
+      assert.equal(legacyDone.status, 'done', JSON.stringify(legacyDone.error))
+      const legacyMeta = JSON.parse(
+        await readFile(join(workspace, legacyDone.output.dir, 'meta.json'), 'utf8'),
+      )
+      assert.equal(legacyMeta.outpaintContent, null, '没有内容框的扩图显式写 null')
+      const legacyItems = (await scanHistory(makeCtx(), { limit: LIMITS.history.maxLimit })).items
+      const legacyItem = legacyItems.find((item) => item.jobId === legacy.job.id)
+      assert.equal(legacyItem.outpaintContent, null, '旧产物 / 无内容框的历史条目恒为 null')
     } finally {
       queue.dispose()
       await remote.close()

@@ -1949,7 +1949,12 @@ var OUTPAINT = {
   maxPixels: 16e5,
   minEdge: 256,
   // 扩图覆盖面积大，默认走满步数；契约的带蒙版上限是 1.0。
-  strength: 1
+  strength: 1,
+  // 扩图产物原图内容框（`outpaintContent`，归一化 0~1、相对画布左上角，4 位小数）：
+  // 随提交请求 → meta.json → HistoryItem 透传，供「对比原图」拉帘把原图放回它在
+  // 扩图画布里的真实位置（画布可能比原图更大、且原图位置可按锚点偏移）。
+  // 只属于 Host/Client，不经 `daemonContract()` 下发远端。
+  content: { fields: ["x", "y", "width", "height"], precision: 4 }
 };
 var REQUEST_TOOLS = Object.freeze(["generate", "upscale", "outpaint"]);
 var TIMEOUTS = {
@@ -2857,7 +2862,7 @@ var gallery_default = "/*\n * 作品画廊：作品集式的卡片墙。\n *\n *
 var chat_default = "/*\n * 对话式面板：柔和消息流。\n *\n * 卡片外壳（背景 / 圆角 / 阴影 / 外边距）、头部与分段控件都由 panel.css 提供，\n * 这里只写卡片内部：消息流、空态、建议行与底部悬浮输入区。\n * 所有选择器挂在 .ofs-panel--chat 下，避免和表单式面板共用的类名互相影响；\n * 对话专属的类名统一用 ofs-chat- / ofs-msg- 前缀。\n */\n\n/* ── 消息流 ─────────────────────────────────────────────────── */\n/* 面板落在单轨布局的第一列；单独挂载预览时这句不影响其它容器。 */\n.ofs-panel--chat {\n  grid-column: 1;\n}\n\n.ofs-panel--chat .ofs-thread {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 6px 15px 10px;\n}\n\n/* 空态用 auto 外边距居中，内容超高时自然回到顶部可滚动，不会被裁掉。 */\n.ofs-panel--chat .ofs-thread.is-empty {\n  justify-content: flex-start;\n}\n\n.ofs-chat-empty {\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 13px;\n  margin: auto 0;\n  /* 稍微上提，避免视觉重心压在输入区上。 */\n  padding-bottom: 26px;\n  animation: ofs-fade-in 260ms ease both;\n}\n\n.ofs-chat-empty-text {\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  line-height: 1.7;\n  text-align: center;\n}\n\n/* 空态示例：五枚可换行的胶囊，读起来是「可以这样问」，而不是五行待填的表单字段。 */\n.ofs-chat-examples {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ofs-panel--chat .ofs-chat-example {\n  display: inline-flex;\n  align-items: center;\n  height: 26px;\n  min-height: 26px;\n  padding: 0 10px;\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  line-height: 1.4;\n  white-space: nowrap;\n}\n\n.ofs-panel--chat .ofs-chat-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 消息 ───────────────────────────────────────────────────── */\n.ofs-panel--chat .ofs-msg {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  max-width: 100%;\n  min-width: 0;\n  animation: ofs-fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;\n}\n\n.ofs-panel--chat .ofs-msg p {\n  font-size: 12.5px;\n  line-height: 1.62;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n\n/* 用户：右对齐的浅灰底，右下角收小圆角但不出气泡尾巴。 */\n.ofs-panel--chat .ofs-msg--user {\n  align-self: flex-end;\n  max-width: 88%;\n  padding: 8px 13px;\n  border: 1px solid var(--ofs-accent-soft-border);\n  border-radius: 16px 16px 6px 16px;\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-ink);\n}\n\n/* 助手：整宽白卡，左上角收小圆角，跟用户消息形成对角呼应。 */\n.ofs-panel--chat .ofs-msg--assistant {\n  align-self: stretch;\n}\n\n/* 表单提交同步记录：不是用户说过的话，用整宽白卡 + 参数胶囊与普通用户气泡区分。 */\n.ofs-panel--chat .ofs-form-sync {\n  align-self: stretch;\n}\n\n.ofs-form-sync-card {\n  gap: 7px;\n}\n\n.ofs-form-sync-title {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n}\n\n.ofs-form-sync-prompt {\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  line-height: 1.6;\n  word-break: break-word;\n}\n\n/* 参数摘要胶囊：比输入区标签更小一号，一行放得下模型 / 尺寸 / 张数 / 参考图 / 种子。 */\n.ofs-form-sync-chips {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-form-sync-chip {\n  height: 22px;\n  padding: 0 9px;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n  cursor: default;\n}\n\n.ofs-form-sync-chip:hover:not(:disabled) {\n  color: var(--ofs-ink-3);\n  border-color: var(--ofs-sunken-border);\n}\n\n.ofs-chat-author {\n  display: flex;\n  align-items: center;\n  gap: 7px;\n  padding-left: 2px;\n}\n\n.ofs-chat-author-name {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.04em;\n}\n\n.ofs-chat-dot {\n  flex: 0 0 auto;\n}\n\n/* 排队与渲染中：状态点换成琥珀色呼吸，不用转圈。 */\n.ofs-panel--chat .ofs-chat-dot.is-live {\n  animation: ofs-chat-breathe 2.2s ease-out infinite;\n}\n\n@keyframes ofs-chat-breathe {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 36%, transparent); }\n  70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-warn) 0%, transparent); }\n}\n\n.ofs-msg-card {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px 13px 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 6px 16px 16px 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n/* 生成中：卡片留一条柔光微光条，扫过即表示在跑。 */\n.ofs-chat-shimmer {\n  display: block;\n  width: 58%;\n  height: 3px;\n  margin-top: -2px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(90deg, transparent 0%, var(--ofs-accent-2) 52%, transparent 100%);\n  background-size: 220% 100%;\n  opacity: 0.62;\n  animation: ofs-shimmer 2s linear infinite;\n}\n\n/* 意图确认卡：中文摘要优先，英文提示词可编辑，比例 / 张数 / 排除项按能力给出。 */\n.ofs-intent {\n  gap: 7px;\n}\n\n.ofs-intent-title {\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-3);\n}\n\n/* 意图卡行内微调：提示词与排除项直接可编辑，改完再点「按此生成」。 */\n.ofs-intent-field {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ofs-intent-field-label {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n}\n\n/* 文本域沿用输入区的浅底与描边，焦点态与其它输入框一致。 */\n.ofs-intent-prompt,\n.ofs-intent-negative {\n  box-sizing: border-box;\n  width: 100%;\n  min-height: 46px;\n  padding: 6px 9px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 8px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-family: inherit;\n  font-size: 12px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-intent-prompt:focus,\n.ofs-intent-negative:focus {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 12%, transparent);\n}\n\n.ofs-intent-prompt::placeholder,\n.ofs-intent-negative::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-intent-edit-hint {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  line-height: 1.5;\n}\n\n/* 中文摘要：放在英文提示词之前，先让用户确认画面对不对。 */\n.ofs-intent-summary {\n  color: var(--ofs-ink);\n  font-size: 12px;\n  line-height: 1.6;\n  word-break: break-word;\n}\n\n.ofs-intent-summary-label {\n  margin-right: 6px;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n}\n\n/* 模型建议：弱提示，不抢主按钮与提示词的注意力，也不拦着按当前模型生成。 */\n.ofs-intent-model-hint {\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.55;\n  word-break: break-word;\n}\n\n/* 中文提示词软提示：跟在提示词输入框下方，样式沿用 .ofs-hint，只补一点间距。 */\n.ofs-prompt-lang-hint {\n  margin-top: 6px;\n}\n\n.ofs-intent-question {\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n}\n\n.ofs-intent-meta {\n  display: flex;\n  align-items: center;\n  gap: 5px;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-intent-note {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  line-height: 1.5;\n}\n\n/* 意图卡上的「沿用上张构图」开关：可选行为，视觉上弱于主按钮。 */\n.ofs-intent-lock {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  align-self: flex-start;\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  line-height: 1.4;\n  cursor: pointer;\n  user-select: none;\n}\n\n.ofs-intent-lock input {\n  width: 13px;\n  height: 13px;\n  margin: 0;\n  accent-color: var(--ofs-accent);\n  cursor: pointer;\n}\n\n/* 上一张图没有可复用种子时置灰，避免开了一个不生效的开关。 */\n.ofs-intent-lock.is-disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* 生成张数：四格分段，与参数面板的张数选择保持同一视觉语言。 */\n.ofs-intent-qty-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ofs-intent-qty-label {\n  flex: 0 0 auto;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n}\n\n.ofs-intent-qty {\n  display: inline-flex;\n  gap: 2px;\n  padding: 2px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-sunken);\n}\n\n.ofs-intent-qty-option {\n  appearance: none;\n  min-width: 30px;\n  height: 24px;\n  padding: 0 6px;\n  border: 0;\n  border-radius: calc(var(--ofs-r-md) - 3px);\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 11.5px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  transition:\n    background-color 140ms ease,\n    color 140ms ease,\n    box-shadow 140ms ease;\n}\n\n.ofs-intent-qty-option:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-intent-qty-option.is-on {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-accent);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n/* 主操作与次级操作同一行：生成是主按钮，带入参数面板更轻。 */\n.ofs-intent-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n  margin-top: 2px;\n}\n\n.ofs-intent-go {\n  height: 30px;\n  padding: 0 14px;\n  border-radius: 10px;\n  font-size: 12px;\n}\n\n.ofs-intent-handoff {\n  height: 30px;\n  padding: 0 12px;\n  border-radius: 10px;\n  font-size: 12px;\n  font-weight: 500;\n}\n\n/* 通用澄清卡：问题 + 2~4 个选项 + 「先按当前设置」。 */\n.ofs-intent-clarify {\n  gap: 9px;\n}\n\n.ofs-intent-clarify .ofs-suggestions {\n  gap: 6px;\n}\n\n/* 结果缩略图网格（阶段十五 Phase A2）：一个任务 1~4 张全部展示。\n * 单张保持整宽单图的观感；多张用 2 列网格，序号与张数标签压在角落。 */\n.ofs-msg-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 6px;\n  margin-top: 1px;\n}\n\n.ofs-msg-grid.is-single {\n  grid-template-columns: minmax(0, 1fr);\n}\n\n.ofs-msg-grid-item {\n  appearance: none;\n  position: relative;\n  display: block;\n  width: 100%;\n  padding: 0;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 12px;\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  cursor: pointer;\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease,\n    border-color 180ms ease;\n}\n\n.ofs-msg-grid-item img {\n  display: block;\n  width: 100%;\n  height: 88px;\n  object-fit: cover;\n}\n\n/* 只有一张时回到单图观感：整宽 + 更高的缩略图。 */\n.ofs-msg-grid.is-single .ofs-msg-grid-item img {\n  height: 132px;\n}\n\n.ofs-msg-grid-item:hover {\n  transform: translateY(-1px);\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-msg-grid-item:active {\n  transform: translateY(0) scale(0.995);\n}\n\n.ofs-msg-grid-item:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 14%, transparent);\n}\n\n/* 多图网格的序号角标：1~4，提示「这里还有别的结果」。 */\n.ofs-msg-grid-index {\n  position: absolute;\n  top: 6px;\n  left: 6px;\n  display: grid;\n  place-items: center;\n  min-width: 17px;\n  height: 17px;\n  padding: 0 5px;\n  border-radius: var(--ofs-r-pill);\n  background: rgb(17 17 20 / 52%);\n  backdrop-filter: blur(8px);\n  -webkit-backdrop-filter: blur(8px);\n  color: rgb(255 255 255 / 93%);\n  font-size: 10px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n/* 张数标签占满一行，紧贴在网格下方。 */\n.ofs-msg-grid-label {\n  grid-column: 1 / -1;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  line-height: 1.4;\n}\n\n/* 舞台图片工具动作镜像卡（kind='tool'）：底图缩略图 + 动作说明 + 可选强度胶囊。 */\n.ofs-panel--chat .ofs-tool-sync {\n  align-self: stretch;\n}\n\n.ofs-tool-sync-card {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 11px;\n}\n\n.ofs-tool-sync-thumb {\n  appearance: none;\n  flex: 0 0 auto;\n  width: 44px;\n  height: 44px;\n  padding: 0;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 9px;\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  cursor: pointer;\n  transition: border-color 160ms ease, box-shadow 160ms ease;\n}\n\n.ofs-tool-sync-thumb img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n.ofs-tool-sync-thumb:hover {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n.ofs-tool-sync-body {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  min-width: 0;\n}\n\n.ofs-tool-sync-title {\n  color: var(--ofs-ink);\n  font-size: 12px;\n  line-height: 1.5;\n  word-break: break-word;\n}\n\n.ofs-tool-sync-chips {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 5px;\n}\n\n.ofs-panel--chat .ofs-tool-sync-chip {\n  height: 20px;\n  padding: 0 8px;\n  font-size: 10px;\n  color: var(--ofs-ink-3);\n  cursor: default;\n}\n\n/* ── 单图聚焦视图（阶段十五 Phase A2） ───────────────────────── */\n\n/* 消息流顶部的轻量面包屑：返回上一层（{label}）。 */\n.ofs-panel--chat .ofs-chat-breadcrumb {\n  position: sticky;\n  top: 0;\n  z-index: 1;\n  display: flex;\n  padding: 2px 0 4px;\n  background: linear-gradient(180deg, var(--ofs-card-solid) 78%, transparent);\n}\n\n.ofs-panel--chat .ofs-chat-back {\n  height: 26px;\n  max-width: 100%;\n  padding: 0 11px;\n  font-size: 11px;\n  color: var(--ofs-ink-2);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n.ofs-panel--chat .ofs-chat-back:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-chat-focus {\n  display: flex;\n  flex-direction: column;\n  gap: 9px;\n  animation: ofs-fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;\n}\n\n.ofs-chat-focus-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 7px;\n}\n\n.ofs-chat-focus-title {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 600;\n  letter-spacing: 0.03em;\n}\n\n.ofs-panel--chat .ofs-chat-focus-batch {\n  height: 20px;\n  padding: 0 8px;\n  font-size: 10px;\n  color: var(--ofs-ink-3);\n  cursor: default;\n}\n\n/* 大图：圆角白卡内的整宽预览，点「查看大图」进放大层。 */\n.ofs-chat-focus-figure {\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 12px;\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  box-shadow: var(--ofs-shadow-card);\n}\n\n.ofs-chat-focus-figure img {\n  display: block;\n  width: 100%;\n  max-height: 320px;\n  object-fit: contain;\n  background: var(--ofs-sunken);\n}\n\n.ofs-chat-focus-meta {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-panel--chat .ofs-chat-focus-chip {\n  height: 22px;\n  padding: 0 9px;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n  cursor: default;\n}\n\n/* 快捷动作胶囊：对比原图 / 继续涂抹 / 重新生成 / 查看大图。 */\n.ofs-chat-focus-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-panel--chat .ofs-chat-focus-action {\n  height: 26px;\n  padding: 0 11px;\n  font-size: 11px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-panel--chat .ofs-chat-focus-action:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* ── 底部：建议 / 动作 / 输入 ────────────────────────────────── */\n.ofs-chat-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  padding: 10px 15px 14px;\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-chat-tools {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-panel--chat .ofs-chat-tools .ofs-chip {\n  height: 27px;\n  padding: 0 11px;\n  font-size: 11.5px;\n}\n\n/* 输入区：白/玻璃的圆角卡，靠内发光描边和柔影浮起来。 */\n.ofs-chat-composer {\n  display: flex;\n  align-items: flex-end;\n  gap: 8px;\n  padding: 9px 9px 9px 12px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-card) 100%);\n  box-shadow:\n    inset 0 1px 0 var(--ofs-window-border),\n    var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-chat-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow:\n    inset 0 1px 0 var(--ofs-window-border),\n    0 0 0 3px color-mix(in oklab, var(--ofs-accent) 12%, transparent),\n    var(--ofs-shadow-card);\n}\n\n.ofs-chat-composer textarea {\n  flex: 1 1 auto;\n  min-width: 0;\n  min-height: 42px;\n  max-height: 128px;\n  padding: 2px 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  line-height: 1.6;\n  resize: none;\n  overflow-y: auto;\n  /* 支持的浏览器里让输入框随内容长到 max-height；不支持时退化成固定两行。 */\n  field-sizing: content;\n}\n\n.ofs-chat-composer textarea:focus,\n.ofs-chat-composer textarea:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-chat-composer textarea::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n/* 发送：墨黑实心圆钮（深色主题由 tokens 反相成浅灰），hover 轻抬升，禁用降饱和。 */\n.ofs-chat-send {\n  appearance: none;\n  flex: 0 0 auto;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  padding: 0;\n  border: 0;\n  border-radius: 50%;\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n  box-shadow: var(--ofs-shadow-accent);\n  cursor: pointer;\n  transition:\n    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-chat-send:hover:not(:disabled) {\n  transform: translateY(-1px);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-chat-send:active:not(:disabled) {\n  transform: translateY(0) scale(0.94);\n}\n\n.ofs-chat-send:disabled {\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-4);\n  box-shadow: none;\n  filter: saturate(0);\n  cursor: default;\n}\n\n/* 窄窗下面板被压到 46vh：收紧留白，让最后两条消息仍然可见。 */\n@media (max-width: 820px) {\n  .ofs-panel--chat .ofs-thread {\n    padding: 0 13px 8px;\n  }\n\n  .ofs-chat-dock {\n    padding: 8px 13px 12px;\n  }\n\n  .ofs-msg-grid.is-single .ofs-msg-grid-item img {\n    height: 112px;\n  }\n}\n\n/* 动效停用时，微光条改成一条静态浅色线，信息不丢。 */\n@media (prefers-reduced-motion: reduce) {\n  .ofs-chat-shimmer {\n    background: var(--ofs-accent-soft-border);\n    opacity: 0.9;\n    animation: none;\n  }\n\n  .ofs-panel--chat .ofs-chat-dot.is-live {\n    animation: none;\n  }\n}";
 
 // src/styles/import.css
-var import_default = "/*\n * 阶段十五 Phase A：本地图片导入拖放层与「对比原图」拉帘。\n *\n * 落点：ImageDropzone（舞台拖放 / 拖入提示 / 新画布选择图片）与 CompareSlider\n * （派生作品的原图对照）。类名以 .ofs-import- / .ofs-compare- 开头，避免与 stage.css 撞名。\n *\n * 尺寸口径跟随舞台：相纸与对比层都按 .ofs-figure（container-type: size）的 cqw / cqh 算，\n * 这样窗口缩放、16:9 与 9:16 都能同比例收进光桌，不会比普通预览小一圈。\n */\n\n/* ── 拖放层：包住整个舞台 ───────────────────────────────────── */\n.ofs-import-zone {\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  flex: 1 1 auto;\n  min-width: 0;\n  min-height: 0;\n}\n\n/* Stage 的 <section> 仍是舞台本体的 flex 子项，包裹层只负责尺寸透传。 */\n.ofs-import-zone > .ofs-stage {\n  flex: 1 1 auto;\n  min-height: 0;\n}\n\n/* 拖入时的提示层：不拦截指针，drop 仍落在包裹层上。 */\n.ofs-import-overlay {\n  position: absolute;\n  inset: 6px;\n  z-index: 40;\n  display: grid;\n  place-items: center;\n  border: 1px dashed var(--ofs-accent-soft-border);\n  border-radius: var(--ofs-r-xl);\n  background: color-mix(in oklab, var(--ofs-card-solid) 66%, transparent);\n  backdrop-filter: blur(10px);\n  -webkit-backdrop-filter: blur(10px);\n  pointer-events: none;\n  animation: ofs-fade-in 140ms ease;\n}\n\n.ofs-import-hint {\n  display: inline-flex;\n  align-items: center;\n  gap: 9px;\n  padding: 11px 18px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  color: var(--ofs-ink-2);\n  font-size: 13px;\n  font-weight: 600;\n  white-space: nowrap;\n}\n\n.ofs-import-hint.is-blocked {\n  border-color: var(--ofs-error-soft);\n  color: var(--ofs-error);\n}\n\n/* 导入中：轻量状态胶囊，说明这次上传还在路上。 */\n.ofs-import-status {\n  position: absolute;\n  top: 14px;\n  left: 50%;\n  z-index: 41;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  padding: 7px 13px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 78%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  transform: translateX(-50%);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  white-space: nowrap;\n  pointer-events: none;\n}\n\n/* 新画布取景框下方的「选择图片」：轻描边胶囊，不与主生成按钮抢注意力。 */\n.ofs-import-choose {\n  position: absolute;\n  bottom: 16px;\n  left: 50%;\n  z-index: 30;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 16px;\n  border: 1px dashed var(--ofs-accent-soft-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transform: translateX(-50%);\n  transition:\n    color 150ms ease,\n    border-color 150ms ease,\n    background-color 150ms ease,\n    transform 150ms ease;\n}\n\n.ofs-import-choose:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-import-choose:active {\n  transform: translateX(-50%) scale(0.97);\n}\n\n.ofs-import-choose:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-import-choose:disabled {\n  opacity: 0.55;\n  cursor: default;\n}\n\n.ofs-import-input {\n  display: none;\n}\n\n/* ── 拉帘对比：原图 / 当前图 ───────────────────────────────────── */\n.ofs-compare {\n  position: relative;\n  display: block;\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-compare-r, 1)));\n  aspect-ratio: var(--ofs-compare-r, 1);\n  max-width: 100%;\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  overflow: hidden;\n  cursor: ew-resize;\n  touch-action: none;\n  user-select: none;\n  -webkit-user-select: none;\n}\n\n.ofs-compare:focus-visible {\n  outline: none;\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 14px var(--ofs-accent),\n    var(--ofs-print-shadow);\n}\n\n.ofs-compare-base,\n.ofs-compare-image {\n  position: absolute;\n  inset: 0;\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  background: var(--ofs-print-paper);\n  pointer-events: none;\n}\n\n.ofs-compare-overlay {\n  position: absolute;\n  inset: 0;\n  will-change: clip-path;\n}\n\n/* 分隔线：一条细白线 + 纸面阴影，中间是抓手。 */\n.ofs-compare-divider {\n  position: absolute;\n  top: 0;\n  bottom: 0;\n  width: 2px;\n  margin-left: -1px;\n  background: rgb(255 255 255 / 88%);\n  box-shadow: 0 0 0 1px rgb(16 16 20 / 22%), 0 0 14px rgb(16 16 20 / 34%);\n  pointer-events: none;\n}\n\n.ofs-compare-handle {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 2px;\n  width: 38px;\n  height: 38px;\n  margin: -19px 0 0 -19px;\n  border: 1px solid rgb(255 255 255 / 40%);\n  border-radius: 50%;\n  background: rgb(20 20 22 / 62%);\n  box-shadow: 0 6px 18px -6px rgb(0 0 0 / 60%);\n  backdrop-filter: blur(6px);\n  -webkit-backdrop-filter: blur(6px);\n  color: #fff;\n  font-size: 15px;\n  line-height: 1;\n}\n\n.ofs-compare.is-dragging .ofs-compare-handle {\n  background: rgb(20 20 22 / 78%);\n}\n\n/* 两侧标签：原图在左上、当前图在右上，跟着分隔线所在的半区走。 */\n.ofs-compare-tag {\n  position: absolute;\n  top: 10px;\n  z-index: 2;\n  padding: 4px 9px;\n  border: 1px solid rgb(255 255 255 / 22%);\n  border-radius: var(--ofs-r-pill);\n  background: rgb(20 20 22 / 56%);\n  color: #fff;\n  font-size: 11px;\n  letter-spacing: 0.02em;\n  white-space: nowrap;\n  pointer-events: none;\n  backdrop-filter: blur(6px);\n  -webkit-backdrop-filter: blur(6px);\n}\n\n.ofs-compare-tag--before {\n  left: 10px;\n}\n\n.ofs-compare-tag--after {\n  right: 10px;\n}\n\n/* 键盘聚焦时给一条不遮挡画面的提示线。 */\n.ofs-compare:focus-visible .ofs-compare-divider {\n  background: #fff;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-import-overlay {\n    animation: none;\n  }\n\n  .ofs-import-choose {\n    transition: none;\n  }\n}\n";
+var import_default = "/*\n * 阶段十五 Phase A：本地图片导入拖放层与「对比原图」拉帘。\n *\n * 落点：ImageDropzone（舞台拖放 / 拖入提示 / 新画布选择图片）与 CompareSlider\n * （派生作品的原图对照）。类名以 .ofs-import- / .ofs-compare- 开头，避免与 stage.css 撞名。\n *\n * 尺寸口径跟随舞台：相纸与对比层都按 .ofs-figure（container-type: size）的 cqw / cqh 算，\n * 这样窗口缩放、16:9 与 9:16 都能同比例收进光桌，不会比普通预览小一圈。\n */\n\n/* ── 拖放层：包住整个舞台 ───────────────────────────────────── */\n.ofs-import-zone {\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  flex: 1 1 auto;\n  min-width: 0;\n  min-height: 0;\n}\n\n/* Stage 的 <section> 仍是舞台本体的 flex 子项，包裹层只负责尺寸透传。 */\n.ofs-import-zone > .ofs-stage {\n  flex: 1 1 auto;\n  min-height: 0;\n}\n\n/* 拖入时的提示层：不拦截指针，drop 仍落在包裹层上。 */\n.ofs-import-overlay {\n  position: absolute;\n  inset: 6px;\n  z-index: 40;\n  display: grid;\n  place-items: center;\n  border: 1px dashed var(--ofs-accent-soft-border);\n  border-radius: var(--ofs-r-xl);\n  background: color-mix(in oklab, var(--ofs-card-solid) 66%, transparent);\n  backdrop-filter: blur(10px);\n  -webkit-backdrop-filter: blur(10px);\n  pointer-events: none;\n  animation: ofs-fade-in 140ms ease;\n}\n\n.ofs-import-hint {\n  display: inline-flex;\n  align-items: center;\n  gap: 9px;\n  padding: 11px 18px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  color: var(--ofs-ink-2);\n  font-size: 13px;\n  font-weight: 600;\n  white-space: nowrap;\n}\n\n.ofs-import-hint.is-blocked {\n  border-color: var(--ofs-error-soft);\n  color: var(--ofs-error);\n}\n\n/* 导入中：轻量状态胶囊，说明这次上传还在路上。 */\n.ofs-import-status {\n  position: absolute;\n  top: 14px;\n  left: 50%;\n  z-index: 41;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  padding: 7px 13px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 78%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  transform: translateX(-50%);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  white-space: nowrap;\n  pointer-events: none;\n}\n\n/* 新画布取景框下方的「选择图片」：轻描边胶囊，不与主生成按钮抢注意力。 */\n.ofs-import-choose {\n  position: absolute;\n  bottom: 16px;\n  left: 50%;\n  z-index: 30;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 16px;\n  border: 1px dashed var(--ofs-accent-soft-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transform: translateX(-50%);\n  transition:\n    color 150ms ease,\n    border-color 150ms ease,\n    background-color 150ms ease,\n    transform 150ms ease;\n}\n\n.ofs-import-choose:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-import-choose:active {\n  transform: translateX(-50%) scale(0.97);\n}\n\n.ofs-import-choose:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-import-choose:disabled {\n  opacity: 0.55;\n  cursor: default;\n}\n\n.ofs-import-input {\n  display: none;\n}\n\n/* ── 拉帘对比：原图 / 当前图 ───────────────────────────────────── */\n.ofs-compare {\n  position: relative;\n  display: block;\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-compare-r, 1)));\n  aspect-ratio: var(--ofs-compare-r, 1);\n  max-width: 100%;\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  overflow: hidden;\n  cursor: ew-resize;\n  touch-action: none;\n  user-select: none;\n  -webkit-user-select: none;\n}\n\n.ofs-compare:focus-visible {\n  outline: none;\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 14px var(--ofs-accent),\n    var(--ofs-print-shadow);\n}\n\n.ofs-compare-base,\n.ofs-compare-image {\n  position: absolute;\n  inset: 0;\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  background: var(--ofs-print-paper);\n  pointer-events: none;\n}\n\n/*\n * 扩图对比：底图只占画布的一块区域（outpaintContent），不能再铺满对比框。\n * 位置由内联 left/top/width/height 百分比给出；`object-fit: fill` 在内容框内\n * 与该框宽高比一致（内容框由源图等比缩放生成），不会变形；框外露出纸面背景。\n */\n.ofs-compare-base.is-region {\n  inset: auto;\n  object-fit: fill;\n}\n\n.ofs-compare-overlay {\n  position: absolute;\n  inset: 0;\n  will-change: clip-path;\n}\n\n/* 分隔线：一条细白线 + 纸面阴影，中间是抓手。 */\n.ofs-compare-divider {\n  position: absolute;\n  top: 0;\n  bottom: 0;\n  width: 2px;\n  margin-left: -1px;\n  background: rgb(255 255 255 / 88%);\n  box-shadow: 0 0 0 1px rgb(16 16 20 / 22%), 0 0 14px rgb(16 16 20 / 34%);\n  pointer-events: none;\n}\n\n.ofs-compare-handle {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 2px;\n  width: 38px;\n  height: 38px;\n  margin: -19px 0 0 -19px;\n  border: 1px solid rgb(255 255 255 / 40%);\n  border-radius: 50%;\n  background: rgb(20 20 22 / 62%);\n  box-shadow: 0 6px 18px -6px rgb(0 0 0 / 60%);\n  backdrop-filter: blur(6px);\n  -webkit-backdrop-filter: blur(6px);\n  color: #fff;\n  font-size: 15px;\n  line-height: 1;\n}\n\n.ofs-compare.is-dragging .ofs-compare-handle {\n  background: rgb(20 20 22 / 78%);\n}\n\n/* 两侧标签：原图在左上、当前图在右上，跟着分隔线所在的半区走。 */\n.ofs-compare-tag {\n  position: absolute;\n  top: 10px;\n  z-index: 2;\n  padding: 4px 9px;\n  border: 1px solid rgb(255 255 255 / 22%);\n  border-radius: var(--ofs-r-pill);\n  background: rgb(20 20 22 / 56%);\n  color: #fff;\n  font-size: 11px;\n  letter-spacing: 0.02em;\n  white-space: nowrap;\n  pointer-events: none;\n  backdrop-filter: blur(6px);\n  -webkit-backdrop-filter: blur(6px);\n}\n\n.ofs-compare-tag--before {\n  left: 10px;\n}\n\n.ofs-compare-tag--after {\n  right: 10px;\n}\n\n/* 键盘聚焦时给一条不遮挡画面的提示线。 */\n.ofs-compare:focus-visible .ofs-compare-divider {\n  background: #fff;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-import-overlay {\n    animation: none;\n  }\n\n  .ofs-import-choose {\n    transition: none;\n  }\n}\n";
 
 // src/styles/responsive.css
 var responsive_default = "/*\n * 响应式：这是桌面端的整页工作台，先保桌面；窄窗口按「面板在上、画布在下」收，\n * 不把桌面布局硬挤成不可用的三列。\n */\n\n@media (max-width: 1120px) {\n  .ofs-brand-sub {\n    display: none;\n  }\n\n  .ofs-model-eta,\n  .ofs-model-div {\n    display: none;\n  }\n\n  .ofs-dock-button {\n    padding: 0 9px;\n    font-size: 11px;\n  }\n}\n\n@media (max-width: 980px) {\n  .ofs-root {\n    padding: 10px;\n  }\n\n  .ofs-app {\n    border-radius: var(--ofs-r-lg);\n  }\n\n  .ofs-topbar {\n    gap: 10px;\n    padding: 0 12px;\n    height: 54px;\n  }\n\n  .ofs-brand-name {\n    font-size: 13px;\n  }\n\n  .ofs-tab {\n    padding: 0 9px;\n    font-size: 12px;\n  }\n\n  .ofs-panel {\n    margin: 10px 0 10px 10px;\n  }\n\n  .ofs-main {\n    margin: 10px;\n  }\n\n  .ofs-filmstrip {\n    margin: 0 10px 10px;\n    min-height: 84px;\n    padding: 8px 10px;\n    border-radius: var(--ofs-r-md);\n  }\n\n  .ofs-thumb {\n    width: 54px;\n    height: 54px;\n    border-radius: 10px;\n  }\n\n  .ofs-stage-foot {\n    flex-wrap: wrap;\n    gap: 6px;\n  }\n\n  .ofs-stage-meta {\n    font-size: 10.5px;\n  }\n\n  .ofs-dock {\n    gap: 4px;\n  }\n\n  .ofs-dock-button {\n    height: 28px;\n    padding: 0 8px;\n    font-size: 11px;\n    gap: 4px;\n  }\n\n  .ofs-figure {\n    border-radius: var(--ofs-r-lg);\n  }\n}\n\n/* 窄窗：画布在上、面板在下；面板不再用固定高度窗口装表单，整页纵向滚动。 */\n@media (max-width: 820px) {\n  .ofs-root {\n    padding: 8px;\n    font-size: 12.5px;\n  }\n\n  .ofs-topbar {\n    flex-wrap: wrap;\n    height: auto;\n    min-height: 52px;\n    padding: 8px 10px;\n    row-gap: 6px;\n  }\n\n  .ofs-tabs {\n    margin-left: 0;\n    order: 3;\n    flex: 1 1 100%;\n    justify-content: flex-start;\n  }\n\n  .ofs-compute em {\n    display: none;\n  }\n\n  .ofs-model-wrap {\n    margin-left: auto;\n  }\n\n  /* 画布在上、面板在下：两块都留在视口内，提交后进度不会被整张表单挤出视野。 */\n  .ofs-body,\n  .ofs-body.is-gallery {\n    display: flex;\n    flex-direction: column;\n  }\n\n  .ofs-body > .ofs-main {\n    order: -1;\n  }\n\n  .ofs-main {\n    flex: 0 0 auto;\n    min-height: 0;\n    height: 42vh;\n    margin: 8px;\n  }\n\n  .ofs-body.is-gallery {\n    overflow: hidden;\n  }\n\n  .ofs-body.is-gallery .ofs-main {\n    flex: 1 1 auto;\n    height: auto;\n  }\n\n  .ofs-panel {\n    flex: 1 1 auto;\n    min-height: 0;\n    margin: 0 8px 8px;\n    max-height: none;\n  }\n\n  /* 创作视图改为文档式滚动：外卡自身滚动，表单按内容展开到自然高度。\n     原先面板里只有一个 170~240px 高的内滚动窗口，表单大半不可见，切口落在行中间。 */\n  .ofs-app {\n    overflow-y: auto;\n    overflow-x: hidden;\n  }\n\n  .ofs-body:not(.is-gallery) {\n    flex: 0 0 auto;\n    overflow: visible;\n  }\n\n  .ofs-body:not(.is-gallery) > .ofs-main {\n    width: 100%;\n    max-width: 560px;\n    margin: 8px auto;\n  }\n\n  .ofs-body:not(.is-gallery) > .ofs-panel {\n    flex: 0 0 auto;\n    width: 100%;\n    max-width: 560px;\n    margin: 0 auto 8px;\n  }\n\n  .ofs-body:not(.is-gallery) .ofs-panel-scroll,\n  .ofs-body:not(.is-gallery) .ofs-thread {\n    flex: 0 0 auto;\n    overflow: visible;\n    scrollbar-gutter: auto;\n  }\n\n  /* 生图流水线：窄屏只保留当前节点的文字，其余收成圆点；排队数并入右侧。 */\n  .ofs-pipeline {\n    margin: 8px 10px 0;\n    padding: 0 10px;\n    height: 36px;\n    gap: 8px;\n  }\n\n  .ofs-pipeline.is-hidden {\n    height: 0;\n    margin-top: 0;\n  }\n\n  .ofs-pl-node {\n    padding: 4px 4px;\n    gap: 0;\n  }\n\n  .ofs-pl-node.is-active,\n  .ofs-pl-node.is-warn,\n  .ofs-pl-node.is-failed {\n    gap: 6px;\n    padding: 4px 7px;\n  }\n\n  .ofs-pl-label {\n    display: none;\n  }\n\n  .ofs-pl-node.is-active .ofs-pl-label,\n  .ofs-pl-node.is-warn .ofs-pl-label,\n  .ofs-pl-node.is-failed .ofs-pl-label {\n    display: inline;\n  }\n\n  /* 没有标签就没有计数：否则窄屏上会只剩一个孤零零的说明文字。 */\n  .ofs-pl-sub {\n    display: none;\n  }\n\n  .ofs-pl-node.is-active .ofs-pl-sub {\n    display: inline;\n  }\n\n  .ofs-pl-tag {\n    display: none;\n  }\n\n  .ofs-pl-link {\n    min-width: 8px;\n  }\n\n  .ofs-pl-meta {\n    gap: 8px;\n    padding-left: 10px;\n  }\n\n  .ofs-stage,\n  .ofs-figure {\n    min-height: 0;\n  }\n\n  /* 窄屏不再按比例约束取景框：空态文案要放得下，裁切标记随之收起。 */\n  .ofs-frame {\n    width: 100%;\n    height: 100%;\n    aspect-ratio: auto;\n  }\n\n  .ofs-frame-body {\n    padding: 12px 14px;\n  }\n\n  .ofs-marks {\n    display: none;\n  }\n\n  .ofs-filmstrip {\n    display: none;\n  }\n\n  .ofs-logs-panel {\n    width: 100%;\n    border-left: 0;\n  }\n\n  .ofs-settings-panel {\n    width: 100%;\n    border-left: 0;\n  }\n\n  .ofs-panel-head {\n    padding: 12px 13px 9px;\n  }\n\n  .ofs-panel-scroll {\n    padding: 0 13px 12px;\n  }\n\n  .ofs-panel-foot {\n    padding: 10px 13px 12px;\n  }\n\n  .ofs-toast-stack {\n    top: 58px;\n    right: 10px;\n    left: 10px;\n    max-width: none;\n    align-items: stretch;\n  }\n\n  .ofs-stage-foot {\n    padding: 0 2px;\n  }\n\n  .ofs-stage-prompt {\n    flex: 1 1 100%;\n  }\n\n  .ofs-dock {\n    flex: 0 0 auto;\n    flex-wrap: wrap;\n    gap: 4px;\n  }\n\n  .ofs-composer-input {\n    min-height: 76px;\n  }\n\n  /* 窄窗里自定义宽高仍是「宽 × 高」一行，空间不够时只压缩输入框宽度（min-width: 0） */\n  .ofs-size-custom-field > span {\n    font-size: 11px;\n  }\n}\n\n@media (max-width: 520px) {\n  .ofs-brand-name {\n    font-size: 12.5px;\n  }\n\n  .ofs-tab {\n    height: 26px;\n    padding: 0 8px;\n    font-size: 11.5px;\n  }\n\n  .ofs-model-menu {\n    width: calc(100vw - 20px);\n  }\n\n  .ofs-compute {\n    height: 30px;\n    padding: 0 9px;\n  }\n\n  .ofs-model {\n    height: 30px;\n    padding: 0 8px;\n    gap: 5px;\n  }\n\n  .ofs-model-family {\n    height: 15px;\n    font-size: 9.5px;\n  }\n\n  .ofs-panel-head h2 {\n    font-size: 14px;\n  }\n\n  .ofs-empty-title {\n    font-size: 15px;\n  }\n\n  /* 手机竖屏再收一点画布高度，给表单留出可滚动空间。 */\n  .ofs-main {\n    height: 38vh;\n  }\n}\n\n/*\n * 触屏热区 ≥44px（P2.3）：只在粗指针设备（手指 / 触控笔）生效，\n * 桌面鼠标的紧凑版式不受影响。图标按钮做正方形，文字按钮只抬最小高度。\n */\n@media (pointer: coarse) {\n  .ofs-icon-btn,\n  .ofs-glass-btn,\n  .ofs-lightbox-close {\n    width: 44px;\n    height: 44px;\n  }\n\n  .ofs-popover-row,\n  .ofs-filmstrip-link {\n    height: auto;\n    min-height: 44px;\n  }\n\n  .ofs-tab,\n  .ofs-dock-button,\n  .ofs-chip,\n  .ofs-example,\n  .ofs-suggestion,\n  .ofs-text-action,\n  .ofs-size,\n  .ofs-ghost-cancel,\n  .ofs-gallery-action {\n    height: auto;\n    min-height: 44px;\n  }\n\n  .ofs-gallery-action {\n    padding: 0 12px;\n    font-size: 11px;\n  }\n\n  .ofs-dock-button {\n    padding: 0 12px;\n  }\n}\n";
@@ -3893,8 +3898,127 @@ function isBareImportOf(entry) {
   if (!params) return true;
   return !(typeof params.steps === "number" || typeof params.cfg === "number" || typeof params.seed === "number");
 }
-function iteratePatch(entry, form, presets) {
+var DIFFUSION_LOOKBACK = 8;
+function isUpscaleItem(item) {
+  if (!item || typeof item !== "object") return false;
+  if (item.upscale === true) return true;
+  return typeof item.presetId === "string" && item.presetId.trim() === UPSCALE.id;
+}
+function isNonDiffusionRecallOf(entry, presets) {
+  const item = entry && typeof entry === "object" && entry.item ? entry.item : null;
+  if (!item) return false;
+  if (isUpscaleItem(item)) return true;
+  const presetId = typeof item.presetId === "string" ? item.presetId.trim() : "";
+  const list = Array.isArray(presets) ? presets.filter((preset) => preset && preset.id) : [];
+  return Boolean(presetId && list.length > 0 && !presetOf(list, presetId));
+}
+function itemsByImagePathOf(items) {
+  const map = /* @__PURE__ */ new Map();
+  if (!Array.isArray(items)) return map;
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const images = Array.isArray(item.images) ? item.images : [];
+    for (const image of images) {
+      const path = image && typeof image.path === "string" ? image.path.trim() : "";
+      if (path && !map.has(path)) map.set(path, { item, image });
+    }
+  }
+  return map;
+}
+function diffusionSourceOf(entry, items) {
+  const holder = entry && typeof entry === "object" ? entry : null;
+  if (!holder || !holder.item) return null;
+  if (!isUpscaleItem(holder.item)) return holder;
+  const byPath = itemsByImagePathOf(items);
+  const seen = /* @__PURE__ */ new Set();
+  let current = holder;
+  for (let depth = 0; depth < DIFFUSION_LOOKBACK; depth += 1) {
+    const item = current && current.item ? current.item : null;
+    const sourceImage = item && typeof item.sourceImage === "string" ? item.sourceImage.trim() : "";
+    if (!sourceImage || seen.has(sourceImage)) return null;
+    seen.add(sourceImage);
+    const parent = byPath.get(sourceImage);
+    if (!parent) return null;
+    const parentEntry = {
+      image: parent.image && typeof parent.image === "object" ? parent.image : { path: sourceImage },
+      item: parent.item
+    };
+    if (isBareImportOf(parentEntry)) return null;
+    if (!isUpscaleItem(parent.item)) return parentEntry;
+    current = parentEntry;
+  }
+  return null;
+}
+function legalDiffusionPresetOf(presets, candidate) {
+  const list = Array.isArray(presets) ? presets.filter((preset) => preset && preset.id) : [];
+  const wanted = typeof candidate === "string" ? candidate.trim() : candidate && typeof candidate === "object" && typeof candidate.id === "string" ? candidate.id.trim() : "";
+  const found = wanted ? presetOf(list, wanted) : null;
+  if (found && !inpaintOnlyOf(found)) return found;
+  return list.find((preset) => !inpaintOnlyOf(preset)) || null;
+}
+function fallbackTuningOf(preset) {
+  const patch = {};
+  if (!preset || typeof preset !== "object" || !preset.id) return patch;
+  patch.presetId = preset.id;
+  const rawSteps = finiteNumber(preset.steps);
+  if (rawSteps !== null && rawSteps > 0) {
+    patch.steps = clampInt(rawSteps, LIMITS.steps.min, LIMITS.steps.max, LIMITS.steps.min);
+  }
+  const rawCfg = finiteNumber(preset.cfg);
+  if (rawCfg !== null && rawCfg > 0) {
+    patch.cfg = clampNumber(rawCfg, LIMITS.cfg.min, LIMITS.cfg.max, rawCfg);
+  }
+  return patch;
+}
+function fallbackSizeOf(entry) {
+  const item = entry && entry.item ? entry.item : null;
+  const image = entry && entry.image ? entry.image : null;
+  const params = item && item.params && typeof item.params === "object" ? item.params : null;
+  const upscaleSource = item && item.upscaleSource && typeof item.upscaleSource === "object" ? item.upscaleSource : null;
+  const width = positiveSize(upscaleSource && upscaleSource.width) ?? positiveSize(image && image.width) ?? positiveSize(params && params.width);
+  const height = positiveSize(upscaleSource && upscaleSource.height) ?? positiveSize(image && image.height) ?? positiveSize(params && params.height);
+  return {
+    width: width === null ? null : clampSize(width),
+    height: height === null ? null : clampSize(height)
+  };
+}
+function degradedIteratePatch(entry, form, presets) {
+  const item = entry && entry.item ? entry.item : null;
+  if (!item) return {};
+  const patch = {};
+  const prompt = typeof item.prompt === "string" ? item.prompt.trim().slice(0, LIMITS.prompt.maxChars) : "";
+  if (prompt) patch.prompt = prompt;
+  const params = item.params && typeof item.params === "object" ? item.params : null;
+  if (params && typeof params.negativePrompt === "string") patch.negative = params.negativePrompt;
+  const size = fallbackSizeOf(entry);
+  if (size.width !== null) patch.width = size.width;
+  if (size.height !== null) patch.height = size.height;
+  const preset = legalDiffusionPresetOf(presets, form && typeof form === "object" ? form.presetId : "");
+  Object.assign(patch, fallbackTuningOf(preset));
+  if (Object.keys(patch).length > 0) patch.seed = "";
+  return patch;
+}
+function degradedRerollOverrides(entry, presets, fallbackPreset) {
+  const item = entry && entry.item ? entry.item : null;
+  if (!item) return null;
+  const prompt = typeof item.prompt === "string" ? item.prompt.trim().slice(0, LIMITS.prompt.maxChars) : "";
+  if (!prompt) return null;
+  const overrides = { prompt, seed: -1, count: 1 };
+  const params = item.params && typeof item.params === "object" ? item.params : null;
+  if (params && typeof params.negativePrompt === "string") overrides.negativePrompt = params.negativePrompt;
+  const size = fallbackSizeOf(entry);
+  if (size.width !== null) overrides.width = size.width;
+  if (size.height !== null) overrides.height = size.height;
+  Object.assign(overrides, fallbackTuningOf(legalDiffusionPresetOf(presets, fallbackPreset)));
+  return overrides;
+}
+function iteratePatch(entry, form, presets, items) {
   if (isBareImportOf(entry)) return {};
+  if (isNonDiffusionRecallOf(entry, presets)) {
+    const source = diffusionSourceOf(entry, items);
+    if (source && source !== entry) return iteratePatch(source, form, presets, items);
+    return degradedIteratePatch(entry, form, presets);
+  }
   const recall = recallOf(entry, presets);
   const patch = {};
   const prompt = recall.prompt.trim();
@@ -3911,8 +4035,13 @@ function iteratePatch(entry, form, presets) {
   }
   return patch;
 }
-function rerollOverrides(entry, presets) {
+function rerollOverrides(entry, presets, items, fallbackPreset) {
   if (isBareImportOf(entry)) return null;
+  if (isNonDiffusionRecallOf(entry, presets)) {
+    const source = diffusionSourceOf(entry, items);
+    if (source && source !== entry) return rerollOverrides(source, presets, items, fallbackPreset);
+    return degradedRerollOverrides(entry, presets, fallbackPreset);
+  }
   const recall = recallOf(entry, presets);
   const prompt = recall.prompt.trim();
   if (!prompt) return null;
@@ -8879,6 +9008,294 @@ function SettingsDrawer(props) {
 // src/studio/Stage.jsx
 var import_react33 = __toESM(require("react"), 1);
 
+// src/logic/outpaint.js
+var OUTPAINT_RATIO_IDS = [...OUTPAINT.ratioIds];
+var OUTPAINT_EXPAND_ID = OUTPAINT.expandId;
+var OUTPAINT_RATIO_ORDER = Object.freeze([OUTPAINT.expandId, ...OUTPAINT.ratioIds]);
+var RATIO_LABEL_KEYS = Object.freeze({
+  [OUTPAINT.expandId]: "studio.outpaint.ratio.expand",
+  "16:9": "studio.outpaint.ratio.16x9",
+  "9:16": "studio.outpaint.ratio.9x16",
+  "4:3": "studio.outpaint.ratio.4x3"
+});
+var RATIO_VALUES = Object.freeze({
+  "16:9": 16 / 9,
+  "9:16": 9 / 16,
+  "4:3": 4 / 3
+});
+var STEP = Number(LIMITS.width.step) > 0 ? Number(LIMITS.width.step) : 8;
+var SAME_RATIO_EPSILON = 2e-3;
+function positiveSize2(value) {
+  if (value === null || value === void 0 || value === "") return null;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return null;
+  return Math.round(number);
+}
+function alignDown(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return STEP;
+  return Math.max(STEP, Math.floor(number / STEP) * STEP);
+}
+function alignNear(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return 0;
+  return Math.max(0, Math.round(number / STEP) * STEP);
+}
+function alignWithin(value, limit) {
+  const max = Math.max(0, Math.floor(Number(limit) / STEP) * STEP);
+  if (max <= 0) return 0;
+  const aligned = Math.max(0, Math.round(Number(value) / STEP) * STEP);
+  return Math.min(max, aligned);
+}
+function clamp01(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0.5;
+  return Math.round(Math.min(1, Math.max(0, number)) * 1e4) / 1e4;
+}
+function coverageOf2(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return 0;
+  if (number >= 1) return 1;
+  return Number(number.toFixed(6));
+}
+function boundsOf() {
+  const maxEdge = Number(OUTPAINT.maxEdge) > 0 ? Number(OUTPAINT.maxEdge) : 1536;
+  const maxPixels = Number(OUTPAINT.maxPixels) > 0 ? Number(OUTPAINT.maxPixels) : 16e5;
+  const minEdge = Number(OUTPAINT.minEdge) > 0 ? Number(OUTPAINT.minEdge) : 256;
+  const expandRatio = Number(OUTPAINT.expandRatio) > 1 ? Number(OUTPAINT.expandRatio) : 1.2;
+  return { maxEdge, maxPixels, minEdge, expandRatio };
+}
+function outpaintRatioOptions() {
+  return OUTPAINT_RATIO_ORDER.map((id) => ({ id, labelKey: RATIO_LABEL_KEYS[id] || "" }));
+}
+function outpaintRatioIdOf(value) {
+  const id = typeof value === "string" ? value.trim() : "";
+  if (id === OUTPAINT.expandId || OUTPAINT_RATIO_IDS.includes(id)) return id;
+  return OUTPAINT.expandId;
+}
+function outpaintAnchorOf(value) {
+  const input = value && typeof value === "object" ? value : {};
+  return { x: clamp01(input.x), y: clamp01(input.y) };
+}
+function outpaintCoverageOf(plan) {
+  const source = plan && typeof plan === "object" && plan.ok === true ? plan : null;
+  if (!source) return 0;
+  const width = Number(source.width);
+  const height = Number(source.height);
+  const content = source.content && typeof source.content === "object" ? source.content : null;
+  if (!content) return 0;
+  const contentWidth = Number(content.width);
+  const contentHeight = Number(content.height);
+  if (!(width > 0) || !(height > 0) || !(contentWidth > 0) || !(contentHeight > 0)) return 0;
+  return coverageOf2(1 - contentWidth * contentHeight / (width * height));
+}
+function outpaintAnchorShift(plan, anchor, delta) {
+  const current = outpaintAnchorOf(anchor);
+  const source = plan && typeof plan === "object" && plan.ok === true ? plan : null;
+  if (!source) return current;
+  const padding = source.padding && typeof source.padding === "object" ? source.padding : {};
+  const padX = Math.max(0, Number(padding.left) || 0) + Math.max(0, Number(padding.right) || 0);
+  const padY = Math.max(0, Number(padding.top) || 0) + Math.max(0, Number(padding.bottom) || 0);
+  const dx = Number(delta && delta.x);
+  const dy = Number(delta && delta.y);
+  const next = { ...current };
+  if (padX > 0 && Number.isFinite(dx) && dx !== 0) next.x = clamp01(current.x + dx / padX);
+  if (padY > 0 && Number.isFinite(dy) && dy !== 0) next.y = clamp01(current.y + dy / padY);
+  return outpaintAnchorOf(next);
+}
+function layoutOf(width, height, contentWidth, contentHeight, anchor, ratioId, scale) {
+  const totalX = Math.max(0, width - contentWidth);
+  const totalY = Math.max(0, height - contentHeight);
+  const left = alignWithin(totalX * anchor.x, totalX);
+  const top = alignWithin(totalY * anchor.y, totalY);
+  const padding = { left, right: totalX - left, top, bottom: totalY - top };
+  const content = { x: left, y: top, width: contentWidth, height: contentHeight };
+  const plan = { ok: true, ratioId, width, height, content, padding, coverage: 0, scale };
+  plan.coverage = outpaintCoverageOf(plan);
+  return plan;
+}
+function expandPlanOf(sourceWidth, sourceHeight, anchor) {
+  const { maxEdge, maxPixels, minEdge, expandRatio } = boundsOf();
+  let scale = 1;
+  scale = Math.min(scale, maxEdge / (sourceWidth * expandRatio));
+  scale = Math.min(scale, maxEdge / (sourceHeight * expandRatio));
+  scale = Math.min(scale, Math.sqrt(maxPixels / (sourceWidth * expandRatio * sourceHeight * expandRatio)));
+  if (!(scale > 0)) return { ok: false, reason: "bounds" };
+  let contentWidth = alignDown(sourceWidth * scale);
+  let contentHeight = alignDown(sourceHeight * scale);
+  if (contentWidth < STEP || contentHeight < STEP) return { ok: false, reason: "too_small" };
+  let padX = alignNear(contentWidth * (expandRatio - 1) / 2);
+  let padY = alignNear(contentHeight * (expandRatio - 1) / 2);
+  let width = contentWidth + padX * 2;
+  let height = contentHeight + padY * 2;
+  for (let guard = 0; guard < 120; guard += 1) {
+    if (width <= maxEdge && height <= maxEdge && width * height <= maxPixels) break;
+    contentWidth = alignDown(contentWidth * 0.98);
+    contentHeight = alignDown(contentHeight * 0.98);
+    if (contentWidth <= STEP || contentHeight <= STEP) return { ok: false, reason: "too_small" };
+    padX = alignNear(contentWidth * (expandRatio - 1) / 2);
+    padY = alignNear(contentHeight * (expandRatio - 1) / 2);
+    width = contentWidth + padX * 2;
+    height = contentHeight + padY * 2;
+  }
+  if (width > maxEdge || height > maxEdge || width * height > maxPixels) return { ok: false, reason: "bounds" };
+  if (width < minEdge || height < minEdge) return { ok: false, reason: "too_small" };
+  return layoutOf(width, height, contentWidth, contentHeight, anchor, OUTPAINT.expandId, contentWidth / sourceWidth);
+}
+function ratioPlanOf(sourceWidth, sourceHeight, ratioId, anchor) {
+  const targetRatio = RATIO_VALUES[ratioId];
+  if (!targetRatio) return { ok: false, reason: "invalid_ratio" };
+  const { maxEdge, maxPixels, minEdge } = boundsOf();
+  const aspect = sourceWidth / sourceHeight;
+  if (Math.abs(aspect - targetRatio) <= targetRatio * SAME_RATIO_EPSILON) {
+    return { ok: false, reason: "no_padding" };
+  }
+  let contentWidth;
+  let contentHeight;
+  if (aspect > targetRatio) {
+    const maxWidth = Math.min(maxEdge, maxEdge * targetRatio, Math.sqrt(maxPixels * targetRatio));
+    contentWidth = alignDown(Math.min(sourceWidth, maxWidth));
+    contentHeight = alignDown(contentWidth / aspect);
+  } else {
+    const maxHeight = Math.min(maxEdge, maxEdge / targetRatio, Math.sqrt(maxPixels / targetRatio));
+    contentHeight = alignDown(Math.min(sourceHeight, maxHeight));
+    contentWidth = alignDown(contentHeight * aspect);
+  }
+  if (contentWidth <= STEP || contentHeight <= STEP) return { ok: false, reason: "too_small" };
+  let width;
+  let height;
+  if (aspect > targetRatio) {
+    height = contentHeight + alignNear(Math.max(0, alignNear(contentWidth / targetRatio) - contentHeight));
+    width = contentWidth;
+  } else {
+    width = contentWidth + alignNear(Math.max(0, alignNear(contentHeight * targetRatio) - contentWidth));
+    height = contentHeight;
+  }
+  for (let guard = 0; guard < 120; guard += 1) {
+    if (width <= maxEdge && height <= maxEdge && width * height <= maxPixels) break;
+    contentWidth = alignDown(contentWidth * 0.98);
+    contentHeight = alignDown(contentHeight * 0.98);
+    if (contentWidth <= STEP || contentHeight <= STEP) return { ok: false, reason: "too_small" };
+    if (aspect > targetRatio) {
+      height = contentHeight + alignNear(Math.max(0, alignNear(contentWidth / targetRatio) - contentHeight));
+      width = contentWidth;
+    } else {
+      width = contentWidth + alignNear(Math.max(0, alignNear(contentHeight * targetRatio) - contentWidth));
+      height = contentHeight;
+    }
+  }
+  if (width > maxEdge || height > maxEdge || width * height > maxPixels) return { ok: false, reason: "bounds" };
+  if (width < minEdge || height < minEdge) return { ok: false, reason: "too_small" };
+  const scale = aspect > targetRatio ? contentWidth / sourceWidth : contentHeight / sourceHeight;
+  return layoutOf(width, height, contentWidth, contentHeight, anchor, ratioId, scale);
+}
+function outpaintPlanOf(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const sourceWidth = positiveSize2(source.sourceWidth);
+  const sourceHeight = positiveSize2(source.sourceHeight);
+  if (!sourceWidth || !sourceHeight) return { ok: false, reason: "invalid_source" };
+  const requested = typeof source.ratioId === "string" ? source.ratioId.trim() : "";
+  const ratioId = requested || OUTPAINT.expandId;
+  if (ratioId !== OUTPAINT.expandId && !OUTPAINT_RATIO_IDS.includes(ratioId)) {
+    return { ok: false, reason: "invalid_ratio" };
+  }
+  const anchor = outpaintAnchorOf(source.anchor);
+  if (ratioId === OUTPAINT.expandId) return expandPlanOf(sourceWidth, sourceHeight, anchor);
+  return ratioPlanOf(sourceWidth, sourceHeight, ratioId, anchor);
+}
+function outpaintEdgeStripsOf(plan) {
+  const source = plan && typeof plan === "object" && plan.ok === true ? plan : null;
+  if (!source) return [];
+  const width = Number(source.width);
+  const height = Number(source.height);
+  const content = source.content && typeof source.content === "object" ? source.content : null;
+  if (!content || !(width > 0) || !(height > 0)) return [];
+  const contentWidth = Number(content.width);
+  const contentHeight = Number(content.height);
+  if (!(contentWidth > 0) || !(contentHeight > 0)) return [];
+  const left = Number(content.x);
+  const top = Number(content.y);
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return [];
+  const right = width - contentWidth - left;
+  const bottom = height - contentHeight - top;
+  if (!(right >= 0) || !(bottom >= 0)) return [];
+  if (left <= 0 && right <= 0 && top <= 0 && bottom <= 0) return [];
+  const strips = [];
+  const push = (sx, sy, sw, sh, tx, ty, tw, th) => {
+    if (!(tw > 0) || !(th > 0)) return;
+    strips.push({
+      source: { x: sx, y: sy, width: sw, height: sh },
+      target: { x: tx, y: ty, width: tw, height: th }
+    });
+  };
+  push(0, 0, 1, 1, 0, 0, left, top);
+  push(contentWidth - 1, 0, 1, 1, left + contentWidth, 0, right, top);
+  push(0, contentHeight - 1, 1, 1, 0, top + contentHeight, left, bottom);
+  push(contentWidth - 1, contentHeight - 1, 1, 1, left + contentWidth, top + contentHeight, right, bottom);
+  push(0, 0, 1, contentHeight, 0, top, left, contentHeight);
+  push(contentWidth - 1, 0, 1, contentHeight, left + contentWidth, top, right, contentHeight);
+  push(0, 0, contentWidth, 1, left, 0, contentWidth, top);
+  push(0, contentHeight - 1, contentWidth, 1, left, top + contentHeight, contentWidth, bottom);
+  return strips;
+}
+var CONTENT_FIELDS = Array.isArray(OUTPAINT.content && OUTPAINT.content.fields) ? OUTPAINT.content.fields : ["x", "y", "width", "height"];
+var CONTENT_PRECISION = Number.isFinite(Number(OUTPAINT.content && OUTPAINT.content.precision)) ? Math.max(0, Math.min(8, Math.floor(Number(OUTPAINT.content.precision)))) : 4;
+var CONTENT_TOLERANCE = 1e-3;
+function nonNegativeInt(value) {
+  if (value === null || value === void 0 || value === "") return null;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return null;
+  return Math.round(number);
+}
+function roundContent(value) {
+  const factor = 10 ** CONTENT_PRECISION;
+  return Math.round(Number(value) * factor) / factor;
+}
+function normalizeOutpaintContent(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  if (!source) return null;
+  const raw = {};
+  for (const field of CONTENT_FIELDS) {
+    const number = source[field];
+    if (typeof number !== "number" || !Number.isFinite(number)) return null;
+    raw[field] = number;
+  }
+  const { x, y, width, height } = raw;
+  if (width <= 0 || height <= 0) return null;
+  if (x < -CONTENT_TOLERANCE || y < -CONTENT_TOLERANCE) return null;
+  if (width > 1 + CONTENT_TOLERANCE || height > 1 + CONTENT_TOLERANCE) return null;
+  const left = Math.max(0, x);
+  const top = Math.max(0, y);
+  if (left + width > 1 + CONTENT_TOLERANCE) return null;
+  if (top + height > 1 + CONTENT_TOLERANCE) return null;
+  return {
+    x: roundContent(Math.min(1, left)),
+    y: roundContent(Math.min(1, top)),
+    width: roundContent(Math.min(1, width)),
+    height: roundContent(Math.min(1, height))
+  };
+}
+function buildOutpaintContentBody(canvas) {
+  const source = canvas && typeof canvas === "object" && !Array.isArray(canvas) ? canvas : null;
+  if (!source) return null;
+  const width = positiveSize2(source.width);
+  const height = positiveSize2(source.height);
+  const content = source.content && typeof source.content === "object" ? source.content : null;
+  if (!width || !height || !content) return null;
+  const contentWidth = positiveSize2(content.width);
+  const contentHeight = positiveSize2(content.height);
+  const x = nonNegativeInt(content.x);
+  const y = nonNegativeInt(content.y);
+  if (contentWidth === null || contentHeight === null || x === null || y === null) return null;
+  if (x + contentWidth > width || y + contentHeight > height) return null;
+  return normalizeOutpaintContent({
+    x: x / width,
+    y: y / height,
+    width: contentWidth / width,
+    height: contentHeight / height
+  });
+}
+
 // src/logic/imageTool.js
 var IMAGE_TOOL_FORMS = Object.freeze(["instant", "inline", "canvas"]);
 var IMAGE_TOOL_GROUPS = Object.freeze(["process", "reuse"]);
@@ -8992,7 +9409,7 @@ function toolStrengthMaxOf(toolId, hasMask) {
 function toolPromptFallback(targetPrompt) {
   return String(targetPrompt ?? "").trim().slice(0, LIMITS.prompt.maxChars);
 }
-function positiveSize2(value) {
+function positiveSize3(value) {
   if (value === null || value === void 0 || value === "") return null;
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return null;
@@ -9035,8 +9452,8 @@ function buildImageToolBody(input) {
   const prompt = (typed || toolPromptFallback(source.targetPrompt)).slice(0, LIMITS.prompt.maxChars);
   if (!prompt) return null;
   const target = source.target && typeof source.target === "object" ? source.target : null;
-  const rawWidth = positiveSize2(source.targetWidth) ?? positiveSize2(target && target.width) ?? positiveSize2(preset.size);
-  const rawHeight = positiveSize2(source.targetHeight) ?? positiveSize2(target && target.height) ?? positiveSize2(preset.size);
+  const rawWidth = positiveSize3(source.targetWidth) ?? positiveSize3(target && target.width) ?? positiveSize3(preset.size);
+  const rawHeight = positiveSize3(source.targetHeight) ?? positiveSize3(target && target.height) ?? positiveSize3(preset.size);
   const data = maskForSubmit(tool, source.mask);
   const hasMask = Boolean(data);
   const rawStrength = finiteNumber2(source.strength);
@@ -9067,8 +9484,8 @@ function buildUpscaleToolBody(input) {
   const targetPath = typeof source.targetPath === "string" && source.targetPath.trim() ? source.targetPath.trim() : workKeyOf(target);
   if (!targetPath) return null;
   const prompt = (typeof source.targetPrompt === "string" ? source.targetPrompt.trim() : "").slice(0, LIMITS.prompt.maxChars);
-  const width = positiveSize2(source.targetWidth) ?? positiveSize2(target && target.width);
-  const height = positiveSize2(source.targetHeight) ?? positiveSize2(target && target.height);
+  const width = positiveSize3(source.targetWidth) ?? positiveSize3(target && target.width);
+  const height = positiveSize3(source.targetHeight) ?? positiveSize3(target && target.height);
   const body = {
     tool: "upscale",
     prompt,
@@ -9097,6 +9514,7 @@ function buildOutpaintToolBody(input) {
   if (!prompt) return null;
   const rawStrength = finiteNumber2(source.strength);
   const strength = clampMaskStrength(rawStrength === null ? Number(OUTPAINT.strength) : rawStrength, true);
+  const outpaintContent = buildOutpaintContentBody(canvas);
   return {
     tool: "outpaint",
     presetId: preset.id,
@@ -9114,11 +9532,12 @@ function buildOutpaintToolBody(input) {
       image: canvas.image,
       mask: canvas.mask,
       sourcePath: targetPath,
-      strength
+      strength,
+      ...outpaintContent ? { outpaintContent } : {}
     }
   };
 }
-function nonNegativeInt(value) {
+function nonNegativeInt2(value) {
   if (value === null || value === void 0 || value === "") return null;
   const number = Number(value);
   if (!Number.isFinite(number) || number < 0) return null;
@@ -9135,8 +9554,8 @@ function normalizeOutpaintCanvas(input) {
   const maxEdge = Number(OUTPAINT.maxEdge);
   const maxPixels = Number(OUTPAINT.maxPixels);
   const minEdge = Number(OUTPAINT.minEdge);
-  const width = positiveSize2(source.width);
-  const height = positiveSize2(source.height);
+  const width = positiveSize3(source.width);
+  const height = positiveSize3(source.height);
   if (width === null || height === null) return null;
   if (width % step !== 0 || height % step !== 0) return null;
   if (width > maxEdge || height > maxEdge) return null;
@@ -9144,10 +9563,10 @@ function normalizeOutpaintCanvas(input) {
   if (width < minEdge || height < minEdge) return null;
   const contentInput = source.content && typeof source.content === "object" ? source.content : null;
   if (!contentInput) return null;
-  const x = nonNegativeInt(contentInput.x);
-  const y = nonNegativeInt(contentInput.y);
-  const contentWidth = positiveSize2(contentInput.width);
-  const contentHeight = positiveSize2(contentInput.height);
+  const x = nonNegativeInt2(contentInput.x);
+  const y = nonNegativeInt2(contentInput.y);
+  const contentWidth = positiveSize3(contentInput.width);
+  const contentHeight = positiveSize3(contentInput.height);
   if (x === null || y === null || contentWidth === null || contentHeight === null) return null;
   if (x + contentWidth > width || y + contentHeight > height) return null;
   const content = { x, y, width: contentWidth, height: contentHeight };
@@ -9170,8 +9589,8 @@ function imageToolBlockedKeyOf(input) {
   if (!targetPath) return "studio.imageTool.blockedTarget";
   if (tool.id === "upscale") {
     const target = source.target && typeof source.target === "object" ? source.target : null;
-    const width = positiveSize2(source.targetWidth) ?? positiveSize2(target && target.width);
-    const height = positiveSize2(source.targetHeight) ?? positiveSize2(target && target.height);
+    const width = positiveSize3(source.targetWidth) ?? positiveSize3(target && target.width);
+    const height = positiveSize3(source.targetHeight) ?? positiveSize3(target && target.height);
     if (width !== null && height !== null && Math.max(width, height) > Number(UPSCALE.maxInputEdge)) {
       return "studio.imageTool.upscaleTooLarge";
     }
@@ -9216,8 +9635,23 @@ function ratioOf(value) {
   if (!Number.isFinite(number) || number <= 0) return 1;
   return number;
 }
+function regionOf(value) {
+  const source = value && typeof value === "object" ? value : null;
+  if (!source) return null;
+  const keys = ["x", "y", "width", "height"];
+  for (const key of keys) {
+    if (typeof source[key] !== "number" || !Number.isFinite(source[key])) return null;
+  }
+  if (!(source.width > 0) || !(source.height > 0)) return null;
+  return {
+    x: Math.min(1, Math.max(0, source.x)),
+    y: Math.min(1, Math.max(0, source.y)),
+    width: Math.min(1, source.width),
+    height: Math.min(1, source.height)
+  };
+}
 function CompareSlider(props) {
-  const { t, beforeUrl, afterUrl, beforeLabel, afterLabel, ratio, initialPosition } = props;
+  const { t, beforeUrl, afterUrl, beforeContent, beforeLabel, afterLabel, ratio, initialPosition } = props;
   const [position, setPosition] = import_react26.default.useState(() => clampPosition(initialPosition ?? 0.5));
   const [dragging, setDragging] = import_react26.default.useState(false);
   const trackRef = import_react26.default.useRef(null);
@@ -9226,6 +9660,14 @@ function CompareSlider(props) {
   const afterText = afterLabel || label("studio.compare.after");
   const percent = Math.round(position * 100);
   const frameRatio = ratioOf(ratio);
+  const baseRegion = regionOf(beforeContent);
+  const baseClass = baseRegion ? "ofs-compare-base is-region" : "ofs-compare-base";
+  const baseStyle = baseRegion ? {
+    left: `${baseRegion.x * 100}%`,
+    top: `${baseRegion.y * 100}%`,
+    width: `${baseRegion.width * 100}%`,
+    height: `${baseRegion.height * 100}%`
+  } : void 0;
   function positionOfPointer(event) {
     const track = trackRef.current;
     if (!track || typeof track.getBoundingClientRect !== "function") return null;
@@ -9306,7 +9748,7 @@ function CompareSlider(props) {
       onKeyDown,
       onDoubleClick,
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("img", { className: "ofs-compare-base", src: beforeUrl, alt: beforeText, draggable: false }),
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("img", { className: baseClass, style: baseStyle, src: beforeUrl, alt: beforeText, draggable: false }),
         /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "ofs-compare-overlay", style: overlayStyle, children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("img", { className: "ofs-compare-image", src: afterUrl, alt: afterText, draggable: false }) }),
         /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "ofs-compare-tag ofs-compare-tag--before", children: beforeText }),
         /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "ofs-compare-tag ofs-compare-tag--after", children: afterText }),
@@ -10709,204 +11151,6 @@ function MaskEditor(props) {
 
 // src/studio/stage/OutpaintEditor.jsx
 var import_react32 = __toESM(require("react"), 1);
-
-// src/logic/outpaint.js
-var OUTPAINT_RATIO_IDS = [...OUTPAINT.ratioIds];
-var OUTPAINT_EXPAND_ID = OUTPAINT.expandId;
-var OUTPAINT_RATIO_ORDER = Object.freeze([OUTPAINT.expandId, ...OUTPAINT.ratioIds]);
-var RATIO_LABEL_KEYS = Object.freeze({
-  [OUTPAINT.expandId]: "studio.outpaint.ratio.expand",
-  "16:9": "studio.outpaint.ratio.16x9",
-  "9:16": "studio.outpaint.ratio.9x16",
-  "4:3": "studio.outpaint.ratio.4x3"
-});
-var RATIO_VALUES = Object.freeze({
-  "16:9": 16 / 9,
-  "9:16": 9 / 16,
-  "4:3": 4 / 3
-});
-var STEP = Number(LIMITS.width.step) > 0 ? Number(LIMITS.width.step) : 8;
-var SAME_RATIO_EPSILON = 2e-3;
-function positiveSize3(value) {
-  if (value === null || value === void 0 || value === "") return null;
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return null;
-  return Math.round(number);
-}
-function alignDown(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return STEP;
-  return Math.max(STEP, Math.floor(number / STEP) * STEP);
-}
-function alignNear(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return 0;
-  return Math.max(0, Math.round(number / STEP) * STEP);
-}
-function alignWithin(value, limit) {
-  const max = Math.max(0, Math.floor(Number(limit) / STEP) * STEP);
-  if (max <= 0) return 0;
-  const aligned = Math.max(0, Math.round(Number(value) / STEP) * STEP);
-  return Math.min(max, aligned);
-}
-function clamp01(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return 0.5;
-  return Math.round(Math.min(1, Math.max(0, number)) * 1e4) / 1e4;
-}
-function coverageOf2(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return 0;
-  if (number >= 1) return 1;
-  return Number(number.toFixed(6));
-}
-function boundsOf() {
-  const maxEdge = Number(OUTPAINT.maxEdge) > 0 ? Number(OUTPAINT.maxEdge) : 1536;
-  const maxPixels = Number(OUTPAINT.maxPixels) > 0 ? Number(OUTPAINT.maxPixels) : 16e5;
-  const minEdge = Number(OUTPAINT.minEdge) > 0 ? Number(OUTPAINT.minEdge) : 256;
-  const expandRatio = Number(OUTPAINT.expandRatio) > 1 ? Number(OUTPAINT.expandRatio) : 1.2;
-  return { maxEdge, maxPixels, minEdge, expandRatio };
-}
-function outpaintRatioOptions() {
-  return OUTPAINT_RATIO_ORDER.map((id) => ({ id, labelKey: RATIO_LABEL_KEYS[id] || "" }));
-}
-function outpaintRatioIdOf(value) {
-  const id = typeof value === "string" ? value.trim() : "";
-  if (id === OUTPAINT.expandId || OUTPAINT_RATIO_IDS.includes(id)) return id;
-  return OUTPAINT.expandId;
-}
-function outpaintAnchorOf(value) {
-  const input = value && typeof value === "object" ? value : {};
-  return { x: clamp01(input.x), y: clamp01(input.y) };
-}
-function outpaintCoverageOf(plan) {
-  const source = plan && typeof plan === "object" && plan.ok === true ? plan : null;
-  if (!source) return 0;
-  const width = Number(source.width);
-  const height = Number(source.height);
-  const content = source.content && typeof source.content === "object" ? source.content : null;
-  if (!content) return 0;
-  const contentWidth = Number(content.width);
-  const contentHeight = Number(content.height);
-  if (!(width > 0) || !(height > 0) || !(contentWidth > 0) || !(contentHeight > 0)) return 0;
-  return coverageOf2(1 - contentWidth * contentHeight / (width * height));
-}
-function outpaintAnchorShift(plan, anchor, delta) {
-  const current = outpaintAnchorOf(anchor);
-  const source = plan && typeof plan === "object" && plan.ok === true ? plan : null;
-  if (!source) return current;
-  const padding = source.padding && typeof source.padding === "object" ? source.padding : {};
-  const padX = Math.max(0, Number(padding.left) || 0) + Math.max(0, Number(padding.right) || 0);
-  const padY = Math.max(0, Number(padding.top) || 0) + Math.max(0, Number(padding.bottom) || 0);
-  const dx = Number(delta && delta.x);
-  const dy = Number(delta && delta.y);
-  const next = { ...current };
-  if (padX > 0 && Number.isFinite(dx) && dx !== 0) next.x = clamp01(current.x + dx / padX);
-  if (padY > 0 && Number.isFinite(dy) && dy !== 0) next.y = clamp01(current.y + dy / padY);
-  return outpaintAnchorOf(next);
-}
-function layoutOf(width, height, contentWidth, contentHeight, anchor, ratioId, scale) {
-  const totalX = Math.max(0, width - contentWidth);
-  const totalY = Math.max(0, height - contentHeight);
-  const left = alignWithin(totalX * anchor.x, totalX);
-  const top = alignWithin(totalY * anchor.y, totalY);
-  const padding = { left, right: totalX - left, top, bottom: totalY - top };
-  const content = { x: left, y: top, width: contentWidth, height: contentHeight };
-  const plan = { ok: true, ratioId, width, height, content, padding, coverage: 0, scale };
-  plan.coverage = outpaintCoverageOf(plan);
-  return plan;
-}
-function expandPlanOf(sourceWidth, sourceHeight, anchor) {
-  const { maxEdge, maxPixels, minEdge, expandRatio } = boundsOf();
-  let scale = 1;
-  scale = Math.min(scale, maxEdge / (sourceWidth * expandRatio));
-  scale = Math.min(scale, maxEdge / (sourceHeight * expandRatio));
-  scale = Math.min(scale, Math.sqrt(maxPixels / (sourceWidth * expandRatio * sourceHeight * expandRatio)));
-  if (!(scale > 0)) return { ok: false, reason: "bounds" };
-  let contentWidth = alignDown(sourceWidth * scale);
-  let contentHeight = alignDown(sourceHeight * scale);
-  if (contentWidth < STEP || contentHeight < STEP) return { ok: false, reason: "too_small" };
-  let padX = alignNear(contentWidth * (expandRatio - 1) / 2);
-  let padY = alignNear(contentHeight * (expandRatio - 1) / 2);
-  let width = contentWidth + padX * 2;
-  let height = contentHeight + padY * 2;
-  for (let guard = 0; guard < 120; guard += 1) {
-    if (width <= maxEdge && height <= maxEdge && width * height <= maxPixels) break;
-    contentWidth = alignDown(contentWidth * 0.98);
-    contentHeight = alignDown(contentHeight * 0.98);
-    if (contentWidth <= STEP || contentHeight <= STEP) return { ok: false, reason: "too_small" };
-    padX = alignNear(contentWidth * (expandRatio - 1) / 2);
-    padY = alignNear(contentHeight * (expandRatio - 1) / 2);
-    width = contentWidth + padX * 2;
-    height = contentHeight + padY * 2;
-  }
-  if (width > maxEdge || height > maxEdge || width * height > maxPixels) return { ok: false, reason: "bounds" };
-  if (width < minEdge || height < minEdge) return { ok: false, reason: "too_small" };
-  return layoutOf(width, height, contentWidth, contentHeight, anchor, OUTPAINT.expandId, contentWidth / sourceWidth);
-}
-function ratioPlanOf(sourceWidth, sourceHeight, ratioId, anchor) {
-  const targetRatio = RATIO_VALUES[ratioId];
-  if (!targetRatio) return { ok: false, reason: "invalid_ratio" };
-  const { maxEdge, maxPixels, minEdge } = boundsOf();
-  const aspect = sourceWidth / sourceHeight;
-  if (Math.abs(aspect - targetRatio) <= targetRatio * SAME_RATIO_EPSILON) {
-    return { ok: false, reason: "no_padding" };
-  }
-  let contentWidth;
-  let contentHeight;
-  if (aspect > targetRatio) {
-    const maxWidth = Math.min(maxEdge, maxEdge * targetRatio, Math.sqrt(maxPixels * targetRatio));
-    contentWidth = alignDown(Math.min(sourceWidth, maxWidth));
-    contentHeight = alignDown(contentWidth / aspect);
-  } else {
-    const maxHeight = Math.min(maxEdge, maxEdge / targetRatio, Math.sqrt(maxPixels / targetRatio));
-    contentHeight = alignDown(Math.min(sourceHeight, maxHeight));
-    contentWidth = alignDown(contentHeight * aspect);
-  }
-  if (contentWidth <= STEP || contentHeight <= STEP) return { ok: false, reason: "too_small" };
-  let width;
-  let height;
-  if (aspect > targetRatio) {
-    height = contentHeight + alignNear(Math.max(0, alignNear(contentWidth / targetRatio) - contentHeight));
-    width = contentWidth;
-  } else {
-    width = contentWidth + alignNear(Math.max(0, alignNear(contentHeight * targetRatio) - contentWidth));
-    height = contentHeight;
-  }
-  for (let guard = 0; guard < 120; guard += 1) {
-    if (width <= maxEdge && height <= maxEdge && width * height <= maxPixels) break;
-    contentWidth = alignDown(contentWidth * 0.98);
-    contentHeight = alignDown(contentHeight * 0.98);
-    if (contentWidth <= STEP || contentHeight <= STEP) return { ok: false, reason: "too_small" };
-    if (aspect > targetRatio) {
-      height = contentHeight + alignNear(Math.max(0, alignNear(contentWidth / targetRatio) - contentHeight));
-      width = contentWidth;
-    } else {
-      width = contentWidth + alignNear(Math.max(0, alignNear(contentHeight * targetRatio) - contentWidth));
-      height = contentHeight;
-    }
-  }
-  if (width > maxEdge || height > maxEdge || width * height > maxPixels) return { ok: false, reason: "bounds" };
-  if (width < minEdge || height < minEdge) return { ok: false, reason: "too_small" };
-  const scale = aspect > targetRatio ? contentWidth / sourceWidth : contentHeight / sourceHeight;
-  return layoutOf(width, height, contentWidth, contentHeight, anchor, ratioId, scale);
-}
-function outpaintPlanOf(input) {
-  const source = input && typeof input === "object" ? input : {};
-  const sourceWidth = positiveSize3(source.sourceWidth);
-  const sourceHeight = positiveSize3(source.sourceHeight);
-  if (!sourceWidth || !sourceHeight) return { ok: false, reason: "invalid_source" };
-  const requested = typeof source.ratioId === "string" ? source.ratioId.trim() : "";
-  const ratioId = requested || OUTPAINT.expandId;
-  if (ratioId !== OUTPAINT.expandId && !OUTPAINT_RATIO_IDS.includes(ratioId)) {
-    return { ok: false, reason: "invalid_ratio" };
-  }
-  const anchor = outpaintAnchorOf(source.anchor);
-  if (ratioId === OUTPAINT.expandId) return expandPlanOf(sourceWidth, sourceHeight, anchor);
-  return ratioPlanOf(sourceWidth, sourceHeight, ratioId, anchor);
-}
-
-// src/studio/stage/OutpaintEditor.jsx
 var import_jsx_runtime30 = require("react/jsx-runtime");
 var HIT_STYLE = { minHeight: 44, minWidth: 44 };
 var KEY_STEP2 = 8;
@@ -10984,8 +11228,10 @@ function OutpaintEditor(props) {
     const maskCtx = typeof maskCanvas.getContext === "function" ? maskCanvas.getContext("2d") : null;
     if (!imageCtx || !maskCtx) return;
     if (typeof imageCanvas.toDataURL !== "function" || typeof maskCanvas.toDataURL !== "function") return;
-    imageCtx.fillStyle = "#000000";
-    imageCtx.fillRect(0, 0, plan.width, plan.height);
+    const sourceWidth = natural.width > 0 ? natural.width : plan.content.width;
+    const sourceHeight = natural.height > 0 ? natural.height : plan.content.height;
+    const scaleX = sourceWidth / plan.content.width;
+    const scaleY = sourceHeight / plan.content.height;
     try {
       imageCtx.drawImage(
         sourceImage,
@@ -10994,6 +11240,19 @@ function OutpaintEditor(props) {
         plan.content.width,
         plan.content.height
       );
+      for (const strip of outpaintEdgeStripsOf(plan)) {
+        imageCtx.drawImage(
+          sourceImage,
+          strip.source.x * scaleX,
+          strip.source.y * scaleY,
+          strip.source.width * scaleX,
+          strip.source.height * scaleY,
+          strip.target.x,
+          strip.target.y,
+          strip.target.width,
+          strip.target.height
+        );
+      }
     } catch {
       return;
     }
@@ -11296,6 +11555,7 @@ function Stage(props) {
   const imageKey = image ? image.path || image.file || image.url || "" : "";
   const sourceImage = item && typeof item.sourceImage === "string" && item.sourceImage || params && typeof params.sourceImage === "string" && params.sourceImage || "";
   const compareUrl = sourceImage ? referenceUrlOf(sourceImage) : "";
+  const compareContent = item && item.outpaintContent ? normalizeOutpaintContent(item.outpaintContent) : null;
   const compareKeyRef = import_react33.default.useRef(imageKey);
   import_react33.default.useEffect(() => {
     if (compareKeyRef.current === imageKey) return;
@@ -11498,6 +11758,7 @@ function Stage(props) {
               t,
               beforeUrl: compareUrl,
               afterUrl: image.url,
+              beforeContent: compareContent,
               beforeLabel: t("studio.compare.before"),
               afterLabel: t("studio.compare.after"),
               ratio: printRatio
@@ -14600,7 +14861,7 @@ function useStudio(props) {
   }
   function reroll(entry) {
     const target = entry || library.selected;
-    const overrides = rerollOverrides(target, presets);
+    const overrides = rerollOverrides(target, presets, library.items, form.activePreset);
     if (!overrides) {
       ui.showToast(t("workbench.needPrompt"));
       return;
@@ -14610,7 +14871,7 @@ function useStudio(props) {
   function previewWork(entry) {
     const target = entry && entry.image ? entry : null;
     if (!target) return;
-    const patch = iteratePatch(target, form.form, presets);
+    const patch = iteratePatch(target, form.form, presets, library.items);
     const decision = previewRecallOf({
       dirty: form.dirty,
       hasDraft: Boolean(form.draft),

@@ -35,6 +35,7 @@ import {
   supportsImg2Img,
   supportsInpaint,
 } from './preset.js'
+import { buildOutpaintContentBody } from './outpaint.js'
 
 /** 工具交互形态：新增工具时必须落在三类之一，动作坞按它决定打开方式。 */
 export const IMAGE_TOOL_FORMS = Object.freeze(['instant', 'inline', 'canvas'])
@@ -397,6 +398,9 @@ export function buildOutpaintToolBody(input) {
 
   const rawStrength = finiteNumber(source.strength)
   const strength = clampMaskStrength(rawStrength === null ? Number(OUTPAINT.strength) : rawStrength, true)
+  // 原图在画布里的位置（归一化 0~1）：Host 落盘到 meta.outpaintContent，「对比原图」拉帘
+  // 据此把底图放回真实位置。画布校验已通过，这里正常都能算出来；算不出时不发该字段。
+  const outpaintContent = buildOutpaintContentBody(canvas)
 
   return {
     tool: 'outpaint',
@@ -416,6 +420,7 @@ export function buildOutpaintToolBody(input) {
       mask: canvas.mask,
       sourcePath: targetPath,
       strength,
+      ...(outpaintContent ? { outpaintContent } : {}),
     },
   }
 }

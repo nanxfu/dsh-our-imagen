@@ -2104,6 +2104,202 @@ await check('生成变体参数', () => {
   assert.equal(more.negativePrompt, 'blur')
 })
 
+// ── 阶段十五 Phase B 补修：高清放大产物的回填 / 重新生成不污染扩散参数 ──────
+const NON_DIFFUSION_PRESETS = [
+  { id: 'sdxl-lightning', size: 1024, steps: 4, cfg: 0 },
+  { id: 'sdxl-base', size: 1024, steps: 25, cfg: 7.5 },
+  { id: 'sdxl-inpaint', size: 1024, steps: 30, cfg: 8, inpaintOnly: true },
+]
+
+/** 放大产物 + 已加载父作品：父作品带真实扩散参数（1024²、25 步、cfg 7.5）。 */
+function upscaleRecallFixtures() {
+  const parentPath = 'imagen-output/job-1/01.png'
+  const parentImage = { path: parentPath, file: '01.png', width: 1024, height: 1024, seed: 17 }
+  const parentItem = {
+    jobId: 'job-1',
+    prompt: '父作品提示词',
+    presetId: 'sdxl-base',
+    params: { prompt: '父作品提示词', negativePrompt: 'blurry', steps: 25, cfg: 7.5, seed: 17 },
+    images: [parentImage],
+  }
+  const upscalePath = 'imagen-output/job-2/01.png'
+  const upscaleImage = { path: upscalePath, file: '01.png', width: 2048, height: 2048, seed: 0 }
+  const upscaleItem = {
+    jobId: 'job-2',
+    prompt: '父作品提示词',
+    presetId: 'realesrgan-x2plus',
+    upscale: true,
+    sourceImage: parentPath,
+    upscaleSource: { width: 1024, height: 1024 },
+    params: { prompt: '父作品提示词', negativePrompt: 'blurry', width: 2048, height: 2048, steps: 0, cfg: 0, seed: 0 },
+    images: [upscaleImage],
+  }
+  return {
+    parentPath,
+    parentImage,
+    parentItem,
+    upscalePath,
+    upscaleImage,
+    upscaleItem,
+    parentEntry: { image: parentImage, item: parentItem },
+    upscaleEntry: { image: upscaleImage, item: upscaleItem },
+  }
+}
+
+await check('放大产物回填：沿 sourceImage 找回父作品的真实扩散参数（不出现超分 id / 0 步 / 2048）', () => {
+  const fixtures = upscaleRecallFixtures()
+  const items = [fixtures.upscaleItem, fixtures.parentItem]
+  const form = { presetId: 'sdxl-lightning', steps: 4, cfg: 0, seed: '' }
+
+  // ① iteratePatch：等于父作品的回填结果，而不是放大记录的占位参数。
+  const patch = logic.iteratePatch(fixtures.upscaleEntry, form, NON_DIFFUSION_PRESETS, items)
+  assert.deepEqual(patch, logic.iteratePatch(fixtures.parentEntry, form, NON_DIFFUSION_PRESETS, items))
+  assert.equal(patch.presetId, 'sdxl-base')
+  assert.equal(patch.steps, 25, 'steps 来自父作品，不能是放大记录的 0')
+  assert.equal(patch.cfg, 7.5)
+  assert.equal(patch.width, 1024, '尺寸来自父作品，不能是放大后的 2048')
+  assert.equal(patch.height, 1024)
+  assert.equal(patch.prompt, '父作品提示词')
+  assert.equal(patch.negative, 'blurry')
+  assert.equal(patch.seed, '17')
+  assert.equal(JSON.stringify(patch).includes('realesrgan'), false, '补丁不得出现超分模型 id')
+
+  // ② rerollOverrides：预设 / 步数 / 尺寸来自父作品，种子换随机。
+  const overrides = logic.rerollOverrides(fixtures.upscaleEntry, NON_DIFFUSION_PRESETS, items)
+  assert.deepEqual(overrides, logic.rerollOverrides(fixtures.parentEntry, NON_DIFFUSION_PRESETS, items))
+  assert.equal(overrides.presetId, 'sdxl-base')
+  assert.equal(overrides.steps, 25)
+  assert.equal(overrides.cfg, 7.5)
+  assert.equal(overrides.width, 1024)
+  assert.equal(overrides.height, 1024)
+  assert.equal(overrides.seed, -1)
+  assert.equal(overrides.count, 1)
+  assert.equal(overrides.negativePrompt, 'blurry')
+  assert.equal(JSON.stringify(overrides).includes('realesrgan'), false)
+
+  // 旧 3 参 / 2 参调用（不传 items）：放大记录父作品不可见，走降级补丁而不是抛错。
+  const legacyPatch = logic.iteratePatch(fixtures.upscaleEntry, form, NON_DIFFUSION_PRESETS)
+  assert.equal(legacyPatch.steps, 4, '降级时用当前表单预设的推荐步数')
+  assert.equal(legacyPatch.width, 1024, '降级尺寸来自 upscaleSource')
+  assert.equal(JSON.stringify(legacyPatch).includes('realesrgan'), false)
+  const legacyOverrides = logic.rerollOverrides(fixtures.upscaleEntry, NON_DIFFUSION_PRESETS)
+  assert.equal(legacyOverrides.seed, -1)
+  assert.equal(legacyOverrides.steps, 4)
+})
+
+await check('放大产物回填：父作品缺失 / 链式放大 / 普通作品回归', () => {
+  const fixtures = upscaleRecallFixtures()
+  const form = { presetId: 'sdxl-lightning', steps: 4, cfg: 0, seed: '' }
+
+  // ③ 父作品缺失：降级补丁保留提示词，尺寸优先 upscaleSource（不超契约上限），steps > 0。
+  const degraded = logic.iteratePatch(fixtures.upscaleEntry, form, NON_DIFFUSION_PRESETS, [fixtures.upscaleItem])
+  assert.equal(degraded.prompt, '父作品提示词')
+  assert.equal(degraded.negative, 'blurry')
+  assert.equal(degraded.width, 1024)
+  assert.equal(degraded.height, 1024)
+  assert.equal(degraded.presetId, 'sdxl-lightning')
+  assert.equal(degraded.steps, 4)
+  assert.ok(degraded.steps > 0, '降级补丁不得写 0 步')
+  assert.equal(degraded.seed, '', '降级后种子恢复随机')
+  assert.equal(Object.prototype.hasOwnProperty.call(degraded, 'cfg'), false, '推荐 cfg=0 时不写 cfg 0')
+  assert.equal(JSON.stringify(degraded).includes('realesrgan'), false)
+  // 没有 upscaleSource 时把放大记录尺寸钳到契约上限（2048 → 1536）。
+  const noSourceItem = { ...fixtures.upscaleItem, upscaleSource: undefined }
+  const clamped = logic.iteratePatch(
+    { image: fixtures.upscaleImage, item: noSourceItem },
+    form,
+    NON_DIFFUSION_PRESETS,
+    [noSourceItem],
+  )
+  assert.equal(clamped.width, LIMITS.width.max, '放大后的 2048 必须钳到契约上限')
+  assert.equal(clamped.height, LIMITS.height.max)
+  // 当前预设是专用 inpaint 权重（不能文生图）：降级时换成第一个可文生图预设。
+  const fromInpaintForm = logic.iteratePatch(
+    fixtures.upscaleEntry,
+    { presetId: 'sdxl-inpaint' },
+    NON_DIFFUSION_PRESETS,
+    [fixtures.upscaleItem],
+  )
+  assert.equal(fromInpaintForm.presetId, 'sdxl-lightning')
+  // 降级 reroll：提示词为空时仍返回 null（保持既有提示）。
+  const noPrompt = { ...fixtures.upscaleItem, prompt: '' }
+  assert.equal(logic.rerollOverrides({ image: fixtures.upscaleImage, item: noPrompt }, NON_DIFFUSION_PRESETS, [noPrompt]), null)
+  const degradedReroll = logic.rerollOverrides(fixtures.upscaleEntry, NON_DIFFUSION_PRESETS, [fixtures.upscaleItem], { id: 'sdxl-base' })
+  assert.equal(degradedReroll.presetId, 'sdxl-base')
+  assert.equal(degradedReroll.steps, 25)
+  assert.equal(degradedReroll.cfg, 7.5)
+  assert.equal(degradedReroll.seed, -1)
+  assert.equal(degradedReroll.width, 1024)
+
+  // ④ 链式：放大 → 放大 → 普通作品，一路解析到普通作品。
+  const normalImage = { path: 'imagen-output/job-0/01.png', width: 1024, height: 1024, seed: 5 }
+  const normalItem = {
+    jobId: 'job-0',
+    prompt: '更早的父作品',
+    presetId: 'sdxl-base',
+    params: { prompt: '更早的父作品', steps: 25, cfg: 7.5, seed: 5 },
+    images: [normalImage],
+  }
+  const upAImage = { path: 'imagen-output/job-2/01.png', width: 2048, height: 2048, seed: 0 }
+  const upAItem = {
+    ...fixtures.upscaleItem,
+    jobId: 'job-2b',
+    sourceImage: normalImage.path,
+    upscaleSource: { width: 1024, height: 1024 },
+    images: [upAImage],
+  }
+  const upBImage = { path: 'imagen-output/job-3/01.png', width: 4096, height: 4096, seed: 0 }
+  const upBItem = {
+    ...fixtures.upscaleItem,
+    jobId: 'job-3',
+    sourceImage: upAImage.path,
+    upscaleSource: { width: 2048, height: 2048 },
+    images: [upBImage],
+  }
+  const chainItems = [upBItem, upAItem, normalItem]
+  const chained = logic.iteratePatch({ image: upBImage, item: upBItem }, form, NON_DIFFUSION_PRESETS, chainItems)
+  assert.equal(chained.prompt, '更早的父作品')
+  assert.equal(chained.presetId, 'sdxl-base')
+  assert.equal(chained.steps, 25)
+  assert.equal(chained.width, 1024)
+  assert.equal(logic.diffusionSourceOf({ image: upBImage, item: upBItem }, chainItems).item.jobId, 'job-0')
+  // 成环数据：不递归爆栈，降级返回合法补丁。
+  const loopA = { ...fixtures.upscaleItem, sourceImage: 'imagen-output/loop-b/01.png', images: [{ path: 'imagen-output/loop-a/01.png', width: 2048, height: 2048 }] }
+  const loopB = { ...fixtures.upscaleItem, sourceImage: 'imagen-output/loop-a/01.png', images: [{ path: 'imagen-output/loop-b/01.png', width: 2048, height: 2048 }] }
+  const loopPatch = logic.iteratePatch({ image: loopA.images[0], item: loopA }, form, NON_DIFFUSION_PRESETS, [loopA, loopB])
+  assert.equal(loopPatch.steps, 4)
+  assert.equal(loopPatch.width, 1024)
+
+  // ⑤ 普通作品 / 裸导入 / 未知预设的既有行为。
+  const ordinary = logic.iteratePatch(fixtures.parentEntry, form, NON_DIFFUSION_PRESETS)
+  assert.equal(ordinary.presetId, 'sdxl-base')
+  assert.equal(ordinary.steps, 25, '普通作品直接回填自身参数')
+  assert.equal(ordinary.width, 1024)
+  const bareImport = { image: { path: 'imagen-output/import/01.png', width: 800, height: 600 }, item: { source: 'import', params: {} } }
+  assert.deepEqual(logic.iteratePatch(bareImport, form, NON_DIFFUSION_PRESETS), {})
+  assert.equal(logic.rerollOverrides(bareImport, NON_DIFFUSION_PRESETS), null)
+  // presetId 不在扩散预设列表：同样不能直接回填（走降级，不写未知模型 id）。
+  const unknownPreset = {
+    image: { path: 'imagen-output/old/01.png', width: 1024, height: 1024 },
+    item: { prompt: '旧模型作品', presetId: 'retired-model', params: { steps: 0, cfg: 0 } },
+  }
+  const unknownPatch = logic.iteratePatch(unknownPreset, form, NON_DIFFUSION_PRESETS)
+  assert.equal(unknownPatch.prompt, '旧模型作品')
+  assert.equal(unknownPatch.presetId, 'sdxl-lightning')
+  assert.equal(JSON.stringify(unknownPatch).includes('retired-model'), false)
+  // 判定函数本身。
+  assert.equal(logic.isNonDiffusionRecallOf(fixtures.upscaleEntry, NON_DIFFUSION_PRESETS), true)
+  assert.equal(logic.isNonDiffusionRecallOf({ image: {}, item: { presetId: 'realesrgan-x2plus' } }, []), true, '超分 id 本身即可判定')
+  assert.equal(logic.isNonDiffusionRecallOf(unknownPreset, NON_DIFFUSION_PRESETS), true)
+  assert.equal(logic.isNonDiffusionRecallOf(unknownPreset, []), false, '预设还没拿到时不按未知预设误判')
+  assert.equal(logic.isNonDiffusionRecallOf(fixtures.parentEntry, NON_DIFFUSION_PRESETS), false)
+  // diffusionSourceOf：普通作品返回自身；父作品缺失 / 裸导入父作品返回 null。
+  assert.equal(logic.diffusionSourceOf(fixtures.parentEntry, []), fixtures.parentEntry)
+  assert.equal(logic.diffusionSourceOf(fixtures.upscaleEntry, []), null)
+  const bareParent = { image: { path: 'imagen-output/import/01.png' }, item: { source: 'import', params: {} } }
+  assert.equal(logic.diffusionSourceOf(fixtures.upscaleEntry, [bareParent]), null)
+})
+
 await check('重试参数构造', () => {
   const job = {
     id: 'job-1',
