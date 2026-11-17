@@ -155,3 +155,20 @@
 2. 工作目录用 `/content`（与 `/` 同一文件系统，但语义更贴近"用户盘"），`disk_usage_root()` 的回退逻辑可直接复用；
 3. 单卡设备，Flux.2 的 `device_map="balanced"` 需按卡数切换（1 卡时不走 balanced）；
 4. 保活本身不复杂，风险集中在 WS 断线重连与令牌刷新，二者都已有可复用的重试/刷新路径。
+
+---
+
+## 7. 2a 真机验收（ColabProvider 接入 SessionManager）
+
+脚本：`tools/colab/smoke-provider.mjs`（`node tools/colab/smoke-provider.mjs --gpu L4`）。
+
+- **首个可出图会话 88 秒就绪**：assign 3.2s → 上传单文件启动器 → 建 Kernel → 起 daemon → 读 `/content/.imagen_endpoint.json` 约 16s，随后装依赖 + 加载模型 39s（权重已在 HF 缓存时更快）。
+- 环境：Python 3.13.16 / torch 2.14.1，daemon 启动日志无 traceback；单卡 L4 与 SDXL 管线均被正确识别。
+- **出图**：sdxl-lightning 4 步，1.07 MB PNG，端到端 18.7s（含 1.46 MB 结果回传）。
+- **释放**：`stop()` 后 `unassign` 生效，`assignments` 清空、CCU 活跃实例归零；单次验收消耗约 0.06 CU。
+- 远端改动：`remote/config.py` 新增 `work_dir`（Colab 切到 `/content`）与 `endpoint_file`（ready/error 事件原子落盘）；`ntfy_topic` 为空时只跳过发布，不报错。
+
+**新发现：大响应会踩轮询超时**
+
+- 1.46 MB 的 base64 结果经 Cloudflare 隧道下行约 **13 秒**，而默认 `/job` 轮询超时是 8 秒——表现为"服务端每次都回 200、Host 侧每次都超时"，最终触发 120 秒连续失败容忍窗。
+- 处理：provider 声明 `jobRequestTimeoutMs`（Colab 30s，Kaggle 仍 8s），任务队列按 provider 取值。后续若结果继续变大，应考虑独立的二进制取图端点，而不是把 base64 塞进轮询响应。

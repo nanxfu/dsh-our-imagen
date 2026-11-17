@@ -71,6 +71,10 @@ class DaemonConfig:
     fallback_tunnel_url_regex: str = ""
     # 权重预挂载（P2.1）：HF 仓库 → 容器内本地目录（Kaggle Dataset 挂载路径）。
     local_models: dict = field(default_factory=dict)
+    # 工作目录（Colab 用 /content；为空则沿用进程 cwd，即 Kaggle 的 /kaggle/working）。
+    work_dir: str = ""
+    # 会合落盘（Colab）：daemon 就绪后把地址写到这里，Host 经 Jupyter Contents 读取。
+    endpoint_file: str = ""
 
 
 # 单例：启动期由 load_config() 原地填充，之后只读（见模块头第 1 条）。
@@ -98,6 +102,8 @@ KNOWN_CONFIG_KEYS = frozenset(
         "fallback_tunnel_command",
         "fallback_tunnel_url_regex",
         "local_models",
+        "work_dir",
+        "endpoint_file",
     }
 )
 
@@ -214,6 +220,15 @@ def build_config(cfg: dict) -> DaemonConfig:
     config.fallback_tunnel_command = normalize_fallback_command(cfg.get("fallback_tunnel_command"))
     config.fallback_tunnel_url_regex = str(cfg.get("fallback_tunnel_url_regex") or "").strip()
     config.local_models = normalize_local_models(cfg.get("local_models"))
+    config.work_dir = str(cfg.get("work_dir") or "")
+    config.endpoint_file = str(cfg.get("endpoint_file") or "")
+    # Colab 的工作盘是 /content，而 Kernel 的 cwd 是 /：显式切换，避免相对路径写到根目录。
+    if config.work_dir:
+        if os.path.isdir(config.work_dir):
+            os.chdir(config.work_dir)
+            log(f"[config] 工作目录已切换到 {config.work_dir}")
+        else:
+            log(f"[config] WARN work_dir 不存在，沿用当前目录：{config.work_dir}")
     unknown = sorted(set(cfg) - KNOWN_CONFIG_KEYS)
     if unknown:
         log(f"[config] WARN 未知配置键已忽略：{', '.join(unknown)}")

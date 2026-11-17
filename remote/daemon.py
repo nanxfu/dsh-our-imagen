@@ -410,6 +410,30 @@ def ntfy_publish(payload: dict, label: str) -> bool:
     return False
 
 
+def write_endpoint_file(payload: dict) -> bool:
+    """Colab 会合：把 ready/error 事件原子写入 Host 指定文件，不依赖 ntfy。
+
+    ntfy 在 Colab 场景不适用（topic 为空），Host 通过 Jupyter Contents 读这个文件
+    拿到 cloudflared 地址；写入失败只记日志，不影响 daemon 正常服务。
+    """
+    path = CONFIG.endpoint_file
+    if not path:
+        return False
+    try:
+        directory = os.path.dirname(path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        temp = f"{path}.tmp"
+        with open(temp, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False)
+        os.replace(temp, path)
+        log(f"[endpoint] 已写入 {path}")
+        return True
+    except Exception as exc:  # noqa: BLE001 - 落盘失败不能拖垮启动
+        log(f"[endpoint] 写入失败：{type(exc).__name__}: {exc}")
+        return False
+
+
 def publish_ready() -> None:
     with BOOT_LOCK:
         endpoint = BOOT.tunnel_url
@@ -425,11 +449,13 @@ def publish_ready() -> None:
         "model_id": model_id,
         "device": device,
     }
+    write_endpoint_file(payload)
     ntfy_publish(payload, "ready")
 
 
 def publish_error(code: str, message: str) -> None:
     payload = {"type": "error", "code": code, "message": message[:800]}
+    write_endpoint_file(payload)
     ntfy_publish(payload, f"error({code})")
 
 

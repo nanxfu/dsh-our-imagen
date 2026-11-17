@@ -26,6 +26,7 @@ import { join } from 'node:path'
 
 import { SessionManager } from '../lib/session.js'
 import {
+  PENDING_CLEANUP_VERSION,
   clearPendingCleanup,
   pendingCleanupPath,
   readPendingCleanup,
@@ -597,7 +598,7 @@ async function scenarioDisposeBranches() {
       const pending = await readPendingCleanup(ctx)
       check(
         '待清理记录内容可用于补发关机',
-        pending?.version === 1 &&
+        pending?.version === PENDING_CLEANUP_VERSION &&
           pending?.endpointUrl === health.endpoint &&
           pending?.token === TOKEN &&
           pending?.kernelId === KERNEL_ID &&
