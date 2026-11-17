@@ -130,6 +130,53 @@ export const IMPORT = {
   maxNameChars: 120,
 }
 
+/**
+ * 高清放大（阶段十五 Phase B1，`tool: 'upscale'`）的共享口径。
+ *
+ * 远端走轻量超分（Real-ESRGAN RRDBNet x2，纯 torch 权重，不占扩散模型显存），
+ * 输入是画廊里已有的一张作品，输出固定 `factor` 倍，作为该作品的派生子版本。
+ *
+ * 为什么用「长边」限制而不是宽高独立限制：2× 之后输出长边翻倍，2560 已接近
+ * 隧道单次轮询能稳定传回的体量（PNG base64 约 7~10 MB）；输入上限 1280 同时
+ * 覆盖工作台默认的 1:1（1024）与 16:9（1280×720）画幅，超过时要用户先缩小画幅。
+ *
+ * 数值随 `daemonContract().limits.upscale` 下发远端，Host / Client 引用同一份。
+ */
+export const UPSCALE = {
+  // 记录到 meta.presetId 的超分模型标识（不是可选的扩散预设，不进模型选择器）。
+  id: 'realesrgan-x2plus',
+  factor: 2,
+  maxInputEdge: 1280,
+  maxOutputEdge: 2560,
+}
+
+/**
+ * 扩图（阶段十五 Phase B2，`tool: 'outpaint'`）的共享口径。
+ *
+ * 扩图不新增远端推理能力：客户端把原图缩放后放进更大的画布、把新增区域涂白生成蒙版，
+ * 再按普通局部重绘提交（远端复用 `sdxl-inpaint` 的 9 通道管线，未涂抹区域由
+ * `composite_inpaint_image` 按蒙版贴回原像素）。本常量只约束客户端画布构造，
+ * 因此不进入 `daemonContract()`（远端只看到一次合法的 inpaint 请求）。
+ */
+export const OUTPAINT = {
+  // 快捷比例胶囊（顺序即界面顺序）：source = 跟随原图比例、四边扩 20%。
+  expandId: 'source',
+  // 目标画幅比例胶囊（canvas 以该比例为准，原图等比缩放后居中）。
+  ratioIds: ['16:9', '9:16', '4:3'],
+  // 「四边扩 20%」= 画布尺寸 ×1.2（每边 10%）。
+  expandRatio: 1.2,
+  // 画布长边 / 总像素上限：1536×1024 量级，与远端 width/height 契约上限对齐，
+  // 也保证 2×T4 上 9 通道 inpaint 不 OOM（真机验收见 CHANGELOG）。
+  maxEdge: 1536,
+  maxPixels: 1600000,
+  minEdge: 256,
+  // 扩图覆盖面积大，默认走满步数；契约的带蒙版上限是 1.0。
+  strength: 1.0,
+}
+
+/** `POST /imagen-api/generate` 的 `tool` 取值（宿主接受的三类请求）。 */
+export const REQUEST_TOOLS = Object.freeze(['generate', 'upscale', 'outpaint'])
+
 /** 宿主与远端之间共享的超时（毫秒）。远端层不再各自保留默认值。 */
 export const TIMEOUTS = {
   // 远端 HTTP
@@ -437,6 +484,9 @@ export const PROTOCOL = {
     // 隧道提供方：cloudflare = quick tunnel 默认通道；custom = 用户配置的备用命令
     // （自建 FRP / 其他 HTTPS 隧道）。ready 事件与 /health 用同一组取值。
     tunnelProviders: ['cloudflare', 'custom'],
+    // 远端 `/generate` 接受的 tool 取值：outpaint 在远端就是「带蒙版的局部重绘」，
+    // 不单列；Host 请求里的三类 tool 见 REQUEST_TOOLS（outpaint 由 Host 展开成 generate）。
+    requestTools: ['generate', 'upscale'],
   },
 }
 
@@ -491,6 +541,8 @@ export function daemonContract() {
       strength: LIMITS.strength,
       // 局部重绘蒙版边界（与参考图一起下发；daemon 请求体上限也按它推导）。
       mask: LIMITS.mask,
+      // 高清放大（tool=upscale）的输入/输出长边上限与放大倍数：远端据此校验源图并回报比例。
+      upscale: UPSCALE,
     },
   }
 }

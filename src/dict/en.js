@@ -245,6 +245,8 @@ export const en = {
   'studio.filmstrip.versionKind.text': 'Text to image',
   'studio.filmstrip.versionKind.img2img': 'Whole-image redraw',
   'studio.filmstrip.versionKind.inpaint': 'Partial redraw',
+  'studio.filmstrip.versionKind.upscale': 'Upscale',
+  'studio.filmstrip.versionKind.outpaint': 'Outpaint',
   'studio.filmstrip.sourceDeleted': 'Source work was deleted',
   'studio.filmstrip.draftDot': 'Unsubmitted edits',
   'studio.filmstrip.draftTitle': 'Modified: {items}',
@@ -499,6 +501,9 @@ export const en = {
   'studio.imageTool.blockedNoPrompt': 'Write a change description, or use a work that has a prompt.',
   'studio.imageTool.blockedTarget': 'No base image to process. Select a work on the stage first.',
   'studio.imageTool.submitted': 'Image processing task submitted',
+  // 高清放大是零参数即时工具：点击即提交，源图超限在提交前拦下。
+  'studio.imageTool.upscaleSubmitted': 'Upscale task submitted',
+  'studio.imageTool.upscaleTooLarge': 'The source image is too large for upscale; pick a smaller work and try again.',
   // Failed tasks fall back to the stage tool: the left panel no longer replays reference jobs.
   'studio.imageTool.retryMoved': 'This task came from an image tool. Use “Keep editing” in the stage dock to restore it and submit again.',
 
@@ -607,6 +612,8 @@ export const en = {
   'studio.chat.focus.empty': 'No previous level for this image',
   'studio.chat.tool.inpaint': 'Started inpainting on this image',
   'studio.chat.tool.img2img': 'Started a full redraw of this image',
+  'studio.chat.tool.upscale': 'Started upscaling this image',
+  'studio.chat.tool.outpaint': 'Started outpainting this image',
   'studio.chat.tool.strength': 'Strength {value}',
   'studio.chat.actions.compare': 'Compare original',
   'studio.chat.actions.continueInpaint': 'Continue inpainting',
@@ -629,4 +636,20 @@ export const en = {
   'studio.compare.after': 'Current',
   'studio.compare.hint': 'Drag the divider to compare',
   'studio.gallery.imported': 'Imported',
+
+  // ── 阶段十五 Phase B：扩图画布 ───────────────────────────────
+  'studio.outpaint.title': 'Outpaint',
+  'studio.outpaint.hint': 'Drag the content frame to place the original in the canvas; arrow keys nudge it, double-click or “Center” resets. The new area is regenerated.',
+  'studio.outpaint.ratioLabel': 'Outpaint ratio',
+  'studio.outpaint.ratio.expand': 'Expand 20% all sides',
+  'studio.outpaint.ratio.16x9': '16:9',
+  'studio.outpaint.ratio.9x16': '9:16',
+  'studio.outpaint.ratio.4x3': '4:3',
+  'studio.outpaint.coverage': 'New area {percent}%',
+  'studio.outpaint.center': 'Center',
+  'studio.outpaint.dragHint': 'Drag the content frame to adjust the padding',
+  'studio.outpaint.canvasLabel': 'Outpaint canvas preview: the area outside the content frame is newly generated.',
+  'studio.outpaint.blockedCanvas': 'The outpaint canvas is not ready yet. Change the ratio or reopen the tool and try again.',
+  'studio.outpaint.invalidCanvas': 'The outpaint canvas data is invalid and was ignored. Drag the content frame again and retry.',
+  'studio.outpaint.tooLarge': 'The outpaint canvas or mask exceeds the size limit, so it was not submitted. Try a smaller ratio.',
 }

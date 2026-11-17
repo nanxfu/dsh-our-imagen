@@ -42,6 +42,12 @@
       "min": 0.2,
       "step": 0.05
     },
+    "upscale": {
+      "factor": 2,
+      "id": "realesrgan-x2plus",
+      "maxInputEdge": 1280,
+      "maxOutputEdge": 2560
+    },
     "width": {
       "max": 1536,
       "min": 256,

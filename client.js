@@ -293,6 +293,8 @@ var zh = {
   "studio.filmstrip.versionKind.text": "文生图",
   "studio.filmstrip.versionKind.img2img": "整图重绘",
   "studio.filmstrip.versionKind.inpaint": "局部重绘",
+  "studio.filmstrip.versionKind.upscale": "高清放大",
+  "studio.filmstrip.versionKind.outpaint": "扩图",
   "studio.filmstrip.sourceDeleted": "来源作品已删除",
   "studio.filmstrip.draftDot": "有未提交的编辑",
   "studio.filmstrip.draftTitle": "已修改：{items}",
@@ -539,6 +541,9 @@ var zh = {
   "studio.imageTool.blockedNoPrompt": "请填写修改描述，或让原作品带有提示词。",
   "studio.imageTool.blockedTarget": "没有可处理的底图，请先在舞台选中一张作品。",
   "studio.imageTool.submitted": "已提交图片处理任务",
+  // 高清放大是零参数即时工具：点击即提交，源图超限在提交前拦下。
+  "studio.imageTool.upscaleSubmitted": "已提交高清放大任务",
+  "studio.imageTool.upscaleTooLarge": "源图过大，超出高清放大的输入上限；请选择更小的作品后再放大。",
   // 失败重试指向舞台工具：左栏「重试一次」不再重放带底图的任务。
   "studio.imageTool.retryMoved": "图片工具任务请在舞台动作坞中点「继续编辑」恢复后重新提交。",
   // ── 局部涂抹画布（MaskEditor 工具栏） ────────────────────────
@@ -643,6 +648,8 @@ var zh = {
   "studio.chat.focus.empty": "这张图没有上一层记录",
   "studio.chat.tool.inpaint": "对当前图发起了局部涂抹",
   "studio.chat.tool.img2img": "对当前图发起了整图重绘",
+  "studio.chat.tool.upscale": "对当前图发起了高清放大",
+  "studio.chat.tool.outpaint": "对当前图发起了扩图",
   "studio.chat.tool.strength": "重绘强度 {value}",
   "studio.chat.actions.compare": "对比原图",
   "studio.chat.actions.continueInpaint": "继续涂抹",
@@ -664,7 +671,22 @@ var zh = {
   "studio.compare.before": "原图",
   "studio.compare.after": "当前",
   "studio.compare.hint": "拖动分隔线对比原图",
-  "studio.gallery.imported": "导入"
+  "studio.gallery.imported": "导入",
+  // ── 阶段十五 Phase B：扩图画布 ───────────────────────────────
+  "studio.outpaint.title": "扩图",
+  "studio.outpaint.hint": "拖动内容框调整原图在画布里的位置；方向键微调，双击或点「回中」复位。新增区域会重新生成。",
+  "studio.outpaint.ratioLabel": "扩图比例",
+  "studio.outpaint.ratio.expand": "四边扩 20%",
+  "studio.outpaint.ratio.16x9": "16:9",
+  "studio.outpaint.ratio.9x16": "9:16",
+  "studio.outpaint.ratio.4x3": "4:3",
+  "studio.outpaint.coverage": "新增画面 {percent}%",
+  "studio.outpaint.center": "回中",
+  "studio.outpaint.dragHint": "拖动内容框调整留白位置",
+  "studio.outpaint.canvasLabel": "扩图画布预览：内容框之外是新增区域。",
+  "studio.outpaint.blockedCanvas": "扩图画布尚未生成，请调整比例或重新打开工具后重试。",
+  "studio.outpaint.invalidCanvas": "扩图画布数据无效，本次导出已忽略；请重新拖动内容框后再试。",
+  "studio.outpaint.tooLarge": "扩图画布或蒙版体积超过上限，未提交；请改用更小的比例。"
 };
 
 // src/dict/en.js
@@ -901,6 +923,8 @@ var en = {
   "studio.filmstrip.versionKind.text": "Text to image",
   "studio.filmstrip.versionKind.img2img": "Whole-image redraw",
   "studio.filmstrip.versionKind.inpaint": "Partial redraw",
+  "studio.filmstrip.versionKind.upscale": "Upscale",
+  "studio.filmstrip.versionKind.outpaint": "Outpaint",
   "studio.filmstrip.sourceDeleted": "Source work was deleted",
   "studio.filmstrip.draftDot": "Unsubmitted edits",
   "studio.filmstrip.draftTitle": "Modified: {items}",
@@ -1147,6 +1171,9 @@ var en = {
   "studio.imageTool.blockedNoPrompt": "Write a change description, or use a work that has a prompt.",
   "studio.imageTool.blockedTarget": "No base image to process. Select a work on the stage first.",
   "studio.imageTool.submitted": "Image processing task submitted",
+  // 高清放大是零参数即时工具：点击即提交，源图超限在提交前拦下。
+  "studio.imageTool.upscaleSubmitted": "Upscale task submitted",
+  "studio.imageTool.upscaleTooLarge": "The source image is too large for upscale; pick a smaller work and try again.",
   // Failed tasks fall back to the stage tool: the left panel no longer replays reference jobs.
   "studio.imageTool.retryMoved": "This task came from an image tool. Use “Keep editing” in the stage dock to restore it and submit again.",
   // ── Partial redraw canvas (MaskEditor toolbar) ────────────────
@@ -1251,6 +1278,8 @@ var en = {
   "studio.chat.focus.empty": "No previous level for this image",
   "studio.chat.tool.inpaint": "Started inpainting on this image",
   "studio.chat.tool.img2img": "Started a full redraw of this image",
+  "studio.chat.tool.upscale": "Started upscaling this image",
+  "studio.chat.tool.outpaint": "Started outpainting this image",
   "studio.chat.tool.strength": "Strength {value}",
   "studio.chat.actions.compare": "Compare original",
   "studio.chat.actions.continueInpaint": "Continue inpainting",
@@ -1272,7 +1301,22 @@ var en = {
   "studio.compare.before": "Original",
   "studio.compare.after": "Current",
   "studio.compare.hint": "Drag the divider to compare",
-  "studio.gallery.imported": "Imported"
+  "studio.gallery.imported": "Imported",
+  // ── 阶段十五 Phase B：扩图画布 ───────────────────────────────
+  "studio.outpaint.title": "Outpaint",
+  "studio.outpaint.hint": "Drag the content frame to place the original in the canvas; arrow keys nudge it, double-click or “Center” resets. The new area is regenerated.",
+  "studio.outpaint.ratioLabel": "Outpaint ratio",
+  "studio.outpaint.ratio.expand": "Expand 20% all sides",
+  "studio.outpaint.ratio.16x9": "16:9",
+  "studio.outpaint.ratio.9x16": "9:16",
+  "studio.outpaint.ratio.4x3": "4:3",
+  "studio.outpaint.coverage": "New area {percent}%",
+  "studio.outpaint.center": "Center",
+  "studio.outpaint.dragHint": "Drag the content frame to adjust the padding",
+  "studio.outpaint.canvasLabel": "Outpaint canvas preview: the area outside the content frame is newly generated.",
+  "studio.outpaint.blockedCanvas": "The outpaint canvas is not ready yet. Change the ratio or reopen the tool and try again.",
+  "studio.outpaint.invalidCanvas": "The outpaint canvas data is invalid and was ignored. Drag the content frame again and retry.",
+  "studio.outpaint.tooLarge": "The outpaint canvas or mask exceeds the size limit, so it was not submitted. Try a smaller ratio."
 };
 
 // src/dict/index.js
@@ -1885,6 +1929,29 @@ var IMPORT = {
   // 展示名上限：只用于 meta.prompt 与列表标题，不参与落盘路径。
   maxNameChars: 120
 };
+var UPSCALE = {
+  // 记录到 meta.presetId 的超分模型标识（不是可选的扩散预设，不进模型选择器）。
+  id: "realesrgan-x2plus",
+  factor: 2,
+  maxInputEdge: 1280,
+  maxOutputEdge: 2560
+};
+var OUTPAINT = {
+  // 快捷比例胶囊（顺序即界面顺序）：source = 跟随原图比例、四边扩 20%。
+  expandId: "source",
+  // 目标画幅比例胶囊（canvas 以该比例为准，原图等比缩放后居中）。
+  ratioIds: ["16:9", "9:16", "4:3"],
+  // 「四边扩 20%」= 画布尺寸 ×1.2（每边 10%）。
+  expandRatio: 1.2,
+  // 画布长边 / 总像素上限：1536×1024 量级，与远端 width/height 契约上限对齐，
+  // 也保证 2×T4 上 9 通道 inpaint 不 OOM（真机验收见 CHANGELOG）。
+  maxEdge: 1536,
+  maxPixels: 16e5,
+  minEdge: 256,
+  // 扩图覆盖面积大，默认走满步数；契约的带蒙版上限是 1.0。
+  strength: 1
+};
+var REQUEST_TOOLS = Object.freeze(["generate", "upscale", "outpaint"]);
 var TIMEOUTS = {
   // 远端 HTTP
   remoteHealthMs: 4e3,
@@ -2751,7 +2818,7 @@ function StatusChip(props) {
 }
 
 // src/studio/Studio.jsx
-var import_react45 = __toESM(require("react"), 1);
+var import_react46 = __toESM(require("react"), 1);
 
 // src/styles/tokens.css
 var tokens_default = '/*\n * 设计变量：黑白灰工作室。\n *\n * 视觉立场：一间明度分层的工作室，而不是一块彩色 AI 画布。\n *  1. 地面是中性灰的柔光渐变，上面浮近白的实心卡片；不用彩色光晕，不用玻璃彩虹。\n *  2. 只有明度关系：墨黑做主操作与选中，灰阶做层级，语义色（成功/警告/错误）\n *     只以小圆点或窄条出现，不参与大面积装饰。\n *  3. 深色是同一套明度关系反相：深灰底、浅灰字、浅色主操作。\n *\n * 预览工具（tools/preview/render.mjs）与宿主页面直接读取这里的深色变量（支持系统 prefers-color-scheme 与显式 [data-theme="dark"]）。\n */\n\n.ofs-root {\n  /* 地面：三层中性柔光 + 一层底色 */\n  --ofs-ground-1: #e7e8ea;\n  --ofs-ground-2: #f1f1f2;\n  --ofs-ground-3: #e3e4e6;\n  --ofs-ground-base: #f5f5f6;\n\n  /* 表面 */\n  --ofs-window: rgb(255 255 255 / 86%);\n  --ofs-window-border: rgb(18 18 22 / 8%);\n  --ofs-card: #ffffff;\n  --ofs-card-solid: #ffffff;\n  --ofs-card-border: rgb(18 18 22 / 9%);\n  --ofs-hairline: rgb(18 18 22 / 7%);\n  --ofs-sunken: #f4f4f6;\n  --ofs-sunken-border: rgb(18 18 22 / 8%);\n\n  /* 文字 */\n  --ofs-ink: #141416;\n  --ofs-ink-2: #52525a;\n  --ofs-ink-3: #6b6b73;\n  --ofs-ink-4: #a8a8b0;\n\n  /* 主操作：墨黑 */\n  --ofs-accent: #141416;\n  --ofs-accent-2: #3f3f46;\n  --ofs-accent-ink: #ffffff;\n  --ofs-accent-soft: #f0f0f2;\n  --ofs-accent-soft-border: #dedee3;\n  --ofs-accent-grad: linear-gradient(180deg, #2b2b30 0%, #141416 100%);\n\n  /* 状态：只做小面积语义色 */\n  --ofs-ok: #2f8a5c;\n  --ofs-ok-soft: #eaf5ef;\n  --ofs-warn: #a96a18;\n  --ofs-warn-soft: #f7f0e4;\n  --ofs-error: #c04444;\n  --ofs-error-soft: #f9ecec;\n  --ofs-idle: #a0a0a8;\n  --ofs-idle-soft: #f1f1f3;\n\n  /* 光桌与相纸：舞台是一张下凹的光桌，出图是一张落在桌上的相纸。\n     这是界面里唯一带实物感的表面，其余控件都保持扁平卡片。 */\n  --ofs-mat: #f0f0f2;\n  --ofs-mat-lit: rgb(255 255 255 / 92%);\n  --ofs-mat-inner: inset 0 1px 3px rgb(16 16 20 / 6%);\n  --ofs-print-paper: #ffffff;\n  --ofs-print-edge: rgb(18 18 22 / 10%);\n  --ofs-print-shadow: 0 20px 40px -24px rgb(16 16 20 / 42%), 0 4px 10px -6px rgb(16 16 20 / 18%);\n  --ofs-print-shadow-hover: 0 26px 50px -24px rgb(16 16 20 / 46%), 0 6px 14px -6px rgb(16 16 20 / 20%);\n  --ofs-mark: rgb(18 18 22 / 26%);\n\n  /* 几何 */\n  --ofs-r-xl: 24px;\n  --ofs-r-lg: 18px;\n  --ofs-r-md: 14px;\n  --ofs-r-sm: 10px;\n  --ofs-r-pill: 999px;\n  --ofs-blur: 18px;\n\n  /* 投影：始终带偏移与柔和扩散，不用零偏移光晕 */\n  --ofs-shadow-card: 0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%);\n  --ofs-shadow-lift: 0 2px 6px rgb(16 16 20 / 6%), 0 18px 40px -20px rgb(16 16 20 / 26%);\n  --ofs-shadow-window: 0 1px 3px rgb(16 16 20 / 5%), 0 36px 80px -48px rgb(16 16 20 / 32%);\n  --ofs-shadow-accent: 0 8px 18px -10px rgb(16 16 20 / 48%);\n  --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(20 20 22 / 45%);\n\n  --ofs-font: -apple-system, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;\n\n  /* 留白节奏 */\n  --ofs-pad: 18px;\n  --ofs-gap: 14px;\n\n  display: flex;\n  flex-direction: column;\n  height: 100%;\n  min-height: 0;\n  padding: 18px;\n  color: var(--ofs-ink);\n  font-family: var(--ofs-font);\n  font-size: 13px;\n  line-height: 1.55;\n  -webkit-font-smoothing: antialiased;\n  background:\n    radial-gradient(1100px 620px at 12% -8%, var(--ofs-ground-1) 0%, transparent 62%),\n    radial-gradient(900px 520px at 88% 4%, var(--ofs-ground-2) 0%, transparent 58%),\n    radial-gradient(780px 540px at 62% 108%, var(--ofs-ground-3) 0%, transparent 62%),\n    linear-gradient(160deg, var(--ofs-ground-base) 0%, var(--ofs-ground-base) 100%);\n}\n\n@media (prefers-color-scheme: dark) {\n  :root:not([data-theme="light"]) .ofs-root:not([data-theme="light"]) {\n    --ofs-ground-1: #232326;\n    --ofs-ground-2: #17171a;\n    --ofs-ground-3: #26262a;\n    --ofs-ground-base: #101012;\n\n    --ofs-window: rgb(24 24 27 / 88%);\n    --ofs-window-border: rgb(255 255 255 / 9%);\n    --ofs-card: #18181b;\n    --ofs-card-solid: #1c1c20;\n    --ofs-card-border: rgb(255 255 255 / 9%);\n    --ofs-hairline: rgb(255 255 255 / 8%);\n    --ofs-sunken: rgb(255 255 255 / 5%);\n    --ofs-sunken-border: rgb(255 255 255 / 9%);\n\n    --ofs-ink: #f2f2f4;\n    --ofs-ink-2: #a4a4ac;\n    --ofs-ink-3: #8d8d95;\n    --ofs-ink-4: #5c5c63;\n\n    --ofs-accent: #f2f2f4;\n    --ofs-accent-2: #c8c8cf;\n    --ofs-accent-ink: #161618;\n    --ofs-accent-soft: rgb(255 255 255 / 8%);\n    --ofs-accent-soft-border: rgb(255 255 255 / 14%);\n    --ofs-accent-grad: linear-gradient(180deg, #fafafa 0%, #dcdce1 100%);\n\n    --ofs-ok: #58c08a;\n    --ofs-ok-soft: rgb(88 192 138 / 14%);\n    --ofs-warn: #d8a55c;\n    --ofs-warn-soft: rgb(216 165 92 / 14%);\n    --ofs-error: #e07a7a;\n    --ofs-error-soft: rgb(224 122 122 / 14%);\n    --ofs-idle: #8a8a92;\n    --ofs-idle-soft: rgb(255 255 255 / 6%);\n\n    /* 深色里相纸仍然是整间暗房里最亮的表面：光桌 > 相纸 > 卡片 > 地面 */\n    --ofs-mat: #1e1e22;\n    --ofs-mat-lit: rgb(255 255 255 / 7%);\n    --ofs-mat-inner: inset 0 1px 3px rgb(0 0 0 / 36%);\n    --ofs-print-paper: #2b2b31;\n    --ofs-print-edge: rgb(255 255 255 / 13%);\n    --ofs-print-shadow: 0 22px 44px -24px rgb(0 0 0 / 78%), 0 4px 12px -6px rgb(0 0 0 / 50%);\n    --ofs-print-shadow-hover: 0 28px 54px -24px rgb(0 0 0 / 82%), 0 6px 16px -6px rgb(0 0 0 / 54%);\n    --ofs-mark: rgb(255 255 255 / 28%);\n\n    --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 28px -18px rgb(0 0 0 / 70%);\n    --ofs-shadow-lift: 0 2px 6px rgb(0 0 0 / 44%), 0 20px 44px -22px rgb(0 0 0 / 76%);\n    --ofs-shadow-window: 0 1px 3px rgb(0 0 0 / 40%), 0 40px 88px -48px rgb(0 0 0 / 88%);\n    --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);\n    --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(255 255 255 / 40%);\n  }\n}\n\n/* 显式深色主题（预览脚本 / 宿主切换 `data-theme="dark"` 时生效），与上面同源。 */\n[data-theme="dark"] .ofs-root,\n.ofs-root[data-theme="dark"] {\n  --ofs-ground-1: #232326;\n  --ofs-ground-2: #17171a;\n  --ofs-ground-3: #26262a;\n  --ofs-ground-base: #101012;\n\n  --ofs-window: rgb(24 24 27 / 88%);\n  --ofs-window-border: rgb(255 255 255 / 9%);\n  --ofs-card: #18181b;\n  --ofs-card-solid: #1c1c20;\n  --ofs-card-border: rgb(255 255 255 / 9%);\n  --ofs-hairline: rgb(255 255 255 / 8%);\n  --ofs-sunken: rgb(255 255 255 / 5%);\n  --ofs-sunken-border: rgb(255 255 255 / 9%);\n\n  --ofs-ink: #f2f2f4;\n  --ofs-ink-2: #a4a4ac;\n  --ofs-ink-3: #8d8d95;\n  --ofs-ink-4: #5c5c63;\n\n  --ofs-accent: #f2f2f4;\n  --ofs-accent-2: #c8c8cf;\n  --ofs-accent-ink: #161618;\n  --ofs-accent-soft: rgb(255 255 255 / 8%);\n  --ofs-accent-soft-border: rgb(255 255 255 / 14%);\n  --ofs-accent-grad: linear-gradient(180deg, #fafafa 0%, #dcdce1 100%);\n\n  --ofs-ok: #58c08a;\n  --ofs-ok-soft: rgb(88 192 138 / 14%);\n  --ofs-warn: #d8a55c;\n  --ofs-warn-soft: rgb(216 165 92 / 14%);\n  --ofs-error: #e07a7a;\n  --ofs-error-soft: rgb(224 122 122 / 14%);\n  --ofs-idle: #8a8a92;\n  --ofs-idle-soft: rgb(255 255 255 / 6%);\n\n  --ofs-mat: #1e1e22;\n  --ofs-mat-lit: rgb(255 255 255 / 7%);\n  --ofs-mat-inner: inset 0 1px 3px rgb(0 0 0 / 36%);\n  --ofs-print-paper: #2b2b31;\n  --ofs-print-edge: rgb(255 255 255 / 13%);\n  --ofs-print-shadow: 0 22px 44px -24px rgb(0 0 0 / 78%), 0 4px 12px -6px rgb(0 0 0 / 50%);\n  --ofs-print-shadow-hover: 0 28px 54px -24px rgb(0 0 0 / 82%), 0 6px 16px -6px rgb(0 0 0 / 54%);\n  --ofs-mark: rgb(255 255 255 / 28%);\n\n  --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 28px -18px rgb(0 0 0 / 70%);\n  --ofs-shadow-lift: 0 2px 6px rgb(0 0 0 / 44%), 0 20px 44px -22px rgb(0 0 0 / 76%);\n  --ofs-shadow-window: 0 1px 3px rgb(0 0 0 / 40%), 0 40px 88px -48px rgb(0 0 0 / 88%);\n  --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);\n  --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(255 255 255 / 40%);\n}';
@@ -2778,7 +2845,7 @@ var drawers_default = '/* ── 右侧抽屉共用骨架（LogsDrawer / Setting
 var panel_default = "/*\n * 左侧创作面板（表单 / 对话两种形态共用的卡片容器与表单控件）。\n */\n\n.ofs-panel {\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n  min-width: 0;\n  margin: 14px 0 14px 14px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  overflow: hidden;\n}\n\n.ofs-panel-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 14px 14px 10px;\n}\n\n.ofs-panel-head-title {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ofs-panel-head h2 {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-head-new {\n  flex: 0 0 auto;\n  height: 26px;\n  padding: 0 9px;\n  gap: 4px;\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n}\n\n.ofs-panel-head .ofs-seg {\n  flex: 0 0 auto;\n}\n\n.ofs-panel-head .ofs-seg button {\n  padding: 0 9px;\n  white-space: nowrap;\n}\n\n.ofs-panel-scroll {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 0 15px 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 0;\n  scroll-behavior: smooth;\n  /* 内容偶尔超出时（等待流水线、错误横幅），用一条常驻细滚动条说明还有内容，\n     而不是把某一行硬切在页脚上沿。gutter 稳定，状态切换时文字不会左右跳。 */\n  scrollbar-width: thin;\n  scrollbar-color: color-mix(in oklab, var(--ofs-ink-4) 72%, transparent) transparent;\n  scrollbar-gutter: stable;\n}\n\n/* ── 微调来源与新建创作 ────────────────────────────────────── */\n/* 面板顶部一条轻量状态行：左侧「正在微调：某张作品」，右侧「新建创作」重置入口。 */\n.ofs-tuning {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 0 15px 10px;\n}\n\n.ofs-tuning.is-idle {\n  justify-content: flex-end;\n}\n\n.ofs-tuning-source {\n  min-width: 0;\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.4;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n/* 阶段十五 A1：有未提交草稿时，状态行换成琥珀色的草稿提示 + 「还原原图」轻量按钮。 */\n.ofs-tuning.is-draft .ofs-tuning-source {\n  color: var(--ofs-warn);\n}\n\n.ofs-tuning-restore {\n  appearance: none;\n  flex: 0 0 auto;\n  height: 22px;\n  padding: 0 9px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 34%, transparent);\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-warn);\n  font-family: var(--ofs-font);\n  font-size: 11px;\n  line-height: 1;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-tuning-restore:hover {\n  border-color: color-mix(in oklab, var(--ofs-warn) 58%, transparent);\n  background: var(--ofs-warn-soft);\n}\n\n.ofs-tuning-restore:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n/* ── 分区 ───────────────────────────────────────────────────── */\n.ofs-fieldset {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding: 8px 0;\n}\n\n.ofs-fieldset:first-child {\n  padding-top: 2px;\n}\n\n.ofs-fieldset + .ofs-fieldset {\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-fieldset-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-fieldset-head h3 {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n/* ── 提示词输入 ─────────────────────────────────────────────── */\n.ofs-composer {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  padding: 10px 10px 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-sunken) 100%);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: 0 0 0 3px rgb(20 20 22 / 10%);\n}\n\n.ofs-composer-input {\n  width: 100%;\n  min-height: 60px;\n  resize: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  line-height: 1.62;\n}\n\n.ofs-composer-input:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-composer-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-composer-foot {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-counter {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-text-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  padding: 3px 7px;\n  border: 0;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transition: background-color 150ms ease;\n}\n\n.ofs-text-action:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-text-action:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* ── 建议 chips ─────────────────────────────────────────────── */\n/* 5 个灵感示例要在 330px 里排成一行：只用缩小内边距与间距换行，不缩小字号。 */\n.ofs-suggestions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-suggestion {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  max-width: 100%;\n  height: 24px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-suggestion:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-suggestion.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n}\n\n/* ── 润色建议 ───────────────────────────────────────────────── */\n.ofs-refine-head,\n.ofs-refine-dim {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-refine {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 9px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-sunken);\n}\n\n.ofs-refine-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  color: var(--ofs-ink-2);\n  font-weight: 600;\n}\n\n/* 头部右侧：来源说明 + 收起/展开，弱化处理，不与标题抢层级。 */\n.ofs-refine-head-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  min-width: 0;\n}\n\n.ofs-refine-toggle {\n  padding: 2px 4px;\n  font-size: 11px;\n  font-weight: 550;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-refine-toggle:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n.ofs-refine-group {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n/* ── 画面比例 ───────────────────────────────────────────────── */\n.ofs-ratio-row {\n  display: flex;\n  gap: 8px;\n}\n\n.ofs-ratio {\n  appearance: none;\n  flex: 1 1 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 5px;\n  padding: 8px 0 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-3);\n  cursor: pointer;\n  transition:\n    border-color 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-ratio:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-ratio.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-ratio-glyph {\n  display: block;\n  border: 1.5px solid currentColor;\n  border-radius: 3px;\n}\n\n.ofs-ratio-glyph--1-1 { width: 19px; height: 19px; }\n.ofs-ratio-glyph--16-9 { width: 25px; height: 14px; }\n.ofs-ratio-glyph--9-16 { width: 14px; height: 25px; }\n.ofs-ratio-glyph--4-3 { width: 22px; height: 17px; }\n.ofs-ratio-glyph--3-4 { width: 17px; height: 22px; }\n\n.ofs-ratio-label {\n  font-size: 11px;\n  font-weight: 550;\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 高级设置行 ─────────────────────────────────────────────── */\n.ofs-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-row {\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  overflow: hidden;\n  transition: border-color 160ms ease;\n}\n\n.ofs-row.is-open,\n.ofs-row:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-row-head {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  padding: 9px 12px;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n}\n\n.ofs-row-toggle {\n  appearance: none;\n  flex: 1 1 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  min-width: 0;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-row-head:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-chevron {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-4);\n  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-chevron.is-open {\n  transform: rotate(180deg);\n}\n\n.ofs-row-textarea {\n  display: block;\n  width: calc(100% - 20px);\n  min-height: 64px;\n  margin: 0 10px 10px;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-grid2 {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 8px;\n  padding: 0 10px 10px;\n}\n\n.ofs-field {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ofs-field > span {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field-label {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n/* 种子字段占满两列：输入框与「恢复随机」并排 */\n.ofs-field--wide {\n  grid-column: 1 / -1;\n}\n\n.ofs-seed-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-seed-row input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ofs-seed-reset {\n  flex: 0 0 auto;\n  padding: 2px 4px;\n  font-size: 11px;\n  font-weight: 550;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-seed-reset:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n.ofs-field input,\n.ofs-field select,\n.ofs-size-custom-field input {\n  width: 100%;\n  height: 30px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-field input:focus-visible,\n.ofs-field select:focus-visible,\n.ofs-size-custom-field input:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n/* 步数按模型分治：连续滑块与档位刻度覆盖通用 .ofs-field input 盒子样式 */\n.ofs-step-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-step-readout {\n  font-size: 11px;\n  font-weight: 600;\n  color: var(--ofs-accent);\n}\n\n.ofs-step-readout.is-fixed {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field input.ofs-step-slider {\n  height: 18px;\n  padding: 0;\n  border: none;\n  background: transparent;\n  box-shadow: none;\n  accent-color: var(--ofs-accent);\n  cursor: pointer;\n}\n\n.ofs-field input.ofs-step-slider:disabled {\n  opacity: 0.55;\n  cursor: default;\n}\n\n.ofs-step-ticks {\n  display: grid;\n  grid-template-columns: repeat(3, minmax(0, 1fr));\n  gap: 4px;\n}\n\n.ofs-step-tick {\n  appearance: none;\n  padding: 2px 4px;\n  border: 1px solid transparent;\n  border-radius: 6px;\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 500;\n  text-align: center;\n  cursor: pointer;\n  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;\n}\n\n.ofs-step-tick:hover {\n  color: var(--ofs-ink);\n  background: var(--ofs-card);\n}\n\n.ofs-step-tick.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  font-weight: 600;\n}\n\n/* ── 底部生成：张数分段 / 主按钮 / 规格摘要 ───────────────────── */\n.ofs-qty-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ofs-qty-label {\n  flex: 0 0 auto;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-qty {\n  flex: 1 1 auto;\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 4px;\n}\n\n.ofs-qty-option {\n  appearance: none;\n  height: 28px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-qty-option:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-qty-option.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: inset 0 0 0 1px var(--ofs-accent);\n}\n\n/* 规格摘要：尺寸 · 比例 · 张数（有参考图补一项），等宽数字不抖动 */\n.ofs-spec-summary {\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n/* ── 底部生成 ───────────────────────────────────────────────── */\n.ofs-panel-foot {\n  position: relative;\n  z-index: 1;\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding: 10px 15px 12px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card);\n  box-shadow: 0 -10px 16px -16px rgb(16 16 20 / 16%);\n}\n\n.ofs-generate {\n  position: relative;\n  overflow: hidden;\n  width: 100%;\n  height: 42px;\n  border-radius: 14px;\n  font-size: 13.5px;\n  letter-spacing: 0.02em;\n}\n\n/* 主操作上的一道扫光：光从相纸表面扫过去，只出现在悬停与提交中 */\n.ofs-generate::after {\n  content: '';\n  position: absolute;\n  inset: -34% -40%;\n  background: linear-gradient(102deg, transparent 42%, rgb(255 255 255 / 17%) 50%, transparent 58%);\n  opacity: 0;\n  transform: translateX(-72%);\n  pointer-events: none;\n}\n\n.ofs-generate:hover:not(:disabled)::after {\n  animation: ofs-light-sweep 820ms cubic-bezier(0.3, 0.8, 0.35, 1) 1;\n}\n\n.ofs-generate.is-busy::after {\n  animation: ofs-light-sweep 2600ms cubic-bezier(0.45, 0, 0.55, 1) infinite;\n}\n\n@keyframes ofs-light-sweep {\n  from {\n    opacity: 0;\n    transform: translateX(-72%);\n  }\n  16% {\n    opacity: 1;\n  }\n  to {\n    opacity: 0;\n    transform: translateX(72%);\n  }\n}\n\n.ofs-hint {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  text-align: center;\n}\n\n/* ── 提示词动作（英译 / 润色并列，实心操作仍只有底部生成） ─────── */\n.ofs-composer-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n/* 英译是次级动作：默认用静色，悬停或含中文建议翻译时提到强调色，不另占一行说明。 */\n.ofs-translate-action {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-translate-action.is-suggested {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-translate-action:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n/* ── 画面设置：画幅比例 / 自定义宽高两段同构 ───────────────────── */\n.ofs-frame-group {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ofs-frame-label {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n/* 标题栏右侧的实时读数：等宽数字，位数变化时不左右跳动 */\n.ofs-frame-readout {\n  flex: 0 0 auto;\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n/* 高级设置折叠态的读数摘要：一眼看清将用什么参数生成 */\n.ofs-row-readout {\n  flex: 0 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n/* 紧凑一行两列：宽 [1024] × 高 [1024]（不复用带卡片内边距的 .ofs-grid2） */\n.ofs-size-custom {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-size-custom-field {\n  display: flex;\n  flex: 1 1 0;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-size-custom-field > span {\n  flex: 0 0 auto;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-size-custom-field input {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-size-custom-times {\n  flex: 0 0 auto;\n  color: var(--ofs-ink-4);\n  font-size: 11px;\n}\n\n/* ── 自定义宽高（默认折叠，按需展开精调） ────────────────────── */\n.ofs-custom-toggle {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-custom-toggle:hover {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-custom-body {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding-top: 2px;\n}\n\n.ofs-link {\n  appearance: none;\n  margin-left: 6px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: inherit;\n  cursor: pointer;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}\n\n/* 主表单模型卡：专用局部重绘预设标记为「仅图片工具」且不可选（决策 D3）。\n * 样式放在面板样式表里，不占 model-picker.css（主表单容器随面板一起加载）。 */\n.ofs-model-option[aria-disabled='true'] {\n  opacity: 0.55;\n  cursor: default;\n}\n\n.ofs-model-option[aria-disabled='true']:hover {\n  border-color: var(--ofs-sunken-border);\n}\n\n.ofs-model-lang.is-tool-only {\n  border-color: var(--ofs-warn-border, #e6c9a8);\n  background: var(--ofs-warn-soft, #f7f0e4);\n  color: var(--ofs-warn, #a96a18);\n}\n\n/* ── 矮窗口（≤ 860px 高）─────────────────────────────────────────\n * 面板高度被压缩时按一档收紧内部留白与控件高度，让「高级设置」这一行仍然完整落在\n * 可视区（1440×800 / 1280×800 等笔记本窗口）。只改高度相关的间距，不改字号。 */\n@media (max-height: 860px) {\n  .ofs-panel-head {\n    padding: 9px 14px 6px;\n  }\n\n  .ofs-fieldset {\n    padding: 5px 0;\n  }\n\n  .ofs-composer-input {\n    min-height: 48px;\n  }\n\n  .ofs-ratio {\n    padding: 5px 0 4px;\n  }\n\n  .ofs-panel-scroll {\n    padding-bottom: 8px;\n  }\n\n  .ofs-qty-option {\n    height: 26px;\n  }\n\n  .ofs-panel-foot {\n    gap: 3px;\n    padding: 7px 15px 8px;\n  }\n\n  .ofs-generate {\n    height: 40px;\n  }\n}\n";
 
 // src/styles/stage.css
-var stage_default = "/*\n * 画面预览：光桌上的相纸。\n *\n * 舞台（.ofs-figure）不是又一张白卡，而是一张下凹的光桌：中性灰表面、顶部一层\n * 柔光、发丝描边、内阴影。图落在桌上时是一张相纸（11px 纸边 + 偏移柔影），\n * 等待出图时桌上只有一只按当前比例画出的取景框和四角裁切标记。\n *\n * 相纸与取景框的尺寸都用容器单位算（cqw / cqh），因为「按比例装进剩余空间」\n * 用百分比 + aspect-ratio 在非替换元素上收不回宽度（实测 1:1 会变成 526×326）。\n *\n * 深色值在 tokens.css 与 tools/preview.mjs 的 DARK_TOKENS 里各有一份，改要同步。\n */\n\n.ofs-stage {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n/* figure 是浏览器默认带 1em 40px 外边距的元素；舞台的尺寸完全由容器单位算，\n   这条外边距会让「出图后」的相纸比「空态取景框」小一圈，必须归零。 */\n.ofs-figure {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  margin: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(76% 58% at 50% 34%, var(--ofs-mat-lit) 0%, transparent 72%),\n    var(--ofs-mat);\n  box-shadow: var(--ofs-mat-inner);\n  overflow: hidden;\n  /* 相纸 / 取景框的容器查询基准：cqw 是这块光桌的内容盒宽度 */\n  container-type: size;\n}\n\n/* ── 相纸 ───────────────────────────────────────────────────── */\n.ofs-print {\n  appearance: none;\n  display: block;\n  /* 比例来自远端下发的图片像素；环形纸边靠阴影画，不占布局 */\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-print-r, 1)));\n  aspect-ratio: var(--ofs-print-r, 1);\n  padding: 0;\n  border: 0;\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  cursor: zoom-in;\n  transition:\n    box-shadow 220ms ease,\n    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-print:hover {\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow-hover);\n  transform: translateY(-2px);\n}\n\n.ofs-print:focus-visible {\n  outline: none;\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 14px var(--ofs-accent),\n    var(--ofs-print-shadow);\n}\n\n.ofs-image {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  border-radius: 3px;\n}\n\n/*\n * 落定：新出的图从潜影显到清晰，只播一次。\n * fill-mode 用 backwards——结束时回到基础样式，悬停抬升才不会被动画终帧钉住。\n */\n.ofs-print.is-developing {\n  animation: ofs-paper-settle 720ms cubic-bezier(0.22, 1, 0.36, 1) backwards;\n}\n\n.ofs-print.is-developing .ofs-image {\n  animation: ofs-develop 760ms cubic-bezier(0.3, 0.9, 0.3, 1) backwards;\n}\n\n@keyframes ofs-paper-settle {\n  from {\n    opacity: 0.42;\n    transform: translateY(10px) scale(0.99);\n  }\n  55% {\n    opacity: 1;\n  }\n  to {\n    opacity: 1;\n    transform: none;\n  }\n}\n\n@keyframes ofs-develop {\n  from {\n    filter: blur(18px) grayscale(1) contrast(0.5) brightness(1.22);\n  }\n  55% {\n    filter: blur(7px) grayscale(0.75) contrast(0.82) brightness(1.08);\n  }\n  to {\n    filter: none;\n  }\n}\n\n/* ── 浮动工具 ───────────────────────────────────────────────── */\n/* 工具组贴住相纸自身的右上角（而不是光桌角）：任何画幅下都不会骑在纸边上下不来。 */\n.ofs-print-slot {\n  position: relative;\n  display: flex;\n  flex: 0 0 auto;\n  max-width: 100%;\n}\n\n.ofs-figure-tools {\n  position: absolute;\n  top: 10px;\n  right: 10px;\n  z-index: 2;\n  display: flex;\n  gap: 6px;\n}\n\n.ofs-glass-btn {\n  appearance: none;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: 11px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 68%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  color: var(--ofs-ink-2);\n  cursor: pointer;\n  transition:\n    color 150ms ease,\n    background-color 150ms ease,\n    border-color 150ms ease,\n    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-glass-btn:hover {\n  color: var(--ofs-accent);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-glass-btn:active {\n  transform: scale(0.95);\n}\n\n.ofs-glass-btn.is-on {\n  color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n/* ── 等待出图：一只按比例画出的取景框 ───────────────────────── */\n/*\n * 空态与等待出图时，桌上是一张还没曝光的空白相纸：比例跟当前画幅走，\n * 出图时同一位置换成显影完成的相纸——所以纸边、投影与 .ofs-print 同一套材质。\n * 外框负责按比例定尺寸（裁切标记贴它的四角），内框负责裁掉溢出的内容。\n */\n.ofs-frame {\n  position: relative;\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-frame-r, 1)));\n  aspect-ratio: var(--ofs-frame-r, 1);\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 1px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  animation: ofs-frame-in 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;\n}\n\n.ofs-frame-body {\n  position: absolute;\n  inset: 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  padding: 20px 22px;\n  border-radius: 3px;\n  overflow: hidden;\n}\n\n@keyframes ofs-frame-in {\n  from {\n    opacity: 0;\n    transform: scale(0.994);\n  }\n  to {\n    opacity: 1;\n    transform: none;\n  }\n}\n\n/* 四角裁切标记：纸上要被框住的那块区域 */\n.ofs-marks {\n  position: absolute;\n  inset: -12px;\n  pointer-events: none;\n}\n\n.ofs-marks span {\n  position: absolute;\n  width: 15px;\n  height: 15px;\n  border: 0 solid var(--ofs-mark);\n}\n\n.ofs-marks span:nth-child(1) {\n  top: 0;\n  left: 0;\n  border-top-width: 1px;\n  border-left-width: 1px;\n}\n\n.ofs-marks span:nth-child(2) {\n  top: 0;\n  right: 0;\n  border-top-width: 1px;\n  border-right-width: 1px;\n}\n\n.ofs-marks span:nth-child(3) {\n  bottom: 0;\n  left: 0;\n  border-bottom-width: 1px;\n  border-left-width: 1px;\n}\n\n.ofs-marks span:nth-child(4) {\n  bottom: 0;\n  right: 0;\n  border-bottom-width: 1px;\n  border-right-width: 1px;\n}\n\n/* ── 进度胶囊 ───────────────────────────────────────────────── */\n.ofs-stage-progress {\n  position: absolute;\n  left: 50%;\n  bottom: 16px;\n  z-index: 2;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  padding: 7px 13px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 74%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  transform: translateX(-50%);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  white-space: nowrap;\n}\n\n.ofs-progress-label {\n  font-variant-numeric: tabular-nums;\n}\n\n/* 还没有图时，胶囊落在这只空取景框的正中：像正在曝光的那一格。 */\n.ofs-stage-progress.is-inside {\n  bottom: 50%;\n  transform: translate(-50%, 50%);\n}\n\n/* 取景框里已有引导文案时，胶囊排进文案流里（标题 → 说明 → 进度），不再浮层压字。 */\n.ofs-stage-progress.is-flow {\n  position: static;\n  margin-top: 3px;\n  transform: none;\n}\n\n.ofs-shimmer {\n  display: block;\n  width: 54px;\n  height: 4px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(\n    90deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 70%, transparent) 50%,\n    transparent 100%\n  );\n  background-size: 220% 100%;\n  animation: ofs-shimmer 1.5s linear infinite;\n}\n\n/* ── 图片下的信息与动作 ─────────────────────────────────────── */\n.ofs-stage-foot {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 16px;\n  padding: 0 4px;\n  min-width: 0;\n}\n\n.ofs-stage-prompt {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n/* 题注按印相室的标签写：小一号、拉开字距、齐宽数字 */\n.ofs-stage-meta {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 11px;\n  font-weight: 500;\n  letter-spacing: 0.07em;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n.ofs-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-dock-button {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 30px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-dock-button:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-dock-button.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* 续绘闭环的主入口：以此结果继续重绘，强调一档但不抢生成按钮。 */\n/* ── 空态 ───────────────────────────────────────────────────── */\n.ofs-figure--empty {\n  background:\n    radial-gradient(64% 54% at 50% 40%, var(--ofs-mat-lit) 0%, transparent 76%),\n    var(--ofs-mat);\n}\n\n.ofs-empty-card {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 9px;\n  width: 100%;\n  max-width: 400px;\n  text-align: center;\n}\n\n.ofs-empty-title {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n}\n\n.ofs-examples {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: center;\n  gap: 6px;\n  margin-top: 4px;\n}\n\n.ofs-examples-label {\n  width: 100%;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-example {\n  appearance: none;\n  padding: 5px 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* 曝光单：这条桌子上的机器大概多久出一张，先给个准话。\n   它落在纸面下沿的留白里（像印相纸边的标注），不再和居中引导文案挤成一团。 */\n.ofs-exposure {\n  position: absolute;\n  left: 44px;\n  right: 44px;\n  bottom: 34px;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  margin: 0;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  letter-spacing: 0.04em;\n  white-space: nowrap;\n}\n\n.ofs-exposure-rule {\n  flex: 1 1 auto;\n  height: 1px;\n  background: var(--ofs-mark);\n}\n\n/*\n * 纸上的辅助文字：纸面比卡片亮一档，固定用 ink-3 在深色下只有 4.3:1。\n * 这里按墨色与纸色混合取一档「纸面次级文字色」，浅深两套主题各自都 ≥ 4.5:1。\n */\n.ofs-frame .ofs-muted,\n.ofs-frame .ofs-examples-label,\n.ofs-frame .ofs-exposure {\n  color: color-mix(in oklab, var(--ofs-ink) 62%, var(--ofs-print-paper));\n}\n\n/* ── 放大层 ─────────────────────────────────────────────────── */\n.ofs-lightbox {\n  position: absolute;\n  inset: -14px;\n  z-index: 80;\n  display: grid;\n  place-items: center;\n  padding: 3vw;\n  background: rgb(16 16 18 / 72%);\n  backdrop-filter: blur(16px);\n  -webkit-backdrop-filter: blur(16px);\n  animation: ofs-fade-in 180ms ease;\n}\n\n.ofs-lightbox img {\n  max-width: 94%;\n  max-height: 92%;\n  border-radius: 12px;\n  box-shadow: 0 40px 90px -30px rgb(0 0 0 / 70%);\n}\n\n.ofs-lightbox-close {\n  position: absolute;\n  top: 18px;\n  right: 18px;\n  display: grid;\n  place-items: center;\n  width: 36px;\n  height: 36px;\n  border: 1px solid rgb(255 255 255 / 26%);\n  border-radius: 11px;\n  background: rgb(255 255 255 / 12%);\n  color: rgb(255 255 255 / 88%);\n  cursor: pointer;\n}\n\n.ofs-lightbox-close:hover {\n  background: rgb(255 255 255 / 20%);\n  color: #fff;\n}\n\n/* 大图预览底部的主操作：以此为参考图重绘 */\n.ofs-lightbox-action {\n  position: absolute;\n  bottom: 26px;\n  left: 50%;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 36px;\n  padding: 0 16px;\n  border: 1px solid rgb(255 255 255 / 30%);\n  border-radius: var(--ofs-r-pill);\n  background: rgb(20 20 22 / 66%);\n  color: #fff;\n  font-size: 12.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transform: translateX(-50%);\n  backdrop-filter: blur(8px);\n  -webkit-backdrop-filter: blur(8px);\n}\n\n.ofs-lightbox-action:hover {\n  background: rgb(20 20 22 / 84%);\n}\n\n/* ── 局部重绘：涂抹蒙版 ─────────────────────────────────────── */\n/*\n * 极简光桌布局：\n *  - 光桌内绝大部分空间留给画布本身（与正常预览 .ofs-print 近乎等大），不因表单挤压缩小；\n *  - 左上角轻胶囊显示「局部重绘 · 已涂抹 X%」，右上角 `?` 胶囊悬停展开操作提示；\n *  - 画布正下方紧贴一条紧凑毛玻璃画笔胶囊；提交控件统一落在光桌外下方的 .ofs-tool-bar。\n */\n.ofs-mask-editor {\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 10px;\n  width: 100%;\n  height: 100%;\n  padding: 12px 14px 10px;\n  overflow: hidden;\n}\n\n.ofs-mask-head {\n  position: absolute;\n  top: 12px;\n  left: 14px;\n  z-index: 5;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n  padding: 5px 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 86%, transparent);\n  backdrop-filter: blur(12px);\n  -webkit-backdrop-filter: blur(12px);\n  box-shadow: var(--ofs-shadow-card);\n  pointer-events: none;\n}\n\n.ofs-mask-title {\n  font-size: 11.5px;\n  font-weight: 600;\n  color: var(--ofs-ink);\n}\n\n.ofs-mask-coverage {\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-mask-zoom {\n  appearance: none;\n  pointer-events: auto;\n  padding: 1px 7px;\n  border: 1px solid var(--ofs-accent-soft-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  font-size: 10.5px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n}\n\n.ofs-mask-zoom:hover {\n  border-color: var(--ofs-accent);\n}\n\n/* 右上角提示胶囊：平时只占一个圆按钮，hover / 键盘聚焦时向下展开说明浮层。 */\n.ofs-mask-help {\n  position: absolute;\n  top: 12px;\n  right: 14px;\n  z-index: 6;\n}\n\n.ofs-mask-help-btn {\n  position: relative;\n  font-size: 13px;\n  font-weight: 650;\n}\n\n.ofs-mask-help.is-warn .ofs-mask-help-btn::after {\n  content: \"\";\n  position: absolute;\n  top: 5px;\n  right: 5px;\n  width: 6px;\n  height: 6px;\n  border-radius: 50%;\n  background: var(--ofs-warn, #b45309);\n}\n\n.ofs-mask-tips {\n  position: absolute;\n  top: calc(100% + 6px);\n  right: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  width: min(320px, 72vw);\n  padding: 10px 12px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-md);\n  background: color-mix(in oklab, var(--ofs-card-solid) 96%, transparent);\n  box-shadow: var(--ofs-shadow-lift);\n  opacity: 0;\n  pointer-events: none;\n  transform: translateY(-4px);\n  transition:\n    opacity 150ms ease,\n    transform 150ms ease;\n}\n\n.ofs-mask-help:hover .ofs-mask-tips,\n.ofs-mask-help:focus-within .ofs-mask-tips {\n  opacity: 1;\n  pointer-events: auto;\n  transform: translateY(0);\n}\n\n.ofs-mask-shortcuts {\n  margin-top: 4px;\n  padding-top: 6px;\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-mask-shortcuts-title {\n  display: block;\n  margin-bottom: 4px;\n  font-size: 10.5px;\n  font-weight: 600;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-mask-shortcuts-list {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 3px 10px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n/* 缩放与平移裁切视口：占满工具胶囊之上的全部光桌，防止放大后的画布遮挡底部工具条。 */\n.ofs-mask-viewport {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 100%;\n  overflow: hidden;\n  container-type: size;\n}\n\n/*\n * 画布外框：按 .ofs-mask-viewport 的宽高自适应到最大尺寸（不再受 560px 限制）。\n */\n.ofs-mask-stage {\n  position: relative;\n  flex: 0 0 auto;\n  width: min(\n    calc(100cqw - 28px),\n    max(160px, calc((100cqh - 22px) * var(--ofs-mask-r, 1)))\n  );\n  aspect-ratio: var(--ofs-mask-r, 1);\n  border-radius: 4px;\n  overflow: hidden;\n  background: #000;\n  transform-origin: center center;\n  box-shadow:\n    0 0 0 8px var(--ofs-print-paper),\n    0 0 0 9px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n}\n\n.ofs-mask-stage.is-panning .ofs-mask-canvas {\n  cursor: grab;\n}\n\n.ofs-mask-stage.is-panning-active .ofs-mask-canvas {\n  cursor: grabbing;\n}\n\n/* 参考图按 fill 铺满画布：导出的蒙版与参考图同比例，这里不能留 contain 的边。 */\n.ofs-mask-photo {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  object-fit: fill;\n  user-select: none;\n}\n\n/* 蒙版层是透明底白色笔迹，叠在参考图上用 screen 混色只提亮涂过的地方。 */\n.ofs-mask-canvas {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  touch-action: none;\n  cursor: crosshair;\n  mix-blend-mode: screen;\n  opacity: 0.85;\n}\n\n/* 画笔光标圈：left / top / width / height 由指针或键盘移动时直接写内联样式。 */\n.ofs-mask-cursor {\n  position: absolute;\n  border: 1px solid var(--ofs-accent);\n  border-radius: 50%;\n  transform: translate(-50%, -50%);\n  pointer-events: none;\n  display: none;\n}\n\n/* 画笔工具条：紧贴画布下方的圆角毛玻璃胶囊，不抢画面；在常见窗口宽度下尽量保持单行。 */\n.ofs-mask-tools {\n  flex: 0 0 auto;\n  display: inline-flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: center;\n  gap: 2px;\n  max-width: 100%;\n  padding: 2px 6px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 92%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n.ofs-mask-tools .ofs-dock-button {\n  padding: 0 9px;\n  border-color: transparent;\n  background: transparent;\n  box-shadow: none;\n}\n\n.ofs-mask-tools .ofs-dock-button:hover {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-mask-tools .ofs-dock-button.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n}\n\n/* 画笔大小：滑块与工具栏同高、宽度紧凑，拖动时不带着整行抖动。 */\n.ofs-mask-brush {\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  height: 44px;\n  padding: 0 6px 0 6px;\n  font-size: 11.5px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-mask-brush b {\n  min-width: 18px;\n  font-variant-numeric: tabular-nums;\n  text-align: right;\n}\n\n.ofs-mask-range {\n  width: 64px;\n  height: 44px;\n  accent-color: var(--ofs-accent);\n}\n\n.ofs-mask-hint,\n.ofs-mask-warn {\n  margin: 0;\n  text-align: left;\n}\n\n.ofs-mask-guide,\n.ofs-mask-fast {\n  margin: 0;\n  line-height: 1.5;\n  text-align: left;\n}\n\n.ofs-mask-fast {\n  color: var(--ofs-warn, #b45309);\n}\n\n/* ── 图片工具：动作坞分组 ─────────────────────────────────────── */\n.ofs-dock-group {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-dock-group[data-group='reuse'] {\n  margin-left: auto;\n}\n\n/* 草稿恢复：继续编辑是编辑态之外的唯一入口，强调一档并用灰色小字标出改动摘要。 */\n.ofs-dock-resume,\n.ofs-dock-close {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-dock-draft {\n  padding-left: 2px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 图片工具：舞台下方单行紧凑提交条 ──────────────────────────── */\n/*\n * 局部涂抹画布与整图重绘条共用这一条，直接落在光桌下方替代动作坞，\n * 不占光桌内部高度。主行单行横排，窄屏温和换行；覆盖率 / 拦截状态收在下方细注。\n */\n.ofs-tool-bar {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  width: 100%;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: color-mix(in oklab, var(--ofs-card) 90%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n.ofs-tool-row {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n  width: 100%;\n}\n\n.ofs-tool-bar-head {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-tool-name {\n  display: none;\n}\n\n.ofs-tool-preset {\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-tool-preset-label {\n  display: none;\n}\n\n.ofs-tool-preset-name {\n  max-width: 150px;\n  overflow: hidden;\n  padding: 0 8px;\n  height: 34px;\n  line-height: 32px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-sm);\n  background: var(--ofs-sunken);\n  font-size: 11.5px;\n  color: var(--ofs-ink-2);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-tool-select {\n  max-width: 138px;\n  height: 34px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-sm);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.ofs-tool-prompt {\n  flex: 1 1 120px;\n  display: flex;\n  align-items: center;\n  min-width: 0;\n}\n\n.ofs-tool-label {\n  flex: 0 0 auto;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-tool-prompt .ofs-tool-label {\n  display: none;\n}\n\n.ofs-tool-prompt-input {\n  width: 100%;\n  height: 34px;\n  min-height: 34px;\n  max-height: 76px;\n  padding: 7px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-sm);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font: inherit;\n  font-size: 12.5px;\n  line-height: 1.4;\n  resize: none;\n}\n\n.ofs-tool-prompt-input::placeholder {\n  color: var(--ofs-ink-4);\n}\n\n.ofs-tool-prompt-input:focus-visible {\n  border-color: transparent;\n  outline: 2px solid var(--ofs-accent);\n  outline-offset: 1px;\n}\n\n.ofs-tool-strength {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  padding: 0 7px;\n  height: 34px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-sm);\n  background: var(--ofs-sunken);\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-tool-range {\n  width: 60px;\n  height: 24px;\n  accent-color: var(--ofs-accent);\n}\n\n.ofs-tool-readout {\n  min-width: 30px;\n  color: var(--ofs-ink);\n  font-size: 11.5px;\n  font-variant-numeric: tabular-nums;\n  text-align: right;\n}\n\n.ofs-tool-actions {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-tool-submit {\n  height: 34px;\n  padding: 0 16px;\n  border-radius: var(--ofs-r-sm);\n}\n\n.ofs-tool-exit {\n  height: 34px;\n  padding: 0 12px;\n  border-radius: var(--ofs-r-sm);\n  border-color: color-mix(in oklab, var(--ofs-error) 34%, transparent);\n  background: var(--ofs-error-soft);\n  color: var(--ofs-error);\n}\n\n.ofs-tool-exit:hover:not(:disabled) {\n  border-color: var(--ofs-error);\n  background: color-mix(in oklab, var(--ofs-error) 14%, transparent);\n  color: var(--ofs-error);\n}\n\n.ofs-tool-meta {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 0 2px;\n}\n\n.ofs-tool-mask,\n.ofs-tool-blocked {\n  margin: 0;\n  text-align: left;\n  font-size: 11px;\n}\n\n.ofs-tool-blocked {\n  color: var(--ofs-warn, #b45309);\n}\n\n/* ── 图片工具：整图重绘条 ─────────────────────────────────────── */\n/*\n * 不切画布：上方沿用光桌质感与 .ofs-print 的容器单位尺寸，\n * 下方接同一条单行提交栏。\n */\n.ofs-inline-tool {\n  flex: 1 1 auto;\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 10px;\n  width: 100%;\n  min-height: 0;\n}\n\n.ofs-inline-stage {\n  position: relative;\n  flex: 1 1 auto;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 100%;\n  min-height: 0;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(76% 58% at 50% 34%, var(--ofs-mat-lit) 0%, transparent 72%),\n    var(--ofs-mat);\n  box-shadow: var(--ofs-mat-inner);\n  overflow: hidden;\n  container-type: size;\n}\n\n/* 这是预览而不是可放大的相纸按钮：不显示缩放光标。 */\n.ofs-inline-stage .ofs-print {\n  cursor: default;\n}\n\n/* ── 阶段十三：显式新建绘图态（模糊动态背景 + 取景框）────────────────── */\n\n.ofs-figure--draft {\n  overflow: hidden;\n  background:\n    radial-gradient(70% 58% at 50% 42%, var(--ofs-mat-lit) 0%, transparent 74%),\n    var(--ofs-mat);\n}\n\n/* 背景是几团缓慢漂移的柔光，表达「画布还在酝酿」；取景框保持静止，不干扰阅读。 */\n.ofs-draft-backdrop {\n  position: absolute;\n  inset: -12%;\n  z-index: 0;\n  pointer-events: none;\n}\n\n.ofs-draft-backdrop span {\n  position: absolute;\n  display: block;\n  border-radius: 50%;\n  filter: blur(46px);\n  opacity: 0.5;\n  background: color-mix(in oklab, var(--ofs-ink) 16%, transparent);\n  animation: ofs-draft-drift 18s ease-in-out infinite alternate;\n}\n\n.ofs-draft-backdrop span:nth-child(1) {\n  top: 8%;\n  left: 12%;\n  width: 46%;\n  height: 42%;\n}\n\n.ofs-draft-backdrop span:nth-child(2) {\n  right: 6%;\n  bottom: 10%;\n  width: 42%;\n  height: 46%;\n  animation-delay: -6s;\n  animation-duration: 22s;\n  background: color-mix(in oklab, var(--ofs-ink) 11%, transparent);\n}\n\n.ofs-draft-backdrop span:nth-child(3) {\n  top: 34%;\n  left: 42%;\n  width: 34%;\n  height: 32%;\n  animation-delay: -12s;\n  animation-duration: 26s;\n  background: color-mix(in oklab, var(--ofs-ink) 8%, transparent);\n}\n\n@keyframes ofs-draft-drift {\n  0% {\n    transform: translate3d(0, 0, 0) scale(1);\n  }\n  50% {\n    transform: translate3d(3%, -2.5%, 0) scale(1.06);\n  }\n  100% {\n    transform: translate3d(-2.5%, 3%, 0) scale(0.97);\n  }\n}\n\n/* 取景框：虚线纸边 + 透明底，和空舞台的实心相纸区分开。 */\n.ofs-frame.ofs-frame--draft {\n  z-index: 1;\n  border: 1px dashed color-mix(in oklab, var(--ofs-ink) 22%, transparent);\n  background: color-mix(in oklab, var(--ofs-card-solid) 42%, transparent);\n  box-shadow: none;\n}\n\n.ofs-frame.ofs-frame--draft .ofs-frame-body {\n  background: transparent;\n}\n\n.ofs-draft-blank .ofs-empty-title {\n  color: var(--ofs-ink);\n}\n\n.ofs-draft-blank .ofs-muted {\n  color: var(--ofs-ink-3);\n}\n\n/* 阶段十五 A1：点草稿卡恢复后，取景框注明这份草稿的来源作品。 */\n.ofs-draft-source {\n  margin: 0;\n  max-width: 30ch;\n  overflow: hidden;\n  color: var(--ofs-warn);\n  font-size: 11px;\n  line-height: 1.5;\n  text-align: center;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-draft-backdrop span {\n    animation: none;\n  }\n}\n";
+var stage_default = '/*\n * 画面预览：光桌上的相纸。\n *\n * 舞台（.ofs-figure）不是又一张白卡，而是一张下凹的光桌：中性灰表面、顶部一层\n * 柔光、发丝描边、内阴影。图落在桌上时是一张相纸（11px 纸边 + 偏移柔影），\n * 等待出图时桌上只有一只按当前比例画出的取景框和四角裁切标记。\n *\n * 相纸与取景框的尺寸都用容器单位算（cqw / cqh），因为「按比例装进剩余空间」\n * 用百分比 + aspect-ratio 在非替换元素上收不回宽度（实测 1:1 会变成 526×326）。\n *\n * 深色值在 tokens.css 与 tools/preview.mjs 的 DARK_TOKENS 里各有一份，改要同步。\n */\n\n.ofs-stage {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n/* figure 是浏览器默认带 1em 40px 外边距的元素；舞台的尺寸完全由容器单位算，\n   这条外边距会让「出图后」的相纸比「空态取景框」小一圈，必须归零。 */\n.ofs-figure {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  margin: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(76% 58% at 50% 34%, var(--ofs-mat-lit) 0%, transparent 72%),\n    var(--ofs-mat);\n  box-shadow: var(--ofs-mat-inner);\n  overflow: hidden;\n  /* 相纸 / 取景框的容器查询基准：cqw 是这块光桌的内容盒宽度 */\n  container-type: size;\n}\n\n/* ── 相纸 ───────────────────────────────────────────────────── */\n.ofs-print {\n  appearance: none;\n  display: block;\n  /* 比例来自远端下发的图片像素；环形纸边靠阴影画，不占布局 */\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-print-r, 1)));\n  aspect-ratio: var(--ofs-print-r, 1);\n  padding: 0;\n  border: 0;\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  cursor: zoom-in;\n  transition:\n    box-shadow 220ms ease,\n    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-print:hover {\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow-hover);\n  transform: translateY(-2px);\n}\n\n.ofs-print:focus-visible {\n  outline: none;\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 14px var(--ofs-accent),\n    var(--ofs-print-shadow);\n}\n\n.ofs-image {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  border-radius: 3px;\n}\n\n/*\n * 落定：新出的图从潜影显到清晰，只播一次。\n * fill-mode 用 backwards——结束时回到基础样式，悬停抬升才不会被动画终帧钉住。\n */\n.ofs-print.is-developing {\n  animation: ofs-paper-settle 720ms cubic-bezier(0.22, 1, 0.36, 1) backwards;\n}\n\n.ofs-print.is-developing .ofs-image {\n  animation: ofs-develop 760ms cubic-bezier(0.3, 0.9, 0.3, 1) backwards;\n}\n\n@keyframes ofs-paper-settle {\n  from {\n    opacity: 0.42;\n    transform: translateY(10px) scale(0.99);\n  }\n  55% {\n    opacity: 1;\n  }\n  to {\n    opacity: 1;\n    transform: none;\n  }\n}\n\n@keyframes ofs-develop {\n  from {\n    filter: blur(18px) grayscale(1) contrast(0.5) brightness(1.22);\n  }\n  55% {\n    filter: blur(7px) grayscale(0.75) contrast(0.82) brightness(1.08);\n  }\n  to {\n    filter: none;\n  }\n}\n\n/* ── 浮动工具 ───────────────────────────────────────────────── */\n/* 工具组贴住相纸自身的右上角（而不是光桌角）：任何画幅下都不会骑在纸边上下不来。 */\n.ofs-print-slot {\n  position: relative;\n  display: flex;\n  flex: 0 0 auto;\n  max-width: 100%;\n}\n\n.ofs-figure-tools {\n  position: absolute;\n  top: 10px;\n  right: 10px;\n  z-index: 2;\n  display: flex;\n  gap: 6px;\n}\n\n.ofs-glass-btn {\n  appearance: none;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: 11px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 68%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  color: var(--ofs-ink-2);\n  cursor: pointer;\n  transition:\n    color 150ms ease,\n    background-color 150ms ease,\n    border-color 150ms ease,\n    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-glass-btn:hover {\n  color: var(--ofs-accent);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-glass-btn:active {\n  transform: scale(0.95);\n}\n\n.ofs-glass-btn.is-on {\n  color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n/* ── 等待出图：一只按比例画出的取景框 ───────────────────────── */\n/*\n * 空态与等待出图时，桌上是一张还没曝光的空白相纸：比例跟当前画幅走，\n * 出图时同一位置换成显影完成的相纸——所以纸边、投影与 .ofs-print 同一套材质。\n * 外框负责按比例定尺寸（裁切标记贴它的四角），内框负责裁掉溢出的内容。\n */\n.ofs-frame {\n  position: relative;\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-frame-r, 1)));\n  aspect-ratio: var(--ofs-frame-r, 1);\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 1px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  animation: ofs-frame-in 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;\n}\n\n.ofs-frame-body {\n  position: absolute;\n  inset: 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  padding: 20px 22px;\n  border-radius: 3px;\n  overflow: hidden;\n}\n\n@keyframes ofs-frame-in {\n  from {\n    opacity: 0;\n    transform: scale(0.994);\n  }\n  to {\n    opacity: 1;\n    transform: none;\n  }\n}\n\n/* 四角裁切标记：纸上要被框住的那块区域 */\n.ofs-marks {\n  position: absolute;\n  inset: -12px;\n  pointer-events: none;\n}\n\n.ofs-marks span {\n  position: absolute;\n  width: 15px;\n  height: 15px;\n  border: 0 solid var(--ofs-mark);\n}\n\n.ofs-marks span:nth-child(1) {\n  top: 0;\n  left: 0;\n  border-top-width: 1px;\n  border-left-width: 1px;\n}\n\n.ofs-marks span:nth-child(2) {\n  top: 0;\n  right: 0;\n  border-top-width: 1px;\n  border-right-width: 1px;\n}\n\n.ofs-marks span:nth-child(3) {\n  bottom: 0;\n  left: 0;\n  border-bottom-width: 1px;\n  border-left-width: 1px;\n}\n\n.ofs-marks span:nth-child(4) {\n  bottom: 0;\n  right: 0;\n  border-bottom-width: 1px;\n  border-right-width: 1px;\n}\n\n/* ── 进度胶囊 ───────────────────────────────────────────────── */\n.ofs-stage-progress {\n  position: absolute;\n  left: 50%;\n  bottom: 16px;\n  z-index: 2;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  padding: 7px 13px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 74%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  transform: translateX(-50%);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  white-space: nowrap;\n}\n\n.ofs-progress-label {\n  font-variant-numeric: tabular-nums;\n}\n\n/* 还没有图时，胶囊落在这只空取景框的正中：像正在曝光的那一格。 */\n.ofs-stage-progress.is-inside {\n  bottom: 50%;\n  transform: translate(-50%, 50%);\n}\n\n/* 取景框里已有引导文案时，胶囊排进文案流里（标题 → 说明 → 进度），不再浮层压字。 */\n.ofs-stage-progress.is-flow {\n  position: static;\n  margin-top: 3px;\n  transform: none;\n}\n\n.ofs-shimmer {\n  display: block;\n  width: 54px;\n  height: 4px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(\n    90deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 70%, transparent) 50%,\n    transparent 100%\n  );\n  background-size: 220% 100%;\n  animation: ofs-shimmer 1.5s linear infinite;\n}\n\n/* ── 图片下的信息与动作 ─────────────────────────────────────── */\n.ofs-stage-foot {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 16px;\n  padding: 0 4px;\n  min-width: 0;\n}\n\n.ofs-stage-prompt {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n/* 题注按印相室的标签写：小一号、拉开字距、齐宽数字 */\n.ofs-stage-meta {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 11px;\n  font-weight: 500;\n  letter-spacing: 0.07em;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n.ofs-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-dock-button {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 30px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-dock-button:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-dock-button.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* 续绘闭环的主入口：以此结果继续重绘，强调一档但不抢生成按钮。 */\n/* ── 空态 ───────────────────────────────────────────────────── */\n.ofs-figure--empty {\n  background:\n    radial-gradient(64% 54% at 50% 40%, var(--ofs-mat-lit) 0%, transparent 76%),\n    var(--ofs-mat);\n}\n\n.ofs-empty-card {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 9px;\n  width: 100%;\n  max-width: 400px;\n  text-align: center;\n}\n\n.ofs-empty-title {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n}\n\n.ofs-examples {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: center;\n  gap: 6px;\n  margin-top: 4px;\n}\n\n.ofs-examples-label {\n  width: 100%;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-example {\n  appearance: none;\n  padding: 5px 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* 曝光单：这条桌子上的机器大概多久出一张，先给个准话。\n   它落在纸面下沿的留白里（像印相纸边的标注），不再和居中引导文案挤成一团。 */\n.ofs-exposure {\n  position: absolute;\n  left: 44px;\n  right: 44px;\n  bottom: 34px;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  margin: 0;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  letter-spacing: 0.04em;\n  white-space: nowrap;\n}\n\n.ofs-exposure-rule {\n  flex: 1 1 auto;\n  height: 1px;\n  background: var(--ofs-mark);\n}\n\n/*\n * 纸上的辅助文字：纸面比卡片亮一档，固定用 ink-3 在深色下只有 4.3:1。\n * 这里按墨色与纸色混合取一档「纸面次级文字色」，浅深两套主题各自都 ≥ 4.5:1。\n */\n.ofs-frame .ofs-muted,\n.ofs-frame .ofs-examples-label,\n.ofs-frame .ofs-exposure {\n  color: color-mix(in oklab, var(--ofs-ink) 62%, var(--ofs-print-paper));\n}\n\n/* ── 放大层 ─────────────────────────────────────────────────── */\n.ofs-lightbox {\n  position: absolute;\n  inset: -14px;\n  z-index: 80;\n  display: grid;\n  place-items: center;\n  padding: 3vw;\n  background: rgb(16 16 18 / 72%);\n  backdrop-filter: blur(16px);\n  -webkit-backdrop-filter: blur(16px);\n  animation: ofs-fade-in 180ms ease;\n}\n\n.ofs-lightbox img {\n  max-width: 94%;\n  max-height: 92%;\n  border-radius: 12px;\n  box-shadow: 0 40px 90px -30px rgb(0 0 0 / 70%);\n}\n\n.ofs-lightbox-close {\n  position: absolute;\n  top: 18px;\n  right: 18px;\n  display: grid;\n  place-items: center;\n  width: 36px;\n  height: 36px;\n  border: 1px solid rgb(255 255 255 / 26%);\n  border-radius: 11px;\n  background: rgb(255 255 255 / 12%);\n  color: rgb(255 255 255 / 88%);\n  cursor: pointer;\n}\n\n.ofs-lightbox-close:hover {\n  background: rgb(255 255 255 / 20%);\n  color: #fff;\n}\n\n/* 大图预览底部的主操作：以此为参考图重绘 */\n.ofs-lightbox-action {\n  position: absolute;\n  bottom: 26px;\n  left: 50%;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 36px;\n  padding: 0 16px;\n  border: 1px solid rgb(255 255 255 / 30%);\n  border-radius: var(--ofs-r-pill);\n  background: rgb(20 20 22 / 66%);\n  color: #fff;\n  font-size: 12.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transform: translateX(-50%);\n  backdrop-filter: blur(8px);\n  -webkit-backdrop-filter: blur(8px);\n}\n\n.ofs-lightbox-action:hover {\n  background: rgb(20 20 22 / 84%);\n}\n\n/* ── 局部重绘：涂抹蒙版 ─────────────────────────────────────── */\n/*\n * 极简光桌布局：\n *  - 光桌内绝大部分空间留给画布本身（与正常预览 .ofs-print 近乎等大），不因表单挤压缩小；\n *  - 左上角轻胶囊显示「局部重绘 · 已涂抹 X%」，右上角 `?` 胶囊悬停展开操作提示；\n *  - 画布正下方紧贴一条紧凑毛玻璃画笔胶囊；提交控件统一落在光桌外下方的 .ofs-tool-bar。\n */\n.ofs-mask-editor {\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 10px;\n  width: 100%;\n  height: 100%;\n  padding: 12px 14px 10px;\n  overflow: hidden;\n}\n\n.ofs-mask-head {\n  position: absolute;\n  top: 12px;\n  left: 14px;\n  z-index: 5;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n  padding: 5px 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 86%, transparent);\n  backdrop-filter: blur(12px);\n  -webkit-backdrop-filter: blur(12px);\n  box-shadow: var(--ofs-shadow-card);\n  pointer-events: none;\n}\n\n.ofs-mask-title {\n  font-size: 11.5px;\n  font-weight: 600;\n  color: var(--ofs-ink);\n}\n\n.ofs-mask-coverage {\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-mask-zoom {\n  appearance: none;\n  pointer-events: auto;\n  padding: 1px 7px;\n  border: 1px solid var(--ofs-accent-soft-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  font-size: 10.5px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n}\n\n.ofs-mask-zoom:hover {\n  border-color: var(--ofs-accent);\n}\n\n/* 右上角提示胶囊：平时只占一个圆按钮，hover / 键盘聚焦时向下展开说明浮层。 */\n.ofs-mask-help {\n  position: absolute;\n  top: 12px;\n  right: 14px;\n  z-index: 6;\n}\n\n.ofs-mask-help-btn {\n  position: relative;\n  font-size: 13px;\n  font-weight: 650;\n}\n\n.ofs-mask-help.is-warn .ofs-mask-help-btn::after {\n  content: "";\n  position: absolute;\n  top: 5px;\n  right: 5px;\n  width: 6px;\n  height: 6px;\n  border-radius: 50%;\n  background: var(--ofs-warn, #b45309);\n}\n\n.ofs-mask-tips {\n  position: absolute;\n  top: calc(100% + 6px);\n  right: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  width: min(320px, 72vw);\n  padding: 10px 12px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-md);\n  background: color-mix(in oklab, var(--ofs-card-solid) 96%, transparent);\n  box-shadow: var(--ofs-shadow-lift);\n  opacity: 0;\n  pointer-events: none;\n  transform: translateY(-4px);\n  transition:\n    opacity 150ms ease,\n    transform 150ms ease;\n}\n\n.ofs-mask-help:hover .ofs-mask-tips,\n.ofs-mask-help:focus-within .ofs-mask-tips {\n  opacity: 1;\n  pointer-events: auto;\n  transform: translateY(0);\n}\n\n.ofs-mask-shortcuts {\n  margin-top: 4px;\n  padding-top: 6px;\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-mask-shortcuts-title {\n  display: block;\n  margin-bottom: 4px;\n  font-size: 10.5px;\n  font-weight: 600;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-mask-shortcuts-list {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 3px 10px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n/* 缩放与平移裁切视口：占满工具胶囊之上的全部光桌，防止放大后的画布遮挡底部工具条。 */\n.ofs-mask-viewport {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 100%;\n  overflow: hidden;\n  container-type: size;\n}\n\n/*\n * 画布外框：按 .ofs-mask-viewport 的宽高自适应到最大尺寸（不再受 560px 限制）。\n */\n.ofs-mask-stage {\n  position: relative;\n  flex: 0 0 auto;\n  width: min(\n    calc(100cqw - 28px),\n    max(160px, calc((100cqh - 22px) * var(--ofs-mask-r, 1)))\n  );\n  aspect-ratio: var(--ofs-mask-r, 1);\n  border-radius: 4px;\n  overflow: hidden;\n  background: #000;\n  transform-origin: center center;\n  box-shadow:\n    0 0 0 8px var(--ofs-print-paper),\n    0 0 0 9px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n}\n\n.ofs-mask-stage.is-panning .ofs-mask-canvas {\n  cursor: grab;\n}\n\n.ofs-mask-stage.is-panning-active .ofs-mask-canvas {\n  cursor: grabbing;\n}\n\n/* 参考图按 fill 铺满画布：导出的蒙版与参考图同比例，这里不能留 contain 的边。 */\n.ofs-mask-photo {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  object-fit: fill;\n  user-select: none;\n}\n\n/* 蒙版层是透明底白色笔迹，叠在参考图上用 screen 混色只提亮涂过的地方。 */\n.ofs-mask-canvas {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  touch-action: none;\n  cursor: crosshair;\n  mix-blend-mode: screen;\n  opacity: 0.85;\n}\n\n/* 画笔光标圈：left / top / width / height 由指针或键盘移动时直接写内联样式。 */\n.ofs-mask-cursor {\n  position: absolute;\n  border: 1px solid var(--ofs-accent);\n  border-radius: 50%;\n  transform: translate(-50%, -50%);\n  pointer-events: none;\n  display: none;\n}\n\n/* 画笔工具条：紧贴画布下方的圆角毛玻璃胶囊，不抢画面；在常见窗口宽度下尽量保持单行。 */\n.ofs-mask-tools {\n  flex: 0 0 auto;\n  display: inline-flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: center;\n  gap: 2px;\n  max-width: 100%;\n  padding: 2px 6px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 92%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n.ofs-mask-tools .ofs-dock-button {\n  padding: 0 9px;\n  border-color: transparent;\n  background: transparent;\n  box-shadow: none;\n}\n\n.ofs-mask-tools .ofs-dock-button:hover {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-mask-tools .ofs-dock-button.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n}\n\n/* 画笔大小：滑块与工具栏同高、宽度紧凑，拖动时不带着整行抖动。 */\n.ofs-mask-brush {\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  height: 44px;\n  padding: 0 6px 0 6px;\n  font-size: 11.5px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-mask-brush b {\n  min-width: 18px;\n  font-variant-numeric: tabular-nums;\n  text-align: right;\n}\n\n.ofs-mask-range {\n  width: 64px;\n  height: 44px;\n  accent-color: var(--ofs-accent);\n}\n\n.ofs-mask-hint,\n.ofs-mask-warn {\n  margin: 0;\n  text-align: left;\n}\n\n.ofs-mask-guide,\n.ofs-mask-fast {\n  margin: 0;\n  line-height: 1.5;\n  text-align: left;\n}\n\n.ofs-mask-fast {\n  color: var(--ofs-warn, #b45309);\n}\n\n/* ── 图片工具：动作坞分组 ─────────────────────────────────────── */\n.ofs-dock-group {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-dock-group[data-group=\'reuse\'] {\n  margin-left: auto;\n}\n\n/* 草稿恢复：继续编辑是编辑态之外的唯一入口，强调一档并用灰色小字标出改动摘要。 */\n.ofs-dock-resume,\n.ofs-dock-close {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-dock-draft {\n  padding-left: 2px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 图片工具：舞台下方单行紧凑提交条 ──────────────────────────── */\n/*\n * 局部涂抹画布与整图重绘条共用这一条，直接落在光桌下方替代动作坞，\n * 不占光桌内部高度。主行单行横排，窄屏温和换行；覆盖率 / 拦截状态收在下方细注。\n */\n.ofs-tool-bar {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  width: 100%;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: color-mix(in oklab, var(--ofs-card) 90%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n.ofs-tool-row {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n  width: 100%;\n}\n\n.ofs-tool-bar-head {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-tool-name {\n  display: none;\n}\n\n.ofs-tool-preset {\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-tool-preset-label {\n  display: none;\n}\n\n.ofs-tool-preset-name {\n  max-width: 150px;\n  overflow: hidden;\n  padding: 0 8px;\n  height: 34px;\n  line-height: 32px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-sm);\n  background: var(--ofs-sunken);\n  font-size: 11.5px;\n  color: var(--ofs-ink-2);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-tool-select {\n  max-width: 138px;\n  height: 34px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-sm);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.ofs-tool-prompt {\n  flex: 1 1 120px;\n  display: flex;\n  align-items: center;\n  min-width: 0;\n}\n\n.ofs-tool-label {\n  flex: 0 0 auto;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-tool-prompt .ofs-tool-label {\n  display: none;\n}\n\n.ofs-tool-prompt-input {\n  width: 100%;\n  height: 34px;\n  min-height: 34px;\n  max-height: 76px;\n  padding: 7px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-sm);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font: inherit;\n  font-size: 12.5px;\n  line-height: 1.4;\n  resize: none;\n}\n\n.ofs-tool-prompt-input::placeholder {\n  color: var(--ofs-ink-4);\n}\n\n.ofs-tool-prompt-input:focus-visible {\n  border-color: transparent;\n  outline: 2px solid var(--ofs-accent);\n  outline-offset: 1px;\n}\n\n.ofs-tool-strength {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  padding: 0 7px;\n  height: 34px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-sm);\n  background: var(--ofs-sunken);\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-tool-range {\n  width: 60px;\n  height: 24px;\n  accent-color: var(--ofs-accent);\n}\n\n.ofs-tool-readout {\n  min-width: 30px;\n  color: var(--ofs-ink);\n  font-size: 11.5px;\n  font-variant-numeric: tabular-nums;\n  text-align: right;\n}\n\n.ofs-tool-actions {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-tool-submit {\n  height: 34px;\n  padding: 0 16px;\n  border-radius: var(--ofs-r-sm);\n}\n\n.ofs-tool-exit {\n  height: 34px;\n  padding: 0 12px;\n  border-radius: var(--ofs-r-sm);\n  border-color: color-mix(in oklab, var(--ofs-error) 34%, transparent);\n  background: var(--ofs-error-soft);\n  color: var(--ofs-error);\n}\n\n.ofs-tool-exit:hover:not(:disabled) {\n  border-color: var(--ofs-error);\n  background: color-mix(in oklab, var(--ofs-error) 14%, transparent);\n  color: var(--ofs-error);\n}\n\n.ofs-tool-meta {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 0 2px;\n}\n\n.ofs-tool-mask,\n.ofs-tool-blocked {\n  margin: 0;\n  text-align: left;\n  font-size: 11px;\n}\n\n.ofs-tool-blocked {\n  color: var(--ofs-warn, #b45309);\n}\n\n/* ── 图片工具：整图重绘条 ─────────────────────────────────────── */\n/*\n * 不切画布：上方沿用光桌质感与 .ofs-print 的容器单位尺寸，\n * 下方接同一条单行提交栏。\n */\n.ofs-inline-tool {\n  flex: 1 1 auto;\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 10px;\n  width: 100%;\n  min-height: 0;\n}\n\n.ofs-inline-stage {\n  position: relative;\n  flex: 1 1 auto;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 100%;\n  min-height: 0;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(76% 58% at 50% 34%, var(--ofs-mat-lit) 0%, transparent 72%),\n    var(--ofs-mat);\n  box-shadow: var(--ofs-mat-inner);\n  overflow: hidden;\n  container-type: size;\n}\n\n/* 这是预览而不是可放大的相纸按钮：不显示缩放光标。 */\n.ofs-inline-stage .ofs-print {\n  cursor: default;\n}\n\n/* ── 阶段十三：显式新建绘图态（模糊动态背景 + 取景框）────────────────── */\n\n.ofs-figure--draft {\n  overflow: hidden;\n  background:\n    radial-gradient(70% 58% at 50% 42%, var(--ofs-mat-lit) 0%, transparent 74%),\n    var(--ofs-mat);\n}\n\n/* 背景是几团缓慢漂移的柔光，表达「画布还在酝酿」；取景框保持静止，不干扰阅读。 */\n.ofs-draft-backdrop {\n  position: absolute;\n  inset: -12%;\n  z-index: 0;\n  pointer-events: none;\n}\n\n.ofs-draft-backdrop span {\n  position: absolute;\n  display: block;\n  border-radius: 50%;\n  filter: blur(46px);\n  opacity: 0.5;\n  background: color-mix(in oklab, var(--ofs-ink) 16%, transparent);\n  animation: ofs-draft-drift 18s ease-in-out infinite alternate;\n}\n\n.ofs-draft-backdrop span:nth-child(1) {\n  top: 8%;\n  left: 12%;\n  width: 46%;\n  height: 42%;\n}\n\n.ofs-draft-backdrop span:nth-child(2) {\n  right: 6%;\n  bottom: 10%;\n  width: 42%;\n  height: 46%;\n  animation-delay: -6s;\n  animation-duration: 22s;\n  background: color-mix(in oklab, var(--ofs-ink) 11%, transparent);\n}\n\n.ofs-draft-backdrop span:nth-child(3) {\n  top: 34%;\n  left: 42%;\n  width: 34%;\n  height: 32%;\n  animation-delay: -12s;\n  animation-duration: 26s;\n  background: color-mix(in oklab, var(--ofs-ink) 8%, transparent);\n}\n\n@keyframes ofs-draft-drift {\n  0% {\n    transform: translate3d(0, 0, 0) scale(1);\n  }\n  50% {\n    transform: translate3d(3%, -2.5%, 0) scale(1.06);\n  }\n  100% {\n    transform: translate3d(-2.5%, 3%, 0) scale(0.97);\n  }\n}\n\n/* 取景框：虚线纸边 + 透明底，和空舞台的实心相纸区分开。 */\n.ofs-frame.ofs-frame--draft {\n  z-index: 1;\n  border: 1px dashed color-mix(in oklab, var(--ofs-ink) 22%, transparent);\n  background: color-mix(in oklab, var(--ofs-card-solid) 42%, transparent);\n  box-shadow: none;\n}\n\n.ofs-frame.ofs-frame--draft .ofs-frame-body {\n  background: transparent;\n}\n\n.ofs-draft-blank .ofs-empty-title {\n  color: var(--ofs-ink);\n}\n\n.ofs-draft-blank .ofs-muted {\n  color: var(--ofs-ink-3);\n}\n\n/* 阶段十五 A1：点草稿卡恢复后，取景框注明这份草稿的来源作品。 */\n.ofs-draft-source {\n  margin: 0;\n  max-width: 30ch;\n  overflow: hidden;\n  color: var(--ofs-warn);\n  font-size: 11px;\n  line-height: 1.5;\n  text-align: center;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n/* ── 扩图：扩张画布 + 比例胶囊 ───────────────────────────────── */\n/*\n * 与 MaskEditor 同一套光桌布局：顶部一条「标题 / 覆盖率 + 比例胶囊」，\n * 中间是可拖拽的扩张画布，底部一条紧凑胶囊放「回中」与操作提示。\n * 画布里的新增区域用斜纹半透明着色，内容框是虚线拖拽区（命中区 44px 起）。\n */\n.ofs-outpaint-editor {\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 10px;\n  width: 100%;\n  height: 100%;\n  padding: 12px 14px 10px;\n  overflow: hidden;\n}\n\n.ofs-outpaint-top {\n  flex: 0 0 auto;\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n}\n\n.ofs-outpaint-head {\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n  padding: 5px 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 86%, transparent);\n  backdrop-filter: blur(12px);\n  -webkit-backdrop-filter: blur(12px);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n.ofs-outpaint-title {\n  font-size: 11.5px;\n  font-weight: 600;\n  color: var(--ofs-ink);\n}\n\n.ofs-outpaint-coverage {\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-outpaint-ratios {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n}\n\n/* 比例胶囊：高度沿用工具栏 44px 触控热区，键盘 Tab 顺序即视觉顺序。 */\n.ofs-outpaint-ratio {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  min-height: 44px;\n  padding: 0 14px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-outpaint-ratio:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-outpaint-ratio.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-outpaint-viewport {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 100%;\n  overflow: hidden;\n  container-type: size;\n}\n\n/* 扩张后的画布：保持与导出 PNG 相同的宽高比，外圈沿用相纸装裱。 */\n.ofs-outpaint-stage {\n  position: relative;\n  flex: 0 0 auto;\n  width: min(\n    calc(100cqw - 28px),\n    max(160px, calc((100cqh - 22px) * var(--ofs-outpaint-r, 1)))\n  );\n  aspect-ratio: var(--ofs-outpaint-r, 1);\n  border-radius: 4px;\n  overflow: hidden;\n  background: #000;\n  touch-action: none;\n  box-shadow:\n    0 0 0 8px var(--ofs-print-paper),\n    0 0 0 9px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n}\n\n/* 预览层与内容框分层：预览整体是角色 img 的图形，内容框是独立的可操作控件。 */\n.ofs-outpaint-preview {\n  position: absolute;\n  inset: 0;\n}\n\n/* 原图按内容框铺满（导出时也是拉伸到同一矩形，预览与产出保持一致）。 */\n.ofs-outpaint-photo {\n  position: absolute;\n  object-fit: fill;\n  user-select: none;\n  pointer-events: none;\n}\n\n/* 新增区域着色：低透明度底色 + 斜纹，表达「这块会重新生成」。 */\n.ofs-outpaint-shade {\n  position: absolute;\n  pointer-events: none;\n  background-color: color-mix(in oklab, var(--ofs-accent) 20%, transparent);\n  background-image: repeating-linear-gradient(\n    45deg,\n    color-mix(in oklab, var(--ofs-accent) 30%, transparent) 0 6px,\n    transparent 6px 12px\n  );\n}\n\n/* 内容框：虚线 + 居中抓手，pointer capture 拖拽；最小 44px 保证触控热区。 */\n.ofs-outpaint-content {\n  position: absolute;\n  appearance: none;\n  min-width: 44px;\n  min-height: 44px;\n  padding: 0;\n  border: 1px dashed color-mix(in oklab, #fff 76%, transparent);\n  border-radius: 2px;\n  background: transparent;\n  cursor: grab;\n  touch-action: none;\n}\n\n.ofs-outpaint-content:active {\n  cursor: grabbing;\n}\n\n.ofs-outpaint-content:focus-visible {\n  outline: 2px solid var(--ofs-accent);\n  outline-offset: 2px;\n}\n\n.ofs-outpaint-grip {\n  position: absolute;\n  left: 50%;\n  top: 50%;\n  display: block;\n  width: 34px;\n  height: 34px;\n  border: 1px solid rgb(255 255 255 / 55%);\n  border-radius: 50%;\n  background: rgb(20 20 22 / 48%);\n  transform: translate(-50%, -50%);\n  pointer-events: none;\n}\n\n.ofs-outpaint-grip::after {\n  content: "";\n  position: absolute;\n  left: 50%;\n  top: 50%;\n  width: 10px;\n  height: 10px;\n  border-radius: 50%;\n  background: rgb(255 255 255 / 74%);\n  transform: translate(-50%, -50%);\n}\n\n/* 底部工具胶囊：紧贴画布下方，与 MaskEditor 的工具栏视觉一致。 */\n.ofs-outpaint-tools {\n  flex: 0 0 auto;\n  display: inline-flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  max-width: 100%;\n  padding: 2px 8px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 92%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n.ofs-outpaint-tools .ofs-dock-button {\n  padding: 0 9px;\n  border-color: transparent;\n  background: transparent;\n  box-shadow: none;\n}\n\n.ofs-outpaint-tools .ofs-dock-button:hover {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-outpaint-hint {\n  margin: 0;\n  font-size: 11px;\n  text-align: left;\n}\n\n.ofs-outpaint-empty {\n  margin: 0;\n}\n\n.ofs-outpaint-warn {\n  margin: 0;\n  color: var(--ofs-warn, #b45309);\n  font-size: 11px;\n  text-align: left;\n}\n\n@media (max-width: 720px) {\n  .ofs-outpaint-top {\n    flex-direction: column;\n    align-items: stretch;\n  }\n\n  .ofs-outpaint-ratios {\n    justify-content: flex-start;\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-draft-backdrop span {\n    animation: none;\n  }\n}\n';
 
 // src/styles/filmstrip.css
 var filmstrip_default = '/*\n * 底部最近生成栏：悬浮玻璃条，左边是批次缩略图流，右边去画廊。\n */\n\n.ofs-filmstrip {\n  position: relative;\n  z-index: 10;\n  isolation: isolate;\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  margin: 0 14px 14px;\n  padding: 4px 12px 10px;\n  min-height: 92px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n/* 毛玻璃背景放进 ::before 伪元素：避免 .ofs-filmstrip 自身带有 backdrop-filter\n   创建新的 containing block，从而让内部版本面板的 position: fixed 严格按视口定位。 */\n.ofs-filmstrip::before {\n  content: "";\n  position: absolute;\n  inset: 0;\n  z-index: -1;\n  border-radius: inherit;\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  backdrop-filter: blur(18px);\n  -webkit-backdrop-filter: blur(18px);\n  pointer-events: none;\n}\n\n.ofs-roll {\n  flex: 1 1 auto;\n  min-width: 0;\n  display: flex;\n  align-items: stretch;\n  gap: 16px;\n  overflow-x: auto;\n  overflow-y: hidden;\n  /* 预留上/左内边距，保证 top: -6px 的版本角标与草稿圆点不被滚动容器边缘裁剪。 */\n  padding: 8px 6px 2px;\n}\n\n.ofs-batch {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.ofs-batch-thumbs {\n  display: flex;\n  gap: 3px;\n}\n\n.ofs-thumb {\n  appearance: none;\n  flex: 0 0 auto;\n  display: block;\n  width: 62px;\n  height: 62px;\n  padding: 0;\n  border: 2px solid transparent;\n  border-radius: 12px;\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  cursor: pointer;\n  transition:\n    transform 170ms cubic-bezier(0.22, 1, 0.36, 1),\n    border-color 170ms ease,\n    box-shadow 170ms ease;\n}\n\n.ofs-thumb img {\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n.ofs-thumb:hover {\n  transform: translateY(-2px);\n}\n\n.ofs-thumb.is-on {\n  border-color: var(--ofs-accent);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 20%, transparent);\n}\n\n.ofs-batch-meta {\n  display: flex;\n  align-items: center;\n  justify-content: flex-start;\n  gap: 6px;\n  font-size: 10px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-batch-meta em {\n  font-style: normal;\n  font-size: 9px;\n  letter-spacing: 0.06em;\n  text-transform: uppercase;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n/* 进行中的暗房计时卡：一格还在显影的相纸 + 阶段与已用时间 */\n.ofs-ghost {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 12px 8px 8px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 14px;\n  background: color-mix(in oklab, var(--ofs-card) 70%, transparent);\n}\n\n.ofs-ghost-frame {\n  position: relative;\n  flex: 0 0 auto;\n  display: grid;\n  place-items: center;\n  width: 46px;\n  height: 46px;\n  overflow: hidden;\n  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 30%, transparent);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n}\n\n/* 一道从下往上推的显影光，说明这一格还在出 */\n.ofs-ghost-bar {\n  width: 100%;\n  height: 100%;\n  background: linear-gradient(\n    180deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 18%, transparent) 46%,\n    color-mix(in oklab, var(--ofs-accent) 4%, transparent) 100%\n  );\n  background-size: 100% 240%;\n  animation: ofs-develop-scan 2.8s ease-in-out infinite;\n}\n\n@keyframes ofs-develop-scan {\n  0% {\n    background-position: 0 110%;\n  }\n  100% {\n    background-position: 0 -130%;\n  }\n}\n\n/* 排队中的卡：这一格还没开始显影，取景框里写位次，旁边写已排队时长 */\n.ofs-ghost.is-queued {\n  background: color-mix(in oklab, var(--ofs-card) 52%, transparent);\n}\n\n.ofs-ghost.is-queued .ofs-ghost-frame {\n  border-color: var(--ofs-sunken-border);\n}\n\n.ofs-ghost-slot {\n  font-size: 14px;\n  font-weight: 600;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-ghost.is-queued .ofs-ghost-label {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-ghost-text {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  min-width: 0;\n}\n\n.ofs-ghost-label {\n  max-width: 168px;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  font-size: 11px;\n  color: var(--ofs-ink-2);\n  white-space: nowrap;\n}\n\n.ofs-ghost-time {\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n/* 取消：排队卡立即出队，运行中的卡当前这张画完后停止 */\n.ofs-ghost-cancel {\n  appearance: none;\n  flex: 0 0 auto;\n  height: 24px;\n  padding: 0 9px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-ghost-cancel:hover:not(:disabled) {\n  border-color: color-mix(in oklab, var(--ofs-error) 34%, transparent);\n  background: var(--ofs-error-soft);\n  color: var(--ofs-error);\n}\n\n.ofs-ghost-cancel:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* 取消中的卡：显影光停下，只保留阶段文案说明「正在停止…」 */\n.ofs-ghost.is-cancelling {\n  border-color: color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n}\n\n.ofs-ghost.is-cancelling .ofs-ghost-bar {\n  animation: none;\n  opacity: 0.45;\n}\n\n.ofs-ghost.is-cancelling .ofs-ghost-label {\n  color: var(--ofs-ink-3);\n}\n\n/* 空态 */\n.ofs-filmstrip-empty {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  flex: 1 1 auto;\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n}\n\n.ofs-slots {\n  display: flex;\n  gap: 6px;\n}\n\n.ofs-slot {\n  display: block;\n  width: 46px;\n  height: 46px;\n  border: 1px dashed var(--ofs-sunken-border);\n  border-radius: 12px;\n  background: color-mix(in oklab, var(--ofs-card) 60%, transparent);\n}\n\n/* 去画廊 */\n.ofs-filmstrip-side {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  align-self: stretch;\n  padding-left: 12px;\n  border-left: 1px solid var(--ofs-hairline);\n}\n\n.ofs-filmstrip-link {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  padding: 8px 10px;\n  border: 0;\n  border-radius: 10px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-filmstrip-link:hover {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n/* ── 阶段十三：作品条版本角标 / 派生面板 / 新建草稿卡 ───────────────── */\n\n/* 版本角标容器：包裹一张作品缩略图，角标压在右上角，面板向上浮出。\n   面板与缩略图同处一个容器，鼠标从缩略图移进面板时不会触发鼠标离开，\n   配合 JS 的延迟收起构成 hover bridge。 */\n.ofs-version-anchor {\n  position: relative;\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n}\n\n.ofs-version-badge {\n  appearance: none;\n  position: absolute;\n  top: -6px;\n  right: -7px;\n  z-index: 2;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  min-width: 20px;\n  height: 17px;\n  padding: 0 5px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink-2);\n  font-family: var(--ofs-font);\n  font-size: 9.5px;\n  font-weight: 600;\n  line-height: 1;\n  letter-spacing: 0.02em;\n  box-shadow: var(--ofs-shadow-card);\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-version-badge:hover,\n.ofs-version-badge.is-on,\n.ofs-version-anchor.is-pinned .ofs-version-badge {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n}\n\n/* 生成中的角标轻呼吸，提示这棵树还有在途分支。 */\n.ofs-version-anchor.has-pending .ofs-version-badge::after {\n  content: "";\n  width: 4px;\n  height: 4px;\n  margin-left: 3px;\n  border-radius: 50%;\n  background: var(--ofs-warn);\n}\n\n/* 派生面板：fixed 脱离 .ofs-roll 横向裁剪，具体 left / bottom / width 由锚点实时算好并钳在视口内；\n   面板下方留一条透明 hover bridge，指针穿过 10px 间隙时仍算在容器内。 */\n.ofs-version-panel {\n  position: fixed;\n  z-index: 120;\n  width: min(272px, calc(100vw - 24px));\n  max-height: min(58vh, 360px);\n  padding: 8px;\n  overflow-y: auto;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-md);\n  background: color-mix(in oklab, var(--ofs-card-solid) 96%, transparent);\n  box-shadow: var(--ofs-shadow-lift);\n  animation: ofs-version-rise 160ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-version-panel::before {\n  content: "";\n  position: absolute;\n  left: 0;\n  right: 0;\n  bottom: -14px;\n  height: 14px;\n}\n\n@keyframes ofs-version-rise {\n  0% {\n    opacity: 0;\n    transform: translateY(4px);\n  }\n  100% {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\n\n.ofs-version-note {\n  padding: 5px 6px 7px;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  line-height: 1.4;\n}\n\n.ofs-version-empty {\n  padding: 10px 6px;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  text-align: center;\n}\n\n.ofs-version-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n}\n\n/* 面板行：左侧按 depth 缩进，行尾可带清空草稿按钮。 */\n.ofs-version-row {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n}\n\n.ofs-version-row-main {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex: 1 1 auto;\n  min-width: 0;\n  padding: 4px 6px;\n  border: 1px solid transparent;\n  border-radius: var(--ofs-r-sm);\n  background: transparent;\n  color: var(--ofs-ink-2);\n  text-align: left;\n  cursor: pointer;\n  transition:\n    background-color 140ms ease,\n    border-color 140ms ease;\n}\n\n.ofs-version-row-main:hover {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-version-row.is-on .ofs-version-row-main {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-ink);\n}\n\n.ofs-version-row.is-ghost .ofs-version-row-main {\n  cursor: default;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-version-label {\n  flex: 0 0 auto;\n  min-width: 38px;\n  font-size: 10px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-version-row.is-on .ofs-version-label {\n  color: var(--ofs-accent);\n}\n\n.ofs-version-row.is-ghost .ofs-version-label {\n  color: var(--ofs-warn);\n}\n\n.ofs-version-kind {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  color: var(--ofs-ink-4);\n}\n\n.ofs-version-thumb {\n  position: relative;\n  flex: 0 0 auto;\n  display: block;\n  width: 28px;\n  height: 28px;\n  overflow: hidden;\n  border-radius: 7px;\n  background: var(--ofs-sunken);\n}\n\n.ofs-version-thumb img {\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n/* 在途幽灵缩略图：复用作品条已有的显影扫描光。 */\n.ofs-version-thumb-ghost {\n  display: block;\n  width: 100%;\n  height: 100%;\n  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 30%, transparent);\n  border-radius: 7px;\n  background: linear-gradient(\n    180deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 18%, transparent) 46%,\n    color-mix(in oklab, var(--ofs-accent) 4%, transparent) 100%\n  );\n  background-size: 100% 240%;\n  animation: ofs-develop-scan 2.8s ease-in-out infinite;\n}\n\n.ofs-version-prompt {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 11px;\n}\n\n/* 草稿圆点：该版本上留有未提交的编辑草稿。 */\n.ofs-version-draft-dot {\n  flex: 0 0 auto;\n  display: inline-block;\n  width: 6px;\n  height: 6px;\n  border-radius: 50%;\n  background: var(--ofs-warn);\n  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n}\n\n.ofs-version-draft-clear {\n  appearance: none;\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  height: 22px;\n  padding: 0 6px;\n  border: 1px solid transparent;\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-family: var(--ofs-font);\n  font-size: 9.5px;\n  white-space: nowrap;\n  cursor: pointer;\n  opacity: 0;\n  transition:\n    opacity 140ms ease,\n    background-color 140ms ease,\n    color 140ms ease;\n}\n\n.ofs-version-row:hover .ofs-version-draft-clear,\n.ofs-version-draft-clear:focus-visible {\n  opacity: 1;\n}\n\n.ofs-version-draft-clear:hover {\n  background: var(--ofs-warn-soft);\n  color: var(--ofs-warn);\n}\n\n.ofs-version-draft-label {\n  line-height: 1;\n}\n\n/* 父图被删后提升的局部根：行内没有徽标位，用左侧窄条说明来源已断。 */\n.ofs-version-row.is-orphan .ofs-version-label {\n  color: var(--ofs-ink-4);\n}\n\n/* 新建绘图草稿卡：作品条最左端的待执行位，取景框按当前画幅比例展示。 */\n.ofs-draft-card {\n  appearance: none;\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-family: var(--ofs-font);\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-draft-frame {\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: space-between;\n  width: 74px;\n  height: 62px;\n  padding: 5px 4px 4px;\n  border: 1px dashed var(--ofs-sunken-border);\n  border-radius: 12px;\n  background: color-mix(in oklab, var(--ofs-card) 60%, transparent);\n  transition:\n    border-color 160ms ease,\n    background-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-draft-card:hover .ofs-draft-frame {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-draft-card.is-on .ofs-draft-frame {\n  border-color: var(--ofs-accent);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 16%, transparent);\n}\n\n.ofs-draft-viewfinder {\n  margin: auto 0;\n  display: grid;\n  place-items: center;\n  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 32%, transparent);\n  border-radius: 6px;\n  color: var(--ofs-ink-4);\n  background: color-mix(in oklab, var(--ofs-card-solid) 72%, transparent);\n}\n\n.ofs-draft-card.is-pending .ofs-draft-viewfinder {\n  border-style: solid;\n  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);\n  color: var(--ofs-warn);\n}\n\n/* 阶段十五 A1：未提交草稿托管态。卡片多一行「源自此图」，取景框按内容自动长高。 */\n.ofs-draft-card.has-draft .ofs-draft-frame {\n  height: auto;\n  min-height: 70px;\n  border-style: solid;\n  border-color: color-mix(in oklab, var(--ofs-warn) 30%, var(--ofs-sunken-border));\n}\n\n.ofs-draft-card.has-draft .ofs-draft-viewfinder {\n  margin: 2px 0 0;\n  border-color: color-mix(in oklab, var(--ofs-warn) 32%, transparent);\n  color: var(--ofs-warn);\n}\n\n.ofs-draft-from {\n  flex: 0 0 auto;\n  width: 100%;\n  overflow: hidden;\n  color: var(--ofs-warn);\n  font-size: 8.5px;\n  line-height: 1.2;\n  text-align: center;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-draft-state {\n  flex: 0 0 auto;\n  width: 100%;\n  overflow: hidden;\n  color: var(--ofs-ink-4);\n  font-size: 9px;\n  line-height: 1.2;\n  text-align: center;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-draft-card.has-draft .ofs-draft-state {\n  color: var(--ofs-warn);\n}\n\n.ofs-draft-card.is-pending .ofs-draft-state {\n  color: var(--ofs-warn);\n}\n\n.ofs-draft-meta {\n  display: flex;\n  align-items: center;\n  justify-content: flex-start;\n  gap: 5px;\n  min-width: 0;\n  font-size: 9.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-draft-meta em {\n  flex: 0 0 auto;\n  font-style: normal;\n  font-size: 9px;\n  letter-spacing: 0.04em;\n  font-variant-numeric: tabular-nums;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-draft-preset {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 9px;\n  color: var(--ofs-ink-4);\n}\n\n/* 窄屏：面板贴住作品条左缘，避免浮到窗口外。 */\n@media (max-width: 720px) {\n  .ofs-version-panel {\n    width: min(260px, 72vw);\n  }\n}\n\n/* ── 阶段十三：作品条缩略图草稿圆点与版本面板开合 ─────────────────── */\n\n/* 草稿圆点：该树有未提交的编辑时压在缩略图左上角（右上角留给 ⎇ N 角标）。\n   视觉只有 9px，但用透明外扩伪元素把点击热区撑到 22px。 */\n.ofs-thumb-dot {\n  appearance: none;\n  position: absolute;\n  top: -6px;\n  left: -6px;\n  z-index: 3;\n  width: 9px;\n  height: 9px;\n  padding: 0;\n  border: 1px solid var(--ofs-card-solid);\n  border-radius: 50%;\n  background: var(--ofs-warn);\n  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ofs-warn) 18%, transparent);\n  cursor: pointer;\n  transition:\n    transform 140ms ease,\n    box-shadow 140ms ease;\n}\n\n.ofs-thumb-dot::before {\n  content: "";\n  position: absolute;\n  inset: -7px;\n  border-radius: 50%;\n}\n\n.ofs-thumb-dot:hover {\n  transform: scale(1.25);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n}\n';
@@ -3883,7 +3950,7 @@ function retryOverrides(source) {
 
 // src/logic/chat.js
 var MAX_RESULT_IMAGES = LIMITS.count.max;
-var MIRROR_TOOLS = Object.freeze(["inpaint", "img2img"]);
+var MIRROR_TOOLS = Object.freeze(["inpaint", "img2img", "upscale", "outpaint"]);
 function textOf2(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -4247,6 +4314,11 @@ var SHAPES = {
     /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "15.2", cy: "8.6", r: "1.1" })
   ] }),
   expand: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_jsx_runtime.Fragment, { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M4.4 9V5.6a1.2 1.2 0 0 1 1.2-1.2H9M15 4.4h3.4a1.2 1.2 0 0 1 1.2 1.2V9M19.6 15v3.4a1.2 1.2 0 0 1-1.2 1.2H15M9 19.6H5.6a1.2 1.2 0 0 1-1.2-1.2V15" }) }),
+  // 扩图画框：外层取景角 + 内层内容框，表达「原图放进更大的画布」。
+  frame: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M4 9V5.8a1.8 1.8 0 0 1 1.8-1.8H9M15 4h3.2A1.8 1.8 0 0 1 20 5.8V9M20 15v3.2a1.8 1.8 0 0 1-1.8 1.8H15M9 20H5.8A1.8 1.8 0 0 1 4 18.2V15" }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("rect", { x: "9.2", y: "9.2", width: "5.6", height: "5.6", rx: "0.8" })
+  ] }),
   dots: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
     /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "6.2", cy: "12", r: "1.4", fill: "currentColor", stroke: "none" }),
     /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: "12", cy: "12", r: "1.4", fill: "currentColor", stroke: "none" }),
@@ -4356,6 +4428,7 @@ function ratioLabel(t, ratioId) {
   return ratioId || t("studio.chat.ratioAuto");
 }
 var PUBLIC_PRESET_LIST = publicPresets();
+var MIRROR_TOOL_IDS = Object.freeze(["inpaint", "img2img", "upscale", "outpaint"]);
 function modelLabelOf(presetId) {
   const preset = PUBLIC_PRESET_LIST.find((item) => item && item.id === presetId);
   return preset ? preset.label || preset.short || preset.id : "";
@@ -4496,7 +4569,7 @@ function ChatPanel(props) {
     if (ui && typeof ui.showToast === "function") ui.showToast(t("studio.chat.intent.handoffDone"));
   }
   function renderToolSync(message) {
-    const tool = message.tool === "img2img" ? "img2img" : message.tool === "inpaint" ? "inpaint" : "";
+    const tool = MIRROR_TOOL_IDS.includes(message.tool) ? message.tool : "";
     const title = tool ? t(`studio.chat.tool.${tool}`) : typeof message.text === "string" ? message.text : "";
     const strength = tool && message.strength !== void 0 && message.strength !== null ? strengthLabelOf(t, message.strength) : "";
     const path = typeof message.imagePath === "string" ? message.imagePath : "";
@@ -4828,11 +4901,13 @@ var PENDING_STATUS = Object.freeze({
   running: true,
   "waiting-session": true
 });
-var LINEAGE_KINDS = Object.freeze(["text", "img2img", "inpaint"]);
+var LINEAGE_KINDS = Object.freeze(["text", "img2img", "inpaint", "upscale", "outpaint"]);
 var MAX_DEPTH = 64;
 var KIND_TEXT = "text";
 var KIND_IMG2IMG = "img2img";
 var KIND_INPAINT = "inpaint";
+var KIND_UPSCALE = "upscale";
+var KIND_OUTPAINT = "outpaint";
 var ALPHABET = "abcdefghijklmnopqrstuvwxyz";
 function textOf3(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -4883,6 +4958,9 @@ function pendingParentOf(job) {
 }
 function pendingKindOf(job) {
   if (!job || typeof job !== "object") return KIND_TEXT;
+  const tool = textOf3(job.tool);
+  if (tool === "upscale") return KIND_UPSCALE;
+  if (tool === "outpaint") return KIND_OUTPAINT;
   const mode = textOf3(job.sourceMode);
   if (LINEAGE_KINDS.includes(mode)) return mode;
   const params = job.params && typeof job.params === "object" ? job.params : null;
@@ -4994,7 +5072,7 @@ function buildLineage(input) {
     const parentPath = textOf3(item.sourceImage);
     const metaRoot = textOf3(item.rootImage);
     const createdAt = createdAtOf(item);
-    const kind = item.inpaint === true ? KIND_INPAINT : parentPath ? KIND_IMG2IMG : KIND_TEXT;
+    const kind = item.upscale === true ? KIND_UPSCALE : item.outpaint === true ? KIND_OUTPAINT : item.inpaint === true ? KIND_INPAINT : parentPath ? KIND_IMG2IMG : KIND_TEXT;
     const itemKey = itemKeyOf(item, itemIndex);
     for (const image of images) {
       const path = imagePathOf(image);
@@ -5360,7 +5438,13 @@ var import_react5 = __toESM(require("react"), 1);
 var import_jsx_runtime5 = require("react/jsx-runtime");
 var DEFAULT_HOVER_DELAY = 250;
 var DEFAULT_HIDE_DELAY = 160;
-var KIND_ICONS = Object.freeze({ text: "sparkles", img2img: "image", inpaint: "focus" });
+var KIND_ICONS = Object.freeze({
+  text: "sparkles",
+  img2img: "image",
+  inpaint: "focus",
+  upscale: "expand",
+  outpaint: "frame"
+});
 function pickText2(value, fallback) {
   return typeof value === "string" && value ? value : fallback;
 }
@@ -5376,6 +5460,8 @@ function fillTemplate(template, params) {
   return out;
 }
 function kindLabelOf(labels, kind) {
+  if (kind === "upscale") return pickText2(labels.kindUpscale, "高清放大");
+  if (kind === "outpaint") return pickText2(labels.kindOutpaint, "扩图");
   if (kind === "inpaint") return pickText2(labels.kindInpaint, "局部重绘");
   if (kind === "img2img") return pickText2(labels.kindImg2img, "整图重绘");
   return pickText2(labels.kindText, "文生图");
@@ -5810,6 +5896,8 @@ function Filmstrip(props) {
     kindText: t("studio.filmstrip.versionKind.text"),
     kindImg2img: t("studio.filmstrip.versionKind.img2img"),
     kindInpaint: t("studio.filmstrip.versionKind.inpaint"),
+    kindUpscale: t("studio.filmstrip.versionKind.upscale"),
+    kindOutpaint: t("studio.filmstrip.versionKind.outpaint"),
     draftItems: {
       mask: t("studio.filmstrip.draftItems.mask"),
       prompt: t("studio.filmstrip.draftItems.prompt"),
@@ -8789,7 +8877,7 @@ function SettingsDrawer(props) {
 }
 
 // src/studio/Stage.jsx
-var import_react32 = __toESM(require("react"), 1);
+var import_react33 = __toESM(require("react"), 1);
 
 // src/logic/imageTool.js
 var IMAGE_TOOL_FORMS = Object.freeze(["instant", "inline", "canvas"]);
@@ -8819,10 +8907,10 @@ var IMAGE_TOOLS = Object.freeze([
     form: "instant",
     group: "process",
     icon: "expand",
+    // 高清放大走远端 Real-ESRGAN 超分，不依赖扩散模型能力，因此没有预设能力字段。
     capability: null,
     labelKey: "studio.imageTool.upscale",
-    ready: false,
-    plannedKey: "studio.imageTool.planned"
+    ready: true
   }),
   Object.freeze({
     id: "outpaint",
@@ -8831,8 +8919,7 @@ var IMAGE_TOOLS = Object.freeze([
     icon: "frame",
     capability: "supportsInpaint",
     labelKey: "studio.imageTool.outpaint",
-    ready: false,
-    plannedKey: "studio.imageTool.planned"
+    ready: true
   })
 ]);
 function imageToolOf(id) {
@@ -8851,6 +8938,7 @@ function toolPresetOf(presets, currentId, toolId) {
   const tool = imageToolOf(toolId);
   const missing = { preset: null, switched: false, fallback: false };
   if (!tool || !tool.ready) return missing;
+  if (tool.id === "upscale") return missing;
   const wanted = typeof currentId === "string" ? currentId.trim() : "";
   const current = wanted ? list.find((item) => item.id === wanted) || null : null;
   if (tool.id === "inpaint") {
@@ -8859,6 +8947,16 @@ function toolPresetOf(presets, currentId, toolId) {
     if (native) {
       return { preset: native, switched: !current || native.id !== current.id, fallback: false };
     }
+    const fallback = referencePresetOf(list);
+    if (fallback) return { preset: fallback, switched: true, fallback: true };
+    return { preset: null, switched: false, fallback: true };
+  }
+  if (tool.id === "outpaint") {
+    const native = list.find((item) => item.id === INPAINT_PRESET_ID && supportsInpaint(item)) || null;
+    if (native) {
+      return { preset: native, switched: !current || native.id !== current.id, fallback: false };
+    }
+    if (supportsInpaint(current)) return { preset: current, switched: false, fallback: false };
     const fallback = referencePresetOf(list);
     if (fallback) return { preset: fallback, switched: true, fallback: true };
     return { preset: null, switched: false, fallback: true };
@@ -8877,6 +8975,10 @@ function toolStrengthDefaultOf(toolId, preset) {
   const tool = imageToolOf(toolId);
   if (tool && tool.id === "inpaint") {
     return inpaintOnlyOf(preset) ? MASK_STRENGTH_NATIVE : MASK_STRENGTH_DEFAULT;
+  }
+  if (tool && tool.id === "outpaint") {
+    const strength = Number(OUTPAINT.strength);
+    return Number.isFinite(strength) ? strength : LIMITS.strength.default;
   }
   return LIMITS.strength.default;
 }
@@ -8921,6 +9023,7 @@ function buildImageToolBody(input) {
   const source = input && typeof input === "object" ? input : {};
   const tool = resolveTool(source.tool);
   if (!tool || !tool.ready) return null;
+  if (tool.form === "instant" || tool.id === "outpaint") return null;
   const targetPath = typeof source.targetPath === "string" ? source.targetPath.trim() : "";
   if (!targetPath) return null;
   const list = Array.isArray(source.presets) ? source.presets : [];
@@ -8958,15 +9061,130 @@ function buildImageToolBody(input) {
   if (data) body.reference.mask = data;
   return body;
 }
+function buildUpscaleToolBody(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const target = source.target && typeof source.target === "object" ? source.target : null;
+  const targetPath = typeof source.targetPath === "string" && source.targetPath.trim() ? source.targetPath.trim() : workKeyOf(target);
+  if (!targetPath) return null;
+  const prompt = (typeof source.targetPrompt === "string" ? source.targetPrompt.trim() : "").slice(0, LIMITS.prompt.maxChars);
+  const width = positiveSize2(source.targetWidth) ?? positiveSize2(target && target.width);
+  const height = positiveSize2(source.targetHeight) ?? positiveSize2(target && target.height);
+  const body = {
+    tool: "upscale",
+    prompt,
+    count: 1,
+    waitSeconds: 0,
+    autoStart: true,
+    reference: { path: targetPath }
+  };
+  if (width !== null) body.width = width;
+  if (height !== null) body.height = height;
+  return body;
+}
+function buildOutpaintToolBody(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const target = source.target && typeof source.target === "object" ? source.target : null;
+  const targetPath = typeof source.targetPath === "string" && source.targetPath.trim() ? source.targetPath.trim() : workKeyOf(target);
+  if (!targetPath) return null;
+  const list = Array.isArray(source.presets) ? source.presets : [];
+  const wantedId = typeof source.presetId === "string" ? source.presetId.trim() : "";
+  const preset = source.preset && typeof source.preset === "object" && source.preset.id ? source.preset : list.find((item) => item && item.id === wantedId) || null;
+  if (!preset) return null;
+  const canvas = normalizeOutpaintCanvas(source.canvas);
+  if (!canvas) return null;
+  const typed = typeof source.prompt === "string" ? source.prompt.trim() : "";
+  const prompt = (typed || toolPromptFallback(source.targetPrompt)).slice(0, LIMITS.prompt.maxChars);
+  if (!prompt) return null;
+  const rawStrength = finiteNumber2(source.strength);
+  const strength = clampMaskStrength(rawStrength === null ? Number(OUTPAINT.strength) : rawStrength, true);
+  return {
+    tool: "outpaint",
+    presetId: preset.id,
+    prompt,
+    negativePrompt: source.negativeActive === true ? hintOf(preset) : "",
+    width: canvas.width,
+    height: canvas.height,
+    steps: presetSteps(preset),
+    cfg: presetCfg(preset),
+    seed: "",
+    count: 1,
+    waitSeconds: 0,
+    autoStart: true,
+    reference: {
+      image: canvas.image,
+      mask: canvas.mask,
+      sourcePath: targetPath,
+      strength
+    }
+  };
+}
+function nonNegativeInt(value) {
+  if (value === null || value === void 0 || value === "") return null;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return null;
+  return Math.round(number);
+}
+function normalizeOutpaintCanvas(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const image = normalizeMaskData(source.image);
+  const mask = normalizeMaskData(source.mask);
+  if (!image || !mask) return null;
+  if (base64BytesOf(image) > Number(LIMITS.reference.maxBytes)) return null;
+  if (base64BytesOf(mask) > Number(LIMITS.mask.maxBytes)) return null;
+  const step = Number(LIMITS.width.step) > 0 ? Number(LIMITS.width.step) : 8;
+  const maxEdge = Number(OUTPAINT.maxEdge);
+  const maxPixels = Number(OUTPAINT.maxPixels);
+  const minEdge = Number(OUTPAINT.minEdge);
+  const width = positiveSize2(source.width);
+  const height = positiveSize2(source.height);
+  if (width === null || height === null) return null;
+  if (width % step !== 0 || height % step !== 0) return null;
+  if (width > maxEdge || height > maxEdge) return null;
+  if (width * height > maxPixels) return null;
+  if (width < minEdge || height < minEdge) return null;
+  const contentInput = source.content && typeof source.content === "object" ? source.content : null;
+  if (!contentInput) return null;
+  const x = nonNegativeInt(contentInput.x);
+  const y = nonNegativeInt(contentInput.y);
+  const contentWidth = positiveSize2(contentInput.width);
+  const contentHeight = positiveSize2(contentInput.height);
+  if (x === null || y === null || contentWidth === null || contentHeight === null) return null;
+  if (x + contentWidth > width || y + contentHeight > height) return null;
+  const content = { x, y, width: contentWidth, height: contentHeight };
+  const coverage = Math.max(0, Math.min(1, 1 - contentWidth * contentHeight / (width * height)));
+  return {
+    image,
+    mask,
+    width,
+    height,
+    content,
+    coverage: Number(coverage.toFixed(6))
+  };
+}
 function imageToolBlockedKeyOf(input) {
   const source = input && typeof input === "object" ? input : {};
   const tool = resolveTool(source.tool);
   if (!tool) return "studio.imageTool.blockedTarget";
   if (!tool.ready) return tool.plannedKey || "studio.imageTool.planned";
-  const targetPath = typeof source.targetPath === "string" ? source.targetPath.trim() : "";
+  const targetPath = typeof source.targetPath === "string" && source.targetPath.trim() ? source.targetPath.trim() : workKeyOf(source.target);
   if (!targetPath) return "studio.imageTool.blockedTarget";
+  if (tool.id === "upscale") {
+    const target = source.target && typeof source.target === "object" ? source.target : null;
+    const width = positiveSize2(source.targetWidth) ?? positiveSize2(target && target.width);
+    const height = positiveSize2(source.targetHeight) ?? positiveSize2(target && target.height);
+    if (width !== null && height !== null && Math.max(width, height) > Number(UPSCALE.maxInputEdge)) {
+      return "studio.imageTool.upscaleTooLarge";
+    }
+    return "";
+  }
   if (!source.preset || typeof source.preset !== "object" || !source.preset.id) {
     return "studio.imageTool.blockedNoPreset";
+  }
+  if (tool.id === "outpaint") {
+    if (!normalizeOutpaintCanvas(source.canvas)) return "studio.outpaint.blockedCanvas";
+    const typedPrompt = typeof source.prompt === "string" ? source.prompt.trim() : "";
+    if (!typedPrompt && !toolPromptFallback(source.targetPrompt)) return "studio.imageTool.blockedNoPrompt";
+    return "";
   }
   const typed = typeof source.prompt === "string" ? source.prompt.trim() : "";
   if (!typed && !toolPromptFallback(source.targetPrompt)) return "studio.imageTool.blockedNoPrompt";
@@ -9104,7 +9322,6 @@ function CompareSlider(props) {
 // src/studio/stage/ImageDock.jsx
 var import_react27 = __toESM(require("react"), 1);
 var import_jsx_runtime25 = require("react/jsx-runtime");
-var ICON_FALLBACK = { frame: "expand" };
 function ImageDock(props) {
   const {
     t,
@@ -9127,7 +9344,7 @@ function ImageDock(props) {
       list.map((tool) => {
         const enabled = tool.enabled !== false && tool.ready !== false;
         const label = tool.label || t(tool.labelKey);
-        const icon = ICON_FALLBACK[tool.icon] || tool.icon;
+        const icon = tool.icon;
         const isActive = Boolean(editing) && tool.id === activeToolId;
         return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
           "button",
@@ -9626,6 +9843,10 @@ function ToolSubmitBar(props) {
     strengthMax,
     onStrengthChange,
     maskCoverage,
+    // 可选：画布类工具的覆盖率文案模板（如扩图「新增画面 {percent}%」）。
+    // 不传时保持既有「已涂抹 {percent}% / 尚未涂抹蒙版」行为。
+    metaLabel,
+    metaPercent,
     submitting,
     canSubmit,
     blockedKey,
@@ -9634,7 +9855,8 @@ function ToolSubmitBar(props) {
   } = props;
   const list = Array.isArray(presets) ? presets : [];
   const showCoverage = maskCoverage !== null && maskCoverage !== void 0;
-  const percent = showCoverage ? percentOf(maskCoverage) : 0;
+  const customMeta = typeof metaLabel === "string" && metaLabel !== "";
+  const percent = percentOf(customMeta ? metaPercent : maskCoverage);
   const max = Number.isFinite(Number(strengthMax)) ? Number(strengthMax) : LIMITS.strength.max;
   const value = Number.isFinite(Number(strength)) ? Number(strength) : LIMITS.strength.default;
   const busy = submitting === true;
@@ -9709,7 +9931,7 @@ function ToolSubmitBar(props) {
       ] })
     ] }),
     showCoverage || blocked ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-tool-meta", children: [
-      showCoverage ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("p", { className: "ofs-tool-mask ofs-hint", children: percent > 0 ? formatText(t("studio.mask.coverage"), { percent }) : t("studio.imageTool.maskEmpty") }) : null,
+      showCoverage ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("p", { className: "ofs-tool-mask ofs-hint", children: customMeta ? formatText(metaLabel, { percent }) : percent > 0 ? formatText(t("studio.mask.coverage"), { percent }) : t("studio.imageTool.maskEmpty") }) : null,
       blocked ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("p", { className: "ofs-hint ofs-tool-blocked", role: "status", children: t(blockedKey) }) : null
     ] }) : null
   ] });
@@ -10485,8 +10707,549 @@ function MaskEditor(props) {
   ] });
 }
 
-// src/studio/Stage.jsx
+// src/studio/stage/OutpaintEditor.jsx
+var import_react32 = __toESM(require("react"), 1);
+
+// src/logic/outpaint.js
+var OUTPAINT_RATIO_IDS = [...OUTPAINT.ratioIds];
+var OUTPAINT_EXPAND_ID = OUTPAINT.expandId;
+var OUTPAINT_RATIO_ORDER = Object.freeze([OUTPAINT.expandId, ...OUTPAINT.ratioIds]);
+var RATIO_LABEL_KEYS = Object.freeze({
+  [OUTPAINT.expandId]: "studio.outpaint.ratio.expand",
+  "16:9": "studio.outpaint.ratio.16x9",
+  "9:16": "studio.outpaint.ratio.9x16",
+  "4:3": "studio.outpaint.ratio.4x3"
+});
+var RATIO_VALUES = Object.freeze({
+  "16:9": 16 / 9,
+  "9:16": 9 / 16,
+  "4:3": 4 / 3
+});
+var STEP = Number(LIMITS.width.step) > 0 ? Number(LIMITS.width.step) : 8;
+var SAME_RATIO_EPSILON = 2e-3;
+function positiveSize3(value) {
+  if (value === null || value === void 0 || value === "") return null;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return null;
+  return Math.round(number);
+}
+function alignDown(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return STEP;
+  return Math.max(STEP, Math.floor(number / STEP) * STEP);
+}
+function alignNear(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return 0;
+  return Math.max(0, Math.round(number / STEP) * STEP);
+}
+function alignWithin(value, limit) {
+  const max = Math.max(0, Math.floor(Number(limit) / STEP) * STEP);
+  if (max <= 0) return 0;
+  const aligned = Math.max(0, Math.round(Number(value) / STEP) * STEP);
+  return Math.min(max, aligned);
+}
+function clamp01(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0.5;
+  return Math.round(Math.min(1, Math.max(0, number)) * 1e4) / 1e4;
+}
+function coverageOf2(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return 0;
+  if (number >= 1) return 1;
+  return Number(number.toFixed(6));
+}
+function boundsOf() {
+  const maxEdge = Number(OUTPAINT.maxEdge) > 0 ? Number(OUTPAINT.maxEdge) : 1536;
+  const maxPixels = Number(OUTPAINT.maxPixels) > 0 ? Number(OUTPAINT.maxPixels) : 16e5;
+  const minEdge = Number(OUTPAINT.minEdge) > 0 ? Number(OUTPAINT.minEdge) : 256;
+  const expandRatio = Number(OUTPAINT.expandRatio) > 1 ? Number(OUTPAINT.expandRatio) : 1.2;
+  return { maxEdge, maxPixels, minEdge, expandRatio };
+}
+function outpaintRatioOptions() {
+  return OUTPAINT_RATIO_ORDER.map((id) => ({ id, labelKey: RATIO_LABEL_KEYS[id] || "" }));
+}
+function outpaintRatioIdOf(value) {
+  const id = typeof value === "string" ? value.trim() : "";
+  if (id === OUTPAINT.expandId || OUTPAINT_RATIO_IDS.includes(id)) return id;
+  return OUTPAINT.expandId;
+}
+function outpaintAnchorOf(value) {
+  const input = value && typeof value === "object" ? value : {};
+  return { x: clamp01(input.x), y: clamp01(input.y) };
+}
+function outpaintCoverageOf(plan) {
+  const source = plan && typeof plan === "object" && plan.ok === true ? plan : null;
+  if (!source) return 0;
+  const width = Number(source.width);
+  const height = Number(source.height);
+  const content = source.content && typeof source.content === "object" ? source.content : null;
+  if (!content) return 0;
+  const contentWidth = Number(content.width);
+  const contentHeight = Number(content.height);
+  if (!(width > 0) || !(height > 0) || !(contentWidth > 0) || !(contentHeight > 0)) return 0;
+  return coverageOf2(1 - contentWidth * contentHeight / (width * height));
+}
+function outpaintAnchorShift(plan, anchor, delta) {
+  const current = outpaintAnchorOf(anchor);
+  const source = plan && typeof plan === "object" && plan.ok === true ? plan : null;
+  if (!source) return current;
+  const padding = source.padding && typeof source.padding === "object" ? source.padding : {};
+  const padX = Math.max(0, Number(padding.left) || 0) + Math.max(0, Number(padding.right) || 0);
+  const padY = Math.max(0, Number(padding.top) || 0) + Math.max(0, Number(padding.bottom) || 0);
+  const dx = Number(delta && delta.x);
+  const dy = Number(delta && delta.y);
+  const next = { ...current };
+  if (padX > 0 && Number.isFinite(dx) && dx !== 0) next.x = clamp01(current.x + dx / padX);
+  if (padY > 0 && Number.isFinite(dy) && dy !== 0) next.y = clamp01(current.y + dy / padY);
+  return outpaintAnchorOf(next);
+}
+function layoutOf(width, height, contentWidth, contentHeight, anchor, ratioId, scale) {
+  const totalX = Math.max(0, width - contentWidth);
+  const totalY = Math.max(0, height - contentHeight);
+  const left = alignWithin(totalX * anchor.x, totalX);
+  const top = alignWithin(totalY * anchor.y, totalY);
+  const padding = { left, right: totalX - left, top, bottom: totalY - top };
+  const content = { x: left, y: top, width: contentWidth, height: contentHeight };
+  const plan = { ok: true, ratioId, width, height, content, padding, coverage: 0, scale };
+  plan.coverage = outpaintCoverageOf(plan);
+  return plan;
+}
+function expandPlanOf(sourceWidth, sourceHeight, anchor) {
+  const { maxEdge, maxPixels, minEdge, expandRatio } = boundsOf();
+  let scale = 1;
+  scale = Math.min(scale, maxEdge / (sourceWidth * expandRatio));
+  scale = Math.min(scale, maxEdge / (sourceHeight * expandRatio));
+  scale = Math.min(scale, Math.sqrt(maxPixels / (sourceWidth * expandRatio * sourceHeight * expandRatio)));
+  if (!(scale > 0)) return { ok: false, reason: "bounds" };
+  let contentWidth = alignDown(sourceWidth * scale);
+  let contentHeight = alignDown(sourceHeight * scale);
+  if (contentWidth < STEP || contentHeight < STEP) return { ok: false, reason: "too_small" };
+  let padX = alignNear(contentWidth * (expandRatio - 1) / 2);
+  let padY = alignNear(contentHeight * (expandRatio - 1) / 2);
+  let width = contentWidth + padX * 2;
+  let height = contentHeight + padY * 2;
+  for (let guard = 0; guard < 120; guard += 1) {
+    if (width <= maxEdge && height <= maxEdge && width * height <= maxPixels) break;
+    contentWidth = alignDown(contentWidth * 0.98);
+    contentHeight = alignDown(contentHeight * 0.98);
+    if (contentWidth <= STEP || contentHeight <= STEP) return { ok: false, reason: "too_small" };
+    padX = alignNear(contentWidth * (expandRatio - 1) / 2);
+    padY = alignNear(contentHeight * (expandRatio - 1) / 2);
+    width = contentWidth + padX * 2;
+    height = contentHeight + padY * 2;
+  }
+  if (width > maxEdge || height > maxEdge || width * height > maxPixels) return { ok: false, reason: "bounds" };
+  if (width < minEdge || height < minEdge) return { ok: false, reason: "too_small" };
+  return layoutOf(width, height, contentWidth, contentHeight, anchor, OUTPAINT.expandId, contentWidth / sourceWidth);
+}
+function ratioPlanOf(sourceWidth, sourceHeight, ratioId, anchor) {
+  const targetRatio = RATIO_VALUES[ratioId];
+  if (!targetRatio) return { ok: false, reason: "invalid_ratio" };
+  const { maxEdge, maxPixels, minEdge } = boundsOf();
+  const aspect = sourceWidth / sourceHeight;
+  if (Math.abs(aspect - targetRatio) <= targetRatio * SAME_RATIO_EPSILON) {
+    return { ok: false, reason: "no_padding" };
+  }
+  let contentWidth;
+  let contentHeight;
+  if (aspect > targetRatio) {
+    const maxWidth = Math.min(maxEdge, maxEdge * targetRatio, Math.sqrt(maxPixels * targetRatio));
+    contentWidth = alignDown(Math.min(sourceWidth, maxWidth));
+    contentHeight = alignDown(contentWidth / aspect);
+  } else {
+    const maxHeight = Math.min(maxEdge, maxEdge / targetRatio, Math.sqrt(maxPixels / targetRatio));
+    contentHeight = alignDown(Math.min(sourceHeight, maxHeight));
+    contentWidth = alignDown(contentHeight * aspect);
+  }
+  if (contentWidth <= STEP || contentHeight <= STEP) return { ok: false, reason: "too_small" };
+  let width;
+  let height;
+  if (aspect > targetRatio) {
+    height = contentHeight + alignNear(Math.max(0, alignNear(contentWidth / targetRatio) - contentHeight));
+    width = contentWidth;
+  } else {
+    width = contentWidth + alignNear(Math.max(0, alignNear(contentHeight * targetRatio) - contentWidth));
+    height = contentHeight;
+  }
+  for (let guard = 0; guard < 120; guard += 1) {
+    if (width <= maxEdge && height <= maxEdge && width * height <= maxPixels) break;
+    contentWidth = alignDown(contentWidth * 0.98);
+    contentHeight = alignDown(contentHeight * 0.98);
+    if (contentWidth <= STEP || contentHeight <= STEP) return { ok: false, reason: "too_small" };
+    if (aspect > targetRatio) {
+      height = contentHeight + alignNear(Math.max(0, alignNear(contentWidth / targetRatio) - contentHeight));
+      width = contentWidth;
+    } else {
+      width = contentWidth + alignNear(Math.max(0, alignNear(contentHeight * targetRatio) - contentWidth));
+      height = contentHeight;
+    }
+  }
+  if (width > maxEdge || height > maxEdge || width * height > maxPixels) return { ok: false, reason: "bounds" };
+  if (width < minEdge || height < minEdge) return { ok: false, reason: "too_small" };
+  const scale = aspect > targetRatio ? contentWidth / sourceWidth : contentHeight / sourceHeight;
+  return layoutOf(width, height, contentWidth, contentHeight, anchor, ratioId, scale);
+}
+function outpaintPlanOf(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const sourceWidth = positiveSize3(source.sourceWidth);
+  const sourceHeight = positiveSize3(source.sourceHeight);
+  if (!sourceWidth || !sourceHeight) return { ok: false, reason: "invalid_source" };
+  const requested = typeof source.ratioId === "string" ? source.ratioId.trim() : "";
+  const ratioId = requested || OUTPAINT.expandId;
+  if (ratioId !== OUTPAINT.expandId && !OUTPAINT_RATIO_IDS.includes(ratioId)) {
+    return { ok: false, reason: "invalid_ratio" };
+  }
+  const anchor = outpaintAnchorOf(source.anchor);
+  if (ratioId === OUTPAINT.expandId) return expandPlanOf(sourceWidth, sourceHeight, anchor);
+  return ratioPlanOf(sourceWidth, sourceHeight, ratioId, anchor);
+}
+
+// src/studio/stage/OutpaintEditor.jsx
 var import_jsx_runtime30 = require("react/jsx-runtime");
+var HIT_STYLE = { minHeight: 44, minWidth: 44 };
+var KEY_STEP2 = 8;
+function percentOf3(coverage) {
+  const value = Number(coverage);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  const percent = Math.min(100, value * 100);
+  return percent >= 10 ? Math.round(percent) : Math.round(percent * 10) / 10;
+}
+function stripDataUrl(text) {
+  const value = typeof text === "string" ? text.trim() : "";
+  if (!value.startsWith("data:")) return value;
+  const comma = value.indexOf(",");
+  return comma >= 0 ? value.slice(comma + 1) : "";
+}
+function percentOfSize(value, total) {
+  if (!(Number(total) > 0)) return "0%";
+  return `${Number(value) / Number(total) * 100}%`;
+}
+function OutpaintEditor(props) {
+  const {
+    t,
+    target,
+    tool,
+    outpaint,
+    onRatioChange,
+    onAnchorChange,
+    onCanvasApply
+  } = props;
+  const targetWidth = Number(target && target.width);
+  const targetHeight = Number(target && target.height);
+  const [natural, setNatural] = import_react32.default.useState(() => ({
+    width: Number.isFinite(targetWidth) && targetWidth > 0 ? Math.round(targetWidth) : 0,
+    height: Number.isFinite(targetHeight) && targetHeight > 0 ? Math.round(targetHeight) : 0
+  }));
+  const [loaded, setLoaded] = import_react32.default.useState(false);
+  const [dragging, setDragging] = import_react32.default.useState(null);
+  const [notice, setNotice] = import_react32.default.useState("");
+  const imageRef = import_react32.default.useRef(null);
+  const stageRef = import_react32.default.useRef(null);
+  const dragRef = import_react32.default.useRef(null);
+  const dragAnchorRef = import_react32.default.useRef(null);
+  const applyRef = import_react32.default.useRef(onCanvasApply);
+  applyRef.current = onCanvasApply;
+  const canEdit = Boolean(target && target.path && tool && tool.id === "outpaint");
+  const ratioId = outpaint && typeof outpaint.ratioId === "string" && outpaint.ratioId ? outpaint.ratioId : OUTPAINT_EXPAND_ID;
+  const anchor = outpaintAnchorOf(outpaint && outpaint.anchor);
+  const options = import_react32.default.useMemo(() => outpaintRatioOptions(), []);
+  const plan = outpaintPlanOf({
+    sourceWidth: natural.width,
+    sourceHeight: natural.height,
+    ratioId,
+    anchor
+  });
+  const previewAnchor = dragging || anchor;
+  const previewPlan = outpaintPlanOf({
+    sourceWidth: natural.width,
+    sourceHeight: natural.height,
+    ratioId,
+    anchor: previewAnchor
+  });
+  function exportCanvas() {
+    if (!plan.ok) return;
+    const doc = typeof document === "undefined" ? null : document;
+    if (!doc || typeof doc.createElement !== "function") return;
+    const sourceImage = imageRef.current;
+    if (!sourceImage || sourceImage.complete === false) return;
+    const imageCanvas = doc.createElement("canvas");
+    imageCanvas.width = plan.width;
+    imageCanvas.height = plan.height;
+    const maskCanvas = doc.createElement("canvas");
+    maskCanvas.width = plan.width;
+    maskCanvas.height = plan.height;
+    const imageCtx = typeof imageCanvas.getContext === "function" ? imageCanvas.getContext("2d") : null;
+    const maskCtx = typeof maskCanvas.getContext === "function" ? maskCanvas.getContext("2d") : null;
+    if (!imageCtx || !maskCtx) return;
+    if (typeof imageCanvas.toDataURL !== "function" || typeof maskCanvas.toDataURL !== "function") return;
+    imageCtx.fillStyle = "#000000";
+    imageCtx.fillRect(0, 0, plan.width, plan.height);
+    try {
+      imageCtx.drawImage(
+        sourceImage,
+        plan.content.x,
+        plan.content.y,
+        plan.content.width,
+        plan.content.height
+      );
+    } catch {
+      return;
+    }
+    maskCtx.fillStyle = "#ffffff";
+    maskCtx.fillRect(0, 0, plan.width, plan.height);
+    maskCtx.fillStyle = "#000000";
+    maskCtx.fillRect(plan.content.x, plan.content.y, plan.content.width, plan.content.height);
+    const result = typeof applyRef.current === "function" ? applyRef.current({
+      image: stripDataUrl(imageCanvas.toDataURL("image/png")),
+      mask: stripDataUrl(maskCanvas.toDataURL("image/png")),
+      width: plan.width,
+      height: plan.height,
+      content: plan.content
+    }) : null;
+    if (result && result.ok === false) {
+      if (result.reason === "too_large") setNotice(t("studio.outpaint.tooLarge"));
+      else if (result.reason === "invalid") setNotice(t("studio.outpaint.invalidCanvas"));
+      else setNotice("");
+      return;
+    }
+    setNotice("");
+  }
+  const exportKey = plan.ok ? `${plan.ratioId}|${plan.width}x${plan.height}|${plan.content.x},${plan.content.y}|${natural.width}x${natural.height}` : "";
+  import_react32.default.useEffect(() => {
+    if (!exportKey || !loaded) return void 0;
+    let cancelled = false;
+    const timer2 = setTimeout(() => {
+      if (!cancelled) exportCanvas();
+    }, 0);
+    return () => {
+      cancelled = true;
+      if (typeof clearTimeout === "function") clearTimeout(timer2);
+    };
+  }, [exportKey, loaded, anchor.x, anchor.y]);
+  if (!canEdit) return null;
+  function onTargetLoad(event) {
+    const imageElement = event && event.target ? event.target : null;
+    const width = Number(imageElement && imageElement.naturalWidth);
+    const height = Number(imageElement && imageElement.naturalHeight);
+    setLoaded(true);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+    setNatural((prev) => prev.width === width && prev.height === height ? prev : { width, height });
+  }
+  function centerAnchor() {
+    if (typeof onAnchorChange === "function") onAnchorChange({ x: 0.5, y: 0.5 });
+    setDragging(null);
+  }
+  function onRatioClick(id) {
+    if (typeof onRatioChange === "function") onRatioChange(id);
+  }
+  function onContentPointerDown(event) {
+    if (!previewPlan.ok) return;
+    if (event && typeof event.preventDefault === "function") event.preventDefault();
+    if (event && event.currentTarget && typeof event.currentTarget.setPointerCapture === "function" && event.pointerId !== void 0) {
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+      }
+    }
+    const stage = stageRef.current;
+    const rect = stage && typeof stage.getBoundingClientRect === "function" ? stage.getBoundingClientRect() : null;
+    dragRef.current = {
+      startX: Number(event && event.clientX) || 0,
+      startY: Number(event && event.clientY) || 0,
+      startAnchor: previewAnchor,
+      padX: previewPlan.padding.left + previewPlan.padding.right,
+      padY: previewPlan.padding.top + previewPlan.padding.bottom,
+      scaleX: rect && rect.width > 0 ? previewPlan.width / rect.width : 1,
+      scaleY: rect && rect.height > 0 ? previewPlan.height / rect.height : 1,
+      moved: false
+    };
+    dragAnchorRef.current = previewAnchor;
+    setDragging(previewAnchor);
+  }
+  function onContentPointerMove(event) {
+    const drag = dragRef.current;
+    if (!drag || !previewPlan.ok) return;
+    const dx = ((Number(event && event.clientX) || 0) - drag.startX) * drag.scaleX;
+    const dy = ((Number(event && event.clientY) || 0) - drag.startY) * drag.scaleY;
+    if (dx === 0 && dy === 0) return;
+    drag.moved = true;
+    const next = { x: drag.startAnchor.x, y: drag.startAnchor.y };
+    if (drag.padX > 0) next.x = drag.startAnchor.x + dx / drag.padX;
+    if (drag.padY > 0) next.y = drag.startAnchor.y + dy / drag.padY;
+    const normalized = outpaintAnchorOf(next);
+    dragAnchorRef.current = normalized;
+    setDragging(normalized);
+  }
+  function onContentPointerUp(event) {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (event && event.currentTarget && typeof event.currentTarget.releasePointerCapture === "function" && event.pointerId !== void 0) {
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {
+      }
+    }
+    const next = dragAnchorRef.current || anchor;
+    dragAnchorRef.current = null;
+    setDragging(null);
+    if (drag && drag.moved && typeof onAnchorChange === "function") onAnchorChange(next);
+  }
+  function onContentKeyDown(event) {
+    if (!event || !previewPlan.ok) return;
+    const key = event.key;
+    if (key === "Home") {
+      if (typeof event.preventDefault === "function") event.preventDefault();
+      centerAnchor();
+      return;
+    }
+    let delta = null;
+    if (key === "ArrowLeft") delta = { x: -KEY_STEP2, y: 0 };
+    else if (key === "ArrowRight") delta = { x: KEY_STEP2, y: 0 };
+    else if (key === "ArrowUp") delta = { x: 0, y: -KEY_STEP2 };
+    else if (key === "ArrowDown") delta = { x: 0, y: KEY_STEP2 };
+    else return;
+    if (typeof event.preventDefault === "function") event.preventDefault();
+    if (typeof onAnchorChange === "function") {
+      onAnchorChange(outpaintAnchorShift(previewPlan, anchor, delta));
+    }
+  }
+  const layout = previewPlan.ok ? previewPlan : null;
+  const stageRatio = layout ? layout.width / layout.height : 1;
+  const percent = percentOf3(plan.ok ? plan.coverage : 0);
+  const coverageText = plan.ok ? formatText(t("studio.outpaint.coverage"), { percent }) : t("studio.outpaint.blockedCanvas");
+  return /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-outpaint-editor", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-outpaint-top", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-outpaint-head", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-outpaint-title", children: t("studio.outpaint.title") }),
+        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-outpaint-coverage ofs-muted", children: coverageText })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { className: "ofs-outpaint-ratios", role: "group", "aria-label": t("studio.outpaint.ratioLabel"), children: options.map((option) => {
+        const active = option.id === ratioId;
+        return /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+          "button",
+          {
+            type: "button",
+            className: active ? "ofs-outpaint-ratio is-on" : "ofs-outpaint-ratio",
+            style: HIT_STYLE,
+            "aria-pressed": active ? "true" : "false",
+            title: t(option.labelKey),
+            onClick: () => onRatioClick(option.id),
+            children: t(option.labelKey)
+          },
+          option.id
+        );
+      }) })
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { className: "ofs-outpaint-viewport", children: layout ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(
+      "div",
+      {
+        ref: stageRef,
+        className: "ofs-outpaint-stage",
+        style: { "--ofs-outpaint-r": String(stageRatio) },
+        children: [
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-outpaint-preview", role: "img", "aria-label": t("studio.outpaint.canvasLabel"), children: [
+            target.url ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+              "img",
+              {
+                ref: imageRef,
+                src: target.url,
+                alt: target.prompt || t("studio.image.alt"),
+                className: "ofs-outpaint-photo",
+                draggable: false,
+                onLoad: onTargetLoad,
+                style: {
+                  left: percentOfSize(layout.content.x, layout.width),
+                  top: percentOfSize(layout.content.y, layout.height),
+                  width: percentOfSize(layout.content.width, layout.width),
+                  height: percentOfSize(layout.content.height, layout.height)
+                }
+              }
+            ) : null,
+            layout.padding.top > 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+              "span",
+              {
+                className: "ofs-outpaint-shade",
+                "aria-hidden": "true",
+                style: { left: 0, top: 0, width: "100%", height: percentOfSize(layout.padding.top, layout.height) }
+              }
+            ) : null,
+            layout.padding.bottom > 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+              "span",
+              {
+                className: "ofs-outpaint-shade",
+                "aria-hidden": "true",
+                style: {
+                  left: 0,
+                  top: percentOfSize(layout.height - layout.padding.bottom, layout.height),
+                  width: "100%",
+                  height: percentOfSize(layout.padding.bottom, layout.height)
+                }
+              }
+            ) : null,
+            layout.padding.left > 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+              "span",
+              {
+                className: "ofs-outpaint-shade",
+                "aria-hidden": "true",
+                style: {
+                  left: 0,
+                  top: percentOfSize(layout.content.y, layout.height),
+                  width: percentOfSize(layout.padding.left, layout.width),
+                  height: percentOfSize(layout.content.height, layout.height)
+                }
+              }
+            ) : null,
+            layout.padding.right > 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+              "span",
+              {
+                className: "ofs-outpaint-shade",
+                "aria-hidden": "true",
+                style: {
+                  left: percentOfSize(layout.width - layout.padding.right, layout.width),
+                  top: percentOfSize(layout.content.y, layout.height),
+                  width: percentOfSize(layout.padding.right, layout.width),
+                  height: percentOfSize(layout.content.height, layout.height)
+                }
+              }
+            ) : null
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+            "button",
+            {
+              type: "button",
+              className: "ofs-outpaint-content",
+              "aria-label": t("studio.outpaint.dragHint"),
+              title: t("studio.outpaint.dragHint"),
+              style: {
+                left: percentOfSize(layout.content.x, layout.width),
+                top: percentOfSize(layout.content.y, layout.height),
+                width: percentOfSize(layout.content.width, layout.width),
+                height: percentOfSize(layout.content.height, layout.height)
+              },
+              onPointerDown: onContentPointerDown,
+              onPointerMove: onContentPointerMove,
+              onPointerUp: onContentPointerUp,
+              onPointerCancel: onContentPointerUp,
+              onDoubleClick: centerAnchor,
+              onKeyDown: onContentKeyDown,
+              children: /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-outpaint-grip", "aria-hidden": "true" })
+            }
+          )
+        ]
+      }
+    ) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "ofs-hint ofs-outpaint-empty", children: t("studio.outpaint.blockedCanvas") }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-outpaint-tools", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("button", { type: "button", className: "ofs-dock-button ofs-outpaint-center", style: HIT_STYLE, onClick: centerAnchor, children: t("studio.outpaint.center") }),
+      /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "ofs-hint ofs-outpaint-hint", children: t("studio.outpaint.hint") })
+    ] }),
+    notice ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "ofs-hint ofs-outpaint-warn", role: "status", children: notice }) : null
+  ] });
+}
+
+// src/studio/Stage.jsx
+var import_jsx_runtime31 = require("react/jsx-runtime");
 var FRESH_MS = 6e4;
 function isFreshItem(item, now) {
   const finishedAt = Date.parse(String(item && item.finishedAt || ""));
@@ -10501,7 +11264,7 @@ function ratioOf3(width, height) {
   if (!Number.isFinite(w) || !Number.isFinite(h2) || w <= 0 || h2 <= 0) return 1;
   return w / h2;
 }
-function percentOf3(coverage) {
+function percentOf4(coverage) {
   const value = Number(coverage);
   if (!Number.isFinite(value) || value <= 0) return 0;
   const percent = Math.min(100, value * 100);
@@ -10518,28 +11281,28 @@ function Stage(props) {
   const item = selected && selected.item || null;
   const params = item && item.params || null;
   const prompt = item && typeof item.prompt === "string" && item.prompt || params && typeof params.prompt === "string" && params.prompt || "";
-  const closeRef = import_react32.default.useRef(null);
-  const lightboxRef = import_react32.default.useRef(null);
-  const zoomOpenerRef = import_react32.default.useRef(null);
+  const closeRef = import_react33.default.useRef(null);
+  const lightboxRef = import_react33.default.useRef(null);
+  const zoomOpenerRef = import_react33.default.useRef(null);
   function openZoom() {
     zoomOpenerRef.current = document.activeElement || null;
     setZoom(true);
   }
   const activeTool = imageTool && imageTool.activeTool ? imageTool.activeTool : null;
   const editorOpen = Boolean(imageTool && imageTool.editorOpen && activeTool && imageTool.target);
-  const dropzoneRef = import_react32.default.useRef(null);
+  const dropzoneRef = import_react33.default.useRef(null);
   const compareOpen = Boolean(ui && ui.compareOpen);
   const setCompareOpen = ui && typeof ui.setCompareOpen === "function" ? ui.setCompareOpen : null;
   const imageKey = image ? image.path || image.file || image.url || "" : "";
   const sourceImage = item && typeof item.sourceImage === "string" && item.sourceImage || params && typeof params.sourceImage === "string" && params.sourceImage || "";
   const compareUrl = sourceImage ? referenceUrlOf(sourceImage) : "";
-  const compareKeyRef = import_react32.default.useRef(imageKey);
-  import_react32.default.useEffect(() => {
+  const compareKeyRef = import_react33.default.useRef(imageKey);
+  import_react33.default.useEffect(() => {
     if (compareKeyRef.current === imageKey) return;
     compareKeyRef.current = imageKey;
     if (setCompareOpen) setCompareOpen(false);
   }, [imageKey, setCompareOpen]);
-  import_react32.default.useEffect(() => {
+  import_react33.default.useEffect(() => {
     if (editorOpen && setCompareOpen) setCompareOpen(false);
   }, [editorOpen, setCompareOpen]);
   const hasGallery = Array.isArray(library.gallery) && library.gallery.length > 0;
@@ -10552,7 +11315,11 @@ function Stage(props) {
     enabled: tool.ready === true,
     hint: tool.ready === true ? "" : t(tool.plannedKey || "studio.imageTool.planned")
   }));
-  const draftStatusLabel = activeTool && !editorOpen && imageTool.mask ? formatText(t("studio.imageTool.draftStatus"), { percent: percentOf3(imageTool.coverage) }) : "";
+  const draftHasInk = Boolean(imageTool && imageTool.mask) || Boolean(activeTool && activeTool.id === "outpaint" && imageTool && imageTool.outpaint && imageTool.outpaint.canvas);
+  const draftStatusLabel = activeTool && !editorOpen && draftHasInk ? formatText(
+    t(activeTool.id === "outpaint" ? "studio.outpaint.coverage" : "studio.imageTool.draftStatus"),
+    { percent: percentOf4(imageTool.coverage) }
+  ) : "";
   const resumeLabel = activeTool ? t("studio.imageTool.resumeDraft") : "";
   const submitProps = {
     t,
@@ -10585,8 +11352,19 @@ function Stage(props) {
   };
   const target = imageTool ? imageTool.target : null;
   const promptPlaceholder = target && target.prompt || t("studio.imageTool.promptPlaceholder");
-  const editorNode = editorOpen ? activeTool.form === "canvas" ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(MaskEditor, { ...submitProps, mask: imageTool.mask, coverage: imageTool.coverage, onMaskApply: imageTool.applyMask, onMaskClear: imageTool.clearMask, now }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(InlineTool, { ...submitProps }) : null;
-  const dock = /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+  const editorNode = editorOpen ? activeTool.form === "canvas" ? activeTool.id === "outpaint" ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
+    OutpaintEditor,
+    {
+      ...submitProps,
+      outpaint: imageTool.outpaint,
+      coverage: imageTool.coverage,
+      onRatioChange: imageTool.setOutpaintRatio,
+      onAnchorChange: imageTool.setOutpaintAnchor,
+      onCanvasApply: imageTool.applyOutpaintCanvas,
+      now
+    }
+  ) : /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(MaskEditor, { ...submitProps, mask: imageTool.mask, coverage: imageTool.coverage, onMaskApply: imageTool.applyMask, onMaskClear: imageTool.clearMask, now }) : /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(InlineTool, { ...submitProps }) : null;
+  const dock = /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
     ImageDock,
     {
       t,
@@ -10609,21 +11387,23 @@ function Stage(props) {
   );
   let content = null;
   if (editorOpen) {
-    content = /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("section", { className: "ofs-stage", children: [
-      activeTool.form === "canvas" ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(import_jsx_runtime30.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("figure", { className: "ofs-figure", children: editorNode }),
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+    content = /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("section", { className: "ofs-stage", children: [
+      activeTool.form === "canvas" ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)(import_jsx_runtime31.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("figure", { className: "ofs-figure", children: editorNode }),
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
           ToolSubmitBar,
           {
             ...submitProps,
             promptPlaceholder,
-            maskCoverage: imageTool ? imageTool.coverage : 0
+            maskCoverage: imageTool ? imageTool.coverage : 0,
+            metaLabel: activeTool.id === "outpaint" ? t("studio.outpaint.coverage") : void 0,
+            metaPercent: activeTool.id === "outpaint" ? imageTool ? imageTool.coverage : 0 : void 0
           }
         )
       ] }) : editorNode,
-      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-stage-progress", "aria-hidden": "true", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-progress-label", children: progressText })
+      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-stage-progress", "aria-hidden": "true", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-progress-label", children: progressText })
       ] }) : null
     ] });
   } else if (showNewDraft) {
@@ -10632,37 +11412,37 @@ function Stage(props) {
     const frameRatio = ratioOf3(fields.width, fields.height);
     const preset = (compute.presets || []).find((option) => option && option.id === fields.presetId) || null;
     const steady = preset && Number.isFinite(Number(preset.steadySeconds)) ? Number(preset.steadySeconds) : null;
-    content = /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("section", { className: "ofs-stage ofs-stage--draft", children: /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-figure ofs-figure--draft", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-draft-backdrop", "aria-hidden": "true", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", {}),
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", {}),
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", {})
+    content = /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("section", { className: "ofs-stage ofs-stage--draft", children: /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-figure ofs-figure--draft", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-draft-backdrop", "aria-hidden": "true", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", {}),
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", {}),
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", {})
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-frame ofs-frame--draft", style: { "--ofs-frame-r": String(frameRatio) }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { className: "ofs-marks", "aria-hidden": "true", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", {})
+      /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-frame ofs-frame--draft", style: { "--ofs-frame-r": String(frameRatio) }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("span", { className: "ofs-marks", "aria-hidden": "true", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", {})
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { className: "ofs-frame-body", children: /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-empty-card ofs-draft-blank", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.newDraftTitle") }),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "ofs-muted", children: draftCard.pending || activeJob ? t("studio.stage.newDraftPending") : stopped ? t("studio.stage.stoppedHint") : t("studio.stage.newDraftHint") }),
-          draftCard.draft === true && draftCard.draftFrom ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "ofs-draft-source", children: formatText(t("studio.stage.draftFrom"), { prompt: draftCard.draftFrom }) }) : null,
-          !draftCard.pending && !activeJob && !draftCard.prompt ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-examples", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
-            INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { className: "ofs-frame-body", children: /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-empty-card ofs-draft-blank", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.newDraftTitle") }),
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("p", { className: "ofs-muted", children: draftCard.pending || activeJob ? t("studio.stage.newDraftPending") : stopped ? t("studio.stage.stoppedHint") : t("studio.stage.newDraftHint") }),
+          draftCard.draft === true && draftCard.draftFrom ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("p", { className: "ofs-draft-source", children: formatText(t("studio.stage.draftFrom"), { prompt: draftCard.draftFrom }) }) : null,
+          !draftCard.pending && !activeJob && !draftCard.prompt ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-examples", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
+            INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
           ] }) : null,
-          !draftCard.pending && !activeJob && steady !== null ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("p", { className: "ofs-exposure", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" }),
+          !draftCard.pending && !activeJob && steady !== null ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("p", { className: "ofs-exposure", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" }),
             t("studio.stage.steady"),
             " ",
             formatSeconds(t, steady),
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" })
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" })
           ] }) : null,
-          activeJob ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-stage-progress is-flow", "aria-hidden": "true", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-progress-label", children: progressText })
+          activeJob ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-stage-progress is-flow", "aria-hidden": "true", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-progress-label", children: progressText })
           ] }) : null
         ] }) })
       ] })
@@ -10674,33 +11454,33 @@ function Stage(props) {
     const frameRatio = ratioOf3(jobParams.width || fields.width, jobParams.height || fields.height);
     const preset = (compute.presets || []).find((option) => option && option.id === fields.presetId) || null;
     const steady = preset && Number.isFinite(Number(preset.steadySeconds)) ? Number(preset.steadySeconds) : null;
-    content = /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("section", { className: "ofs-stage", children: /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-figure ofs-figure--empty", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-frame", style: { "--ofs-frame-r": String(frameRatio) }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { className: "ofs-marks", "aria-hidden": "true", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", {})
+    content = /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("section", { className: "ofs-stage", children: /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-figure ofs-figure--empty", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-frame", style: { "--ofs-frame-r": String(frameRatio) }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("span", { className: "ofs-marks", "aria-hidden": "true", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", {})
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { className: "ofs-frame-body", children: activeJob ? null : /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-empty-card", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.empty") }),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "ofs-muted", children: stopped ? t("studio.stage.stoppedHint") : t("studio.stage.emptyHint") }),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-examples", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
-            INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { className: "ofs-frame-body", children: activeJob ? null : /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-empty-card", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.empty") }),
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("p", { className: "ofs-muted", children: stopped ? t("studio.stage.stoppedHint") : t("studio.stage.emptyHint") }),
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-examples", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
+            INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
           ] }),
-          steady !== null ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("p", { className: "ofs-exposure", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" }),
+          steady !== null ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("p", { className: "ofs-exposure", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" }),
             t("studio.stage.steady"),
             " ",
             formatSeconds(t, steady),
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" })
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" })
           ] }) : null
         ] }) })
       ] }),
-      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-stage-progress is-inside", "aria-hidden": "true", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-progress-label", children: progressText })
+      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-stage-progress is-inside", "aria-hidden": "true", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-progress-label", children: progressText })
       ] }) : null
     ] }) });
   }
@@ -10709,10 +11489,10 @@ function Stage(props) {
     const copyTarget = image.absolute || image.path || image.file;
     const printRatio = ratioOf3(image.width, image.height);
     const developing = isFreshItem(item, now);
-    content = /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("section", { className: "ofs-stage", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("figure", { className: "ofs-figure", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-print-slot", children: [
-          compareOpen && compareUrl ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+    content = /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("section", { className: "ofs-stage", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("figure", { className: "ofs-figure", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-print-slot", children: [
+          compareOpen && compareUrl ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
             CompareSlider,
             {
               t,
@@ -10722,7 +11502,7 @@ function Stage(props) {
               afterLabel: t("studio.compare.after"),
               ratio: printRatio
             }
-          ) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+          ) : /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
             "button",
             {
               type: "button",
@@ -10730,12 +11510,12 @@ function Stage(props) {
               style: { "--ofs-print-r": String(printRatio) },
               onClick: openZoom,
               title: t("studio.stage.zoom"),
-              children: /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("img", { src: image.url, alt: prompt || image.file || t("studio.image.alt"), className: "ofs-image" })
+              children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("img", { src: image.url, alt: prompt || image.file || t("studio.image.alt"), className: "ofs-image" })
             },
             imageKey
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-figure-tools", children: [
-            compareUrl && setCompareOpen ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-figure-tools", children: [
+            compareUrl && setCompareOpen ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
               "button",
               {
                 type: "button",
@@ -10744,12 +11524,12 @@ function Stage(props) {
                 title: t("studio.compare.toggle"),
                 "aria-label": t("studio.compare.toggle"),
                 "aria-pressed": compareOpen,
-                children: /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Icon, { name: "images", size: 16 })
+                children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Icon, { name: "images", size: 16 })
               }
             ) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: openZoom, title: t("studio.stage.zoom"), "aria-label": t("studio.stage.zoom"), children: /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Icon, { name: "expand", size: 16 }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: () => copyPath(copyTarget), title: t("studio.action.copyPath"), "aria-label": t("studio.action.copyPath"), children: /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Icon, { name: "copy", size: 16 }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: openZoom, title: t("studio.stage.zoom"), "aria-label": t("studio.stage.zoom"), children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Icon, { name: "expand", size: 16 }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: () => copyPath(copyTarget), title: t("studio.action.copyPath"), "aria-label": t("studio.action.copyPath"), children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Icon, { name: "copy", size: 16 }) }),
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
               "button",
               {
                 type: "button",
@@ -10758,28 +11538,28 @@ function Stage(props) {
                 title: favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
                 "aria-label": favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
                 "aria-pressed": favorite,
-                children: /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Icon, { name: favorite ? "starFilled" : "star", size: 16 })
+                children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Icon, { name: favorite ? "starFilled" : "star", size: 16 })
               }
             )
           ] })
         ] }),
-        activeJob ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-stage-progress", "aria-hidden": "true", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-progress-label", children: progressText })
+        activeJob ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-stage-progress", "aria-hidden": "true", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-progress-label", children: progressText })
         ] }) : null
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-stage-foot", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "ofs-stage-prompt", title: prompt || void 0, children: prompt }),
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-stage-meta", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-stage-foot", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("p", { className: "ofs-stage-prompt", title: prompt || void 0, children: prompt }),
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-stage-meta", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("span", { children: [
             image.width || "—",
             " × ",
             image.height || "—"
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { "aria-hidden": "true", children: "·" }),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { children: formatSeconds(t, image.seconds) }),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { "aria-hidden": "true", children: "·" }),
-          /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { "aria-hidden": "true", children: "·" }),
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { children: formatSeconds(t, image.seconds) }),
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { "aria-hidden": "true", children: "·" }),
+          /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("span", { children: [
             t("studio.meta.seed"),
             " ",
             image.seed ?? "—"
@@ -10787,7 +11567,7 @@ function Stage(props) {
         ] })
       ] }),
       dock,
-      zoom ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(
+      zoom ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)(
         "div",
         {
           className: "ofs-lightbox",
@@ -10797,7 +11577,7 @@ function Stage(props) {
           ref: lightboxRef,
           onClick: () => setZoom(false),
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
               "img",
               {
                 src: image.url,
@@ -10805,7 +11585,7 @@ function Stage(props) {
                 onClick: (event) => event.stopPropagation()
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
               "button",
               {
                 ref: closeRef,
@@ -10813,10 +11593,10 @@ function Stage(props) {
                 className: "ofs-lightbox-close",
                 onClick: () => setZoom(false),
                 "aria-label": t("studio.stage.close"),
-                children: /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Icon, { name: "close", size: 16 })
+                children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Icon, { name: "close", size: 16 })
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)(
               "button",
               {
                 type: "button",
@@ -10826,7 +11606,7 @@ function Stage(props) {
                   actions.openImageTool("inpaint", selected);
                 },
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Icon, { name: "image", size: 15 }),
+                  /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Icon, { name: "image", size: 15 }),
                   t("studio.action.reference")
                 ]
               }
@@ -10837,7 +11617,7 @@ function Stage(props) {
     ] });
   }
   const onImported = actions && typeof actions.activateImport === "function" ? actions.activateImport : void 0;
-  return /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
     ImageDropzone,
     {
       t,
@@ -10852,8 +11632,8 @@ function Stage(props) {
 }
 
 // src/studio/Toast.jsx
-var import_react33 = __toESM(require("react"), 1);
-var import_jsx_runtime31 = require("react/jsx-runtime");
+var import_react34 = __toESM(require("react"), 1);
+var import_jsx_runtime32 = require("react/jsx-runtime");
 function noticeSpecOf(t, kind, compute, actions) {
   if (!kind) return null;
   const specs = {
@@ -10891,28 +11671,28 @@ function Toast(props) {
   const dismiss = guidance && typeof guidance.dismiss === "function" ? guidance.dismiss : null;
   const openLogs = ui && typeof ui.openLogs === "function" ? ui.openLogs : null;
   const actionRun = spec && spec.action && typeof spec.action.run === "function" ? spec.action.run : null;
-  return /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-toast-stack", "aria-live": "polite", children: [
-    spec ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-toast ofs-toast--notice", role: "alert", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { className: "ofs-toast-icon", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Icon, { name: "alert", size: 14 }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-toast-body", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("p", { className: "ofs-toast-title", children: spec.title }),
-        detail ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("p", { className: "ofs-toast-detail", title: detail, children: detail }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "ofs-toast-actions", children: [
-          actionRun ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: actionRun, children: spec.action.label }) : null,
-          spec.logs && openLogs ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("button", { type: "button", className: "ofs-chip", onClick: (event) => openLogs(event.currentTarget), children: t("studio.guidance.viewLogs") }) : null,
-          dismiss ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("button", { type: "button", className: "ofs-chip", onClick: dismiss, children: t("studio.guidance.close") }) : null
+  return /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-toast-stack", "aria-live": "polite", children: [
+    spec ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-toast ofs-toast--notice", role: "alert", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-toast-icon", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "alert", size: 14 }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-toast-body", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("p", { className: "ofs-toast-title", children: spec.title }),
+        detail ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("p", { className: "ofs-toast-detail", title: detail, children: detail }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-toast-actions", children: [
+          actionRun ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: actionRun, children: spec.action.label }) : null,
+          spec.logs && openLogs ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("button", { type: "button", className: "ofs-chip", onClick: (event) => openLogs(event.currentTarget), children: t("studio.guidance.viewLogs") }) : null,
+          dismiss ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("button", { type: "button", className: "ofs-chip", onClick: dismiss, children: t("studio.guidance.close") }) : null
         ] })
       ] })
     ] }) : null,
-    toast ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { className: "ofs-toast", role: "status", children: toast.text }, toast.id) : null
+    toast ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("div", { className: "ofs-toast", role: "status", children: toast.text }, toast.id) : null
   ] });
 }
 
 // src/studio/TopBar.jsx
-var import_react36 = __toESM(require("react"), 1);
+var import_react37 = __toESM(require("react"), 1);
 
 // src/studio/ModelCardPicker.jsx
-var import_react34 = __toESM(require("react"), 1);
+var import_react35 = __toESM(require("react"), 1);
 
 // src/studio/posters/animagine-xl-3.1.webp
 var animagine_xl_3_1_default = "data:image/webp;base64,UklGRj4MAABXRUJQVlA4IDIMAABQLgCdASpwAHAAPo02kUglIyGhN3qrsKARiWIAzfSNxBe78md9X0YberzAeax6P/Oq6l70AOlw/wVqk6S+Dvjb+W5++XO0X7Po02SPx/1AsQuyL2j/Z+gX368CHVH8S9HX/F8SX796g/6Y9IrROqJn+d/fwl10dH5rN1Mwf6wcOvBCsj4oRO5xLIjXy0h7VGvOWDAMoFJoOB9tpwjnETvss2lM5HBTdm3sUM+iwYYRIM9UTmjhjcvT11mabLsn5cHP3MdHst1brWsgno5VaFn6E9JE2OxFhK/DV2WFSh7zHO5sl9x4X/WrK8T7/cTS7OGzUqHX2I2sTRTcElTCQ0u347Xz4F0j021izy4cBOvGoEiCdR+FavR2N8O8NamscwcSQ3oVdGpenpLMQLAffvPn3CHdfr6X9dOj1NExZbWO3tN0WCfEU9BubTQVjIq/DrKIx3rE4c2o7JdrKEfxeny5ca0eO1rKe9cOzWwLbNflGYICnep3foalz3gAAP7000ZnhZ4vmuuMkTKDJHFBdi/mmEDLo1llzm/qISqNVdyayyKOhpVGu62ysf21Dp/vn03XbwRv2tDxXJLm+D+ytSObZdL69zaWrC8Kdy2Qrid3p2wPImDzOHosc6Suo3YILzADT3ehxFnBGwhZ/Wm6gxlS5vIA2sMpv7MtircKiIpqwfeBcaBx5dQsWJ4brr8S6kKqnzP+9svtYgYnuQG148turJrS7IVLYNznA95z/drhdF5R9Dr/uXQiIdCegcOHDm2Fojs7fgGTlEoXh/xx/YayHnJwBp7jMrQ2W9pPq6hREBGLiIvKT1omBjtXeUJXXoFHiRp5JA4MtMxSlpP5o/mDyR5M2v6uG9CSUgsTxP58hf3P97Pt/MuqP9eo6YJoDJw7ArV4lTcOU+DC+mJ3ZQDYtd5anzX7WreLSrVwKBW1U75Q/3fnEhmkfAufqg4i+C+81AJGr+1BFyk0JiACJgCqs89/PTU+D9PKaZCc1erGbfmofGwX+GSoYn1t+jz9F68KDm7Gz+2qO+6oYRl/q5MXO+fNG5VPGAPMHt50MN4twH+i/6BQYTiniz7GMoAyiJUrHr4KErCP21zKly9jV2rGTJB6T+oRvwmA7zpVE1Sd5OYFq0hJOprb36xkuy0vAgG2oy+Mz0rH/Ht8I4shOM8mBxUhtc3XaEQpL7EHIp7+EVjqVeg97yNEttvDFtaDH1FnYcfabx7+vIB6ACLb99WlRt0kiINwsttJTsJuD/E45gKIDBbtlEUl5uket/eWlh0CtzV6pn5+3p+ZuTtc/DVZ2wcevUPpqqv3eCcK0LVNiC3JJpb5cpLBpunMfSGzZ2Ye4zXDd0I2ogyasH3H6CAX9cqzi8tK3SAWGzoXQWBCPzQ17c9QUUavVe5jMrulmV27fD2GqD9etsFHasHhv4j7tIkUpT1EbPhPhLN8MCAxrA0HXgQGKZIX6UK1YvcWywz+3BFek2Is/Y2MuO57eTTMk0J8WGYmyd4pUfP+xcixXZyuXLUOLdwJqGt1P69pg3/jKRT5NSOAqnZfO/12OZdRXhgvD+gfVIKRwdApojBMq8TdpUSqIooHuqCgDaqyn2B8rp2nG+Kmc639uGKuXCa6vTUHvuOqvCw/U5qQJqbtSAOLjdYWuMSxU5RK7B4RlBGvp3pO8fHgHqDrMGywz5nTQZRbDnuycWdpZTBvpDgz9RbiN3mfKalqbKNoUr1liODuGks4Jvwqr49vS812pP893dLZkFtis6kFA2dAwgQZDRl/DXfXMs+0PEk3E2U7ZHVTK53zsfK+aZNd0zhrqjnAUjdsMdfGq+eH7gLwbnxcydzF9Uh3oKKus1IB69tK1nJ3QmV1hZPsxFe1jaMdKP9KGGOXlXCWMx666oviGICin6sMj9KQYjPtbR1+BzULQeM79UNnn0ySuZ8yYl1n8Yvl1VR2JFxTfbAHOn3WJm5BtWdlkBVgF1xxHDfdqS2tQzhZrlnrtha242RHRVjpweOFjggi7yYDk5t5JoKqGL4opofQISwwEriwuo+bpjq12t6N2WzNna9oQI3lxbuW+Cix5k1fb6MeFST/9RFC9WeJI0S7nRLpjEMB83yFLKc13UNwj3h0cT+cQotgP7+VhGIuxRBZIlVwGwKlFWt0F1nGepdpIQ7KzVPcmfz4IShcUr70bRcOpBRnApDnv/vBqrg1/va1JXdAIlRX2LJuOT25nDD+XjKlWK+xRZxlPg45zfGTrrpLNVaSWjZCSITn/IluVsekszCZj542nNCEN7O8WB+2rH1Hgu7a8kEGrw6/UBgedAIq07DoJvMrMS5E7//4dOMD5V1y2ppH4x6lEZn+YtcHeELvivgDQqJW5JMp2/3O+3J9pgHzG5YJuqbtCZrgmy++FGNwlwLJlzazHL+1tlTTC4/zCZBkKd8hwgzIqjJfsmNilE2A1BmlNceFDm4Q8qzAm/sO86Fw1Xzs1EuVe+fk5T9KymZ9uI954QfJRxW00xxaMHt+dfw4lBThUooj8p7RdQV8bd0pFLxRG0iQ2GgxlRyuaT5iBAr/XCTMO8HAXGf7nJSyL2rLvjbP1M/QXTYTuP//ZD5S1xSUmEJXzU/1PKhc9iqW3NrQwe5lfTCMBLYlXWv0q8/hBNWtmqK01288hpmRwunEijcmd7qAaNKJb6wwv4exBn+b2/ttkbNFW8UIie65jfSJO2OVZZSBXr3sTw62arC+cpPcODCaIe7m6j3GyqCY2RxA2EmuX7bwCkQvEwAnH5mZ6wr1a5WpuQcwoBnEA43KyPpb/4zTmheI+pxo7B3jJCTjt/iMuzzd9s8kVH5AwwLENivQ27yaOxjLDH51y9v0b+IHp8MHIroYCm61DDyDghfA0d62pc16e1KsSQ1tTvMW97yG+7pDzsG5OqX0PgPJTTDr9kit13rBnjeZUeOFC4DCWrbbtQuJgcgDUfgCTuRDqXYmCOQmvLqJDz2VSlj6yG1Bjd63VQGiZY3y/6bns7/mdOa90d/Z5QmgolBHzfLEKyvRcrEG/M5wYwCz4PT7LGKafWQcIfX8uNyCeUm0k1/cQxx2NcRMIKy8ATg3Ds6njAs46wN2SmyXiQBZQYlgaes/7AvRSBDOI40W9G1ZiRTScsbWpE4QItRXM7q5LZmnWIqfCzuVF8au4QnXojHH32LxVGFHbG4DDVaGi0LZSCHppSUk2yPVObuwl01uDNpsgcBvNbOtIs2aoLYr+Kkzysu7jbqXbsiPEUr/7MH+gFvopyfOizqem1Un8VKK39KMmxBg1j4vu5p5Byp/WQkpXrM7h3bZdk9BHP52gmSEhuxhtz+EsNHrJfq3qQ+vO0N9CunS0rrIN/AhjcU81ZjNUoxLc0XT8WicXO1Ix+b1vKXj2INDPO8knrBWZwRTtYKec+edlz3wUbUB+95loU0jdgg/cwJT4FfxRA9QbTQlK/Wj+ic5XJnVa85Z8Xub50zj4Wx9U7cUow7yf6AAuMUh7MO4WRnu2xh2AnEIt5lQawkZga/cIMUk5/wkvBzBmwCfw2X1ZQC7vvNcjhSz2VXEeX3uYXfhtB7dGGo/QXgvDfoSlqHnMOd9aRJaV83cpFgLrCO6QW/IpZrsLho2swkrvun3wxdK89rzd4kwGw7OPsL6QJHaHGPRLJsbCpCmGZG7nJLdhWa9Fly74GkqkU+I4XVIV5T60KiS/9cgUL68UXz00zPz0CRUNWnBrDLcHFYReUZ4w7BGlilnkCfM3WgktXOBZTtqRuvlEs39yIPU/zjNKnA1kQDC+NQyZw4a3R5Gr5Vpb5b9wst1VwedQzu5D2loS42J3ge9bXlekU0u3UG8csq/j8sE0aVH9HhvIvVu1tYJyR3apqTPj2JglKaHzzNRdIUfD3TvI7ChQRzx46l0Cscw2BCqEhDm4PXQyUtu54tfYn9Eos6WvlJvCg2iCSWwjVnRACkS/MIBFvLuGg/qViFYpnASj7psF7t08Ph4hjQQkKROwn/VA3JyAlrI+fTAqlpTy/Ri567w9do/HYMoIH4WEoS2N2Ba6FaSByZhGAFqstIYvj9hI+v8aaSQ5AJz9pyxfgonu6S+RJ2/ut6Lcl1b+TkyP9fPKQf57kFQcvkg8ssQRBMWd+g2wVTa0gSC/jP8v8GFqH87d8AapdP5UgA/EAAAAA==";
@@ -10942,7 +11722,7 @@ var realvis_v5_default = "data:image/webp;base64,UklGRmQFAABXRUJQVlA4IFgFAAAQJAC
 var sdxl_turbo_default = "data:image/webp;base64,UklGRkwLAABXRUJQVlA4IEALAACQLACdASpwAHAAPo06lUglI6IhNZdO+KARiWwAsv8hR2fK+ZFXH8FsJldeUq+N/tvUx+ht6d+6Pq5/bT9nffV9Mf/P9HL+zdbD6AHnO+sB5XPX6ad3xnxa9KIihxfVJ39/MHUCuOd3Bs3+o5R6eF+u6NPT7wlTSGl89H4ZbwsqMPCzFFT1xA7/1Hwgdf/zx//s4HTf+YQiPvW81nqOl8A2xN6o0G9ri0cXcduyW5uMLu5dwnCzsr52TzLvamBwPDWjAI9O9MFzWNsI7EtL6HdufnA1lMBeBtgovAksGg/Klqe5uC4Qtq+c/slf/W+Zq3U4EMc5ksQDegTrlJgL3WaYoDzHM6iE/uSiaLkvVN/QLC6Z6tzsJb7ZI0MtyhlN6B1UKDRfIL7s28SqNx1BOLi9N1LlWilbXS1n8YgxNH4oQW6EiUF7s+f7CgrsKG2pu2RiMUp2nyuKKSl8kKJ9utYCsY/z938dUEnuJkdDgAD+2IvRErU87UDtgc3To785vxbvrG9Y7uxklJG5T872jf6wxr+OWDMMClFgIzdIyrrwsAv+z9MySVMXqrNTReZTBymIQyIUvK1ys3TvSWMmvzvMGVyAA/t9mau9fsZQLFnvRqyuDOJm40Ji/YWjj471EDTlD+uW51wv6pz0W4aXaXHbvgPjFe+2uCuBlsqs4ULv4TQ5J67wUauutxlUm2QZ77Xt9F1/Nvph2Sq4rmvuSXxEc4tfBb8/ODBw5OifshVtDG3MYUnAOx9mlnV3Wbh7ti5gnoT+pk9MVmlgwtnpBcTXXnzx6McGNeDNsIQb7slBx4JdJWI6kI8Bx9zS1LKYFx9CGq7k3cBQS7QUHo+rCbFa0lXPfTtUKGk/H8jiK0HuTDvxoFaeCNu/cYhfewe/PRkQayjTAd2huSq5YACqQ4IGTBqm7JJq9lTQ0GcrQ76L+Zf2NjfVD5QmbQnaokgnk0Q/EFsLl8Sp5ve25LSRI32vmCyzTMu34jwhRRERm5tvVAFAO/nV0DS+6ZnO9MFUD5ct89HzyPFqNvcktQulN4du9KtuLIR+BhVvnw+HN2IamOt/tIeaGrKbqEdVfgJRLlnzmQMZZ9g6llz1zAe4pGT4fgaqhMbkZ7vCmHK5VbKeBNEzPgDKk5BDO71cyZXPmBwXLFdHK9Icq+yUT18lpMuSkweVV8bFIU4x754zPKLbt61N8Xi1SY6ss4T8HdIdPkmIr/BKwuxO7Mgw0zzAUyR3eGtm3i8xFaPaUCf9lOemLW0MoYimfrzDHU7KIWup5fDimmZcepwqHepdxlrn5DPAMguXeZy8vkTRMUhm6kNihDW0S0o3RrBj7YPBSbnUGM5hBtmdoWxZ1fKLb+9rLQQjCw28FKZULmWOWh9FjQHiFrQHG5QIXEx0LYnIDo15d+yLDbndpV2VFznQ+knpeNYPu8/aXgKCqM/8xYH8PCF3T628j+NKAf528r7MsAd1BH0XATPVtIhu6mK3PUlvJKbqQOylSP2QzpFIPDGCTkAEVDBF2DJ3tQAU4XP96r0FF7Uan94OWr5EoFqhHm9h3NVJ26gZCiyf21syyEHA0rCsBdJYz/rcQsD9ixzGUWu0u2aXy9SOFtNLjBfOSVyMJZz8zesgNuhw1aekEfUSw1EdnuYpF7dAN5UYhAxT4m7Ms75XkxJh1c3uHYEEbjYw5l/dezaKGVt95NhoD8K4F/wd1KuZWCNJXRDC/6rR2OZ8p22P97Ka5e6MD7SNf5vq2bfzd26CDoWFPqu17a8Vohvg8VxgSNe0M5Kj/IQPtTk7IoiTbCuDsgyFgX5JiZakIFhJHRu9jWCsU0QOLOwzdZzpvOp+Ky635rqqLQM7ACcCS6quaixQ3PS7xg8DBrlAPWGBBYujdSGsmnZi2ZdxSTN0Vh1hYHDmuLOLkn24jAmfg7Q8csiKaSq76BZIj5+G3Rp5h5xy8aZsuucCcENoqwrn+HVHFhVpQn7eo5Z0TGbd9kuu04z9av2LsHzJmXKD38U3e9eWdSvq84QK5dOIVBxJ3Jz7RLH/7Zub13NKuamJsGVPIjSgq/WUFtEmDOgV0s7oWCJ5H5dmwrjTcAkX5pOddRXi0PiZQ40hV9FFTzg61v1S3al0cvM9kAjIiroaUKuw5YtYY39NSOnW3xDWwXpPaB4etcxvX2Ou+BA57CxGBgCGJm487yuGbDdHpOjVGBV7/y5NiVNSK/dfp5mSruH55XOeGdRfcqmXj3Re3ykk49u0+lpJfiW5ox/PqibhL502IoWGd0d+b7Siza+ej3Oi6EsvgKxg5jWrMd53uEdewRPg9KIDtDHIwuKZ5DSd2e7ratdU3JdbacU6N+KfT/ZrIfRHLwUk22uxJy1sIXewegO1yxXRNlEoLHLTCK+wGyT2U9okgRdYVPqmax1SPXo2O30zubcnl3fZ74ODvEGlgQr/RMnjeCBDhjvXKweT0FhpEDlkWytlSBwxB65zc285Rv9AztBXNy6XgnAr6Tqh5RR97xdXNurY2N3ZKP+1j99ybEN2ZNiYJLYaZKYV6DaSVbXgcr2b83toq3L74X5wM7yUEeHBbpEBNvLtlWENpZtBkp8WTptCwTNT4UOlU6OFQTq5fdgoE+Z+UxDCDLCl98UWVfvSCE7gsuEGcrxv04iKo/qYv/MS+MWWWyWINjnlRgiPseEycbadm6IxmJC2/QHI7EWyx3D4GMsV3HWTj7kE00GO6w09G2jBUjCbM1MqwsinPzOXgkSEz8IJVWNPmvZHvnE3HsrpW9T8vJKYXfGfW0RCWs4XvOPXNltuwEqE91PtQP45JNSn/+kwfFrHCaXkBkM2Czo1Rmumqo6S+DrH85eaee5MHNHkzGFvjPYSnzynV48lxDntaS9iSMdzGlQc3LY7j8QwLBuN/JOFFjwIpy9bL7yAAAC3IEMqdhRHA6lQfgdlYHY4IaAx4Er/zF4tcnN97wTdLX7f9Fo9Dk0i6pfiwHNiAB9oPk5w70hY4/sPBXdTdRApd/c4lZfRg67R+JMwolB8Utn7NDDe3gaPo/7r8og2gxbaML30q9Ul4okz/pj/MjvNULV0Sg6Ao5vb6Zaf8wLCnV/6GI6B/v71rTQPwqSgpFY3Wlc+d48FBJMhHU4mZj2XCZIn2liDlDPdpA+LjIELb5JJMSYoyqnjv8l47blKRtbZ9rBQ+OMn56STv4ncrOdoWCHSPLZEp2icLw70lHdtjX6Mky7eVGv9lc+M4/UqbpOFAZbfvn0HEHrGgSijozpFiPqehnMtXdLpXv1EYGEpjaQ+BZuSD2v0iKrvCtwjrNgPQ+XDtz8tRpVD8SW3aZ7A1ylo+Txm2nD4Lg+jHNXKCjiAhBgOCA7I2Ovrl2v9p1TLYjFcOV/YKF/BQ/iK7GhCZkI7UFLkvD6synmPyE4/4OxdQEnzc84EK1ogK/8wuKowKItmfaBFkzhPtPsQ9/moVQHqR/G2P6BIQsF+fxzXprCxYMB8oj6177N+GXi8P5gPAiawl1sTbjB98GWLDjtaRzJPYXwYBmkxV6yR8VAiCIdzf3NZFq10mdzJuM8z1rbmr+dw9M3yX5OS6dtRoDQnTu51O+SCaKA5TBW1nsJs/2Lpb7VMSAZyFDrCiJ4M9j31BuqgpSpqnJdgyMMFOE3Ik+pYOdWZ92BOurYEDxZBNyySNiugFHYLIlZgqsOcYvXVWJJIa3n1Z8O/WmqRnqprSpfd7bAxVTk5odM7VhCCkFSSgUl+LKwLxrAc0MZHT3LEoURP885MjEg6sJodrCRLktMa6MyNO2FkplRaYbdb1ZbP6iB5rryzgUupUXWQBobhOivudDCeOCMWDAukjbEKSLer5kCgEAA=";
 
 // src/studio/ModelCardPicker.jsx
-var import_jsx_runtime32 = require("react/jsx-runtime");
+var import_jsx_runtime33 = require("react/jsx-runtime");
 var MENU_ID = "ofs-model-menu";
 var POSTERS = {
   "sdxl-lightning": sdxl_lightning_default,
@@ -10993,10 +11773,10 @@ function ModelCardPicker(props) {
   const { t, isEn, presets, value, defaultPreset, onChange, open, onOpenChange } = props;
   const list = Array.isArray(presets) ? presets : [];
   const active = list.find((preset) => preset.id === value) || list[0] || null;
-  const rootRef = import_react34.default.useRef(null);
-  const triggerRef = import_react34.default.useRef(null);
-  const listRef = import_react34.default.useRef(null);
-  import_react34.default.useEffect(() => {
+  const rootRef = import_react35.default.useRef(null);
+  const triggerRef = import_react35.default.useRef(null);
+  const listRef = import_react35.default.useRef(null);
+  import_react35.default.useEffect(() => {
     if (!open || !listRef.current) return;
     const options = listRef.current.querySelectorAll('[role="option"]');
     if (options.length === 0) return;
@@ -11005,7 +11785,7 @@ function ModelCardPicker(props) {
     if (typeof target.focus === "function") target.focus({ preventScroll: true });
     if (typeof target.scrollIntoView === "function") target.scrollIntoView({ block: "nearest" });
   }, [open, value, list]);
-  import_react34.default.useEffect(() => {
+  import_react35.default.useEffect(() => {
     if (!open) return void 0;
     function onKeyDown(event) {
       if (event.key === "Escape") {
@@ -11048,15 +11828,15 @@ function ModelCardPicker(props) {
     if (typeof next.scrollIntoView === "function") next.scrollIntoView({ block: "nearest" });
   }
   if (!active) {
-    return /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { className: "ofs-model is-empty", "aria-hidden": "true", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "sliders", size: 14 }),
-      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-now", children: "—" })
+    return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { className: "ofs-model is-empty", "aria-hidden": "true", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Icon, { name: "sliders", size: 14 }),
+      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-now", children: "—" })
     ] });
   }
   const eta = etaOf(t, active);
   const poster = POSTERS[active.id] || "";
-  return /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-model-wrap", ref: rootRef, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { className: "ofs-model-wrap", ref: rootRef, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
       "button",
       {
         ref: triggerRef,
@@ -11074,30 +11854,30 @@ function ModelCardPicker(props) {
           }
         },
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "sliders", size: 14 }),
-          active.family ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-family", children: active.family }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-now", children: shortOf(active) }),
-          eta ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(import_jsx_runtime32.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-div", "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-eta", children: eta })
+          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Icon, { name: "sliders", size: 14 }),
+          active.family ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-family", children: active.family }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-now", children: shortOf(active) }),
+          eta ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(import_jsx_runtime33.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-div", "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-eta", children: eta })
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "chevronDown", size: 13, className: "ofs-model-caret" })
+          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Icon, { name: "chevronDown", size: 13, className: "ofs-model-caret" })
         ]
       }
     ),
-    open ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-model-menu", id: MENU_ID, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-model-head", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { children: `${t(LABELS.menuTitle)}${list.length > 1 ? ` · ${list.length}` : ""}` }),
-        /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { children: t(LABELS.measured) })
+    open ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { className: "ofs-model-menu", id: MENU_ID, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { className: "ofs-model-head", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { children: `${t(LABELS.menuTitle)}${list.length > 1 ? ` · ${list.length}` : ""}` }),
+        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { children: t(LABELS.measured) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("div", { className: "ofs-model-list", role: "listbox", "aria-label": t(LABELS.menuTitle), ref: listRef, onKeyDown: onListKeyDown, children: list.map((preset) => {
+      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { className: "ofs-model-list", role: "listbox", "aria-label": t(LABELS.menuTitle), ref: listRef, onKeyDown: onListKeyDown, children: list.map((preset) => {
         const selected = preset.id === active.id;
         const image = POSTERS[preset.id] || "";
         const isDefault = preset.id === defaultPreset;
         const imageToolOnly = preset.inpaintOnly === true;
         const optionEta = etaOf(t, preset);
         const description = descriptionOf(preset, isEn);
-        return /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(
+        return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
           "button",
           {
             type: "button",
@@ -11110,37 +11890,37 @@ function ModelCardPicker(props) {
             title: imageToolOnly ? t(LABELS.imageToolOnly) : void 0,
             onClick: () => choose(preset),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-poster", "aria-hidden": "true", children: image ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("img", { src: image, alt: "", width: "56", height: "56", draggable: "false" }) : /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-poster-fallback", children: (preset.family || preset.id || "M").slice(0, 1) }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { className: "ofs-model-copy", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { className: "ofs-model-line", children: [
-                  preset.family ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-fam", children: preset.family }) : null,
-                  /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-name", children: shortOf(preset) }),
-                  imageToolOnly ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-lang is-tool-only", children: t(LABELS.imageToolOnly) }) : /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: preset.supportsChinese === true ? "ofs-model-lang is-zh" : "ofs-model-lang", children: t(preset.supportsChinese === true ? LABELS.langZhEn : LABELS.langEnOnly) }),
-                  isDefault ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-default", children: t(LABELS.default) }) : null
+              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-poster", "aria-hidden": "true", children: image ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("img", { src: image, alt: "", width: "56", height: "56", draggable: "false" }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-poster-fallback", children: (preset.family || preset.id || "M").slice(0, 1) }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { className: "ofs-model-copy", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { className: "ofs-model-line", children: [
+                  preset.family ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-fam", children: preset.family }) : null,
+                  /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-name", children: shortOf(preset) }),
+                  imageToolOnly ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-lang is-tool-only", children: t(LABELS.imageToolOnly) }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: preset.supportsChinese === true ? "ofs-model-lang is-zh" : "ofs-model-lang", children: t(preset.supportsChinese === true ? LABELS.langZhEn : LABELS.langEnOnly) }),
+                  isDefault ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-default", children: t(LABELS.default) }) : null
                 ] }),
-                description ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-desc", children: description }) : null,
-                /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-spec", children: specOf(t, preset) })
+                description ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-desc", children: description }) : null,
+                /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-spec", children: specOf(t, preset) })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { className: "ofs-model-side", children: [
-                optionEta ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-option-eta", children: optionEta }) : /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-option-eta" }),
-                /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-model-check", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "check", size: 15 }) })
+              /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { className: "ofs-model-side", children: [
+                optionEta ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-option-eta", children: optionEta }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-option-eta" }),
+                /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "ofs-model-check", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Icon, { name: "check", size: 15 }) })
               ] })
             ]
           },
           preset.id
         );
       }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("div", { className: "ofs-model-foot", children: t(LABELS.footer) })
+      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { className: "ofs-model-foot", children: t(LABELS.footer) })
     ] }) : null
   ] });
 }
 
 // src/studio/StudioIcon.jsx
-var import_react35 = __toESM(require("react"), 1);
-var import_jsx_runtime33 = require("react/jsx-runtime");
+var import_react36 = __toESM(require("react"), 1);
+var import_jsx_runtime34 = require("react/jsx-runtime");
 function StudioIcon(props) {
   const size = props && props.size || 20;
-  return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(
     "svg",
     {
       width: size,
@@ -11153,18 +11933,18 @@ function StudioIcon(props) {
       strokeLinejoin: "round",
       "aria-hidden": "true",
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("path", { d: "M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8" }),
-        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("path", { d: "M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8" }),
-        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("path", { d: "M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16" }),
-        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("path", { d: "M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" }),
-        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("circle", { cx: "12", cy: "12", r: "3.2" })
+        /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("path", { d: "M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8" }),
+        /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("path", { d: "M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8" }),
+        /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("path", { d: "M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16" }),
+        /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("path", { d: "M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" }),
+        /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("circle", { cx: "12", cy: "12", r: "3.2" })
       ]
     }
   );
 }
 
 // src/studio/TopBar.jsx
-var import_jsx_runtime34 = require("react/jsx-runtime");
+var import_jsx_runtime35 = require("react/jsx-runtime");
 function TopBar(props) {
   const { t, isEn, ui, compute, library } = props;
   const { form: fields, patchForm, selectPreset } = props.form;
@@ -11185,13 +11965,13 @@ function TopBar(props) {
     openFolder
   } = compute;
   const status = compute.status || computeStatusOf(t, { session });
-  const [open, setOpen] = import_react36.default.useState(Boolean(props.defaultOpen));
-  const [modelOpen, setModelOpen] = import_react36.default.useState(Boolean(props.defaultModelOpen));
-  const wrapRef = import_react36.default.useRef(null);
-  const pillRef = import_react36.default.useRef(null);
+  const [open, setOpen] = import_react37.default.useState(Boolean(props.defaultOpen));
+  const [modelOpen, setModelOpen] = import_react37.default.useState(Boolean(props.defaultModelOpen));
+  const wrapRef = import_react37.default.useRef(null);
+  const pillRef = import_react37.default.useRef(null);
   const snapshot2 = useHostSnapshot(open);
   const now = useNow(open);
-  import_react36.default.useEffect(() => {
+  import_react37.default.useEffect(() => {
     if (!open) return void 0;
     function onKey(event) {
       if (event.key === "Escape") setOpen(false);
@@ -11234,24 +12014,24 @@ function TopBar(props) {
     if (value === "unavailable") return t("value.quotaUnavailable");
     return t("value.unknown");
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("header", { className: "ofs-topbar", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "ofs-brand", title: t("studio.nav.label"), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-brand-mark", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(StudioIcon, { size: 18 }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-brand-name", children: t("studio.brand") }),
-      /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-brand-sub", children: t("studio.brandSub") })
+  return /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("header", { className: "ofs-topbar", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "ofs-brand", title: t("studio.nav.label"), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "ofs-brand-mark", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(StudioIcon, { size: 18 }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "ofs-brand-name", children: t("studio.brand") }),
+      /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "ofs-brand-sub", children: t("studio.brandSub") })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("nav", { className: "ofs-tabs", "aria-label": t("studio.tabs"), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("button", { type: "button", className: view === "studio" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("studio"), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Icon, { name: "sparkles", size: 15 }),
+    /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("nav", { className: "ofs-tabs", "aria-label": t("studio.tabs"), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("button", { type: "button", className: view === "studio" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("studio"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Icon, { name: "sparkles", size: 15 }),
         t("studio.tab.studio")
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("button", { type: "button", className: view === "gallery" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("gallery"), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Icon, { name: "images", size: 15 }),
+      /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("button", { type: "button", className: view === "gallery" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("gallery"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Icon, { name: "images", size: 15 }),
         t("studio.tab.gallery")
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-grow" }),
-    openFolder ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "ofs-grow" }),
+    openFolder ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
       "button",
       {
         type: "button",
@@ -11259,12 +12039,12 @@ function TopBar(props) {
         onClick: openFolder,
         title: t("studio.action.openFolder"),
         "aria-label": t("studio.action.openFolder"),
-        children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Icon, { name: "folder", size: 16 })
+        children: /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Icon, { name: "folder", size: 16 })
       }
     ) : null,
-    library.loadHistory ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("button", { type: "button", className: "ofs-icon-btn", onClick: library.loadHistory, title: t("studio.refresh"), "aria-label": t("studio.refresh"), children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Icon, { name: "refresh", size: 16 }) }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "ofs-pill-wrap", ref: wrapRef, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(
+    library.loadHistory ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("button", { type: "button", className: "ofs-icon-btn", onClick: library.loadHistory, title: t("studio.refresh"), "aria-label": t("studio.refresh"), children: /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Icon, { name: "refresh", size: 16 }) }) : null,
+    /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "ofs-pill-wrap", ref: wrapRef, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(
         "button",
         {
           ref: pillRef,
@@ -11280,17 +12060,17 @@ function TopBar(props) {
           "aria-expanded": open,
           "aria-haspopup": "menu",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { children: status.label }),
-            quotaUsed !== null && quotaTotal !== null ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("em", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { children: status.label }),
+            quotaUsed !== null && quotaTotal !== null ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("em", { children: [
               quotaUsed,
               " / ",
               quotaTotal,
               " ",
               t("unit.hour")
             ] }) : null,
-            providerUsage && Number.isFinite(providerUsage.balance) ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("em", { children: formatText(t("studio.compute.ccu"), { balance: providerUsage.balance.toFixed(1) }) }) : null,
-            update ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+            providerUsage && Number.isFinite(providerUsage.balance) ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("em", { children: formatText(t("studio.compute.ccu"), { balance: providerUsage.balance.toFixed(1) }) }) : null,
+            update ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
               "span",
               {
                 className: "ofs-update-dot",
@@ -11299,55 +12079,55 @@ function TopBar(props) {
                 title: formatText(t("studio.update.available"), { latest: update.latest, current: update.current })
               }
             ) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-pill-caret", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Icon, { name: "chevronDown", size: 13 }) })
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "ofs-pill-caret", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Icon, { name: "chevronDown", size: 13 }) })
           ]
         }
       ),
-      open ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "ofs-popover", role: "menu", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "ofs-popover-head", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("b", { children: status.label }),
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Tooltip, { text: status.tooltip, side: "bottom" })
+      open ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "ofs-popover", role: "menu", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "ofs-popover-head", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("span", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("b", { children: status.label }),
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Tooltip, { text: status.tooltip, side: "bottom" })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { className: "ofs-muted", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.quota"),
             " ",
             quotaUsed !== null && quotaTotal !== null ? `${quotaUsed} / ${quotaTotal} ${t("unit.hour")}` : "—"
           ] }),
-          status.phaseLabel ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { className: "ofs-muted", children: [
+          status.phaseLabel ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.phase"),
             " · ",
             status.phaseLabel
           ] }) : null,
-          status.ready && steadySeconds !== null ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { className: "ofs-muted", children: [
+          status.ready && steadySeconds !== null ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.speedLine"),
             " ",
             formatSeconds(t, steadySeconds)
           ] }) : null,
-          idleShutdown ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-muted", children: formatText(t("studio.compute.idleCountdown"), {
+          idleShutdown ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "ofs-muted", children: formatText(t("studio.compute.idleCountdown"), {
             idle: idleShutdown.idleMinutes,
             total: idleShutdown.totalMinutes
-          }) }) : idleMinutes > 0 ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { className: "ofs-muted", children: [
+          }) }) : idleMinutes > 0 ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.idleFor"),
             " ",
             idleMinutes,
             " ",
             t("unit.min")
           ] }) : null,
-          session && session.device ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-muted", children: session.device }) : null,
-          tunnelLabel ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { className: "ofs-muted", children: [
+          session && session.device ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "ofs-muted", children: session.device }) : null,
+          tunnelLabel ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.tunnel"),
             " · ",
             tunnelLabel
           ] }) : null
         ] }),
-        status.hint ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("p", { className: "ofs-popover-hint", children: status.hint }) : null,
-        update ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "ofs-popover-fallback ofs-popover-update", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-popover-fallback-title", children: formatText(t("studio.update.available"), { latest: update.latest, current: update.current }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { children: t("studio.update.hint") }),
-          update.enginesDsh ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { children: formatText(t("studio.update.requiresDsh"), { range: update.enginesDsh }) }) : null,
-          update.releaseUrl ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        status.hint ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("p", { className: "ofs-popover-hint", children: status.hint }) : null,
+        update ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "ofs-popover-fallback ofs-popover-update", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "ofs-popover-fallback-title", children: formatText(t("studio.update.available"), { latest: update.latest, current: update.current }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { children: t("studio.update.hint") }),
+          update.enginesDsh ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { children: formatText(t("studio.update.requiresDsh"), { range: update.enginesDsh }) }) : null,
+          update.releaseUrl ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
             "a",
             {
               className: "ofs-popover-link",
@@ -11359,35 +12139,35 @@ function TopBar(props) {
             }
           ) : null
         ] }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "ofs-popover-note", children: [
-          probing ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { children: t("action.probing") }) : null,
-          probeInfo ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(import_jsx_runtime34.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "ofs-popover-note", children: [
+          probing ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { children: t("action.probing") }) : null,
+          probeInfo ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(import_jsx_runtime35.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("span", { children: [
               t(accessMethodKey(kaggleTransport)),
               " · ",
               t(accessStatusKey(kaggleTransport, accessStatusOf(probeInfo, kaggleTransport)))
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("span", { children: [
               t("studio.probe.quota"),
               " · ",
               statusText(probeInfo.quota)
             ] })
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("span", { children: [
             t("studio.probe.account"),
             " · ",
             statusText(accountStatus),
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Tooltip, { text: t("studio.compute.authTooltip"), tone: "warn", side: "bottom" })
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Tooltip, { text: t("studio.compute.authTooltip"), tone: "warn", side: "bottom" })
           ] }),
-          probeFailed ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { title: probeFailed.message || void 0, children: [
+          probeFailed ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("span", { title: probeFailed.message || void 0, children: [
             probeFailed.status === "timeout" ? t("studio.probe.timeout") : t("studio.probe.failed"),
             probeFailed.message ? ` · ${probeFailed.message}` : ""
           ] }) : null,
-          probeNote ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { title: probeInfo.notes.join(" · "), children: probeNote }) : null
+          probeNote ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { title: probeInfo.notes.join(" · "), children: probeNote }) : null
         ] }),
-        quotaUnavailable ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "ofs-popover-fallback", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-popover-fallback-title", children: t("studio.compute.quotaFallback") }),
-          lastCheckTime ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { children: [
+        quotaUnavailable ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "ofs-popover-fallback", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "ofs-popover-fallback-title", children: t("studio.compute.quotaFallback") }),
+          lastCheckTime ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("span", { children: [
             t("studio.compute.lastGood"),
             " ",
             lastCheckTime,
@@ -11395,13 +12175,13 @@ function TopBar(props) {
             t("studio.compute.quota"),
             " ",
             lastGoodQuota
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { children: t("studio.compute.neverChecked") }),
-          sessionRunMs !== null ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { children: [
+          ] }) : /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { children: t("studio.compute.neverChecked") }),
+          sessionRunMs !== null ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("span", { children: [
             t("studio.compute.sessionRan"),
             " ",
             formatDuration(t, sessionRunMs)
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
             "a",
             {
               className: "ofs-popover-link",
@@ -11413,15 +12193,15 @@ function TopBar(props) {
             }
           )
         ] }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: startSession2, disabled: !!busy || !status.canStart, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Icon, { name: "cloud", size: 15 }),
+        /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: startSession2, disabled: !!busy || !status.canStart, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Icon, { name: "cloud", size: 15 }),
           t("studio.compute.start")
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: stopSession2, disabled: !!busy || !status.canStop, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Icon, { name: "clock", size: 15 }),
+        /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: stopSession2, disabled: !!busy || !status.canStop, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Icon, { name: "clock", size: 15 }),
           t("studio.compute.stop")
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(
           "button",
           {
             type: "button",
@@ -11431,12 +12211,12 @@ function TopBar(props) {
             disabled: !!busy || probing,
             "aria-busy": probing,
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Icon, { name: "refresh", size: 15 }),
+              /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Icon, { name: "refresh", size: 15 }),
               probing ? t("action.probing") : t("studio.compute.check")
             ]
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(
           "button",
           {
             type: "button",
@@ -11447,12 +12227,12 @@ function TopBar(props) {
               if (openLogs) openLogs(pillRef.current);
             },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Icon, { name: "message", size: 15 }),
+              /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Icon, { name: "message", size: 15 }),
               t("studio.logs.open")
             ]
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(
           "button",
           {
             type: "button",
@@ -11463,14 +12243,14 @@ function TopBar(props) {
               if (openSettings) openSettings(pillRef.current);
             },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Icon, { name: "sliders", size: 15 }),
+              /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Icon, { name: "sliders", size: 15 }),
               t("studio.settings.open")
             ]
           }
         )
       ] }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
       ModelCardPicker,
       {
         t,
@@ -11494,7 +12274,7 @@ function TopBar(props) {
 }
 
 // src/studio/hooks/useStudioUi.js
-var import_react37 = __toESM(require("react"), 1);
+var import_react38 = __toESM(require("react"), 1);
 
 // src/logic/notice.js
 var NOTICE_TITLE_PREFIX = "● 生成完成 · ";
@@ -11532,26 +12312,26 @@ function uiStateViewOf(result) {
 // src/studio/hooks/useStudioUi.js
 var nextToastId = 0;
 function useStudioUi({ t, initialView, initialPanelMode }) {
-  const [view, setView] = import_react37.default.useState(initialView);
-  const [advancedOpen, setAdvancedOpen] = import_react37.default.useState(UI_STATE.defaults.advancedOpen);
-  const [negativeOpen, setNegativeOpen] = import_react37.default.useState(false);
-  const [error, setError] = import_react37.default.useState(null);
-  const [dismissed, setDismissed] = import_react37.default.useState("");
-  const [toast, setToast] = import_react37.default.useState(null);
-  const [panelMode, setPanelMode] = import_react37.default.useState(initialPanelMode);
-  const [zoom, setZoom] = import_react37.default.useState(false);
-  const [compareOpen, setCompareOpen] = import_react37.default.useState(false);
-  const [logsOpen, setLogsOpen] = import_react37.default.useState(false);
-  const logsReturnRef = import_react37.default.useRef(null);
-  const [settingsOpen, setSettingsOpen] = import_react37.default.useState(false);
-  const settingsReturnRef = import_react37.default.useRef(null);
-  const advancedOpenRef = import_react37.default.useRef(advancedOpen);
+  const [view, setView] = import_react38.default.useState(initialView);
+  const [advancedOpen, setAdvancedOpen] = import_react38.default.useState(UI_STATE.defaults.advancedOpen);
+  const [negativeOpen, setNegativeOpen] = import_react38.default.useState(false);
+  const [error, setError] = import_react38.default.useState(null);
+  const [dismissed, setDismissed] = import_react38.default.useState("");
+  const [toast, setToast] = import_react38.default.useState(null);
+  const [panelMode, setPanelMode] = import_react38.default.useState(initialPanelMode);
+  const [zoom, setZoom] = import_react38.default.useState(false);
+  const [compareOpen, setCompareOpen] = import_react38.default.useState(false);
+  const [logsOpen, setLogsOpen] = import_react38.default.useState(false);
+  const logsReturnRef = import_react38.default.useRef(null);
+  const [settingsOpen, setSettingsOpen] = import_react38.default.useState(false);
+  const settingsReturnRef = import_react38.default.useRef(null);
+  const advancedOpenRef = import_react38.default.useRef(advancedOpen);
   advancedOpenRef.current = advancedOpen;
   function showToast(text) {
     nextToastId += 1;
     setToast({ text, id: nextToastId });
   }
-  import_react37.default.useEffect(() => {
+  import_react38.default.useEffect(() => {
     let alive = true;
     Promise.resolve(fetchUiState()).then((result) => {
       if (!alive) return;
@@ -11580,7 +12360,7 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
     if (guidanceKey) setDismissed(guidanceKey);
     setError(null);
   }
-  import_react37.default.useEffect(() => {
+  import_react38.default.useEffect(() => {
     if (!toast) return void 0;
     const timer2 = setTimeout(() => setToast(null), 2600);
     return () => clearTimeout(timer2);
@@ -11658,15 +12438,15 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
   };
 }
 function useCompletionNotice({ t, ui, job, activeJob }) {
-  const previousRef = import_react37.default.useRef(void 0);
-  const pendingRef = import_react37.default.useRef(false);
-  const hiddenJobRef = import_react37.default.useRef(null);
-  const returningRef = import_react37.default.useRef(null);
-  const tRef = import_react37.default.useRef(t);
-  const uiRef = import_react37.default.useRef(ui);
+  const previousRef = import_react38.default.useRef(void 0);
+  const pendingRef = import_react38.default.useRef(false);
+  const hiddenJobRef = import_react38.default.useRef(null);
+  const returningRef = import_react38.default.useRef(null);
+  const tRef = import_react38.default.useRef(t);
+  const uiRef = import_react38.default.useRef(ui);
   tRef.current = t;
   uiRef.current = ui;
-  const judge = import_react37.default.useCallback((nextJob) => {
+  const judge = import_react38.default.useCallback((nextJob) => {
     const previous = previousRef.current;
     previousRef.current = nextJob || null;
     if (previous === void 0) return;
@@ -11687,10 +12467,10 @@ function useCompletionNotice({ t, ui, job, activeJob }) {
       uiRef.current.showToast(tRef.current("studio.toast.generationDone"));
     }
   }, []);
-  import_react37.default.useEffect(() => {
+  import_react38.default.useEffect(() => {
     judge(job);
   }, [judge, job && job.id, job && job.status, job && (job.finishedAt ?? "")]);
-  import_react37.default.useEffect(() => {
+  import_react38.default.useEffect(() => {
     let timer2 = null;
     let alive = true;
     function stop() {
@@ -11743,24 +12523,24 @@ function useCompletionNotice({ t, ui, job, activeJob }) {
 }
 
 // src/studio/useStudio.js
-var import_react44 = __toESM(require("react"), 1);
+var import_react45 = __toESM(require("react"), 1);
 
 // src/studio/hooks/useChatThread.js
-var import_react38 = __toESM(require("react"), 1);
+var import_react39 = __toESM(require("react"), 1);
 function useChatThread({ t, isEn, alive, state, form, generate }) {
-  const [messages, setMessages] = import_react38.default.useState([]);
-  const [interpreting, setInterpreting] = import_react38.default.useState(false);
-  const [focusStack, setFocusStack] = import_react38.default.useState([]);
-  const messageSeq = import_react38.default.useRef(0);
-  const interpretingRef = import_react38.default.useRef(false);
-  const threadSeq = import_react38.default.useRef(0);
-  const focusRef = import_react38.default.useRef(focusStack);
+  const [messages, setMessages] = import_react39.default.useState([]);
+  const [interpreting, setInterpreting] = import_react39.default.useState(false);
+  const [focusStack, setFocusStack] = import_react39.default.useState([]);
+  const messageSeq = import_react39.default.useRef(0);
+  const interpretingRef = import_react39.default.useRef(false);
+  const threadSeq = import_react39.default.useRef(0);
+  const focusRef = import_react39.default.useRef(focusStack);
   focusRef.current = focusStack;
   const focus = currentFocusOf(focusStack);
   const jobs = stateJobs(state);
   const threadJobs = jobs.length > 0 ? jobs : state && state.lastJob ? [state.lastJob] : [];
   const threadKey = threadJobs.map((job) => `${job.id}:${job.status}`).join("|");
-  import_react38.default.useEffect(() => {
+  import_react39.default.useEffect(() => {
     if (messages.length === 0 || threadJobs.length === 0) return;
     setMessages((prev) => {
       let next = prev;
@@ -11934,7 +12714,10 @@ function useChatThread({ t, isEn, alive, state, form, generate }) {
 }
 
 // src/studio/hooks/useImageTool.js
-var import_react39 = __toESM(require("react"), 1);
+var import_react40 = __toESM(require("react"), 1);
+function defaultOutpaint() {
+  return { ratioId: OUTPAINT_EXPAND_ID, anchor: { x: 0.5, y: 0.5 } };
+}
 function emptyDraft() {
   return {
     toolId: "",
@@ -11943,10 +12726,14 @@ function emptyDraft() {
     strength: LIMITS.strength.default,
     strengthAuto: true,
     presetId: "",
-    mask: null
+    mask: null,
+    // 扩图草稿：只存小对象（比例 + 锚点）；运行时导出的画布 base64 另存 `canvas`，
+    // 不进 workDrafts（避免几 MB 的快照进入 LRU 表），重开时由编辑器重新导出。
+    outpaint: defaultOutpaint(),
+    canvas: null
   };
 }
-function positiveSize3(value) {
+function positiveSize4(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? Math.round(number) : null;
 }
@@ -11964,15 +12751,17 @@ function targetOf(entry) {
   return {
     path,
     url: typeof image.url === "string" && image.url ? image.url : referenceUrlOf(path),
-    width: positiveSize3(image.width),
-    height: positiveSize3(image.height),
+    width: positiveSize4(image.width),
+    height: positiveSize4(image.height),
     item,
     prompt
   };
 }
 function presetsForTool(list, tool) {
   if (!tool || !tool.capability) return [];
-  if (tool.id === "inpaint") return list.filter((item) => item.supportsInpaint === true);
+  if (tool.id === "inpaint" || tool.id === "outpaint") {
+    return list.filter((item) => item.supportsInpaint === true);
+  }
   if (tool.id === "img2img") {
     return list.filter((item) => item.supportsImg2Img === true && item.inpaintOnly !== true);
   }
@@ -11980,15 +12769,15 @@ function presetsForTool(list, tool) {
 }
 function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, currentPresetId }) {
   const list = Array.isArray(presets) ? presets.filter((item) => item && item.id) : [];
-  const [draft, setDraft] = import_react39.default.useState(() => emptyDraft());
-  const [editorOpen, setEditorOpen] = import_react39.default.useState(false);
-  const [submitting, setSubmitting] = import_react39.default.useState(false);
-  const [pendingTool, setPendingTool] = import_react39.default.useState(null);
-  const draftRef = import_react39.default.useRef(draft);
+  const [draft, setDraft] = import_react40.default.useState(() => emptyDraft());
+  const [editorOpen, setEditorOpen] = import_react40.default.useState(false);
+  const [submitting, setSubmitting] = import_react40.default.useState(false);
+  const [pendingTool, setPendingTool] = import_react40.default.useState(null);
+  const draftRef = import_react40.default.useRef(draft);
   draftRef.current = draft;
-  const inFlightRef = import_react39.default.useRef(false);
-  const [workDrafts, setWorkDrafts] = import_react39.default.useState({});
-  const baselinesRef = import_react39.default.useRef({});
+  const inFlightRef = import_react40.default.useRef(false);
+  const [workDrafts, setWorkDrafts] = import_react40.default.useState({});
+  const baselinesRef = import_react40.default.useRef({});
   const removeWorkDraft = (key) => {
     const path = draftKeyOf(key);
     if (!path) return;
@@ -12000,14 +12789,17 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
       return next;
     });
   };
-  import_react39.default.useEffect(() => {
+  import_react40.default.useEffect(() => {
     const key = draftKeyOf(draft.target);
     if (!key) return;
     const baseline = baselinesRef.current[key] || {};
+    const out = draft.outpaint || defaultOutpaint();
+    const baseAnchor = baseline.anchor || defaultOutpaint().anchor;
+    const outpaintChanged = draft.toolId === "outpaint" && (out.ratioId !== (baseline.ratioId || OUTPAINT_EXPAND_ID) || out.anchor.x !== baseAnchor.x || out.anchor.y !== baseAnchor.y);
     const changed = {
       mask: Boolean(draft.mask),
       prompt: draft.prompt.trim() !== "",
-      params: draft.presetId !== baseline.presetId || draft.strength !== baseline.strength
+      params: draft.presetId !== baseline.presetId || draft.strength !== baseline.strength || outpaintChanged
     };
     const active = changed.mask || changed.prompt || changed.params;
     setWorkDrafts((prev) => {
@@ -12026,6 +12818,7 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
           strengthAuto: draft.strengthAuto,
           presetId: draft.presetId,
           mask: draft.mask,
+          outpaint: out,
           changed,
           lastTouchedAt: Date.now()
         }
@@ -12035,17 +12828,20 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
   const activeTool = imageToolOf(draft.toolId);
   const preset = list.find((item) => item.id === draft.presetId) || null;
   const toolPresets = presetsForTool(list, activeTool);
-  const hasMask = Boolean(draft.mask);
+  const outpaint = draft.outpaint || defaultOutpaint();
+  const hasMask = Boolean(draft.mask) || Boolean(activeTool && activeTool.id === "outpaint");
   const strength = clampMaskStrength(draft.strength, hasMask);
   const strengthMax = toolStrengthMaxOf(draft.toolId, hasMask);
-  const coverage = draft.mask ? draft.mask.coverage : 0;
+  const coverage = activeTool && activeTool.id === "outpaint" ? draft.canvas ? draft.canvas.coverage : 0 : draft.mask ? draft.mask.coverage : 0;
   const blockedKey = imageToolBlockedKeyOf({
     tool: draft.toolId,
+    target: draft.target,
     targetPath: draft.target ? draft.target.path : "",
     preset,
     prompt: draft.prompt,
     targetPrompt: draft.target ? draft.target.prompt : "",
-    mask: draft.mask
+    mask: draft.mask,
+    canvas: draft.canvas
   });
   const canSubmit = Boolean(activeTool && activeTool.ready && draft.target) && blockedKey === "" && !submitting;
   function setPrompt(value) {
@@ -12066,6 +12862,7 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
       ui.showToast(t("studio.imageTool.blockedTarget"));
       return false;
     }
+    if (tool.form === "instant") return sendInstant(tool, target);
     const previous = draftRef.current;
     const workKey = draftKeyOf(target);
     const saved = workKey ? workDrafts[workKey] : null;
@@ -12081,9 +12878,14 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
     }
     const nextPreset = choice.preset;
     const prompt = restored ? restored.prompt : sameTool ? previous.prompt : "";
-    const strength2 = restored ? clampMaskStrength(restored.strength, Boolean(restored.mask)) : sameTool ? clampMaskStrength(previous.strength, Boolean(previous.mask)) : toolStrengthDefaultOf(tool.id, nextPreset);
+    const restoredMask = restored ? restored.mask : null;
+    const sameMask = sameTool ? previous.mask : null;
+    const maskClamp = tool.id === "outpaint" ? true : Boolean(restoredMask || sameMask);
+    const strength2 = restored ? clampMaskStrength(restored.strength, maskClamp) : sameTool ? clampMaskStrength(previous.strength, maskClamp) : toolStrengthDefaultOf(tool.id, nextPreset);
     const strengthAuto = restored ? restored.strengthAuto !== false : sameTool ? previous.strengthAuto : true;
-    const mask = restored ? restored.mask : sameTool ? previous.mask : null;
+    const mask = tool.id === "outpaint" ? null : restored ? restoredMask : sameMask;
+    const nextOutpaint = restored && restored.outpaint && typeof restored.outpaint === "object" ? { ratioId: outpaintRatioIdOf(restored.outpaint.ratioId), anchor: outpaintAnchorOf(restored.outpaint.anchor) } : sameTool && previous.outpaint ? previous.outpaint : defaultOutpaint();
+    const canvas = tool.id === "outpaint" && sameTool ? previous.canvas : null;
     setDraft({
       toolId: tool.id,
       target,
@@ -12092,16 +12894,78 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
       strength: strength2,
       strengthAuto,
       presetId: nextPreset.id,
-      mask
+      mask,
+      outpaint: nextOutpaint,
+      canvas
     });
     if (workKey && !baselinesRef.current[workKey]) {
-      baselinesRef.current[workKey] = { presetId: nextPreset.id, strength: strength2 };
+      baselinesRef.current[workKey] = {
+        presetId: nextPreset.id,
+        strength: strength2,
+        ratioId: nextOutpaint.ratioId,
+        anchor: nextOutpaint.anchor
+      };
     }
     setEditorOpen(true);
     if (!restored && !sameTool && (choice.switched || choice.fallback)) {
       ui.showToast(formatText(t("studio.imageTool.autoPreset"), { preset: presetLabelOf(nextPreset) }));
     }
     return true;
+  }
+  async function sendInstant(tool, target) {
+    if (inFlightRef.current) return false;
+    const blocked = imageToolBlockedKeyOf({
+      tool: tool.id,
+      target,
+      targetPath: target.path,
+      targetPrompt: target.prompt
+    });
+    if (blocked) {
+      ui.showToast(t(blocked));
+      return false;
+    }
+    const body = buildUpscaleToolBody({ target, targetPrompt: target.prompt });
+    if (!body) {
+      ui.showToast(t("studio.imageTool.blockedTarget"));
+      return false;
+    }
+    inFlightRef.current = true;
+    setSubmitting(true);
+    ui.setError(null);
+    try {
+      const result = await alive(submitGenerate(body));
+      if (!result) return false;
+      if (result.ok && result.data && result.data.id) {
+        setPendingTool({
+          jobId: result.data.id,
+          target,
+          body,
+          parentPath: target.path,
+          rootImage: target.item && target.item.rootImage || target.path,
+          sourceMode: tool.id
+        });
+        ui.showToast(t("studio.imageTool.upscaleSubmitted"));
+        if (typeof onSubmitted === "function") {
+          onSubmitted(result.data, { tool: tool.id, target, body });
+        }
+        return true;
+      }
+      ui.fail(result.code, result.message);
+      return false;
+    } finally {
+      inFlightRef.current = false;
+      setSubmitting(false);
+    }
+  }
+  function submitInstant(kind, entry) {
+    const tool = imageToolOf(typeof kind === "string" ? kind : kind && kind.id);
+    if (!tool || tool.form !== "instant" || !tool.ready) return Promise.resolve(false);
+    const target = targetOf(entry);
+    if (!target) {
+      ui.showToast(t("studio.imageTool.blockedTarget"));
+      return Promise.resolve(false);
+    }
+    return sendInstant(tool, target);
   }
   function closeTool() {
     setEditorOpen(false);
@@ -12123,7 +12987,8 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
     const found = presetsForTool(list, tool).find((item) => item.id === wanted) || null;
     if (!found) return false;
     setDraft((prev) => {
-      const value = prev.strengthAuto ? toolStrengthDefaultOf(tool.id, found) : clampMaskStrength(prev.strength, Boolean(prev.mask));
+      const withMask = tool.id === "outpaint" ? true : Boolean(prev.mask);
+      const value = prev.strengthAuto ? toolStrengthDefaultOf(tool.id, found) : clampMaskStrength(prev.strength, withMask);
       return { ...prev, presetId: found.id, strength: value };
     });
     return true;
@@ -12131,7 +12996,7 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
   function setStrength(value) {
     setDraft((prev) => {
       const tool = imageToolOf(prev.toolId);
-      const withMask = Boolean(prev.mask) && Boolean(tool && tool.form === "canvas");
+      const withMask = Boolean(tool && tool.form === "canvas") && (tool.id === "outpaint" || Boolean(prev.mask));
       return { ...prev, strengthAuto: false, strength: clampMaskStrength(value, withMask) };
     });
   }
@@ -12155,6 +13020,45 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
   function clearMask() {
     setDraft((prev) => prev.mask ? { ...prev, mask: null } : prev);
     return true;
+  }
+  function setOutpaintRatio(value) {
+    const tool = imageToolOf(draftRef.current.toolId);
+    if (!tool || tool.id !== "outpaint") return false;
+    const ratioId = outpaintRatioIdOf(value);
+    setDraft((prev) => {
+      const current = prev.outpaint || defaultOutpaint();
+      if (current.ratioId === ratioId) return prev;
+      return { ...prev, outpaint: { ...current, ratioId }, canvas: null };
+    });
+    return true;
+  }
+  function setOutpaintAnchor(value) {
+    const tool = imageToolOf(draftRef.current.toolId);
+    if (!tool || tool.id !== "outpaint") return false;
+    const anchor = outpaintAnchorOf(value);
+    setDraft((prev) => {
+      const current = prev.outpaint || defaultOutpaint();
+      if (current.anchor.x === anchor.x && current.anchor.y === anchor.y) return prev;
+      return { ...prev, outpaint: { ...current, anchor }, canvas: null };
+    });
+    return true;
+  }
+  function applyOutpaintCanvas(input) {
+    const tool = imageToolOf(draftRef.current.toolId);
+    if (!tool || tool.id !== "outpaint") return { ok: false, reason: "unsupported" };
+    if (!draftRef.current.target) return { ok: false, reason: "no_target" };
+    const candidate = input && typeof input === "object" ? input : {};
+    const canvas = normalizeOutpaintCanvas(candidate);
+    if (!canvas) {
+      const image = normalizeMaskData(candidate.image);
+      const mask = normalizeMaskData(candidate.mask);
+      if (!image || !mask) return { ok: false, reason: "invalid" };
+      if (base64BytesOf(image) > Number(LIMITS.reference.maxBytes)) return { ok: false, reason: "too_large" };
+      if (base64BytesOf(mask) > Number(LIMITS.mask.maxBytes)) return { ok: false, reason: "too_large" };
+      return { ok: false, reason: "invalid" };
+    }
+    setDraft((prev) => ({ ...prev, canvas }));
+    return { ok: true, canvas };
   }
   function clearWorkDraft(value) {
     const key = draftKeyOf(value);
@@ -12182,33 +13086,52 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
     const current = draftRef.current;
     const tool = imageToolOf(current.toolId);
     if (!tool || !tool.ready) return false;
+    if (tool.form === "instant") return sendInstant(tool, current.target);
     const currentPreset = list.find((item) => item.id === current.presetId) || null;
     const blocked = imageToolBlockedKeyOf({
       tool: tool.id,
+      target: current.target,
       targetPath: current.target ? current.target.path : "",
       preset: currentPreset,
       prompt: current.prompt,
       targetPrompt: current.target ? current.target.prompt : "",
-      mask: current.mask
+      mask: current.mask,
+      canvas: current.canvas
     });
     if (blocked) {
       ui.showToast(t(blocked));
       return false;
     }
-    const body = buildImageToolBody({
-      tool: tool.id,
-      targetPath: current.target.path,
-      targetPrompt: current.target.prompt,
-      target: current.target,
-      preset: currentPreset,
-      presets: list,
-      prompt: current.prompt,
-      strength: current.strength,
-      mask: current.mask,
-      negativeActive: negativePromptActive(currentPreset, currentPreset && currentPreset.cfg)
-    });
+    const negativeActive = negativePromptActive(currentPreset, currentPreset && currentPreset.cfg);
+    let body = null;
+    if (tool.id === "outpaint") {
+      body = buildOutpaintToolBody({
+        target: current.target,
+        targetPath: current.target.path,
+        targetPrompt: current.target.prompt,
+        preset: currentPreset,
+        presets: list,
+        prompt: current.prompt,
+        strength: current.strength,
+        canvas: current.canvas,
+        negativeActive
+      });
+    } else {
+      body = buildImageToolBody({
+        tool: tool.id,
+        targetPath: current.target.path,
+        targetPrompt: current.target.prompt,
+        target: current.target,
+        preset: currentPreset,
+        presets: list,
+        prompt: current.prompt,
+        strength: current.strength,
+        mask: current.mask,
+        negativeActive
+      });
+    }
     if (!body) {
-      ui.showToast(t("studio.imageTool.blockedTarget"));
+      ui.showToast(t(tool.id === "outpaint" ? "studio.outpaint.blockedCanvas" : "studio.imageTool.blockedTarget"));
       return false;
     }
     inFlightRef.current = true;
@@ -12267,6 +13190,16 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
     coverage,
     applyMask,
     clearMask,
+    // 扩图草稿：小对象进 workDrafts；canvas（大 base64）只留在活动草稿内存里，
+    // 关闭编辑态 / 重开时由 OutpaintEditor 按 outpaint 重新导出。
+    outpaint: {
+      ratioId: outpaint.ratioId,
+      anchor: outpaint.anchor,
+      canvas: draft.canvas
+    },
+    setOutpaintRatio,
+    setOutpaintAnchor,
+    applyOutpaintCanvas,
     // 编辑态与提交。
     editorOpen,
     openTool,
@@ -12276,6 +13209,9 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
     submitBlockedKey: blockedKey,
     submitting,
     submit,
+    // 即时工具（高清放大）的显式入口：点击动作坞已经由 openTool 直达提交，
+    // 这里导出方便渲染测试与后续「大图预览里的放大按钮」复用。
+    submitInstant,
     // 阶段十三：按作品路径缓存的未提交编辑草稿（LRU 8，会话内内存、不落盘）。
     workDrafts,
     clearWorkDraft,
@@ -12287,7 +13223,7 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
 }
 
 // src/studio/hooks/useKaggleLogin.js
-var import_react40 = __toESM(require("react"), 1);
+var import_react41 = __toESM(require("react"), 1);
 var NETWORK_ERROR_KEY = "studio.guidance.auth.reason.network";
 var REQUEST_ERROR_KEY = "studio.guidance.auth.reason.request";
 var UNAVAILABLE_ERROR_KEY = "studio.guidance.auth.reason.unavailable";
@@ -12306,19 +13242,19 @@ var COLAB_API = {
 };
 function useOAuthLogin({ t, ui, onDone, api = KAGGLE_API } = {}) {
   const translate = typeof t === "function" ? t : (key) => key;
-  const [login, setLogin] = import_react40.default.useState(emptyLoginView);
-  const [busy, setBusy] = import_react40.default.useState(false);
-  const [errorKey, setErrorKey] = import_react40.default.useState("");
-  const [codeErrorKey, setCodeErrorKey] = import_react40.default.useState("");
-  const timerRef = import_react40.default.useRef(null);
-  const startedAtRef = import_react40.default.useRef(0);
-  const busyRef = import_react40.default.useRef(false);
-  const sessionRef = import_react40.default.useRef(0);
-  const aliveRef = import_react40.default.useRef(true);
-  const viewRef = import_react40.default.useRef(emptyLoginView());
-  const onDoneRef = import_react40.default.useRef(onDone);
+  const [login, setLogin] = import_react41.default.useState(emptyLoginView);
+  const [busy, setBusy] = import_react41.default.useState(false);
+  const [errorKey, setErrorKey] = import_react41.default.useState("");
+  const [codeErrorKey, setCodeErrorKey] = import_react41.default.useState("");
+  const timerRef = import_react41.default.useRef(null);
+  const startedAtRef = import_react41.default.useRef(0);
+  const busyRef = import_react41.default.useRef(false);
+  const sessionRef = import_react41.default.useRef(0);
+  const aliveRef = import_react41.default.useRef(true);
+  const viewRef = import_react41.default.useRef(emptyLoginView());
+  const onDoneRef = import_react41.default.useRef(onDone);
   onDoneRef.current = onDone;
-  const apiRef = import_react40.default.useRef(api);
+  const apiRef = import_react41.default.useRef(api);
   apiRef.current = api;
   function toast(key) {
     if (ui && typeof ui.showToast === "function") ui.showToast(translate(key));
@@ -12471,7 +13407,7 @@ function useOAuthLogin({ t, ui, onDone, api = KAGGLE_API } = {}) {
     setErrorKey("");
     setCodeErrorKey("");
   }
-  import_react40.default.useEffect(() => {
+  import_react41.default.useEffect(() => {
     aliveRef.current = true;
     function onVisibility() {
       if (document.hidden) {
@@ -12508,7 +13444,7 @@ function useColabLogin(options = {}) {
 }
 
 // src/studio/hooks/useSessionControl.js
-var import_react41 = __toESM(require("react"), 1);
+var import_react42 = __toESM(require("react"), 1);
 
 // src/logic/update.js
 function safeUrl(value) {
@@ -12539,12 +13475,12 @@ function rememberCancelling(previous, id) {
   return previous.includes(id) ? previous : [...previous, id];
 }
 function useSessionControl({ t, host, ui, alive }) {
-  const [busy, setBusy] = import_react41.default.useState("");
-  const [probing, setProbing] = import_react41.default.useState(false);
-  const [probeReport, setProbeReport] = import_react41.default.useState(null);
-  const [cancellingIds, setCancellingIds] = import_react41.default.useState([]);
-  const cancellingRef = import_react41.default.useRef(/* @__PURE__ */ new Set());
-  const startingRef = import_react41.default.useRef(false);
+  const [busy, setBusy] = import_react42.default.useState("");
+  const [probing, setProbing] = import_react42.default.useState(false);
+  const [probeReport, setProbeReport] = import_react42.default.useState(null);
+  const [cancellingIds, setCancellingIds] = import_react42.default.useState([]);
+  const cancellingRef = import_react42.default.useRef(/* @__PURE__ */ new Set());
+  const startingRef = import_react42.default.useRef(false);
   const state = host.state;
   const session = state && state.session || null;
   const kaggleTransport = transportOf(state);
@@ -12563,7 +13499,7 @@ function useSessionControl({ t, host, ui, alive }) {
     stalledMinutes: queueStalledMinutesOf(queuePolicy)
   };
   const pendingSignature = pendingJobs.map((job) => job.id).join(",");
-  import_react41.default.useEffect(() => {
+  import_react42.default.useEffect(() => {
     const activeIds = new Set(pendingJobs.map((job) => job.id));
     for (const id of [...cancellingRef.current]) {
       if (!activeIds.has(id)) cancellingRef.current.delete(id);
@@ -12573,9 +13509,9 @@ function useSessionControl({ t, host, ui, alive }) {
       return next.length === prev.length ? prev : next;
     });
   }, [pendingSignature]);
-  const hostErrorKeyRef = import_react41.default.useRef("");
-  const hostErrorCodeRef = import_react41.default.useRef("");
-  import_react41.default.useEffect(() => {
+  const hostErrorKeyRef = import_react42.default.useRef("");
+  const hostErrorCodeRef = import_react42.default.useRef("");
+  import_react42.default.useEffect(() => {
     if (!host.error) {
       if (!hostErrorCodeRef.current) return;
       const code = hostErrorCodeRef.current;
@@ -12709,7 +13645,7 @@ function useSessionControl({ t, host, ui, alive }) {
 }
 
 // src/studio/hooks/useStudioForm.js
-var import_react42 = __toESM(require("react"), 1);
+var import_react43 = __toESM(require("react"), 1);
 
 // src/logic/form.js
 var SNAPSHOT_FIELDS = ["prompt", "negative", "presetId", "seed"];
@@ -12846,22 +13782,22 @@ var EMPTY_FORM = {
 };
 function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const { presets, defaultPreset } = preset;
-  const [form, setForm] = import_react42.default.useState(() => ({
+  const [form, setForm] = import_react43.default.useState(() => ({
     ...EMPTY_FORM,
     prompt: initialPrompt
   }));
-  const [refineGroups, setRefineGroups] = import_react42.default.useState([]);
-  const [refineSource, setRefineSource] = import_react42.default.useState("");
-  const [enhancing, setEnhancing] = import_react42.default.useState(false);
-  const [translating, setTranslating] = import_react42.default.useState(false);
-  const [cleanBaseline, setCleanBaseline] = import_react42.default.useState("");
-  const [origin, setOrigin] = import_react42.default.useState(null);
-  const [draft, setDraft] = import_react42.default.useState(null);
-  const formRef = import_react42.default.useRef(form);
+  const [refineGroups, setRefineGroups] = import_react43.default.useState([]);
+  const [refineSource, setRefineSource] = import_react43.default.useState("");
+  const [enhancing, setEnhancing] = import_react43.default.useState(false);
+  const [translating, setTranslating] = import_react43.default.useState(false);
+  const [cleanBaseline, setCleanBaseline] = import_react43.default.useState("");
+  const [origin, setOrigin] = import_react43.default.useState(null);
+  const [draft, setDraft] = import_react43.default.useState(null);
+  const formRef = import_react43.default.useRef(form);
   formRef.current = form;
-  const originRef = import_react42.default.useRef(origin);
+  const originRef = import_react43.default.useRef(origin);
   originRef.current = origin;
-  const draftRef = import_react42.default.useRef(draft);
+  const draftRef = import_react43.default.useRef(draft);
   draftRef.current = draft;
   const dirty = isFormDirty(form, cleanBaseline);
   const draftView = draftViewOf({ draft, dirty, origin });
@@ -12870,7 +13806,7 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const negativeHint = hintOf(activePreset);
   const negativeActive = negativePromptActive(activePreset, form.cfg);
   const englishPromptHint = detectCjk(form.prompt) && presetNeedsEnglish(activePreset);
-  import_react42.default.useEffect(() => {
+  import_react43.default.useEffect(() => {
     if (presets.length === 0) return;
     setForm((prev) => {
       if (prev.presetId && presets.some((item2) => item2.id === prev.presetId)) return prev;
@@ -12880,7 +13816,7 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
       return applyNegativePatch(prev, presetSelectPatch(item, prev, presets));
     });
   }, [presets.length, defaultPreset]);
-  import_react42.default.useEffect(() => {
+  import_react43.default.useEffect(() => {
     if (cleanBaseline || !form.presetId) return;
     setCleanBaseline(formSnapshotOf(form));
   }, [cleanBaseline, form.presetId]);
@@ -12951,7 +13887,7 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     setDraft(null);
     return source;
   }
-  import_react42.default.useEffect(() => {
+  import_react43.default.useEffect(() => {
     const current = draftRef.current;
     if (!current || current.editing !== true || current.form === form) return;
     setDraft({ ...current, form });
@@ -13140,7 +14076,7 @@ ${value}` : value });
 }
 
 // src/studio/hooks/useWorkLibrary.js
-var import_react43 = __toESM(require("react"), 1);
+var import_react44 = __toESM(require("react"), 1);
 var PAGE_SIZE = LIMITS.history.pageSize;
 function flattenHistory(items) {
   const images = [];
@@ -13163,31 +14099,31 @@ function mergePendingFavorites(serverList, pendingMap) {
   return merged;
 }
 function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
-  const [selectedPath, setSelectedPath] = import_react43.default.useState("");
-  const [historyItems, setHistoryItems] = import_react43.default.useState([]);
-  const [historyHasMoreState, setHistoryHasMoreState] = import_react43.default.useState(false);
-  const [historyLoadingMore, setHistoryLoadingMore] = import_react43.default.useState(false);
-  const [favorites, setFavorites] = import_react43.default.useState([]);
-  const [workspaceMode, setWorkspaceMode] = import_react43.default.useState(() => initialWorkspaceMode === "work" ? "work" : "new_draft");
-  const [newDraftExplicit, setNewDraftExplicit] = import_react43.default.useState(false);
-  const [newDraftPending, setNewDraftPending] = import_react43.default.useState(false);
-  const [treeUnavailable, setTreeUnavailable] = import_react43.default.useState(false);
-  const [treeLoadingRoot, setTreeLoadingRoot] = import_react43.default.useState("");
-  const pendingNewDraftRef = import_react43.default.useRef("");
-  const treeUnavailableRef = import_react43.default.useRef(false);
-  const treeLoadedRef = import_react43.default.useRef(/* @__PURE__ */ new Set());
-  const tRef = import_react43.default.useRef(t);
-  const uiRef = import_react43.default.useRef(ui);
+  const [selectedPath, setSelectedPath] = import_react44.default.useState("");
+  const [historyItems, setHistoryItems] = import_react44.default.useState([]);
+  const [historyHasMoreState, setHistoryHasMoreState] = import_react44.default.useState(false);
+  const [historyLoadingMore, setHistoryLoadingMore] = import_react44.default.useState(false);
+  const [favorites, setFavorites] = import_react44.default.useState([]);
+  const [workspaceMode, setWorkspaceMode] = import_react44.default.useState(() => initialWorkspaceMode === "work" ? "work" : "new_draft");
+  const [newDraftExplicit, setNewDraftExplicit] = import_react44.default.useState(false);
+  const [newDraftPending, setNewDraftPending] = import_react44.default.useState(false);
+  const [treeUnavailable, setTreeUnavailable] = import_react44.default.useState(false);
+  const [treeLoadingRoot, setTreeLoadingRoot] = import_react44.default.useState("");
+  const pendingNewDraftRef = import_react44.default.useRef("");
+  const treeUnavailableRef = import_react44.default.useRef(false);
+  const treeLoadedRef = import_react44.default.useRef(/* @__PURE__ */ new Set());
+  const tRef = import_react44.default.useRef(t);
+  const uiRef = import_react44.default.useRef(ui);
   tRef.current = t;
   uiRef.current = ui;
-  const favoritesRef = import_react43.default.useRef(favorites);
+  const favoritesRef = import_react44.default.useRef(favorites);
   favoritesRef.current = favorites;
-  const favSeqRef = import_react43.default.useRef(/* @__PURE__ */ new Map());
-  const favPendingRef = import_react43.default.useRef(/* @__PURE__ */ new Map());
-  const offsetRef = import_react43.default.useRef(0);
-  const hasMoreRef = import_react43.default.useRef(false);
-  const loadingMoreRef = import_react43.default.useRef(false);
-  const loadHistory = import_react43.default.useCallback(async () => {
+  const favSeqRef = import_react44.default.useRef(/* @__PURE__ */ new Map());
+  const favPendingRef = import_react44.default.useRef(/* @__PURE__ */ new Map());
+  const offsetRef = import_react44.default.useRef(0);
+  const hasMoreRef = import_react44.default.useRef(false);
+  const loadingMoreRef = import_react44.default.useRef(false);
+  const loadHistory = import_react44.default.useCallback(async () => {
     const result = await alive(fetchHistory(PAGE_SIZE, 0));
     if (!result) return;
     if (result.ok && result.data && Array.isArray(result.data.items)) {
@@ -13203,7 +14139,7 @@ function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
       uiRef.current.fail(result.code, result.message);
     }
   }, [alive]);
-  const loadMoreHistory = import_react43.default.useCallback(async () => {
+  const loadMoreHistory = import_react44.default.useCallback(async () => {
     if (loadingMoreRef.current || !hasMoreRef.current) return;
     loadingMoreRef.current = true;
     setHistoryLoadingMore(true);
@@ -13226,10 +14162,10 @@ function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
       setHistoryLoadingMore(false);
     }
   }, [alive]);
-  import_react43.default.useEffect(() => {
+  import_react44.default.useEffect(() => {
     loadHistory();
   }, [loadHistory]);
-  const loadLibrary = import_react43.default.useCallback(async () => {
+  const loadLibrary = import_react44.default.useCallback(async () => {
     const result = await alive(fetchLibrary());
     if (!result) return;
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
@@ -13240,17 +14176,17 @@ function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
       uiRef.current.fail(result.code, result.message);
     }
   }, [alive]);
-  import_react43.default.useEffect(() => {
+  import_react44.default.useEffect(() => {
     loadLibrary();
   }, [loadLibrary]);
   const hasState = Boolean(state);
-  const baselineRef = import_react43.default.useRef(false);
-  const seenJobRef = import_react43.default.useRef("");
-  const announcedRef = import_react43.default.useRef(false);
+  const baselineRef = import_react44.default.useRef(false);
+  const seenJobRef = import_react44.default.useRef("");
+  const announcedRef = import_react44.default.useRef(false);
   const lastJob = state && state.lastJob ? state.lastJob : null;
   const lastJobKey = lastJob ? `${lastJob.id}:${lastJob.status}` : "";
   const sessionState = state && state.session && state.session.state || "absent";
-  import_react43.default.useEffect(() => {
+  import_react44.default.useEffect(() => {
     if (!hasState) return;
     if (!baselineRef.current) {
       baselineRef.current = true;
@@ -13265,10 +14201,10 @@ function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
     announcedRef.current = true;
     uiRef.current.showToast(tRef.current("studio.toast.firstImage"));
   }, [hasState, lastJobKey, sessionState]);
-  const historyBaselineRef = import_react43.default.useRef(false);
+  const historyBaselineRef = import_react44.default.useRef(false);
   const lastJobId = state && state.lastJob ? `${state.lastJob.id}:${state.lastJob.finishedAt ?? ""}` : "";
-  const lastSeenRef = import_react43.default.useRef("");
-  import_react43.default.useEffect(() => {
+  const lastSeenRef = import_react44.default.useRef("");
+  import_react44.default.useEffect(() => {
     if (!hasState) return;
     if (!historyBaselineRef.current) {
       historyBaselineRef.current = true;
@@ -13279,7 +14215,7 @@ function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
     lastSeenRef.current = lastJobId;
     loadHistory();
   }, [hasState, lastJobId, loadHistory]);
-  import_react43.default.useEffect(() => {
+  import_react44.default.useEffect(() => {
     const jobId = pendingNewDraftRef.current;
     if (!jobId || !lastJob || lastJob.id !== jobId) return;
     if (lastJob.status === "failed" || lastJob.status === "cancelled") {
@@ -13305,7 +14241,7 @@ function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
   const selected = workspaceMode === "new_draft" ? null : selectedPath && gallery.find((entry) => entry.image.path === selectedPath) || newest;
   const pendingJobs = pendingJobsOf(state);
   const pendingSignature = pendingJobs.map((job) => `${job.id}:${job.status}`).join(",");
-  const lineage = import_react43.default.useMemo(
+  const lineage = import_react44.default.useMemo(
     () => buildLineage({ items: historyItems, pendingJobs }),
     [historyItems, pendingSignature]
   );
@@ -13490,14 +14426,14 @@ function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
 
 // src/studio/useStudio.js
 function useAlive() {
-  const ref = import_react44.default.useRef(true);
-  import_react44.default.useEffect(() => {
+  const ref = import_react45.default.useRef(true);
+  import_react45.default.useEffect(() => {
     ref.current = true;
     return () => {
       ref.current = false;
     };
   }, []);
-  return import_react44.default.useCallback(async (promise) => {
+  return import_react45.default.useCallback(async (promise) => {
     const value = await promise;
     return ref.current ? value : null;
   }, []);
@@ -13514,11 +14450,11 @@ function useStudio(props) {
   const initialWorkspaceMode = props && props.workspaceMode === "work" ? "work" : "new_draft";
   const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : [];
   const defaultPreset = state && state.defaultPreset || "";
-  const [sending, setSending] = import_react44.default.useState(false);
-  const pendingRef = import_react44.default.useRef(null);
+  const [sending, setSending] = import_react45.default.useState(false);
+  const pendingRef = import_react45.default.useRef(null);
   const ui = useStudioUi({ t, initialView, initialPanelMode });
   const control = useSessionControl({ t, host, ui, alive });
-  const [dismissedQueueKey, setDismissedQueueKey] = import_react44.default.useState("");
+  const [dismissedQueueKey, setDismissedQueueKey] = import_react45.default.useState("");
   const kaggleLogin = useKaggleLogin({ t, ui, onDone: () => control.runProbe() });
   const colabLogin = useColabLogin({ t, ui, onDone: () => host.refresh() });
   const form = useStudioForm({ t, isEn, alive, ui, preset: { presets, defaultPreset }, initialPrompt });
@@ -13792,9 +14728,9 @@ function useStudio(props) {
 }
 
 // src/studio/Studio.jsx
-var import_jsx_runtime35 = require("react/jsx-runtime");
-var StudioStyles = import_react45.default.memo(function StudioStyles2() {
-  return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("style", { children: CSS });
+var import_jsx_runtime36 = require("react/jsx-runtime");
+var StudioStyles = import_react46.default.memo(function StudioStyles2() {
+  return /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("style", { children: CSS });
 });
 function Studio(props) {
   const { t, isEn, ui, compute, form, chat, library, imageTool, guidance, actions } = useStudio(props);
@@ -13813,23 +14749,23 @@ function Studio(props) {
     failureDismissed: Boolean(guidance.key) && ui.dismissed === guidance.key,
     now: Date.now()
   });
-  const panel = chatMode ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(ChatPanel, { t, ui, form, chat, library, actions }) : /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Rail, { t, ui, form, actions });
+  const panel = chatMode ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(ChatPanel, { t, ui, form, chat, library, actions }) : /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(Rail, { t, ui, form, actions });
   const guidanceSurface = guidance && guidance.kind ? guidance.surface || guidanceSurfaceOf(guidance.kind) : "";
   const bannerGuidance = guidanceSurface === "banner" ? guidance : null;
   const noticeGuidance = guidanceSurface === "toast" ? guidance : null;
-  return /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "ofs-root", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(StudioStyles, {}),
-    /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "ofs-app", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(TopBar, { t, isEn, ui, compute, form, library, defaultModelOpen: props.defaultModelOpen }),
-      /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "ofs-status-area", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(PipelineBar, { view: pipeline }),
-        /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(QueueNotice, { t, notice: compute.queueNotice }),
-        bannerGuidance ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(GuidanceCard, { t, guidance: bannerGuidance, compute, actions, ui }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Toast, { t, toast: ui.toast, guidance: noticeGuidance, compute, actions, ui })
+  return /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("div", { className: "ofs-root", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(StudioStyles, {}),
+    /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("div", { className: "ofs-app", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(TopBar, { t, isEn, ui, compute, form, library, defaultModelOpen: props.defaultModelOpen }),
+      /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("div", { className: "ofs-status-area", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(PipelineBar, { view: pipeline }),
+        /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(QueueNotice, { t, notice: compute.queueNotice }),
+        bannerGuidance ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(GuidanceCard, { t, guidance: bannerGuidance, compute, actions, ui }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(Toast, { t, toast: ui.toast, guidance: noticeGuidance, compute, actions, ui })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: `ofs-body${ui.view === "gallery" ? " is-gallery" : ""}`, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("div", { className: `ofs-body${ui.view === "gallery" ? " is-gallery" : ""}`, children: [
         ui.view === "studio" ? panel : null,
-        /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("div", { className: "ofs-main", children: ui.view === "gallery" ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "ofs-main", children: ui.view === "gallery" ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
           Gallery,
           {
             t,
@@ -13851,12 +14787,12 @@ function Studio(props) {
               ui.setZoom(false);
             }
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Stage, { t, ui, compute, form, library, imageTool, actions, now }) })
+        ) : /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(Stage, { t, ui, compute, form, library, imageTool, actions, now }) })
       ] }),
-      ui.view === "studio" ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Filmstrip, { t, ui, compute, library, actions, now }) : null
+      ui.view === "studio" ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(Filmstrip, { t, ui, compute, library, actions, now }) : null
     ] }),
-    ui.logsOpen ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(LogsDrawer, { t, ui, compute, logs, onClose: ui.closeLogs }) : null,
-    ui.settingsOpen ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
+    ui.logsOpen ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(LogsDrawer, { t, ui, compute, logs, onClose: ui.closeLogs }) : null,
+    ui.settingsOpen ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
       SettingsDrawer,
       {
         t,

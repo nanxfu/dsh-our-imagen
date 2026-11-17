@@ -8,7 +8,9 @@
 2. Bearer 鉴权（``hmac.compare_digest``；无 token 时按 ``allow_no_auth`` 决定是否放行）；
    鉴权通过即通知生命周期层「Host 已接管」（``mark_claimed``，取消启动后的 claim 看门狗）；
 3. 请求体解码与体积闸门（上限来自注入契约，见 ``config.request_body_limit``）；
-4. 把 ``RequestError`` / ``QueueFullError`` 映射成 400 / 429，其余异常交给调用方分类。
+4. ``/generate`` 按 ``tool`` 分派：``generate`` 校验 pipeline / loader 与 tasks（含 img2img /
+   inpaint 的参考图），``upscale`` 只校验源图并合成 1 条任务——两条路都走同一个异步 job 协议；
+5. 把 ``RequestError`` / ``QueueFullError`` 映射成 400 / 429，其余异常交给调用方分类。
 
 **协作者一律从 :class:`HttpApi` 取，本模块不 import daemon**：daemon 反向依赖本模块，
 再反向导入就是循环。更重要的是，按**模块属性**（lambda 延迟解析）取协作者而不是在
@@ -61,6 +63,10 @@ class HttpApi:
     submit_job: Callable[..., Any]
     validate_generate_spec: Callable[[Any], Any]
     parse_reference_spec: Callable[[Any, dict], Any]
+    # tool=upscale 的源图校验与任务合成：upscale 不读 pipeline、不查 loader 白名单，
+    # 任务要等源图头校验拿到宽高后才能拼出来（见 remote/transport/validator.py）。
+    parse_upscale_reference: Callable[[Any], Any]
+    build_upscale_task: Callable[[int, int], dict]
     normalize_job_id: Callable[[Any], Any]
     request_shutdown: Callable[[], None]
     cleanup_before_exit: Callable[[], None]
@@ -243,20 +249,29 @@ class DaemonHandler(BaseHTTPRequestHandler):
                 )
             return
 
+        spec = None
         try:
             spec = self._read_json()
-            pipeline_spec, model_id, tasks = api.validate_generate_spec(spec)
-            # 图生图（M3）：参考图提交期只读图片头做校验，失败直接 400；
-            # 没有 reference 时返回 None，文生图路径逐字不变。
-            reference = api.parse_reference_spec(spec.get("reference"), pipeline_spec)
+            pipeline_spec, model_id, tasks, tool = api.validate_generate_spec(spec)
+            if tool == "upscale":
+                # 高清放大（INTERFACES §2.1）：源图只做头部校验，任务按源图宽高由 daemon
+                # 合成 1 条；不读 pipeline、不查 loader 白名单（固定 Real-ESRGAN 权重）。
+                reference = api.parse_upscale_reference(spec.get("reference"))
+                tasks = [api.build_upscale_task(reference["width"], reference["height"])]
+            else:
+                # 图生图（M3）：参考图提交期只读图片头做校验，失败直接 400；
+                # 没有 reference 时返回 None，文生图路径逐字不变。
+                reference = api.parse_reference_spec(spec.get("reference"), pipeline_spec)
             job_id = api.normalize_job_id(spec.get("jobId"))
         except RequestError as exc:
-            log(f"[gen] 请求非法：{exc}")
+            log(f"[gen] 请求非法（tool={spec.get('tool') if isinstance(spec, dict) else '-'}）：{exc}")
             self._send_error(400, "invalid_request", str(exc))
             return
 
         try:
-            job, created = api.submit_job(pipeline_spec, model_id, tasks, job_id, reference)
+            job, created = api.submit_job(
+                pipeline_spec, model_id, tasks, job_id, reference, tool=tool
+            )
         except QueueFullError as exc:
             log(f"[gen] 队列已满：{exc}")
             self._send_error(429, "queue_full", str(exc), {"Retry-After": "5"})
@@ -275,6 +290,7 @@ class DaemonHandler(BaseHTTPRequestHandler):
             {
                 "status": "accepted",
                 "job_id": job.job_id,
+                "tool": job.tool,
                 "model_id": job.model_id,
                 "created_at": api.iso_time(job.created_at),
             },

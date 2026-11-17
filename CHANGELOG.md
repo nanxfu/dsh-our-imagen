@@ -1,5 +1,46 @@
 # 变更记录
 
+## 0.13.0 — 未发布（2026-11-18）
+
+> 主题：图像后处理闭环。接通舞台动作坞预留的「高清放大」与「扩图」：前者是独立的轻量超分推理（不加载扩散模型），后者由客户端合成画布、复用已验证的 9 通道局部重绘。两个工具都沿用「产物作为原图派生子版本」的版本树语义，并补齐 Agent 工具、契约、界面与真机验收。对应 ROADMAP 第十五项 Phase B，设计依据见 [docs/STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](docs/STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md) §四。
+
+### 功能
+
+- **高清放大（`upscale`）**：
+  - 远端新增 `remote/inference/upscale.py`：自包含 Real-ESRGAN `RRDBNet(x2)`（`scale=2` 时 `conv_first` 输入 12 通道 + `pixel_unshuffle(2)`、23 个 RRDB 块、特征域两次 nearest ×2 上采样），**不引入 basicsr / realesrgan**（与当前 torch/diffusers 组合冲突）；权重固定 HF 镜像（GitHub Release 兜底），下载边写 `.part` 边算 SHA256 校验（`67,061,725` 字节 / `49fafd45…abb`），失败自动换源重试，落盘工作目录 `sr/`，进程内只下一次；CUDA fp16、奇数宽高 reflect pad 后裁回；执行结束（含异常）卸载模型并 `torch.cuda.empty_cache()`。
+  - `POST /generate` 新增可选 `tool: "upscale"`：只读源图头（PNG/JPEG、体积、长边 ≤ `UPSCALE.maxInputEdge` = 1280），不读 `pipeline`、不查 loader 白名单、不允许蒙版；daemon 合成 1 条任务入队，`execute_job` 走独立分支、`ensure_pipeline` 全程不参与。Job 模型与公开载荷新增 `tool`，结果项带 `upscale / scale / sourceWidth / sourceHeight`。
+  - Host `JobQueue` 按 `tool` 分派：放大固定 1 张、没有 preset / steps / seed 语义、复用同一套轮询 / 取消 / 幂等重投；入队前校验源图长边上限；产物 `meta.json` 记 `upscale: true` / `upscaleScale` / `upscaleSource`，`/history` 恒存在透传 `upscale` / `upscaleScale`。
+  - 客户端动作坞「高清放大」为零参数即时工具：点击即提交（不进入编辑态），选中作品长边超过 1280 时前置拦下并提示「源图过大」；提交成功提示「已提交高清放大任务」，产物作为源图子版本进入版本树（类型「高清放大」）并镜像到助手线程。
+  - 新增 Agent 工具 `imagen_upscale`：`path` 必须是 `imagen-output/` 内作品，Host 读 PNG/JPEG 头部补源图宽高，支持 `waitSeconds` 与 `saveTo`（交付规则同 `imagen_generate`）。
+- **扩图（`outpaint`）**：
+  - 不新增远端推理能力：客户端把原图放进更大的画布、新增区域涂白生成蒙版，再按普通局部重绘提交，远端复用已验证的 `sdxl-inpaint` 9 通道管线（`meta.outpaint = true`，同时保留 `inpaint = true`）。
+  - 新增纯逻辑 `src/logic/outpaint.js`：两种模式——「四边扩 20%」（画布 ×1.2，四边留白）与目标画幅（16:9 / 9:16 / 4:3，内容等比放入后只在一个轴加留白）；留白按 anchor 分配，画布宽高 / 内容框 / 偏移全部按 8px 对齐，并受 `OUTPAINT.maxEdge`（1536）/ `maxPixels`（1.6 MP）/ `minEdge`（256）约束。
+  - 新增 `src/studio/stage/OutpaintEditor.jsx`：顶部比例胶囊（四边扩 20% 默认 + 16:9 / 9:16 / 4:3）、扩张画面预览（新增区域斜纹着色 + 内容框虚线）、内容框拖拽（pointer capture）/ 方向键 8px 微调 / 双击与「回中」复位；任意变化后导出画布与白边蒙版写入工具草稿（大 base64 只留内存，不进 `workDrafts`）。
+  - Host `normalizeReference` 支持 `image` 来源携带 `sourcePath`（校验规则与 `path` 相同），扩图产物因此能把 `sourceImage` / `rootImage` 指回原图，直接挂进原图版本树（类型「扩图」）。
+  - 提交栏：模型默认 `sdxl-inpaint`、修改描述留空回退原作品提示词、强度默认 1.0（带蒙版上限 1.0）；覆盖率读数改为「新增画面 N%」。提交成功后助手线程追加镜像动作与任务气泡，完成后可用「对比原图」拉帘看新增边界；失败保留底图 / 比例 / 锚点 / 提示词，动作坞「继续编辑」按原参数恢复。
+- **版本树与助手**：`LINEAGE_KINDS` 增加 `upscale` / `outpaint`，版本面板显示「高清放大」「扩图」类型（图标 `expand` / 新增 `frame`）；在途任务幽灵节点优先按 `job.tool` 判类型；助手镜像工具白名单扩到四类，镜像 / 结果记录仍带 `kind`、不进入 `intentHistory`。
+- **Agent 工具边界**：`imagen_outpaint` 本轮不提供——扩图画布需要像素级等比缩放 / 居中 / 白边蒙版合成，Host 保持零图像依赖（不引入 sharp / jimp）；评估结论写入 SPEC §3.7。
+
+### 接口与配置
+
+- `shared/contract.js` 新增 `UPSCALE`（`id: realesrgan-x2plus` / `factor: 2` / `maxInputEdge: 1280` / `maxOutputEdge: 2560`）、`OUTPAINT`（比例 / 扩边比 / 上限 / 默认强度）、`REQUEST_TOOLS`（`generate | upscale | outpaint`）；`daemonContract().limits.upscale = UPSCALE` 随注入契约下发远端，`PROTOCOL.daemon.requestTools = ['generate', 'upscale']` 登记远端取值域；`remote/config.py` 的 `LIMIT_NUMERIC_KEYS` 补 `factor` / `maxInputEdge` / `maxOutputEdge`。
+- `POST /imagen-api/generate` 新增 `tool`（缺省 `generate`）；`upscale` 请求体只带源图与宽高，`outpaint` 为普通局部重绘请求体 + `reference.sourcePath`。Job 公开视图新增 `tool`；`/history` 条目新增 `upscale`（bool）/ `upscaleScale`（number|null）/ `outpaint`（bool），字段恒存在、旧产物无迁移。
+- SPEC 新增 §3.7 `imagen_upscale` 与 §5.20 交互规范，§2.2 补充 `tool`、高清放大 / 扩图、`reference.sourcePath` 与 Job / HistoryItem 字段。
+
+### 测试
+
+- 新增 `test/remote/test_upscale.py`（49 项：tool 归一、源图校验、权重下载 / SHA256 / 重试 / 备用源、checkpoint 三种形状解包、架构构造与前向、`execute_job` 放大分支与模型释放、幂等键）与 `test/outpaint.mjs`（16 项：两种模式尺寸 / 8px 对齐 / anchor / 覆盖率 / 上限钳制）。
+- 客户端：`image-tool` 19 → 25、`image-tool-render` 6 → 11、`lineage` 17 → 18、`check-client-logic` 83 → 84，`check-client-locale` zh/en 各 566 → 586 键同构（新增高清放大 / 扩图 / 版本类型 / 扩图画布文案）。
+- Host：`host-e2e` 56 → 60（放大全链路与 meta / history 透传、扩图 sourcePath 版本树归组、非法 tool / 超限源图 / 带蒙版 / 越界 sourcePath 400）、`jobs-wait` 31 → 35、`agent-batch` 17 → 18；远端 `test/remote/run.py` 391 → 440。
+- 全量 `npm test` 38 步全绿（含契约 12 项、Python 远端 440 项）；`npm run contract:check`、`npm run models:check`、`npm run package` 通过。
+
+### 真机验收（Kaggle 2×Tesla T4，diffusers 0.43.0 / torch 2.11.0）
+
+- **高清放大默认档**：`sdxl-lightning` 1024×1024（PNG 1.21 MB）→ 2048×2048（PNG 4.01 MB）；权重下载 2.25s（67,061,725 B，SHA256 通过）、推理 1.45s、wall 10.0s（含 5.3 MB base64 回传）；`/health.gpu_memory` 前 `{allocated 7000, reserved 10776, max 10233}` → 后 `{7000, 7030, 10233}`，`reserved` 反降 3746 MB（模型按设计卸载）。质量：输出 Laplacian 方差 59.8 vs 双三次 13.4（4.47×），与双三次平均绝对差 1.89/255。
+- **高清放大上限档**：1280×720 → 2560×1440（= `maxOutputEdge`）；加载 1.5s、推理 1.32s；`/job` 响应 base64 4.84 MB 在约 3.2s 内取回（`submitMs` 1670ms、`pollCount` 3、`maxPollGapMs` 3175ms），**低于 8s 单次轮询超时、无重试**；显存无残留。
+- **扩图（`sdxl-inpaint` 9 通道）**：864×864 内容 → 1536×864 画布（内容框 `(336,0)`，覆盖率 43.75%；画布 PNG 1.40 MB、蒙版 7,966 B），强度 1.0 / 30 步，单张 35.4s，输出 PNG 1.67 MB。内容保留：内容区平均差 0.11/255（去掉 16px 边界后核心区 **0.00/255**，最大差 91 只出现在羽化带）；边界两侧 8px 亮度跳变 1.18 / 2.82（全图相邻列均值 0.63），**无硬像素接缝**，右侧轻微明暗过渡属新区域光照差异、羽化带已软化。`gpu_memory` 前 `{7000, 9736, max 9348}` → 后 `{6625, 10306, max 9715}`，峰值 < 14.56 GB，无 OOM。
+- 3 个验收 Kernel 均 `COMPLETE`、脚本 finally 已 `stop`（state=absent），无 `RUNNING` / `QUEUED` 遗留；产物见 `bench-results/gpu-live/2026-11-17T19-35-08/`、`19-44-25/`、`19-49-22/`。
+
 ## 0.12.0 — 2026-11-18
 
 > 主题：长排队可操作化。Kaggle 免费 GPU 偶发队列条目卡住（45 分钟仍 `QUEUED`；重新推送一个 Kernel 常常能在几十秒内拿到 GPU，但同样受平台负载影响，不是保证）。本批把「干等 45 分钟」改成三层提示与一键重排，并补上旧 Kernel 清理与远端自证无人接管。

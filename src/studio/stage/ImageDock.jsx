@@ -8,7 +8,8 @@
  *
  * 图片处理组由桌面注册表 `IMAGE_TOOLS` 驱动：`tools` 的每一项由 Stage 补好
  * `label`（翻译后的按钮文案）、`enabled`（能力是否可用）与可选 `hint`（悬停说明）。
- * 未开放的工具（高清放大 / 扩图）保持禁用但可见，`title` 显示规划中说明；
+ * 阶段十五 Phase B 起四个工具全部可用（高清放大点击即提交、扩图进入画布），
+ * 不再有禁用占位；保留 `enabled` 分支只为后续新增工具能先占位。
  * 编辑态下只保留「退出」按钮，创作复用组隐藏，避免误操作打断正在涂抹的草稿。
  *
  * 阶段十五 Phase A1：「带回参数」下线（点胶片条已自动回填，§2.3），复用组只剩
@@ -18,12 +19,6 @@
 import React from 'react'
 
 import { Icon } from '../icons.jsx'
-
-/**
- * 图标回落：契约里 outpaint 的 icon 是 `frame`，而 `icons.jsx` 目前没有这个图形。
- * 渲染层退回 `expand`，不修改别人文件；后续补上 frame 图标后自动改用契约值。
- */
-const ICON_FALLBACK = { frame: 'expand' }
 
 export function ImageDock(props) {
   const {
@@ -49,7 +44,7 @@ export function ImageDock(props) {
         {list.map((tool) => {
           const enabled = tool.enabled !== false && tool.ready !== false
           const label = tool.label || t(tool.labelKey)
-          const icon = ICON_FALLBACK[tool.icon] || tool.icon
+          const icon = tool.icon
           const isActive = Boolean(editing) && tool.id === activeToolId
           return (
             <button

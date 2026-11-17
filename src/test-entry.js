@@ -34,6 +34,7 @@ import { ModelCardPicker } from './studio/ModelCardPicker.jsx'
 import { ImageDock } from './studio/stage/ImageDock.jsx'
 import { InlineTool } from './studio/stage/InlineTool.jsx'
 import { MaskEditor } from './studio/stage/MaskEditor.jsx'
+import { OutpaintEditor } from './studio/stage/OutpaintEditor.jsx'
 import { ToolSubmitBar } from './studio/stage/ToolSubmitBar.jsx'
 // 阶段十三作品条：新建绘图草稿卡与版本派生面板（Filmstrip 接线）。
 import { DraftCard } from './studio/filmstrip/DraftCard.jsx'
@@ -76,10 +77,11 @@ export const __test = {
     LogsDrawer,
     SettingsDrawer,
     ModelCardPicker,
-    // 舞台图片工具子组件（阶段十二）。
+    // 舞台图片工具子组件（阶段十二 / 阶段十五 Phase B 扩图）。
     ImageDock,
     InlineTool,
     MaskEditor,
+    OutpaintEditor,
     ToolSubmitBar,
     // 作品条版本组件（阶段十三）。
     DraftCard,

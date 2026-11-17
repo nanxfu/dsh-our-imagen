@@ -330,6 +330,10 @@ LIMIT_NUMERIC_KEYS = (
     "minEdge",
     "inpaintMax",
     "minCoverage",
+    # 高清放大（tool=upscale）：放大倍数与输入/输出长边上限，Host 与 daemon 共用同一份。
+    "factor",
+    "maxInputEdge",
+    "maxOutputEdge",
 )
 
 

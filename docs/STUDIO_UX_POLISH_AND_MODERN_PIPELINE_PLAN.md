@@ -1,6 +1,6 @@
 # 工作台交互语义对齐、双向助手闭环与模型原生参考规划
 
-> **状态**：🟡 Phase 0 与 Phase A 已完成（2026-11-18，未发版）；Phase B（后处理闭环）/ Phase C（模型原生参考）待排期。  
+> **状态**：🟡 Phase 0、Phase A 与 Phase B 已完成（2026-11-18，未发版）；Phase C（模型原生参考）待排期。  
 > **前置基线**：0.13.0（已完成阶段十二「舞台图片处理工具栏解耦」与阶段十三「显式新建绘图、多作品草稿与树状版本管理」）。  
 > **核心原则**：UI 保持克制、减少用户参数决策；表单—舞台—助手三向闭环；**不做多模态看图过渡方案**，直接基于图像模型原生能力补齐“参考图与编辑统一体验”；不给 SDXL 堆砌过时外挂技术债。
 
@@ -148,7 +148,46 @@
   - **拉帘对比原图**：所有带有 `sourceImage` 的 `v2` 派生版本（无论原图来自生成还是导入）提供交互式对比滑块；
   - **PNG 元数据写入与读取**：Host 写入标准 PNG `tEXt` 元数据块，拖入本地图片时若含有效元数据支持一键还原参数。
 
-### Phase B：图像后处理闭环（点亮 `upscale` 与 `outpaint`）
+### Phase B：图像后处理闭环（点亮 `upscale` 与 `outpaint`）—— ✅ 已完成（2026-11-18）
+
+> **实现说明**（与下方原始分期一致；交互规范见 [SPEC.md](SPEC.md) §5.20，远端协议与 Agent 工具见 §2.2 / §3.7，
+> 变更明细见 [CHANGELOG](../CHANGELOG.md) 的 0.13.0 条目）。
+>
+> - **B1 高清放大（`upscale`，`instant`）**：新增 `remote/inference/upscale.py`——自包含 Real-ESRGAN
+>   `RRDBNet(x2)`（conv_first 12 通道 + pixel_unshuffle + 23×RRDB + 两次 nearest 上采样），**不引入
+>   basicsr / realesrgan**（避免与新版 torch 冲突）。权重固定 HF 镜像（GitHub Release 兜底），下载边写边算
+>   SHA256（`67061725` 字节 / `49fafd45…abb`），`.part` + 失败自动换源；CUDA fp16、奇数宽高 reflect pad
+>   后裁回、执行结束卸载模型并 `empty_cache`。远端 `POST /generate` 新增 `tool: 'upscale'`
+>   （只读源图头、不读 pipeline / loader 白名单、不允许蒙版），`Job.tool` 与公开载荷透传；Host
+>   `JobQueue` 按 tool 分派（固定 1 张、无 preset/steps/seed 语义、沿用同一套轮询与幂等重投），
+>   产物 `meta.json` 写 `upscale` / `upscaleScale` / `upscaleSource`，`/history` 恒存在透传。
+>   客户端动作坞点「高清放大」零参数即时提交（不进入编辑态），源图长边 > `UPSCALE.maxInputEdge`（1280）
+>   时前置拦下，产物作为源图子版本进入版本树并镜像到助手线程。新增 Agent 工具 `imagen_upscale`
+>   （`path` 必须是 `imagen-output/` 内作品）。
+> - **B2 扩图（`outpaint`，`canvas`）**：**不新增远端推理能力**——客户端把原图放进更大的画布、把新增区域
+>   涂白生成蒙版，再按普通局部重绘提交，远端复用已验证的 `sdxl-inpaint` 9 通道管线。新增
+>   `src/logic/outpaint.js`（四边扩 20% 与 16:9 / 9:16 / 4:3 两种模式、锚点分配留白、8px 对齐、
+>   `maxEdge`（1536）/ `maxPixels`（1.6 MP）/ `minEdge`（256）约束）与
+>   `src/studio/stage/OutpaintEditor.jsx`（比例胶囊、扩张画面预览与新增区斜纹着色、内容框拖拽 /
+>   方向键 8px / 双击与「回中」复位、导出画布 + 白边蒙版）；`ToolSubmitBar` 覆盖率读数在扩图下改为
+>   「新增画面 N%」。Host `normalizeReference` 支持 `image` 来源携带 `sourcePath` 溯源，
+>   `meta.outpaint = true` 且 `sourceImage` / `rootImage` 指回原图，扩图产物直接挂进原图版本树。
+>   `imagen_outpaint` 本轮不提供 Agent 工具（画布合成需要像素级处理，Host 保持零图像依赖），
+>   评估结论写在 SPEC §3.7。
+> - **契约与版本树**：`UPSCALE` / `OUTPAINT` / `REQUEST_TOOLS` 进入 `shared/contract.js`，
+>   `daemonContract().limits.upscale` 下发远端、`PROTOCOL.daemon.requestTools` 登记远端取值域；
+>   `Job` 增加 `tool` 字段，`HistoryItem` 增加 `upscale` / `upscaleScale` / `outpaint`；
+>   `LINEAGE_KINDS` 增加 `upscale` / `outpaint`，版本面板与助手镜像同步支持四类工具。
+> - **测试**：新增 `test/outpaint.mjs`（16）与 `test/remote/test_upscale.py`（49）；`image-tool`
+>   19 → 25、`image-tool-render` 6 → 11、`lineage` 17 → 18、`check-client-logic` 83 → 84、
+>   `host-e2e` 56 → 60、`jobs-wait` 31 → 35、`agent-batch` 17 → 18、`test/remote/run.py` 391 → 440；
+>   `npm test` 38 步全绿。
+> - **真机验收（Kaggle 2×T4，3 轮全过）**：1024² → 2048²（加载 2.25s / 推理 1.45s / PNG 4.01 MB，
+>   `allocated_mb` 7000→7000、`max_allocated_mb` 不变，模型卸载后 `reserved` 反降 3746 MB；
+>   Laplacian 方差 59.8 vs 双三次 13.4）；1280×720 → 2560×1440 上限档（推理 1.32s，4.84 MB
+>   base64 响应约 3.2s 取回、低于 8s 轮询超时）；`sdxl-inpaint` 扩图 864² 内容 → 1536×864 画布
+>   （覆盖率 43.75%、30 步 35.4s、输出 1.67 MB，保留区核心像素差 0.00/255、无硬接缝，
+>   显存峰值 9715 MB < 14.56 GB，无 OOM）。
 
 * **目标**：激活舞台动作坞预留的两个工具位，补齐从“初稿生成”到“成片交付”的完整链路，并接入 Agent 工具。
 * **Phase B1 — 一键 2× 高清放大（`upscale`，`instant` 形态）**：

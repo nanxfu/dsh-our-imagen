@@ -447,17 +447,18 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 
 | 字段 | 类型 | 约束（越界自动钳制，不报错） |
 | :--- | :--- | :--- |
-| `prompt` | string | 必填，trim 后 1~2000 字符；空则 400 `invalid_prompt` |
+| `tool` | string | 可选，缺省 `generate`；取值 `REQUEST_TOOLS`（`generate` / `upscale` / `outpaint`），其它值 400 `invalid_request`。三类请求的差异见下方「高清放大」与「扩图」 |
+| `prompt` | string | `generate` / `outpaint` 必填，trim 后 1~2000 字符；空则 400 `invalid_prompt`。`upscale` 可空（只作为产物标题记录） |
 | `negativePrompt` | string | 可选，截断到 1000 字符；默认空 |
-| `presetId` | string | 可选，未知 id 回退默认预设 |
-| `width` / `height` | integer | 256~1536，按 8 的倍数对齐；缺省取预设 `size` |
+| `presetId` | string | 可选，未知 id 回退默认预设；`upscale` 忽略该字段 |
+| `width` / `height` | integer | 256~1536，按 8 的倍数对齐；缺省取预设 `size`。`upscale` 传源图宽高（长边不得超过 `UPSCALE.maxInputEdge` = 1280）；`outpaint` 传扩张后画布宽高 |
 | `steps` | integer | 1~60；缺省取预设 `steps` |
 | `cfg` | number | 0~20；缺省取预设 `cfg` |
 | `seed` | integer | 0~2147483647；省略则随机。多张时第 `i` 张为 `seed + i` |
 | `count` | integer | 1~4，默认 1 |
 | `waitSeconds` | integer | 0~600：>0 时该请求最多等待任务结束 N 秒再返回（默认 0，立即返回） |
 | `autoStart` | boolean | 默认 `true`；`false` 时不自动唤醒会话 |
-| `reference` | object | 可选。图生图 / 局部重绘参考图（M3 / 0.12.0）：`{ path?, image?, strength?, mask? }`，`path` 与 `image` 二选一，`mask` 可叠加；详见下方「图生图参考图」 |
+| `reference` | object | 可选。图生图 / 局部重绘参考图（M3 / 0.12.0）：`{ path?, image?, strength?, mask?, sourcePath? }`，`path` 与 `image` 二选一，`mask` 可叠加；`sourcePath` 是 `image` 来源的溯源路径（扩图用，见下方「本地画布来源」）；详见下方「图生图参考图」 |
 
 **图生图参考图（M3）与局部重绘蒙版（0.12.0）**：
 
@@ -498,6 +499,42 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
   不再依赖管线的缺省方形尺寸；管线不接受该参数时由 `__call__` 签名过滤丢弃，出图尺寸仍跟随参考图，
   像素合成（composite）保留为尺寸不一致时的兜底。日志会打印 `[gen] inpaint ... kw=...,height,...,width,...`。
 
+**高清放大（`tool: "upscale"`，阶段十五 Phase B1）**：
+
+- 远端走**轻量超分**而非扩散推理：Real-ESRGAN `RRDBNet` x2（纯 torch 前向，权重 67 MB，
+  不加载扩散 pipeline、不占扩散模型显存），产物固定 `UPSCALE.factor` = 2 倍。
+- 请求体只需要 `reference`（源图，`path` 或 `image` 二选一）与源图宽高：`presetId` / `steps` /
+  `cfg` / `seed` / `count` 不参与（`count` 固定 1、`waitSeconds` / `autoStart` 语义不变）。
+  `reference` 不允许带 `mask` / `strength`（带了返回 400 `invalid_request`）。
+- 上限：源图长边 ≤ `UPSCALE.maxInputEdge`（1280），超过时 Host 入队前 400；远端只接受
+  PNG / JPEG 且长边 ≥ `LIMITS.reference.minEdge`。输出长边 = 源 × 2（≤ 2560）。
+- 产物作为源图的派生子版本：`meta.json` 记 `sourceImage` / `rootImage` / `upscale: true` /
+  `upscaleScale: 2` / `upscaleSource: { width, height }`，与「局部重绘 / 整图重绘」共用同一棵版本树。
+- 远端差异：`tool=upscale` 时远端不读 `pipeline`、不加载扩散模型；任务结果项带
+  `upscale: true` / `scale` / `sourceWidth` / `sourceHeight`（Host 只透传不消费），job 载荷与
+  `/generate` 响应都带 `tool` 字段。
+- 远端任务结果的额外字段见 §1.4 之后的「远端结果字段」；Host 只透传不消费。
+
+**扩图（`tool: "outpaint"`，阶段十五 Phase B2）**：
+
+- 扩图**不新增远端能力**：客户端把原图缩放后放进更大的画布、把新增区域涂白生成蒙版，再按普通
+  局部重绘提交（`presetId` 默认 `sdxl-inpaint`，复用已验证的 9 通道管线），远端看到的就是一次
+  合法的 inpaint 请求。
+- 请求体与局部重绘相同，只是 `reference` 用**本地画布来源**：`{ image: <扩张后画布 PNG base64>,
+  mask: <白=新增区 PNG base64>, sourcePath: <原作品路径>, strength: 1.0 }`。画布尺寸写进
+  `width` / `height`（256~1536、8 对齐）；新增区域占比由客户端保证 ≥ 2%，空蒙版/无画布在 Host
+  与客户端双重拦截。
+- **本地画布来源（`reference.sourcePath`）**：`image` 来源新增可选溯源路径，校验规则与
+  `reference.path` 完全一致（工作区相对、必须在 `imagen-output/` 内）；Host 用它写
+  `meta.sourceImage` / `rootImage`，让扩图产物挂进原图版本树（`reference.path` 来源时即等于 `path`，
+  老客户端不传时行为不变）。
+- 产物 `meta.json` 除 `inpaint: true` / `strength` 外再记 `outpaint: true`；历史条目透传
+  `outpaint` 标记，版本面板显示「扩图」类型。
+- **客户端画布口径**（`OUTPAINT`，契约唯一来源）：快捷比例为 `16:9` / `9:16` / `4:3` 与
+  「四边扩 20%」（`expandRatio` = 1.2）；画布长边 ≤ `maxEdge`（1536）、总像素 ≤ `maxPixels`
+  （1.6 MP）、各边 ≥ `minEdge`（256），宽高与内容框均按 8 对齐；内容框可按 anchor 拖动分配留白，
+  默认居中。
+
 - **响应**：**裸 `Job` 对象**（不是 `{ ok, job }` 包装）。`waitSeconds > 0` 时返回的是等待结束后的快照，
   任务可能仍在 `queued` / `running`。
 
@@ -511,8 +548,9 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | `stageCode` | 结构化阶段标识（稳定英文）：`queued` / `waiting-session` / `loading` / `running` / `done` / `failed` / `cancelled`。`loading` 专指会话就绪路径上远端仍在加载模型（`sessionState=warming`）；客户端按它选本地化文案 |
 | `progress` | 仅在 `running` 时非 `null`：`{ done, total }`，`done` 是**已完成的张数**（0 起）。其余状态为 `null`；客户端用 `done + 1` 展示「正在生成第 k/总数 张」 |
 | `cancelRequested` | 是否已收到取消请求（running 合作式停止中为 `true`）；终态/未取消为 `false` |
-| `presetId` | 实际使用的预设 id |
-| `params` | 归一化后的参数：`{ prompt, negativePrompt, width, height, steps, cfg, seed, count }`；图生图任务额外带 `reference: { sourcePath, strength }`（不包含参考图二进制） |
+| `tool` | 本次任务的工具类型：`generate` / `upscale` / `outpaint`（缺省 `generate`）。客户端据此渲染版本树节点类型与助手镜像 |
+| `presetId` | 实际使用的预设 id（`upscale` 为超分模型 id `realesrgan-x2plus`） |
+| `params` | 归一化后的参数：`{ prompt, negativePrompt, width, height, steps, cfg, seed, count }`；图生图 / 局部重绘任务额外带 `reference: { sourcePath, strength }`（不包含参考图二进制，`mask` 只回布尔标记）；高清放大任务额外带 `reference: { sourcePath, upscale: true }` |
 | `createdAt` / `startedAt` / `finishedAt` | ISO 时间；未发生为 `null` |
 | `seconds` | 生成耗时（秒，1 位小数）或 `null` |
 | `sessionState` | 任务执行时最近的会话状态 |
@@ -603,7 +641,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
   `items` 保持数组类型（旧客户端只读该字段即可向后兼容）；`hasMore=true` 表示还有更早的记录，
   客户端可在底部继续「加载更多」（前端每次取契约上限 `LIMITS.history.pageSize` = 100 条）。
 
-`HistoryItem`：`{ jobId, dir, createdAt, finishedAt, presetId, params, prompt, images[], source, sourceImage, rootImage, inpaint, strength }`；
+`HistoryItem`：`{ jobId, dir, createdAt, finishedAt, presetId, params, prompt, images[], source, sourceImage, rootImage, inpaint, strength, upscale, upscaleScale, outpaint }`；
 `params` 是完整的生成参数（用于「带回参数」），`images[]` 每项：
 `{ file, path, absolute, url, width, height, seed, seconds }`（已按文件是否存在过滤，删除过的图不会出现）。
 `source` 是作品来源（阶段十五 Phase A）：`"ai"` 为 AI 生成，`"import"` 为用户本地导入（见 §2.3 `/import`，导入图不参与 AI 生成计数）。
@@ -611,6 +649,8 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 是本次生成所用参考图的工作区相对路径（纯文生图或前端动态上传参考图时为 `null`）；`rootImage` 是整棵
 派生树的根作品路径（无参考图的根作品为 `null`，每张候选图各自为根；旧 `meta.json` 缺该字段时由 Host 按
 `sourceImage` 链回溯，回溯不到时退回 `sourceImage`）；`inpaint` 为局部重绘标记；`strength` 为重绘强度。
+`upscale` / `upscaleScale` / `outpaint` 是阶段十五 Phase B 的后处理标记（字段恒存在）：高清放大产物
+`upscale=true`、`upscaleScale` 为放大倍数（旧产物 `null`）；扩图产物 `outpaint=true`（同时 `inpaint=true`）。
 
 #### `GET /imagen-api/history/tree?root=<encodedPath>&limit=<n>`
 
@@ -1025,6 +1065,25 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | `dequeued` | `已取消任务 <jobId>（已从队列移除）` |
 | `cooperative` | `已向任务 <jobId> 发送合作式取消请求：当前正在生成的单张完成后将停止，不再继续后续张数，已出图像仍保留` |
 | `already-finished` | `任务 <jobId> 已处于终态（<status>），无需取消` |
+
+### 3.7 `imagen_upscale`
+
+- **描述**：把工作区 `imagen-output/` 里已有的一张作品高清放大 `UPSCALE.factor`（2）倍
+  （Real-ESRGAN 轻量超分，不加载扩散模型、不占扩散显存）。只支持 PNG / JPEG，源图长边不超过
+  `UPSCALE.maxInputEdge`（1280px）；输出作为该作品的派生子版本归档到 `imagen-output/`，
+  可在 `imagen_history` 与版本树里看到（类型为「高清放大」）。
+- **输入参数**（`additionalProperties: false`，必填 `path`）：
+
+| 参数 | 类型 | 必填 | 说明 |
+| :--- | :--- | :---: | :--- |
+| `path` | string | 是 | 工作区相对的源图路径，必须是 `imagen-output/` 内的作品（如 `imagen-output/20260101-120000-j_1a2b3c4d/01.png`）；越界、不是可识别 PNG/JPEG 或长边超限时在提交前直接返回失败文本，不占用队列 |
+| `waitSeconds` | integer | 否 | 最多等待多少秒（0–600，默认 90）；超时后任务仍在后台继续，可用返回的 `jobId` 配合 `imagen_history` / `imagen_cancel` |
+| `saveTo` | string | 否 | 可选交付路径，规则与 `imagen_generate` 的 `saveTo` 相同（不允许绝对路径、`..`、`imagen-output/` 或 `.imagen/`） |
+
+- **返回**：与 `imagen_generate` 同形的任务摘要文本；高清放大任务的 `presetId` 为
+  `realesrgan-x2plus`，`params.reference.sourcePath` 指向源图。
+- **实现边界**：扩图暂不提供 Agent 工具——扩图画布需要像素级的等比缩放 / 居中 / 白边蒙版合成，
+  Host 保持零图像依赖（不引入 sharp / jimp）；扩图由用户在工作台舞台动作坞提交（见 §5.20）。
 
 ---
 
@@ -1499,3 +1558,49 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
    PNG tEXt / 历史收录）；`check-client-chat` 19 项、`check-client-shell` 51 项、`check-client-logic` 83 项、
    `check-client-tools` 27 项、`image-tool-render` 6 项、`host-e2e` 56 项、`jobs-wait` 31 项，
    `check-client-locale` zh/en 各 539 键同构；`npm test` 36 步全绿。
+
+### 5.20 第十六批交互补充（高清放大与扩图后处理闭环，阶段十五 Phase B）
+
+> 设计依据：[STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md) §四 Phase B。
+> 两个工具都在舞台动作坞（`ImageDock`）里一步直达，产物统一作为当前作品的派生子版本进入版本树；
+> 编辑态与左栏表单完全隔离，不写 `form`、不污染 `intentHistory`。
+
+1. **高清放大（`upscale`，instant 形态）**：动作坞点「高清放大」即提交，不进入编辑态、没有参数表单。
+   源图固定按 `UPSCALE.factor`（2）倍放大（Real-ESRGAN 轻量超分，远端不加载扩散模型）。
+   选中作品的长边超过 `UPSCALE.maxInputEdge`（1280px）时前置校验拦下并提示「源图过大」，
+   不发请求、不占队列；旧记录没有宽高时放行，由远端解码后兜底。提交成功提示「已提交高清放大任务」，
+   任务走同一条生图流水线；完成后产物作为源图的子版本归档（`meta.upscale = true` /
+   `upscaleScale` / `upscaleSource`），版本面板类型显示「高清放大」，支持「对比原图」拉帘与「重新生成」。
+   高清放大没有强度 / 提示词语义，助手镜像记录只显示动作与底图（不显示强度胶囊）。
+2. **扩图画布（`outpaint`，canvas 形态）**：动作坞点「扩图」进入画布态（与局部涂抹互斥，一次只开一个工具）。
+   - **比例胶囊**：顶部固定「四边扩 20%（默认）」「16:9」「9:16」「4:3」四项，切换即重算画布；
+     四边扩 = 画布尺寸 ×1.2、通常四边都有留白；目标画幅模式下内容等比放入后只在一个轴上加留白，
+     另一轴铺满。比例与源图相同时提示「扩不出新增区域」。
+   - **预览与微调**：画布按「扩张后的画面」呈现（新增区域用斜纹半透明着色、内容框虚线）；
+     拖拽内容框（pointer capture）即可把原图在画布里的位置挪到任意一侧，方向键按 8px 微调，
+     双击或点「回中」复位；拖拽过程只更新预览，松手才写回草稿并重新导出。画布与内容框尺寸
+     全部按 8px 对齐，且受 `OUTPAINT.maxEdge`（1536）/ `maxPixels`（1.6 MP）/ `minEdge`（256）约束。
+   - **提交栏**：模型默认 9 通道专用权重 `sdxl-inpaint`（也可切换其它支持局部重绘的模型）、
+     修改描述留空时回退原作品提示词、强度默认 `1.0` 且上限 `1.0`（覆盖大面积新增区域需要满步数）。
+   - **提交与归档**：编辑器把画布导出为 `reference.image`（扩张后的画布，黑底 + 原图放进内容框）、
+     `reference.mask`（白 = 新增区域）与 `reference.sourcePath`（原作品路径）；Host 写
+     `meta.outpaint = true` 并把 `sourceImage` / `rootImage` 指回原作品，因此扩图产物直接挂在
+     原图版本树下（类型「扩图」，同时 `inpaint = true`）。提交后助手线程追加镜像动作与任务气泡，
+     完成后可用「对比原图」拉帘看新增边界。
+   - **编辑保护与失败恢复**：扩图编辑态拒绝导入替换底图（沿用 Phase A 的编辑态保护）；提交失败保留
+     底图 / 比例 / 锚点 / 提示词，动作坞「继续编辑」按原参数重开；换作品 / 换工具 / 新建创作清空画布草稿。
+     草稿圆点把「比例 / 锚点」变化计为参数改动（`params`），与局部涂抹的蒙版圆点口径一致。
+   - **体积与空态**：导出的画布 / 蒙版超过契约体积（参考图 8 MiB / 蒙版 2 MiB）时就地提示、不提交；
+     画布还没导出时提交按钮禁用并提示原因。
+3. **版本树与助手统一**：版本类型新增 `upscale` / `outpaint`（`LINEAGE_KINDS`），
+   版本面板显示对应文案与图标；在途任务的幽灵节点优先按 `job.tool` 判类型（其次 `sourceMode` /
+   `reference`），提交后即可在父作品下看到「生成中」节点。助手镜像工具白名单扩到四类
+   （局部涂抹 / 整图重绘 / 高清放大 / 扩图），镜像记录与结果卡仍带 `kind`，不进入意图上下文。
+4. **无障碍与响应式**：比例胶囊与「回中」按钮触控热区 ≥ 44px，`aria-pressed` 标记当前比例；
+   画布预览 `role="img"` + 画布说明，内容框是独立可聚焦控件（方向键 / Home 可用）；
+   ≤720px 时顶部「标题 + 覆盖率」与比例胶囊改为上下两行，画布按容器等比缩放不溢出。
+5. **测试**：新增 `test/outpaint.mjs`（16 项，比例 / 尺寸 / 8px 对齐 / anchor / 覆盖率 / 上限钳制）；
+   `image-tool` 19 → 25、`image-tool-render` 6 → 11、`lineage` 17 → 18、`check-client-logic` 83 → 84，
+   `check-client-locale` zh/en 各 566 → 586 键同构；Host `host-e2e` 56 → 60、`jobs-wait` 31 → 35、
+   `agent-batch` 17 → 18；远端 `test/remote/run.py` 391 → 440（新增 `test_upscale.py` 49 项）。
+   `npm test` 38 步全绿。真机验收数据见 [CHANGELOG](../CHANGELOG.md) 的 0.13.0 条目。

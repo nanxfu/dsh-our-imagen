@@ -1200,6 +1200,261 @@
   white-space: nowrap;
 }
 
+/* ── 扩图：扩张画布 + 比例胶囊 ───────────────────────────────── */
+/*
+ * 与 MaskEditor 同一套光桌布局：顶部一条「标题 / 覆盖率 + 比例胶囊」，
+ * 中间是可拖拽的扩张画布，底部一条紧凑胶囊放「回中」与操作提示。
+ * 画布里的新增区域用斜纹半透明着色，内容框是虚线拖拽区（命中区 44px 起）。
+ */
+.ofs-outpaint-editor {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  padding: 12px 14px 10px;
+  overflow: hidden;
+}
+
+.ofs-outpaint-top {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.ofs-outpaint-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: var(--ofs-r-pill);
+  background: color-mix(in oklab, var(--ofs-card) 86%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--ofs-shadow-card);
+}
+
+.ofs-outpaint-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ofs-ink);
+}
+
+.ofs-outpaint-coverage {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ofs-outpaint-ratios {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 比例胶囊：高度沿用工具栏 44px 触控热区，键盘 Tab 顺序即视觉顺序。 */
+.ofs-outpaint-ratio {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-pill);
+  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);
+  color: var(--ofs-ink-2);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.ofs-outpaint-ratio:hover {
+  border-color: var(--ofs-accent-soft-border);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+}
+
+.ofs-outpaint-ratio.is-on {
+  border-color: var(--ofs-accent-soft-border);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+}
+
+.ofs-outpaint-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  overflow: hidden;
+  container-type: size;
+}
+
+/* 扩张后的画布：保持与导出 PNG 相同的宽高比，外圈沿用相纸装裱。 */
+.ofs-outpaint-stage {
+  position: relative;
+  flex: 0 0 auto;
+  width: min(
+    calc(100cqw - 28px),
+    max(160px, calc((100cqh - 22px) * var(--ofs-outpaint-r, 1)))
+  );
+  aspect-ratio: var(--ofs-outpaint-r, 1);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #000;
+  touch-action: none;
+  box-shadow:
+    0 0 0 8px var(--ofs-print-paper),
+    0 0 0 9px var(--ofs-print-edge),
+    var(--ofs-print-shadow);
+}
+
+/* 预览层与内容框分层：预览整体是角色 img 的图形，内容框是独立的可操作控件。 */
+.ofs-outpaint-preview {
+  position: absolute;
+  inset: 0;
+}
+
+/* 原图按内容框铺满（导出时也是拉伸到同一矩形，预览与产出保持一致）。 */
+.ofs-outpaint-photo {
+  position: absolute;
+  object-fit: fill;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* 新增区域着色：低透明度底色 + 斜纹，表达「这块会重新生成」。 */
+.ofs-outpaint-shade {
+  position: absolute;
+  pointer-events: none;
+  background-color: color-mix(in oklab, var(--ofs-accent) 20%, transparent);
+  background-image: repeating-linear-gradient(
+    45deg,
+    color-mix(in oklab, var(--ofs-accent) 30%, transparent) 0 6px,
+    transparent 6px 12px
+  );
+}
+
+/* 内容框：虚线 + 居中抓手，pointer capture 拖拽；最小 44px 保证触控热区。 */
+.ofs-outpaint-content {
+  position: absolute;
+  appearance: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px dashed color-mix(in oklab, #fff 76%, transparent);
+  border-radius: 2px;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+}
+
+.ofs-outpaint-content:active {
+  cursor: grabbing;
+}
+
+.ofs-outpaint-content:focus-visible {
+  outline: 2px solid var(--ofs-accent);
+  outline-offset: 2px;
+}
+
+.ofs-outpaint-grip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: block;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgb(255 255 255 / 55%);
+  border-radius: 50%;
+  background: rgb(20 20 22 / 48%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.ofs-outpaint-grip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 74%);
+  transform: translate(-50%, -50%);
+}
+
+/* 底部工具胶囊：紧贴画布下方，与 MaskEditor 的工具栏视觉一致。 */
+.ofs-outpaint-tools {
+  flex: 0 0 auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: var(--ofs-r-pill);
+  background: color-mix(in oklab, var(--ofs-card) 92%, transparent);
+  box-shadow: var(--ofs-shadow-card);
+}
+
+.ofs-outpaint-tools .ofs-dock-button {
+  padding: 0 9px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ofs-outpaint-tools .ofs-dock-button:hover {
+  background: var(--ofs-accent-soft);
+}
+
+.ofs-outpaint-hint {
+  margin: 0;
+  font-size: 11px;
+  text-align: left;
+}
+
+.ofs-outpaint-empty {
+  margin: 0;
+}
+
+.ofs-outpaint-warn {
+  margin: 0;
+  color: var(--ofs-warn, #b45309);
+  font-size: 11px;
+  text-align: left;
+}
+
+@media (max-width: 720px) {
+  .ofs-outpaint-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ofs-outpaint-ratios {
+    justify-content: flex-start;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ofs-draft-backdrop span {
     animation: none;

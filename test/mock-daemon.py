@@ -9,7 +9,8 @@
                             并带 tunnel_provider / tunnel_state / tunnel_restarts
   GET  /logs?since=N        {lines, next}，环形缓冲最多 400 行
   POST /generate            {status:"accepted", job_id, model_id, created_at}（202，入队即返回）
-  GET  /job?id=<job_id>     {status:queued|running|done|failed, progress, results|error, ...}
+                            tool=generate（缺省，扩散出图）| upscale（高清放大，源图 ×factor）
+  GET  /job?id=<job_id>     {status:queued|running|done|failed, tool, progress, results|error, ...}
   POST /shutdown            {"status": "shutting_down"} 后退出
 
 0.5.0 起 /generate 是异步的：提交只做校验+入队，202 返回；后台 worker 线程串行执行，
@@ -29,6 +30,10 @@ shared/contract.js 生成），参数边界与 daemon 注入的 ``config.contrac
 
 图片编码优先用 Pillow；没装 Pillow 时退回内置的最小 PNG 编码（zlib + CRC32），
 保证任何环境都能返回合法 PNG。
+
+高清放大（tool=upscale）不读 pipeline / tasks：mock 从 reference.image_b64 的头部解析
+源图宽高，按 limits.upscale.factor 放大后返回纯色 PNG，并在 result 里回带
+upscale / scale / sourceWidth / sourceHeight（与真 daemon 的结果字段同形）。
 
 示例：
   python test/mock-daemon.py --port 17860 --token test-token
@@ -78,6 +83,9 @@ SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2", "anima")
 SUPPORTED_IMG2IMG_LOADERS = ("sdxl", "sdxl-lora")
 # 局部重绘白名单：与 remote/inference/registry.py 的 inpaint_names() 同值（首期仅 SDXL 家族）。
 SUPPORTED_INPAINT_LOADERS = ("sdxl", "sdxl-lora")
+# 远端 /generate 接受的 tool 取值：与契约 PROTOCOL.daemon.requestTools 同值。
+# outpaint 在远端就是「带蒙版的局部重绘」，不单列。
+PROTOCOL_TOOLS = ("generate", "upscale")
 REFERENCE_IMAGE_FORMATS = ("PNG", "JPEG")
 # 蒙版只接受 PNG：与 remote/inference/reference_codec.py 的 MASK_IMAGE_FORMATS 同值。
 MASK_IMAGE_FORMATS = ("PNG",)
@@ -111,6 +119,8 @@ FALLBACK_CONTRACT = {
         # 局部重绘蒙版：黑白 PNG（白 = 重绘区域，黑 = 保留区域），尺寸由远端对齐参考图；
         # minCoverage 是白色区域最小占比（低于它按空蒙版拒绝，全白允许）。
         "mask": {"maxBytes": 2 * 1024 * 1024, "minCoverage": 0.0005},
+        # 高清放大（tool=upscale）：输入/输出长边上限与固定倍率，Host 与 daemon 共用同一份。
+        "upscale": {"factor": 2, "id": "realesrgan-x2plus", "maxInputEdge": 1280, "maxOutputEdge": 2560},
     },
 }
 _LIMIT_NUMERIC_KEYS = (
@@ -124,6 +134,10 @@ _LIMIT_NUMERIC_KEYS = (
     "minEdge",
     "inpaintMax",
     "minCoverage",
+    # 高清放大（tool=upscale）：放大倍数与输入/输出长边上限（与 remote/config.py 同表）。
+    "factor",
+    "maxInputEdge",
+    "maxOutputEdge",
 )
 
 CONTRACT: dict = {}
@@ -531,7 +545,14 @@ def prune_jobs(now: float | None = None) -> None:
         _JOB_TABLE.pop(job_id, None)
 
 
-def submit_job(pipeline: dict, model_id: str, tasks: list[dict], job_id=None, reference=None):  # noqa: ANN001, ANN201
+def submit_job(  # noqa: ANN001, ANN201
+    pipeline: dict,
+    model_id: str,
+    tasks: list[dict],
+    job_id=None,
+    reference=None,
+    tool: str = "generate",
+):
     with _JOB_LOCK:
         prune_jobs()
         if job_id:
@@ -541,6 +562,7 @@ def submit_job(pipeline: dict, model_id: str, tasks: list[dict], job_id=None, re
         job = {
             "job_id": job_id or new_job_id(),
             "model_id": str(model_id),
+            "tool": str(tool or "generate"),
             "pipeline": dict(pipeline),
             "tasks": list(tasks),
             "reference": dict(reference) if reference is not None else None,
@@ -557,7 +579,7 @@ def submit_job(pipeline: dict, model_id: str, tasks: list[dict], job_id=None, re
         queue_len = len(_JOB_QUEUE)
         _JOB_WAKE.set()
         log(
-            f"[job] 入队 {job['job_id']}（tasks={len(job['tasks'])}，排队 {queue_len}"
+            f"[job] 入队 {job['job_id']}（tool={job['tool']}，tasks={len(job['tasks'])}，排队 {queue_len}"
             f"{'，带参考图' if job['reference'] is not None else ''}）"
         )
         return job, True
@@ -580,6 +602,8 @@ def job_payload(job: dict) -> dict:
             "status": job["status"],
             "job_id": job["job_id"],
             "model_id": job["model_id"],
+            # Job 模型（Phase B）：tool 缺省 generate，与 daemon 的公开载荷一致。
+            "tool": job.get("tool", "generate"),
             "progress": {"done": len(job["results"]), "total": len(job["tasks"])},
             "created_at": iso_time(job["created_at"]),
             "updated_at": iso_time(job["updated_at"]),
@@ -600,6 +624,59 @@ def _finish_job(job: dict, status: str, error: dict | None = None) -> None:
         prune_jobs(now)
 
 
+def _run_upscale_job(job: dict) -> None:
+    """高清放大（tool=upscale）：按源图尺寸 ×factor 返回合法 PNG，不加载任何扩散管线。
+
+    与真 daemon 的分支语义一致：只读 reference（源图头部已由 ``parse_upscale_reference``
+    校验），合成 1 条 steps/cfg = 0 的任务，result 里回带 upscale / scale / sourceWidth /
+    sourceHeight，Host 落盘时据此写 meta.upscale / upscaleScale / upscaleSource。
+    """
+    limits = _limit("upscale")
+    factor = int(limits.get("factor") or 2)
+    reference = job.get("reference") or {}
+    source_w = int(reference.get("width") or 0)
+    source_h = int(reference.get("height") or 0)
+    results = []
+    with _GEN_LOCK:
+        for task in job["tasks"]:
+            delay = max(0.0, float(_ARGS.delay or 0.0))
+            if delay:
+                time.sleep(delay)
+            width = max(1, int(task.get("width") or source_w))
+            height = max(1, int(task.get("height") or source_h))
+            out_w, out_h = width * factor, height * factor
+            png = render_png(out_w, out_h, task["seed"])
+            results.append(
+                {
+                    "name": task["name"],
+                    "seed": task["seed"],
+                    "seconds": round(max(delay, 0.001), 2),
+                    "width": out_w,
+                    "height": out_h,
+                    # 放大没有采样语义：steps / cfg 固定 0（与真 daemon 的 result 同形）。
+                    "steps": 0,
+                    "cfg": 0.0,
+                    "png_bytes": len(png),
+                    "image_b64": base64.b64encode(png).decode("ascii"),
+                    "upscale": True,
+                    "scale": factor,
+                    "sourceWidth": width,
+                    "sourceHeight": height,
+                }
+            )
+            log(f"[mock] 放大 {task['name']} 源图 {width}x{height} → {out_w}x{out_h} {len(png)} 字节")
+            with _JOB_LOCK:
+                job["results"] = list(results)
+                job["updated_at"] = time.time()
+            _LAST_ACTIVE = time.time()
+    _JOBS_DONE["count"] += len(results)
+    with _JOB_LOCK:
+        job["results"] = list(results)
+        job["load_seconds"] = 0.05
+    _finish_job(job, "done")
+    log(f"[job] {job['job_id']} 放大完成 {len(results)} 张")
+
+
 def _execute_job(job: dict) -> None:
     """mock 的 job 执行：按 --delay / --fail-job 模拟出图与失败。"""
     global _LAST_ACTIVE
@@ -610,6 +687,10 @@ def _execute_job(job: dict) -> None:
     try:
         if fail_job != "none":
             raise RuntimeError(f"mock 按 --fail-job 注入的错误：{fail_job}")
+        # 高清放大走独立分支：不读 pipeline / strength，按源图尺寸 ×factor 出图后直接收尾。
+        if job.get("tool") == "upscale":
+            _run_upscale_job(job)
+            return
         ref = job.get("reference")
         ref_size = None
         ref_strength = None
@@ -896,6 +977,78 @@ def parse_reference_spec(raw, pipeline_spec: dict) -> dict | None:  # noqa: ANN0
     return spec
 
 
+# ── 高清放大（tool=upscale，阶段十五 Phase B1）─────────────────────────────
+
+
+def normalize_tool(value):  # noqa: ANN001, ANN201
+    """归一请求的 tool：缺省 generate，只接受远端协议声明的两类（与 daemon 同口径）。"""
+    if value is None:
+        return "generate"
+    if not isinstance(value, str):
+        raise ValueError("tool 必须是字符串")
+    tool = value.strip()
+    if not tool:
+        return "generate"
+    if tool not in PROTOCOL_TOOLS:
+        raise ValueError(f"tool 只支持 {' / '.join(PROTOCOL_TOOLS)}，收到 {tool}")
+    return tool
+
+
+def parse_upscale_reference(raw) -> dict:  # noqa: ANN001
+    """tool=upscale 的源图校验：PNG/JPEG 头部 + 体积 + 长边上下限；不读 strength、不允许蒙版。"""
+    if raw is None:
+        raise ValueError("tool=upscale 时必须提供 reference.image_b64")
+    if not isinstance(raw, dict):
+        raise ValueError("reference 必须是对象")
+    if raw.get("mask_b64") is not None:
+        raise ValueError("tool=upscale 不接受蒙版（mask_b64）")
+    encoded = raw.get("image_b64")
+    if not isinstance(encoded, str) or not encoded.strip():
+        raise ValueError("tool=upscale 时 reference.image_b64 必须是非空字符串")
+    max_bytes = int(_limit("reference").get("maxBytes") or 0)
+    try:
+        data = base64.b64decode(encoded.strip(), validate=True)
+    except (binascii.Error, ValueError):
+        raise ValueError("reference.image_b64 不是合法 base64") from None
+    if not data:
+        raise ValueError("reference.image_b64 解码后为空")
+    if max_bytes > 0 and len(data) > max_bytes:
+        raise ValueError(f"参考图体积 {len(data)} 字节，超过上限 {max_bytes} 字节")
+    # 参考图那套头部校验（PNG/JPEG + 长边 ≥ minEdge）；不做 loader 白名单、不读 strength。
+    _fmt, width, height = _probe_reference_image(data)
+    limits = _limit("upscale")
+    max_input_edge = int(limits.get("maxInputEdge") or 0)
+    if max_input_edge > 0 and max(width, height) > max_input_edge:
+        raise ValueError(
+            f"源图长边 {max(width, height)}px 超过 {max_input_edge}px 上限"
+            f"（limits.upscale.maxInputEdge）"
+        )
+    return {"image_bytes": data, "width": int(width), "height": int(height)}
+
+
+def validate_upscale_spec(spec) -> tuple[str, list[dict], dict]:  # noqa: ANN001
+    """tool=upscale 的请求校验：不读 pipeline，合成 1 条超分任务（与 daemon 的 Job 模型同形）。"""
+    if not isinstance(spec, dict):
+        raise ValueError("请求体必须是 JSON 对象")
+    reference = parse_upscale_reference(spec.get("reference"))
+    limits = _limit("upscale")
+    seed_limit = int(_limit("seed").get("max") or 2**31 - 1)
+    seed = int(time.time() * 1000) % seed_limit
+    # 宽高 = 源图宽高；steps / cfg 固定 0（放大不采样）。tasks 由 daemon 自行合成，Host 不下发。
+    task = {
+        "name": "01",
+        "prompt": "",
+        "negative_prompt": "",
+        "seed": seed,
+        "width": reference["width"],
+        "height": reference["height"],
+        "steps": 0,
+        "cfg": 0.0,
+    }
+    model_id = str(limits.get("id") or "realesrgan-x2plus")
+    return model_id, [task], reference
+
+
 def validate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
     """与 remote/daemon.py 相同的校验口径（边界来自 contract.limits），越界返回 400。"""
     if not isinstance(spec, dict):
@@ -1127,8 +1280,15 @@ class MockHandler(BaseHTTPRequestHandler):
 
         try:
             spec = self._read_json()
-            pipeline, model_id, tasks = validate_spec(spec)
-            reference = parse_reference_spec(spec.get("reference"), pipeline)
+            tool = normalize_tool(spec.get("tool"))
+            reference = None
+            if tool == "upscale":
+                # 放大不读 pipeline / tasks：源图尺寸 + limits.upscale.factor 就是全部输入。
+                model_id, tasks, reference = validate_upscale_spec(spec)
+                pipeline = {}
+            else:
+                pipeline, model_id, tasks = validate_spec(spec)
+                reference = parse_reference_spec(spec.get("reference"), pipeline)
             job_id = normalize_job_id(spec.get("jobId"))
         except ValueError as exc:
             log(f"[http] 400 /generate 校验失败：{exc}")
@@ -1156,7 +1316,7 @@ class MockHandler(BaseHTTPRequestHandler):
             self._send_error(status, code, message)
             return
 
-        job, created = submit_job(pipeline, model_id, tasks, job_id, reference)
+        job, created = submit_job(pipeline, model_id, tasks, job_id, reference, tool=tool)
         if not created:
             log(f"[http] 202 /generate 幂等命中 {job['job_id']}（status={job['status']}）")
         self._send_json(

@@ -4,18 +4,20 @@
  * 阶段十二把「针对已生成作品的二次处理」从文生图主表单里彻底抽离：
  * 工具注册表、自动选模、强度档位、提示词回退与请求体拼装都收敛在这里，
  * 不依赖 React / DOM，便于离线断言；状态编排见 `src/studio/hooks/useImageTool.js`，
- * 画布交互见 `src/studio/stage/MaskEditor.jsx`。
+ * 画布交互见 `src/studio/stage/MaskEditor.jsx`（涂抹）与 `OutpaintEditor.jsx`（扩图，
+ * 版面几何在 `src/logic/outpaint.js`）。
  *
- * 交互形态（面向未来的高清化 / 扩图）：
- *  - `instant`：无参工具，点击即按当前图片提交；
+ * 交互形态：
+ *  - `instant`：无参工具，点击即按当前图片提交（高清放大）；
  *  - `inline`：舞台下方展开一条轻量参数（整图重绘）；
  *  - `canvas`：整块舞台切成交互画布（局部涂抹 / 扩图）。
  *
  * 阶段十二只有 inpaint（canvas）与 img2img（inline）两个真实可用的工具；
- * upscale / outpaint 是 disabled 占位——远端没有对应推理能力（Lead 决策 D1）。
+ * 阶段十五 Phase B 点亮了高清放大（instant，远端轻量超分）与扩图（canvas，
+ * 客户端合成画布 + 蒙版后按普通 inpaint 提交）。
  */
 
-import { LIMITS } from '../../shared/contract.js'
+import { LIMITS, OUTPAINT, UPSCALE } from '../../shared/contract.js'
 
 import { clampInt, clampNumber, clampSize } from './clamp.js'
 import {
@@ -53,7 +55,7 @@ const INPAINT_PRESET_ID = 'sdxl-inpaint'
  *  - `capability`：预设上对应的能力字段（null 表示无参工具，不依赖模型能力）；
  *  - `labelKey`：按钮 / 标题文案键；
  *  - `ready`：远端是否真的有对应推理能力；false 的按钮只做占位（禁用 + 规划中提示）；
- *  - `plannedKey`：未开放工具的提示文案键（只有 ready=false 时有值）。
+ *  - `plannedKey`：未开放工具的提示文案键（只有 ready=false 时才会命中）。
  */
 export const IMAGE_TOOLS = Object.freeze([
   Object.freeze({
@@ -79,10 +81,10 @@ export const IMAGE_TOOLS = Object.freeze([
     form: 'instant',
     group: 'process',
     icon: 'expand',
+    // 高清放大走远端 Real-ESRGAN 超分，不依赖扩散模型能力，因此没有预设能力字段。
     capability: null,
     labelKey: 'studio.imageTool.upscale',
-    ready: false,
-    plannedKey: 'studio.imageTool.planned',
+    ready: true,
   }),
   Object.freeze({
     id: 'outpaint',
@@ -91,8 +93,7 @@ export const IMAGE_TOOLS = Object.freeze([
     icon: 'frame',
     capability: 'supportsInpaint',
     labelKey: 'studio.imageTool.outpaint',
-    ready: false,
-    plannedKey: 'studio.imageTool.planned',
+    ready: true,
   }),
 ])
 
@@ -119,6 +120,9 @@ function resolveTool(value) {
  *    再退 `referencePresetOf()` 的通用垫图兜底；一个都没有 → preset: null。
  *  - img2img：当前预设支持整图垫图就沿用；否则退 `referencePresetOf()`。
  *    专用局部重绘权重（inpaintOnly）不能做纯整图重绘，即使它声明 supportsImg2Img 也不沿用。
+ *  - outpaint：**优先专用 9 通道权重 `sdxl-inpaint`**（扩图新增面积大，通用底座边界融合弱），
+ *    其次当前预设（支持 Inpaint 时），最后通用垫图兜底。
+ *  - upscale：远端超分不读扩散预设，返回 `{ preset: null }`（hook 不对它做预设校验）。
  *
  * @param {Array<object>} presets 宿主下发的预设列表
  * @param {string} currentId 当前（左栏或工具草稿里的）预设 id
@@ -132,6 +136,8 @@ export function toolPresetOf(presets, currentId, toolId) {
   const tool = imageToolOf(toolId)
   const missing = { preset: null, switched: false, fallback: false }
   if (!tool || !tool.ready) return missing
+  // 无参工具（高清放大）不参与选模：远端按超分权重执行，没有预设可校验。
+  if (tool.id === 'upscale') return missing
   const wanted = typeof currentId === 'string' ? currentId.trim() : ''
   const current = wanted ? list.find((item) => item.id === wanted) || null : null
 
@@ -146,6 +152,18 @@ export function toolPresetOf(presets, currentId, toolId) {
     return { preset: null, switched: false, fallback: true }
   }
 
+  if (tool.id === 'outpaint') {
+    // 扩图优先专用权重：9 通道 inpaint 底座对「大片新增区域」的融合明显更好。
+    const native = list.find((item) => item.id === INPAINT_PRESET_ID && supportsInpaint(item)) || null
+    if (native) {
+      return { preset: native, switched: !current || native.id !== current.id, fallback: false }
+    }
+    if (supportsInpaint(current)) return { preset: current, switched: false, fallback: false }
+    const fallback = referencePresetOf(list)
+    if (fallback) return { preset: fallback, switched: true, fallback: true }
+    return { preset: null, switched: false, fallback: true }
+  }
+
   if (tool.id === 'img2img') {
     if (supportsImg2Img(current) && !inpaintOnlyOf(current)) {
       return { preset: current, switched: false, fallback: false }
@@ -155,7 +173,6 @@ export function toolPresetOf(presets, currentId, toolId) {
     return { preset: null, switched: false, fallback: true }
   }
 
-  // instant 类型目前只有未开放的高清放大：没有可提交的能力路径。
   return missing
 }
 
@@ -163,12 +180,17 @@ export function toolPresetOf(presets, currentId, toolId) {
  * 工具的默认重绘强度（打开工具时套用，用户拖动即退出自动档）。
  *
  * - inpaint：专用 inpaint 权重 0.9，通用模型 0.8（真机验收结论，见 logic/mask.js）；
- * - img2img：契约默认 0.6。
+ * - outpaint：扩图覆盖面积大，默认走契约 `OUTPAINT.strength`（1.0，带蒙版上限之内）；
+ * - img2img / 其它：契约默认 0.6。
  */
 export function toolStrengthDefaultOf(toolId, preset) {
   const tool = imageToolOf(toolId)
   if (tool && tool.id === 'inpaint') {
     return inpaintOnlyOf(preset) ? MASK_STRENGTH_NATIVE : MASK_STRENGTH_DEFAULT
+  }
+  if (tool && tool.id === 'outpaint') {
+    const strength = Number(OUTPAINT.strength)
+    return Number.isFinite(strength) ? strength : LIMITS.strength.default
   }
   return LIMITS.strength.default
 }
@@ -252,6 +274,9 @@ export function buildImageToolBody(input) {
   const source = input && typeof input === 'object' ? input : {}
   const tool = resolveTool(source.tool)
   if (!tool || !tool.ready) return null
+  // 高清放大 / 扩图有各自的请求体（buildUpscaleToolBody / buildOutpaintToolBody）：
+  // 这个通用构造器只服务「参考图 + 可选蒙版」的局部重绘与整图重绘。
+  if (tool.form === 'instant' || tool.id === 'outpaint') return null
 
   const targetPath = typeof source.targetPath === 'string' ? source.targetPath.trim() : ''
   if (!targetPath) return null
@@ -303,21 +328,194 @@ export function buildImageToolBody(input) {
 }
 
 /**
+ * 高清放大请求体（`tool: 'upscale'`，INTERFACES §3.1）。
+ *
+ * 零参数工具：没有 preset / steps / cfg / seed 语义，尺寸只用于 Host 校验源图上限；
+ * 提示词沿用目标作品原提示词（可空串，远端不读扩散参数）。
+ * 没有底图路径时返回 null，由调用方给可见提示。
+ *
+ * @param {{ target?: object, targetPath?: string, targetPrompt?: string,
+ *   targetWidth?: number, targetHeight?: number }} input
+ */
+export function buildUpscaleToolBody(input) {
+  const source = input && typeof input === 'object' ? input : {}
+  const target = source.target && typeof source.target === 'object' ? source.target : null
+  const targetPath = typeof source.targetPath === 'string' && source.targetPath.trim()
+    ? source.targetPath.trim()
+    : workKeyOf(target)
+  if (!targetPath) return null
+  const prompt = (typeof source.targetPrompt === 'string' ? source.targetPrompt.trim() : '')
+    .slice(0, LIMITS.prompt.maxChars)
+  const width = positiveSize(source.targetWidth) ?? positiveSize(target && target.width)
+  const height = positiveSize(source.targetHeight) ?? positiveSize(target && target.height)
+  const body = {
+    tool: 'upscale',
+    prompt,
+    count: 1,
+    waitSeconds: 0,
+    autoStart: true,
+    reference: { path: targetPath },
+  }
+  // 宽高未知时留空：Host / 远端会按源图文件兜底，客户端不伪造尺寸。
+  if (width !== null) body.width = width
+  if (height !== null) body.height = height
+  return body
+}
+
+/**
+ * 扩图请求体（`tool: 'outpaint'`，INTERFACES §3.1）。
+ *
+ * 远端不新增推理能力：这里提交的是一张已经合成好的画布（`reference.image`）+ 白=新增区的
+ * 蒙版（`reference.mask`），`sourcePath` 记录来源作品，供版本树归组。
+ *
+ * @param {{ targetPath?: string, target?: object, targetPrompt?: string, preset?: object,
+ *   presets?: Array<object>, presetId?: string, prompt?: string, strength?: number,
+ *   canvas?: object, negativeActive?: boolean }} input
+ * @returns {object|null} 缺底图 / 预设 / 画布 / 提示词时返回 null
+ */
+export function buildOutpaintToolBody(input) {
+  const source = input && typeof input === 'object' ? input : {}
+  const target = source.target && typeof source.target === 'object' ? source.target : null
+  const targetPath = typeof source.targetPath === 'string' && source.targetPath.trim()
+    ? source.targetPath.trim()
+    : workKeyOf(target)
+  if (!targetPath) return null
+
+  const list = Array.isArray(source.presets) ? source.presets : []
+  const wantedId = typeof source.presetId === 'string' ? source.presetId.trim() : ''
+  const preset = source.preset && typeof source.preset === 'object' && source.preset.id
+    ? source.preset
+    : list.find((item) => item && item.id === wantedId) || null
+  if (!preset) return null
+
+  const canvas = normalizeOutpaintCanvas(source.canvas)
+  if (!canvas) return null
+
+  const typed = typeof source.prompt === 'string' ? source.prompt.trim() : ''
+  const prompt = (typed || toolPromptFallback(source.targetPrompt)).slice(0, LIMITS.prompt.maxChars)
+  if (!prompt) return null
+
+  const rawStrength = finiteNumber(source.strength)
+  const strength = clampMaskStrength(rawStrength === null ? Number(OUTPAINT.strength) : rawStrength, true)
+
+  return {
+    tool: 'outpaint',
+    presetId: preset.id,
+    prompt,
+    negativePrompt: source.negativeActive === true ? hintOf(preset) : '',
+    width: canvas.width,
+    height: canvas.height,
+    steps: presetSteps(preset),
+    cfg: presetCfg(preset),
+    seed: '',
+    count: 1,
+    waitSeconds: 0,
+    autoStart: true,
+    reference: {
+      image: canvas.image,
+      mask: canvas.mask,
+      sourcePath: targetPath,
+      strength,
+    },
+  }
+}
+
+/** 非负整数；缺失 / 非法返回 null。 */
+function nonNegativeInt(value) {
+  if (value === null || value === undefined || value === '') return null
+  const number = Number(value)
+  if (!Number.isFinite(number) || number < 0) return null
+  return Math.round(number)
+}
+
+/**
+ * 扩图画布归一：校验导出值并补出覆盖率。
+ *
+ * 入参来自 `OutpaintEditor` 的导出：`{ image, mask, width, height, content }`。
+ * 校验项（任何一项不满足返回 null，由调用方转成可见提示）：
+ *  - image / mask 是合法 base64，且不超过参考图 / 蒙版契约体积；
+ *  - 画布宽高是正整数、按 `LIMITS.width.step` 对齐、在 `OUTPAINT.maxEdge / maxPixels / minEdge` 之内；
+ *  - 内容框在画布边界内且面积为正。
+ *
+ * @returns {{ image: string, mask: string, width: number, height: number,
+ *   content: {x:number,y:number,width:number,height:number}, coverage: number } | null}
+ */
+export function normalizeOutpaintCanvas(input) {
+  const source = input && typeof input === 'object' ? input : {}
+  const image = normalizeMaskData(source.image)
+  const mask = normalizeMaskData(source.mask)
+  if (!image || !mask) return null
+  if (base64BytesOf(image) > Number(LIMITS.reference.maxBytes)) return null
+  if (base64BytesOf(mask) > Number(LIMITS.mask.maxBytes)) return null
+
+  const step = Number(LIMITS.width.step) > 0 ? Number(LIMITS.width.step) : 8
+  const maxEdge = Number(OUTPAINT.maxEdge)
+  const maxPixels = Number(OUTPAINT.maxPixels)
+  const minEdge = Number(OUTPAINT.minEdge)
+  const width = positiveSize(source.width)
+  const height = positiveSize(source.height)
+  if (width === null || height === null) return null
+  if (width % step !== 0 || height % step !== 0) return null
+  if (width > maxEdge || height > maxEdge) return null
+  if (width * height > maxPixels) return null
+  if (width < minEdge || height < minEdge) return null
+
+  const contentInput = source.content && typeof source.content === 'object' ? source.content : null
+  if (!contentInput) return null
+  const x = nonNegativeInt(contentInput.x)
+  const y = nonNegativeInt(contentInput.y)
+  const contentWidth = positiveSize(contentInput.width)
+  const contentHeight = positiveSize(contentInput.height)
+  if (x === null || y === null || contentWidth === null || contentHeight === null) return null
+  if (x + contentWidth > width || y + contentHeight > height) return null
+  const content = { x, y, width: contentWidth, height: contentHeight }
+  const coverage = Math.max(0, Math.min(1, 1 - (contentWidth * contentHeight) / (width * height)))
+  return {
+    image,
+    mask,
+    width,
+    height,
+    content,
+    coverage: Number(coverage.toFixed(6)),
+  }
+}
+
+/**
  * 提交前置校验：返回第一个拦截原因的文案键（空串表示可以提交）。
  *
- * 检查顺序与界面提示一致：工具可提交 → 有底图 → 有可用预设 → 有提示词 →
- * 专用局部重绘权重必须有蒙版。最后一条复用既有 `studio.mask.onlyHint` 文案，
- * 不再新增键。
+ * 检查顺序与界面提示一致：工具可提交 → 有底图。之后按工具分支：
+ *  - upscale：源图长边超过 `UPSCALE.maxInputEdge` → `upscaleTooLarge`；宽高未知时放行（远端兜底）；
+ *  - outpaint：有可用预设 → 有画布 → 有提示词（含回退）；
+ *  - inpaint / img2img：有可用预设 → 有提示词 → 专用局部重绘权重必须有蒙版。
+ * 最后一条复用既有 `studio.mask.onlyHint` 文案，不再新增键。
  */
 export function imageToolBlockedKeyOf(input) {
   const source = input && typeof input === 'object' ? input : {}
   const tool = resolveTool(source.tool)
   if (!tool) return 'studio.imageTool.blockedTarget'
   if (!tool.ready) return tool.plannedKey || 'studio.imageTool.planned'
-  const targetPath = typeof source.targetPath === 'string' ? source.targetPath.trim() : ''
+  const targetPath = typeof source.targetPath === 'string' && source.targetPath.trim()
+    ? source.targetPath.trim()
+    : workKeyOf(source.target)
   if (!targetPath) return 'studio.imageTool.blockedTarget'
+  if (tool.id === 'upscale') {
+    const target = source.target && typeof source.target === 'object' ? source.target : null
+    const width = positiveSize(source.targetWidth) ?? positiveSize(target && target.width)
+    const height = positiveSize(source.targetHeight) ?? positiveSize(target && target.height)
+    // 长边只对已知尺寸生效：旧记录没有宽高时交给远端兜底，客户端不误拦。
+    if (width !== null && height !== null && Math.max(width, height) > Number(UPSCALE.maxInputEdge)) {
+      return 'studio.imageTool.upscaleTooLarge'
+    }
+    return ''
+  }
   if (!source.preset || typeof source.preset !== 'object' || !source.preset.id) {
     return 'studio.imageTool.blockedNoPreset'
+  }
+  if (tool.id === 'outpaint') {
+    if (!normalizeOutpaintCanvas(source.canvas)) return 'studio.outpaint.blockedCanvas'
+    const typedPrompt = typeof source.prompt === 'string' ? source.prompt.trim() : ''
+    if (!typedPrompt && !toolPromptFallback(source.targetPrompt)) return 'studio.imageTool.blockedNoPrompt'
+    return ''
   }
   const typed = typeof source.prompt === 'string' ? source.prompt.trim() : ''
   if (!typed && !toolPromptFallback(source.targetPrompt)) return 'studio.imageTool.blockedNoPrompt'

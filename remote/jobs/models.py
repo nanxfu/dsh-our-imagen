@@ -41,6 +41,9 @@ class Job:
     model_id: str
     pipeline: dict
     tasks: list
+    # 请求工具（协议 0.13.0）：缺省 generate；upscale 走独立的超分执行分支，
+    # 与扩散出图共用同一套队列/轮询/幂等逻辑（否则 Host 要维护两条任务通道）。
+    tool: str = "generate"
     # job 级参考图（M3 图生图）：提交期校验后归一成
     # ``{image_bytes, strength, width, height}``；None 表示文生图，路径与行为完全不变。
     reference: dict | None = None

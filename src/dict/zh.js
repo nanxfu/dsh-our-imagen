@@ -245,6 +245,8 @@ export const zh = {
   'studio.filmstrip.versionKind.text': '文生图',
   'studio.filmstrip.versionKind.img2img': '整图重绘',
   'studio.filmstrip.versionKind.inpaint': '局部重绘',
+  'studio.filmstrip.versionKind.upscale': '高清放大',
+  'studio.filmstrip.versionKind.outpaint': '扩图',
   'studio.filmstrip.sourceDeleted': '来源作品已删除',
   'studio.filmstrip.draftDot': '有未提交的编辑',
   'studio.filmstrip.draftTitle': '已修改：{items}',
@@ -499,6 +501,9 @@ export const zh = {
   'studio.imageTool.blockedNoPrompt': '请填写修改描述，或让原作品带有提示词。',
   'studio.imageTool.blockedTarget': '没有可处理的底图，请先在舞台选中一张作品。',
   'studio.imageTool.submitted': '已提交图片处理任务',
+  // 高清放大是零参数即时工具：点击即提交，源图超限在提交前拦下。
+  'studio.imageTool.upscaleSubmitted': '已提交高清放大任务',
+  'studio.imageTool.upscaleTooLarge': '源图过大，超出高清放大的输入上限；请选择更小的作品后再放大。',
   // 失败重试指向舞台工具：左栏「重试一次」不再重放带底图的任务。
   'studio.imageTool.retryMoved': '图片工具任务请在舞台动作坞中点「继续编辑」恢复后重新提交。',
 
@@ -607,6 +612,8 @@ export const zh = {
   'studio.chat.focus.empty': '这张图没有上一层记录',
   'studio.chat.tool.inpaint': '对当前图发起了局部涂抹',
   'studio.chat.tool.img2img': '对当前图发起了整图重绘',
+  'studio.chat.tool.upscale': '对当前图发起了高清放大',
+  'studio.chat.tool.outpaint': '对当前图发起了扩图',
   'studio.chat.tool.strength': '重绘强度 {value}',
   'studio.chat.actions.compare': '对比原图',
   'studio.chat.actions.continueInpaint': '继续涂抹',
@@ -629,4 +636,20 @@ export const zh = {
   'studio.compare.after': '当前',
   'studio.compare.hint': '拖动分隔线对比原图',
   'studio.gallery.imported': '导入',
+
+  // ── 阶段十五 Phase B：扩图画布 ───────────────────────────────
+  'studio.outpaint.title': '扩图',
+  'studio.outpaint.hint': '拖动内容框调整原图在画布里的位置；方向键微调，双击或点「回中」复位。新增区域会重新生成。',
+  'studio.outpaint.ratioLabel': '扩图比例',
+  'studio.outpaint.ratio.expand': '四边扩 20%',
+  'studio.outpaint.ratio.16x9': '16:9',
+  'studio.outpaint.ratio.9x16': '9:16',
+  'studio.outpaint.ratio.4x3': '4:3',
+  'studio.outpaint.coverage': '新增画面 {percent}%',
+  'studio.outpaint.center': '回中',
+  'studio.outpaint.dragHint': '拖动内容框调整留白位置',
+  'studio.outpaint.canvasLabel': '扩图画布预览：内容框之外是新增区域。',
+  'studio.outpaint.blockedCanvas': '扩图画布尚未生成，请调整比例或重新打开工具后重试。',
+  'studio.outpaint.invalidCanvas': '扩图画布数据无效，本次导出已忽略；请重新拖动内容框后再试。',
+  'studio.outpaint.tooLarge': '扩图画布或蒙版体积超过上限，未提交；请改用更小的比例。',
 }

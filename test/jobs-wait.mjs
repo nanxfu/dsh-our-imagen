@@ -28,16 +28,30 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { JobQueue, normalizeReference, normalizeStrength } from '../lib/jobs.js'
+import { JobQueue, normalizeReference, normalizeStrength, normalizeTool, normalizeUpscaleRequest } from '../lib/jobs.js'
 import { saveJobOutput } from '../lib/output.js'
 import { submitGenerate, waitForJob } from '../lib/remote.js'
-import { LIMITS, PRESETS } from '../shared/contract.js'
+import { LIMITS, PRESETS, UPSCALE } from '../shared/contract.js'
 import { createCheckRunner } from './helpers/check.mjs'
 
 const PRESET = 'sdxl-turbo'
 // 1×1 透明 PNG：走真实的 saveJobOutput 落盘路径。
 const PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+/**
+ * 构造「头部可解析」的源图夹具：测试只依赖 PNG 头部（parseImageHeader / 远端头部校验），
+ * 不引入图像编码依赖；放大链路的落盘产物用 mock 远端返回的真实 PNG。
+ */
+function headerOnlyPng(width, height) {
+  const buffer = Buffer.alloc(24)
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buffer, 0)
+  buffer.writeUInt32BE(13, 8)
+  buffer.write('IHDR', 12, 'latin1')
+  buffer.writeUInt32BE(width, 16)
+  buffer.writeUInt32BE(height, 20)
+  return buffer
+}
 
 const { check, results } = createCheckRunner()
 
@@ -1141,6 +1155,282 @@ async function main() {
       assert.equal(ok.ok, true, JSON.stringify(ok))
       const done = await queue.waitFor(ok.job.id, 10)
       assert.equal(done.status, 'done', JSON.stringify(done.error))
+    } finally {
+      queue.dispose()
+      await remote.close()
+    }
+  })
+
+  // ── 高清放大（Phase B1）：tool 归一 / 单张远端任务 / meta 标记 ──────────────
+  await check('validator：tool 归一、upscale 源图与宽高上限（纯函数）', () => {
+    assert.deepEqual(normalizeTool(undefined), { ok: true, tool: 'generate' })
+    assert.deepEqual(normalizeTool(''), { ok: true, tool: 'generate' })
+    assert.deepEqual(normalizeTool('generate'), { ok: true, tool: 'generate' })
+    assert.deepEqual(normalizeTool('upscale'), { ok: true, tool: 'upscale' })
+    assert.deepEqual(normalizeTool('outpaint'), { ok: true, tool: 'outpaint' })
+    for (const bad of ['inpaint', 'UPSCALE', 42, {}]) {
+      const result = normalizeTool(bad)
+      assert.equal(result.ok, false, JSON.stringify(bad))
+      assert.equal(result.code, 'invalid_request')
+    }
+
+    // 放大只接受一张源图：缺 reference / 带蒙版 / 越界路径都在入队期拒绝。
+    const missing = normalizeUpscaleRequest({ width: 1024, height: 1024 })
+    assert.equal(missing.ok, false)
+    assert.equal(missing.code, 'invalid_request')
+    assert.match(missing.message, /源图/)
+    const masked = normalizeUpscaleRequest({ reference: { path: 'imagen-output/a/01.png', mask: PNG_B64 } })
+    assert.equal(masked.ok, false)
+    assert.match(masked.message, /蒙版/)
+    const escaped = normalizeUpscaleRequest({ reference: { path: '../escape.png' } })
+    assert.equal(escaped.ok, false)
+    assert.equal(escaped.code, 'invalid_path')
+
+    const ok = normalizeUpscaleRequest({
+      reference: { path: 'imagen-output/20260101-000000-a/01.png' },
+      width: 1024,
+      height: 768,
+    })
+    assert.equal(ok.ok, true, JSON.stringify(ok))
+    assert.equal(ok.width, 1024)
+    assert.equal(ok.height, 768)
+    assert.equal(ok.reference.sourcePath, 'imagen-output/20260101-000000-a/01.png')
+
+    // 长边超限：文案给出 1280 上限；宽高缺失时不拦（远端解码后按同一上限兜底）。
+    const tooLarge = normalizeUpscaleRequest({ reference: { image: PNG_B64 }, width: 1536, height: 1024 })
+    assert.equal(tooLarge.ok, false)
+    assert.equal(tooLarge.code, 'invalid_request')
+    assert.match(tooLarge.message, new RegExp(String(UPSCALE.maxInputEdge)))
+    const unknownExtent = normalizeUpscaleRequest({ reference: { image: PNG_B64 } })
+    assert.equal(unknownExtent.ok, true)
+    assert.equal(unknownExtent.width, null)
+    assert.equal(unknownExtent.height, null)
+
+    // image 来源可选 sourcePath（扩图溯源）：非法路径同样按 invalid_path 拒绝，
+    // 合法时统一挂在返回值的 sourcePath 上（path 来源则等于 path 自己）。
+    const badSource = normalizeReference({ image: PNG_B64, sourcePath: '../x.png' })
+    assert.equal(badSource.ok, false)
+    assert.equal(badSource.code, 'invalid_path')
+    assert.match(badSource.message, /来源图/)
+    const withSource = normalizeReference({ image: PNG_B64, sourcePath: 'imagen-output/20260101-000000-a/01.png' })
+    assert.equal(withSource.ok, true)
+    assert.equal(withSource.value.sourcePath, 'imagen-output/20260101-000000-a/01.png')
+    // 旧行为不变：纯 image 来源没有 sourcePath 时就是 null；path 来源的 sourcePath = path。
+    assert.equal(normalizeReference({ image: PNG_B64 }).value.sourcePath, null)
+    assert.equal(normalizeReference({ path: 'imagen-output/20260101-000000-a/01.png' }).value.sourcePath,
+      'imagen-output/20260101-000000-a/01.png')
+    // 文生图仍然要求 prompt（放大 / 扩图才允许空提示词）。
+    const queue = makeQueue()
+    try {
+      assert.equal(queue.submit({ prompt: '' }).code, 'invalid_prompt')
+    } finally {
+      queue.dispose()
+    }
+  })
+
+  await check('高清放大：单张远端任务（tool=upscale）、进度 total=1 与 meta.upscale', async () => {
+    const remote = await startFlakyRemote()
+    const upscaleResult = {
+      name: '01',
+      seed: 0,
+      seconds: 0.2,
+      width: 2048,
+      height: 1536,
+      steps: 0,
+      cfg: 0,
+      png_bytes: 70,
+      image_b64: PNG_B64,
+      upscale: true,
+      scale: 2,
+      sourceWidth: 1024,
+      sourceHeight: 768,
+    }
+    // 前两次 /job 返回 running 0/1（观察结构化进度），第三次 done。
+    remote.state.nextPolls = [
+      { status: 'running', job_id: 'x', progress: { done: 0, total: 1 }, results: null, error: null },
+      { status: 'running', job_id: 'x', progress: { done: 0, total: 1 }, results: null, error: null },
+      {
+        status: 'done',
+        job_id: 'x',
+        model_id: UPSCALE.id,
+        progress: { done: 1, total: 1 },
+        load_seconds: 0.1,
+        results: [upscaleResult],
+        error: null,
+      },
+    ]
+    const seedDir = join(workspace, 'imagen-output', '20260101-000000-upscale-seed')
+    await mkdir(seedDir, { recursive: true })
+    const seedPath = 'imagen-output/20260101-000000-upscale-seed/01.png'
+    await writeFile(join(seedDir, '01.png'), headerOnlyPng(1024, 768))
+    const queue = new JobQueue({
+      ctx: makeCtx(),
+      session: makeSession({ connection: () => ({ endpoint: remote.endpoint, token: 'test-token' }) }),
+      defaultPreset: PRESET,
+      options: { generateTimeoutMs: 5000, pollMs: 20 },
+    })
+    try {
+      const submitted = queue.submit({
+        tool: 'upscale',
+        prompt: '',
+        width: 1024,
+        height: 768,
+        reference: { path: seedPath },
+      })
+      assert.equal(submitted.ok, true, JSON.stringify(submitted))
+      assert.equal(submitted.job.tool, 'upscale', 'publicView 必须带 tool')
+      assert.equal(submitted.job.presetId, UPSCALE.id)
+      assert.equal(submitted.job.modelId, UPSCALE.id)
+      assert.deepEqual(submitted.job.params.reference, { sourcePath: seedPath, upscale: true })
+      const jobId = submitted.job.id
+
+      const seen = []
+      const deadline = Date.now() + 4000
+      while (Date.now() < deadline) {
+        const view = queue.get(jobId)
+        if (view) seen.push(view)
+        if (view && ['done', 'failed', 'cancelled'].includes(view.status)) break
+        await sleep(5)
+      }
+      const final = queue.get(jobId)
+      assert.equal(final.status, 'done', JSON.stringify(final.error))
+      const running = seen.filter((item) => item.status === 'running')
+      assert.ok(running.length > 0, '应记录到 running 快照')
+      assert.ok(
+        running.every((item) => item.progress?.total === 1),
+        `放大进度 total 固定 1：${running.map((item) => JSON.stringify(item.progress))}`,
+      )
+
+      // 远端载荷：只有 1 个 job，tool=upscale，不下发 pipeline / tasks / strength。
+      assert.equal(remote.state.generateCalls.length, 1, '放大只提交一个远端 job')
+      const call = remote.state.generateCalls[0]
+      assert.equal(call.tool, 'upscale')
+      assert.equal(call.jobId, `${jobId}-01`)
+      assert.equal(call.modelId, UPSCALE.id)
+      assert.equal(call.pipeline, undefined, '放大请求不应带扩散 pipeline')
+      assert.equal(call.tasks, undefined, '放大任务由远端合成，Host 不下发 tasks')
+      assert.deepEqual(call.reference, { image_b64: headerOnlyPng(1024, 768).toString('base64') })
+
+      assert.equal(final.output.images.length, 1)
+      assert.equal(final.output.images[0].width, 2048)
+      assert.equal(final.output.images[0].height, 1536)
+      const meta = JSON.parse(await readFile(join(workspace, final.output.dir, 'meta.json'), 'utf8'))
+      assert.equal(meta.upscale, true)
+      assert.equal(meta.upscaleScale, 2)
+      assert.deepEqual(meta.upscaleSource, { width: 1024, height: 768 })
+      assert.equal(meta.sourceImage, seedPath)
+      assert.equal(meta.rootImage, seedPath)
+      assert.equal(meta.inpaint, undefined, '放大不是局部重绘')
+      assert.equal(meta.outpaint, undefined)
+    } finally {
+      queue.dispose()
+      await remote.close()
+    }
+  })
+
+  await check('高清放大：远端失败原样透传（oom），源图缺失在生成阶段 invalid_path', async () => {
+    const remote = await startFlakyRemote()
+    remote.state.onGenerate = (state, count) => {
+      const body = state.generateCalls[count - 1]
+      state.jobs.set(body.jobId, {
+        status: 'failed',
+        job_id: body.jobId,
+        model_id: UPSCALE.id,
+        progress: { done: 0, total: 1 },
+        results: null,
+        error: { code: 'oom', message: '显存不足：mock 注入' },
+      })
+    }
+    const seedDir = join(workspace, 'imagen-output', '20260101-000000-upscale-fail')
+    await mkdir(seedDir, { recursive: true })
+    const seedPath = 'imagen-output/20260101-000000-upscale-fail/01.png'
+    await writeFile(join(seedDir, '01.png'), headerOnlyPng(1024, 768))
+    const queue = new JobQueue({
+      ctx: makeCtx(),
+      session: makeSession({ connection: () => ({ endpoint: remote.endpoint, token: 'test-token' }) }),
+      defaultPreset: PRESET,
+      options: { generateTimeoutMs: 5000, pollMs: 20 },
+    })
+    try {
+      const submitted = queue.submit({
+        tool: 'upscale',
+        prompt: '',
+        width: 1024,
+        height: 768,
+        reference: { path: seedPath },
+      })
+      const failed = await queue.waitFor(submitted.job.id, 10)
+      assert.equal(failed.status, 'failed')
+      assert.equal(failed.error?.code, 'oom', '远端失败码原样透传')
+      assert.match(failed.error?.message, /显存不足/)
+      assert.equal(failed.output, null, '失败任务不落产物目录')
+      assert.equal(failed.progress, null)
+
+      // 路径形状合法但文件不存在：执行阶段读源图失败 → invalid_path，且不提交远端。
+      const before = remote.state.generateCalls.length
+      const missing = queue.submit({
+        tool: 'upscale',
+        prompt: '',
+        width: 1024,
+        height: 768,
+        reference: { path: 'imagen-output/20260101-000000-nope/01.png' },
+      })
+      assert.equal(missing.ok, true, '路径形状合法即可入队（文件是否存在在执行阶段校验）')
+      const missingDone = await queue.waitFor(missing.job.id, 10)
+      assert.equal(missingDone.status, 'failed')
+      assert.equal(missingDone.error?.code, 'invalid_path')
+      assert.equal(remote.state.generateCalls.length, before, '源图缺失不应提交远端')
+    } finally {
+      queue.dispose()
+      await remote.close()
+    }
+  })
+
+  await check('扩图：tool=outpaint 记 outpaint/inpaint/sourcePath，远端载荷仍是普通局部重绘', async () => {
+    const remote = await startFlakyRemote()
+    remote.state.onGenerate = (state, count) => {
+      const body = state.generateCalls[count - 1]
+      state.jobs.set(body.jobId, doneJob(body.jobId, 1))
+    }
+    const sourcePath = await seedWork('20260101-000000-outpaint-source')
+    const queue = new JobQueue({
+      ctx: makeCtx(),
+      session: makeSession({ connection: () => ({ endpoint: remote.endpoint, token: 'test-token' }) }),
+      defaultPreset: PRESET,
+      options: { generateTimeoutMs: 5000, pollMs: 20 },
+    })
+    try {
+      const submitted = queue.submit({
+        tool: 'outpaint',
+        presetId: 'sdxl-inpaint',
+        prompt: '向四周扩展成 16:9 的风景',
+        width: 1280,
+        height: 720,
+        steps: 8,
+        cfg: 7,
+        count: 1,
+        // 画布 base64 由客户端合成；sourcePath 指回被扩的原作品（版本树归组用）。
+        reference: { image: PNG_B64, mask: PNG_B64, sourcePath, strength: 1.0 },
+      })
+      assert.equal(submitted.ok, true, JSON.stringify(submitted))
+      assert.equal(submitted.job.tool, 'outpaint')
+      assert.equal(submitted.job.presetId, 'sdxl-inpaint')
+      assert.deepEqual(submitted.job.params.reference, { sourcePath, strength: 1.0, mask: true })
+      assert.ok(!JSON.stringify(submitted.job).includes(PNG_B64), 'publicView 不得回传画布/蒙版二进制')
+
+      const done = await queue.waitFor(submitted.job.id, 10)
+      assert.equal(done.status, 'done', JSON.stringify(done.error))
+      const call = remote.state.generateCalls.at(-1)
+      assert.equal(call.tool, undefined, '远端看不到 outpaint：就是一次普通 inpaint 请求')
+      assert.deepEqual(call.reference, { image_b64: PNG_B64, strength: 1.0, mask_b64: PNG_B64 })
+
+      const meta = JSON.parse(await readFile(join(workspace, done.output.dir, 'meta.json'), 'utf8'))
+      assert.equal(meta.outpaint, true, 'meta 必须记 outpaint 标记')
+      assert.equal(meta.inpaint, true, '扩图在远端是局部重绘，inpaint 标记保留')
+      assert.equal(meta.sourceImage, sourcePath, 'image 来源也要按 sourcePath 记来源图')
+      assert.equal(meta.rootImage, sourcePath, '来源图没有父 meta 时 rootImage 兜底为 sourcePath')
+      assert.equal(meta.strength, 1.0)
+      assert.equal(meta.params.reference.sourcePath, sourcePath)
     } finally {
       queue.dispose()
       await remote.close()

@@ -46,6 +46,9 @@ function ratioLabel(t, ratioId) {
 
 const PUBLIC_PRESET_LIST = publicPresets()
 
+/** 会镜像到助手线程的舞台工具 id：界面按它决定回放哪条动作说明。 */
+const MIRROR_TOOL_IDS = Object.freeze(['inpaint', 'img2img', 'upscale', 'outpaint'])
+
 /** 模型建议里展示的模型名；未知 id 返回空串（整行不渲染）。 */
 function modelLabelOf(presetId) {
   const preset = PUBLIC_PRESET_LIST.find((item) => item && item.id === presetId)
@@ -235,11 +238,12 @@ export function ChatPanel(props) {
 
   /**
    * 舞台图片工具动作镜像记录（`kind='tool'`）：
-   * 底图缩略图 + 动作说明（`studio.chat.tool.inpaint|img2img`）+ 可选重绘强度胶囊。
+   * 底图缩略图 + 动作说明（`studio.chat.tool.inpaint|img2img|upscale|outpaint`）
+   * + 可选重绘强度胶囊（高清放大没有强度）。
    * 只是界面回放，不进入意图上下文（带 kind 的用户记录会被 intentHistory 跳过）。
    */
   function renderToolSync(message) {
-    const tool = message.tool === 'img2img' ? 'img2img' : (message.tool === 'inpaint' ? 'inpaint' : '')
+    const tool = MIRROR_TOOL_IDS.includes(message.tool) ? message.tool : ''
     const title = tool ? t(`studio.chat.tool.${tool}`) : (typeof message.text === 'string' ? message.text : '')
     const strength = tool && message.strength !== undefined && message.strength !== null
       ? strengthLabelOf(t, message.strength)

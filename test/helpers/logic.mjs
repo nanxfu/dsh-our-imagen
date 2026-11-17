@@ -2,7 +2,7 @@
  * 测试侧的纯逻辑聚合出口：不依赖 React / DOM，测试可直接 import。
  *
  * 与运行时代码无关——src 内部一律直接 import 具体模块，这里只是把
- * 25 个纯逻辑模块重新导出一份，供 check-client-logic 与 client.PURE 使用。
+ * 26 个纯逻辑模块重新导出一份，供 check-client-logic 与 client.PURE 使用。
  */
 export * from '../../src/logic/clamp.js'
 export * from '../../src/logic/format.js'
@@ -20,6 +20,7 @@ export * from '../../src/logic/generate.js'
 export * from '../../src/logic/form.js'
 export * from '../../src/logic/imageTool.js'
 export * from '../../src/logic/mask.js'
+export * from '../../src/logic/outpaint.js'
 export * from '../../src/logic/gallery.js'
 export * from '../../src/logic/refine.js'
 export * from '../../src/logic/intent.js'

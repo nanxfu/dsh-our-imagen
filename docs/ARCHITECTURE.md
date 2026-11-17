@@ -368,6 +368,42 @@ daemon 与 Host 出图路由都按 `reference.maxBytes + mask.maxBytes` 推导�
 启动一个独立宿主进程，overlay 里把 `agent-default-model` 指向目标 provider/model、插入一个调试插件，
 直接调用 `enhancePrompt` / `parseIntent` 并打印 `source`；真实 provider 成功时 `source` 为 `model`。
 
+### 2.24 高清放大与扩图（阶段十五 Phase B）
+
+两个后处理工具走两条完全不同的实现路线，选择依据是「这一步到底需不需要扩散模型」：
+
+1. **高清放大（`tool=upscale`）——独立轻量推理，不碰扩散 pipeline**：
+   - 远端新增 `remote/inference/upscale.py`：自包含 Real-ESRGAN `RRDBNet(x2)`（`scale=2` 时
+     `conv_first` 输入 12 通道 + `pixel_unshuffle(2)`，23 个 RRDB 残差块，特征域两次 nearest ×2
+     上采样）。**不装 basicsr / realesrgan**：这两个包依赖已被 torchvision 移除的旧接口，与当前
+     diffusers/torch 组合冲突；这里只需要架构 + 一份 67 MB 权重。
+   - 权重固定 HF 镜像（GitHub Release 兜底），下载边写 `.part` 边算 SHA256，校验失败自动换源重试；
+     落盘到工作目录 `sr/`，进程内只下一次。`HF_TOKEN` 存在时只加 Authorization 头，值不进日志。
+   - 执行路径在 `execute_job` 里单独分支：解码源图 → `run_upscale_job`（惰性加载 → fp16 前向 →
+     PNG）→ 直接收尾，`ensure_pipeline` 全程不参与；**执行结束（含异常）卸载模型并
+     `torch.cuda.empty_cache()`**——2× 输出 2560² 时前向激活有数 GB，不能留给下一次扩散任务。
+   - 协议侧 `tool` 缺省 `generate`，远端只认 `generate` / `upscale`；`upscale` 只读源图头
+     （PNG/JPEG、体积、`limits.upscale.maxInputEdge` ≤ 1280），不读 `pipeline`、不查 loader 白名单、
+     不允许蒙版。真机实测 1024²→2048² 推理 1.45s、1280×720→2560×1440 推理 1.32s，`allocated_mb`
+     前后不变。
+   - Host 侧 `JobQueue` 按 `tool` 分派：放大固定 1 张、无 preset / steps / seed 语义，复用同一套
+     轮询、取消与幂等重投；`meta.json` 记 `upscale / upscaleScale / upscaleSource`，版本树把产物
+     挂到源图下。
+
+2. **扩图（`tool=outpaint`）——客户端合成画布，远端零改动**：
+   - 画布几何（比例 / 内容框 / 留白锚点 / 8px 对齐 / `maxEdge`、`maxPixels`、`minEdge` 约束）全部在
+     `src/logic/outpaint.js` 里算，`OutpaintEditor` 只做 DOM 绘制与导出：`image` = 黑底 + 原图放进
+     内容框，`mask` = 白底 + 内容框涂黑（白 = 新增区域）。
+   - 提交时 `reference` 走**本地画布来源**：`image` + `mask` + `sourcePath`（原作品路径）。Host
+     `normalizeReference` 对 `image` 来源也接受 `sourcePath`（校验规则与 `path` 相同），
+     `meta.sourceImage` / `rootImage` 因此指回原图，扩图产物直接挂进原图版本树。
+   - 远端看到的就是一次合法的 inpaint 请求：默认 `sdxl-inpaint` 9 通道权重 + `strength 1.0`，
+     `composite_inpaint_image` 保证保留区逐像素不变（真机核心区平均差 0.00/255）。
+     之所以不新增远端 `outpaint` 能力：扩图本质是「画布 + 蒙版」的几何问题，远端已有能力足够，
+     多一条推理分支只会扩大显存与测试面。
+   - Agent 侧只接 `imagen_upscale`；扩图需要像素级画布合成，Host 保持零图像依赖（不引入
+     sharp / jimp），不在本轮提供工具。
+
 ---
 
 ## 3. 本地脱机调试技巧（不烧 Kaggle 额度）

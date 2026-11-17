@@ -17,6 +17,7 @@
  *     title: string, empty: string, loading: string, unavailable: string,
  *     inFlight: string, badge: string, badgeHint: string, close: string, pending: string,
  *     kindText: string, kindImg2img: string, kindInpaint: string,
+ *     kindUpscale: string, kindOutpaint: string,
  *     draftItems: { mask: string, prompt: string, params: string },
  *     draftTitle: string, draftClear: string, sourceDeleted: string,
  *   },
@@ -45,7 +46,13 @@ import { Icon } from '../icons.jsx'
 const DEFAULT_HOVER_DELAY = 250
 const DEFAULT_HIDE_DELAY = 160
 
-const KIND_ICONS = Object.freeze({ text: 'sparkles', img2img: 'image', inpaint: 'focus' })
+const KIND_ICONS = Object.freeze({
+  text: 'sparkles',
+  img2img: 'image',
+  inpaint: 'focus',
+  upscale: 'expand',
+  outpaint: 'frame',
+})
 
 function pickText(value, fallback) {
   return typeof value === 'string' && value ? value : fallback
@@ -66,6 +73,8 @@ function fillTemplate(template, params) {
 }
 
 function kindLabelOf(labels, kind) {
+  if (kind === 'upscale') return pickText(labels.kindUpscale, '高清放大')
+  if (kind === 'outpaint') return pickText(labels.kindOutpaint, '扩图')
   if (kind === 'inpaint') return pickText(labels.kindInpaint, '局部重绘')
   if (kind === 'img2img') return pickText(labels.kindImg2img, '整图重绘')
   return pickText(labels.kindText, '文生图')

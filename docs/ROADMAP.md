@@ -291,9 +291,9 @@
 
 ---
 
-## 十五、 工作台交互语义对齐、双向助手闭环与模型原生参考演进（规划中）
+## 十五、 工作台交互语义对齐、双向助手闭环与模型原生参考演进（Phase 0/A/B 已完成，Phase C 待排期）
 
-> **状态**：🟡 Phase 0 与 Phase A 已完成（2026-11-18，未发版），Phase B / C 待排期。完整方案与分期路径见 [STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md)。
+> **状态**：🟡 Phase 0、Phase A 与 Phase B 已完成（2026-11-18，未发版），Phase C 待排期。完整方案与分期路径见 [STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md)。
 
 - **背景**：0.13.0 收口舞台工具解耦与版本树后，继续解决「外部图片导入与全局可发现性」「文生图原生参考能力缺失」「表单-舞台-助手三向协同」及「后处理闭环」问题；放弃多模态看图过渡方案，直接基于图像模型原生能力演进，避免为 SDXL 堆砌过时外挂技术债。
 - **核心设计**：
@@ -306,6 +306,15 @@
   - **A3 本地导入与对比**：新增 `POST /imagen-api/import`（PNG / JPEG 魔数、8 MiB、最小边 128 校验后原样落盘为独立 `v1`，写同构 `meta.json` 并标 `source: "import"`），导入图自动进入 `/history` 与 `/history/tree`，作品条 / 画廊显示「导入」角标；舞台支持拖入、粘贴与「选择图片」，新画布提示「写提示词，或把图片拖入取景框」，编辑态拒绝导入；带 `sourceImage` 的派生作品提供可拖动「对比原图」拉帘。新增 `lib/image-meta.js` 在生成 PNG 写入 `tEXt` 生成元数据（失败退回原字节），导入自带元数据的 PNG 时回填 `generation` 并恢复原生成参数。
   - **契约与字典**：`ROUTES.importFile` + `IMPORT` 进入 `shared/contract.js`，`HistoryItem` 增加 `source`；`useStudioUi` 新增 `compareOpen`；中英字典各 539 键同构。
   - **测试**：新增 `check-client-draft`（4）、`chat-timeline`（5）、`import-client`（18）、`import-host`（17）；`check-client-chat` 19、`check-client-shell` 51、`check-client-logic` 83、`check-client-tools` 27、`image-tool-render` 6、`host-e2e` 56、`jobs-wait` 31、`check-contract` 12，`npm test` 36 步全绿。变更明细见 [CHANGELOG](../CHANGELOG.md) 的对应条目。
+- **实现（Phase B 已完成，2026-11-18）**：点亮动作坞预留的两个后处理工具，形成「初稿 → 成片」闭环；远端与本地链路全部离线可测，并完成 Kaggle `2×T4` 真机验收。
+  - **B1 高清放大（`upscale`）**：新增 `remote/inference/upscale.py`——自包含 Real-ESRGAN `RRDBNet(x2)` 架构（不引入 basicsr / realesrgan，避免与 torch 版本冲突），权重固定 HF 镜像 + SHA256 校验（备用 GitHub Release），CUDA fp16、奇数宽高三倍 reflect pad 后裁回、执行结束卸载模型并清 CUDA 缓存；`POST /generate` 新增 `tool: 'upscale'` 协议分支（只校验源图、不读 pipeline / loader 白名单、不允许蒙版），`Job.tool` 与 job 公开载荷同步透传。Host `JobQueue` 按 tool 分派（固定 1 张、无 preset / steps / seed 语义、沿用同一套轮询与幂等重投），产物 `meta.json` 记 `upscale` / `upscaleScale` / `upscaleSource`，`/history` 恒存在透传。客户端动作坞点「高清放大」即提交（instant 工具，不进编辑态），源图长边 > 1280 时前置拦下，产物直接作为源图的子版本进入版本树。新增 Agent 工具 `imagen_upscale`（`path` 必须是 `imagen-output/` 内作品，Host 读图片头补宽高）。
+  - **B2 扩图（`outpaint`）**：不新增远端推理能力——客户端把原图放进更大的画布、把新增区域涂白生成蒙版，再按普通局部重绘提交，远端复用已验证的 `sdxl-inpaint` 9 通道管线（`meta.outpaint = true`，`sourceImage` / `rootImage` 指回原图）。新增 `src/logic/outpaint.js` 纯逻辑（四边扩 20% 与 16:9 / 9:16 / 4:3 目标画幅两种模式、锚点分配留白、8px 对齐、`maxEdge` / `maxPixels` / `minEdge` 约束）与 `src/studio/stage/OutpaintEditor.jsx` 画布（比例胶囊、扩张画面预览与新增区着色、内容框拖拽 / 方向键 / 双击回中、导出画布与蒙版）；Host `normalizeReference` 支持 `image` 来源携带 `sourcePath` 溯源，扩图产物挂进原图版本树。`imagen_outpaint` 本轮不提供 Agent 工具（画布合成需要像素级处理，Host 保持零图像依赖），评估结论写入 SPEC §3.7。
+  - **契约与字典**：`UPSCALE` / `OUTPAINT` / `REQUEST_TOOLS` 进入 `shared/contract.js` 并随 `daemonContract().limits.upscale` 下发远端；`PROTOCOL.daemon.requestTools` 登记远端取值域；`HistoryItem` 增加 `upscale` / `upscaleScale` / `outpaint`，`Job` 增加 `tool`；中英字典各 586 键同构。
+  - **测试**：新增 `test/outpaint.mjs`（16）、`test/remote/test_upscale.py`（49）；`image-tool` 19 → 25、`image-tool-render` 6 → 11、`lineage` 17 → 18、`check-client-logic` 83 → 84、`host-e2e` 56 → 60、`jobs-wait` 31 → 35、`agent-batch` 17 → 18、`test/remote/run.py` 391 → 440；`npm test` 38 步全绿。
+  - **真机验收（Kaggle 2×Tesla T4，diffusers 0.43.0 / torch 2.11.0，3 轮全过、无 OOM、无遗留 Kernel）**：
+    - **高清放大默认档**：`sdxl-lightning` 1024×1024 PNG（1.21 MB）→ 2048×2048 PNG（4.01 MB）；权重下载 2.25s（67,061,725 B，SHA256 校验通过）、推理 1.45s、wall 10.0s（含 5.3 MB base64 回传）；`gpu_memory` 的 `allocated_mb` 7000→7000、`max_allocated_mb` 10233 不变、`reserved_mb` 反降 3746 MB（模型按设计卸载）。质量：输出 Laplacian 方差 59.8 vs 双三次 13.4（4.47×），与双三次平均差 1.89/255，确为超分而非插值。
+    - **高清放大上限档**：1280×720 → 2560×1440（= `maxOutputEdge`），加载 1.45s、推理 1.32s；`/job` 响应 base64 4.84 MB 在约 3.2s 内取回，**低于 8s 单次轮询超时、无重试**；显存无残留。
+    - **扩图（`sdxl-inpaint` 9 通道）**：864×864 内容 → 1536×864 画布（覆盖率 43.75%、强度 1.0、30 步），单张 35.4s，输出 PNG 1.67 MB；保留区核心像素差 **0.00/255**（含羽化带平均 0.11，最大差 91 只出现在羽化带），边界两侧 8px 亮度跳变 1.18 / 2.82（全图相邻列均值 0.63）→ 无硬像素接缝，右侧轻微明暗过渡属新区域光照差异、羽化带已软化；显存峰值 9715 MB < 14.56 GB，无 OOM。数据详见 [CHANGELOG](../CHANGELOG.md) 的 0.13.0 条目。
 
 ---
 
@@ -317,4 +326,4 @@
 | **十二** | 舞台图片处理工具栏与交互解耦（方案 B） | 前端交互重构 | 十一完成收口 | **✅ 已完成（0.13.0，未发版）** |
 | **十三** | 显式新建绘图、多作品草稿圆点与树状版本管理 | 前端 + Host 元数据 | 十二（方案 B 底座） | **✅ 已完成（0.13.0，未发版）** |
 | **十四** | Google Colab（Colab Pro）后端接入 | Host 算力扩展 + `remote/` 适配 | 十一收口后可与十二/十三并行（需先过 M0 探针） | **✅ 已完成并合入 `main`（2026-11-18）** |
-| **十五** | 交互语义对齐、双向助手闭环与模型原生参考演进（Phase 0~C） | 全链路体验 + 导入 + 后处理与 DiT 原生参考 | 十三（工作区草稿与版本树） | 🟡 Phase 0 / Phase A 已完成（未发版）；Phase B / C 待排期 |
+| **十五** | 交互语义对齐、双向助手闭环与模型原生参考演进（Phase 0~C） | 全链路体验 + 导入 + 后处理与 DiT 原生参考 | 十三（工作区草稿与版本树） | 🟡 Phase 0 / A / B 已完成（未发版，Phase B 已过真机验收）；Phase C 待排期 |

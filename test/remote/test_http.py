@@ -25,7 +25,9 @@ class HttpTransportBoundaryTest(DaemonUnitTest):
 
     def test_api_callables_resolve_daemon_attributes_at_call_time(self) -> None:
         """装配用 lambda 而不是函数对象：patch.object(d, "submit_job") 必须穿过 api 生效。"""
-        job = types.SimpleNamespace(job_id="j-1", model_id="org/base", created_at=0.0, status="queued")
+        job = types.SimpleNamespace(
+            job_id="j-1", model_id="org/base", created_at=0.0, status="queued", tool="generate"
+        )
         d.STATE.phase = "ready"
         with mock.patch.object(d.JOB_STORE, "submit", return_value=(job, True)) as submit:
             handler, sent = make_generate_handler(make_spec(tasks=TASKS))

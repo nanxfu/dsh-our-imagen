@@ -196,6 +196,8 @@ export function Filmstrip(props) {
     kindText: t('studio.filmstrip.versionKind.text'),
     kindImg2img: t('studio.filmstrip.versionKind.img2img'),
     kindInpaint: t('studio.filmstrip.versionKind.inpaint'),
+    kindUpscale: t('studio.filmstrip.versionKind.upscale'),
+    kindOutpaint: t('studio.filmstrip.versionKind.outpaint'),
     draftItems: {
       mask: t('studio.filmstrip.draftItems.mask'),
       prompt: t('studio.filmstrip.draftItems.prompt'),

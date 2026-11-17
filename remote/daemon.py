@@ -62,6 +62,15 @@
     中 4px / 大 6~8px）。管线用 ``AutoPipelineForInpainting.from_pipe(STATE.pipe)`` 复用
     同一批底座组件，缓存与释放规则同 ``ensure_img2img_pipeline``；出图尺寸跟随参考图，
     并显式传按 8 对齐的参考图宽高（不支持该参数的管线由 ``filter_call_kwargs`` 丢弃）。
+16. **高清放大（``tool=upscale``，0.13.0）**：``POST /generate`` 可带 ``tool=upscale``，
+    源图只做参考图那套头部校验（PNG/JPEG、``limits.reference.maxBytes``、``minEdge``）
+    加长边 ≤ ``limits.upscale.maxInputEdge``；不读 pipeline、不查 loader 白名单、不允许
+    蒙版，源图头校验通过后由 daemon 合成 1 条任务入队（宽高取源图实际尺寸）。
+    ``execute_job`` 走独立分支：只加载 Real-ESRGAN RRDBNet(x2) 权重（固定 URL + SHA256，
+    落盘工作目录 ``sr/``），**不碰任何扩散 pipeline**；奇数宽高 reflect pad 到偶数、CUDA
+    时 fp16，执行结束（含异常）卸载模型并 ``torch.cuda.empty_cache()``，避免和后续扩散
+    任务争显存。结果在原有 results 字段上追加 ``upscale`` / ``scale`` / ``sourceWidth`` /
+    ``sourceHeight``；``tool=generate`` 的请求与执行行为与改造前逐字不变。
 
 文件边界（Batch 2 切片⑥f 之后）：本文件只留**配置注入点、ntfy 会合、模型加载的装配与出图
 执行、job 执行、/health 取样、以及三处装配块**（HTTP_API / TUNNEL / APP）。HTTP 传输层在
@@ -847,8 +856,20 @@ from remote.inference.reference_codec import (  # noqa: E402
     decode_reference_image as decode_reference_image_impl,
     feather_mask_image as feather_mask_image_impl,
     parse_reference_spec as parse_reference_spec_impl,
+    parse_upscale_reference as parse_upscale_reference_impl,
 )
-from remote.transport.validator import validate_generate_spec as validate_generate_spec_impl  # noqa: E402
+from remote.inference.upscale import (  # noqa: E402
+    UPSCALE_ID,
+    UPSCALE_PIPELINE_SPEC,
+    UPSCALE_SCALE,
+    load_model as load_upscale_model_impl,
+    upscale_image as upscale_image_impl,
+    weight_path as upscale_weight_path_impl,
+)
+from remote.transport.validator import (  # noqa: E402
+    build_upscale_task as build_upscale_task_impl,
+    validate_generate_spec as validate_generate_spec_impl,
+)
 
 
 def _coerce_strength(value, has_mask: bool = False) -> float:  # noqa: ANN001
@@ -896,10 +917,48 @@ def composite_inpaint_image(generated, original, mask):  # noqa: ANN001, ANN201
     return composite_inpaint_image_impl(generated, original, mask)
 
 
-def validate_generate_spec(spec) -> tuple[dict, str, list[dict]]:  # noqa: ANN001
-    """把请求体归一成 ``(pipeline_spec, model_id, tasks)``。"""
+def upscale_weight_path() -> str:
+    """超分权重落盘路径：工作目录下 ``sr/RealESRGAN_x2plus.pth``。
+
+    ``CONFIG.work_dir`` 为空时用进程 cwd（Kaggle 是 /kaggle/working、Colab 由 Host 注入
+    /content）；不写 HF cache、不需要 Dataset 挂载。
+    """
+    return upscale_weight_path_impl(CONFIG.work_dir)
+
+
+def load_upscale_model(weight_path: str):  # noqa: ANN201
+    """校验/下载权重并构造 RRDBNet(x2)；失败抛 ``LoadError``（job 收敛为 load_failed）。"""
+    return load_upscale_model_impl(weight_path, log=log)
+
+
+def upscale_image(model, image):  # noqa: ANN001, ANN201
+    """对一张 PIL 图做 x2 超分，返回新图（实现在 remote/inference/upscale.py）。"""
+    return upscale_image_impl(model, image, log=log)
+
+
+def parse_upscale_reference(raw) -> dict:  # noqa: ANN001
+    """``tool=upscale`` 的源图提交期校验（只读图片头）：返回 ``{image_bytes, width, height}``。"""
+    return parse_upscale_reference_impl(raw, limits_for=_limit_spec)
+
+
+def build_upscale_task(width: int, height: int) -> dict:
+    """``tool=upscale`` 的执行任务：prompt 空 / steps=cfg=0 / 宽高取源图实际尺寸。"""
+    return build_upscale_task_impl(width, height, limits_for=_limit_spec)
+
+
+def validate_generate_spec(spec) -> tuple[dict, str, list[dict], str]:  # noqa: ANN001
+    """把请求体归一成 ``(pipeline_spec, model_id, tasks, tool)``（tool 缺省 generate）。
+
+    ``tool=upscale`` 时 pipeline / model_id 是 daemon 内部合成值、tasks 为空列表，源图头
+    校验通过后由 HTTP 层用 ``build_upscale_task`` 补 1 条任务（宽高要等解码图片头才知道）。
+    """
     return validate_generate_spec_impl(
-        spec, limits_for=_limit_spec, max_tasks=_max_tasks(), supported_loaders=SUPPORTED_LOADERS
+        spec,
+        limits_for=_limit_spec,
+        max_tasks=_max_tasks(),
+        supported_loaders=SUPPORTED_LOADERS,
+        upscale_pipeline=UPSCALE_PIPELINE_SPEC,
+        upscale_model_id=UPSCALE_ID,
     )
 
 
@@ -1171,6 +1230,134 @@ def _finish_job(job: Job, status: str, error: dict | None = None) -> None:
         STATE.last_active = now
 
 
+# ── 高清放大（tool=upscale）：模型句柄与结果组装 ────────────────────────────
+
+
+def ensure_upscale_model() -> tuple[object, float]:
+    """惰性加载 Real-ESRGAN 权重：同一份权重只加载一次，句柄原地写进 ``STATE``。
+
+    权重文件的下载 / SHA256 校验在 ``remote.inference.upscale`` 里（进程内只下载一次）；
+    本函数负责「句柄缓存」这一层。**执行结束必须调** :func:`release_upscale_model`：
+    超分权重只有 67MB，但 fp16 前向的中间激活在 2560² 输出上仍有数 GB，不能长期占卡。
+    """
+    weight_path = upscale_weight_path()
+    with STATE_LOCK:
+        model = STATE.upscale_model
+        if model is not None and STATE.upscale_key == weight_path:
+            return model, 0.0
+        has_stale = model is not None
+    if has_stale:
+        # 工作目录换了（极少见）：先卸旧句柄，避免两份 RRDB 同时占显存。
+        release_upscale_model()
+    started = time.time()
+    log("[upscale] 加载权重…")
+    try:
+        model = load_upscale_model(weight_path)
+    except Exception:
+        # 加载途中失败可能已经占过显存（部分模块已上卡），清一次缓存再上抛。
+        free_cuda_cache()
+        raise
+    elapsed = round(time.time() - started, 2)
+    with STATE_LOCK:
+        STATE.upscale_model = model
+        STATE.upscale_key = weight_path
+    log(f"[upscale] 权重就绪，用时 {elapsed}s")
+    return model, elapsed
+
+
+def release_upscale_model() -> None:
+    """卸载超分模型并清 CUDA 缓存（含异常路径）：不能占着显存影响后续扩散任务。
+
+    ``STATE.upscale_model`` 先清空再 gc：调用方函数栈里可能还持有局部引用，
+    必须等那个引用也松开后 ``gc.collect()`` 才能回收权重；``empty_cache()`` 清掉
+    前向留下的缓存块，把显存还给后续 pipeline 加载（T4 上 2560² 放大的峰值不能留）。
+    """
+    with STATE_LOCK:
+        model = STATE.upscale_model
+        STATE.upscale_model = None
+        STATE.upscale_key = None
+    if model is not None:
+        try:
+            del model
+        except Exception:  # pragma: no cover - 仅作防御
+            pass
+    gc.collect()
+    free_cuda_cache()
+
+
+def run_upscale_task(model, task: dict, source_image) -> dict:  # noqa: ANN001
+    """执行单张高清放大，返回与扩散出图同形的 results 项（追加 upscale 扩展字段）。
+
+    ``width`` / ``height`` 是**实际输出尺寸**（源图 × factor），``sourceWidth`` /
+    ``sourceHeight`` 是源图尺寸（Host 写 meta 用）。超分没有采样语义，``steps`` / ``cfg``
+    固定回 0；异常原样上抛，由 ``execute_job`` 统一分类（OOM → oom）。
+    """
+    with STATE_LOCK:
+        STATE.last_active = time.time()
+    source_width, source_height = source_image.size
+    started = time.time()
+    image = upscale_image(model, source_image)
+    try:
+        _sync_cuda()
+        seconds = round(time.time() - started, 2)
+        png = _encode_png(image)
+        width, height = image.size
+    finally:
+        close_fn = getattr(image, "close", None)
+        if callable(close_fn):
+            try:
+                close_fn()
+            except Exception:
+                pass
+    log(f"[upscale] {task['name']} 完成，{seconds}s，{len(png)} 字节")
+    return {
+        "name": task["name"],
+        "seed": task["seed"],
+        "seconds": seconds,
+        "width": int(width),
+        "height": int(height),
+        "steps": task["steps"],
+        "cfg": task["cfg"],
+        "png_bytes": len(png),
+        "image_b64": base64.b64encode(png).decode("ascii"),
+        "upscale": True,
+        "scale": UPSCALE_SCALE,
+        "sourceWidth": int(source_width),
+        "sourceHeight": int(source_height),
+    }
+
+
+def run_upscale_job(job: Job) -> tuple[list[dict], float]:
+    """``tool=upscale`` 的执行体：解码源图 → 超分 → 返回 1 条 results 项与加载秒数。
+
+    为什么单独一个函数：超分不加载扩散 pipeline（``ensure_pipeline`` 全程不参与），
+    与 ``execute_job`` 的参考图 / 蒙版 / run_tasks 路径没有交集；放在外面还能保证
+    「模型释放」与「源图关闭」一定发生在同一个 finally 结构里（含异常）。
+    """
+    source_image = decode_reference_image(job.reference)
+    load_seconds = 0.0
+    try:
+        # 解码完成后立刻释放队列里保留的 base64 原始字节（job 公开视图不含参考图）。
+        JOB_STORE.clear_reference(job)
+        model = None
+        try:
+            model, load_seconds = ensure_upscale_model()
+            result = run_upscale_task(model, job.tasks[0], source_image)
+        finally:
+            # 先松开本函数的局部引用，release 里的 gc.collect 才能真回收权重；
+            # 加载途中失败（ensure 抛异常）也走这里：release 对空句柄是幂等的。
+            model = None  # noqa: F841 - 显式断引用
+            release_upscale_model()
+    finally:
+        close_fn = getattr(source_image, "close", None)
+        if callable(close_fn):
+            try:
+                close_fn()
+            except Exception:
+                pass
+    return [result], load_seconds
+
+
 def execute_job(job: Job) -> None:
     """worker 里执行单个 job：加载 pipeline → 逐张出图 → 更新进度/终态。
 
@@ -1184,6 +1371,21 @@ def execute_job(job: Job) -> None:
     mask_image = None
     try:
         started = time.time()
+        if job.tool == "upscale":
+            # 高清放大：独立执行分支，不加载任何扩散 pipeline（INTERFACES §2.1）。
+            # 模型与源图的释放都在 run_upscale_job 内部完成（含异常），这里只收结果。
+            results, load_seconds = run_upscale_job(job)
+            JOB_STORE.set_results(job, results)
+            JOB_STORE.record_loaded(job, load_seconds)
+            with STATE_LOCK:
+                STATE.jobs_done += len(results)
+            total = round(time.time() - started, 2)
+            log(
+                f"[job] {job.job_id} 完成：{len(results)} 张，总耗时 {total}s"
+                f"（加载 {load_seconds}s）"
+            )
+            _finish_job(job, JOB_STATUS_DONE)
+            return
         reference_strength = None
         if job.reference is not None:
             # 图生图 / 局部重绘：参考图与蒙版完整解码各只做一次（整批 count 共用），且放在
@@ -1348,6 +1550,8 @@ HTTP_API = HttpApi(
     submit_job=lambda *args, **kwargs: JOB_STORE.submit(*args, **kwargs),
     validate_generate_spec=lambda spec: validate_generate_spec(spec),
     parse_reference_spec=lambda raw, pipeline_spec: parse_reference_spec(raw, pipeline_spec),
+    parse_upscale_reference=lambda raw: parse_upscale_reference(raw),
+    build_upscale_task=lambda width, height: build_upscale_task(width, height),
     normalize_job_id=lambda raw: normalize_job_id(raw),
     request_shutdown=lambda: request_shutdown(),
     cleanup_before_exit=lambda: _cleanup_before_exit(),

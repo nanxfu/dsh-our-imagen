@@ -21,7 +21,7 @@ import { invokeLlm } from '../lib/llm.js'
 import { createLogRoutes } from '../lib/routes/logs.js'
 import { normalizeSaveTo, resolveWorkspaceWritePath } from '../lib/paths.js'
 import { registerTools } from '../lib/tools.js'
-import { INTENT, LIMITS, VERSION } from '../shared/contract.js'
+import { INTENT, LIMITS, UPSCALE, VERSION } from '../shared/contract.js'
 import { createCheckRunner } from './helpers/check.mjs'
 import { createFakeContext, json, startHost } from './helpers/fake-context.mjs'
 
@@ -35,6 +35,33 @@ const EMPTY_MASK_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAAAAADhZOFXAAAADElEQVR4nGNgoA4AAABIAAEuuDx+AAAAAElFTkSuQmCC'
 
 const DEV_TOKEN = 'dev-token-test'
+
+/**
+ * 构造「只保证头部可解析」的源图夹具：高清放大链路只需要 PNG 头部宽高
+ * （Host 的 parseImageHeader / 远端头部校验），测试不引入图像编码依赖。
+ */
+function headerOnlyPng(width, height) {
+  const buffer = Buffer.alloc(24)
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buffer, 0)
+  buffer.writeUInt32BE(13, 8)
+  buffer.write('IHDR', 12, 'latin1')
+  buffer.writeUInt32BE(width, 16)
+  buffer.writeUInt32BE(height, 20)
+  return buffer
+}
+
+/** 从 PNG base64 头部读宽高；非 PNG 返回 null（供 mock 远端推导放大输出尺寸）。 */
+function pngSizeOfB64(b64) {
+  try {
+    const buffer = Buffer.from(String(b64 ?? ''), 'base64')
+    if (buffer.length < 24) return null
+    if (buffer.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') return null
+    if (buffer.toString('latin1', 12, 16) !== 'IHDR') return null
+    return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) }
+  } catch {
+    return null
+  }
+}
 
 /**
  * 假的宿主 llm 服务：记录每次调用的 system prompt / 消息，并回放固定文本。
@@ -97,6 +124,40 @@ function startMockDaemon() {
         state.lastBody = body
         state.generateBodies.push(body)
         const jobId = String(body.jobId || `mock-job-${state.generateCalls}`)
+        const tool = typeof body.tool === 'string' ? body.tool : 'generate'
+        // 高清放大（Phase B）：Host 只发 tool+源图，远端按源图头部尺寸 ×2 合成 1 条结果。
+        if (tool === 'upscale') {
+          const source = pngSizeOfB64(body.reference?.image_b64) ?? { width: 1, height: 1 }
+          const results = [
+            {
+              name: '01',
+              seed: 0,
+              seconds: 0.05,
+              width: source.width * 2,
+              height: source.height * 2,
+              steps: 0,
+              cfg: 0,
+              png_bytes: 70,
+              image_b64: PNG_B64,
+              upscale: true,
+              scale: 2,
+              sourceWidth: source.width,
+              sourceHeight: source.height,
+            },
+          ]
+          state.jobs.set(jobId, {
+            status: 'done',
+            job_id: jobId,
+            model_id: body.modelId,
+            tool,
+            progress: { done: 1, total: 1 },
+            load_seconds: 0.05,
+            results,
+            error: null,
+          })
+          send(202, { status: 'accepted', job_id: jobId, model_id: body.modelId })
+          return
+        }
         // 空蒙版在执行期（加载模型前）被真 daemon 按覆盖率拦截，HTTP 层仍是 202 入队成功；
         // 这里模拟同一个拒绝点：返回 failed job + invalid_request，用于断言 Host 把它折叠成
         // 「异步任务终态 failed + invalid_request」的透传语义（不是 400 入队拒绝）。
@@ -105,6 +166,7 @@ function startMockDaemon() {
             status: 'failed',
             job_id: jobId,
             model_id: body.modelId,
+            tool,
             progress: { done: 0, total: 1 },
             load_seconds: 0,
             results: null,
@@ -132,6 +194,7 @@ function startMockDaemon() {
           status: 'done',
           job_id: jobId,
           model_id: body.modelId,
+          tool,
           progress: { done: results.length, total: results.length },
           load_seconds: 0.1,
           results,
@@ -259,6 +322,7 @@ async function main() {
       'imagen_history',
       'imagen_recipes',
       'imagen_session',
+      'imagen_upscale',
     ])
     for (const tool of fake.tools) {
       assert.ok(tool.output?.render, `${tool.name} 缺少 output.render`)
@@ -269,6 +333,19 @@ async function main() {
     assert.deepEqual(cancel.parameters.required, ['jobId'], 'imagen_cancel 必须要求 jobId')
     assert.equal(cancel.parameters.properties.jobId.type, 'string')
     assert.equal(cancel.parameters.additionalProperties, false)
+
+    // 高清放大：只收工作区相对路径 + 可选等待/交付，不暴露源图宽高（Host 自己读头部）。
+    const upscale = fake.tools.find((tool) => tool.name === 'imagen_upscale')
+    assert.deepEqual(upscale.parameters.required, ['path'], 'imagen_upscale 必须要求 path')
+    assert.deepEqual(
+      Object.keys(upscale.parameters.properties).sort(),
+      ['path', 'saveTo', 'waitSeconds'],
+      'imagen_upscale 只接受 path / waitSeconds / saveTo',
+    )
+    assert.ok(
+      upscale.parameters.properties.path.description.includes(String(UPSCALE.maxInputEdge)),
+      'imagen_upscale 的 path 说明应给出源图长边上限',
+    )
 
     // 批量创作：条数上限与等待预算都取自契约 LIMITS。
     const batch = fake.tools.find((tool) => tool.name === 'imagen_batch')
@@ -701,6 +778,39 @@ async function main() {
     assert.equal(rendered[0].type, 'text')
   })
 
+  await check('Agent 工具 imagen_upscale：路径校验、源图宽高读取与放大链路', async () => {
+    const tool = fake.tools.find((item) => item.name === 'imagen_upscale')
+    // 非法源图：越界 / 非产物目录 / 不存在 / 超限，都只返回可读的提交失败，不占队列。
+    for (const bad of ['../index.js', 'docs/assets/hero.png', 'imagen-output/20260101-000000-none/01.png']) {
+      const value = await tool.execute({ path: bad }, {})
+      assert.match(value.text, /^提交失败：/, `${bad} → ${value.text}`)
+    }
+    const tooLargeDir = join(workspace, 'imagen-output', '20260101-000000-upscale-agent-large')
+    await mkdir(tooLargeDir, { recursive: true })
+    await writeFile(join(tooLargeDir, '01.png'), headerOnlyPng(1536, 1024))
+    const tooLarge = await tool.execute({ path: 'imagen-output/20260101-000000-upscale-agent-large/01.png' }, {})
+    assert.match(tooLarge.text, /提交失败：/)
+    assert.match(tooLarge.text, new RegExp(String(UPSCALE.maxInputEdge)))
+
+    // 合法源图：Host 自行读头部宽高后以 tool=upscale 提交，返回结构与 imagen_generate 同形。
+    const dir = join(workspace, 'imagen-output', '20260101-000000-upscale-agent')
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, '01.png'), headerOnlyPng(512, 384))
+    const value = await tool.execute(
+      { path: 'imagen-output/20260101-000000-upscale-agent/01.png', waitSeconds: 30 },
+      {},
+    )
+    assert.equal(typeof value.text, 'string')
+    assert.match(value.text, /高清放大（×2）/, value.text)
+    assert.match(value.text, /源图 512×384/, '工具应回显从 PNG 头部读出的源图尺寸')
+    assert.match(value.text, /imagen-output\//)
+    // 远端载荷同样来自这条 tool 调用：源图宽高由 Host 读取，客户端不需要自己算。
+    assert.equal(mock.state.lastBody.tool, 'upscale')
+    assert.equal(mock.state.lastBody.reference.image_b64, headerOnlyPng(512, 384).toString('base64'))
+    const rendered = tool.output.render({}, value)
+    assert.equal(rendered[0].type, 'text')
+  })
+
   await check('Agent 工具 imagen_history', async () => {
     const tool = fake.tools.find((item) => item.name === 'imagen_history')
     const value = await tool.execute({ limit: 3 }, {})
@@ -920,7 +1030,8 @@ async function main() {
     const library = await json(host.origin, '/imagen-api/library')
     assert.ok(library.body.deleted.some((item) => item.path === target.path), '删除应被记录')
 
-    const history = await json(host.origin, '/imagen-api/history?limit=10')
+    // 用契约上限而不是固定 10：历史条目随用例增长，固定 limit 会把较早的 firstJob 挤出分页。
+    const history = await json(host.origin, `/imagen-api/history?limit=${LIMITS.history.maxLimit}`)
     const item = history.body.items.find((entry) => entry.jobId === firstJob.id)
     assert.equal(item.images.length, 1, '历史里不应再出现已删除的图片')
   })
@@ -1951,6 +2062,183 @@ async function main() {
     assert.equal(item.rootImage, null)
     assert.equal(item.inpaint, false)
     assert.equal(item.strength, 0.5)
+  })
+
+  // ── 阶段十五 Phase B：高清放大（upscale）与扩图（outpaint）──────────────
+  // 源图夹具：1024×768 的 PNG（只保证头部可解析，放大链路只读宽高）。
+  const upscaleSourceDir = join(workspace, 'imagen-output', '20260101-000000-upscale-source')
+  await mkdir(upscaleSourceDir, { recursive: true })
+  const upscaleSourcePath = 'imagen-output/20260101-000000-upscale-source/01.png'
+  await writeFile(join(upscaleSourceDir, '01.png'), headerOnlyPng(1024, 768))
+
+  await check('高清放大：提交 → 轮询 → meta.upscale/upscaleScale → /history 透传', async () => {
+    const submitted = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tool: 'upscale',
+        prompt: '',
+        // 客户端从历史条目带来源图宽高；Host 按 UPSCALE.maxInputEdge 预检。
+        width: 1024,
+        height: 768,
+        count: 1,
+        waitSeconds: 15,
+        reference: { path: upscaleSourcePath },
+      }),
+    })
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body))
+    const job = submitted.body
+    assert.equal(job.status, 'done', JSON.stringify(job))
+    assert.equal(job.tool, 'upscale', 'publicView 必须带 tool')
+    assert.equal(job.presetId, UPSCALE.id, '放大不选扩散预设，presetId 记超分模型标识')
+    assert.equal(job.modelId, UPSCALE.id)
+    assert.equal(job.params.count, 1)
+    assert.deepEqual(job.params.reference, { sourcePath: upscaleSourcePath, upscale: true })
+    assert.ok(!JSON.stringify(job).includes(headerOnlyPng(1024, 768).toString('base64')), '任务视图不得回传源图二进制')
+
+    // 远端载荷：只发 1 个放大 job，不下发 pipeline / tasks / strength（由远端合成任务）。
+    const call = mock.state.lastBody
+    assert.equal(call.tool, 'upscale')
+    assert.equal(call.modelId, UPSCALE.id)
+    assert.equal(call.jobId, `${job.id}-01`, '放大复用逐张提交的两位序号幂等键')
+    assert.equal(call.pipeline, undefined, '放大请求不应带扩散 pipeline')
+    assert.equal(call.tasks, undefined, '放大任务由远端合成，Host 不下发 tasks')
+    assert.deepEqual(call.reference, { image_b64: headerOnlyPng(1024, 768).toString('base64') })
+
+    // 落盘：产物尺寸 = 源图 ×2（mock 按源图头部尺寸回报），meta 记倍数与源图尺寸。
+    assert.equal(job.output.images.length, 1)
+    assert.equal(job.output.images[0].width, 1024 * UPSCALE.factor)
+    assert.equal(job.output.images[0].height, 768 * UPSCALE.factor)
+    const meta = JSON.parse(await readFile(join(workspace, job.output.dir, 'meta.json'), 'utf8'))
+    assert.equal(meta.upscale, true, 'meta.json 必须记 upscale 标记')
+    assert.equal(meta.upscaleScale, UPSCALE.factor)
+    assert.deepEqual(meta.upscaleSource, { width: 1024, height: 768 })
+    assert.equal(meta.sourceImage, upscaleSourcePath, '放大产物必须指回源图')
+    assert.equal(meta.rootImage, upscaleSourcePath, '源图没有父 meta 时 rootImage 兜底为来源图')
+    assert.equal(meta.inpaint, undefined, '放大不是局部重绘')
+    assert.equal(meta.params.reference.upscale, true)
+
+    // /history 透传：三个新字段恒存在；旧产物自动是 false / null / false。
+    const history = await json(host.origin, `/imagen-api/history?limit=${LIMITS.history.maxLimit}`)
+    const item = history.body.items.find((entry) => entry.jobId === job.id)
+    assert.ok(item, '历史里应有放大产物')
+    assert.equal(item.upscale, true)
+    assert.equal(item.upscaleScale, UPSCALE.factor)
+    assert.equal(item.outpaint, false)
+    assert.equal(item.sourceImage, upscaleSourcePath)
+    assert.equal(item.rootImage, upscaleSourcePath)
+    assert.equal(item.inpaint, false)
+    const legacy = history.body.items.find((entry) => entry.jobId === firstJob.id)
+    assert.equal(legacy.upscale, false, '旧产物没有 upscale 标记')
+    assert.equal(legacy.upscaleScale, null, '旧产物 upscaleScale 恒为 null')
+    assert.equal(legacy.outpaint, false, '旧产物没有 outpaint 标记')
+  })
+
+  await check('高清放大：非法 tool / 超限源图 / 带蒙版 / 缺源图 均在入队前 400', async () => {
+    const post = (body) =>
+      json(host.origin, '/imagen-api/generate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    const cases = [
+      {
+        body: { tool: 'upscale', prompt: '', width: 1536, height: 1024, reference: { path: upscaleSourcePath } },
+        code: 'invalid_request',
+        pattern: new RegExp(String(UPSCALE.maxInputEdge)),
+      },
+      {
+        body: { tool: 'inpaint', prompt: '未知 tool' },
+        code: 'invalid_request',
+        pattern: /tool/,
+      },
+      {
+        body: { tool: 'upscale', prompt: '', width: 1024, height: 768, reference: { path: upscaleSourcePath, mask: PNG_B64 } },
+        code: 'invalid_request',
+        pattern: /蒙版/,
+      },
+      {
+        body: { tool: 'upscale', prompt: '', width: 1024, height: 768 },
+        code: 'invalid_request',
+        pattern: /源图/,
+      },
+      {
+        body: { tool: 'upscale', prompt: '', width: 1024, height: 768, reference: { path: '../escape.png' } },
+        code: 'invalid_path',
+        pattern: /参考图/,
+      },
+      // outpaint 的 sourcePath 与 path 同一口径：越界路径直接拒绝（不静默丢弃来源）。
+      {
+        body: {
+          tool: 'outpaint',
+          prompt: '扩图',
+          reference: { image: PNG_B64, mask: PNG_B64, sourcePath: '../escape.png', strength: 1.0 },
+        },
+        code: 'invalid_path',
+        pattern: /来源图/,
+      },
+    ]
+    for (const entry of cases) {
+      const result = await post(entry.body)
+      assert.equal(result.status, 400, `${JSON.stringify(entry.body)} → ${JSON.stringify(result.body)}`)
+      assert.equal(result.body.error.code, entry.code)
+      assert.match(result.body.error.message, entry.pattern)
+    }
+  })
+
+  await check('扩图：tool=outpaint 走普通局部重绘路径，sourcePath 归组到版本树', async () => {
+    // 以版本树夹具的根作品作为扩图来源：参考图是客户端合成的画布 + 白边蒙版。
+    const rootPath = tree.rootPath
+    const submitted = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tool: 'outpaint',
+        presetId: 'sdxl-inpaint',
+        prompt: '向四周扩展成 16:9 的风景',
+        width: 1280,
+        height: 720,
+        steps: 8,
+        cfg: 7,
+        count: 1,
+        waitSeconds: 15,
+        reference: { image: PNG_B64, mask: PNG_B64, sourcePath: rootPath, strength: 1.0 },
+      }),
+    })
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body))
+    const job = submitted.body
+    assert.equal(job.status, 'done', JSON.stringify(job))
+    assert.equal(job.tool, 'outpaint')
+    assert.equal(job.presetId, 'sdxl-inpaint', '扩图优先使用 9 通道 inpaint 权重')
+    assert.deepEqual(job.params.reference, { sourcePath: rootPath, strength: 1.0, mask: true })
+
+    // 远端看不到 outpaint：它就是一次普通局部重绘（带 mask_b64）。
+    const call = mock.state.lastBody
+    assert.equal(call.tool, undefined, 'outpaint 由 Host 展开成 generate 请求')
+    assert.deepEqual(call.reference, { image_b64: PNG_B64, strength: 1.0, mask_b64: PNG_B64 })
+
+    const meta = JSON.parse(await readFile(join(workspace, job.output.dir, 'meta.json'), 'utf8'))
+    assert.equal(meta.outpaint, true, 'meta 必须记 outpaint 标记')
+    assert.equal(meta.inpaint, true, '扩图在远端是局部重绘，inpaint 标记保留')
+    assert.equal(meta.sourceImage, rootPath, 'image 来源也要按 sourcePath 记来源图')
+    assert.equal(meta.rootImage, rootPath, '扩图应归组到来源作品的根')
+
+    // 版本树：扩图产物出现在来源作品的树里（跨目录归组，不依赖分页）。
+    const treeRes = await json(host.origin, `/imagen-api/history/tree?root=${encodeURIComponent(rootPath)}`)
+    assert.equal(treeRes.status, 200, JSON.stringify(treeRes.body))
+    assert.ok(
+      treeRes.body.items.some((entry) => entry.jobId === job.id),
+      '扩图产物应出现在来源作品的版本树里',
+    )
+    // /history 透传：outpaint 与 inpaint 同时为 true（扩图是带蒙版的局部重绘）。
+    const history = await json(host.origin, `/imagen-api/history?limit=${LIMITS.history.maxLimit}`)
+    const item = history.body.items.find((entry) => entry.jobId === job.id)
+    assert.equal(item.outpaint, true)
+    assert.equal(item.inpaint, true)
+    assert.equal(item.upscale, false)
+    assert.equal(item.upscaleScale, null)
+    assert.equal(item.sourceImage, rootPath)
+    assert.equal(item.rootImage, rootPath)
   })
 
   await check('打开产物目录（dryRun 只解析路径）', async () => {

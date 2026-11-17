@@ -364,10 +364,11 @@ export function useStudio(props) {
    * 默认以当前选中的作品为底图；从画廊 / 大图预览触发时由调用方传入条目。
    * 工具会自动选模（不改左栏表单）；没有可处理的底图或没有可用垫图预设时，
    * `openTool` 自己 toast 说明并返回 false，这里不切换视图。
+   * 高清放大是即时工具：`openTool` 直接提交、不进入编辑态，这里的视图切换照常执行。
    *
-   * @param {'inpaint'|'img2img'} kind 工具 id
+   * @param {'inpaint'|'img2img'|'upscale'|'outpaint'} kind 工具 id
    * @param {object} [entry] 胶卷 / 画廊条目 `{ image, item }`；缺省用当前选中作品
-   * @returns {boolean} 是否成功进入编辑态
+   * @returns {boolean} 是否成功打开（即时工具为是否已发起提交）
    */
   function openImageTool(kind, entry) {
     const target = entry || library.selected

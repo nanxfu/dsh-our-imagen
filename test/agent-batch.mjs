@@ -10,12 +10,12 @@
  */
 
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { registerTools } from '../lib/tools.js'
-import { LIMITS, PRESETS, RATIO_IDS } from '../shared/contract.js'
+import { LIMITS, PRESETS, RATIO_IDS, UPSCALE } from '../shared/contract.js'
 import {
   RECIPES,
   RECIPE_CATEGORIES,
@@ -35,7 +35,21 @@ const TOOL_NAMES = [
   'imagen_history',
   'imagen_recipes',
   'imagen_session',
+  'imagen_upscale',
 ]
+
+/**
+ * 构造「头部可解析」的源图夹具：imagen_upscale 只用 PNG 头部读宽高，测试不引入图像依赖。
+ */
+function headerOnlyPng(width, height) {
+  const buffer = Buffer.alloc(24)
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buffer, 0)
+  buffer.writeUInt32BE(13, 8)
+  buffer.write('IHDR', 12, 'latin1')
+  buffer.writeUInt32BE(width, 16)
+  buffer.writeUInt32BE(height, 20)
+  return buffer
+}
 
 /** 假任务：默认立即完成；可按 prompt 指定失败 / 挂起状态。 */
 function createFakeJob(id, request, state) {
@@ -51,6 +65,8 @@ function createFakeJob(id, request, state) {
   }
   const base = {
     id,
+    // 阶段十五 Phase B：工具可用 tool 指定请求类型（imagen_upscale 提交的是 upscale）。
+    tool: request.tool ?? 'generate',
     presetId: request.presetId ?? 'sdxl-lightning',
     params,
     seconds: 1,
@@ -147,7 +163,7 @@ const { check, summary } = createCheckRunner()
 async function main() {
   const workspace = await mkdtemp(join(tmpdir(), 'imagen-agent-batch-'))
 
-  await check('工具注册：6 个工具均带参数 schema 与文本输出', () => {
+  await check('工具注册：7 个工具均带参数 schema 与文本输出', () => {
     const { registered } = createTools(workspace)
     assert.deepEqual(
       registered.map((tool) => tool.name).sort(),
@@ -212,6 +228,54 @@ async function main() {
       'limit 上界应为配方总数（由数据决定，不写死数字）',
     )
     assert.deepEqual(parameters.required, undefined, 'imagen_recipes 是可选过滤的只读检索，不需要必填参数')
+  })
+
+  await check('imagen_upscale：参数 schema、源图宽高读取与 tool=upscale 提交', async () => {
+    const { tool, queue } = createTools(workspace)
+    const parameters = tool('imagen_upscale').parameters
+    assert.deepEqual(parameters.required, ['path'])
+    assert.deepEqual(Object.keys(parameters.properties).sort(), ['path', 'saveTo', 'waitSeconds'])
+    assert.ok(
+      parameters.properties.path.description.includes(`${UPSCALE.maxInputEdge}`),
+      'path 说明应给出源图长边上限',
+    )
+
+    // 非法路径 / 不存在的作品：直接返回提交失败，不占用队列。
+    for (const bad of ['../index.js', '/abs/path.png', 'docs/assets/hero.png', 'imagen-output/no-such/01.png']) {
+      const value = await tool('imagen_upscale').execute({ path: bad })
+      assert.match(value.text, /^提交失败：/, `${bad} → ${value.text}`)
+    }
+    assert.equal(queue.submits.length, 0, '非法源图不得提交队列')
+
+    // 合法源图：宽高由 Host 从 PNG 头部读取，固定 1 张、提示词为空、tool=upscale。
+    const dir = join(workspace, 'imagen-output', '20260101-000000-upscale-agent')
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, '01.png'), headerOnlyPng(1024, 768))
+    const value = await tool('imagen_upscale').execute({
+      path: 'imagen-output/20260101-000000-upscale-agent/01.png',
+      waitSeconds: 1,
+    })
+    assert.match(value.text, /高清放大（×2）/, value.text)
+    assert.match(value.text, /源图 1024×768/, '工具应回显从 PNG 头部读出的源图尺寸')
+    assert.equal(queue.submits.length, 1)
+    const request = queue.submits[0]
+    assert.equal(request.tool, 'upscale')
+    assert.equal(request.prompt, '')
+    assert.equal(request.width, 1024)
+    assert.equal(request.height, 768)
+    assert.deepEqual(request.reference, { path: 'imagen-output/20260101-000000-upscale-agent/01.png' })
+    assert.equal(request.autoStart, true)
+
+    // 超限源图：Host 读头部后按 UPSCALE.maxInputEdge 拒绝，不提交队列。
+    const largeDir = join(workspace, 'imagen-output', '20260101-000000-upscale-large')
+    await mkdir(largeDir, { recursive: true })
+    await writeFile(join(largeDir, '01.png'), headerOnlyPng(1536, 1024))
+    const tooLarge = await tool('imagen_upscale').execute({
+      path: 'imagen-output/20260101-000000-upscale-large/01.png',
+    })
+    assert.match(tooLarge.text, /^提交失败：/)
+    assert.match(tooLarge.text, new RegExp(String(UPSCALE.maxInputEdge)))
+    assert.equal(queue.submits.length, 1, '超限源图不得提交队列')
   })
 
   await check('imagen_batch 超过单次上限：整批拒绝且不提交任何任务', async () => {

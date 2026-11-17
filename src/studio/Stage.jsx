@@ -14,6 +14,7 @@ import { ImageDock } from './stage/ImageDock.jsx'
 import { ImageDropzone } from './stage/ImageDropzone.jsx'
 import { InlineTool } from './stage/InlineTool.jsx'
 import { MaskEditor } from './stage/MaskEditor.jsx'
+import { OutpaintEditor } from './stage/OutpaintEditor.jsx'
 import { ToolSubmitBar } from './stage/ToolSubmitBar.jsx'
 
 /** 出图后一分钟内才算「刚落定」，超过就当历史作品直接陈列。 */
@@ -46,9 +47,10 @@ function percentOf(coverage) {
 /**
  * 舞台：只做编排。
  *
- * - 主表单回归纯文生图后，针对作品的二次处理（局部涂抹 / 整图重绘）全部由
- *   舞台底部动作坞 `ImageDock` 一步直达；编辑态下画布 / 轻量重绘条二选一挂载，
- *   提交栏由 tool-core 的组件内置，Stage 不再自己拼提交参数。
+ * - 主表单回归纯文生图后，针对作品的二次处理（局部涂抹 / 整图重绘 / 高清放大 / 扩图）
+ *   全部由舞台底部动作坞 `ImageDock` 一步直达；编辑态下按工具的 `form` 挂载
+ *   `MaskEditor` / `OutpaintEditor` / `InlineTool` 三选一，提交栏由 tool-core 的
+ *   组件内置，Stage 不再自己拼提交参数。高清放大是即时工具，不会进入编辑态。
  * - 空舞台没有底图，不再出现涂抹入口；动作坞只在有选中作品时渲染。
  *
  * 接收 { t, ui, compute, form, library, imageTool, actions, now } 领域对象。
@@ -123,9 +125,14 @@ export function Stage(props) {
     enabled: tool.ready === true,
     hint: tool.ready === true ? '' : t(tool.plannedKey || 'studio.imageTool.planned'),
   }))
-  // 草稿状态：关闭编辑态但仍留有已涂蒙版时，给「继续编辑」一个覆盖率读数。
-  const draftStatusLabel = activeTool && !editorOpen && imageTool.mask
-    ? formatText(t('studio.imageTool.draftStatus'), { percent: percentOf(imageTool.coverage) })
+  // 草稿状态：关闭编辑态但仍留有已涂蒙版 / 扩图草稿时，给「继续编辑」一个读数。
+  const draftHasInk = Boolean(imageTool && imageTool.mask)
+    || Boolean(activeTool && activeTool.id === 'outpaint' && imageTool && imageTool.outpaint && imageTool.outpaint.canvas)
+  const draftStatusLabel = activeTool && !editorOpen && draftHasInk
+    ? formatText(
+        t(activeTool.id === 'outpaint' ? 'studio.outpaint.coverage' : 'studio.imageTool.draftStatus'),
+        { percent: percentOf(imageTool.coverage) },
+      )
     : ''
   const resumeLabel = activeTool ? t('studio.imageTool.resumeDraft') : ''
 
@@ -159,7 +166,19 @@ export function Stage(props) {
 
   const editorNode = editorOpen
     ? (activeTool.form === 'canvas'
-      ? <MaskEditor {...submitProps} mask={imageTool.mask} coverage={imageTool.coverage} onMaskApply={imageTool.applyMask} onMaskClear={imageTool.clearMask} now={now} />
+      ? (activeTool.id === 'outpaint'
+        ? (
+          <OutpaintEditor
+            {...submitProps}
+            outpaint={imageTool.outpaint}
+            coverage={imageTool.coverage}
+            onRatioChange={imageTool.setOutpaintRatio}
+            onAnchorChange={imageTool.setOutpaintAnchor}
+            onCanvasApply={imageTool.applyOutpaintCanvas}
+            now={now}
+          />
+        )
+        : <MaskEditor {...submitProps} mask={imageTool.mask} coverage={imageTool.coverage} onMaskApply={imageTool.applyMask} onMaskClear={imageTool.clearMask} now={now} />)
       : <InlineTool {...submitProps} />)
     : null
 
@@ -200,6 +219,8 @@ export function Stage(props) {
               {...submitProps}
               promptPlaceholder={promptPlaceholder}
               maskCoverage={imageTool ? imageTool.coverage : 0}
+              metaLabel={activeTool.id === 'outpaint' ? t('studio.outpaint.coverage') : undefined}
+              metaPercent={activeTool.id === 'outpaint' ? (imageTool ? imageTool.coverage : 0) : undefined}
             />
           </>
         ) : (

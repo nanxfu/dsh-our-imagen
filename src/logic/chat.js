@@ -16,8 +16,8 @@ import { referenceUrlOf } from './generate.js'
 /** 一次任务最多展示 4 张结果图（契约的生成张数上限）。 */
 const MAX_RESULT_IMAGES = LIMITS.count.max
 
-/** 舞台图片工具里会镜像到助手线程的工具 id。 */
-const MIRROR_TOOLS = Object.freeze(['inpaint', 'img2img'])
+/** 舞台图片工具里会镜像到助手线程的工具 id（局部 / 整图 / 高清放大 / 扩图）。 */
+const MIRROR_TOOLS = Object.freeze(['inpaint', 'img2img', 'upscale', 'outpaint'])
 
 function textOf(value) {
   return typeof value === 'string' ? value.trim() : ''

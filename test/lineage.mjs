@@ -56,6 +56,8 @@ function item(options = {}) {
   if (options.sourceImage) base.sourceImage = options.sourceImage
   if (options.rootImage) base.rootImage = options.rootImage
   if (options.inpaint) base.inpaint = true
+  if (options.upscale) base.upscale = true
+  if (options.outpaint) base.outpaint = true
   if (options.strength !== undefined) base.strength = options.strength
   return base
 }
@@ -146,6 +148,40 @@ await check('两级派生：rootImage 归组、depth 与 v 编号递增、latest
   assert.equal(byPath[v2Path].parentPath, rootPath)
   assert.equal(byPath[v2Path].kind, 'inpaint', 'meta.inpaint 决定行类型')
   assert.equal(byPath[PATH(v3Dir, '01.png')].kind, 'inpaint')
+})
+
+await check('版本类型：upscale / outpaint 优先于 inpaint，在途任务按 job.tool 判定', () => {
+  const rootItem = item({ jobId: 'job-1', images: ['01.png'], finishedAt: '2026-11-09T05:00:00.000Z' })
+  const rootPath = PATH(ROOT_DIR, '01.png')
+  const upscaleItem = item({
+    jobId: 'job-u',
+    images: ['01.png'],
+    imageDir: 'imagen-output/20261109-121000-job-u',
+    sourceImage: rootPath,
+    rootImage: rootPath,
+    upscale: true,
+    finishedAt: '2026-11-09T05:01:00.000Z',
+  })
+  const outpaintItem = item({
+    jobId: 'job-o',
+    images: ['01.png'],
+    imageDir: 'imagen-output/20261109-122000-job-o',
+    sourceImage: rootPath,
+    rootImage: rootPath,
+    outpaint: true,
+    // 扩图在 Host 侧也写了 inpaint=true（普通蒙版重绘），但版本类型应按 outpaint 显示。
+    inpaint: true,
+    finishedAt: '2026-11-09T05:02:00.000Z',
+  })
+  const { byPath } = buildLineage({ items: [rootItem, upscaleItem, outpaintItem], pendingJobs: [] })
+  assert.equal(byPath[upscaleItem.images[0].path].kind, 'upscale')
+  assert.equal(byPath[outpaintItem.images[0].path].kind, 'outpaint', 'outpaint 标记优先于 inpaint')
+  assert.equal(byPath[rootPath].kind, 'text')
+  // 在途任务：job.tool 优先于 sourceMode / reference.mask 推断。
+  assert.equal(pendingKindOf({ tool: 'upscale', status: 'queued' }), 'upscale')
+  assert.equal(pendingKindOf({ tool: 'outpaint', status: 'running', params: { reference: { mask: true } } }), 'outpaint')
+  assert.equal(pendingKindOf({ tool: 'generate', sourceMode: 'upscale' }), 'upscale', '旧宿主没有 tool 时按客户端 sourceMode')
+  assert.equal(pendingKindOf({ sourceMode: 'outpaint' }), 'outpaint')
 })
 
 await check('同批多图：一次重绘的 3 张候选是同一父节点下的 v2a / v2b / v2c', () => {

@@ -140,8 +140,28 @@ await check('纯逻辑：舞台工具镜像记录带 kind 且不进意图上下�
   const redraw = mirrorToolEntries(t, { tool: 'img2img', job: { id: 'job-tool-2' }, target })
   assert.equal(redraw[0].text, '对当前图发起了整图重绘')
   assert.equal(Object.prototype.hasOwnProperty.call(redraw[0], 'strength'), false)
+  // 高清放大：即时工具同样镜像，请求体没有强度（reference 只有 path）。
+  const upscale = mirrorToolEntries(t, {
+    tool: 'upscale',
+    job: { id: 'job-tool-3' },
+    target,
+    body: { tool: 'upscale', reference: { path: target.path } },
+  })
+  assert.equal(upscale.length, 2)
+  assert.equal(upscale[0].text, '对当前图发起了高清放大')
+  assert.equal(Object.prototype.hasOwnProperty.call(upscale[0], 'strength'), false)
+  // 扩图：强度胶囊沿用 reference.strength（默认 1.0）。
+  const outpaint = mirrorToolEntries(t, {
+    tool: 'outpaint',
+    job: { id: 'job-tool-4' },
+    target,
+    body: { tool: 'outpaint', reference: { path: target.path, strength: 1 } },
+  })
+  assert.equal(outpaint[0].text, '对当前图发起了扩图')
+  assert.equal(outpaint[0].strength, 1)
+  assert.equal(outpaint[1].jobId, 'job-tool-4')
   // 参数不全 / 未知工具：不追加（失败路径不会留下半条记录）。
-  assert.deepEqual(mirrorToolEntries(t, { tool: 'upscale', job: { id: 'x' }, target }), [])
+  assert.deepEqual(mirrorToolEntries(t, { tool: 'nope', job: { id: 'x' }, target }), [])
   assert.deepEqual(mirrorToolEntries(t, { tool: 'inpaint', job: {}, target }), [])
   assert.deepEqual(mirrorToolEntries(t, { tool: 'inpaint', job: { id: 'x' } }), [])
   // 上下文隔离：kind='tool' 的用户记录与 kind='job' 的助手记录都被 intentHistory 跳过。

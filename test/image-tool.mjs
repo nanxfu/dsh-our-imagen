@@ -1,12 +1,14 @@
 /**
  * 舞台图片工具核心层的离线测试（不联网、不需要 React / DOM）。
  *
- * 覆盖 `src/logic/imageTool.js` 的冻结接口（INTERFACES.md §2.1）：
- *   - 工具注册表与描述符字段；
- *   - 自动选模 / 兜底（inpaint 专用权重优先、img2img 跳过 inpaintOnly）；
- *   - 强度默认档与上限（canvas + 蒙版放宽到 inpaintMax）；
- *   - 提示词回退（空输入 → 目标作品原提示词）与前置拦截；
- *   - POST /generate 请求体形状（宽高跟随作品、蒙版门控、负向词门控）；
+ * 覆盖 `src/logic/imageTool.js` 的冻结接口（INTERFACES.md §4.1 / §4.3）：
+ *   - 工具注册表与描述符字段（阶段十五 Phase B 起四个工具全部 ready）；
+ *   - 自动选模 / 兜底（inpaint 沿用当前模型优先、outpaint 优先专用 9 通道权重、
+ *     img2img 跳过 inpaintOnly、upscale 不选模）；
+ *   - 强度默认档与上限（canvas + 蒙版放宽到 inpaintMax、outpaint 默认 1.0）；
+ *   - 提示词回退（空输入 → 目标作品原提示词）与前置拦截（含 upscale 源图超限）；
+ *   - 三类请求体：POST /generate 的 inpaint / img2img / upscale / outpaint 形状；
+ *   - 扩图画布归一（base64 / 体积 / 8 对齐 / 画布边界 / 覆盖率）；
  *   - 作品键归一（条目 / 图片 / 字符串）。
  *
  * 运行：node test/image-tool.mjs
@@ -14,15 +16,18 @@
 
 import assert from 'node:assert/strict'
 
-import { PRESETS, LIMITS } from '../shared/contract.js'
+import { PRESETS, LIMITS, OUTPAINT, UPSCALE } from '../shared/contract.js'
 import {
   IMAGE_TOOL_FORMS,
   IMAGE_TOOL_GROUPS,
   IMAGE_TOOLS,
   buildImageToolBody,
+  buildOutpaintToolBody,
+  buildUpscaleToolBody,
   imageToolBlockedKeyOf,
   imageToolOf,
   imageToolSummary,
+  normalizeOutpaintCanvas,
   toolPresetOf,
   toolPromptFallback,
   toolStrengthDefaultOf,
@@ -40,6 +45,16 @@ const anima = byId('anima-light-lavender')
 
 /** 合法蒙版 base64（逻辑层只校验 base64 形状，不解码 PNG）。 */
 const MASK_DATA = Buffer.from('fake-inpaint-mask').toString('base64')
+/** 扩图合成画布：image / mask 各一段合法 base64，尺寸与版面取「1024² 四边扩 20%」。 */
+const CANVAS_IMAGE = Buffer.from('fake-outpaint-image').toString('base64')
+const CANVAS_MASK = Buffer.from('fake-outpaint-mask').toString('base64')
+const OUTPAINT_CANVAS = {
+  image: CANVAS_IMAGE,
+  mask: CANVAS_MASK,
+  width: 1232,
+  height: 1232,
+  content: { x: 104, y: 104, width: 1024, height: 1024 },
+}
 /** 超过契约上限的蒙版：base64 字节数 2100000 > LIMITS.mask.maxBytes。 */
 const OVERSIZED_MASK = 'A'.repeat(2_800_000)
 
@@ -65,16 +80,20 @@ async function main() {
       assert.equal(typeof tool.ready, 'boolean')
       if (tool.ready) {
         assert.equal(tool.plannedKey, undefined, `${tool.id} 已开放时不应有规划中提示`)
-        assert.equal(typeof tool.capability, 'string')
+        // 无参工具（高清放大）没有预设能力字段，其余工具必须声明能力字段。
+        if (tool.id === 'upscale') assert.equal(tool.capability, null)
+        else assert.equal(typeof tool.capability, 'string')
       } else {
         assert.equal(tool.plannedKey, 'studio.imageTool.planned')
       }
     }
-    // 阶段十二只有局部涂抹 / 整图重绘真实可用；高清放大 / 扩图是禁用占位（Lead 决策 D1）。
-    assert.deepEqual(IMAGE_TOOLS.filter((tool) => tool.ready).map((tool) => tool.id), ['inpaint', 'img2img'])
+    // 阶段十五 Phase B：四个工具全部开放（高清放大 / 扩图不再是禁用占位）。
+    assert.deepEqual(IMAGE_TOOLS.filter((tool) => tool.ready).map((tool) => tool.id), ['inpaint', 'img2img', 'upscale', 'outpaint'])
     assert.equal(imageToolOf('inpaint').form, 'canvas')
     assert.equal(imageToolOf('img2img').form, 'inline')
-    assert.equal(imageToolOf('upscale').ready, false)
+    assert.equal(imageToolOf('upscale').form, 'instant')
+    assert.equal(imageToolOf('outpaint').form, 'canvas')
+    assert.equal(imageToolOf('upscale').capability, null)
     assert.equal(imageToolOf('nope'), null)
     assert.equal(imageToolOf(''), null)
     assert.equal(imageToolOf(null), null)
@@ -131,15 +150,37 @@ async function main() {
     assert.equal(fromInpaint.preset.id, 'sdxl-lightning')
     assert.equal(fromInpaint.switched, true)
     assert.equal(fromInpaint.fallback, true)
-    // 尚未开放的工具不参与自动选模。
+    // 高清放大是无参工具，不参与自动选模；未知工具同样返回空。
     assert.equal(toolPresetOf([lightning], 'sdxl-lightning', 'upscale').preset, null)
     assert.equal(toolPresetOf([lightning], 'sdxl-lightning', 'nope').preset, null)
   })
 
-  await check('toolStrengthDefaultOf：inpaint 0.8 / 专用权重 0.9 / img2img 契约默认', () => {
+  await check('toolPresetOf：outpaint 优先专用 sdxl-inpaint，其次当前支持 Inpaint 的模型', () => {
+    // 当前是通用模型：扩图优先切到 9 通道专用权重。
+    const fromLightning = toolPresetOf([lightning, inpaintPreset], 'sdxl-lightning', 'outpaint')
+    assert.equal(fromLightning.preset.id, 'sdxl-inpaint')
+    assert.equal(fromLightning.switched, true)
+    assert.equal(fromLightning.fallback, false)
+    // 没有专用权重时沿用当前支持 Inpaint 的通用模型。
+    const noNative = toolPresetOf([lightning, flux2], 'sdxl-lightning', 'outpaint')
+    assert.equal(noNative.preset.id, 'sdxl-lightning')
+    assert.equal(noNative.switched, false)
+    assert.equal(noNative.fallback, false)
+    // 当前模型不支持 Inpaint：退回通用垫图兜底（referencePresetOf 跳过 inpaintOnly）。
+    const fallback = toolPresetOf([flux2, animagine], 'flux2-klein-4b', 'outpaint')
+    assert.equal(fallback.preset.id, 'animagine-xl-3.1')
+    assert.equal(fallback.switched, true)
+    assert.equal(fallback.fallback, true)
+    assert.equal(toolPresetOf([flux2], 'flux2-klein-4b', 'outpaint').preset, null)
+  })
+
+  await check('toolStrengthDefaultOf：inpaint 0.8 / 专用权重 0.9 / outpaint 1.0 / img2img 契约默认', () => {
     assert.equal(toolStrengthDefaultOf('inpaint', lightning), 0.8)
     assert.equal(toolStrengthDefaultOf('inpaint', inpaintPreset), 0.9)
+    assert.equal(toolStrengthDefaultOf('outpaint', lightning), OUTPAINT.strength)
+    assert.equal(toolStrengthDefaultOf('outpaint', inpaintPreset), OUTPAINT.strength)
     assert.equal(toolStrengthDefaultOf('img2img', animagine), LIMITS.strength.default)
+    assert.equal(toolStrengthDefaultOf('upscale', lightning), LIMITS.strength.default)
     assert.equal(toolStrengthDefaultOf('nope', null), LIMITS.strength.default)
   })
 
@@ -289,8 +330,129 @@ async function main() {
     assert.equal(resolved.presetId, 'animagine-xl-3.1')
   })
 
+  await check('buildUpscaleToolBody：零参数请求体（无预设 / 无种子语义）', () => {
+    const target = { path: 'imagen-output/job-1/07.png', width: 1024, height: 768, prompt: '一只荷花' }
+    const body = buildUpscaleToolBody({ target, targetPrompt: target.prompt })
+    assert.deepEqual(Object.keys(body).sort(), [
+      'autoStart', 'count', 'height', 'prompt', 'reference', 'tool', 'waitSeconds', 'width',
+    ].sort())
+    assert.equal(body.tool, 'upscale')
+    assert.equal(body.prompt, '一只荷花')
+    assert.equal(body.width, 1024)
+    assert.equal(body.height, 768)
+    assert.equal(body.count, 1)
+    assert.equal(body.waitSeconds, 0)
+    assert.equal(body.autoStart, true)
+    assert.deepEqual(body.reference, { path: target.path })
+    for (const key of ['presetId', 'steps', 'cfg', 'seed']) {
+      assert.equal(Object.prototype.hasOwnProperty.call(body, key), false, `upscale 请求体不应带 ${key}`)
+    }
+    // 目标作品没有提示词时 prompt 是空串（远端不读扩散参数）；宽高未知时省略字段交给远端兜底。
+    const minimal = buildUpscaleToolBody({ target: { path: 'imagen-output/a/01.png' } })
+    assert.equal(minimal.prompt, '')
+    assert.equal(Object.prototype.hasOwnProperty.call(minimal, 'width'), false)
+    assert.equal(Object.prototype.hasOwnProperty.call(minimal, 'height'), false)
+    // 也接受显式 targetPath / targetPrompt。
+    const explicit = buildUpscaleToolBody({ targetPath: ' imagen-output/a/01.png ', targetPrompt: '  荷花  ', targetWidth: 512, targetHeight: 512 })
+    assert.equal(explicit.reference.path, 'imagen-output/a/01.png')
+    assert.equal(explicit.prompt, '荷花')
+    assert.equal(explicit.width, 512)
+    assert.equal(buildUpscaleToolBody({}), null)
+    assert.equal(buildUpscaleToolBody(null), null)
+    assert.equal(buildUpscaleToolBody({ target: {} }), null)
+  })
+
+  await check('buildOutpaintToolBody：画布 + 蒙版 + 来源路径 + 强度（默认 1.0）', () => {
+    const body = buildOutpaintToolBody({
+      targetPath: 'imagen-output/job-1/07.png',
+      targetPrompt: '一只荷花',
+      preset: inpaintPreset,
+      presets: [inpaintPreset],
+      prompt: '',
+      strength: OUTPAINT.strength,
+      canvas: OUTPAINT_CANVAS,
+      negativeActive: true,
+    })
+    assert.ok(body)
+    assert.equal(body.tool, 'outpaint')
+    assert.equal(body.presetId, 'sdxl-inpaint')
+    assert.equal(body.prompt, '一只荷花', '工具提示词为空时回退目标作品提示词')
+    assert.equal(body.negativePrompt, String(inpaintPreset.negativeHint || '').trim(), '专用权重消费负向词时带上推荐词')
+    assert.equal(body.width, 1232)
+    assert.equal(body.height, 1232)
+    assert.equal(body.steps, inpaintPreset.steps)
+    assert.equal(body.cfg, inpaintPreset.cfg)
+    assert.equal(body.seed, '')
+    assert.equal(body.count, 1)
+    assert.equal(body.waitSeconds, 0)
+    assert.equal(body.autoStart, true)
+    assert.deepEqual(Object.keys(body.reference).sort(), ['image', 'mask', 'sourcePath', 'strength'])
+    assert.equal(body.reference.image, CANVAS_IMAGE)
+    assert.equal(body.reference.mask, CANVAS_MASK)
+    assert.equal(body.reference.sourcePath, 'imagen-output/job-1/07.png')
+    assert.equal(body.reference.strength, OUTPAINT.strength, '扩图默认强度走满步（1.0）')
+    // 用户调过强度时尊重用户值（带蒙版上限内），负向词门控关闭时为空串。
+    const tuned = buildOutpaintToolBody({
+      targetPath: 'imagen-output/a/01.png',
+      targetPrompt: 'x',
+      preset: lightning,
+      prompt: '把天空换成晚霞',
+      strength: 0.95,
+      canvas: { ...OUTPAINT_CANVAS, image: `data:image/png;base64,${CANVAS_IMAGE}` },
+      negativeActive: false,
+    })
+    assert.equal(tuned.reference.strength, 0.95)
+    assert.equal(tuned.negativePrompt, '')
+    assert.equal(tuned.reference.image, CANVAS_IMAGE, '带 data URL 前缀的导出值会被剥掉')
+    // 缺底图 / 预设 / 画布 / 提示词都返回 null。
+    const base = {
+      targetPath: 'imagen-output/a/01.png',
+      targetPrompt: '一只荷花',
+      preset: inpaintPreset,
+      prompt: '',
+      canvas: OUTPAINT_CANVAS,
+    }
+    assert.equal(buildOutpaintToolBody({ ...base, targetPath: '' }), null)
+    assert.equal(buildOutpaintToolBody({ ...base, preset: null }), null)
+    assert.equal(buildOutpaintToolBody({ ...base, canvas: null }), null)
+    assert.equal(buildOutpaintToolBody({ ...base, prompt: '', targetPrompt: '' }), null)
+    assert.equal(buildOutpaintToolBody(null), null)
+  })
+
+  await check('normalizeOutpaintCanvas：base64 / 体积 / 8 对齐 / 画布边界校验与覆盖率', () => {
+    const canvas = normalizeOutpaintCanvas(OUTPAINT_CANVAS)
+    assert.ok(canvas)
+    assert.equal(canvas.image, CANVAS_IMAGE)
+    assert.equal(canvas.mask, CANVAS_MASK)
+    assert.equal(canvas.width, 1232)
+    assert.equal(canvas.height, 1232)
+    assert.deepEqual(canvas.content, { x: 104, y: 104, width: 1024, height: 1024 })
+    assert.ok(Math.abs(canvas.coverage - 0.309158) < 0.000001)
+    // 非法 base64 / 缺字段。
+    assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, image: 'not base64!!' }), null)
+    assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, mask: '' }), null)
+    assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, width: null }), null)
+    assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, content: null }), null)
+    // 宽高必须 8 对齐且落在契约边界内。
+    assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, width: 1230, height: 1230, content: { x: 0, y: 0, width: 100, height: 100 } }), null)
+    assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, width: OUTPAINT.maxEdge + 8 }), null)
+    assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, width: 200, height: 200, content: { x: 0, y: 0, width: 100, height: 100 } }), null)
+    // 内容框必须在画布内且面积为正。
+    assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, content: { x: 200, y: 0, width: 1100, height: 100 } }), null)
+    assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, content: { x: 0, y: 0, width: 0, height: 100 } }), null)
+    // 体积超限（image 超过参考图上限 / mask 超过蒙版上限）。
+    assert.equal(normalizeOutpaintCanvas({
+      ...OUTPAINT_CANVAS,
+      image: 'A'.repeat(2 * (LIMITS.reference.maxBytes + 10)),
+    }), null)
+    assert.equal(normalizeOutpaintCanvas({
+      ...OUTPAINT_CANVAS,
+      mask: 'A'.repeat(2 * (LIMITS.mask.maxBytes + 10)),
+    }), null)
+  })
+
   await check('imageToolBlockedKeyOf：拦截顺序与文案键', () => {
-    assert.equal(imageToolBlockedKeyOf({ tool: 'upscale' }), 'studio.imageTool.planned')
+    assert.equal(imageToolBlockedKeyOf({ tool: 'upscale' }), 'studio.imageTool.blockedTarget')
     assert.equal(imageToolBlockedKeyOf({ tool: 'nope', targetPath: 'a.png' }), 'studio.imageTool.blockedTarget')
     assert.equal(imageToolBlockedKeyOf({ tool: 'inpaint' }), 'studio.imageTool.blockedTarget')
     assert.equal(imageToolBlockedKeyOf({
@@ -334,6 +496,57 @@ async function main() {
     assert.equal(imageToolBlockedKeyOf({ ...base, mask: { data: MASK_DATA, coverage: 0.2 } }), '')
     // 整图重绘不需要蒙版，即使当前是专用权重也会在选模阶段被换掉。
     assert.equal(imageToolBlockedKeyOf({ ...base, tool: 'img2img' }), '')
+  })
+
+  await check('imageToolBlockedKeyOf：upscale 长边超限拦下，宽高未知时放行', () => {
+    const target = { path: 'imagen-output/a/01.png', width: 1024, height: 1024 }
+    assert.equal(imageToolBlockedKeyOf({ tool: 'upscale', targetPath: target.path, target }), '')
+    assert.equal(imageToolBlockedKeyOf({
+      tool: 'upscale',
+      targetPath: target.path,
+      target: { ...target, width: 1280, height: 720 },
+    }), '', '长边正好达到上限时应放行')
+    assert.equal(imageToolBlockedKeyOf({
+      tool: 'upscale',
+      targetPath: target.path,
+      target: { ...target, width: UPSCALE.maxInputEdge + 8, height: 1024 },
+    }), 'studio.imageTool.upscaleTooLarge')
+    // 无宽高信息（旧记录）时交给远端兜底，客户端不误拦。
+    assert.equal(imageToolBlockedKeyOf({
+      tool: 'upscale',
+      targetPath: target.path,
+      target: { path: target.path },
+    }), '')
+    assert.equal(imageToolBlockedKeyOf({
+      tool: 'upscale',
+      targetPath: target.path,
+      targetWidth: 2048,
+      targetHeight: 1024,
+    }), 'studio.imageTool.upscaleTooLarge')
+  })
+
+  await check('imageToolBlockedKeyOf：outpaint 依次检查预设 / 画布 / 提示词', () => {
+    const base = {
+      tool: 'outpaint',
+      targetPath: 'imagen-output/a/01.png',
+      targetPrompt: '一只荷花',
+      preset: inpaintPreset,
+      prompt: '',
+      canvas: OUTPAINT_CANVAS,
+    }
+    assert.equal(imageToolBlockedKeyOf({ ...base }), '')
+    assert.equal(imageToolBlockedKeyOf({ ...base, preset: null }), 'studio.imageTool.blockedNoPreset')
+    assert.equal(imageToolBlockedKeyOf({ ...base, canvas: null }), 'studio.outpaint.blockedCanvas')
+    assert.equal(imageToolBlockedKeyOf({ ...base, canvas: { image: 'x' } }), 'studio.outpaint.blockedCanvas')
+    assert.equal(imageToolBlockedKeyOf({
+      ...base,
+      prompt: '',
+      targetPrompt: '',
+    }), 'studio.imageTool.blockedNoPrompt')
+    // 用户输入了提示词时不再依赖作品原提示词。
+    assert.equal(imageToolBlockedKeyOf({ ...base, targetPrompt: '', prompt: '把天空换成晚霞' }), '')
+    // 专用 inpaint 权重在扩图下不要求涂抹蒙版（画布自带蒙版），不会命中 onlyHint。
+    assert.equal(imageToolBlockedKeyOf({ ...base, mask: null }), '')
   })
 
   await check('workKeyOf：条目 / 图片 / 字符串 → 稳定路径键', () => {

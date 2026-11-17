@@ -95,6 +95,7 @@ class JobStore:
             return {
                 "status": job.status,
                 "job_id": job.job_id,
+                "tool": job.tool,
                 "model_id": job.model_id,
                 "progress": {"done": done, "total": job.total},
                 "created_at": iso_time(job.created_at),
@@ -126,11 +127,14 @@ class JobStore:
         tasks: list[dict],
         job_id: str | None = None,
         reference: dict | None = None,
+        tool: str = "generate",
     ):
         """入队；``job_id`` 命中已有 job 时原样返回（幂等，不重复入队）。
 
         ``reference`` 是提交期校验并归一过的参考图（见 ``parse_reference_spec``），
-        文生图请求传 None。返回 ``(job, created)``：created=False 表示命中了幂等键。
+        文生图请求传 None；``tool`` 是请求工具（缺省 generate，upscale 走超分执行分支）。
+        返回 ``(job, created)``：created=False 表示命中了幂等键（同一 jobId 无论 tool 如何，
+        命中即返回原 job——幂等键语义不变）。
         """
         with self._cond:
             self.prune()
@@ -146,6 +150,7 @@ class JobStore:
                 model_id=str(model_id),
                 pipeline=dict(pipeline_spec),
                 tasks=list(tasks),
+                tool=str(tool or "generate"),
                 reference=dict(reference) if reference is not None else None,
             )
             self._jobs[job.job_id] = job
@@ -153,7 +158,7 @@ class JobStore:
             queue_len = len(self._queue)
             self._cond.notify_all()
             log(
-                f"[job] 入队 {job.job_id}（tasks={job.total}，排队 {queue_len}"
+                f"[job] 入队 {job.job_id}（tool={job.tool}，tasks={job.total}，排队 {queue_len}"
                 f"{'，带参考图' if job.reference is not None else ''}）"
             )
             return job, True

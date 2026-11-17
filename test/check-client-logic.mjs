@@ -2880,6 +2880,27 @@ await check('阶段十二图片工具文案键：中英文两侧齐全', () => {
     'studio.imageTool.submitted',
     'studio.imageTool.retryMoved',
     'studio.mask.onlyHint',
+    // 阶段十五 Phase B：高清放大 / 扩图的文案键（中英两侧必须同构）。
+    'studio.imageTool.upscaleSubmitted',
+    'studio.imageTool.upscaleTooLarge',
+    'studio.outpaint.title',
+    'studio.outpaint.hint',
+    'studio.outpaint.ratioLabel',
+    'studio.outpaint.ratio.expand',
+    'studio.outpaint.ratio.16x9',
+    'studio.outpaint.ratio.9x16',
+    'studio.outpaint.ratio.4x3',
+    'studio.outpaint.coverage',
+    'studio.outpaint.center',
+    'studio.outpaint.dragHint',
+    'studio.outpaint.canvasLabel',
+    'studio.outpaint.blockedCanvas',
+    'studio.outpaint.invalidCanvas',
+    'studio.outpaint.tooLarge',
+    'studio.filmstrip.versionKind.upscale',
+    'studio.filmstrip.versionKind.outpaint',
+    'studio.chat.tool.upscale',
+    'studio.chat.tool.outpaint',
   ]) {
     assert.ok(typeof DICT.zh[key] === 'string' && DICT.zh[key].length > 0, `${key} 缺少中文文案`)
     assert.ok(typeof DICT.en[key] === 'string' && DICT.en[key].length > 0, `${key} 缺少英文文案`)
@@ -2899,6 +2920,21 @@ await check('阶段十二图片工具文案键：中英文两侧齐全', () => {
     assert.equal(Object.prototype.hasOwnProperty.call(DICT.zh, key), false, `${key} 应随左栏参考图区一起删除`)
     assert.equal(Object.prototype.hasOwnProperty.call(DICT.en, key), false, `${key} 应随左栏参考图区一起删除`)
   }
+})
+
+// 阶段十五 Phase B：扩图纯逻辑通过测试聚合出口导出（渲染 / 逻辑测试共用同一份实现）。
+await check('扩图纯逻辑：plan / anchor / coverage / ratio 在聚合出口可用', () => {
+  for (const name of ['outpaintPlanOf', 'outpaintAnchorOf', 'outpaintAnchorShift', 'outpaintCoverageOf', 'outpaintRatioOptions']) {
+    assert.equal(typeof logic[name], 'function', `缺少 ${name} 导出`)
+  }
+  const plan = logic.outpaintPlanOf({ sourceWidth: 1024, sourceHeight: 1024, ratioId: 'source' })
+  assert.equal(plan.ok, true)
+  assert.equal(plan.width % LIMITS.width.step, 0)
+  assert.equal(plan.height % LIMITS.width.step, 0)
+  assert.ok(plan.coverage > 0 && plan.coverage < 1)
+  assert.equal(logic.outpaintCoverageOf(plan), plan.coverage)
+  assert.equal(logic.outpaintAnchorOf({ x: 2, y: -1 }).x, 1)
+  assert.deepEqual(logic.outpaintRatioOptions().map((option) => option.id), ['source', '16:9', '9:16', '4:3'])
 })
 
 summary()

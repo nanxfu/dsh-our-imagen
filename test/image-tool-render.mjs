@@ -1,9 +1,9 @@
 /**
  * 舞台图片工具组件的渲染测试（假 React，不需要浏览器）。
  *
- * 阶段十二的 tool-core 自测：mount 真实的 `useImageTool` + `Stage`，
- * 断言动作坞分组、涂抹画布 / 整图重绘条的挂载与退出、提交按钮的可用性、
- * 蒙版改变时强度上限的联动，以及一次真实的工具提交请求体。
+ * tool-core 自测：mount 真实的 `useImageTool` + `Stage`，
+ * 断言动作坞分组、涂抹画布 / 扩图画布 / 整图重绘条的挂载与退出、提交按钮的可用性、
+ * 蒙版改变时强度上限的联动、高清放大点击即提交，以及一次真实的工具提交请求体。
  *
  * 注意：
  *  - 树遍历 helper 与其它渲染测试共用 `test/helpers/render.mjs`；
@@ -26,6 +26,16 @@ const NOW = Date.parse('2026-11-09T05:05:00.000Z')
 
 /** 合法蒙版 base64（逻辑层只校验 base64 形状，不解码 PNG）。 */
 const MASK_DATA = Buffer.from('fake-inpaint-mask').toString('base64')
+/** 扩图合成画布（1024² 四边扩 20% 的版面）。 */
+const CANVAS_IMAGE = Buffer.from('fake-outpaint-image').toString('base64')
+const CANVAS_MASK = Buffer.from('fake-outpaint-mask').toString('base64')
+const OUTPAINT_CANVAS = {
+  image: CANVAS_IMAGE,
+  mask: CANVAS_MASK,
+  width: 1232,
+  height: 1232,
+  content: { x: 104, y: 104, width: 1024, height: 1024 },
+}
 
 /** 最小预设样本：能力字段是渲染分支的唯一依据，数值取契约内的常见档位。 */
 function presetOf(id, extra = {}) {
@@ -130,6 +140,7 @@ async function main() {
   assert.equal(typeof client.components.Stage, 'function')
   assert.equal(typeof client.hooks.useImageTool, 'function')
   assert.equal(typeof client.components.MaskEditor, 'function')
+  assert.equal(typeof client.components.OutpaintEditor, 'function')
 
   const createHarness = () => {
     let latest = null
@@ -156,7 +167,7 @@ async function main() {
     return { Harness, api: () => latest }
   }
 
-  const mountStage = async () => {
+  const mountStage = async (options = {}) => {
     client.unmount()
     const ui = createUi()
     const harness = createHarness()
@@ -166,7 +177,11 @@ async function main() {
       now: NOW,
       compute: { activeJob: null, status: {}, presets: PRESETS, defaultPreset: 'sdxl-lightning' },
       form: { form: { presetId: 'sdxl-lightning', width: 1024, height: 1024 }, useInspiration() {} },
-      library: { selected: { image, item }, isFavorite: () => false, toggleFavorite() {} },
+      library: {
+        selected: options.selected || { image, item },
+        isFavorite: () => false,
+        toggleFavorite() {},
+      },
     }
     const tree = await client.mountRaw(harness.Harness, props)
     return { tree, harness, ui }
@@ -174,7 +189,7 @@ async function main() {
   /** 状态变更后把最新树刷出来（假 React 不自动调度 useEffect 之后的渲染）。 */
   const refresh = () => client.rerenderRaw()
 
-  await check('动作坞：图片处理 / 创作复用两组，未开放工具禁用并带规划中说明', async () => {
+  await check('动作坞：图片处理 / 创作复用两组，四个工具全部可用', async () => {
     const { tree } = await mountStage()
     const classes = collectClasses(tree)
     assert.equal(classes['ofs-dock'], 1)
@@ -187,11 +202,164 @@ async function main() {
       (button) => typeof button.props.className === 'string' && button.props.className.split(/\s+/).includes('ofs-dock-button'),
     )
     assert.equal(buttons.length, 5, '四个图片工具 + 重新生成（「带回参数」已下线）')
+    // 阶段十五 Phase B：高清放大 / 扩图已开放，不再有禁用占位。
     const disabled = buttons.filter((button) => button.props['aria-disabled'] === 'true')
-    assert.deepEqual(disabled.map(textOf), ['高清放大', '扩图'])
-    for (const button of disabled) assert.equal(button.props.title, '规划中，暂未开放')
+    assert.equal(disabled.length, 0, '不应再有禁用占位')
     const usable = buttons.filter((button) => button.props['aria-disabled'] !== 'true')
-    assert.deepEqual(usable.map(textOf), ['局部重绘', '整图重绘', '重新生成'])
+    assert.deepEqual(usable.map(textOf), ['局部重绘', '整图重绘', '高清放大', '扩图', '重新生成'])
+    for (const tool of usable.slice(0, 4)) assert.equal(typeof tool.props.onClick, 'function', '四个工具都应绑定动作')
+  })
+
+  await check('高清放大：点击即提交（不进入编辑态），toast 专用文案', async () => {
+    const { tree, harness, ui } = await mountStage()
+    buttonByText(tree, '高清放大').props.onClick()
+    await client.settle()
+    const next = await refresh()
+    assert.equal(harness.api().editorOpen, false, '即时工具不进入编辑态')
+    assert.equal(byClass(next, 'ofs-mask-editor').length, 0)
+    assert.equal(byClass(next, 'ofs-outpaint-editor').length, 0)
+    assert.equal(byClass(next, 'ofs-tool-bar').length, 0, '不出现编辑态提交栏')
+    const request = [...client.requests].reverse().find((entry) => entry.path === '/imagen-api/generate')
+    assert.ok(request, '应发出 POST /imagen-api/generate')
+    assert.equal(request.body.tool, 'upscale')
+    assert.equal(request.body.presetId, undefined, '放大请求不带预设')
+    assert.equal(request.body.reference.path, image.path)
+    assert.equal(request.body.width, 1024)
+    assert.equal(request.body.height, 1024)
+    assert.equal(request.body.count, 1)
+    assert.ok(ui.toasts.includes('已提交高清放大任务'), 'toast 应说明高清放大已提交')
+    assert.equal(harness.api().pendingTool.sourceMode, 'upscale')
+  })
+
+  await check('高清放大：源图长边超限时提交被拦并给明确提示', async () => {
+    const bigImage = { ...image, width: 1536, height: 1024 }
+    const bigItem = { ...item, images: [bigImage] }
+    const { tree, harness, ui } = await mountStage({ selected: { image: bigImage, item: bigItem } })
+    const generateBefore = client.requests.filter((entry) => entry.path === '/imagen-api/generate').length
+    buttonByText(tree, '高清放大').props.onClick()
+    await client.settle()
+    const next = await refresh()
+    assert.equal(harness.api().editorOpen, false)
+    assert.ok(
+      ui.toasts.some((text) => text.includes('超出高清放大的输入上限')),
+      `应提示源图过大，实际 toast：${ui.toasts.join(' | ')}`,
+    )
+    assert.equal(
+      client.requests.filter((entry) => entry.path === '/imagen-api/generate').length,
+      generateBefore,
+      '超限时不应发出请求',
+    )
+    assert.equal(byClass(next, 'ofs-tool-bar').length, 0)
+  })
+
+  await check('扩图：进入画布编辑态，比例胶囊 / 默认模型与强度正确', async () => {
+    const { tree, harness, ui } = await mountStage()
+    buttonByText(tree, '扩图').props.onClick()
+    let next = await refresh()
+    const classes = collectClasses(next)
+    assert.equal(harness.api().editorOpen, true)
+    assert.equal(harness.api().activeTool.id, 'outpaint')
+    assert.equal(classes['ofs-outpaint-editor'], 1)
+    assert.equal(classes['ofs-outpaint-stage'], 1)
+    assert.equal(byClass(next, 'ofs-mask-editor').length, 0, '扩图不挂涂抹画布')
+    assert.equal(classes['ofs-tool-bar'], 1)
+    // 预览层对屏幕阅读器是图形（role=img），内容框是可聚焦控件（键盘可达、44px 热区）。
+    const preview = byClassOne(next, 'ofs-outpaint-preview')
+    assert.equal(preview.props.role, 'img')
+    assert.ok(String(preview.props['aria-label'] || '').includes('扩图画布'))
+    const contentBox = byClassOne(next, 'ofs-outpaint-content')
+    assert.equal(contentBox.type, 'button')
+    assert.equal(contentBox.props.title, '拖动内容框调整留白位置')
+    // 四个比例胶囊：默认选中「四边扩 20%」。
+    const ratios = byClass(next, 'ofs-outpaint-ratio')
+    assert.equal(ratios.length, 4)
+    assert.deepEqual(ratios.map(textOf), ['四边扩20%', '16:9', '9:16', '4:3'])
+    assert.equal(ratios[0].props['aria-pressed'], 'true')
+    // 默认选中 9 通道专用权重，强度 1.0、上限 inpaintMax。
+    assert.equal(harness.api().presetId, 'sdxl-inpaint')
+    assert.equal(harness.api().strength, 1.0)
+    assert.equal(byClassOne(next, 'ofs-tool-range').props.max, LIMITS.strength.inpaintMax)
+    // 画布还没导出：提交禁用并提示 blockedCanvas。
+    assert.equal(byClassOne(next, 'ofs-tool-submit').props.disabled, true)
+    assert.ok(textOf(byClassOne(next, 'ofs-tool-blocked')).includes('扩图画布尚未生成'))
+    assert.ok(ui.toasts.some((text) => text.includes('已自动改用')), '切到专用权重时给一次自动换模提示')
+  })
+
+  await check('扩图：切比例后导出画布可提交，请求体带合成图 / 蒙版 / 来源路径', async () => {
+    const { tree, harness } = await mountStage()
+    buttonByText(tree, '扩图').props.onClick()
+    let next = await refresh()
+    // 切到 16:9：草稿比例更新。
+    byClass(next, 'ofs-outpaint-ratio')[1].props.onClick()
+    next = await refresh()
+    assert.equal(harness.api().outpaint.ratioId, '16:9')
+    // 模拟编辑器导出画布（渲染测试的假 DOM 没有 canvas 2D，直接调 hook 的入口）。
+    const applied = harness.api().applyOutpaintCanvas(OUTPAINT_CANVAS)
+    assert.equal(applied.ok, true)
+    next = await refresh()
+    assert.equal(harness.api().outpaint.canvas.width, 1232)
+    assert.equal(byClassOne(next, 'ofs-tool-submit').props.disabled, false)
+    const meta = textOf(byClassOne(next, 'ofs-tool-mask'))
+    assert.ok(meta.includes('新增画面'), `覆盖率读数为「新增画面 x%」，实际：${meta}`)
+    assert.ok(Math.abs(harness.api().coverage - 0.309158) < 0.000001, `覆盖率应约 30.9%，实际：${harness.api().coverage}`)
+    // 提交：请求体走 outpaint 分支。
+    byClassOne(next, 'ofs-tool-submit').props.onClick()
+    await client.settle()
+    next = await refresh()
+    const request = [...client.requests].reverse().find((entry) => entry.path === '/imagen-api/generate')
+    assert.ok(request, '应发出 POST /imagen-api/generate')
+    const body = request.body
+    assert.equal(body.tool, 'outpaint')
+    assert.equal(body.presetId, 'sdxl-inpaint')
+    assert.equal(body.prompt, '测试用的荷花池塘', '工具提示词为空时回退目标作品原提示词')
+    assert.equal(body.width, 1232)
+    assert.equal(body.height, 1232)
+    assert.equal(body.reference.image, CANVAS_IMAGE)
+    assert.equal(body.reference.mask, CANVAS_MASK)
+    assert.equal(body.reference.sourcePath, image.path)
+    assert.equal(body.reference.strength, 1.0)
+    assert.equal(harness.api().editorOpen, false)
+    assert.equal(byClass(next, 'ofs-outpaint-editor').length, 0)
+    assert.equal(harness.api().pendingTool.sourceMode, 'outpaint')
+  })
+
+  await check('扩图：内容框拖拽 / 方向键 / 双击回中都会更新锚点并作废旧画布', async () => {
+    const { tree, harness } = await mountStage()
+    buttonByText(tree, '扩图').props.onClick()
+    let next = await refresh()
+    assert.equal(harness.api().outpaint.ratioId, 'source')
+    // 先模拟一次画布导出，验证「参数变化会清掉旧画布」。
+    harness.api().applyOutpaintCanvas(OUTPAINT_CANVAS)
+    next = await refresh()
+    assert.equal(harness.api().outpaint.canvas.width, 1232)
+    // 方向键右移 8px：锚点 x 增加，旧画布被清空。
+    const content = byClassOne(next, 'ofs-outpaint-content')
+    assert.equal(content.props['aria-label'], '拖动内容框调整留白位置')
+    content.props.onKeyDown({ key: 'ArrowRight', preventDefault() {} })
+    next = await refresh()
+    const shifted = harness.api().outpaint.anchor
+    assert.ok(shifted.x > 0.5, `方向键应右移锚点，实际 ${JSON.stringify(shifted)}`)
+    assert.equal(shifted.y, 0.5, '上轴没有变化')
+    assert.equal(harness.api().outpaint.canvas, null, '锚点变化后旧画布作废，等编辑器重新导出')
+    // 双击回中。
+    byClassOne(next, 'ofs-outpaint-content').props.onDoubleClick()
+    next = await refresh()
+    assert.deepEqual(harness.api().outpaint.anchor, { x: 0.5, y: 0.5 })
+    // 指针拖拽：从中心往右拖 104px（留白总宽 208 的一半）→ 锚点贴右边界。
+    const dragStart = byClassOne(next, 'ofs-outpaint-content')
+    dragStart.props.onPointerDown({ clientX: 0, clientY: 0, pointerId: 1, preventDefault() {} })
+    dragStart.props.onPointerMove({ clientX: 104, clientY: 0 })
+    dragStart.props.onPointerUp({ pointerId: 1 })
+    next = await refresh()
+    assert.equal(harness.api().outpaint.anchor.x, 1, '拖到最右后锚点钳到 1')
+    assert.equal(harness.api().outpaint.anchor.y, 0.5)
+    // 比例切换：胶囊高亮跟随 aria-pressed。
+    const ratios = byClass(next, 'ofs-outpaint-ratio')
+    ratios[2].props.onClick()
+    next = await refresh()
+    assert.equal(harness.api().outpaint.ratioId, '9:16')
+    assert.equal(byClass(next, 'ofs-outpaint-ratio')[2].props['aria-pressed'], 'true')
+    assert.equal(byClass(next, 'ofs-outpaint-ratio')[0].props['aria-pressed'], 'false')
   })
 
   await check('点「局部重绘」进入画布：画布 / 工具栏 / 提交栏挂载，复用组收起', async () => {

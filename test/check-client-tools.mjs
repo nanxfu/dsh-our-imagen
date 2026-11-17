@@ -206,8 +206,8 @@ await check('渲染：大图预览的「以此图重绘」直接打开局部涂�
     client.unmount()
   }
 })
-// 动作坞结构：图片处理四项（两个占位禁用）、创作复用两项；旧「复制路径 / 继续重绘」已删除。
-await check('渲染：动作坞按图片处理 / 创作复用分组，未开放工具禁用', async () => {
+// 动作坞结构：图片处理四项（阶段十五 Phase B 起全部可用）、创作复用一项；旧「复制路径 / 继续重绘」已删除。
+await check('渲染：动作坞按图片处理 / 创作复用分组，四个工具全部可用', async () => {
   const client = await createTestClient({
     now: NOW,
         responses: studioResponses({ ...readyState, presets: [toolPreset], defaultPreset: 'sdxl-lightning' }, { items: [historyItem] }),
@@ -223,18 +223,17 @@ await check('渲染：动作坞按图片处理 / 创作复用分组，未开放�
     assert.equal(groups.length, 2, '动作坞应分两组')
     assert.deepEqual(groups.map((group) => group.props['data-group']), ['process', 'reuse'])
     assert.equal(groups[0].props['aria-label'], '图片处理', '图片处理组要可读')
-    // 图片处理组：局部重绘 / 整图重绘 / 高清放大 / 扩图（后两个 disabled 占位）。
+    // 图片处理组：局部重绘 / 整图重绘 / 高清放大 / 扩图（阶段十五 Phase B 起全部可用）。
     const processButtons = groups[0].children.filter((child) => child && child.type === 'button')
     const processLabels = processButtons.map((node) => collectText(node).join(''))
     assert.deepEqual(processLabels, ['局部重绘', '整图重绘', '高清放大', '扩图'])
     const [inpaintButton, img2imgButton, upscaleButton, outpaintButton] = processButtons
-    assert.equal(typeof inpaintButton.props.onClick, 'function', '局部重绘应可点击')
-    assert.equal(typeof img2imgButton.props.onClick, 'function', '整图重绘应可点击')
-    for (const disabled of [upscaleButton, outpaintButton]) {
-      assert.equal(disabled.props['aria-disabled'], 'true', '未开放工具标 aria-disabled')
-      assert.equal(disabled.props.onClick, undefined, '禁用工具不绑动作')
-      assert.equal(disabled.props.title, '规划中，暂未开放', '禁用工具说明「规划中」')
+    for (const button of [inpaintButton, img2imgButton, upscaleButton, outpaintButton]) {
+      assert.equal(typeof button.props.onClick, 'function', '四个图片工具都应可点击')
+      assert.equal(button.props['aria-disabled'], undefined, '不再有禁用占位')
     }
+    assert.equal(upscaleButton.props.title, '高清放大', '可用工具的 title 是按钮名')
+    assert.equal(outpaintButton.props.title, '扩图')
     // 创作复用组：阶段十五 Phase A1 起只剩「重新生成」（「带回参数」已下线）。
     const reuseText = collectText(groups[1]).join(' | ')
     assert.ok(!reuseText.includes('带回参数'), '「带回参数」已从动作坞下线')

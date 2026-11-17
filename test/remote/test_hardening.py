@@ -26,7 +26,7 @@ class HardeningRegressionTest(DaemonUnitTest):
             d.validate_generate_spec(make_spec([{"prompt": "p", "negative_prompt": 123}]))
         with self.assertRaises(d.RequestError):
             d.validate_generate_spec(make_spec([{"prompt": "p", "negative_prompt": "x" * 1001}]))
-        _, _, tasks = d.validate_generate_spec(make_spec([{"prompt": "p", "negative_prompt": "  bad hands  "}]))
+        _, _, tasks, _ = d.validate_generate_spec(make_spec([{"prompt": "p", "negative_prompt": "  bad hands  "}]))
         self.assertEqual(tasks[0]["negative_prompt"], "bad hands")
 
     def test_bool_and_non_finite_numeric_params_rejected(self) -> None:
@@ -43,7 +43,7 @@ class HardeningRegressionTest(DaemonUnitTest):
 
     def test_pipeline_base_format_validation(self) -> None:
         for valid_base in ("org/model", "black-forest-labs/FLUX.2-klein-4B", "/kaggle/input/sdxl-model"):
-            _, model_id, _ = d.validate_generate_spec(
+            _, model_id, _, _ = d.validate_generate_spec(
                 {"pipeline": {"loader": "sdxl", "base": valid_base}, "tasks": [{"prompt": "p"}]}
             )
             self.assertEqual(model_id, valid_base)

@@ -31,8 +31,8 @@ const PENDING_STATUS = Object.freeze({
   'waiting-session': true,
 })
 
-/** 版本类型：文生 / 整图重绘 / 局部涂抹。 */
-export const LINEAGE_KINDS = Object.freeze(['text', 'img2img', 'inpaint'])
+/** 版本类型：文生 / 整图重绘 / 局部涂抹 / 高清放大 / 扩图。 */
+export const LINEAGE_KINDS = Object.freeze(['text', 'img2img', 'inpaint', 'upscale', 'outpaint'])
 
 /** 旧数据回溯 rootImage 的层数上限，与 Host 侧 resolveRootImage 保持一致。 */
 const ROOT_LOOKBACK = 8
@@ -43,6 +43,8 @@ const MAX_DEPTH = 64
 const KIND_TEXT = 'text'
 const KIND_IMG2IMG = 'img2img'
 const KIND_INPAINT = 'inpaint'
+const KIND_UPSCALE = 'upscale'
+const KIND_OUTPAINT = 'outpaint'
 
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
 
@@ -161,9 +163,16 @@ export function pendingParentOf(job) {
   return textOf(job.sourceImage)
 }
 
-/** 在途任务的版本类型：sourceMode 优先，其次看提交体里有没有参考图 / 蒙版。 */
+/**
+ * 在途任务的版本类型：job.tool（upscale / outpaint）优先，其次 sourceMode，
+ * 最后看提交体里有没有参考图 / 蒙版。
+ */
 export function pendingKindOf(job) {
   if (!job || typeof job !== 'object') return KIND_TEXT
+  // 阶段十五 Phase B：Host 的 job 公开载荷带 tool，高清放大 / 扩图走各自独立的版本类型。
+  const tool = textOf(job.tool)
+  if (tool === 'upscale') return KIND_UPSCALE
+  if (tool === 'outpaint') return KIND_OUTPAINT
   const mode = textOf(job.sourceMode)
   if (LINEAGE_KINDS.includes(mode)) return mode
   const params = job.params && typeof job.params === 'object' ? job.params : null
@@ -339,7 +348,14 @@ export function buildLineage(input) {
     const parentPath = textOf(item.sourceImage)
     const metaRoot = textOf(item.rootImage)
     const createdAt = createdAtOf(item)
-    const kind = item.inpaint === true ? KIND_INPAINT : (parentPath ? KIND_IMG2IMG : KIND_TEXT)
+    // kind 判定顺序：高清放大 → 扩图 → 局部重绘 → 有父图即整图重绘 → 纯文生图。
+    const kind = item.upscale === true
+      ? KIND_UPSCALE
+      : item.outpaint === true
+        ? KIND_OUTPAINT
+        : item.inpaint === true
+          ? KIND_INPAINT
+          : (parentPath ? KIND_IMG2IMG : KIND_TEXT)
     const itemKey = itemKeyOf(item, itemIndex)
     for (const image of images) {
       const path = imagePathOf(image)

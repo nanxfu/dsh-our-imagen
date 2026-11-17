@@ -5,7 +5,7 @@
  *  - 维护单例远端会话（Kaggle Kernel + Cloudflare 隧道）的生命周期；
  *  - 串行执行出图任务并把图片落到 `<workspace>/imagen-output/`；
  *  - 向 Web Client 暴露状态/任务/历史/文件路由（实现在 lib/routes/，本文件只装配）；
- *  - 向 Agent 暴露 imagen_generate / imagen_session / imagen_history 三个工具（lib/tools.js）。
+ *  - 向 Agent 暴露生图 / 放大 / 会话 / 历史等工具（见 lib/tools.js 的工具清单）。
  */
 
 import { TIMEOUTS, VERSION } from './shared/contract.js'

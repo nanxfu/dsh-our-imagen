@@ -28,6 +28,16 @@
  *       - `--inpaint-rounds <n>`：连续局部重绘轮数（第 2 轮起把上一轮出图当参考图继续重绘）。
  *     report.json 的 `inpaint.rounds[]` 记录每轮 strength / 耗时 / result 宽高 / 参考图与
  *     蒙版尺寸 / 蒙版覆盖率 / 蒙版内平均差异，便于验收文档直接引用。
+ *   - `--upscale`：Phase B1 高清放大验收。先文生图（默认 sdxl-lightning 1024x1024，可用
+ *     `--reference-size WxH` 指定源图，长边不能超过 UPSCALE.maxInputEdge），再以该图为源发
+ *     `tool=upscale`，report.json 记录源图/输出宽高、加载与推理秒数、PNG 字节数、前后
+ *     /health.gpu_memory，并断言输出 = 源图 × 2。
+ *   - `--outpaint`：Phase B2 扩图验收。先文生图（源图固定 864x864），再用 Node 侧 PNG 工具
+ *     构造「画布 1536x864 + 原图 864x864 居中 + 白边蒙版」，以 strength 1.0 提交到
+ *     `sdxl-inpaint`（`--preset sdxl-inpaint` 时必须同时给 `--source-preset sdxl-lightning`，
+ *     专用 inpaint 模型不能文生图），report.json 记录耗时 / 输出尺寸 / 前后显存，
+ *     并用像素差统计验证内容区保留（内容区平均差应 ≈0、无硬接缝）。
+ *     report.json 的新字段 `upscale` / `outpaint`（非该模式为 null）。
  *
  * 前置条件：默认走直连，本机有可用的 Kaggle 凭据（`~/.kaggle/credentials.json` 等）即可；
 加 `--cli` 时才要求本机安装并登录 kaggle CLI。账号需启用 GPU 加速器且当天配额充足。
@@ -50,11 +60,16 @@ import {
   pushKernel as directPushKernel,
 } from '../lib/kaggle-direct.js'
 import { PRESETS, presetById } from '../lib/presets.js'
-import { LIMITS } from '../shared/contract.js'
-import { fetchHealth, requestGenerate, requestLogs } from '../lib/remote.js'
+import { LIMITS, OUTPAINT, UPSCALE } from '../shared/contract.js'
+import { fetchHealth, requestGenerate, requestLogs, submitGenerate, waitForJob } from '../lib/remote.js'
 
 const PLUGIN_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const OUT_DIR = join(PLUGIN_ROOT, 'bench-results', 'gpu-live')
+// 扩图真机验收的固定画布（INTERFACES §2.6）：1536x864（16:9）+ 原图 864x864 居中，
+// 新增区域就是左右两条 336px 的白边（覆盖率 43.75%）。画布长边贴着远端 width 上限 1536，
+// 用来验证 9 通道 inpaint 在大画布上的显存与边缘融合。
+const OUTPAINT_CANVAS = { width: 1536, height: 864 }
+const OUTPAINT_CONTENT = { x: 336, y: 0, width: 864, height: 864 }
 const KEEP = process.argv.includes('--keep')
 const HELP = process.argv.includes('--help') || process.argv.includes('-h')
 // 默认走直连（0.8.2 起的默认访问方式，不需要本机 kaggle CLI）；
@@ -91,6 +106,8 @@ function printHelp() {
   node test/gpu-live.mjs --preset sdxl-inpaint --inpaint --reference-size 1024x768 --mask-scale 0.05
   node test/gpu-live.mjs --preset sdxl-inpaint --inpaint --strength-compare 0.9,1.0
   node test/gpu-live.mjs --preset sdxl-inpaint --inpaint --inpaint-rounds 2
+  node test/gpu-live.mjs --preset sdxl-lightning --upscale [--reference-size 768x768]
+  node test/gpu-live.mjs --preset sdxl-inpaint --source-preset sdxl-lightning --outpaint
 
 选项：
   --preset <id>     单预设模式（默认 sdxl-lightning），出图一张
@@ -98,12 +115,16 @@ function printHelp() {
   --prompt <text>   提示词（两种模式共用）
   --img2img         M3 图生图验收：文生图后用该图垫图重绘，记录显存对比（仅单预设）
   --inpaint         M3 局部重绘验收：文生图后用程序化蒙版做 Inpaint，记录显存对比（仅单预设）
+  --upscale         Phase B1 高清放大验收：文生图后以该图为源发 tool=upscale，断言输出 = 源×2
+  --outpaint        Phase B2 扩图验收：构造 1536x864 画布 + 白边蒙版做局部重绘，
+                    并用像素差验证内容区保留（仅单预设；配合 --preset sdxl-inpaint 使用）
   --inpaint-prompt <text>
                     局部重绘使用单独的提示词（默认与 --prompt 相同）。给一段与文生图不同的描述，
                     才能肉眼确认白色蒙版区真的按新内容重写
   --reference-size WxH
-                    仅 --inpaint：源文生图的宽高（默认跟随 --source-preset 的 size），
-                    用于非正方形验收（如 1024x768）；程序化蒙版按参考图同比例生成
+                    仅 --inpaint / --upscale：源文生图的宽高（默认跟随 --source-preset 的 size），
+                    用于非正方形验收（如 1024x768）；--upscale 时源图长边不能超过
+                    UPSCALE.maxInputEdge（1280）
   --mask-scale <0~1>
                     仅 --inpaint：中心蒙版面积占画布的比例（如 0.05 = 5%）。
                     默认沿用 --mask-size 的旧口径（rect 为边长比例 0.4）
@@ -137,6 +158,8 @@ function printHelp() {
 报告：bench-results/gpu-live/<时间戳>/report.json
   - models[]：每个预设的 modelId / pipelineKind / 加载秒数 / 出图秒数 / 出图宽高 / PNG 字节数
   - inpaint：局部重绘每轮/每档的 result 宽高、参考图与蒙版尺寸、蒙版覆盖率与蒙版内平均差异
+  - upscale：--upscale 模式的源图/输出尺寸、加载与推理秒数、PNG 字节与前后显存
+  - outpaint：--outpaint 模式的画布/内容区尺寸、新增区覆盖率、内容区像素差与前后显存
   - versions：远端 /health 上报的依赖版本快照（用于维护 LKGR 基线）
   - cacheLogs：远端 [cache] 日志摘要，拉取失败时为 null（不影响验证结论）
 
@@ -185,16 +208,43 @@ function parseOptions() {
   if (img2img && presets.length !== 1) throw new Error('--img2img 只能配合单个预设使用')
   const inpaint = process.argv.includes('--inpaint')
   if (inpaint && presets.length !== 1) throw new Error('--inpaint 只能配合单个预设使用')
-  // 局部重绘的源图预设：专用 inpaint 模型不能文生图，验收时先用普通模型出源图。
+  // Phase B 的两个验收模式：--upscale（远端 tool=upscale）与 --outpaint（构造画布后走 inpaint）。
+  const upscale = process.argv.includes('--upscale')
+  if (upscale && presets.length !== 1) throw new Error('--upscale 只能配合单个预设使用')
+  const outpaint = process.argv.includes('--outpaint')
+  if (outpaint && presets.length !== 1) throw new Error('--outpaint 只能配合单个预设使用')
+  const modeCount = [img2img, inpaint, upscale, outpaint].filter(Boolean).length
+  if (modeCount > 1) {
+    throw new Error('--img2img / --inpaint / --upscale / --outpaint 是互相独立的验收模式，请分开运行')
+  }
+  // 局部重绘 / 扩图的源图预设：专用 inpaint 模型不能文生图，验收时先用普通模型出源图。
   const sourcePresetArg = String(argOf('source-preset', 'sdxl-lightning')).trim()
   if (!VALID_PRESET_IDS.has(sourcePresetArg)) {
     throw new Error(`未知源图预设：${sourcePresetArg}（可选：${[...VALID_PRESET_IDS].join(', ')}）`)
   }
-  if (sourcePresetArg === presets[0] && process.argv.includes('--inpaint')) {
+  if (sourcePresetArg === presets[0] && (inpaint || outpaint)) {
     // 允许，但源图与重绘用同一预设时提示一次（专用模型会在生成阶段被拦）。
     console.log(`  · 提示：源图与重绘使用同一预设 ${sourcePresetArg}`)
   }
-  if (img2img && inpaint) throw new Error('--img2img 与 --inpaint 是两种独立验收，请分开运行')
+  if (outpaint) {
+    const targetPreset = presetById(presets[0])
+    if (targetPreset?.supportsInpaint !== true) {
+      throw new Error(`--outpaint 需要支持局部重绘的预设（当前 ${presets[0]}），例如 sdxl-inpaint`)
+    }
+    if (targetPreset?.inpaintOnly === true && sourcePresetArg === presets[0]) {
+      throw new Error(
+        '专用 inpaint 模型不能文生图：--outpaint 请用 --source-preset 指定普通预设（例如 sdxl-lightning）',
+      )
+    }
+  }
+  if (upscale) {
+    const sourcePreset = presetById(presets[0])
+    if (Number(sourcePreset?.size) > UPSCALE.maxInputEdge) {
+      throw new Error(
+        `--upscale 的源图长边不能超过 ${UPSCALE.maxInputEdge}（预设 ${presets[0]} 是 ${sourcePreset.size}），请用 --reference-size 指定更小的源图`,
+      )
+    }
+  }
   // 强度上限按场景：局部重绘允许契约 inpaintMax（1.0），img2img 仍用 max（0.9）。
   const rawStrength = Number(argOf('strength', String(LIMITS.strength.default)))
   const strength = normalizeStrengthValue(
@@ -204,13 +254,20 @@ function parseOptions() {
   // 非正方形验收：--reference-size WxH 同时决定源文生图宽高（蒙版按参考图同比例生成）。
   let referenceSize = null
   if (process.argv.includes('--reference-size')) {
-    if (!inpaint) throw new Error('--reference-size 只能配合 --inpaint 使用')
+    if (!inpaint && !upscale) {
+      throw new Error('--reference-size 只能配合 --inpaint 或 --upscale 使用')
+    }
     const raw = String(argOf('reference-size', '')).trim()
     const match = raw.match(/^(\d+)\s*[x×]\s*(\d+)$/i)
     if (!match) throw new Error(`--reference-size 格式应为 WxH（例如 1024x768），收到 ${raw || '(空)'}`)
     referenceSize = {
       width: normalizeDimensionValue(Number(match[1]), LIMITS.width),
       height: normalizeDimensionValue(Number(match[2]), LIMITS.height),
+    }
+    if (upscale && Math.max(referenceSize.width, referenceSize.height) > UPSCALE.maxInputEdge) {
+      throw new Error(
+        `--reference-size 长边不能超过高清放大上限 ${UPSCALE.maxInputEdge}（收到 ${referenceSize.width}x${referenceSize.height}）`,
+      )
     }
   }
   // --mask-scale 是中心蒙版的面积占比（rect 用 sqrt 换算边长比例），优先于旧的 --mask-size 口径。
@@ -277,6 +334,8 @@ function parseOptions() {
     inpaintPrompt,
     img2img,
     inpaint,
+    upscale,
+    outpaint,
     strength,
     referenceSize,
     maskScale,
@@ -417,7 +476,7 @@ async function collectGenLogs(endpoint, token) {
     const payload = await requestLogs(endpoint, token, 0, 8000)
     const lines = Array.isArray(payload?.lines) ? payload.lines : []
     return lines.filter(
-      (line) => typeof line === 'string' && /\[(load|gen|job)\]/.test(line),
+      (line) => typeof line === 'string' && /\[(load|gen|job|upscale)\]/.test(line),
     )
   } catch (error) {
     return [`（远端日志拉取失败：${String(error?.message ?? error).slice(0, 120)}）`]
@@ -716,6 +775,13 @@ function decodePng(buffer) {
   return { width: header.width, height: header.height, channels, pixels }
 }
 
+/** 像素亮度：灰度取单通道、RGB/A 取 RGB 均值（与 decodePng 的通道布局对应）。 */
+function pixelBrightness(image, index) {
+  const offset = index * image.channels
+  if (image.channels <= 2) return image.pixels[offset]
+  return (image.pixels[offset] + image.pixels[offset + 1] + image.pixels[offset + 2]) / 3
+}
+
 /**
  * 两张同尺寸 PNG 在蒙版白色区域内的平均亮度绝对差异（0~255，保留两位小数）。
  * 尺寸不一致或任一张图无法解码时返回 null；蒙版按「任一通道 >=128 视为重绘区」
@@ -734,12 +800,6 @@ function maskedMeanDiff(basePng, otherPng, maskPng) {
   ) {
     return null
   }
-  const brightness = (image, index) => {
-    const offset = index * image.channels
-    if (image.channels === 1) return image.pixels[offset]
-    if (image.channels === 2) return image.pixels[offset]
-    return (image.pixels[offset] + image.pixels[offset + 1] + image.pixels[offset + 2]) / 3
-  }
   let sum = 0
   let count = 0
   const total = mask.width * mask.height
@@ -753,11 +813,307 @@ function maskedMeanDiff(basePng, otherPng, maskPng) {
       }
     }
     if (!white) continue
-    sum += Math.abs(brightness(base, index) - brightness(other, index))
+    sum += Math.abs(pixelBrightness(base, index) - pixelBrightness(other, index))
     count += 1
   }
   if (!count) return null
   return Math.round((sum / count) * 100) / 100
+}
+
+/**
+ * 把解码后的 RGB(A) 像素按 8 位 RGB 编码成 PNG（filter 0，无隔行）。
+ * 扩图验收需要在 Node 侧合成画布：复用脚本里的 CRC/chunk/deflate 工具，不引第三方图像库。
+ */
+function encodePngRgb(width, height, pixels) {
+  const stride = width * 3
+  const raw = Buffer.alloc((stride + 1) * height)
+  for (let y = 0; y < height; y += 1) {
+    const row = y * (stride + 1)
+    raw[row] = 0 // filter type: none
+    pixels.copy(raw, row + 1, y * stride, (y + 1) * stride)
+  }
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(width, 0)
+  ihdr.writeUInt32BE(height, 4)
+  ihdr[8] = 8 // bit depth
+  ihdr[9] = 2 // color type: RGB
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ])
+}
+
+/**
+ * 构造扩图画布：白底 + 原图贴进居中内容区（白底是给 inpaint 的「未知区域」起点，
+ * 真正的重建由模型完成；内容区像素逐字节保留，用于验证「扩图不改原图内容」）。
+ */
+function buildOutpaintCanvas(sourcePng, canvas = OUTPAINT_CANVAS, content = OUTPAINT_CONTENT) {
+  const source = decodePng(sourcePng)
+  if (!source) throw new Error('outpaint：无法解码源图 PNG')
+  if (source.width !== content.width || source.height !== content.height) {
+    throw new Error(
+      `outpaint：源图应为 ${content.width}x${content.height}，收到 ${source.width}x${source.height}`,
+    )
+  }
+  const pixels = Buffer.alloc(canvas.width * canvas.height * 3, 255)
+  for (let y = 0; y < content.height; y += 1) {
+    const sourceRow = y * source.width * source.channels
+    const targetRow = ((content.y + y) * canvas.width + content.x) * 3
+    for (let x = 0; x < content.width; x += 1) {
+      const sourceOffset = sourceRow + x * source.channels
+      const targetOffset = targetRow + x * 3
+      pixels[targetOffset] = source.pixels[sourceOffset]
+      pixels[targetOffset + 1] =
+        source.channels >= 3 ? source.pixels[sourceOffset + 1] : source.pixels[sourceOffset]
+      pixels[targetOffset + 2] =
+        source.channels >= 3 ? source.pixels[sourceOffset + 2] : source.pixels[sourceOffset]
+    }
+  }
+  return {
+    png: encodePngRgb(canvas.width, canvas.height, pixels),
+    width: canvas.width,
+    height: canvas.height,
+    content: { ...content },
+    sourceSize: { width: source.width, height: source.height },
+  }
+}
+
+/** 构造扩图蒙版：白 = 新增区域（内容区之外），黑 = 保留区域（原图内容区）。 */
+function buildOutpaintMaskPng(canvas = OUTPAINT_CANVAS, content = OUTPAINT_CONTENT) {
+  const raw = Buffer.alloc((canvas.width + 1) * canvas.height)
+  let whitePixels = 0
+  for (let y = 0; y < canvas.height; y += 1) {
+    const row = y * (canvas.width + 1)
+    raw[row] = 0
+    for (let x = 0; x < canvas.width; x += 1) {
+      const inContent =
+        x >= content.x &&
+        x < content.x + content.width &&
+        y >= content.y &&
+        y < content.y + content.height
+      raw[row + 1 + x] = inContent ? 0 : 255
+      if (!inContent) whitePixels += 1
+    }
+  }
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(canvas.width, 0)
+  ihdr.writeUInt32BE(canvas.height, 4)
+  ihdr[8] = 8 // bit depth
+  ihdr[9] = 0 // color type: grayscale
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ])
+  return { png, coverage: whitePixels / (canvas.width * canvas.height) }
+}
+
+/**
+ * 内容区保留度统计：把源图内容逐像素与「出图对应内容区」比较，返回平均亮度绝对差。
+ *
+ * `margin` 用来避开羽化过渡带（远端按蒙版覆盖率把白色区域外扩 6~8px 再高斯羽化，
+ * 内容区边界附近会被生成结果替换）；`margin` 越大越接近「纯保留区」的差异。
+ * 尺寸不一致 / 无法解码返回 null。
+ */
+function contentRegionDiff(sourcePng, outPng, content = OUTPAINT_CONTENT, margin = 0) {
+  const source = decodePng(sourcePng)
+  const out = decodePng(outPng)
+  if (!source || !out) return null
+  if (source.width !== content.width || source.height !== content.height) return null
+  if (out.width < content.x + content.width || out.height < content.y + content.height) return null
+  const x0 = Math.max(0, margin)
+  const y0 = Math.max(0, margin)
+  const x1 = content.width - Math.max(0, margin)
+  const y1 = content.height - Math.max(0, margin)
+  if (x1 <= x0 || y1 <= y0) return null
+  let sum = 0
+  let count = 0
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      const sourceIndex = y * content.width + x
+      const outIndex = (content.y + y) * out.width + (content.x + x)
+      sum += Math.abs(pixelBrightness(source, sourceIndex) - pixelBrightness(out, outIndex))
+      count += 1
+    }
+  }
+  if (!count) return null
+  return Math.round((sum / count) * 100) / 100
+}
+
+/**
+ * Phase B1 真机验收：把刚生成的图作为源图发 `tool=upscale`。
+ *
+ * 远端不读 pipeline / tasks，只收 `{tool, reference:{image_b64}}`；结果里的
+ * `sourceWidth` / `sourceHeight` / `scale` 是 daemon 合成的协议字段，这里再断言一次
+ * 输出尺寸 = 源图 × factor（PNG 头与 results 字段两边都要对）。
+ */
+async function runUpscale({ endpoint, token, sourcePng }) {
+  const sourceSize = pngSize(sourcePng)
+  if (!sourceSize) throw new Error('upscale：无法读取源图尺寸')
+  console.log(
+    `  · [upscale] 源图 ${sourceSize.width}x${sourceSize.height}（${sourcePng.length} 字节），提交 tool=upscale …`,
+  )
+  const begin = Date.now()
+  // 单独走 submitGenerate + waitForJob（requestGenerate 就是这两步）是为了记录轮询间隔：
+  // 2560x1440 的输出 base64 有 ~8MB，/job 单次请求超时是 8s（TIMEOUTS.remoteJobRequestMs），
+  // 需要看下载响应体是否逼近超时、有没有触发重试（wallSeconds 会明显大于耗时之和）。
+  const submitted = await submitGenerate(endpoint, token, {
+    tool: 'upscale',
+    reference: { image_b64: sourcePng.toString('base64') },
+  })
+  const submitMs = Date.now() - begin
+  const pollTimes = []
+  const response = await waitForJob(endpoint, token, submitted.job_id, {
+    timeoutMs: 600000,
+    onProgress: () => pollTimes.push(Date.now()),
+  })
+  const pollGaps = pollTimes.slice(1).map((time, index) => time - pollTimes[index])
+  const maxPollGapMs = pollGaps.length ? Math.max(...pollGaps) : null
+  const wallSeconds = Number(((Date.now() - begin) / 1000).toFixed(1))
+  const result = response.results?.[0]
+  if (!result?.image_b64) throw new Error('upscale：远端没有返回图片')
+  const png = Buffer.from(result.image_b64, 'base64')
+  const isPng = png.subarray(0, 8).toString('hex') === '89504e470d0a1a0a'
+  if (!isPng) throw new Error('upscale：返回内容不是合法 PNG')
+  const outputSize = pngSize(png)
+  const factor = Number(result.scale) || UPSCALE.factor
+  const expected = { width: sourceSize.width * factor, height: sourceSize.height * factor }
+  const actual = {
+    width: Number(result.width ?? 0),
+    height: Number(result.height ?? 0),
+  }
+  if (actual.width !== expected.width || actual.height !== expected.height) {
+    throw new Error(
+      `upscale：results 尺寸不符，期望 ${expected.width}x${expected.height}，收到 ${actual.width}x${actual.height}`,
+    )
+  }
+  if (outputSize && (outputSize.width !== expected.width || outputSize.height !== expected.height)) {
+    throw new Error(
+      `upscale：输出 PNG 尺寸不符，期望 ${expected.width}x${expected.height}，收到 ${outputSize.width}x${outputSize.height}`,
+    )
+  }
+  console.log(
+    `  · 高清放大完成：${sourceSize.width}x${sourceSize.height} → ${expected.width}x${expected.height}，` +
+      `加载 ${response.load_seconds ?? '-'}s / 推理 ${result.seconds ?? '-'}s / PNG ${png.length} 字节`,
+  )
+  return {
+    png,
+    entry: {
+      sourcePreset: null,
+      factor,
+      sourceWidth: Number(result.sourceWidth ?? sourceSize.width),
+      sourceHeight: Number(result.sourceHeight ?? sourceSize.height),
+      width: expected.width,
+      height: expected.height,
+      loadSeconds: response.load_seconds ?? null,
+      imageSeconds: result.seconds ?? null,
+      wallSeconds,
+      pngBytes: png.length,
+      isPng,
+      upscale: result.upscale === true,
+      // 轮询观测：submitMs / pollCount / maxPollGapMs 用于判断大响应体是否逼近 8s 单次超时。
+      submitMs,
+      pollCount: pollTimes.length,
+      maxPollGapMs,
+      imageBase64Bytes: Math.ceil(png.length / 3) * 4,
+    },
+  }
+}
+
+/**
+ * Phase B2 真机验收：构造「1536x864 画布 + 864x864 原图居中 + 白边蒙版」发局部重绘。
+ *
+ * 远端把画布当参考图、把蒙版当重绘区域（白 = 新增区域），strength 固定 1.0（新区域
+ * 完全重画）。用内容区像素差验证「原图内容没被改」（≈0 说明 composite 保留生效），
+ * margin 16px 避开蒙版羽化过渡带。
+ */
+async function runOutpaint({ endpoint, token, presetId, sourcePng, prompt }) {
+  const preset = presetById(presetId)
+  const composed = buildOutpaintCanvas(sourcePng)
+  const mask = buildOutpaintMaskPng()
+  console.log(
+    `  · [outpaint] 画布 ${composed.width}x${composed.height}（内容区 ${composed.content.width}x` +
+      `${composed.content.height} @ ${composed.content.x},${composed.content.y}，新增区域 ` +
+      `${(mask.coverage * 100).toFixed(2)}%，画布 ${composed.png.length} 字节，蒙版 ${mask.png.length} 字节）…`,
+  )
+  const begin = Date.now()
+  const response = await requestGenerate(
+    endpoint,
+    token,
+    {
+      pipeline: preset.pipeline,
+      modelId: preset.repo,
+      reference: {
+        image_b64: composed.png.toString('base64'),
+        mask_b64: mask.png.toString('base64'),
+        strength: OUTPAINT.strength,
+      },
+      tasks: [
+        {
+          name: '01',
+          prompt,
+          negative_prompt: preset.negativeHint ?? '',
+          seed: 45,
+          width: composed.width,
+          height: composed.height,
+          steps: preset.steps,
+          cfg: preset.cfg,
+        },
+      ],
+    },
+    { timeoutMs: 600000 },
+  )
+  const wallSeconds = Number(((Date.now() - begin) / 1000).toFixed(1))
+  const result = response.results?.[0]
+  if (!result?.image_b64) throw new Error('outpaint：远端没有返回图片')
+  const png = Buffer.from(result.image_b64, 'base64')
+  const isPng = png.subarray(0, 8).toString('hex') === '89504e470d0a1a0a'
+  if (!isPng) throw new Error('outpaint：返回内容不是合法 PNG')
+  const outputSize = pngSize(png)
+  if (
+    outputSize &&
+    (outputSize.width !== composed.width || outputSize.height !== composed.height)
+  ) {
+    throw new Error(
+      `outpaint：输出尺寸不符，期望 ${composed.width}x${composed.height}，收到 ${outputSize.width}x${outputSize.height}`,
+    )
+  }
+  const contentMeanDiff = contentRegionDiff(sourcePng, png, composed.content, 0)
+  const contentCoreMeanDiff = contentRegionDiff(sourcePng, png, composed.content, 16)
+  const contentPreserved = contentCoreMeanDiff !== null && contentCoreMeanDiff <= 1.0
+  console.log(
+    `  · 扩图完成：${composed.width}x${composed.height}，加载 ${response.load_seconds ?? '-'}s / ` +
+      `推理 ${result.seconds ?? '-'}s / PNG ${png.length} 字节；内容区平均差 ${contentMeanDiff ?? '-'}` +
+      `（核心区 ${contentCoreMeanDiff ?? '-'}，${contentPreserved ? '内容保留正常' : '内容被改动'}）`,
+  )
+  return {
+    png,
+    canvasPng: composed.png,
+    maskPng: mask.png,
+    entry: {
+      preset: presetId,
+      strength: OUTPAINT.strength,
+      sourceWidth: composed.sourceSize.width,
+      sourceHeight: composed.sourceSize.height,
+      width: outputSize?.width ?? composed.width,
+      height: outputSize?.height ?? composed.height,
+      canvasWidth: composed.width,
+      canvasHeight: composed.height,
+      content: composed.content,
+      coveragePercent: Number((mask.coverage * 100).toFixed(4)),
+      loadSeconds: response.load_seconds ?? null,
+      imageSeconds: result.seconds ?? null,
+      wallSeconds,
+      pngBytes: png.length,
+      isPng,
+      contentMeanDiff,
+      contentCoreMeanDiff,
+      contentPreserved,
+    },
+  }
 }
 
 /**
@@ -1034,14 +1390,22 @@ async function main() {
             `（${options.strengthCompare ? `强度对比 ${options.strengthCompare.join('/')}` : `${options.inpaintRounds ?? 1} 轮`}` +
             `${options.referenceSize ? `，参考尺寸 ${options.referenceSize.width}x${options.referenceSize.height}` : ''}` +
             `${options.maskScale ? `，蒙版面积 ${(options.maskScale * 100).toFixed(1)}%` : ''}）…`
-          : single
-            ? '[4/5] 生成一张 …'
-            : `[4/5] 在同一会话内连续生成 ${options.presets.length} 个模型（验证 LRU 缓存清理）…`,
+          : options.upscale
+            ? '[4/5] 文生图 + tool=upscale 高清放大' +
+              `（源图 ${options.referenceSize ? `${options.referenceSize.width}x${options.referenceSize.height}` : '跟随预设 size'}）…`
+            : options.outpaint
+              ? `[4/5] 文生图 + 扩图（画布 ${OUTPAINT_CANVAS.width}x${OUTPAINT_CANVAS.height}，` +
+                `内容区 ${OUTPAINT_CONTENT.width}x${OUTPAINT_CONTENT.height} 居中，strength ${OUTPAINT.strength}）…`
+              : single
+                ? '[4/5] 生成一张 …'
+                : `[4/5] 在同一会话内连续生成 ${options.presets.length} 个模型（验证 LRU 缓存清理）…`,
     )
     const models = []
     const images = []
     let img2imgReport = null
     let inpaintReport = null
+    let upscaleReport = null
+    let outpaintReport = null
     if (options.img2img) {
       // M3 真机验收：先文生图，再用刚生成的图做垫图重绘；对比 /health.gpu_memory。
       if (!single) throw new Error('--img2img 只能配合单个 --preset 使用')
@@ -1181,6 +1545,143 @@ async function main() {
         // from_pipe 复用底座不应重新加载权重：每轮 load_seconds 期望为 0 或接近 0。
         reusedBasePipeline: inpaintRuns.every((run) => (run.entry.loadSeconds ?? 0) === 0),
       }
+    } else if (options.upscale) {
+      // Phase B1 真机验收：先文生图（默认 preset size，或 --reference-size），再发 tool=upscale。
+      if (!single) throw new Error('--upscale 只能配合单个 --preset 使用')
+      const sourcePresetId = options.presets[0]
+      const txt2img = await generateOne({
+        endpoint,
+        token,
+        presetId: sourcePresetId,
+        prompt: options.prompt,
+        index: 0,
+        total: 1,
+        width: options.referenceSize?.width,
+        height: options.referenceSize?.height,
+      })
+      models.push(txt2img.entry)
+      images.push({ index: 0, presetId: sourcePresetId, png: txt2img.png })
+      const sourceSize = pngSize(txt2img.png)
+      console.log(
+        `  · ${sourcePresetId} 文生图完成：加载 ${txt2img.entry.loadSeconds ?? '-'}s / 出图 ` +
+          `${sourceSize?.width ?? '?'}x${sourceSize?.height ?? '?'}`,
+      )
+      const before = await readGpuMemory(endpoint, token)
+      const upscale = await runUpscale({ endpoint, token, sourcePng: txt2img.png })
+      const after = await readGpuMemory(endpoint, token)
+      images.push({
+        index: 'upscale',
+        presetId: `${sourcePresetId}-upscale`,
+        png: upscale.png,
+        name: '02-upscale.png',
+      })
+      console.log(`  · 显存对比（MiB）：文生图后 ${fmt(before)} → 放大后 ${fmt(after)}`)
+      const reservedDeltaMb =
+        Number.isFinite(before?.reserved_mb) && Number.isFinite(after?.reserved_mb)
+          ? after.reserved_mb - before.reserved_mb
+          : null
+      upscaleReport = {
+        ...upscale.entry,
+        sourcePreset: sourcePresetId,
+        gpuMemoryBefore: before,
+        gpuMemoryAfter: after,
+        reservedDeltaMb,
+        // 输出应是源图的整数倍（INTERFACES §2.6 的硬断言）：
+        // 宽高比与 factor 在 runUpscale 里已校验，这里补一个可读布尔值供报告消费。
+        outputMatchesSource: upscale.entry.width === txt2img.entry.width * upscale.entry.factor,
+      }
+      if (!upscaleReport.outputMatchesSource) {
+        throw new Error(
+          `upscale：输出 ${upscale.entry.width}x${upscale.entry.height} 不是源图 ` +
+            `${txt2img.entry.width}x${txt2img.entry.height} 的 ${upscale.entry.factor} 倍`,
+        )
+      }
+    } else if (options.outpaint) {
+      // Phase B2 真机验收：源图 864x864（专用 inpaint 预设不能文生图，源图先由普通预设出），
+      // 然后构造「1536x864 画布 + 白边蒙版」提交局部重绘，并用像素差验证内容区保留。
+      if (!single) throw new Error('--outpaint 只能配合单个 --preset 使用')
+      const presetId = options.presets[0]
+      const preset = presetById(presetId)
+      if (preset?.supportsInpaint !== true) {
+        throw new Error(`预设 ${presetId} 不支持局部重绘（supportsInpaint=false），请换 SDXL 家族预设`)
+      }
+      const sourcePresetId = options.sourcePreset
+      const txt2img = await generateOne({
+        endpoint,
+        token,
+        presetId: sourcePresetId,
+        prompt: options.prompt,
+        index: 0,
+        total: 1,
+        width: OUTPAINT_CONTENT.width,
+        height: OUTPAINT_CONTENT.height,
+      })
+      models.push(txt2img.entry)
+      images.push({ index: 0, presetId: sourcePresetId, png: txt2img.png })
+      const sourceSize = pngSize(txt2img.png)
+      if (
+        sourceSize &&
+        (sourceSize.width !== OUTPAINT_CONTENT.width || sourceSize.height !== OUTPAINT_CONTENT.height)
+      ) {
+        throw new Error(
+          `outpaint：源图应为 ${OUTPAINT_CONTENT.width}x${OUTPAINT_CONTENT.height}，` +
+            `收到 ${sourceSize.width}x${sourceSize.height}`,
+        )
+      }
+      console.log(
+        `  · ${sourcePresetId} 文生图完成：加载 ${txt2img.entry.loadSeconds ?? '-'}s / 出图 ` +
+          `${sourceSize?.width ?? '?'}x${sourceSize?.height ?? '?'}`,
+      )
+      const before = await readGpuMemory(endpoint, token)
+      const outpaint = await runOutpaint({
+        endpoint,
+        token,
+        presetId,
+        sourcePng: txt2img.png,
+        prompt: options.prompt,
+      })
+      const after = await readGpuMemory(endpoint, token)
+      images.push(
+        {
+          index: 'outpaint',
+          presetId: `${presetId}-outpaint`,
+          png: outpaint.png,
+          name: '02-outpaint.png',
+        },
+        {
+          index: 'outpaint-canvas',
+          presetId: `${presetId}-outpaint`,
+          png: outpaint.canvasPng,
+          name: '02-outpaint-canvas.png',
+        },
+        {
+          index: 'outpaint-mask',
+          presetId: `${presetId}-outpaint`,
+          png: outpaint.maskPng,
+          name: '02-outpaint-mask.png',
+        },
+      )
+      console.log(`  · 显存对比（MiB）：文生图后 ${fmt(before)} → 扩图后 ${fmt(after)}`)
+      const reservedDeltaMb =
+        Number.isFinite(before?.reserved_mb) && Number.isFinite(after?.reserved_mb)
+          ? after.reserved_mb - before.reserved_mb
+          : null
+      outpaintReport = {
+        ...outpaint.entry,
+        sourcePreset: sourcePresetId,
+        gpuMemoryBefore: before,
+        gpuMemoryAfter: after,
+        reservedDeltaMb,
+        // 内容区核心像素与源图应几乎一致（composite 保留原图像素）；
+        // 差异过大说明扩图改写了保留区（硬接缝/整图重绘），验收不通过。
+        contentPreserved: outpaint.entry.contentPreserved,
+      }
+      if (!outpaintReport.contentPreserved) {
+        throw new Error(
+          `outpaint：内容区被改动（核心区平均差 ${outpaint.entry.contentCoreMeanDiff}），` +
+            '预期 composite 保留原图像素（≈0）',
+        )
+      }
     } else {
       for (const [index, presetId] of options.presets.entries()) {
         const { png, entry } = await generateOne({
@@ -1213,7 +1714,11 @@ async function main() {
           ? '01-img2img.png'
           : image.index === 'inpaint'
             ? '02-inpaint.png'
-            : artifactName(image.index, image.presetId, options.presets.length))
+            : image.index === 'upscale'
+              ? '02-upscale.png'
+              : image.index === 'outpaint'
+                ? '02-outpaint.png'
+                : artifactName(image.index, image.presetId, options.presets.length))
       await writeFile(join(dir, name), image.png)
     }
     const first = models[0]
@@ -1236,6 +1741,10 @@ async function main() {
       img2img: img2imgReport,
       // M3：--inpaint 模式下的局部重绘结果、蒙版尺寸与显存对比（非该模式为 null）。
       inpaint: inpaintReport,
+      // Phase B1：--upscale 模式下的源图/输出尺寸、加载与推理秒数、显存对比（非该模式为 null）。
+      upscale: upscaleReport,
+      // Phase B2：--outpaint 模式的画布/内容区、内容区像素差与显存对比（非该模式为 null）。
+      outpaint: outpaintReport,
       versions: health.versions ?? null,
       finalVersions: finalHealth.versions ?? null,
       cacheLogs,
@@ -1263,20 +1772,37 @@ if (HELP) {
   process.exit(0)
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error('\n验证失败：', error?.message ?? error)
-    if (['auth_required', 'cli_missing', 'cli_timeout'].includes(error?.code)) {
-      console.error(
-        '请先确认 Kaggle 凭据可用：默认直连读 %USERPROFILE%\\.kaggle\\credentials.json，' +
-          '也可在工作台用内置 OAuth 登录；加 --cli 时才需要本机 kaggle CLI（详见 docs/TROUBLESHOOTING.md 第 6 节）。',
-      )
-    } else if (error?.code === 'gpu_unavailable') {
-      console.error(
-        '远端容器没有拿到 GPU：请检查 Kaggle 账号是否已完成手机号验证、是否启用 GPU 加速器' +
-          '（详见 docs/TROUBLESHOOTING.md 第 6 节）。',
-      )
-    }
-    process.exit(1)
-  })
+// 离线校验 PNG 辅助函数（画布/蒙版/像素差）时置 GPU_LIVE_SKIP_MAIN=1：只加载函数，
+// 不推送 Kernel、不消耗配额；真机运行不带该变量，行为与改造前完全一致。
+if (process.env.GPU_LIVE_SKIP_MAIN !== '1') {
+  main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error('\n验证失败：', error?.message ?? error)
+      if (['auth_required', 'cli_missing', 'cli_timeout'].includes(error?.code)) {
+        console.error(
+          '请先确认 Kaggle 凭据可用：默认直连读 %USERPROFILE%\\.kaggle\\credentials.json，' +
+            '也可在工作台用内置 OAuth 登录；加 --cli 时才需要本机 kaggle CLI（详见 docs/TROUBLESHOOTING.md 第 6 节）。',
+        )
+      } else if (error?.code === 'gpu_unavailable') {
+        console.error(
+          '远端容器没有拿到 GPU：请检查 Kaggle 账号是否已完成手机号验证、是否启用 GPU 加速器' +
+            '（详见 docs/TROUBLESHOOTING.md 第 6 节）。',
+        )
+      }
+      process.exit(1)
+    })
+}
+
+// 真机验收脚本不对外提供 API；这里只把 PNG 辅助函数与参数解析导出给离线自检
+// （`GPU_LIVE_SKIP_MAIN=1`，不推送 Kernel、不消耗配额）。
+export {
+  OUTPAINT_CANVAS,
+  OUTPAINT_CONTENT,
+  buildOutpaintCanvas,
+  buildOutpaintMaskPng,
+  contentRegionDiff,
+  decodePng,
+  encodePngRgb,
+  parseOptions,
+}

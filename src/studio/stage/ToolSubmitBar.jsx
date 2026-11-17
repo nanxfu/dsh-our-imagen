@@ -1,15 +1,18 @@
 /**
- * 图片工具的轻量提交栏：MaskEditor / InlineTool 共用的「预设 + 提示词 + 强度 + 提交」一行。
+ * 图片工具的轻量提交栏：MaskEditor / OutpaintEditor / InlineTool 共用的
+ * 「预设 + 提示词 + 强度 + 提交」一行。
  *
  * 这里只做受控展示，不持有状态：预设、提示词、强度与拦截原因都来自 `useImageTool`，
  * 通过 Stage 透传进来。提交走工具自己的请求体，与左栏文生图表单完全无关。
+ * 扩图通过可选的 `metaLabel` / `metaPercent` 把覆盖率读数换成「新增画面 {percent}%」，
+ * 不传时保持局部重绘的既有文案。
  *
  * 结构（对应 `src/styles/stage.css` 的 `.ofs-tool-*`）：
  *   .ofs-tool-bar
  *     ├─ .ofs-tool-bar-head  → 工具名 + 预设（多于一个时给 select 胶囊）
  *     ├─ .ofs-tool-prompt    → 修改描述输入框（默认空，placeholder 是目标作品原提示词）
  *     ├─ .ofs-tool-strength  → 重绘强度滑块 + 读数
- *     ├─ .ofs-tool-mask      → 涂抹覆盖率读数（仅画布工具）
+ *     ├─ .ofs-tool-mask      → 涂抹覆盖率读数（仅画布工具；扩图用 metaLabel 换文案）
  *     └─ .ofs-tool-actions   → 主按钮 .ofs-tool-submit / 退出 .ofs-tool-exit
  */
 
@@ -47,6 +50,10 @@ export function ToolSubmitBar(props) {
     strengthMax,
     onStrengthChange,
     maskCoverage,
+    // 可选：画布类工具的覆盖率文案模板（如扩图「新增画面 {percent}%」）。
+    // 不传时保持既有「已涂抹 {percent}% / 尚未涂抹蒙版」行为。
+    metaLabel,
+    metaPercent,
     submitting,
     canSubmit,
     blockedKey,
@@ -56,7 +63,8 @@ export function ToolSubmitBar(props) {
   const list = Array.isArray(presets) ? presets : []
   // 画布工具才显示覆盖率读数（整图重绘传 undefined，不占一行）。
   const showCoverage = maskCoverage !== null && maskCoverage !== undefined
-  const percent = showCoverage ? percentOf(maskCoverage) : 0
+  const customMeta = typeof metaLabel === 'string' && metaLabel !== ''
+  const percent = percentOf(customMeta ? metaPercent : maskCoverage)
   const max = Number.isFinite(Number(strengthMax)) ? Number(strengthMax) : LIMITS.strength.max
   const value = Number.isFinite(Number(strength)) ? Number(strength) : LIMITS.strength.default
   const busy = submitting === true
@@ -138,9 +146,11 @@ export function ToolSubmitBar(props) {
         <div className="ofs-tool-meta">
           {showCoverage ? (
             <p className="ofs-tool-mask ofs-hint">
-              {percent > 0
-                ? formatText(t('studio.mask.coverage'), { percent })
-                : t('studio.imageTool.maskEmpty')}
+              {customMeta
+                ? formatText(metaLabel, { percent })
+                : (percent > 0
+                  ? formatText(t('studio.mask.coverage'), { percent })
+                  : t('studio.imageTool.maskEmpty'))}
             </p>
           ) : null}
           {blocked ? (

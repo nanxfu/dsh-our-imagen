@@ -14,6 +14,10 @@
 ``RequestError``（job 收敛为 invalid_request），全白（整图重绘）允许；羽化半径按覆盖率
 自适应（见模块顶部常量）。带蒙版时 ``strength`` 上限取 ``contract.limits.strength.inpaintMax``，
 普通垫图仍用 ``max``。
+
+高清放大（``tool=upscale``）的源图也走本模块：``parse_upscale_reference`` 复用参考图的
+头部校验（PNG/JPEG、体积、``minEdge``），但不查 loader 白名单、不读 strength、不允许蒙版，
+并额外要求长边 ≤ ``contract.limits.upscale.maxInputEdge``。
 """
 
 from __future__ import annotations
@@ -222,11 +226,52 @@ def parse_reference_spec(  # noqa: ANN001
     return spec
 
 
+def parse_upscale_reference(raw, *, limits_for) -> dict:  # noqa: ANN001
+    """``tool=upscale`` 的源图提交期校验：只读图片头，归一成 ``{image_bytes, width, height}``。
+
+    与 :func:`parse_reference_spec` 的差别（INTERFACES §2.1）：
+
+    - 不查 loader 白名单、不读 strength：超分固定用 Real-ESRGAN，与扩散模型无关；
+    - 不允许 ``mask_b64``：超分没有「重绘区域」概念，带蒙版说明客户端拼错了请求；
+    - 源图长边必须 ≤ ``limits.upscale.maxInputEdge``：超分是像素级任务，「先缩小再放大」
+      等于主动丢细节，宁可 400 让客户端换源图，也不静默缩图后当成高清放大（无意义放大）。
+
+    其余口径与参考图一致（PNG/JPEG、``limits.reference.maxBytes``、``minEdge``）；
+    返回的 ``image_bytes`` 供执行期 ``decode_reference_image`` 再完整解码一次。
+    """
+    if raw is None:
+        raise RequestError("tool=upscale 需要 reference.image_b64")
+    if not isinstance(raw, dict):
+        raise RequestError("reference 必须是对象")
+    if raw.get("mask_b64") is not None:
+        raise RequestError("高清放大不支持蒙版（reference.mask_b64 必须省略）")
+    data = _decode_base64_field(
+        raw.get("image_b64"),
+        "reference.image_b64",
+        int(limits_for("reference").get("maxBytes") or 0),
+        label="源图",
+    )
+    image = _open_reference_image(data, limits_for=limits_for)
+    try:
+        width, height = image.size
+    finally:
+        _close_quietly(image)
+    width, height = int(width), int(height)
+    max_input_edge = int(limits_for("upscale").get("maxInputEdge") or 0)
+    long_edge = max(width, height)
+    if max_input_edge > 0 and long_edge > max_input_edge:
+        raise RequestError(
+            f"源图长边 {long_edge}px 超过高清放大的上限 {max_input_edge}px，"
+            "请先缩小源图再放大"
+        )
+    return {"image_bytes": data, "width": width, "height": height}
+
+
 def decode_reference_image(reference: dict, *, limits_for) -> object:  # noqa: ANN001
     """执行期完整解码参考图一次：转 RGB，长边超过 ``maxEdge`` 时等比 LANCZOS 缩小。
 
-    返回可直接喂给图生图 / 局部重绘管线的 PIL Image；解码失败抛 ``RequestError``（job 收敛为
-    invalid_request）。原始尺寸挂在 ``_imagen_source_size`` 上，供 run_task 打日志。
+    返回可直接喂给图生图 / 局部重绘 / 超分管线的 PIL Image；解码失败抛 ``RequestError``
+    （job 收敛为 invalid_request）。原始尺寸挂在 ``_imagen_source_size`` 上，供 run_task 打日志。
     """
     if not isinstance(reference, dict):
         raise RequestError("reference 必须是对象")

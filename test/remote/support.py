@@ -105,6 +105,8 @@ CONTRACT = {
         "strength": CONTRACT_DOC["limits"]["strength"],
         # 局部重绘蒙版上限（与参考图一起下发；请求体上限公式也按它推导）。
         "mask": CONTRACT_DOC["limits"]["mask"],
+        # 高清放大（tool=upscale）：倍数与输入长边上限，Host 与 daemon 共用同一份。
+        "upscale": CONTRACT_DOC["limits"]["upscale"],
     },
 }
 
