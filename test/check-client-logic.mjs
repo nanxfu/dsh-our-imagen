@@ -767,6 +767,10 @@ await check('运行设置：脱敏视图 → 表单', () => {
   const view = {
     idleTimeoutSec: 1800,
     accelerator: 'NvidiaTeslaP100',
+
+    provider: 'kaggle',
+    colabGpu: 'L4',
+    colabHighRam: false,
     datasetSources: ['owner/dataset'],
     localModels: { 'org/repo': '/kaggle/input/repo' },
     pipConstraints: ['diffusers==0.31.0'],
@@ -778,6 +782,10 @@ await check('运行设置：脱敏视图 → 表单', () => {
   assert.deepEqual(form, {
     idleMinutes: '30',
     accelerator: 'NvidiaTeslaP100',
+
+    provider: 'kaggle',
+    colabGpu: 'L4',
+    colabHighRam: false,
     // 视图缺 kaggleTransport（旧宿主）：按兼容口径 cli 处理，不指向不存在的登录路由。
     kaggleTransport: 'cli',
     // 视图本来就不回传 hfToken 原文：表单永远从空串开始。
@@ -805,6 +813,10 @@ await check('运行设置：表单 → 请求体只含改动字段', () => {
   const view = {
     idleTimeoutSec: 1800,
     accelerator: 'NvidiaTeslaT4',
+
+    provider: 'kaggle',
+    colabGpu: 'L4',
+    colabHighRam: false,
     datasetSources: ['owner/dataset'],
     localModels: { 'org/repo': '/kaggle/input/repo' },
     pipConstraints: ['diffusers==0.31.0'],

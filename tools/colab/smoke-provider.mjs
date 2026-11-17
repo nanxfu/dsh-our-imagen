@@ -17,6 +17,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { presetById } from '../../lib/presets.js'
+import { mergeSettings } from '../../lib/settings.js'
 import { fetchHealth, requestGenerate } from '../../lib/remote.js'
 import { SessionManager } from '../../lib/session.js'
 import { ccuInfo, listAssignments } from '../../lib/colab/client.js'
@@ -49,13 +50,16 @@ function check(name, ok, detail = '') {
 async function main() {
   if (!preset) throw new Error(`未知预设：${presetId}`)
 
+  // 走真实设置链路（契约 + mergeSettings），确保 UI 保存的 provider/colabGpu 能落到会话。
+  const effective = mergeSettings({}, { provider: 'colab', colabGpu: gpu })
   const session = new SessionManager({
     ctx: { workspace: process.cwd() },
     defaultPreset: presetId,
     deps: { log: sink },
     options: {
-      provider: 'colab',
-      colabGpu: gpu,
+      provider: effective.provider,
+      colabGpu: effective.colabGpu,
+      colabHighRam: effective.colabHighRam,
       enableGpu: true,
       // 出图链路较长：给足排队/装依赖/下权重的时间，但空闲关机仍按 10 分钟。
       idleTimeoutSec: 600,

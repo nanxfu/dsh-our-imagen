@@ -157,9 +157,14 @@ export function formFromSettings(view) {
   const accelerator = SETTINGS.accelerators.includes(source.accelerator)
     ? source.accelerator
     : SETTINGS.defaultAccelerator
+  const provider = SETTINGS.providers.includes(source.provider) ? source.provider : SETTINGS.defaultProvider
+  const colabGpu = SETTINGS.colabGpus.includes(source.colabGpu) ? source.colabGpu : SETTINGS.defaultColabGpu
   return {
     idleMinutes: String(idleMinutesOf(source.idleTimeoutSec)),
     accelerator,
+    provider,
+    colabGpu,
+    colabHighRam: source.colabHighRam === true,
     // 旧宿主缺 kaggleTransport 时按 cli 处理（不是契约默认的 direct）。
     kaggleTransport: transportOf(source),
     hfToken: '',
@@ -210,6 +215,18 @@ export function buildSettingsPayload(form, view) {
     ? base.accelerator
     : SETTINGS.defaultAccelerator
   if (accelerator !== baseAccelerator) payload.accelerator = accelerator
+
+  const provider = SETTINGS.providers.includes(source.provider) ? source.provider : SETTINGS.defaultProvider
+  const baseProvider = SETTINGS.providers.includes(base.provider) ? base.provider : SETTINGS.defaultProvider
+  if (provider !== baseProvider) payload.provider = provider
+
+  const colabGpu = SETTINGS.colabGpus.includes(source.colabGpu) ? source.colabGpu : SETTINGS.defaultColabGpu
+  const baseColabGpu = SETTINGS.colabGpus.includes(base.colabGpu) ? base.colabGpu : SETTINGS.defaultColabGpu
+  if (colabGpu !== baseColabGpu) payload.colabGpu = colabGpu
+
+  if ((source.colabHighRam === true) !== (base.colabHighRam === true)) {
+    payload.colabHighRam = source.colabHighRam === true
+  }
 
   // Kaggle 访问方式：只有真正切换时才补丁，旧视图缺字段按 cli 比较。
   const transport = normalizeKaggleTransport(source.kaggleTransport)

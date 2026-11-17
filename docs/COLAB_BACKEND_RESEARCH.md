@@ -172,3 +172,10 @@
 
 - 1.46 MB 的 base64 结果经 Cloudflare 隧道下行约 **13 秒**，而默认 `/job` 轮询超时是 8 秒——表现为"服务端每次都回 200、Host 侧每次都超时"，最终触发 120 秒连续失败容忍窗。
 - 处理：provider 声明 `jobRequestTimeoutMs`（Colab 30s，Kaggle 仍 8s），任务队列按 provider 取值。后续若结果继续变大，应考虑独立的二进制取图端点，而不是把 base64 塞进轮询响应。
+
+**2b 收尾**
+
+- 契约与设置：`provider` / `colabGpu` / `colabHighRam` 已接入设置抽屉、Host 校验与 `mergeSettings`；`index.js` 按设置装配 provider。
+- 恢复：Colab 会话记录带 `provider` 与 `handle`，启动时按 assignment 重新接管；实例已消失则 `unassign` 兜底并清记录。
+- 单卡：Flux.2 在 `device_count === 1` 时不再传 `device_map`；CPU 容器提示改为双平台文案。
+- 真机（设置链路）：L4 + sdxl-lightning，出图 1071 KiB / 18.6s，stop 后 assignments 归零、余额 198.11。

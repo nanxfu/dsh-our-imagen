@@ -40,8 +40,8 @@ from remote.text import short
 # 给出可执行的下一步，而不是继续用 CPU 硬跑（那会表现为超时或模糊的 CUDA 报错）。
 GPU_UNAVAILABLE_MESSAGE = (
     "未检测到可用 GPU（当前为 CPU 容器）。"
-    "请检查 Kaggle 账号是否已完成手机号验证，并确认已启用 GPU 加速器"
-    "（本插件推送 Kernel 时默认开启 2×Tesla T4）"
+    "Kaggle：请确认账号已完成手机号验证并启用 GPU 加速器；"
+    "Colab：请确认订阅有效且所选 GPU 型号仍有可用配额"
 )
 
 

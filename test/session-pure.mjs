@@ -115,8 +115,8 @@ async function scenarioState() {
     assert.equal(value.phase, null)
     assert.equal(value.idleTimeoutSec, 1800)
     assert.equal(value.tunnelProvider, null)
-    // 新增 idleSeconds（远端空闲秒数，M3.4）后字段数由 17 变为 18。
-    assert.equal(Object.keys(value).length, 18)
+    // 新增 idleSeconds（M3.4）与 provider / providerUsage（2b）后字段数由 17 变为 20。
+    assert.equal(Object.keys(value).length, 20)
   })
 
   await check('normalizeTunnelProvider 只放行契约取值域内的通道', () => {

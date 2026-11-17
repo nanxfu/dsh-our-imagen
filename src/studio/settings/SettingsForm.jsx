@@ -75,6 +75,55 @@ export function SettingsForm({
         </label>
 
         <div className="ofs-settings-row">
+          <span className="ofs-settings-label">{t('studio.settings.provider.label')}</span>
+          <div className="ofs-settings-options" role="radiogroup" aria-label={t('studio.settings.provider.label')}>
+            {SETTINGS.providers.map((id) => (
+              <label key={id} className={`ofs-settings-option${form.provider === id ? ' is-on' : ''}`}>
+                <input
+                  type="radio"
+                  name="ofs-provider"
+                  value={id}
+                  checked={form.provider === id}
+                  onChange={() => patchForm({ provider: id })}
+                />
+                <span>{t(`studio.settings.provider.${id}`)}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {form.provider === 'colab' ? (
+          <>
+            <div className="ofs-settings-row">
+              <span className="ofs-settings-label">{t('studio.settings.colabGpu.label')}</span>
+              <div className="ofs-settings-options" role="radiogroup" aria-label={t('studio.settings.colabGpu.label')}>
+                {SETTINGS.colabGpus.map((id) => (
+                  <label key={id} className={`ofs-settings-option${form.colabGpu === id ? ' is-on' : ''}`}>
+                    <input
+                      type="radio"
+                      name="ofs-colab-gpu"
+                      value={id}
+                      checked={form.colabGpu === id}
+                      onChange={() => patchForm({ colabGpu: id })}
+                    />
+                    <span>{t(`studio.settings.colabGpu.${id}`)}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label className="ofs-settings-inline">
+              <input
+                type="checkbox"
+                checked={form.colabHighRam === true}
+                onChange={(event) => patchForm({ colabHighRam: event.target.checked })}
+              />
+              <span className="ofs-settings-label">{t('studio.settings.colabHighRam.label')}</span>
+            </label>
+            <p className="ofs-settings-muted">{t('studio.settings.colabHighRam.hint')}</p>
+          </>
+        ) : null}
+
+        <div className="ofs-settings-row">
           <span className="ofs-settings-label">{t('studio.settings.accelerator.label')}</span>
           <div className="ofs-settings-options" role="radiogroup" aria-label={t('studio.settings.accelerator.label')}>
             {SETTINGS.accelerators.map((id) => (

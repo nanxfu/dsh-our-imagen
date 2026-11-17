@@ -77,6 +77,9 @@ export function apply(ctx, config = {}) {
       devEndpoint,
       devToken,
       accelerator: config.accelerator ?? 'NvidiaTeslaT4',
+      provider: config.provider,
+      colabGpu: config.colabGpu,
+      colabHighRam: config.colabHighRam,
       idleTimeoutSec: toInt(config.idleTimeoutSec, TIMEOUTS.idleShutdownSec, 300, 10800),
       provisionTimeoutMs: toInt(config.provisionTimeoutMinutes, TIMEOUTS.provisionMs / 60000, 5, 240) * 60 * 1000,
       // 排队分级提示阈值：超过慢档只做状态提示，超过卡住档才建议换新实例重排。

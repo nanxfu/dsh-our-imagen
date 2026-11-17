@@ -708,7 +708,7 @@ await check('渲染：设置抽屉分区、生效提示与 Token 状态', async 
         'ofs-settings-section': 3,
         'ofs-settings-section-title': 2,
         'ofs-settings-quick-item': 4,
-        'ofs-settings-option': 2,
+        'ofs-settings-option': 4,
         'ofs-settings-clear': 1,
         'ofs-settings-save': 1,
       },
@@ -744,7 +744,7 @@ await check('渲染：设置抽屉分区、生效提示与 Token 状态', async 
       (node) => node.type === 'button' && String(node.props?.className).includes('ofs-settings-quick-item'),
     )
     assert.deepEqual(quickItems.map((node) => node.props['aria-pressed']), [false, true, false, false])
-    const radios = findNodes(mounted.tree, (node) => node.type === 'input' && node.props && node.props.type === 'radio')
+    const radios = findNodes(mounted.tree, (node) => node.type === 'input' && node.props && node.props.type === 'radio' && node.props.name === 'ofs-accelerator')
     assert.deepEqual(radios.map((node) => node.props.value), ['NvidiaTeslaT4', 'NvidiaTeslaP100'])
     assert.deepEqual(radios.map((node) => node.props.checked), [true, false])
   } finally {
@@ -826,7 +826,7 @@ await check('渲染：设置抽屉保存流程（只提交改动字段）', asyn
       (node) => node.type === 'button' && String(node.props?.className).includes('ofs-settings-quick-item'),
     )
     assert.deepEqual(quickItems.map((node) => node.props['aria-pressed']), [false, false, true, false], '60 分钟档应高亮')
-    const radios = findNodes(mounted.tree, (node) => node.type === 'input' && node.props && node.props.type === 'radio')
+    const radios = findNodes(mounted.tree, (node) => node.type === 'input' && node.props && node.props.type === 'radio' && node.props.name === 'ofs-accelerator')
     assert.deepEqual(radios.map((node) => node.props.checked), [false, true], 'P100 应选中')
     const saveButton = findNodes(
       mounted.tree,
