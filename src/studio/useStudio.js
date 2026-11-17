@@ -1,9 +1,12 @@
 /**
  * 生图工作台的数据编排（组合层）。
  *
- * 5 个域 hook 各管一块状态，这里只做宿主状态桥接、跨域动作粘合（生成、变体、回填、重试、
+ * 域 hook 各管一块状态，这里只做宿主状态桥接、跨域动作粘合（生成、变体、回填、重试、
  * 指引计算）与领域对象组装。对外返回按领域分组：
- *   { t, ui, compute, form, chat, library, guidance, actions }
+ *   { t, ui, compute, form, chat, library, imageTool, guidance, actions }
+ *
+ * 0.13.0 起主表单只做纯文生图；针对舞台作品的图片处理（局部涂抹 / 整图重绘）
+ * 由独立的 `imageTool` 域承载，组合层只负责动作入口与视图切换。
  *
  * effect 顺序：宿主轮询 → 卸载边界 → Toast 定时 → 宿主错误消费 → 预设同步 → 线程同步
  * → 历史/收藏加载 → 首图提示 → 任务完成刷新历史。
@@ -20,16 +23,16 @@ import {
   effectivePresetOf,
   formSummaryOf,
   generateCapabilityOf,
-  generateSourcePolicy,
   iteratePatch,
+  presetLabelOf,
   previewRecallOf,
   rerollOverrides,
-  retryReferencePlan,
+  retryOverrides,
 } from '../logic/generate.js'
-import { inpaintOnlyOf } from '../logic/preset.js'
 import { safeResetPatch } from '../../shared/models-guide.js'
 import { accountStatusOf } from '../logic/probe.js'
 import { useChatThread } from './hooks/useChatThread.js'
+import { useImageTool } from './hooks/useImageTool.js'
 import { useKaggleLogin } from './hooks/useKaggleLogin.js'
 import { useSessionControl } from './hooks/useSessionControl.js'
 import { useStudioForm } from './hooks/useStudioForm.js'
@@ -82,9 +85,59 @@ export function useStudio(props) {
   // CLI 模式下 hook 不会发起任何请求（指引卡使用原有「复制登录命令」动作）。
   const kaggleLogin = useKaggleLogin({ t, ui, onDone: () => control.runProbe() })
   const form = useStudioForm({ t, isEn, alive, ui, preset: { presets, defaultPreset }, initialPrompt })
+  // 舞台图片工具域：底图 / 提示词 / 强度 / 蒙版 / 工具预设全部独立于左栏表单。
+  const imageTool = useImageTool({
+    t,
+    isEn,
+    alive,
+    ui,
+    presets,
+    defaultPreset,
+    // 工具优先沿用左栏当前模型（支持对应能力时），但不回写左栏。
+    currentPresetId: form.form.presetId,
+    onSubmitted: () => host.refresh(),
+  })
   // generate 是函数声明（提升），chat 在事件回调里调用时已完成初始化。
   const chat = useChatThread({ t, isEn, alive, state, form, generate })
   const library = useWorkLibrary({ t, alive, ui, state })
+
+  /**
+   * 显式新建绘图（阶段十三）：重置表单 + 进入 new_draft 焦点。
+   *
+   * 入口沿用 Rail 顶部的「新建创作」按钮（它调用 form.newCreation），这里把 form 的
+   * newCreation 包装成「重置表单 + 切新建态」；同时暴露 actions.newDraft 供其它入口使用。
+   * 表单域本身不感知工作区焦点，避免 hook 之间互相依赖。
+   */
+  function newDraft() {
+    // 新建画布与「正在编辑某张作品」互斥：先退出工具编辑态（未提交草稿仍保存在 workDrafts）。
+    imageTool.closeTool()
+    form.newCreation()
+    library.newDraft()
+    ui.setView('studio')
+    ui.setPanelMode('form')
+  }
+  const formView = { ...form, newCreation: newDraft }
+
+  /**
+   * 组件层拿到的作品库视图（阶段十三）：
+   * 在 useWorkLibrary 领域对象上补 Filmstrip 需要的草稿表与新建草稿卡数据，
+   * 这样 Gallery / Stage / Filmstrip 仍共用同一个 library props，Studio.jsx 不需要改动。
+   */
+  const libraryView = {
+    ...library,
+    newDraftCard: {
+      active: library.workspaceMode === 'new_draft',
+      pending: library.newDraftPending === true,
+      width: form.form.width,
+      height: form.form.height,
+      presetLabel: form.activePreset ? presetLabelOf(form.activePreset) : '',
+      prompt: form.form.prompt,
+    },
+    // 工具域的未提交编辑草稿：缩略图圆点 / 版本面板圆点与清空都用这一份。
+    workDrafts: imageTool.workDrafts,
+    clearWorkDraft: imageTool.clearWorkDraft,
+    workDraftSummary: imageTool.workDraftSummary,
+  }
 
   /** 启动会话（默认优先检查并接管仍在排队/运行的原 Kernel）。 */
   function startSession() {
@@ -127,47 +180,32 @@ export function useStudio(props) {
   }
 
   /**
-   * 提交生成。
+   * 提交生成（纯文生图）。
    *
-   * 来源策略统一在这里消费（`options.source`）：assistant / variant 强制纯文生图，
-   * form / retry 沿用（或恢复出的）参考图；随后用「有效预设 + 有效参考图」做能力校验，
-   * 不能用当前表单预设去误拦重试恢复出的、来自别的预设的带蒙版任务。
+   * 主表单 / 助手 / 变体 / 重试都只做文生图：参考图与蒙版由舞台图片工具自己的提交路径
+   * 负责，不再经过这里，也不会从表单或覆盖项里被带出来。
+   *
+   * 专用局部重绘预设（`inpaintOnly`）不能文生图：本次请求改用兜底预设并轻提示（决策 D3），
+   * 左栏表单保持用户选择不变。
    */
   async function generate(overrides, options = {}) {
     if (sending) return false
-    const policy = generateSourcePolicy(options.source, {
-      overrides,
-      preset: form.activePreset,
-      presets,
-    })
-    if (!policy.ok) {
-      ui.showToast(t(policy.blockedKey))
-      return false
-    }
-    const effectivePreset = effectivePresetOf(policy.overrides, form.activePreset, presets)
-    const hasReferenceOverride = Boolean(policy.overrides)
-      && Object.prototype.hasOwnProperty.call(policy.overrides, 'reference')
-    const effectiveReference = hasReferenceOverride ? policy.overrides.reference : form.reference
-    // 参考图 / 蒙版与本次有效预设的能力不匹配时拦下：既不能悄悄丢掉参考图当文生图发出去，
-    // 也不该把注定失败的请求交给宿主。提示里写明下一步（切模型或移除参考图）。
-    const capability = generateCapabilityOf({
-      preset: effectivePreset,
-      presets,
-      reference: effectiveReference,
-    })
+    const effectivePreset = effectivePresetOf(overrides, form.activePreset, presets)
+    const capability = generateCapabilityOf({ preset: effectivePreset, presets })
     if (!capability.ok) {
-      ui.showToast(t(capability.noticeKey))
+      ui.showToast(t(capability.blockedKey))
       return false
     }
-    const body = form.buildBody(policy.overrides, { preset: effectivePreset })
+    const requestPreset = capability.preset || effectivePreset
+    const body = form.buildBody(overrides, { preset: requestPreset })
     if (!body.prompt) {
       ui.fail('need_prompt', '')
       return false
     }
-    // 来源策略的轻提示要在提交结果之后弹：成功提示会覆盖先前的 toast，否则用户看不到
-    // 「本次已改用 X 文生图」这类关键说明。
+    // 兜底切换的轻提示要在提交结果之后再弹：成功提示会覆盖先前的 toast，
+    // 否则用户看不到「本次已改用 X 文生图」这类关键说明。
     const showPolicyNotice = () => {
-      if (policy.notice) ui.showToast(formatText(t(policy.notice.key), policy.notice.params))
+      if (capability.notice) ui.showToast(formatText(t(capability.notice.key), capability.notice.params))
     }
     // 提交时的表单对象：成功回来后只有它仍是当前表单，才记为干净基准。
     const submittedForm = form.form
@@ -196,6 +234,8 @@ export function useStudio(props) {
         // 刚提交的内容就是当前的干净版本：之后手动改动才算 dirty。
         // 等 chat 确认卡提交（pushUser=false）由 generateIntent 在表单补丁落地后再标记。
         if (options.pushUser !== false) form.markClean(submittedForm)
+        // 显式新建绘图：保持 new_draft 直到该任务完成，完成后再切 work 并选中新图。
+        if (library.workspaceMode === 'new_draft') library.markNewDraftSubmitted(jobId)
         host.refresh()
         // 历史只在任务完成后刷新（见 useWorkLibrary 的 lastJob effect）：
         // 刚提交的任务还没有产物，这里再拉一次会把已加载的分页重置回第一页。
@@ -225,7 +265,7 @@ export function useStudio(props) {
 
   /**
    * 带回参数：提示词与尺寸来自作品本身，steps/cfg 才用 params 或预设推荐值。
-   * 回填同时清掉残留参考图，并把表单标记为「正在微调这张作品」。
+   * 回填同时把表单标记为「正在微调这张作品」。
    */
   function iterate(entry) {
     const target = entry || library.selected
@@ -240,108 +280,69 @@ export function useStudio(props) {
   /**
    * 创作区胶卷点击：始终切换右侧预览；表单干净时把该作品参数回填到左侧面板。
    *
-   * 回填由纯逻辑按优先级判定（见 `previewRecallOf()`）：表单挂着参考图（含蒙版）时
-   * 只换预览、绝不回填——涂好的蒙版一旦被隐式清掉，用户得从头再涂一遍；其次是未提交的
-   * 手动修改（dirty）保护草稿；两者都没有才回填。画廊视图不接这个动作，保持纯浏览。
+   * 回填由纯逻辑按优先级判定（见 `previewRecallOf()`）：未提交的手动修改（dirty）保护草稿，
+   * 否则回填。参考图 / 蒙版已迁到舞台图片工具，不再参与这里的判定。
+   * 画廊视图不接这个动作，保持纯浏览。
    */
   function previewWork(entry) {
     const target = entry && entry.image ? entry : null
     if (!target) return
     library.selectImage(target)
     const patch = iteratePatch(target, form.form, presets)
-    const decision = previewRecallOf({ reference: form.reference, dirty: form.dirty, patch })
+    const decision = previewRecallOf({ dirty: form.dirty, patch })
     if (decision.noticeKey) ui.showToast(t(decision.noticeKey))
     if (decision.action !== 'recall') return
     form.applyRecall(patch, target)
   }
 
   /**
-   * 以此图重绘：把画廊作品设为参考图并切回创作视图。
+   * 一步直达舞台图片工具（决策 D4）。
    *
-   * 预设是否支持垫图由表单域判断：不支持时自动切到支持的预设，toast 里说明切到了哪个；
-   * 旧宿主一个支持的预设都没有时保持表单不变并明确提示（不把参考图塞给必然拒绝的宿主）。
-   * 专用局部重绘权重只能带蒙版使用：设为参考图后直接请求进入涂抹态（见决策 4）。
-   */
-  function referenceImage(entry) {
-    const target = entry || library.selected
-    const result = form.applyReference(target)
-    if (!result || !result.ok) {
-      // 旧记录缺 image.path 与「宿主一个支持垫图的预设都没有」要分开说清楚。
-      const failedKey = result && result.reason === 'no_path' ? 'studio.reference.noPath' : 'studio.reference.unavailable'
-      ui.showToast(t(failedKey))
-      return
-    }
-    ui.setView('studio')
-    ui.setPanelMode('form')
-    // 从大图预览触发时一并收起放大层，用户能直接看到左侧参考图槽位。
-    ui.setZoom(false)
-    // 生效预设是专用局部重绘权重：自动进入涂抹，省掉再点一次「局部涂抹」。
-    const effectivePreset = result.switchedPreset || form.activePreset
-    if (inpaintOnlyOf(effectivePreset)) ui.requestPaint()
-    if (result.switchedPreset) {
-      const preset = result.switchedPreset
-      const label = preset.label || preset.short || preset.id
-      ui.showToast(formatText(t('studio.reference.switched'), { preset: label }))
-      return
-    }
-    ui.showToast(t('studio.reference.applied'))
-  }
-
-  /**
-   * 以此结果继续重绘：把该作品设为新参考图、清空蒙版、进入涂抹（见决策 5）。
+   * 默认以当前选中的作品为底图；从画廊 / 大图预览触发时由调用方传入条目。
+   * 工具会自动选模（不改左栏表单）；没有可处理的底图或没有可用垫图预设时，
+   * `openTool` 自己 toast 说明并返回 false，这里不切换视图。
    *
-   * 选择不自动切换，避免打断用户对比；只有显式点击这个动作才换底图。
-   * `applyReference()` 整块替换 reference，旧蒙版随之清掉，不需要再单独清。
+   * @param {'inpaint'|'img2img'} kind 工具 id
+   * @param {object} [entry] 胶卷 / 画廊条目 `{ image, item }`；缺省用当前选中作品
+   * @returns {boolean} 是否成功进入编辑态
    */
-  function continueInpaint(entry) {
+  function openImageTool(kind, entry) {
     const target = entry || library.selected
-    const result = form.applyReference(target)
-    if (!result || !result.ok) {
-      const failedKey = result && result.reason === 'no_path' ? 'studio.reference.noPath' : 'studio.reference.unavailable'
-      ui.showToast(t(failedKey))
+    if (!target) {
+      ui.showToast(t('studio.imageTool.blockedTarget'))
       return false
     }
+    // D4：「选中该作品 + 切回舞台 + 打开工具」三步语义一致——退出工具后舞台停在该作品上。
+    // 传裸 image 对象时包成条目；selectImage 同时会把工作区焦点从 new_draft 切回 work。
+    library.selectImage(target.image ? target : { image: target })
+    if (!imageTool.openTool(kind, target)) return false
     ui.setView('studio')
     ui.setPanelMode('form')
     ui.setZoom(false)
-    ui.requestPaint()
-    ui.showToast(t('studio.mask.continueHint'))
     return true
   }
 
   /**
-   * 按失败任务原来的参数重试。
+   * 按失败任务原来的参数重试（纯文生图）。
    *
-   * 参考图的恢复计划由纯逻辑给出：任务本来没有参考图时显式纯文生图；
-   * 有参考图且同源提交体还留着蒙版时直接恢复重试；蒙版已不可恢复时只把参考图填回
-   * 表单并请求进入涂抹，不自动提交。没有可重试的任务时退回上一次提交的 body。
+   * 图片工具任务的失败恢复由 `useImageTool` 自己的草稿机制负责（决策 D5），
+   * 这里不能把带底图 / 蒙版的任务压成文生图重放：检测到 reference 参数时只给指引。
+   * 没有可重试的任务时退回上一次提交的 body。
    */
   function retryFocusedJob() {
     const pending = pendingRef.current
-    // 失败任务参数不完整（旧宿主）时退回上一次提交体，保持原有重试兜底。
-    let plan = retryReferencePlan(control.focusedJob, { pendingRef: pending })
-    if (!plan && pending) plan = retryReferencePlan(pending, { pendingRef: pending })
-    if (!plan) {
+    const focused = control.focusedJob
+    const focusedParams = focused && focused.params && typeof focused.params === 'object' ? focused.params : null
+    if (focusedParams && focusedParams.reference) {
+      ui.showToast(t('studio.imageTool.retryMoved'))
+      return
+    }
+    const overrides = retryOverrides(focused) || (pending ? retryOverrides(pending) : null)
+    if (!overrides) {
       ui.showToast(t('workbench.needPrompt'))
       return
     }
-    if (plan.maskLost) {
-      // 蒙版不可恢复：把失败任务的预设、提示词与参数一起填回表单（而不是只塞参考图），
-      // 用户重新涂抹后点生成即等价重试；这里不提交、不伪造蒙版。
-      const restored = form.restoreRetryTask(plan)
-      if (!restored || !restored.ok) {
-        const failedKey = restored && restored.reason === 'no_path' ? 'studio.reference.noPath' : 'studio.reference.unavailable'
-        ui.showToast(t(failedKey))
-        return
-      }
-      ui.setView('studio')
-      ui.setPanelMode('form')
-      ui.setZoom(false)
-      if (plan.requestPaint) ui.requestPaint()
-      ui.showToast(t(plan.noticeKey))
-      return
-    }
-    generate(plan.overrides, { source: 'retry' })
+    generate(overrides, { source: 'retry' })
   }
 
   /** OOM 指引卡上的「重置参数」：表单回到当前活跃预设的安全默认档，并清掉当前错误。 */
@@ -389,10 +390,11 @@ export function useStudio(props) {
     isEn,
     ui,
     compute,
-    form,
+    form: formView,
     chat,
-    library,
+    library: libraryView,
+    imageTool,
     guidance: { kind: guidanceKind, code: guidanceCode, surface: guidanceSurface, detail: guidanceDetail, key: guidanceKey, dismiss: dismissGuidance },
-    actions: { sending, generate, previewWork, reroll, iterate, referenceImage, continueInpaint, retryFocusedJob, resetToSafe },
+    actions: { sending, generate, newDraft, previewWork, reroll, iterate, openImageTool, retryFocusedJob, resetToSafe },
   }
 }

@@ -29,6 +29,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { JobQueue, normalizeReference, normalizeStrength } from '../lib/jobs.js'
+import { saveJobOutput } from '../lib/output.js'
 import { submitGenerate, waitForJob } from '../lib/remote.js'
 import { LIMITS, PRESETS } from '../shared/contract.js'
 
@@ -119,6 +120,43 @@ function doneResults(count = 1) {
     width: 512,
     height: 512,
   }))
+}
+
+/** 播种一个历史作品目录（01.png + 可选 meta.json），用于版本链用例；返回图片工作区相对路径。 */
+async function seedWork(dirName, meta = null) {
+  const dir = join(workspace, 'imagen-output', dirName)
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(dir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+  if (meta) {
+    await writeFile(join(dir, 'meta.json'), JSON.stringify({ images: [{ file: '01.png' }], ...meta }), 'utf8')
+  }
+  return `imagen-output/${dirName}/01.png`
+}
+
+/**
+ * 用最小 job 形状走真实的 saveJobOutput（落盘链路），返回写入的 meta.json。
+ * 不经过远端：版本链解析只发生在落盘阶段，这样单测更聚焦、也不依赖假 daemon。
+ */
+async function persistReferenceJob(reference) {
+  const job = {
+    id: `j_lineage_${Math.random().toString(16).slice(2, 10)}`,
+    presetId: PRESET,
+    params: {
+      prompt: '版本链测试',
+      negativePrompt: '',
+      width: 512,
+      height: 512,
+      steps: 3,
+      cfg: 1.5,
+      seed: 1,
+      count: 1,
+      reference,
+    },
+    createdAt: '2026-01-01T00:00:00.000Z',
+    finishedAt: '2026-01-01T00:00:01.000Z',
+  }
+  const output = await saveJobOutput(makeCtx(), job, doneResults(1))
+  return JSON.parse(await readFile(join(workspace, ...output.metaFile.split('/')), 'utf8'))
 }
 
 function makeGate() {
@@ -907,6 +945,7 @@ async function main() {
 
       const meta = JSON.parse(await readFile(join(workspace, done.output.dir, 'meta.json'), 'utf8'))
       assert.equal(meta.sourceImage, seedPath)
+      assert.equal(meta.rootImage, seedPath, '父作品没有 meta 时 rootImage 兜底为 sourcePath')
       assert.equal(meta.strength, 0.8)
       assert.equal(meta.params.reference.sourcePath, seedPath)
     } finally {
@@ -948,6 +987,7 @@ async function main() {
       assert.deepEqual(call.reference, { image_b64: PNG_B64, strength: LIMITS.strength.max })
       const meta = JSON.parse(await readFile(join(workspace, done.output.dir, 'meta.json'), 'utf8'))
       assert.equal(meta.sourceImage, null, '上传来源没有工作区路径')
+      assert.equal(meta.rootImage, null, '动态上传参考图没有可归组的根作品')
       assert.equal(meta.strength, LIMITS.strength.max)
     } finally {
       queue.dispose()
@@ -1039,6 +1079,7 @@ async function main() {
       const meta = JSON.parse(await readFile(join(workspace, done.output.dir, 'meta.json'), 'utf8'))
       assert.equal(meta.inpaint, true, 'meta 必须记 inpaint 标记')
       assert.equal(meta.sourceImage, seedPath)
+      assert.equal(meta.rootImage, seedPath, '局部重绘同样记录根作品路径')
       assert.equal(meta.strength, 0.75)
       assert.equal(meta.params.reference.mask, true)
 
@@ -1115,6 +1156,65 @@ async function main() {
       queue.dispose()
       await remote.close()
     }
+  })
+
+  // ── 版本链（阶段十三）：meta.rootImage 落盘与旧数据回溯 ──────────────────
+  await check('版本链：父作品没有 meta.json 时 rootImage 兜底为 sourcePath', async () => {
+    const parentPath = await seedWork('20260101-000000-lineage-no-meta')
+    const meta = await persistReferenceJob({ sourcePath: parentPath, strength: 0.6 })
+    assert.equal(meta.sourceImage, parentPath)
+    assert.equal(meta.rootImage, parentPath, '读不到父作品 meta 时应退回来源图本身')
+    assert.equal(meta.strength, 0.6)
+  })
+
+  await check('版本链：父作品 meta.json 损坏时 rootImage 兜底为 sourcePath', async () => {
+    const parentPath = await seedWork('20260101-000000-lineage-broken')
+    await writeFile(
+      join(workspace, 'imagen-output', '20260101-000000-lineage-broken', 'meta.json'),
+      '{ 这不是合法 JSON',
+      'utf8',
+    )
+    const meta = await persistReferenceJob({ sourcePath: parentPath, strength: 0.55 })
+    assert.equal(meta.rootImage, parentPath, '父 meta 损坏不得让落盘失败，退回来源图')
+  })
+
+  await check('版本链：父作品 meta 有 rootImage 时直接继承（两级派生）', async () => {
+    const rootPath = await seedWork('20260101-000000-lineage-root', { jobId: 'j_lineage_root' })
+    const childPath = await seedWork('20260101-000001-lineage-child', {
+      jobId: 'j_lineage_child',
+      sourceImage: rootPath,
+      rootImage: rootPath,
+      strength: 0.6,
+    })
+    const meta = await persistReferenceJob({ sourcePath: childPath, strength: 0.5 })
+    assert.equal(meta.sourceImage, childPath)
+    assert.equal(meta.rootImage, rootPath, '应继承父作品记录的根，而不是把父作品自身当根')
+  })
+
+  await check('版本链：旧 meta 无 rootImage 时按 sourceImage 链回溯到根（≤8 层）', async () => {
+    const rootPath = await seedWork('20260101-000000-legacy-root', { jobId: 'j_legacy_root' })
+    const firstPath = await seedWork('20260101-000001-legacy-1', { sourceImage: rootPath })
+    const secondPath = await seedWork('20260101-000002-legacy-2', { sourceImage: firstPath })
+    const meta = await persistReferenceJob({ sourcePath: secondPath, strength: 0.6 })
+    assert.equal(meta.rootImage, rootPath, '旧数据应沿 sourceImage 链一路回溯到没有来源图的根')
+  })
+
+  await check('版本链：回溯深度上限 8 层，超长旧链停在深度上限而不是全量走完', async () => {
+    const chain = []
+    for (let index = 0; index < 10; index += 1) {
+      const previous = chain[index - 1] ?? null
+      chain.push(
+        await seedWork(`20260101-00000${index}-legacy-deep`, {
+          jobId: `j_legacy_deep_${index}`,
+          ...(previous ? { sourceImage: previous } : {}),
+        }),
+      )
+    }
+    const meta = await persistReferenceJob({ sourcePath: chain[9], strength: 0.6 })
+    // 从 chain[9] 起读 8 层 meta（chain[9] … chain[2]）后停在 chain[1]：
+    // 深度上限是「旧数据回溯成本」的硬边界，不是必须走完整条链。
+    assert.equal(meta.rootImage, chain[1], `应停在 8 层上限处，实际 ${meta.rootImage}`)
+    assert.notEqual(meta.rootImage, chain[0], '超过上限后不再继续回溯到真正的根')
   })
 
   clearTimeout(watchdog)

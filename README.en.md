@@ -46,10 +46,10 @@ Not every machine has a high-VRAM GPU, and setting up PyTorch, CUDA, and ComfyUI
 ### 1. Standalone Workbench
 * **10 Built-in Models**: Fast models (`SDXL Lightning`, `Hyper-SDXL`, `SDXL Turbo`), general/photorealistic (`SDXL Base`, `RealVisXL`, `Playground v2.5`), anime (`Animagine XL 3.1`, `Anima Light Lavender`), `FLUX.2 Klein 4B`, and the dedicated `SDXL Inpaint` weights for local repaints.
 * **Focused Controls**: Prompt, aspect ratio, resolution, steps, CFG scale, and seed in one panel, with batch count (1–4) pinned in the footer.
-* **Effective Parameters Only**: Unused fields (such as negative prompts on 4-step models or `FLUX.2 Klein 4B`) are hidden and omitted from requests. When a reference image is attached, output dimensions follow the reference image.
+* **Effective Parameters Only**: Unused fields (such as negative prompts on 4-step models or `FLUX.2 Klein 4B`) are hidden and omitted from requests. The dedicated inpaint weights only appear inside the image tools.
 * **Quick Modifiers**: Collapsible one-click English tags for lighting, material, composition, and mood (with localized UI labels).
-* **Image-to-Image**: Send any gallery image back as a reference with a denoising strength slider for iterative edits (SDXL family).
-* **Filmstrip & Gallery**: Review recent outputs in the bottom filmstrip, restore all parameters or generate variations in one click, and manage your date-grouped gallery with search, favorites, batch selection, and single-image deletion.
+* **Stage Image Tools**: With a work selected, hit **Local paint** or **Full repaint** below the stage to edit in place; the canvas and light submit bar include a change description, repaint strength, and model switch. "Repaint from this image" in the gallery/lightbox opens local paint in one step. Upscale/outpaint slots are reserved for later.
+* **Filmstrip & Version Tree**: The bottom filmstrip folds by version tree; the `⎇ N` badge opens the version panel, and paint/repaint outputs automatically become v2/v3 child versions. Unsubmitted edits are marked with a dot per work and survive work switching. Restore all parameters or generate variations in one click, and manage your date-grouped gallery with search, favorites, batch selection, and single-image deletion.
 
 </td>
 <td width="52%">

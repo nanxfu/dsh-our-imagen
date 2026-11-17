@@ -55,8 +55,9 @@ function formSyncTitle(t, source) {
 /**
  * 表单提交的参数摘要 → 紧凑胶囊。
  *
- * 展示顺序固定：模型 → 画幅比例与像素 → 张数 → 是否带参考图 → 种子策略，
+ * 展示顺序固定：模型 → 画幅比例与像素 → 张数 → 种子策略，
  * 与表单提交时的请求体一一对应，用户不用回参数面板就能看懂这次是怎么生成的。
+ * 主表单固定纯文生图（0.13.0 起参考图迁到舞台图片工具），不再输出「是否带参考图」胶囊。
  */
 function formSyncChips(t, message) {
   const summary = message && message.summary && typeof message.summary === 'object' ? message.summary : null
@@ -77,10 +78,6 @@ function formSyncChips(t, message) {
   if (Number.isFinite(count) && count > 0) {
     chips.push({ key: 'count', text: `${Math.round(count)} ${t('unit.image')}` })
   }
-  chips.push({
-    key: 'reference',
-    text: summary.hasReference === true ? t('studio.chat.formSync.reference') : t('studio.chat.formSync.textOnly'),
-  })
   const seedValue = summary.seed
   // Number(null) === 0，不能直接 Number()：没有固定种子时 summary.seed 是 null。
   const seed = seedValue === null || seedValue === undefined || seedValue === '' ? NaN : Number(seedValue)

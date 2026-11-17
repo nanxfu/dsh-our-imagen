@@ -8,12 +8,14 @@
  * 判定方式是与「干净基准快照」逐字段比较，而不是一改就置脏：
  * 用户把值改回原样后仍然是干净的，不会因为点过一下输入框就永久失去自动回填。
  * 回填与重置只在这里算补丁，hook 负责落状态、维护基准与微调来源。
+ *
+ * 0.13.0 起参考图 / 蒙版 / 重绘强度迁到舞台图片工具（`useImageTool`），
+ * 主表单快照只比较提示词与纯文生图参数。
  */
 
 import { LIMITS } from '../../shared/contract.js'
 import { negativePromptActive } from '../../shared/models-guide.js'
 
-import { maskDigestOf } from './mask.js'
 import { hintOf } from './preset.js'
 import { negativeLayersPatch, normalizeNegativeLayers } from './prompt.js'
 
@@ -27,30 +29,6 @@ function textOf(value) {
 function numberish(value) {
   const number = Number(value)
   return Number.isFinite(number) ? number : 0
-}
-
-/**
- * 蒙版快照：优先用表单里已经算好的指纹，避免每次渲染都对几 MB 的 base64 重新哈希。
- * 外部直接塞字符串（没有指纹）时才现算。
- */
-function maskSnapshot(mask) {
-  if (!mask) return ''
-  if (typeof mask === 'object' && typeof mask.digest === 'string' && mask.digest) return mask.digest
-  const data = typeof mask === 'object' ? mask.data : mask
-  return maskDigestOf(data)
-}
-
-/** 参考图归一成可比较的五元组（路径 / 缩略图 / 宽高 / 蒙版指纹）；没有参考图时是 null。 */
-function referenceSnapshot(reference) {
-  if (!reference || typeof reference !== 'object') return null
-  return [
-    textOf(reference.path).trim(),
-    textOf(reference.url),
-    numberish(reference.width),
-    numberish(reference.height),
-    // 蒙版也是未提交的手动修改：涂完还没生成就切胶卷，同样要按草稿保护处理。
-    maskSnapshot(reference.mask),
-  ]
 }
 
 /**
@@ -69,8 +47,6 @@ export function formSnapshotOf(form) {
   snapshot.steps = numberish(input.steps)
   snapshot.cfg = numberish(input.cfg)
   snapshot.count = numberish(input.count)
-  snapshot.strength = numberish(input.strength)
-  snapshot.reference = referenceSnapshot(input.reference)
   return JSON.stringify(snapshot)
 }
 
@@ -87,7 +63,7 @@ export function isFormDirty(form, baseline) {
 /**
  * 「新建创作」→ 表单补丁。
  *
- * 只清掉绑定到上一张具体作品的状态：提示词、参考图、固定种子、排除项回落到
+ * 只清掉绑定到上一张具体作品的状态：提示词、固定种子、排除项回落到
  * 当前预设的默认推荐状态。模型预设与画幅比例是用户下一张还要用的常用设置，保留不动。
  */
 export function newCreationPatch(form, preset) {
@@ -102,9 +78,7 @@ export function newCreationPatch(form, preset) {
   })
   return {
     prompt: '',
-    reference: null,
     seed: '',
-    strength: LIMITS.strength.default,
     ...negativeLayersPatch(layers),
   }
 }

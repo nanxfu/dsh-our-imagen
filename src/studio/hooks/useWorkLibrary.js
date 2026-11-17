@@ -19,13 +19,16 @@ import {
   deleteImages as deleteImagesRequest,
   favoriteImage,
   fetchHistory,
+  fetchHistoryTree,
   fetchLibrary,
 } from '../../api/resources.js'
 import {
   historyHasMore,
   mergeHistoryPages,
   nextHistoryOffset,
+  pendingJobsOf,
 } from '../../logic/jobs.js'
+import { buildLineage } from '../../logic/lineage.js'
 
 const PAGE_SIZE = LIMITS.history.pageSize
 
@@ -58,6 +61,15 @@ export function useWorkLibrary({ t, alive, ui, state }) {
   const [historyHasMoreState, setHistoryHasMoreState] = React.useState(false)
   const [historyLoadingMore, setHistoryLoadingMore] = React.useState(false)
   const [favorites, setFavorites] = React.useState([])
+  // 阶段十三：显式新建绘图态与版本树按需拉取。
+  const [workspaceMode, setWorkspaceMode] = React.useState('work')
+  const [newDraftPending, setNewDraftPending] = React.useState(false)
+  const [treeUnavailable, setTreeUnavailable] = React.useState(false)
+  const [treeLoadingRoot, setTreeLoadingRoot] = React.useState('')
+  // 已提交、等待出图的 new_draft 任务 id：完成后切回 work 并选中新图。
+  const pendingNewDraftRef = React.useRef('')
+  const treeUnavailableRef = React.useRef(false)
+  const treeLoadedRef = React.useRef(new Set())
 
   // 最新回调函数与收藏视图放进 ref：异步回调与 effect 不依赖渲染闭包。
   const tRef = React.useRef(t)
@@ -183,6 +195,24 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     loadHistory()
   }, [hasState, lastJobId, loadHistory])
 
+  // 阶段十三：显式新建绘图提交后保持 new_draft，直到该任务完成再切回 work 并选中新图。
+  // 历史刷新由上面的 effect 负责（同一个 lastJobId 变化），这里只切焦点，避免重复请求。
+  React.useEffect(() => {
+    const jobId = pendingNewDraftRef.current
+    if (!jobId || !lastJob || lastJob.id !== jobId) return
+    if (lastJob.status === 'failed' || lastJob.status === 'cancelled') {
+      pendingNewDraftRef.current = ''
+      setNewDraftPending(false)
+      return
+    }
+    if (lastJob.status !== 'done') return
+    pendingNewDraftRef.current = ''
+    setNewDraftPending(false)
+    const first = Array.isArray(lastJob.output?.images) ? lastJob.output.images[0] : null
+    setWorkspaceMode('work')
+    setSelectedPath(first && first.path ? first.path : '')
+  }, [hasState, lastJobId])
+
   const gallery = flattenHistory(historyItems)
   // 最近生成按批次分组：一次生成（1~4 张）就是一组。
   const batches = historyItems
@@ -194,14 +224,84 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     }))
     .filter((batch) => batch.entries.length > 0)
   const newest = gallery[0] || null
-  const selected = (selectedPath && gallery.find((entry) => entry.image.path === selectedPath)) || newest
+  // new_draft 时没有选中作品：舞台显示显式新建背景，而不是上一张旧图。
+  const selected = workspaceMode === 'new_draft'
+    ? null
+    : ((selectedPath && gallery.find((entry) => entry.image.path === selectedPath)) || newest)
 
+  // 阶段十三版本树：已加载历史 + 在途活动任务 → 按根折叠的作品卡索引。
+  // pendingJobs 每次渲染都是新数组，用 id+status 指纹做依赖（任务参数不会中途变化）。
+  const pendingJobs = pendingJobsOf(state)
+  const pendingSignature = pendingJobs.map((job) => `${job.id}:${job.status}`).join(',')
+  const lineage = React.useMemo(
+    () => buildLineage({ items: historyItems, pendingJobs }),
+    [historyItems, pendingSignature],
+  )
+
+  /** 进入显式新建绘图态：清空选中，Stage 切「模糊背景 + 取景框」，作品条出现草稿卡。 */
+  function newDraft() {
+    pendingNewDraftRef.current = ''
+    setNewDraftPending(false)
+    setWorkspaceMode('new_draft')
+    setSelectedPath('')
+  }
+
+  /** 新建绘图提交成功：记下任务 id，等它完成后自动切回 work 并选中新图。 */
+  function markNewDraftSubmitted(jobId) {
+    pendingNewDraftRef.current = typeof jobId === 'string' ? jobId : ''
+    setNewDraftPending(true)
+    setWorkspaceMode('new_draft')
+    setSelectedPath('')
+  }
+
+  /** 切到某张作品：用户显式点选即退出新建态，并作废自动跳转（不抢用户焦点）。 */
   function selectImage(entry) {
+    pendingNewDraftRef.current = ''
+    setNewDraftPending(false)
+    setWorkspaceMode('work')
     setSelectedPath(entry && entry.image ? entry.image.path : '')
   }
 
   function openMessage(path) {
-    if (path) setSelectedPath(path)
+    if (!path) return
+    pendingNewDraftRef.current = ''
+    setNewDraftPending(false)
+    setWorkspaceMode('work')
+    setSelectedPath(path)
+  }
+
+  /**
+   * 版本面板按需拉树：`GET /history/tree?root=` 补齐跨分页的子版本，条目并入已加载分页。
+   * 旧宿主没有该路由（404）时只降级一次：标记 `treeUnavailable`，面板提示后用已加载分页继续。
+   */
+  async function loadTree(root) {
+    const path = typeof root === 'string' ? root.trim() : ''
+    if (!path || treeLoadedRef.current.has(path) || treeUnavailableRef.current) return null
+    treeLoadedRef.current.add(path)
+    setTreeLoadingRoot(path)
+    try {
+      const result = await alive(fetchHistoryTree(path))
+      if (!result) {
+        treeLoadedRef.current.delete(path)
+        return null
+      }
+      if (result.ok && result.data && Array.isArray(result.data.items)) {
+        const treeItems = result.data.items.filter(Boolean)
+        if (treeItems.length > 0) setHistoryItems((prev) => mergeHistoryPages(prev, treeItems))
+        return result.data
+      }
+      if (result.status === 404 || result.code === 'http_404') {
+        treeUnavailableRef.current = true
+        setTreeUnavailable(true)
+        return null
+      }
+      // 其它失败（网络/5xx）允许下次再试；不改动已有分页。
+      treeLoadedRef.current.delete(path)
+      uiRef.current.fail(result.code, result.message)
+      return null
+    } finally {
+      setTreeLoadingRoot('')
+    }
   }
 
   function isFavorite(path) {
@@ -310,5 +410,17 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     hasMore: historyHasMoreState,
     loadingMore: historyLoadingMore,
     loadMore: loadMoreHistory,
+    // 阶段十三：原始历史条目与版本树索引（Filmstrip 按根折叠、版本面板取数据）。
+    items: historyItems,
+    lineage,
+    // 工作区焦点：new_draft 时 selected 为 null，作品条显示新建草稿卡。
+    workspaceMode,
+    newDraftPending,
+    newDraft,
+    markNewDraftSubmitted,
+    // 版本树按需拉取与旧宿主降级状态。
+    loadTree,
+    treeUnavailable,
+    treeLoadingRoot,
   }
 }

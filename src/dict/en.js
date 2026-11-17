@@ -168,6 +168,8 @@ export const en = {
   'studio.preset.default': 'Default',
   'studio.preset.langZhEn': 'CN/EN',
   'studio.preset.langEnOnly': 'EN only',
+  // Dedicated inpainting weights live in the stage image tools only; the form picker marks them unselectable.
+  'studio.preset.imageToolOnly': 'Image tools only',
   'studio.preset.stepsUnit': 'steps',
   'studio.preset.dualGpu': 'Dual GPU',
   'studio.preset.footer': 'Posters are conceptual, not model outputs. Switching applies the recommended size and steps.',
@@ -198,11 +200,18 @@ export const en = {
   'studio.generate': 'Generate',
   'studio.generating': 'Submitting…',
   'studio.generateHint': 'Ctrl+Enter also generates',
+  // An inpaint-only preset cannot do text-to-image: the form falls back for this request, or blocks if none exists.
+  'studio.form.autoText2Image': 'The current preset only supports partial redraw; this request uses {preset} for text-to-image',
+  'studio.form.blockedInpaintOnly': 'The current preset only supports partial redraw and no text-to-image preset is available. Switch models.',
 
   // ── Preview ───────────────────────────────────────────────────
   'studio.stage.empty': 'Preview',
   'studio.stage.emptyHint': 'Describe the image on the left, then press Generate.',
   'studio.stage.stoppedHint': 'The cloud is closed; press Wake before generating.',
+  // Stage 13: explicit new-drawing mode (blurred animated backdrop + viewfinder frame).
+  'studio.stage.newDraftTitle': 'A canvas not generated yet',
+  'studio.stage.newDraftHint': 'Describe the image on the left, then press Generate.',
+  'studio.stage.newDraftPending': 'Submitted; the first image will open automatically when ready.',
   'studio.stage.examples': 'Ideas',
   'studio.stage.steady': 'Steady about',
   'studio.stage.zoom': 'Click to view full size',
@@ -221,6 +230,29 @@ export const en = {
   'studio.filmstrip.empty': 'Each batch you generate shows up here',
   'studio.filmstrip.offline': 'The cloud is not running yet',
   'studio.filmstrip.offlineClosed': 'The cloud is closed',
+  // Stage 13: new-draft card, root-folded work cards and the version panel.
+  'studio.filmstrip.newDraft': 'New drawing',
+  'studio.filmstrip.draftHint': 'Fill in the settings, then generate',
+  'studio.filmstrip.draftActive': 'Configuring a new canvas',
+  'studio.filmstrip.draftPending': 'Submitted, waiting for output',
+  'studio.filmstrip.versionsCount': '{count} versions',
+  'studio.filmstrip.versionBadge': '⎇ {count}',
+  'studio.filmstrip.versionBadgeHint': 'Version branches',
+  'studio.filmstrip.versionPanelTitle': 'Version branches',
+  'studio.filmstrip.versionPanelEmpty': 'No derived versions yet',
+  'studio.filmstrip.versionInFlight': 'Generating',
+  'studio.filmstrip.versionLoading': 'Loading versions…',
+  'studio.filmstrip.treeUnavailable': 'This host has no version tree API; showing loaded pages only',
+  'studio.filmstrip.versionKind.text': 'Text to image',
+  'studio.filmstrip.versionKind.img2img': 'Whole-image redraw',
+  'studio.filmstrip.versionKind.inpaint': 'Local inpaint',
+  'studio.filmstrip.sourceDeleted': 'Source work was deleted',
+  'studio.filmstrip.draftDot': 'Unsubmitted edits',
+  'studio.filmstrip.draftTitle': 'Modified: {items}',
+  'studio.filmstrip.draftClear': 'Clear draft',
+  'studio.filmstrip.draftItems.mask': 'Mask',
+  'studio.filmstrip.draftItems.prompt': 'Prompt',
+  'studio.filmstrip.draftItems.params': 'Parameters',
   // Narrow-screen queue pill: the filmstrip is hidden below 820px, this keeps the pending count visible.
   'studio.queue.waiting': '{count} more queued',
   // Stalled queue (10 min) banner: not an error; the primary action requeues a fresh instance.
@@ -318,11 +350,6 @@ export const en = {
   'studio.toast.recalled': 'Settings restored',
   // Filmstrip click with unsaved manual edits: preview switches, draft stays.
   'studio.toast.draftKept': 'Current draft kept',
-  // Filmstrip click with a reference image / mask: preview switches, both stay.
-  'studio.toast.referenceKept': 'Kept the current reference image and mask',
-  'studio.toast.referenceImageKept': 'Kept the current reference image',
-  // Retry: the original mask cannot be restored, so only the reference is filled back.
-  'studio.toast.maskLost': 'The original mask cannot be restored; paint it again before generating',
   'studio.toast.newCreation': 'Started a new creation',
   'studio.toast.favorited': 'Added to favorites',
   'studio.toast.unfavorited': 'Removed from favorites',
@@ -419,39 +446,39 @@ export const en = {
   'studio.rail.frame': 'Frame',
   'studio.rail.advanced': 'Advanced',
   'studio.rail.params': 'Steps / guidance / seed',
-  'studio.rail.followReference': 'Follows reference',
   // Version tuning: which work the current form comes from; "New creation" clears that tie.
   'studio.rail.tuning': 'Tuning from: {prompt}',
   'studio.rail.tuningUnknown': 'current work',
   'studio.rail.newCreation': 'New creation',
+  // The left panel no longer hosts image processing: point at the stage action dock.
+  'studio.rail.imageToolsHint': 'Image processing (partial redraw / whole-image redraw) lives in the action dock at the bottom of the stage.',
 
-  // ── Reference image and image-to-image ────────────────────────
-  'studio.reference.title': 'Reference image',
-  'studio.reference.strength': 'Redraw strength',
-  'studio.reference.hint': 'Lower stays closer to the reference; higher gives the model more freedom.',
-  'studio.reference.remove': 'Remove',
-  'studio.reference.unsupported': 'This model does not support image-to-image. Switch models or remove the reference image.',
-  'studio.reference.blocked': 'This model does not support image-to-image, so this generation was stopped. Switch models or remove the reference image.',
-  'studio.reference.switched': 'This model does not support image-to-image, so it switched to {preset}.',
-  'studio.reference.applied': 'Set as the reference image; adjust the redraw strength.',
-  'studio.reference.unavailable': 'The installed host does not support image-to-image, so this work cannot be used as a reference.',
-  'studio.reference.noPath': 'This work has no usable file path and cannot be used as a reference.',
-  // Empty reference slot: dedicated inpainting models get two steps, other models a single line.
-  'studio.reference.emptyTitle': 'Pick a reference image first',
-  'studio.reference.emptyHint': 'Choose a work from the gallery, then paint the area to redraw',
-  'studio.reference.emptySimple': 'Attach a reference image for image-to-image',
-  'studio.reference.emptyAction': 'Choose from gallery',
-  // Reference ready: mask coverage, keep painting / clear mask and the footer source note.
-  'studio.reference.maskCoverage': '{percent}% painted',
-  'studio.reference.maskEmpty': 'Not painted yet',
-  'studio.reference.continuePaint': 'Keep painting',
-  'studio.reference.clearMask': 'Clear mask',
-  'studio.reference.basedOn': 'Redrawing from {name}',
-  // Assistant / variant force text-to-image: an inpaint-only preset switches for this request.
-  'studio.reference.autoText2Image': 'The current preset only supports inpainting; this request uses {preset} for text-to-image',
+  // ── Stage image tools (action dock / inline submit bar) ───────
+  'studio.imageTool.title': 'Image tools',
+  'studio.imageTool.groupLabel': 'Image processing',
+  'studio.imageTool.inpaint': 'Paint mask',
+  'studio.imageTool.img2img': 'Whole-image redraw',
+  'studio.imageTool.upscale': 'Upscale',
+  'studio.imageTool.outpaint': 'Outpaint',
+  'studio.imageTool.planned': 'Planned, not available yet',
+  'studio.imageTool.autoPreset': 'Switched to {preset} automatically',
+  'studio.imageTool.presetLabel': 'Model',
+  'studio.imageTool.promptLabel': 'Change description',
+  'studio.imageTool.promptPlaceholder': 'Leave empty to reuse the original prompt',
+  'studio.imageTool.strengthLabel': 'Redraw strength',
+  'studio.imageTool.submit': 'Redraw',
+  'studio.imageTool.exit': 'Exit',
+  'studio.imageTool.resumeDraft': 'Keep editing',
+  'studio.imageTool.draftStatus': '{percent}% painted',
+  'studio.imageTool.maskEmpty': 'Not painted yet',
+  'studio.imageTool.blockedNoPreset': 'No usable model, so the image tool cannot run.',
+  'studio.imageTool.blockedNoPrompt': 'Write a change description, or use a work that has a prompt.',
+  'studio.imageTool.blockedTarget': 'No base image to process. Select a work on the stage first.',
+  'studio.imageTool.submitted': 'Image processing task submitted',
+  // Failed tasks fall back to the stage tool: the left panel no longer replays reference jobs.
+  'studio.imageTool.retryMoved': 'This task came from an image tool. Use “Keep editing” in the stage dock to restore it and submit again.',
 
-  // ── Partial redraw (Inpaint) ──────────────────────────────────
-  'studio.mask.toggle': 'Paint mask',
+  // ── Partial redraw canvas (MaskEditor toolbar) ────────────────
   'studio.mask.title': 'Partial redraw',
   'studio.mask.hint': 'Paint the area to redraw; untouched areas stay unchanged.',
   'studio.mask.brush': 'Brush size',
@@ -460,15 +487,8 @@ export const en = {
   'studio.mask.invert': 'Invert selection',
   'studio.mask.close': 'Done painting',
   'studio.mask.coverage': 'Painted {percent}%',
-  'studio.mask.applied': 'Painted {percent}%; only this area will be redrawn.',
-  'studio.mask.empty': 'Nothing painted yet; generation will redraw the whole image.',
-  'studio.mask.unsupported': 'This model does not support partial redraw. Switch to an SDXL model.',
-  'studio.mask.kept': 'Your painted mask is kept and will work again once you switch back to a supported model.',
   'studio.mask.tooLarge': 'The mask exceeds the size limit and was not saved. Paint a smaller area and try again.',
   'studio.mask.canvasLabel': 'Mask painting canvas: use arrow keys to move the brush, Space or Enter to paint, Esc to finish.',
-  // Redraw chain: set the current result as the new reference and start painting.
-  'studio.mask.continueFromResult': 'Redraw from this result',
-  'studio.mask.continueHint': 'Set as reference; paint the area to redraw',
 
   // ── Creation assistant ────────────────────────────────────────
   'studio.chat.assistant': 'Assistant',
@@ -501,8 +521,6 @@ export const en = {
   'studio.chat.formSync.form': 'From the form',
   'studio.chat.formSync.variant': 'Variant',
   'studio.chat.formSync.retry': 'Retry last params',
-  'studio.chat.formSync.reference': 'With reference',
-  'studio.chat.formSync.textOnly': 'Text to image',
   'studio.chat.formSync.seed': 'Seed {seed}',
   'studio.chat.formSync.seedRandom': 'Random seed',
 
@@ -537,5 +555,5 @@ export const en = {
   'studio.update.requiresDsh': 'The new version requires DSH {range}; upgrade DSH first.',
   'studio.mask.guide': 'Tip: cover the whole object you want to repaint (including its edges) and change one object at a time; large block masks tend to show seams.',
   'studio.mask.fastModelHint': 'This is a few-step fast model, so local repaints change less; switch to a multi-step model (SDXL Base / RealVis) when you need a bigger rewrite.',
-  'studio.mask.onlyHint': 'This is a dedicated inpainting model: attach a reference image and paint a mask before generating.',
+  'studio.mask.onlyHint': 'This is a dedicated inpainting model: paint a mask on the canvas before submitting.',
 }

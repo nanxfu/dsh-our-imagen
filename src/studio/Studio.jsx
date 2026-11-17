@@ -37,7 +37,7 @@ const StudioStyles = React.memo(function StudioStyles() {
 })
 
 export function Studio(props) {
-  const { t, isEn, ui, compute, form, chat, library, guidance, actions } = useStudio(props)
+  const { t, isEn, ui, compute, form, chat, library, imageTool, guidance, actions } = useStudio(props)
   const status = compute.status
   // 完成态还要保留一会儿：宿主 2 秒轮询一次，任务真正完成的时刻客户端最晚 2 秒后才知道，
   // 只靠「有活动任务」会停表，完成节点就闪不出来。失败态没有时间变化，不需要额外刷新。
@@ -105,7 +105,7 @@ export function Studio(props) {
                 onExport={library.exportPaths}
                 onRecall={actions.iterate}
                 onVariant={actions.reroll}
-                onReference={actions.referenceImage}
+                onReference={(entry) => actions.openImageTool('inpaint', entry)}
                 onToggleFavorite={library.toggleFavorite}
                 onZoom={library.zoomImage}
                 onOpen={(entry) => {
@@ -114,7 +114,7 @@ export function Studio(props) {
                 }}
               />
             ) : (
-              <Stage t={t} ui={ui} compute={compute} form={form} library={library} actions={actions} now={now} />
+              <Stage t={t} ui={ui} compute={compute} form={form} library={library} imageTool={imageTool} actions={actions} now={now} />
             )}
           </div>
         </div>

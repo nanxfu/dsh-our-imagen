@@ -33,6 +33,9 @@ export const ROUTES = {
   jobs: { method: 'GET', path: '/imagen-api/jobs' },
   // 历史分页：limit / offset 查询参数，响应补 hasMore（向后兼容只读 items 的旧客户端）。
   history: { method: 'GET', path: '/imagen-api/history' },
+  // 版本树：按根作品路径（root，工作区相对路径）返回整棵派生树，供作品条版本面板按需展开。
+  // 旧宿主没有该路由时客户端按 404 降级为「仅用已加载分页」。
+  historyTree: { method: 'GET', path: '/imagen-api/history/tree' },
   file: { method: 'GET', path: '/imagen-api/file' },
   library: { method: 'GET', path: '/imagen-api/library' },
   libraryFavorite: { method: 'POST', path: '/imagen-api/library/favorite' },

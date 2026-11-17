@@ -2,13 +2,12 @@
  * 局部重绘（Inpaint）蒙版的纯逻辑。
  *
  * 蒙版是一张「白 = 重绘区域、黑 = 保留区域」的 PNG，和参考图一起提交：
- *  - 画布绘制、像素反选与 PNG 导出需要 DOM，留在 `src/studio/Stage.jsx`；
- *  - 画笔边界、涂抹状态转换、导出前置校验与「表单 → 请求体」的形状换算放在这里，
- *    便于离线断言，也让 Stage 与 useStudioForm 共用同一套规则。
+ *  - 画布绘制、像素反选与 PNG 导出需要 DOM，留在 `src/studio/stage/MaskEditor.jsx`；
+ *  - 画笔边界、涂抹状态转换、导出前置校验与 base64 归一放在这里，便于离线断言，
+ *    由 MaskEditor 与 `useImageTool` 共用同一套规则。
  *
- * 表单里蒙版挂在 `reference.mask` 上（`{ data, coverage, digest }`）：
- * 换参考图 / 移除参考图 / 回填 / 新建创作都会整块替换或清空 `reference`，
- * 蒙版随之一起清掉，不会残留到下一轮。
+ * 阶段十二起蒙版不再挂在文生图表单的 `reference.mask` 上，而是图片工具草稿的
+ * `mask`（`{ data, coverage, digest }`）：换作品 / 提交成功时由工具域整体清空。
  */
 
 import { LIMITS } from '../../shared/contract.js'
@@ -49,38 +48,6 @@ export const MASK_STRENGTH_DEFAULT = 0.8
  * 明显替换。契约上限是 0.9，因此这里直接取 0.9。
  */
 export const MASK_STRENGTH_NATIVE = 0.9
-
-/** 涂抹推荐强度档：专用 inpaint 权重取 0.9，通用模型取 0.8。 */
-export function maskStrengthTargetOf(native) {
-  return native === true ? MASK_STRENGTH_NATIVE : MASK_STRENGTH_DEFAULT
-}
-
-/**
- * 进入涂抹模式时要不要把强度抬到推荐档。
- *
- * `native` 为真表示当前是专用 inpaint 权重，用更高的 0.9；否则用 0.8。
- * `auto` 为真表示强度仍在自动档（没被用户手调过），无条件跟随推荐档；
- * 否则沿用旧语义：只有当前仍是契约默认值时才抬档，用户手调过的值一律尊重。
- * 返回 `{ strength }` 补丁或 null。
- */
-export function maskStrengthPatch(current, options = {}) {
-  const target = maskStrengthTargetOf(options.native === true)
-  const auto = options.auto === true
-  const number = Number(current)
-  // 自动档要么从未被改过、要么上一轮就是推荐档：直接跟随当前预设的推荐档。
-  if (auto) return { strength: target }
-  if (!Number.isFinite(number)) return { strength: target }
-  if (Math.abs(number - LIMITS.strength.default) > 1e-9) return null
-  return { strength: target }
-}
-
-/**
- * 切换预设时的强度联动：自动档按新预设的推荐档更新，用户手调过则返回 null（不动）。
- */
-export function maskStrengthPresetPatch(strengthAuto, options = {}) {
-  if (strengthAuto !== true) return null
-  return { strength: maskStrengthTargetOf(options.native === true) }
-}
 
 /**
  * 强度上限：有蒙版时用契约的 `strength.inpaintMax`（局部重绘允许更强替换），
@@ -158,17 +125,6 @@ export function maskStateOf(partial) {
 /** 空涂抹状态（清空蒙版后的状态）。 */
 export function emptyMaskState() {
   return { coverage: 0 }
-}
-
-/** 清空蒙版：状态回到空涂抹。 */
-export function clearMaskState() {
-  return emptyMaskState()
-}
-
-/** 反选区域：覆盖率取补；空蒙版反选即全选，全选反选即清空。 */
-export function invertMaskState(state) {
-  const { coverage } = maskStateOf(state)
-  return { coverage: coverage > 0 ? coverageOf(1 - coverage) : 1 }
 }
 
 /** 当前涂抹是否达到最小有效面积（低于阈值按空蒙版处理）。 */
@@ -269,15 +225,6 @@ export function referenceMaskForSubmit(reference) {
   const bytes = base64BytesOf(data)
   if (bytes <= 0 || bytes > LIMITS.mask.maxBytes) return ''
   return data
-}
-
-/** 去掉参考图上的蒙版，其余字段原样保留（回填 / 换参考图时兜底清理用）。 */
-export function referenceWithoutMask(reference) {
-  if (!reference || typeof reference !== 'object') return reference ?? null
-  if (!reference.mask) return reference
-  const next = { ...reference }
-  delete next.mask
-  return next
 }
 
 /**

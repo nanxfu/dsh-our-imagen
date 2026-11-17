@@ -168,6 +168,8 @@ export const zh = {
   'studio.preset.default': '默认',
   'studio.preset.langZhEn': '中英双语',
   'studio.preset.langEnOnly': '仅英文',
+  // 专用局部重绘权重只出现在舞台图片工具里，主表单模型卡标成不可选。
+  'studio.preset.imageToolOnly': '仅图片工具',
   'studio.preset.stepsUnit': '步',
   'studio.preset.dualGpu': '双 GPU',
   'studio.preset.footer': '海报为概念示意，非出图样例；切换会套用推荐尺寸与步数。',
@@ -198,11 +200,18 @@ export const zh = {
   'studio.generate': '立即生成',
   'studio.generating': '提交中…',
   'studio.generateHint': 'Ctrl+Enter 直接生成',
+  // 专用局部重绘预设不能文生图：主表单本次请求自动切兜底预设 / 一个可用预设都没有时拦下。
+  'studio.form.autoText2Image': '当前预设只支持局部重绘，本次已改用 {preset} 文生图',
+  'studio.form.blockedInpaintOnly': '当前预设只支持局部重绘，且没有可用的文生图预设；请切换模型。',
 
   // ── 画面预览 ─────────────────────────────────────────────────
   'studio.stage.empty': '画面预览',
   'studio.stage.emptyHint': '在左侧输入画面描述，点击生成即可开始出图。',
   'studio.stage.stoppedHint': '云端已关闭，先点「唤醒」再生成。',
+  // 阶段十三：显式新建绘图态（模糊动态背景 + 取景框）。
+  'studio.stage.newDraftTitle': '一张还没生成的新画布',
+  'studio.stage.newDraftHint': '在左侧填写画面描述，点击生成开始出图。',
+  'studio.stage.newDraftPending': '已提交，第一张出图后自动切到作品。',
   'studio.stage.examples': '灵感示例',
   'studio.stage.steady': '稳定出图约',
   'studio.stage.zoom': '点击查看原图',
@@ -221,6 +230,29 @@ export const zh = {
   'studio.filmstrip.empty': '生成的每一批作品会显示在这里',
   'studio.filmstrip.offline': '云端尚未启动',
   'studio.filmstrip.offlineClosed': '云端已关闭',
+  // 阶段十三：新建草稿卡、按根折叠的作品卡与版本派生面板。
+  'studio.filmstrip.newDraft': '新建绘图',
+  'studio.filmstrip.draftHint': '填写参数后生成第一张',
+  'studio.filmstrip.draftActive': '正在配置新画布',
+  'studio.filmstrip.draftPending': '已提交，等待出图',
+  'studio.filmstrip.versionsCount': '{count} 个版本',
+  'studio.filmstrip.versionBadge': '⎇ {count}',
+  'studio.filmstrip.versionBadgeHint': '版本分支',
+  'studio.filmstrip.versionPanelTitle': '版本分支',
+  'studio.filmstrip.versionPanelEmpty': '暂无派生版本',
+  'studio.filmstrip.versionInFlight': '生成中',
+  'studio.filmstrip.versionLoading': '正在拉取版本…',
+  'studio.filmstrip.treeUnavailable': '当前宿主不支持版本树，仅显示已加载分页',
+  'studio.filmstrip.versionKind.text': '文生图',
+  'studio.filmstrip.versionKind.img2img': '整图重绘',
+  'studio.filmstrip.versionKind.inpaint': '局部涂抹',
+  'studio.filmstrip.sourceDeleted': '来源作品已删除',
+  'studio.filmstrip.draftDot': '有未提交的编辑',
+  'studio.filmstrip.draftTitle': '已修改：{items}',
+  'studio.filmstrip.draftClear': '清空草稿',
+  'studio.filmstrip.draftItems.mask': '涂抹区域',
+  'studio.filmstrip.draftItems.prompt': '提示词',
+  'studio.filmstrip.draftItems.params': '参数',
   // 窄屏队列胶囊：胶片条在窄屏收起后用它显示后续待执行任务数。
   'studio.queue.waiting': '另有 {count} 张排队',
   // 排队卡住（10 分钟档）顶部横幅：非错误提示，主操作换新实例重排。
@@ -318,11 +350,6 @@ export const zh = {
   'studio.toast.recalled': '参数已回填',
   // 胶卷点击遇到未提交的手动修改：只换预览、保留草稿。
   'studio.toast.draftKept': '已保留当前草稿',
-  // 胶卷点击遇到参考图 / 蒙版：只换预览，参考图与蒙版原样保留。
-  'studio.toast.referenceKept': '已保留当前参考图与蒙版',
-  'studio.toast.referenceImageKept': '已保留当前参考图',
-  // 失败重试：原任务蒙版无法还原，只把参考图填回表单。
-  'studio.toast.maskLost': '原任务的蒙版已无法恢复，请重新涂抹后再生成',
   'studio.toast.newCreation': '已开始新的创作',
   'studio.toast.favorited': '已加入收藏',
   'studio.toast.unfavorited': '已取消收藏',
@@ -419,39 +446,39 @@ export const zh = {
   'studio.rail.frame': '画面设置',
   'studio.rail.advanced': '高级设置',
   'studio.rail.params': '步数 / 引导强度 / 随机种子',
-  'studio.rail.followReference': '跟随参考图',
   // 版本微调：当前表单参数来自哪张作品；「新建创作」清掉这层绑定回到干净起点。
   'studio.rail.tuning': '正在微调：{prompt}',
   'studio.rail.tuningUnknown': '当前作品',
   'studio.rail.newCreation': '新建创作',
+  // 左栏不再承载图片处理：告诉用户入口在舞台底部动作坞。
+  'studio.rail.imageToolsHint': '图片处理（局部涂抹 / 整图重绘）在舞台底部的动作坞里。',
 
-  // ── 参考图与垫图重绘 ─────────────────────────────────────────
-  'studio.reference.title': '参考图',
-  'studio.reference.strength': '重绘强度',
-  'studio.reference.hint': '强度越低越贴近参考图，越高越自由发挥。',
-  'studio.reference.remove': '移除',
-  'studio.reference.unsupported': '当前模型不支持垫图重绘，请切换模型或移除参考图。',
-  'studio.reference.blocked': '当前模型不支持垫图重绘，已拦下本次生成；请切换模型或移除参考图。',
-  'studio.reference.switched': '当前模型不支持垫图重绘，已切到 {preset}。',
-  'studio.reference.applied': '已设为参考图，可调整重绘强度。',
-  'studio.reference.unavailable': '当前宿主版本不支持垫图重绘，无法把作品设为参考图。',
-  'studio.reference.noPath': '这张作品没有可用的文件路径，无法作为参考图。',
-  // 还没放参考图时的引导：专用局部重绘模型给两步说明，普通垫图模型只给单行入口。
-  'studio.reference.emptyTitle': '先选一张参考图',
-  'studio.reference.emptyHint': '从作品画廊选一张图，再涂抹要重绘的区域',
-  'studio.reference.emptySimple': '可挂一张参考图做垫图重绘',
-  'studio.reference.emptyAction': '从作品画廊选择',
-  // 参考图已就位：蒙版覆盖率、继续涂抹 / 清空蒙版与页脚来源标注。
-  'studio.reference.maskCoverage': '已涂抹 {percent}%',
-  'studio.reference.maskEmpty': '尚未涂抹蒙版',
-  'studio.reference.continuePaint': '继续涂抹',
-  'studio.reference.clearMask': '清空蒙版',
-  'studio.reference.basedOn': '本次基于 {name} 重绘',
-  // 助手 / 变体强制纯文生图：当前预设只支持局部重绘时本次改用兜底预设。
-  'studio.reference.autoText2Image': '当前预设只支持局部重绘，本次已改用 {preset} 文生图',
+  // ── 舞台图片工具（动作坞 / 轻量提交栏） ───────────────────────
+  'studio.imageTool.title': '图片工具',
+  'studio.imageTool.groupLabel': '图片处理',
+  'studio.imageTool.inpaint': '局部涂抹',
+  'studio.imageTool.img2img': '整图重绘',
+  'studio.imageTool.upscale': '高清放大',
+  'studio.imageTool.outpaint': '扩图',
+  'studio.imageTool.planned': '规划中，暂未开放',
+  'studio.imageTool.autoPreset': '已自动改用 {preset}',
+  'studio.imageTool.presetLabel': '模型',
+  'studio.imageTool.promptLabel': '修改描述',
+  'studio.imageTool.promptPlaceholder': '留空则沿用原作品提示词',
+  'studio.imageTool.strengthLabel': '重绘强度',
+  'studio.imageTool.submit': '重绘',
+  'studio.imageTool.exit': '退出',
+  'studio.imageTool.resumeDraft': '继续编辑',
+  'studio.imageTool.draftStatus': '已涂 {percent}%',
+  'studio.imageTool.maskEmpty': '尚未涂抹蒙版',
+  'studio.imageTool.blockedNoPreset': '没有可用的模型，无法执行图片工具。',
+  'studio.imageTool.blockedNoPrompt': '请填写修改描述，或让原作品带有提示词。',
+  'studio.imageTool.blockedTarget': '没有可处理的底图，请先在舞台选中一张作品。',
+  'studio.imageTool.submitted': '已提交图片处理任务',
+  // 失败重试指向舞台工具：左栏「重试一次」不再重放带底图的任务。
+  'studio.imageTool.retryMoved': '图片工具任务请在舞台动作坞中点「继续编辑」恢复后重新提交。',
 
-  // ── 局部涂抹（Inpaint） ──────────────────────────────────────
-  'studio.mask.toggle': '局部涂抹',
+  // ── 局部涂抹画布（MaskEditor 工具栏） ────────────────────────
   'studio.mask.title': '局部重绘',
   'studio.mask.hint': '在图上涂抹要重绘的区域；未涂抹的区域保持不变。',
   'studio.mask.brush': '画笔大小',
@@ -460,15 +487,8 @@ export const zh = {
   'studio.mask.invert': '反选区域',
   'studio.mask.close': '完成涂抹',
   'studio.mask.coverage': '已涂抹 {percent}%',
-  'studio.mask.applied': '已涂抹 {percent}%，生成时只重绘这部分区域。',
-  'studio.mask.empty': '还没有涂抹区域，生成时仍按整图重绘。',
-  'studio.mask.unsupported': '当前模型不支持局部重绘，请切换到 SDXL 系列模型。',
-  'studio.mask.kept': '已涂抹的蒙版会保留，切回支持局部重绘的模型后可继续使用。',
   'studio.mask.tooLarge': '蒙版体积超过上限，未保存；请减少涂抹面积后重试。',
   'studio.mask.canvasLabel': '局部涂抹画布：方向键移动画笔，空格键或回车键落笔，Esc 完成涂抹。',
-  // 续绘闭环：把当前结果设为新参考图并进入涂抹。
-  'studio.mask.continueFromResult': '以此结果继续重绘',
-  'studio.mask.continueHint': '已设为参考图，请涂抹要重绘的区域',
 
   // ── 创作助手 ─────────────────────────────────────────────────
   'studio.chat.assistant': '创作助手',
@@ -501,8 +521,6 @@ export const zh = {
   'studio.chat.formSync.form': '来自参数表单',
   'studio.chat.formSync.variant': '生成变体',
   'studio.chat.formSync.retry': '重试上次参数',
-  'studio.chat.formSync.reference': '含参考图',
-  'studio.chat.formSync.textOnly': '文生图',
   'studio.chat.formSync.seed': '种子 {seed}',
   'studio.chat.formSync.seedRandom': '随机种子',
 
@@ -537,5 +555,5 @@ export const zh = {
   'studio.update.requiresDsh': '新版本要求 DSH {range}，请先升级 DSH。',
   'studio.mask.guide': '小技巧：蒙版要包住要替换的整个物体（含边缘），一次只改一个物体；大面积整块涂抹容易出现接缝。',
   'studio.mask.fastModelHint': '当前是少步快速模型，局部重绘的改动幅度有限；需要明显改写时建议换 SDXL Base / RealVis 等多步模型。',
-  'studio.mask.onlyHint': '当前是局部重绘专用模型：请先「以此图重绘」并涂抹蒙版后再生成。',
+  'studio.mask.onlyHint': '当前是局部重绘专用模型：请先在画布上涂抹蒙版再提交。',
 }

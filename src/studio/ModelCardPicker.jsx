@@ -45,6 +45,7 @@ const LABELS = {
   default: 'studio.preset.default',
   langZhEn: 'studio.preset.langZhEn',
   langEnOnly: 'studio.preset.langEnOnly',
+  imageToolOnly: 'studio.preset.imageToolOnly',
   footer: 'studio.preset.footer',
   steps: 'studio.preset.stepsUnit',
   dualGpu: 'studio.preset.dualGpu',
@@ -118,6 +119,8 @@ export function ModelCardPicker(props) {
   }, [open, onOpenChange])
 
   function choose(preset) {
+    // 专用局部重绘权重只服务舞台图片工具：主表单选择器不给选（Lead 决策 D3）。
+    if (!preset || preset.inpaintOnly === true) return
     if (onChange) onChange(preset)
     onOpenChange(false)
     if (triggerRef.current) triggerRef.current.focus({ preventScroll: true })
@@ -125,7 +128,10 @@ export function ModelCardPicker(props) {
 
   function onListKeyDown(event) {
     if (!listRef.current) return
-    const options = Array.prototype.slice.call(listRef.current.querySelectorAll('[role="option"]'))
+    const options = Array.prototype.slice
+      .call(listRef.current.querySelectorAll('[role="option"]'))
+      // 禁用项（仅图片工具可用）不可聚焦：方向键在可选模型之间循环。
+      .filter((option) => option.disabled !== true && option.getAttribute('aria-disabled') !== 'true')
     if (options.length === 0) return
     const current = options.indexOf(document.activeElement)
     let next = null
@@ -192,6 +198,8 @@ export function ModelCardPicker(props) {
               const selected = preset.id === active.id
               const image = POSTERS[preset.id] || ''
               const isDefault = preset.id === defaultPreset
+              // 专用局部重绘权重只出现在舞台图片工具里：主表单选择器标成不可选。
+              const imageToolOnly = preset.inpaintOnly === true
               const optionEta = etaOf(t, preset)
               const description = descriptionOf(preset, isEn)
               return (
@@ -200,8 +208,11 @@ export function ModelCardPicker(props) {
                   type="button"
                   role="option"
                   aria-selected={selected ? 'true' : 'false'}
-                  className={`ofs-model-option${selected ? ' is-on' : ''}`}
+                  aria-disabled={imageToolOnly ? 'true' : undefined}
+                  disabled={imageToolOnly}
+                  className={`ofs-model-option${selected ? ' is-on' : ''}${imageToolOnly ? ' is-tool-only' : ''}`}
                   data-preset-id={preset.id}
+                  title={imageToolOnly ? t(LABELS.imageToolOnly) : undefined}
                   onClick={() => choose(preset)}
                 >
                   <span className="ofs-model-poster" aria-hidden="true">
@@ -215,9 +226,13 @@ export function ModelCardPicker(props) {
                     <span className="ofs-model-line">
                       {preset.family ? <span className="ofs-model-fam">{preset.family}</span> : null}
                       <span className="ofs-model-name">{shortOf(preset)}</span>
-                      <span className={preset.supportsChinese === true ? 'ofs-model-lang is-zh' : 'ofs-model-lang'}>
-                        {t(preset.supportsChinese === true ? LABELS.langZhEn : LABELS.langEnOnly)}
-                      </span>
+                      {imageToolOnly ? (
+                        <span className="ofs-model-lang is-tool-only">{t(LABELS.imageToolOnly)}</span>
+                      ) : (
+                        <span className={preset.supportsChinese === true ? 'ofs-model-lang is-zh' : 'ofs-model-lang'}>
+                          {t(preset.supportsChinese === true ? LABELS.langZhEn : LABELS.langEnOnly)}
+                        </span>
+                      )}
                       {isDefault ? <span className="ofs-model-default">{t(LABELS.default)}</span> : null}
                     </span>
                     {description ? <span className="ofs-model-desc">{description}</span> : null}

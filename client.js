@@ -219,6 +219,8 @@ var zh = {
   "studio.preset.default": "默认",
   "studio.preset.langZhEn": "中英双语",
   "studio.preset.langEnOnly": "仅英文",
+  // 专用局部重绘权重只出现在舞台图片工具里，主表单模型卡标成不可选。
+  "studio.preset.imageToolOnly": "仅图片工具",
   "studio.preset.stepsUnit": "步",
   "studio.preset.dualGpu": "双 GPU",
   "studio.preset.footer": "海报为概念示意，非出图样例；切换会套用推荐尺寸与步数。",
@@ -248,10 +250,17 @@ var zh = {
   "studio.generate": "立即生成",
   "studio.generating": "提交中…",
   "studio.generateHint": "Ctrl+Enter 直接生成",
+  // 专用局部重绘预设不能文生图：主表单本次请求自动切兜底预设 / 一个可用预设都没有时拦下。
+  "studio.form.autoText2Image": "当前预设只支持局部重绘，本次已改用 {preset} 文生图",
+  "studio.form.blockedInpaintOnly": "当前预设只支持局部重绘，且没有可用的文生图预设；请切换模型。",
   // ── 画面预览 ─────────────────────────────────────────────────
   "studio.stage.empty": "画面预览",
   "studio.stage.emptyHint": "在左侧输入画面描述，点击生成即可开始出图。",
   "studio.stage.stoppedHint": "云端已关闭，先点「唤醒」再生成。",
+  // 阶段十三：显式新建绘图态（模糊动态背景 + 取景框）。
+  "studio.stage.newDraftTitle": "一张还没生成的新画布",
+  "studio.stage.newDraftHint": "在左侧填写画面描述，点击生成开始出图。",
+  "studio.stage.newDraftPending": "已提交，第一张出图后自动切到作品。",
   "studio.stage.examples": "灵感示例",
   "studio.stage.steady": "稳定出图约",
   "studio.stage.zoom": "点击查看原图",
@@ -269,6 +278,29 @@ var zh = {
   "studio.filmstrip.empty": "生成的每一批作品会显示在这里",
   "studio.filmstrip.offline": "云端尚未启动",
   "studio.filmstrip.offlineClosed": "云端已关闭",
+  // 阶段十三：新建草稿卡、按根折叠的作品卡与版本派生面板。
+  "studio.filmstrip.newDraft": "新建绘图",
+  "studio.filmstrip.draftHint": "填写参数后生成第一张",
+  "studio.filmstrip.draftActive": "正在配置新画布",
+  "studio.filmstrip.draftPending": "已提交，等待出图",
+  "studio.filmstrip.versionsCount": "{count} 个版本",
+  "studio.filmstrip.versionBadge": "⎇ {count}",
+  "studio.filmstrip.versionBadgeHint": "版本分支",
+  "studio.filmstrip.versionPanelTitle": "版本分支",
+  "studio.filmstrip.versionPanelEmpty": "暂无派生版本",
+  "studio.filmstrip.versionInFlight": "生成中",
+  "studio.filmstrip.versionLoading": "正在拉取版本…",
+  "studio.filmstrip.treeUnavailable": "当前宿主不支持版本树，仅显示已加载分页",
+  "studio.filmstrip.versionKind.text": "文生图",
+  "studio.filmstrip.versionKind.img2img": "整图重绘",
+  "studio.filmstrip.versionKind.inpaint": "局部涂抹",
+  "studio.filmstrip.sourceDeleted": "来源作品已删除",
+  "studio.filmstrip.draftDot": "有未提交的编辑",
+  "studio.filmstrip.draftTitle": "已修改：{items}",
+  "studio.filmstrip.draftClear": "清空草稿",
+  "studio.filmstrip.draftItems.mask": "涂抹区域",
+  "studio.filmstrip.draftItems.prompt": "提示词",
+  "studio.filmstrip.draftItems.params": "参数",
   // 窄屏队列胶囊：胶片条在窄屏收起后用它显示后续待执行任务数。
   "studio.queue.waiting": "另有 {count} 张排队",
   // 排队卡住（10 分钟档）顶部横幅：非错误提示，主操作换新实例重排。
@@ -362,11 +394,6 @@ var zh = {
   "studio.toast.recalled": "参数已回填",
   // 胶卷点击遇到未提交的手动修改：只换预览、保留草稿。
   "studio.toast.draftKept": "已保留当前草稿",
-  // 胶卷点击遇到参考图 / 蒙版：只换预览，参考图与蒙版原样保留。
-  "studio.toast.referenceKept": "已保留当前参考图与蒙版",
-  "studio.toast.referenceImageKept": "已保留当前参考图",
-  // 失败重试：原任务蒙版无法还原，只把参考图填回表单。
-  "studio.toast.maskLost": "原任务的蒙版已无法恢复，请重新涂抹后再生成",
   "studio.toast.newCreation": "已开始新的创作",
   "studio.toast.favorited": "已加入收藏",
   "studio.toast.unfavorited": "已取消收藏",
@@ -460,37 +487,37 @@ var zh = {
   "studio.rail.frame": "画面设置",
   "studio.rail.advanced": "高级设置",
   "studio.rail.params": "步数 / 引导强度 / 随机种子",
-  "studio.rail.followReference": "跟随参考图",
   // 版本微调：当前表单参数来自哪张作品；「新建创作」清掉这层绑定回到干净起点。
   "studio.rail.tuning": "正在微调：{prompt}",
   "studio.rail.tuningUnknown": "当前作品",
   "studio.rail.newCreation": "新建创作",
-  // ── 参考图与垫图重绘 ─────────────────────────────────────────
-  "studio.reference.title": "参考图",
-  "studio.reference.strength": "重绘强度",
-  "studio.reference.hint": "强度越低越贴近参考图，越高越自由发挥。",
-  "studio.reference.remove": "移除",
-  "studio.reference.unsupported": "当前模型不支持垫图重绘，请切换模型或移除参考图。",
-  "studio.reference.blocked": "当前模型不支持垫图重绘，已拦下本次生成；请切换模型或移除参考图。",
-  "studio.reference.switched": "当前模型不支持垫图重绘，已切到 {preset}。",
-  "studio.reference.applied": "已设为参考图，可调整重绘强度。",
-  "studio.reference.unavailable": "当前宿主版本不支持垫图重绘，无法把作品设为参考图。",
-  "studio.reference.noPath": "这张作品没有可用的文件路径，无法作为参考图。",
-  // 还没放参考图时的引导：专用局部重绘模型给两步说明，普通垫图模型只给单行入口。
-  "studio.reference.emptyTitle": "先选一张参考图",
-  "studio.reference.emptyHint": "从作品画廊选一张图，再涂抹要重绘的区域",
-  "studio.reference.emptySimple": "可挂一张参考图做垫图重绘",
-  "studio.reference.emptyAction": "从作品画廊选择",
-  // 参考图已就位：蒙版覆盖率、继续涂抹 / 清空蒙版与页脚来源标注。
-  "studio.reference.maskCoverage": "已涂抹 {percent}%",
-  "studio.reference.maskEmpty": "尚未涂抹蒙版",
-  "studio.reference.continuePaint": "继续涂抹",
-  "studio.reference.clearMask": "清空蒙版",
-  "studio.reference.basedOn": "本次基于 {name} 重绘",
-  // 助手 / 变体强制纯文生图：当前预设只支持局部重绘时本次改用兜底预设。
-  "studio.reference.autoText2Image": "当前预设只支持局部重绘，本次已改用 {preset} 文生图",
-  // ── 局部涂抹（Inpaint） ──────────────────────────────────────
-  "studio.mask.toggle": "局部涂抹",
+  // 左栏不再承载图片处理：告诉用户入口在舞台底部动作坞。
+  "studio.rail.imageToolsHint": "图片处理（局部涂抹 / 整图重绘）在舞台底部的动作坞里。",
+  // ── 舞台图片工具（动作坞 / 轻量提交栏） ───────────────────────
+  "studio.imageTool.title": "图片工具",
+  "studio.imageTool.groupLabel": "图片处理",
+  "studio.imageTool.inpaint": "局部涂抹",
+  "studio.imageTool.img2img": "整图重绘",
+  "studio.imageTool.upscale": "高清放大",
+  "studio.imageTool.outpaint": "扩图",
+  "studio.imageTool.planned": "规划中，暂未开放",
+  "studio.imageTool.autoPreset": "已自动改用 {preset}",
+  "studio.imageTool.presetLabel": "模型",
+  "studio.imageTool.promptLabel": "修改描述",
+  "studio.imageTool.promptPlaceholder": "留空则沿用原作品提示词",
+  "studio.imageTool.strengthLabel": "重绘强度",
+  "studio.imageTool.submit": "重绘",
+  "studio.imageTool.exit": "退出",
+  "studio.imageTool.resumeDraft": "继续编辑",
+  "studio.imageTool.draftStatus": "已涂 {percent}%",
+  "studio.imageTool.maskEmpty": "尚未涂抹蒙版",
+  "studio.imageTool.blockedNoPreset": "没有可用的模型，无法执行图片工具。",
+  "studio.imageTool.blockedNoPrompt": "请填写修改描述，或让原作品带有提示词。",
+  "studio.imageTool.blockedTarget": "没有可处理的底图，请先在舞台选中一张作品。",
+  "studio.imageTool.submitted": "已提交图片处理任务",
+  // 失败重试指向舞台工具：左栏「重试一次」不再重放带底图的任务。
+  "studio.imageTool.retryMoved": "图片工具任务请在舞台动作坞中点「继续编辑」恢复后重新提交。",
+  // ── 局部涂抹画布（MaskEditor 工具栏） ────────────────────────
   "studio.mask.title": "局部重绘",
   "studio.mask.hint": "在图上涂抹要重绘的区域；未涂抹的区域保持不变。",
   "studio.mask.brush": "画笔大小",
@@ -499,15 +526,8 @@ var zh = {
   "studio.mask.invert": "反选区域",
   "studio.mask.close": "完成涂抹",
   "studio.mask.coverage": "已涂抹 {percent}%",
-  "studio.mask.applied": "已涂抹 {percent}%，生成时只重绘这部分区域。",
-  "studio.mask.empty": "还没有涂抹区域，生成时仍按整图重绘。",
-  "studio.mask.unsupported": "当前模型不支持局部重绘，请切换到 SDXL 系列模型。",
-  "studio.mask.kept": "已涂抹的蒙版会保留，切回支持局部重绘的模型后可继续使用。",
   "studio.mask.tooLarge": "蒙版体积超过上限，未保存；请减少涂抹面积后重试。",
   "studio.mask.canvasLabel": "局部涂抹画布：方向键移动画笔，空格键或回车键落笔，Esc 完成涂抹。",
-  // 续绘闭环：把当前结果设为新参考图并进入涂抹。
-  "studio.mask.continueFromResult": "以此结果继续重绘",
-  "studio.mask.continueHint": "已设为参考图，请涂抹要重绘的区域",
   // ── 创作助手 ─────────────────────────────────────────────────
   "studio.chat.assistant": "创作助手",
   "studio.chat.parsing": "正在解析你的描述…",
@@ -539,8 +559,6 @@ var zh = {
   "studio.chat.formSync.form": "来自参数表单",
   "studio.chat.formSync.variant": "生成变体",
   "studio.chat.formSync.retry": "重试上次参数",
-  "studio.chat.formSync.reference": "含参考图",
-  "studio.chat.formSync.textOnly": "文生图",
   "studio.chat.formSync.seed": "种子 {seed}",
   "studio.chat.formSync.seedRandom": "随机种子",
   // ── 第二批：任务取消 / 英译 / 尺寸档位 / 分页 / 日志诊断 ──────────────
@@ -574,7 +592,7 @@ var zh = {
   "studio.update.requiresDsh": "新版本要求 DSH {range}，请先升级 DSH。",
   "studio.mask.guide": "小技巧：蒙版要包住要替换的整个物体（含边缘），一次只改一个物体；大面积整块涂抹容易出现接缝。",
   "studio.mask.fastModelHint": "当前是少步快速模型，局部重绘的改动幅度有限；需要明显改写时建议换 SDXL Base / RealVis 等多步模型。",
-  "studio.mask.onlyHint": "当前是局部重绘专用模型：请先「以此图重绘」并涂抹蒙版后再生成。"
+  "studio.mask.onlyHint": "当前是局部重绘专用模型：请先在画布上涂抹蒙版再提交。"
 };
 
 // src/dict/en.js
@@ -737,6 +755,8 @@ var en = {
   "studio.preset.default": "Default",
   "studio.preset.langZhEn": "CN/EN",
   "studio.preset.langEnOnly": "EN only",
+  // Dedicated inpainting weights live in the stage image tools only; the form picker marks them unselectable.
+  "studio.preset.imageToolOnly": "Image tools only",
   "studio.preset.stepsUnit": "steps",
   "studio.preset.dualGpu": "Dual GPU",
   "studio.preset.footer": "Posters are conceptual, not model outputs. Switching applies the recommended size and steps.",
@@ -766,10 +786,17 @@ var en = {
   "studio.generate": "Generate",
   "studio.generating": "Submitting…",
   "studio.generateHint": "Ctrl+Enter also generates",
+  // An inpaint-only preset cannot do text-to-image: the form falls back for this request, or blocks if none exists.
+  "studio.form.autoText2Image": "The current preset only supports partial redraw; this request uses {preset} for text-to-image",
+  "studio.form.blockedInpaintOnly": "The current preset only supports partial redraw and no text-to-image preset is available. Switch models.",
   // ── Preview ───────────────────────────────────────────────────
   "studio.stage.empty": "Preview",
   "studio.stage.emptyHint": "Describe the image on the left, then press Generate.",
   "studio.stage.stoppedHint": "The cloud is closed; press Wake before generating.",
+  // Stage 13: explicit new-drawing mode (blurred animated backdrop + viewfinder frame).
+  "studio.stage.newDraftTitle": "A canvas not generated yet",
+  "studio.stage.newDraftHint": "Describe the image on the left, then press Generate.",
+  "studio.stage.newDraftPending": "Submitted; the first image will open automatically when ready.",
   "studio.stage.examples": "Ideas",
   "studio.stage.steady": "Steady about",
   "studio.stage.zoom": "Click to view full size",
@@ -787,6 +814,29 @@ var en = {
   "studio.filmstrip.empty": "Each batch you generate shows up here",
   "studio.filmstrip.offline": "The cloud is not running yet",
   "studio.filmstrip.offlineClosed": "The cloud is closed",
+  // Stage 13: new-draft card, root-folded work cards and the version panel.
+  "studio.filmstrip.newDraft": "New drawing",
+  "studio.filmstrip.draftHint": "Fill in the settings, then generate",
+  "studio.filmstrip.draftActive": "Configuring a new canvas",
+  "studio.filmstrip.draftPending": "Submitted, waiting for output",
+  "studio.filmstrip.versionsCount": "{count} versions",
+  "studio.filmstrip.versionBadge": "⎇ {count}",
+  "studio.filmstrip.versionBadgeHint": "Version branches",
+  "studio.filmstrip.versionPanelTitle": "Version branches",
+  "studio.filmstrip.versionPanelEmpty": "No derived versions yet",
+  "studio.filmstrip.versionInFlight": "Generating",
+  "studio.filmstrip.versionLoading": "Loading versions…",
+  "studio.filmstrip.treeUnavailable": "This host has no version tree API; showing loaded pages only",
+  "studio.filmstrip.versionKind.text": "Text to image",
+  "studio.filmstrip.versionKind.img2img": "Whole-image redraw",
+  "studio.filmstrip.versionKind.inpaint": "Local inpaint",
+  "studio.filmstrip.sourceDeleted": "Source work was deleted",
+  "studio.filmstrip.draftDot": "Unsubmitted edits",
+  "studio.filmstrip.draftTitle": "Modified: {items}",
+  "studio.filmstrip.draftClear": "Clear draft",
+  "studio.filmstrip.draftItems.mask": "Mask",
+  "studio.filmstrip.draftItems.prompt": "Prompt",
+  "studio.filmstrip.draftItems.params": "Parameters",
   // Narrow-screen queue pill: the filmstrip is hidden below 820px, this keeps the pending count visible.
   "studio.queue.waiting": "{count} more queued",
   // Stalled queue (10 min) banner: not an error; the primary action requeues a fresh instance.
@@ -880,11 +930,6 @@ var en = {
   "studio.toast.recalled": "Settings restored",
   // Filmstrip click with unsaved manual edits: preview switches, draft stays.
   "studio.toast.draftKept": "Current draft kept",
-  // Filmstrip click with a reference image / mask: preview switches, both stay.
-  "studio.toast.referenceKept": "Kept the current reference image and mask",
-  "studio.toast.referenceImageKept": "Kept the current reference image",
-  // Retry: the original mask cannot be restored, so only the reference is filled back.
-  "studio.toast.maskLost": "The original mask cannot be restored; paint it again before generating",
   "studio.toast.newCreation": "Started a new creation",
   "studio.toast.favorited": "Added to favorites",
   "studio.toast.unfavorited": "Removed from favorites",
@@ -978,37 +1023,37 @@ var en = {
   "studio.rail.frame": "Frame",
   "studio.rail.advanced": "Advanced",
   "studio.rail.params": "Steps / guidance / seed",
-  "studio.rail.followReference": "Follows reference",
   // Version tuning: which work the current form comes from; "New creation" clears that tie.
   "studio.rail.tuning": "Tuning from: {prompt}",
   "studio.rail.tuningUnknown": "current work",
   "studio.rail.newCreation": "New creation",
-  // ── Reference image and image-to-image ────────────────────────
-  "studio.reference.title": "Reference image",
-  "studio.reference.strength": "Redraw strength",
-  "studio.reference.hint": "Lower stays closer to the reference; higher gives the model more freedom.",
-  "studio.reference.remove": "Remove",
-  "studio.reference.unsupported": "This model does not support image-to-image. Switch models or remove the reference image.",
-  "studio.reference.blocked": "This model does not support image-to-image, so this generation was stopped. Switch models or remove the reference image.",
-  "studio.reference.switched": "This model does not support image-to-image, so it switched to {preset}.",
-  "studio.reference.applied": "Set as the reference image; adjust the redraw strength.",
-  "studio.reference.unavailable": "The installed host does not support image-to-image, so this work cannot be used as a reference.",
-  "studio.reference.noPath": "This work has no usable file path and cannot be used as a reference.",
-  // Empty reference slot: dedicated inpainting models get two steps, other models a single line.
-  "studio.reference.emptyTitle": "Pick a reference image first",
-  "studio.reference.emptyHint": "Choose a work from the gallery, then paint the area to redraw",
-  "studio.reference.emptySimple": "Attach a reference image for image-to-image",
-  "studio.reference.emptyAction": "Choose from gallery",
-  // Reference ready: mask coverage, keep painting / clear mask and the footer source note.
-  "studio.reference.maskCoverage": "{percent}% painted",
-  "studio.reference.maskEmpty": "Not painted yet",
-  "studio.reference.continuePaint": "Keep painting",
-  "studio.reference.clearMask": "Clear mask",
-  "studio.reference.basedOn": "Redrawing from {name}",
-  // Assistant / variant force text-to-image: an inpaint-only preset switches for this request.
-  "studio.reference.autoText2Image": "The current preset only supports inpainting; this request uses {preset} for text-to-image",
-  // ── Partial redraw (Inpaint) ──────────────────────────────────
-  "studio.mask.toggle": "Paint mask",
+  // The left panel no longer hosts image processing: point at the stage action dock.
+  "studio.rail.imageToolsHint": "Image processing (partial redraw / whole-image redraw) lives in the action dock at the bottom of the stage.",
+  // ── Stage image tools (action dock / inline submit bar) ───────
+  "studio.imageTool.title": "Image tools",
+  "studio.imageTool.groupLabel": "Image processing",
+  "studio.imageTool.inpaint": "Paint mask",
+  "studio.imageTool.img2img": "Whole-image redraw",
+  "studio.imageTool.upscale": "Upscale",
+  "studio.imageTool.outpaint": "Outpaint",
+  "studio.imageTool.planned": "Planned, not available yet",
+  "studio.imageTool.autoPreset": "Switched to {preset} automatically",
+  "studio.imageTool.presetLabel": "Model",
+  "studio.imageTool.promptLabel": "Change description",
+  "studio.imageTool.promptPlaceholder": "Leave empty to reuse the original prompt",
+  "studio.imageTool.strengthLabel": "Redraw strength",
+  "studio.imageTool.submit": "Redraw",
+  "studio.imageTool.exit": "Exit",
+  "studio.imageTool.resumeDraft": "Keep editing",
+  "studio.imageTool.draftStatus": "{percent}% painted",
+  "studio.imageTool.maskEmpty": "Not painted yet",
+  "studio.imageTool.blockedNoPreset": "No usable model, so the image tool cannot run.",
+  "studio.imageTool.blockedNoPrompt": "Write a change description, or use a work that has a prompt.",
+  "studio.imageTool.blockedTarget": "No base image to process. Select a work on the stage first.",
+  "studio.imageTool.submitted": "Image processing task submitted",
+  // Failed tasks fall back to the stage tool: the left panel no longer replays reference jobs.
+  "studio.imageTool.retryMoved": "This task came from an image tool. Use “Keep editing” in the stage dock to restore it and submit again.",
+  // ── Partial redraw canvas (MaskEditor toolbar) ────────────────
   "studio.mask.title": "Partial redraw",
   "studio.mask.hint": "Paint the area to redraw; untouched areas stay unchanged.",
   "studio.mask.brush": "Brush size",
@@ -1017,15 +1062,8 @@ var en = {
   "studio.mask.invert": "Invert selection",
   "studio.mask.close": "Done painting",
   "studio.mask.coverage": "Painted {percent}%",
-  "studio.mask.applied": "Painted {percent}%; only this area will be redrawn.",
-  "studio.mask.empty": "Nothing painted yet; generation will redraw the whole image.",
-  "studio.mask.unsupported": "This model does not support partial redraw. Switch to an SDXL model.",
-  "studio.mask.kept": "Your painted mask is kept and will work again once you switch back to a supported model.",
   "studio.mask.tooLarge": "The mask exceeds the size limit and was not saved. Paint a smaller area and try again.",
   "studio.mask.canvasLabel": "Mask painting canvas: use arrow keys to move the brush, Space or Enter to paint, Esc to finish.",
-  // Redraw chain: set the current result as the new reference and start painting.
-  "studio.mask.continueFromResult": "Redraw from this result",
-  "studio.mask.continueHint": "Set as reference; paint the area to redraw",
   // ── Creation assistant ────────────────────────────────────────
   "studio.chat.assistant": "Assistant",
   "studio.chat.parsing": "Reading your description…",
@@ -1057,8 +1095,6 @@ var en = {
   "studio.chat.formSync.form": "From the form",
   "studio.chat.formSync.variant": "Variant",
   "studio.chat.formSync.retry": "Retry last params",
-  "studio.chat.formSync.reference": "With reference",
-  "studio.chat.formSync.textOnly": "Text to image",
   "studio.chat.formSync.seed": "Seed {seed}",
   "studio.chat.formSync.seedRandom": "Random seed",
   // ── Batch 2: job cancel / translation / size options / paging / log diagnostics ──
@@ -1092,7 +1128,7 @@ var en = {
   "studio.update.requiresDsh": "The new version requires DSH {range}; upgrade DSH first.",
   "studio.mask.guide": "Tip: cover the whole object you want to repaint (including its edges) and change one object at a time; large block masks tend to show seams.",
   "studio.mask.fastModelHint": "This is a few-step fast model, so local repaints change less; switch to a multi-step model (SDXL Base / RealVis) when you need a bigger rewrite.",
-  "studio.mask.onlyHint": "This is a dedicated inpainting model: attach a reference image and paint a mask before generating."
+  "studio.mask.onlyHint": "This is a dedicated inpainting model: paint a mask on the canvas before submitting."
 };
 
 // src/dict/index.js
@@ -1623,6 +1659,9 @@ var ROUTES = {
   jobs: { method: "GET", path: "/imagen-api/jobs" },
   // 历史分页：limit / offset 查询参数，响应补 hasMore（向后兼容只读 items 的旧客户端）。
   history: { method: "GET", path: "/imagen-api/history" },
+  // 版本树：按根作品路径（root，工作区相对路径）返回整棵派生树，供作品条版本面板按需展开。
+  // 旧宿主没有该路由时客户端按 404 降级为「仅用已加载分页」。
+  historyTree: { method: "GET", path: "/imagen-api/history/tree" },
   file: { method: "GET", path: "/imagen-api/file" },
   library: { method: "GET", path: "/imagen-api/library" },
   libraryFavorite: { method: "POST", path: "/imagen-api/library/favorite" },
@@ -2281,6 +2320,14 @@ function fetchHistory(limit = LIMITS.history.pageSize, offset = 0) {
 function fetchLibrary() {
   return request(routePath("library"), { method: "GET" });
 }
+function fetchHistoryTree(root, limit = LIMITS.history.pageSize) {
+  const value = typeof root === "string" ? root.trim() : "";
+  if (!value) {
+    return Promise.resolve({ ok: false, status: 0, code: "invalid_request", message: "root 不能为空" });
+  }
+  const size = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Math.min(LIMITS.history.maxLimit, Math.floor(Number(limit))) : LIMITS.history.pageSize;
+  return request(`${routePath("historyTree")}?root=${encodeURIComponent(value)}&limit=${size}`, { method: "GET" });
+}
 function startSession(presetId, options = {}) {
   const body = { presetId };
   if (options && options.forceNew === true) body.forceNew = true;
@@ -2500,7 +2547,7 @@ function StatusChip(props) {
 }
 
 // src/studio/Studio.jsx
-var import_react37 = __toESM(require("react"), 1);
+var import_react43 = __toESM(require("react"), 1);
 
 // src/styles/tokens.css
 var tokens_default = '/*\n * 设计变量：黑白灰工作室。\n *\n * 视觉立场：一间明度分层的工作室，而不是一块彩色 AI 画布。\n *  1. 地面是中性灰的柔光渐变，上面浮近白的实心卡片；不用彩色光晕，不用玻璃彩虹。\n *  2. 只有明度关系：墨黑做主操作与选中，灰阶做层级，语义色（成功/警告/错误）\n *     只以小圆点或窄条出现，不参与大面积装饰。\n *  3. 深色是同一套明度关系反相：深灰底、浅灰字、浅色主操作。\n *\n * 预览工具（tools/preview/render.mjs）与宿主页面直接读取这里的深色变量（支持系统 prefers-color-scheme 与显式 [data-theme="dark"]）。\n */\n\n.ofs-root {\n  /* 地面：三层中性柔光 + 一层底色 */\n  --ofs-ground-1: #e7e8ea;\n  --ofs-ground-2: #f1f1f2;\n  --ofs-ground-3: #e3e4e6;\n  --ofs-ground-base: #f5f5f6;\n\n  /* 表面 */\n  --ofs-window: rgb(255 255 255 / 86%);\n  --ofs-window-border: rgb(18 18 22 / 8%);\n  --ofs-card: #ffffff;\n  --ofs-card-solid: #ffffff;\n  --ofs-card-border: rgb(18 18 22 / 9%);\n  --ofs-hairline: rgb(18 18 22 / 7%);\n  --ofs-sunken: #f4f4f6;\n  --ofs-sunken-border: rgb(18 18 22 / 8%);\n\n  /* 文字 */\n  --ofs-ink: #141416;\n  --ofs-ink-2: #52525a;\n  --ofs-ink-3: #6b6b73;\n  --ofs-ink-4: #a8a8b0;\n\n  /* 主操作：墨黑 */\n  --ofs-accent: #141416;\n  --ofs-accent-2: #3f3f46;\n  --ofs-accent-ink: #ffffff;\n  --ofs-accent-soft: #f0f0f2;\n  --ofs-accent-soft-border: #dedee3;\n  --ofs-accent-grad: linear-gradient(180deg, #2b2b30 0%, #141416 100%);\n\n  /* 状态：只做小面积语义色 */\n  --ofs-ok: #2f8a5c;\n  --ofs-ok-soft: #eaf5ef;\n  --ofs-warn: #a96a18;\n  --ofs-warn-soft: #f7f0e4;\n  --ofs-error: #c04444;\n  --ofs-error-soft: #f9ecec;\n  --ofs-idle: #a0a0a8;\n  --ofs-idle-soft: #f1f1f3;\n\n  /* 光桌与相纸：舞台是一张下凹的光桌，出图是一张落在桌上的相纸。\n     这是界面里唯一带实物感的表面，其余控件都保持扁平卡片。 */\n  --ofs-mat: #f0f0f2;\n  --ofs-mat-lit: rgb(255 255 255 / 92%);\n  --ofs-mat-inner: inset 0 1px 3px rgb(16 16 20 / 6%);\n  --ofs-print-paper: #ffffff;\n  --ofs-print-edge: rgb(18 18 22 / 10%);\n  --ofs-print-shadow: 0 20px 40px -24px rgb(16 16 20 / 42%), 0 4px 10px -6px rgb(16 16 20 / 18%);\n  --ofs-print-shadow-hover: 0 26px 50px -24px rgb(16 16 20 / 46%), 0 6px 14px -6px rgb(16 16 20 / 20%);\n  --ofs-mark: rgb(18 18 22 / 26%);\n\n  /* 几何 */\n  --ofs-r-xl: 24px;\n  --ofs-r-lg: 18px;\n  --ofs-r-md: 14px;\n  --ofs-r-sm: 10px;\n  --ofs-r-pill: 999px;\n  --ofs-blur: 18px;\n\n  /* 投影：始终带偏移与柔和扩散，不用零偏移光晕 */\n  --ofs-shadow-card: 0 1px 2px rgb(16 16 20 / 5%), 0 10px 24px -16px rgb(16 16 20 / 22%);\n  --ofs-shadow-lift: 0 2px 6px rgb(16 16 20 / 6%), 0 18px 40px -20px rgb(16 16 20 / 26%);\n  --ofs-shadow-window: 0 1px 3px rgb(16 16 20 / 5%), 0 36px 80px -48px rgb(16 16 20 / 32%);\n  --ofs-shadow-accent: 0 8px 18px -10px rgb(16 16 20 / 48%);\n  --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(20 20 22 / 45%);\n\n  --ofs-font: -apple-system, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;\n\n  /* 留白节奏 */\n  --ofs-pad: 18px;\n  --ofs-gap: 14px;\n\n  display: flex;\n  flex-direction: column;\n  height: 100%;\n  min-height: 0;\n  padding: 18px;\n  color: var(--ofs-ink);\n  font-family: var(--ofs-font);\n  font-size: 13px;\n  line-height: 1.55;\n  -webkit-font-smoothing: antialiased;\n  background:\n    radial-gradient(1100px 620px at 12% -8%, var(--ofs-ground-1) 0%, transparent 62%),\n    radial-gradient(900px 520px at 88% 4%, var(--ofs-ground-2) 0%, transparent 58%),\n    radial-gradient(780px 540px at 62% 108%, var(--ofs-ground-3) 0%, transparent 62%),\n    linear-gradient(160deg, var(--ofs-ground-base) 0%, var(--ofs-ground-base) 100%);\n}\n\n@media (prefers-color-scheme: dark) {\n  :root:not([data-theme="light"]) .ofs-root:not([data-theme="light"]) {\n    --ofs-ground-1: #232326;\n    --ofs-ground-2: #17171a;\n    --ofs-ground-3: #26262a;\n    --ofs-ground-base: #101012;\n\n    --ofs-window: rgb(24 24 27 / 88%);\n    --ofs-window-border: rgb(255 255 255 / 9%);\n    --ofs-card: #18181b;\n    --ofs-card-solid: #1c1c20;\n    --ofs-card-border: rgb(255 255 255 / 9%);\n    --ofs-hairline: rgb(255 255 255 / 8%);\n    --ofs-sunken: rgb(255 255 255 / 5%);\n    --ofs-sunken-border: rgb(255 255 255 / 9%);\n\n    --ofs-ink: #f2f2f4;\n    --ofs-ink-2: #a4a4ac;\n    --ofs-ink-3: #8d8d95;\n    --ofs-ink-4: #5c5c63;\n\n    --ofs-accent: #f2f2f4;\n    --ofs-accent-2: #c8c8cf;\n    --ofs-accent-ink: #161618;\n    --ofs-accent-soft: rgb(255 255 255 / 8%);\n    --ofs-accent-soft-border: rgb(255 255 255 / 14%);\n    --ofs-accent-grad: linear-gradient(180deg, #fafafa 0%, #dcdce1 100%);\n\n    --ofs-ok: #58c08a;\n    --ofs-ok-soft: rgb(88 192 138 / 14%);\n    --ofs-warn: #d8a55c;\n    --ofs-warn-soft: rgb(216 165 92 / 14%);\n    --ofs-error: #e07a7a;\n    --ofs-error-soft: rgb(224 122 122 / 14%);\n    --ofs-idle: #8a8a92;\n    --ofs-idle-soft: rgb(255 255 255 / 6%);\n\n    /* 深色里相纸仍然是整间暗房里最亮的表面：光桌 > 相纸 > 卡片 > 地面 */\n    --ofs-mat: #1e1e22;\n    --ofs-mat-lit: rgb(255 255 255 / 7%);\n    --ofs-mat-inner: inset 0 1px 3px rgb(0 0 0 / 36%);\n    --ofs-print-paper: #2b2b31;\n    --ofs-print-edge: rgb(255 255 255 / 13%);\n    --ofs-print-shadow: 0 22px 44px -24px rgb(0 0 0 / 78%), 0 4px 12px -6px rgb(0 0 0 / 50%);\n    --ofs-print-shadow-hover: 0 28px 54px -24px rgb(0 0 0 / 82%), 0 6px 16px -6px rgb(0 0 0 / 54%);\n    --ofs-mark: rgb(255 255 255 / 28%);\n\n    --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 28px -18px rgb(0 0 0 / 70%);\n    --ofs-shadow-lift: 0 2px 6px rgb(0 0 0 / 44%), 0 20px 44px -22px rgb(0 0 0 / 76%);\n    --ofs-shadow-window: 0 1px 3px rgb(0 0 0 / 40%), 0 40px 88px -48px rgb(0 0 0 / 88%);\n    --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);\n    --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(255 255 255 / 40%);\n  }\n}\n\n/* 显式深色主题（预览脚本 / 宿主切换 `data-theme="dark"` 时生效），与上面同源。 */\n[data-theme="dark"] .ofs-root,\n.ofs-root[data-theme="dark"] {\n  --ofs-ground-1: #232326;\n  --ofs-ground-2: #17171a;\n  --ofs-ground-3: #26262a;\n  --ofs-ground-base: #101012;\n\n  --ofs-window: rgb(24 24 27 / 88%);\n  --ofs-window-border: rgb(255 255 255 / 9%);\n  --ofs-card: #18181b;\n  --ofs-card-solid: #1c1c20;\n  --ofs-card-border: rgb(255 255 255 / 9%);\n  --ofs-hairline: rgb(255 255 255 / 8%);\n  --ofs-sunken: rgb(255 255 255 / 5%);\n  --ofs-sunken-border: rgb(255 255 255 / 9%);\n\n  --ofs-ink: #f2f2f4;\n  --ofs-ink-2: #a4a4ac;\n  --ofs-ink-3: #8d8d95;\n  --ofs-ink-4: #5c5c63;\n\n  --ofs-accent: #f2f2f4;\n  --ofs-accent-2: #c8c8cf;\n  --ofs-accent-ink: #161618;\n  --ofs-accent-soft: rgb(255 255 255 / 8%);\n  --ofs-accent-soft-border: rgb(255 255 255 / 14%);\n  --ofs-accent-grad: linear-gradient(180deg, #fafafa 0%, #dcdce1 100%);\n\n  --ofs-ok: #58c08a;\n  --ofs-ok-soft: rgb(88 192 138 / 14%);\n  --ofs-warn: #d8a55c;\n  --ofs-warn-soft: rgb(216 165 92 / 14%);\n  --ofs-error: #e07a7a;\n  --ofs-error-soft: rgb(224 122 122 / 14%);\n  --ofs-idle: #8a8a92;\n  --ofs-idle-soft: rgb(255 255 255 / 6%);\n\n  --ofs-mat: #1e1e22;\n  --ofs-mat-lit: rgb(255 255 255 / 7%);\n  --ofs-mat-inner: inset 0 1px 3px rgb(0 0 0 / 36%);\n  --ofs-print-paper: #2b2b31;\n  --ofs-print-edge: rgb(255 255 255 / 13%);\n  --ofs-print-shadow: 0 22px 44px -24px rgb(0 0 0 / 78%), 0 4px 12px -6px rgb(0 0 0 / 50%);\n  --ofs-print-shadow-hover: 0 28px 54px -24px rgb(0 0 0 / 82%), 0 6px 16px -6px rgb(0 0 0 / 54%);\n  --ofs-mark: rgb(255 255 255 / 28%);\n\n  --ofs-shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 28px -18px rgb(0 0 0 / 70%);\n  --ofs-shadow-lift: 0 2px 6px rgb(0 0 0 / 44%), 0 20px 44px -22px rgb(0 0 0 / 76%);\n  --ofs-shadow-window: 0 1px 3px rgb(0 0 0 / 40%), 0 40px 88px -48px rgb(0 0 0 / 88%);\n  --ofs-shadow-accent: 0 8px 20px -10px rgb(0 0 0 / 60%);\n  --ofs-focus-ring: 0 0 0 2px var(--ofs-card-solid), 0 0 0 4px rgb(255 255 255 / 40%);\n}';
@@ -2524,13 +2571,13 @@ var guidance_default = '/* ── 异常指引 ───────────
 var drawers_default = '/* ── 右侧抽屉共用骨架（LogsDrawer / SettingsDrawer） ──────────── */\n.ofs-logs,\n.ofs-settings {\n  position: fixed;\n  inset: 0;\n  z-index: 100;\n  display: flex;\n  justify-content: flex-end;\n  background: rgb(16 16 18 / 38%);\n  backdrop-filter: blur(2px);\n  -webkit-backdrop-filter: blur(2px);\n  animation: ofs-fade-in 160ms ease;\n}\n\n.ofs-logs-panel,\n.ofs-settings-panel {\n  display: flex;\n  flex-direction: column;\n  height: 100%;\n  border-left: 1px solid var(--ofs-window-border);\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-window);\n  animation: ofs-slide-in 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-logs-panel {\n  width: min(560px, 100%);\n}\n\n/* 设置项是短表单，不需要日志那样的整屏宽度。 */\n.ofs-settings-panel {\n  width: min(440px, 100%);\n}\n\n.ofs-logs-head,\n.ofs-settings-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  padding: 12px 16px;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-logs-head {\n  flex-wrap: wrap;\n}\n\n.ofs-logs-title,\n.ofs-settings-title {\n  font-size: 13.5px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n.ofs-logs-body,\n.ofs-settings-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-logs-body::-webkit-scrollbar,\n.ofs-settings-body::-webkit-scrollbar {\n  width: 8px;\n}\n\n.ofs-logs-body::-webkit-scrollbar-thumb,\n.ofs-settings-body::-webkit-scrollbar-thumb {\n  border: 2px solid transparent;\n  border-radius: 8px;\n  background: var(--ofs-ink-4);\n  background-clip: content-box;\n}\n\n.ofs-logs-note,\n.ofs-settings-note {\n  margin: 0;\n  padding: 18px 16px;\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n  line-height: 1.6;\n}\n\n@keyframes ofs-slide-in {\n  from {\n    opacity: 0;\n    transform: translateX(18px);\n  }\n  to {\n    opacity: 1;\n    transform: translateX(0);\n  }\n}\n\n/* ── 运行日志抽屉专属规则 ───────────────────────────────────── */\n/* 远端 / Host 双视图切换：紧凑胶囊，与 header 里的复制按钮同一视觉语言。 */\n.ofs-logs-tabs {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n}\n\n.ofs-logs-tab {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11.5px;\n}\n\n.ofs-logs-copy {\n  height: 30px;\n}\n\n.ofs-logs-body {\n  background: var(--ofs-sunken);\n}\n\n.ofs-logs-lines {\n  margin: 0;\n  padding: 14px 16px 22px;\n  color: var(--ofs-ink-2);\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  line-height: 1.65;\n  font-variant-numeric: tabular-nums;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.ofs-logs-note.is-warn {\n  color: var(--ofs-warn);\n}\n\n/* 自动兜底提示：远端没有日志、已切到 Host 本地日志时说明来源。 */\n.ofs-logs-fallback {\n  margin: 0;\n  padding: 9px 16px;\n  border-bottom: 1px solid color-mix(in oklab, var(--ofs-accent) 22%, transparent);\n  background: color-mix(in oklab, var(--ofs-accent) 10%, transparent);\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n/* ── 运行设置抽屉专属规则 ───────────────────────────────────── */\n/* 读取失败：不白屏，给原因 + 重试。 */\n.ofs-settings-error-state {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 10px;\n  padding: 18px 16px;\n}\n\n.ofs-settings-form {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 4px 16px 16px;\n}\n\n/* 生效提示：温和的暖色窄条，说明改动要等下次唤醒。 */\n.ofs-settings-effective {\n  margin: 10px 0 2px;\n  padding: 8px 10px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n  border-radius: 10px;\n  background: var(--ofs-warn-soft);\n  color: var(--ofs-warn);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n.ofs-settings-section {\n  display: flex;\n  flex-direction: column;\n  gap: 9px;\n  padding: 13px 0;\n  border-bottom: 1px solid var(--ofs-hairline);\n}\n\n.ofs-settings-section:last-of-type {\n  border-bottom: 0;\n}\n\n.ofs-settings-section-title {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-settings-row {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ofs-settings-label {\n  font-size: 11.5px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-settings-quick {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-settings-quick-item {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11.5px;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-settings-field {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.ofs-settings-input,\n.ofs-settings-textarea {\n  width: 100%;\n  padding: 0 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-settings-input {\n  height: 32px;\n}\n\n.ofs-settings-textarea {\n  min-height: 66px;\n  padding: 8px 10px;\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-settings-input:focus-visible,\n.ofs-settings-textarea:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-settings-options {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n/* 加速器单选：原生 radio 收进 label 里，视觉仍是轻量卡片。 */\n.ofs-settings-option {\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 32px;\n  padding: 0 12px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-settings-option:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-settings-option input {\n  margin: 0;\n  accent-color: var(--ofs-accent);\n}\n\n.ofs-settings-option.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-settings-inline {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ofs-settings-muted {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-settings-clear {\n  height: 26px;\n  padding: 0 10px;\n  font-size: 11px;\n}\n\n/* 高级折叠头：一行标题 + 箭头，默认收起，不占表单纵向空间。 */\n.ofs-settings-advanced-toggle {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-settings-advanced-toggle:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-settings-advanced {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  padding-top: 9px;\n}\n\n.ofs-settings-hint {\n  font-size: 10.5px;\n  line-height: 1.5;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-settings-errors {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.ofs-settings-error-item {\n  color: var(--ofs-error);\n  font-size: 11px;\n  line-height: 1.5;\n  overflow-wrap: anywhere;\n}\n\n.ofs-settings-error {\n  margin: 0;\n  color: var(--ofs-error);\n  font-size: 11.5px;\n  line-height: 1.5;\n}\n\n/* 底部操作条：滚动时贴住抽屉底部，保存按钮始终可点。 */\n.ofs-settings-foot {\n  position: sticky;\n  bottom: 0;\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n  margin-top: 4px;\n  padding: 12px 0 4px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-settings-save {\n  height: 32px;\n  padding: 0 16px;\n  font-size: 12.5px;\n}\n';
 
 // src/styles/panel.css
-var panel_default = "/*\n * 左侧创作面板（表单 / 对话两种形态共用的卡片容器与表单控件）。\n */\n\n.ofs-panel {\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n  min-width: 0;\n  margin: 14px 0 14px 14px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  overflow: hidden;\n}\n\n.ofs-panel-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 15px 15px 11px;\n}\n\n.ofs-panel-head h2 {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-panel-scroll {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 0 15px 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 0;\n  scroll-behavior: smooth;\n}\n\n/* ── 微调来源与新建创作 ────────────────────────────────────── */\n/* 面板顶部一条轻量状态行：左侧「正在微调：某张作品」，右侧「新建创作」重置入口。 */\n.ofs-tuning {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 0 15px 10px;\n}\n\n.ofs-tuning.is-idle {\n  justify-content: flex-end;\n}\n\n.ofs-tuning-source {\n  min-width: 0;\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.4;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-tuning-new {\n  flex: 0 0 auto;\n  height: 25px;\n  padding: 0 10px;\n  font-size: 11px;\n}\n\n/* ── 分区 ───────────────────────────────────────────────────── */\n.ofs-fieldset {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding: 8px 0;\n}\n\n.ofs-fieldset:first-child {\n  padding-top: 2px;\n}\n\n.ofs-fieldset + .ofs-fieldset {\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-fieldset-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-fieldset-head h3 {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n/* ── 提示词输入 ─────────────────────────────────────────────── */\n.ofs-composer {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  padding: 10px 10px 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-sunken) 100%);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: 0 0 0 3px rgb(20 20 22 / 10%);\n}\n\n.ofs-composer-input {\n  width: 100%;\n  min-height: 60px;\n  resize: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  line-height: 1.62;\n}\n\n.ofs-composer-input:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-composer-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-composer-foot {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-counter {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-text-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  padding: 3px 7px;\n  border: 0;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transition: background-color 150ms ease;\n}\n\n.ofs-text-action:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-text-action:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* ── 建议 chips ─────────────────────────────────────────────── */\n.ofs-suggestions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-suggestion {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  max-width: 100%;\n  height: 24px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-suggestion:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-suggestion.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n}\n\n/* ── 灵感与润色 ─────────────────────────────────────────────── */\n.ofs-inspire {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  padding-top: 2px;\n}\n\n.ofs-inspire-label,\n.ofs-refine-head,\n.ofs-refine-dim {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-refine {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 9px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-sunken);\n}\n\n.ofs-refine-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  color: var(--ofs-ink-2);\n  font-weight: 600;\n}\n\n/* 头部右侧：来源说明 + 收起/展开，弱化处理，不与标题抢层级。 */\n.ofs-refine-head-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  min-width: 0;\n}\n\n.ofs-refine-toggle {\n  padding: 2px 4px;\n  font-size: 11px;\n  font-weight: 550;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-refine-toggle:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n.ofs-refine-group {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n/* ── 画面比例 ───────────────────────────────────────────────── */\n.ofs-ratio-row {\n  display: flex;\n  gap: 8px;\n}\n\n.ofs-ratio {\n  appearance: none;\n  flex: 1 1 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 5px;\n  padding: 8px 0 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-3);\n  cursor: pointer;\n  transition:\n    border-color 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-ratio:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-ratio.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-ratio-glyph {\n  display: block;\n  border: 1.5px solid currentColor;\n  border-radius: 3px;\n}\n\n.ofs-ratio-glyph--1-1 { width: 19px; height: 19px; }\n.ofs-ratio-glyph--16-9 { width: 25px; height: 14px; }\n.ofs-ratio-glyph--9-16 { width: 14px; height: 25px; }\n.ofs-ratio-glyph--4-3 { width: 22px; height: 17px; }\n.ofs-ratio-glyph--3-4 { width: 17px; height: 22px; }\n\n.ofs-ratio-label {\n  font-size: 11px;\n  font-weight: 550;\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 高级设置行 ─────────────────────────────────────────────── */\n.ofs-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-row {\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  overflow: hidden;\n  transition: border-color 160ms ease;\n}\n\n.ofs-row.is-open,\n.ofs-row:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-row-head {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  padding: 9px 12px;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n}\n\n.ofs-row-toggle {\n  appearance: none;\n  flex: 1 1 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  min-width: 0;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-row-head:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-chevron {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-4);\n  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-chevron.is-open {\n  transform: rotate(180deg);\n}\n\n.ofs-row-textarea {\n  display: block;\n  width: calc(100% - 20px);\n  min-height: 64px;\n  margin: 0 10px 10px;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-grid2 {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 8px;\n  padding: 0 10px 10px;\n}\n\n.ofs-field {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ofs-field > span {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field-label {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n/* 种子字段占满两列：输入框与「恢复随机」并排 */\n.ofs-field--wide {\n  grid-column: 1 / -1;\n}\n\n.ofs-seed-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-seed-row input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ofs-seed-reset {\n  flex: 0 0 auto;\n  padding: 2px 4px;\n  font-size: 11px;\n  font-weight: 550;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-seed-reset:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n.ofs-field input,\n.ofs-field select,\n.ofs-size-custom-field input {\n  width: 100%;\n  height: 30px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-field input:focus-visible,\n.ofs-field select:focus-visible,\n.ofs-size-custom-field input:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n/* 步数按模型分治：连续滑块与档位刻度覆盖通用 .ofs-field input 盒子样式 */\n.ofs-step-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-step-readout {\n  font-size: 11px;\n  font-weight: 600;\n  color: var(--ofs-accent);\n}\n\n.ofs-step-readout.is-fixed {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field input.ofs-step-slider {\n  height: 18px;\n  padding: 0;\n  border: none;\n  background: transparent;\n  box-shadow: none;\n  accent-color: var(--ofs-accent);\n  cursor: pointer;\n}\n\n.ofs-field input.ofs-step-slider:disabled {\n  opacity: 0.55;\n  cursor: default;\n}\n\n.ofs-step-ticks {\n  display: grid;\n  grid-template-columns: repeat(3, minmax(0, 1fr));\n  gap: 4px;\n}\n\n.ofs-step-tick {\n  appearance: none;\n  padding: 2px 4px;\n  border: 1px solid transparent;\n  border-radius: 6px;\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 500;\n  text-align: center;\n  cursor: pointer;\n  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;\n}\n\n.ofs-step-tick:hover {\n  color: var(--ofs-ink);\n  background: var(--ofs-card);\n}\n\n.ofs-step-tick.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  font-weight: 600;\n}\n\n/* ── 底部生成：张数分段 / 主按钮 / 规格摘要 ───────────────────── */\n.ofs-qty-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ofs-qty-label {\n  flex: 0 0 auto;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-qty {\n  flex: 1 1 auto;\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 4px;\n}\n\n.ofs-qty-option {\n  appearance: none;\n  height: 28px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-qty-option:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-qty-option.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: inset 0 0 0 1px var(--ofs-accent);\n}\n\n/* 规格摘要：尺寸 · 比例 · 张数（有参考图补一项），等宽数字不抖动 */\n.ofs-spec-summary {\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n/* ── 底部生成 ───────────────────────────────────────────────── */\n.ofs-panel-foot {\n  position: relative;\n  z-index: 1;\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding: 10px 15px 12px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card);\n  box-shadow: 0 -16px 20px -18px rgb(16 16 20 / 20%);\n}\n\n.ofs-generate {\n  position: relative;\n  overflow: hidden;\n  width: 100%;\n  height: 42px;\n  border-radius: 14px;\n  font-size: 13.5px;\n  letter-spacing: 0.02em;\n}\n\n/* 主操作上的一道扫光：光从相纸表面扫过去，只出现在悬停与提交中 */\n.ofs-generate::after {\n  content: '';\n  position: absolute;\n  inset: -34% -40%;\n  background: linear-gradient(102deg, transparent 42%, rgb(255 255 255 / 17%) 50%, transparent 58%);\n  opacity: 0;\n  transform: translateX(-72%);\n  pointer-events: none;\n}\n\n.ofs-generate:hover:not(:disabled)::after {\n  animation: ofs-light-sweep 820ms cubic-bezier(0.3, 0.8, 0.35, 1) 1;\n}\n\n.ofs-generate.is-busy::after {\n  animation: ofs-light-sweep 2600ms cubic-bezier(0.45, 0, 0.55, 1) infinite;\n}\n\n@keyframes ofs-light-sweep {\n  from {\n    opacity: 0;\n    transform: translateX(-72%);\n  }\n  16% {\n    opacity: 1;\n  }\n  to {\n    opacity: 0;\n    transform: translateX(72%);\n  }\n}\n\n.ofs-hint {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  text-align: center;\n}\n\n/* ── 提示词动作（英译 / 润色并列，实心操作仍只有底部生成） ─────── */\n.ofs-composer-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n/* 英译是次级动作：默认用静色，悬停或含中文建议翻译时提到强调色，不另占一行说明。 */\n.ofs-translate-action {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-translate-action.is-suggested {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-translate-action:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n/* ── 画面设置：画幅比例 / 1:1 推荐尺寸 / 自定义宽高 三段同构 ───── */\n.ofs-frame-group {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ofs-frame-label {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n/* 标题栏右侧的实时读数：等宽数字，位数变化时不左右跳动 */\n.ofs-frame-readout {\n  flex: 0 0 auto;\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n/* 高级设置折叠态的读数摘要：一眼看清将用什么参数生成 */\n.ofs-row-readout {\n  flex: 0 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n/* 紧凑一行两列：宽 [1024] × 高 [1024]（不复用带卡片内边距的 .ofs-grid2） */\n.ofs-size-custom {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-size-custom-field {\n  display: flex;\n  flex: 1 1 0;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-size-custom-field > span {\n  flex: 0 0 auto;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-size-custom-field input {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-size-custom-times {\n  flex: 0 0 auto;\n  color: var(--ofs-ink-4);\n  font-size: 11px;\n}\n\n/* ── 自定义宽高（默认折叠，按需展开精调） ────────────────────── */\n.ofs-custom-toggle {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-custom-toggle:hover {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-custom-body {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding-top: 2px;\n}\n\n.ofs-link {\n  appearance: none;\n  margin-left: 6px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: inherit;\n  cursor: pointer;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}\n\n/* ── 参考图槽位与重绘强度（只在已有参考图时出现） ─────────────── */\n.ofs-reference {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  padding: 9px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-sunken);\n}\n\n/* 当前预设不支持垫图：整块置灰，一眼看出这次生成会被拦下 */\n.ofs-reference.is-unsupported {\n  opacity: 0.55;\n  filter: grayscale(0.4);\n}\n\n.ofs-reference-thumb {\n  flex: 0 0 auto;\n  display: grid;\n  place-items: center;\n  width: 58px;\n  height: 58px;\n  overflow: hidden;\n  border: 1px solid var(--ofs-print-edge);\n  border-radius: 10px;\n  background: var(--ofs-print-paper);\n  color: var(--ofs-ink-4);\n}\n\n.ofs-reference-thumb img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n.ofs-reference-meta {\n  flex: 1 1 auto;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n  justify-content: center;\n  gap: 7px;\n}\n\n.ofs-reference-name {\n  overflow: hidden;\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n.ofs-reference-strength {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n}\n\n.ofs-reference-strength-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-reference-strength-head b {\n  color: var(--ofs-ink-2);\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-reference-range {\n  width: 100%;\n  height: 16px;\n  margin: 0;\n  accent-color: var(--ofs-accent);\n}\n\n.ofs-reference-range:disabled {\n  cursor: default;\n}\n\n.ofs-reference-remove {\n  color: var(--ofs-ink-3);\n  font-weight: 550;\n}\n\n.ofs-reference-remove:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n.ofs-reference-warn {\n  color: var(--ofs-warn);\n  text-align: left;\n}\n\n.ofs-reference-hint {\n  text-align: left;\n}\n\n/* ── 参考图空槽位（首次使用引导） ───────────────────────────── */\n/*\n * 无参考图且当前模型支持垫图时出现：\n *  - 普通垫图模型：一行轻量入口，不打断纯文生图流程；\n *  - 专用局部重绘模型：虚线框 + 两步说明，明确「先选图再涂抹」的顺序。\n */\n.ofs-reference-entry {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-sunken);\n}\n\n.ofs-reference-entry-hint {\n  margin: 0;\n  text-align: left;\n}\n\n.ofs-reference-empty {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 6px;\n  padding: 16px 12px;\n  border: 1px dashed var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: color-mix(in oklab, var(--ofs-sunken) 70%, transparent);\n  text-align: center;\n}\n\n.ofs-reference-empty-title {\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ofs-reference-empty-hint {\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.5;\n}\n\n/* 空槽位的「从作品画廊选择」按钮：虚线框内唯一的实心动作。 */\n.ofs-reference-pick {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n  margin-top: 2px;\n  padding: 0 12px;\n  border: 1px solid var(--ofs-accent-soft-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  font-weight: 600;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-reference-pick:hover {\n  border-color: var(--ofs-accent);\n}\n\n/* 参考图已就位：蒙版覆盖率读数与「继续涂抹 / 清空蒙版」。 */\n.ofs-reference-mask {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 0 2px;\n}\n\n.ofs-reference-mask-readout {\n  margin: 0;\n  text-align: left;\n}\n\n.ofs-reference-mask-actions {\n  display: inline-flex;\n  gap: 6px;\n}\n\n.ofs-reference-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  padding: 0 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-reference-action:hover:not(:disabled) {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-reference-action:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* 页脚：本次基于哪张参考图重绘（连续局部重绘时避免误读来源）。 */\n.ofs-reference-based {\n  text-align: center;\n  font-variant-numeric: tabular-nums;\n}\n/* 专用局部重绘模型的常驻说明：放在面板滚动区顶部，缺蒙版时出现。 */\n.ofs-rail-note {\n  margin: 0 0 10px;\n  padding: 8px 10px;\n  border-radius: var(--ofs-r-sm, 8px);\n  background: var(--ofs-warn-soft, #f7f0e4);\n  color: var(--ofs-warn, #a96a18);\n  line-height: 1.5;\n}\n";
+var panel_default = "/*\n * 左侧创作面板（表单 / 对话两种形态共用的卡片容器与表单控件）。\n */\n\n.ofs-panel {\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n  min-width: 0;\n  margin: 14px 0 14px 14px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  overflow: hidden;\n}\n\n.ofs-panel-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 15px 15px 11px;\n}\n\n.ofs-panel-head h2 {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n  white-space: nowrap;\n}\n\n.ofs-panel-scroll {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n  padding: 0 15px 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 0;\n  scroll-behavior: smooth;\n}\n\n/* ── 微调来源与新建创作 ────────────────────────────────────── */\n/* 面板顶部一条轻量状态行：左侧「正在微调：某张作品」，右侧「新建创作」重置入口。 */\n.ofs-tuning {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 0 15px 10px;\n}\n\n.ofs-tuning.is-idle {\n  justify-content: flex-end;\n}\n\n.ofs-tuning-source {\n  min-width: 0;\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.4;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-tuning-new {\n  flex: 0 0 auto;\n  height: 25px;\n  padding: 0 10px;\n  font-size: 11px;\n}\n\n/* ── 分区 ───────────────────────────────────────────────────── */\n.ofs-fieldset {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding: 8px 0;\n}\n\n.ofs-fieldset:first-child {\n  padding-top: 2px;\n}\n\n.ofs-fieldset + .ofs-fieldset {\n  border-top: 1px solid var(--ofs-hairline);\n}\n\n.ofs-fieldset-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-fieldset-head h3 {\n  font-size: 12px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-2);\n}\n\n/* ── 提示词输入 ─────────────────────────────────────────────── */\n.ofs-composer {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  padding: 10px 10px 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: linear-gradient(180deg, var(--ofs-card-solid) 0%, var(--ofs-sunken) 100%);\n  transition:\n    border-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-composer:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: 0 0 0 3px rgb(20 20 22 / 10%);\n}\n\n.ofs-composer-input {\n  width: 100%;\n  min-height: 60px;\n  resize: none;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  line-height: 1.62;\n}\n\n.ofs-composer-input:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-composer-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-composer-foot {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-counter {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-text-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  padding: 3px 7px;\n  border: 0;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: 11.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transition: background-color 150ms ease;\n}\n\n.ofs-text-action:hover:not(:disabled) {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-text-action:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* ── 建议 chips ─────────────────────────────────────────────── */\n.ofs-suggestions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-suggestion {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  max-width: 100%;\n  height: 24px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-suggestion:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-suggestion.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n}\n\n/* ── 灵感与润色 ─────────────────────────────────────────────── */\n.ofs-inspire {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  padding-top: 2px;\n}\n\n.ofs-inspire-label,\n.ofs-refine-head,\n.ofs-refine-dim {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-refine {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  padding: 9px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-sunken);\n}\n\n.ofs-refine-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  color: var(--ofs-ink-2);\n  font-weight: 600;\n}\n\n/* 头部右侧：来源说明 + 收起/展开，弱化处理，不与标题抢层级。 */\n.ofs-refine-head-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  min-width: 0;\n}\n\n.ofs-refine-toggle {\n  padding: 2px 4px;\n  font-size: 11px;\n  font-weight: 550;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-refine-toggle:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n.ofs-refine-group {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n/* ── 画面比例 ───────────────────────────────────────────────── */\n.ofs-ratio-row {\n  display: flex;\n  gap: 8px;\n}\n\n.ofs-ratio {\n  appearance: none;\n  flex: 1 1 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 5px;\n  padding: 8px 0 7px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-3);\n  cursor: pointer;\n  transition:\n    border-color 160ms ease,\n    background-color 160ms ease,\n    color 160ms ease;\n}\n\n.ofs-ratio:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-ratio.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: 0 0 0 1px var(--ofs-accent);\n}\n\n.ofs-ratio-glyph {\n  display: block;\n  border: 1.5px solid currentColor;\n  border-radius: 3px;\n}\n\n.ofs-ratio-glyph--1-1 { width: 19px; height: 19px; }\n.ofs-ratio-glyph--16-9 { width: 25px; height: 14px; }\n.ofs-ratio-glyph--9-16 { width: 14px; height: 25px; }\n.ofs-ratio-glyph--4-3 { width: 22px; height: 17px; }\n.ofs-ratio-glyph--3-4 { width: 17px; height: 22px; }\n\n.ofs-ratio-label {\n  font-size: 11px;\n  font-weight: 550;\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 高级设置行 ─────────────────────────────────────────────── */\n.ofs-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n}\n\n.ofs-row {\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  overflow: hidden;\n  transition: border-color 160ms ease;\n}\n\n.ofs-row.is-open,\n.ofs-row:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-row-head {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  padding: 9px 12px;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n}\n\n.ofs-row-toggle {\n  appearance: none;\n  flex: 1 1 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  min-width: 0;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-row-head:hover {\n  color: var(--ofs-ink);\n}\n\n.ofs-chevron {\n  display: grid;\n  place-items: center;\n  color: var(--ofs-ink-4);\n  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-chevron.is-open {\n  transform: rotate(180deg);\n}\n\n.ofs-row-textarea {\n  display: block;\n  width: calc(100% - 20px);\n  min-height: 64px;\n  margin: 0 10px 10px;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.ofs-grid2 {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 8px;\n  padding: 0 10px 10px;\n}\n\n.ofs-field {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ofs-field > span {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field-label {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n/* 种子字段占满两列：输入框与「恢复随机」并排 */\n.ofs-field--wide {\n  grid-column: 1 / -1;\n}\n\n.ofs-seed-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-seed-row input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ofs-seed-reset {\n  flex: 0 0 auto;\n  padding: 2px 4px;\n  font-size: 11px;\n  font-weight: 550;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-seed-reset:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n.ofs-field input,\n.ofs-field select,\n.ofs-size-custom-field input {\n  width: 100%;\n  height: 30px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12px;\n}\n\n.ofs-field input:focus-visible,\n.ofs-field select:focus-visible,\n.ofs-size-custom-field input:focus-visible {\n  outline: none;\n  border-color: var(--ofs-accent-soft-border);\n  box-shadow: var(--ofs-focus-ring);\n}\n\n/* 步数按模型分治：连续滑块与档位刻度覆盖通用 .ofs-field input 盒子样式 */\n.ofs-step-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ofs-step-readout {\n  font-size: 11px;\n  font-weight: 600;\n  color: var(--ofs-accent);\n}\n\n.ofs-step-readout.is-fixed {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-field input.ofs-step-slider {\n  height: 18px;\n  padding: 0;\n  border: none;\n  background: transparent;\n  box-shadow: none;\n  accent-color: var(--ofs-accent);\n  cursor: pointer;\n}\n\n.ofs-field input.ofs-step-slider:disabled {\n  opacity: 0.55;\n  cursor: default;\n}\n\n.ofs-step-ticks {\n  display: grid;\n  grid-template-columns: repeat(3, minmax(0, 1fr));\n  gap: 4px;\n}\n\n.ofs-step-tick {\n  appearance: none;\n  padding: 2px 4px;\n  border: 1px solid transparent;\n  border-radius: 6px;\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 500;\n  text-align: center;\n  cursor: pointer;\n  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;\n}\n\n.ofs-step-tick:hover {\n  color: var(--ofs-ink);\n  background: var(--ofs-card);\n}\n\n.ofs-step-tick.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  font-weight: 600;\n}\n\n/* ── 底部生成：张数分段 / 主按钮 / 规格摘要 ───────────────────── */\n.ofs-qty-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ofs-qty-label {\n  flex: 0 0 auto;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-qty {\n  flex: 1 1 auto;\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 4px;\n}\n\n.ofs-qty-option {\n  appearance: none;\n  height: 28px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 9px;\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-qty-option:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-qty-option.is-on {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  box-shadow: inset 0 0 0 1px var(--ofs-accent);\n}\n\n/* 规格摘要：尺寸 · 比例 · 张数（有参考图补一项），等宽数字不抖动 */\n.ofs-spec-summary {\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n/* ── 底部生成 ───────────────────────────────────────────────── */\n.ofs-panel-foot {\n  position: relative;\n  z-index: 1;\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding: 10px 15px 12px;\n  border-top: 1px solid var(--ofs-hairline);\n  background: var(--ofs-card);\n  box-shadow: 0 -16px 20px -18px rgb(16 16 20 / 20%);\n}\n\n.ofs-generate {\n  position: relative;\n  overflow: hidden;\n  width: 100%;\n  height: 42px;\n  border-radius: 14px;\n  font-size: 13.5px;\n  letter-spacing: 0.02em;\n}\n\n/* 主操作上的一道扫光：光从相纸表面扫过去，只出现在悬停与提交中 */\n.ofs-generate::after {\n  content: '';\n  position: absolute;\n  inset: -34% -40%;\n  background: linear-gradient(102deg, transparent 42%, rgb(255 255 255 / 17%) 50%, transparent 58%);\n  opacity: 0;\n  transform: translateX(-72%);\n  pointer-events: none;\n}\n\n.ofs-generate:hover:not(:disabled)::after {\n  animation: ofs-light-sweep 820ms cubic-bezier(0.3, 0.8, 0.35, 1) 1;\n}\n\n.ofs-generate.is-busy::after {\n  animation: ofs-light-sweep 2600ms cubic-bezier(0.45, 0, 0.55, 1) infinite;\n}\n\n@keyframes ofs-light-sweep {\n  from {\n    opacity: 0;\n    transform: translateX(-72%);\n  }\n  16% {\n    opacity: 1;\n  }\n  to {\n    opacity: 0;\n    transform: translateX(72%);\n  }\n}\n\n.ofs-hint {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  text-align: center;\n}\n\n/* ── 提示词动作（英译 / 润色并列，实心操作仍只有底部生成） ─────── */\n.ofs-composer-actions {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n/* 英译是次级动作：默认用静色，悬停或含中文建议翻译时提到强调色，不另占一行说明。 */\n.ofs-translate-action {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-translate-action.is-suggested {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-translate-action:hover:not(:disabled) {\n  color: var(--ofs-accent);\n}\n\n/* ── 画面设置：画幅比例 / 1:1 推荐尺寸 / 自定义宽高 三段同构 ───── */\n.ofs-frame-group {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ofs-frame-label {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n/* 标题栏右侧的实时读数：等宽数字，位数变化时不左右跳动 */\n.ofs-frame-readout {\n  flex: 0 0 auto;\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n/* 高级设置折叠态的读数摘要：一眼看清将用什么参数生成 */\n.ofs-row-readout {\n  flex: 0 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  font-size: 11px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n/* 紧凑一行两列：宽 [1024] × 高 [1024]（不复用带卡片内边距的 .ofs-grid2） */\n.ofs-size-custom {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ofs-size-custom-field {\n  display: flex;\n  flex: 1 1 0;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-size-custom-field > span {\n  flex: 0 0 auto;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-size-custom-field input {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-size-custom-times {\n  flex: 0 0 auto;\n  color: var(--ofs-ink-4);\n  font-size: 11px;\n}\n\n/* ── 自定义宽高（默认折叠，按需展开精调） ────────────────────── */\n.ofs-custom-toggle {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  width: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-custom-toggle:hover {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-custom-body {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  padding-top: 2px;\n}\n\n.ofs-link {\n  appearance: none;\n  margin-left: 6px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-accent);\n  font-size: inherit;\n  cursor: pointer;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}\n\n/* 左栏工具提示与旧专用模型说明共用：图片处理入口已迁到舞台动作坞。 */\n.ofs-rail-note {\n  margin: 0 0 10px;\n  padding: 8px 10px;\n  border-radius: var(--ofs-r-sm, 8px);\n  background: var(--ofs-warn-soft, #f7f0e4);\n  color: var(--ofs-warn, #a96a18);\n  line-height: 1.5;\n}\n\n/* 左栏底部「图片工具在舞台动作坞」提示：不需要告警底色，读起来更轻。 */\n.ofs-rail-tools-hint {\n  margin: 4px 0 0;\n  padding: 0;\n  background: transparent;\n  color: var(--ofs-ink-4);\n}\n\n/* 主表单模型卡：专用局部重绘预设标记为「仅图片工具」且不可选（决策 D3）。\n * 样式放在面板样式表里，不占 model-picker.css（主表单容器随面板一起加载）。 */\n.ofs-model-option[aria-disabled='true'] {\n  opacity: 0.55;\n  cursor: default;\n}\n\n.ofs-model-option[aria-disabled='true']:hover {\n  border-color: var(--ofs-sunken-border);\n}\n\n.ofs-model-lang.is-tool-only {\n  border-color: var(--ofs-warn-border, #e6c9a8);\n  background: var(--ofs-warn-soft, #f7f0e4);\n  color: var(--ofs-warn, #a96a18);\n}\n";
 
 // src/styles/stage.css
-var stage_default = "/*\n * 画面预览：光桌上的相纸。\n *\n * 舞台（.ofs-figure）不是又一张白卡，而是一张下凹的光桌：中性灰表面、顶部一层\n * 柔光、发丝描边、内阴影。图落在桌上时是一张相纸（11px 纸边 + 偏移柔影），\n * 等待出图时桌上只有一只按当前比例画出的取景框和四角裁切标记。\n *\n * 相纸与取景框的尺寸都用容器单位算（cqw / cqh），因为「按比例装进剩余空间」\n * 用百分比 + aspect-ratio 在非替换元素上收不回宽度（实测 1:1 会变成 526×326）。\n *\n * 深色值在 tokens.css 与 tools/preview.mjs 的 DARK_TOKENS 里各有一份，改要同步。\n */\n\n.ofs-stage {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.ofs-figure {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(76% 58% at 50% 34%, var(--ofs-mat-lit) 0%, transparent 72%),\n    var(--ofs-mat);\n  box-shadow: var(--ofs-mat-inner);\n  overflow: hidden;\n  /* 相纸 / 取景框的容器查询基准：cqw 是这块光桌的内容盒宽度 */\n  container-type: size;\n}\n\n/* ── 相纸 ───────────────────────────────────────────────────── */\n.ofs-print {\n  appearance: none;\n  display: block;\n  /* 比例来自远端下发的图片像素；环形纸边靠阴影画，不占布局 */\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-print-r, 1)));\n  aspect-ratio: var(--ofs-print-r, 1);\n  padding: 0;\n  border: 0;\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  cursor: zoom-in;\n  transition:\n    box-shadow 220ms ease,\n    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-print:hover {\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow-hover);\n  transform: translateY(-2px);\n}\n\n.ofs-print:focus-visible {\n  outline: none;\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 14px var(--ofs-accent),\n    var(--ofs-print-shadow);\n}\n\n.ofs-image {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  border-radius: 3px;\n}\n\n/*\n * 落定：新出的图从潜影显到清晰，只播一次。\n * fill-mode 用 backwards——结束时回到基础样式，悬停抬升才不会被动画终帧钉住。\n */\n.ofs-print.is-developing {\n  animation: ofs-paper-settle 720ms cubic-bezier(0.22, 1, 0.36, 1) backwards;\n}\n\n.ofs-print.is-developing .ofs-image {\n  animation: ofs-develop 760ms cubic-bezier(0.3, 0.9, 0.3, 1) backwards;\n}\n\n@keyframes ofs-paper-settle {\n  from {\n    opacity: 0.42;\n    transform: translateY(10px) scale(0.99);\n  }\n  55% {\n    opacity: 1;\n  }\n  to {\n    opacity: 1;\n    transform: none;\n  }\n}\n\n@keyframes ofs-develop {\n  from {\n    filter: blur(18px) grayscale(1) contrast(0.5) brightness(1.22);\n  }\n  55% {\n    filter: blur(7px) grayscale(0.75) contrast(0.82) brightness(1.08);\n  }\n  to {\n    filter: none;\n  }\n}\n\n/* ── 浮动工具 ───────────────────────────────────────────────── */\n.ofs-figure-tools {\n  position: absolute;\n  top: 14px;\n  right: 14px;\n  z-index: 2;\n  display: flex;\n  gap: 6px;\n}\n\n.ofs-glass-btn {\n  appearance: none;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: 11px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 68%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  color: var(--ofs-ink-2);\n  cursor: pointer;\n  transition:\n    color 150ms ease,\n    background-color 150ms ease,\n    border-color 150ms ease,\n    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-glass-btn:hover {\n  color: var(--ofs-accent);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-glass-btn:active {\n  transform: scale(0.95);\n}\n\n.ofs-glass-btn.is-on {\n  color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n/* ── 等待出图：一只按比例画出的取景框 ───────────────────────── */\n/*\n * 空态与等待出图时，桌上是一张还没曝光的空白相纸：比例跟当前画幅走，\n * 出图时同一位置换成显影完成的相纸——所以纸边、投影与 .ofs-print 同一套材质。\n * 外框负责按比例定尺寸（裁切标记贴它的四角），内框负责裁掉溢出的内容。\n */\n.ofs-frame {\n  position: relative;\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-frame-r, 1)));\n  aspect-ratio: var(--ofs-frame-r, 1);\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 1px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  animation: ofs-frame-in 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;\n}\n\n.ofs-frame-body {\n  position: absolute;\n  inset: 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  padding: 20px 22px;\n  border-radius: 3px;\n  overflow: hidden;\n}\n\n@keyframes ofs-frame-in {\n  from {\n    opacity: 0;\n    transform: scale(0.994);\n  }\n  to {\n    opacity: 1;\n    transform: none;\n  }\n}\n\n/* 四角裁切标记：纸上要被框住的那块区域 */\n.ofs-marks {\n  position: absolute;\n  inset: -12px;\n  pointer-events: none;\n}\n\n.ofs-marks span {\n  position: absolute;\n  width: 15px;\n  height: 15px;\n  border: 0 solid var(--ofs-mark);\n}\n\n.ofs-marks span:nth-child(1) {\n  top: 0;\n  left: 0;\n  border-top-width: 1px;\n  border-left-width: 1px;\n}\n\n.ofs-marks span:nth-child(2) {\n  top: 0;\n  right: 0;\n  border-top-width: 1px;\n  border-right-width: 1px;\n}\n\n.ofs-marks span:nth-child(3) {\n  bottom: 0;\n  left: 0;\n  border-bottom-width: 1px;\n  border-left-width: 1px;\n}\n\n.ofs-marks span:nth-child(4) {\n  bottom: 0;\n  right: 0;\n  border-bottom-width: 1px;\n  border-right-width: 1px;\n}\n\n/* ── 进度胶囊 ───────────────────────────────────────────────── */\n.ofs-stage-progress {\n  position: absolute;\n  left: 50%;\n  bottom: 16px;\n  z-index: 2;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  padding: 7px 13px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 74%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  transform: translateX(-50%);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  white-space: nowrap;\n}\n\n.ofs-progress-label {\n  font-variant-numeric: tabular-nums;\n}\n\n/* 还没有图时，胶囊落在这只空取景框的正中：像正在曝光的那一格。 */\n.ofs-stage-progress.is-inside {\n  bottom: 50%;\n  transform: translate(-50%, 50%);\n}\n\n.ofs-shimmer {\n  display: block;\n  width: 54px;\n  height: 4px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(\n    90deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 70%, transparent) 50%,\n    transparent 100%\n  );\n  background-size: 220% 100%;\n  animation: ofs-shimmer 1.5s linear infinite;\n}\n\n/* ── 图片下的信息与动作 ─────────────────────────────────────── */\n.ofs-stage-foot {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 16px;\n  padding: 0 4px;\n  min-width: 0;\n}\n\n.ofs-stage-prompt {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n/* 题注按印相室的标签写：小一号、拉开字距、齐宽数字 */\n.ofs-stage-meta {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 10.5px;\n  font-weight: 500;\n  letter-spacing: 0.07em;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n.ofs-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-dock-button {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 30px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-dock-button:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-dock-button.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* 续绘闭环的主入口：以此结果继续重绘，强调一档但不抢生成按钮。 */\n.ofs-continue-inpaint {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-continue-inpaint:hover {\n  border-color: var(--ofs-accent);\n  color: var(--ofs-accent);\n}\n\n/* ── 空态 ───────────────────────────────────────────────────── */\n.ofs-figure--empty {\n  background:\n    radial-gradient(64% 54% at 50% 40%, var(--ofs-mat-lit) 0%, transparent 76%),\n    var(--ofs-mat);\n}\n\n.ofs-empty-card {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 9px;\n  width: 100%;\n  max-width: 400px;\n  text-align: center;\n}\n\n.ofs-empty-title {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n}\n\n.ofs-examples {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: center;\n  gap: 6px;\n  margin-top: 4px;\n}\n\n.ofs-examples-label {\n  width: 100%;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-example {\n  appearance: none;\n  padding: 5px 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* 曝光单：这条桌子上的机器大概多久出一张，先给个准话 */\n.ofs-exposure {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  width: 100%;\n  max-width: 260px;\n  margin-top: 6px;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  letter-spacing: 0.04em;\n  white-space: nowrap;\n}\n\n.ofs-exposure-rule {\n  flex: 1 1 auto;\n  height: 1px;\n  background: var(--ofs-mark);\n}\n\n/*\n * 纸上的辅助文字：纸面比卡片亮一档，固定用 ink-3 在深色下只有 4.3:1。\n * 这里按墨色与纸色混合取一档「纸面次级文字色」，浅深两套主题各自都 ≥ 4.5:1。\n */\n.ofs-frame .ofs-muted,\n.ofs-frame .ofs-examples-label,\n.ofs-frame .ofs-exposure {\n  color: color-mix(in oklab, var(--ofs-ink) 62%, var(--ofs-print-paper));\n}\n\n/* ── 窄屏排队胶囊 ───────────────────────────────────────────── */\n/* 默认不占位：宽屏由胶片条展示队列，≤820px 时 responsive.css 打开这里。 */\n.ofs-queue-pill {\n  display: none;\n}\n\n/* ── 放大层 ─────────────────────────────────────────────────── */\n.ofs-lightbox {\n  position: absolute;\n  inset: -14px;\n  z-index: 80;\n  display: grid;\n  place-items: center;\n  padding: 3vw;\n  background: rgb(16 16 18 / 72%);\n  backdrop-filter: blur(16px);\n  -webkit-backdrop-filter: blur(16px);\n  animation: ofs-fade-in 180ms ease;\n}\n\n.ofs-lightbox img {\n  max-width: 94%;\n  max-height: 92%;\n  border-radius: 12px;\n  box-shadow: 0 40px 90px -30px rgb(0 0 0 / 70%);\n}\n\n.ofs-lightbox-close {\n  position: absolute;\n  top: 18px;\n  right: 18px;\n  display: grid;\n  place-items: center;\n  width: 36px;\n  height: 36px;\n  border: 1px solid rgb(255 255 255 / 26%);\n  border-radius: 11px;\n  background: rgb(255 255 255 / 12%);\n  color: rgb(255 255 255 / 88%);\n  cursor: pointer;\n}\n\n.ofs-lightbox-close:hover {\n  background: rgb(255 255 255 / 20%);\n  color: #fff;\n}\n\n/* 大图预览底部的主操作：以此为参考图重绘 */\n.ofs-lightbox-action {\n  position: absolute;\n  bottom: 26px;\n  left: 50%;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 36px;\n  padding: 0 16px;\n  border: 1px solid rgb(255 255 255 / 30%);\n  border-radius: var(--ofs-r-pill);\n  background: rgb(20 20 22 / 66%);\n  color: #fff;\n  font-size: 12.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transform: translateX(-50%);\n  backdrop-filter: blur(8px);\n  -webkit-backdrop-filter: blur(8px);\n}\n\n.ofs-lightbox-action:hover {\n  background: rgb(20 20 22 / 84%);\n}\n\n/* ── 局部重绘：涂抹蒙版 ─────────────────────────────────────── */\n/*\n * 涂抹态占满整块光桌：上面一行标题与覆盖率读数，中间是参考图与蒙版画布，\n * 下面一排画笔、橡皮擦、清空、反选与完成。\n * 画布外框的比例、光标圆圈的位置与直径都由运行时按参考图像素写进内联样式，\n * 这里只固定静态排版。\n */\n.ofs-mask-editor {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  /* 内容超出（矮窗口 / 竖图）时从顶部开始滚动，不被居中的 flex 裁掉上半截。 */\n  justify-content: center;\n  justify-content: safe center;\n  gap: 10px;\n  width: 100%;\n  height: 100%;\n  padding: 12px;\n  overflow: auto;\n}\n\n.ofs-mask-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  width: min(100%, 560px);\n}\n\n.ofs-mask-title {\n  font-size: 12.5px;\n  font-weight: 600;\n}\n\n/*\n * 画布外框：比例来自参考图像素（内联 aspect-ratio 与 --ofs-mask-r）。\n *\n * 宽度同时受容器宽与可用高度约束：与 .ofs-frame / .ofs-print 一样用容器单位算，\n * 竖图或矮窗口下按比例整体缩小，而不是被 max-height 单独压扁。\n * 200px 是上方标题、下方工具栏与两行提示的大致占位；画布保比例优先，必要时编辑器滚动。\n */\n.ofs-mask-stage {\n  position: relative;\n  flex: 0 0 auto;\n  width: min(\n    calc(100cqw - 24px),\n    560px,\n    max(120px, calc((100cqh - 200px) * var(--ofs-mask-r, 1)))\n  );\n  aspect-ratio: var(--ofs-mask-r, 1);\n  border-radius: 6px;\n  overflow: hidden;\n  background: #000;\n  box-shadow: var(--ofs-print-shadow);\n}\n\n/* 参考图按 fill 铺满画布：导出的蒙版与参考图同比例，这里不能留 contain 的边。 */\n.ofs-mask-photo {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  object-fit: fill;\n  user-select: none;\n}\n\n/* 蒙版层是透明底白色笔迹，叠在参考图上用 screen 混色只提亮涂过的地方。 */\n.ofs-mask-canvas {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  touch-action: none;\n  cursor: crosshair;\n  mix-blend-mode: screen;\n  opacity: 0.85;\n}\n\n/* 画笔光标圈：left / top / width / height 由指针或键盘移动时直接写内联样式。 */\n.ofs-mask-cursor {\n  position: absolute;\n  border: 1px solid var(--ofs-accent);\n  border-radius: 50%;\n  transform: translate(-50%, -50%);\n  pointer-events: none;\n  display: none;\n}\n\n.ofs-mask-tools {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  width: 100%;\n}\n\n/* 画笔大小：滑块与工具栏同高、宽度固定，拖动时不带着整行抖动。 */\n.ofs-mask-brush {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 44px;\n  padding: 0 10px;\n  font-size: 11.5px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-mask-range {\n  width: 120px;\n  height: 44px;\n}\n\n/* 说明文字与画布同宽（画布宽度也是 min(100%, 560px)）；字号与颜色沿用 .ofs-hint。 */\n.ofs-mask-hint {\n  width: min(100%, 560px);\n}\n\n/* 涂抹入口行：读数与提示并排，窄屏自动换行。 */\n.ofs-mask-bar {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 10px;\n}\n\n/* 蒙版读数与能力说明：外边距归零，字号与颜色沿用 .ofs-hint / .ofs-muted。 */\n.ofs-mask-hint,\n.ofs-mask-status,\n.ofs-mask-warn {\n  margin: 0;\n}\n/* 涂抹提示：操作要点与少步模型的能力提醒（两行弱提示，不抢视觉）。 */\n.ofs-mask-guide,\n.ofs-mask-fast {\n  max-width: min(100%, 560px);\n  margin: 0;\n  line-height: 1.5;\n}\n\n.ofs-mask-fast {\n  color: var(--ofs-warn, #b45309);\n}\n";
+var stage_default = "/*\n * 画面预览：光桌上的相纸。\n *\n * 舞台（.ofs-figure）不是又一张白卡，而是一张下凹的光桌：中性灰表面、顶部一层\n * 柔光、发丝描边、内阴影。图落在桌上时是一张相纸（11px 纸边 + 偏移柔影），\n * 等待出图时桌上只有一只按当前比例画出的取景框和四角裁切标记。\n *\n * 相纸与取景框的尺寸都用容器单位算（cqw / cqh），因为「按比例装进剩余空间」\n * 用百分比 + aspect-ratio 在非替换元素上收不回宽度（实测 1:1 会变成 526×326）。\n *\n * 深色值在 tokens.css 与 tools/preview.mjs 的 DARK_TOKENS 里各有一份，改要同步。\n */\n\n.ofs-stage {\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.ofs-figure {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(76% 58% at 50% 34%, var(--ofs-mat-lit) 0%, transparent 72%),\n    var(--ofs-mat);\n  box-shadow: var(--ofs-mat-inner);\n  overflow: hidden;\n  /* 相纸 / 取景框的容器查询基准：cqw 是这块光桌的内容盒宽度 */\n  container-type: size;\n}\n\n/* ── 相纸 ───────────────────────────────────────────────────── */\n.ofs-print {\n  appearance: none;\n  display: block;\n  /* 比例来自远端下发的图片像素；环形纸边靠阴影画，不占布局 */\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-print-r, 1)));\n  aspect-ratio: var(--ofs-print-r, 1);\n  padding: 0;\n  border: 0;\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  cursor: zoom-in;\n  transition:\n    box-shadow 220ms ease,\n    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-print:hover {\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 12px var(--ofs-print-edge),\n    var(--ofs-print-shadow-hover);\n  transform: translateY(-2px);\n}\n\n.ofs-print:focus-visible {\n  outline: none;\n  box-shadow:\n    0 0 0 11px var(--ofs-print-paper),\n    0 0 0 14px var(--ofs-accent),\n    var(--ofs-print-shadow);\n}\n\n.ofs-image {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: contain;\n  border-radius: 3px;\n}\n\n/*\n * 落定：新出的图从潜影显到清晰，只播一次。\n * fill-mode 用 backwards——结束时回到基础样式，悬停抬升才不会被动画终帧钉住。\n */\n.ofs-print.is-developing {\n  animation: ofs-paper-settle 720ms cubic-bezier(0.22, 1, 0.36, 1) backwards;\n}\n\n.ofs-print.is-developing .ofs-image {\n  animation: ofs-develop 760ms cubic-bezier(0.3, 0.9, 0.3, 1) backwards;\n}\n\n@keyframes ofs-paper-settle {\n  from {\n    opacity: 0.42;\n    transform: translateY(10px) scale(0.99);\n  }\n  55% {\n    opacity: 1;\n  }\n  to {\n    opacity: 1;\n    transform: none;\n  }\n}\n\n@keyframes ofs-develop {\n  from {\n    filter: blur(18px) grayscale(1) contrast(0.5) brightness(1.22);\n  }\n  55% {\n    filter: blur(7px) grayscale(0.75) contrast(0.82) brightness(1.08);\n  }\n  to {\n    filter: none;\n  }\n}\n\n/* ── 浮动工具 ───────────────────────────────────────────────── */\n.ofs-figure-tools {\n  position: absolute;\n  top: 14px;\n  right: 14px;\n  z-index: 2;\n  display: flex;\n  gap: 6px;\n}\n\n.ofs-glass-btn {\n  appearance: none;\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: 11px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 68%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  color: var(--ofs-ink-2);\n  cursor: pointer;\n  transition:\n    color 150ms ease,\n    background-color 150ms ease,\n    border-color 150ms ease,\n    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-glass-btn:hover {\n  color: var(--ofs-accent);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n.ofs-glass-btn:active {\n  transform: scale(0.95);\n}\n\n.ofs-glass-btn.is-on {\n  color: var(--ofs-accent);\n  background: var(--ofs-accent-soft);\n  border-color: var(--ofs-accent-soft-border);\n}\n\n/* ── 等待出图：一只按比例画出的取景框 ───────────────────────── */\n/*\n * 空态与等待出图时，桌上是一张还没曝光的空白相纸：比例跟当前画幅走，\n * 出图时同一位置换成显影完成的相纸——所以纸边、投影与 .ofs-print 同一套材质。\n * 外框负责按比例定尺寸（裁切标记贴它的四角），内框负责裁掉溢出的内容。\n */\n.ofs-frame {\n  position: relative;\n  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-frame-r, 1)));\n  aspect-ratio: var(--ofs-frame-r, 1);\n  border-radius: 3px;\n  background: var(--ofs-print-paper);\n  box-shadow:\n    0 0 0 1px var(--ofs-print-edge),\n    var(--ofs-print-shadow);\n  animation: ofs-frame-in 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;\n}\n\n.ofs-frame-body {\n  position: absolute;\n  inset: 0;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  padding: 20px 22px;\n  border-radius: 3px;\n  overflow: hidden;\n}\n\n@keyframes ofs-frame-in {\n  from {\n    opacity: 0;\n    transform: scale(0.994);\n  }\n  to {\n    opacity: 1;\n    transform: none;\n  }\n}\n\n/* 四角裁切标记：纸上要被框住的那块区域 */\n.ofs-marks {\n  position: absolute;\n  inset: -12px;\n  pointer-events: none;\n}\n\n.ofs-marks span {\n  position: absolute;\n  width: 15px;\n  height: 15px;\n  border: 0 solid var(--ofs-mark);\n}\n\n.ofs-marks span:nth-child(1) {\n  top: 0;\n  left: 0;\n  border-top-width: 1px;\n  border-left-width: 1px;\n}\n\n.ofs-marks span:nth-child(2) {\n  top: 0;\n  right: 0;\n  border-top-width: 1px;\n  border-right-width: 1px;\n}\n\n.ofs-marks span:nth-child(3) {\n  bottom: 0;\n  left: 0;\n  border-bottom-width: 1px;\n  border-left-width: 1px;\n}\n\n.ofs-marks span:nth-child(4) {\n  bottom: 0;\n  right: 0;\n  border-bottom-width: 1px;\n  border-right-width: 1px;\n}\n\n/* ── 进度胶囊 ───────────────────────────────────────────────── */\n.ofs-stage-progress {\n  position: absolute;\n  left: 50%;\n  bottom: 16px;\n  z-index: 2;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  padding: 7px 13px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card-solid) 74%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(14px);\n  -webkit-backdrop-filter: blur(14px);\n  transform: translateX(-50%);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  white-space: nowrap;\n}\n\n.ofs-progress-label {\n  font-variant-numeric: tabular-nums;\n}\n\n/* 还没有图时，胶囊落在这只空取景框的正中：像正在曝光的那一格。 */\n.ofs-stage-progress.is-inside {\n  bottom: 50%;\n  transform: translate(-50%, 50%);\n}\n\n.ofs-shimmer {\n  display: block;\n  width: 54px;\n  height: 4px;\n  border-radius: var(--ofs-r-pill);\n  background: linear-gradient(\n    90deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 70%, transparent) 50%,\n    transparent 100%\n  );\n  background-size: 220% 100%;\n  animation: ofs-shimmer 1.5s linear infinite;\n}\n\n/* ── 图片下的信息与动作 ─────────────────────────────────────── */\n.ofs-stage-foot {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 16px;\n  padding: 0 4px;\n  min-width: 0;\n}\n\n.ofs-stage-prompt {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 12px;\n  color: var(--ofs-ink-2);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n/* 题注按印相室的标签写：小一号、拉开字距、齐宽数字 */\n.ofs-stage-meta {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 10.5px;\n  font-weight: 500;\n  letter-spacing: 0.07em;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n.ofs-dock {\n  flex: 0 0 auto;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-dock-button {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 30px;\n  padding: 0 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-dock-button:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-dock-button.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* 续绘闭环的主入口：以此结果继续重绘，强调一档但不抢生成按钮。 */\n/* ── 空态 ───────────────────────────────────────────────────── */\n.ofs-figure--empty {\n  background:\n    radial-gradient(64% 54% at 50% 40%, var(--ofs-mat-lit) 0%, transparent 76%),\n    var(--ofs-mat);\n}\n\n.ofs-empty-card {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 9px;\n  width: 100%;\n  max-width: 400px;\n  text-align: center;\n}\n\n.ofs-empty-title {\n  font-size: 16px;\n  font-weight: 650;\n  letter-spacing: 0.01em;\n}\n\n.ofs-examples {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: center;\n  gap: 6px;\n  margin-top: 4px;\n}\n\n.ofs-examples-label {\n  width: 100%;\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-example {\n  appearance: none;\n  padding: 5px 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-example:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* 曝光单：这条桌子上的机器大概多久出一张，先给个准话 */\n.ofs-exposure {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  width: 100%;\n  max-width: 260px;\n  margin-top: 6px;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  letter-spacing: 0.04em;\n  white-space: nowrap;\n}\n\n.ofs-exposure-rule {\n  flex: 1 1 auto;\n  height: 1px;\n  background: var(--ofs-mark);\n}\n\n/*\n * 纸上的辅助文字：纸面比卡片亮一档，固定用 ink-3 在深色下只有 4.3:1。\n * 这里按墨色与纸色混合取一档「纸面次级文字色」，浅深两套主题各自都 ≥ 4.5:1。\n */\n.ofs-frame .ofs-muted,\n.ofs-frame .ofs-examples-label,\n.ofs-frame .ofs-exposure {\n  color: color-mix(in oklab, var(--ofs-ink) 62%, var(--ofs-print-paper));\n}\n\n/* ── 窄屏排队胶囊 ───────────────────────────────────────────── */\n/* 默认不占位：宽屏由胶片条展示队列，≤820px 时 responsive.css 打开这里。 */\n.ofs-queue-pill {\n  display: none;\n}\n\n/* ── 放大层 ─────────────────────────────────────────────────── */\n.ofs-lightbox {\n  position: absolute;\n  inset: -14px;\n  z-index: 80;\n  display: grid;\n  place-items: center;\n  padding: 3vw;\n  background: rgb(16 16 18 / 72%);\n  backdrop-filter: blur(16px);\n  -webkit-backdrop-filter: blur(16px);\n  animation: ofs-fade-in 180ms ease;\n}\n\n.ofs-lightbox img {\n  max-width: 94%;\n  max-height: 92%;\n  border-radius: 12px;\n  box-shadow: 0 40px 90px -30px rgb(0 0 0 / 70%);\n}\n\n.ofs-lightbox-close {\n  position: absolute;\n  top: 18px;\n  right: 18px;\n  display: grid;\n  place-items: center;\n  width: 36px;\n  height: 36px;\n  border: 1px solid rgb(255 255 255 / 26%);\n  border-radius: 11px;\n  background: rgb(255 255 255 / 12%);\n  color: rgb(255 255 255 / 88%);\n  cursor: pointer;\n}\n\n.ofs-lightbox-close:hover {\n  background: rgb(255 255 255 / 20%);\n  color: #fff;\n}\n\n/* 大图预览底部的主操作：以此为参考图重绘 */\n.ofs-lightbox-action {\n  position: absolute;\n  bottom: 26px;\n  left: 50%;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 36px;\n  padding: 0 16px;\n  border: 1px solid rgb(255 255 255 / 30%);\n  border-radius: var(--ofs-r-pill);\n  background: rgb(20 20 22 / 66%);\n  color: #fff;\n  font-size: 12.5px;\n  font-weight: 600;\n  cursor: pointer;\n  transform: translateX(-50%);\n  backdrop-filter: blur(8px);\n  -webkit-backdrop-filter: blur(8px);\n}\n\n.ofs-lightbox-action:hover {\n  background: rgb(20 20 22 / 84%);\n}\n\n/* ── 局部重绘：涂抹蒙版 ─────────────────────────────────────── */\n/*\n * 涂抹态占满整块光桌：上面一行标题与覆盖率读数，中间是参考图与蒙版画布，\n * 下面一排画笔、橡皮擦、清空、反选与完成。\n * 画布外框的比例、光标圆圈的位置与直径都由运行时按参考图像素写进内联样式，\n * 这里只固定静态排版。\n */\n.ofs-mask-editor {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  /* 内容超出（矮窗口 / 竖图）时从顶部开始滚动，不被居中的 flex 裁掉上半截。 */\n  justify-content: center;\n  justify-content: safe center;\n  gap: 10px;\n  width: 100%;\n  height: 100%;\n  padding: 12px;\n  overflow: auto;\n}\n\n.ofs-mask-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  width: min(100%, 560px);\n}\n\n.ofs-mask-title {\n  font-size: 12.5px;\n  font-weight: 600;\n}\n\n/*\n * 画布外框：比例来自参考图像素（内联 aspect-ratio 与 --ofs-mask-r）。\n *\n * 宽度同时受容器宽与可用高度约束：与 .ofs-frame / .ofs-print 一样用容器单位算，\n * 竖图或矮窗口下按比例整体缩小，而不是被 max-height 单独压扁。\n * 200px 是上方标题、下方工具栏与两行提示的大致占位；画布保比例优先，必要时编辑器滚动。\n */\n.ofs-mask-stage {\n  position: relative;\n  flex: 0 0 auto;\n  width: min(\n    calc(100cqw - 24px),\n    560px,\n    max(120px, calc((100cqh - 200px) * var(--ofs-mask-r, 1)))\n  );\n  aspect-ratio: var(--ofs-mask-r, 1);\n  border-radius: 6px;\n  overflow: hidden;\n  background: #000;\n  box-shadow: var(--ofs-print-shadow);\n}\n\n/* 参考图按 fill 铺满画布：导出的蒙版与参考图同比例，这里不能留 contain 的边。 */\n.ofs-mask-photo {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  object-fit: fill;\n  user-select: none;\n}\n\n/* 蒙版层是透明底白色笔迹，叠在参考图上用 screen 混色只提亮涂过的地方。 */\n.ofs-mask-canvas {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  touch-action: none;\n  cursor: crosshair;\n  mix-blend-mode: screen;\n  opacity: 0.85;\n}\n\n/* 画笔光标圈：left / top / width / height 由指针或键盘移动时直接写内联样式。 */\n.ofs-mask-cursor {\n  position: absolute;\n  border: 1px solid var(--ofs-accent);\n  border-radius: 50%;\n  transform: translate(-50%, -50%);\n  pointer-events: none;\n  display: none;\n}\n\n.ofs-mask-tools {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  width: 100%;\n}\n\n/* 画笔大小：滑块与工具栏同高、宽度固定，拖动时不带着整行抖动。 */\n.ofs-mask-brush {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  height: 44px;\n  padding: 0 10px;\n  font-size: 11.5px;\n  color: var(--ofs-ink-2);\n}\n\n.ofs-mask-range {\n  width: 120px;\n  height: 44px;\n}\n\n/* 说明文字与画布同宽（画布宽度也是 min(100%, 560px)）；字号与颜色沿用 .ofs-hint。 */\n.ofs-mask-hint {\n  width: min(100%, 560px);\n}\n\n/* 涂抹入口行：读数与提示并排，窄屏自动换行。 */\n/* 蒙版读数与能力说明：外边距归零，字号与颜色沿用 .ofs-hint / .ofs-muted。 */\n.ofs-mask-hint,\n.ofs-mask-status,\n.ofs-mask-warn {\n  margin: 0;\n}\n/* 涂抹提示：操作要点与少步模型的能力提醒（两行弱提示，不抢视觉）。 */\n.ofs-mask-guide,\n.ofs-mask-fast {\n  max-width: min(100%, 560px);\n  margin: 0;\n  line-height: 1.5;\n}\n\n.ofs-mask-fast {\n  color: var(--ofs-warn, #b45309);\n}\n\n/* ── 图片工具：动作坞分组 ─────────────────────────────────────── */\n/*\n * 阶段十二把舞台动作坞收拢成「图片处理 / 创作复用」两组：组内横排，第二组靠右；\n * 窄屏整体换行时每组仍是完整的一排，不会把图片处理与创作复用混在一起。\n * 既有 .ofs-dock / .ofs-dock-button 的尺寸与悬浮反馈保持不变。\n */\n.ofs-dock-group {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-dock-group[data-group='reuse'] {\n  margin-left: auto;\n}\n\n/* 草稿恢复：继续编辑是编辑态之外的唯一入口，强调一档并用灰色小字标出改动摘要。 */\n.ofs-dock-resume,\n.ofs-dock-close {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-dock-draft {\n  padding-left: 2px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 图片工具：轻量提交栏 ─────────────────────────────────────── */\n/*\n * 局部涂抹画布与整图重绘条共用这一条：预设 / 提示词 / 强度 / 主按钮 / 退出。\n * 宽度与涂抹画布对齐（min(100%, 560px)），矮窗口下随 .ofs-mask-editor 一起滚动。\n */\n.ofs-tool-bar {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  width: min(100%, 560px);\n  padding: 10px 12px 11px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-lg);\n  background: color-mix(in oklab, var(--ofs-card) 88%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n}\n\n.ofs-tool-bar-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  min-height: 22px;\n}\n\n.ofs-tool-name {\n  font-size: 12.5px;\n  font-weight: 650;\n  color: var(--ofs-ink);\n}\n\n.ofs-tool-preset {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-tool-preset-name {\n  max-width: 46%;\n  overflow: hidden;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-tool-select {\n  max-width: 190px;\n  height: 28px;\n  padding: 0 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-sm);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n}\n\n.ofs-tool-prompt {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ofs-tool-label {\n  font-size: 10.5px;\n  letter-spacing: 0.05em;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-tool-prompt-input {\n  min-height: 52px;\n  width: 100%;\n  padding: 8px 10px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font: inherit;\n  font-size: 12.5px;\n  line-height: 1.5;\n  resize: vertical;\n}\n\n.ofs-tool-prompt-input::placeholder {\n  color: var(--ofs-ink-4);\n}\n\n.ofs-tool-prompt-input:focus-visible {\n  border-color: transparent;\n  outline: 2px solid var(--ofs-accent);\n  outline-offset: 1px;\n}\n\n.ofs-tool-strength {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-tool-range {\n  flex: 1 1 auto;\n  min-width: 80px;\n  height: 28px;\n  accent-color: var(--ofs-accent);\n}\n\n.ofs-tool-readout {\n  min-width: 34px;\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-variant-numeric: tabular-nums;\n  text-align: right;\n}\n\n/* 覆盖率读数与拦截说明：沿用 .ofs-hint 的字号与颜色，只把居中对齐改成左对齐。 */\n.ofs-tool-mask,\n.ofs-tool-blocked {\n  margin: 0;\n  text-align: left;\n}\n\n.ofs-tool-blocked {\n  color: var(--ofs-warn, #b45309);\n}\n\n.ofs-tool-actions {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ofs-tool-submit {\n  flex: 1 1 auto;\n  height: 34px;\n  border-radius: 11px;\n}\n\n.ofs-tool-exit {\n  flex: 0 0 auto;\n  height: 34px;\n  border-radius: 11px;\n}\n\n/* ── 图片工具：整图重绘条 ─────────────────────────────────────── */\n/*\n * 不切画布：上方是目标作品预览（沿用相纸材质与 .ofs-print 的容器单位尺寸），\n * 下方是同一条轻量提交栏。.ofs-inline-stage 自己就是尺寸容器，cqw / cqh 才能算。\n */\n.ofs-inline-tool {\n  flex: 1 1 auto;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 10px;\n  width: 100%;\n  min-height: 0;\n}\n\n.ofs-inline-stage {\n  position: relative;\n  flex: 1 1 auto;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 100%;\n  min-height: 0;\n  container-type: size;\n}\n\n/* 这是预览而不是可放大的相纸按钮：不显示缩放光标。 */\n.ofs-inline-stage .ofs-print {\n  cursor: default;\n}\n\n/* ── 阶段十三：显式新建绘图态（模糊动态背景 + 取景框）────────────────── */\n\n.ofs-figure--draft {\n  overflow: hidden;\n  background:\n    radial-gradient(70% 58% at 50% 42%, var(--ofs-mat-lit) 0%, transparent 74%),\n    var(--ofs-mat);\n}\n\n/* 背景是几团缓慢漂移的柔光，表达「画布还在酝酿」；取景框保持静止，不干扰阅读。 */\n.ofs-draft-backdrop {\n  position: absolute;\n  inset: -12%;\n  z-index: 0;\n  pointer-events: none;\n}\n\n.ofs-draft-backdrop span {\n  position: absolute;\n  display: block;\n  border-radius: 50%;\n  filter: blur(46px);\n  opacity: 0.5;\n  background: color-mix(in oklab, var(--ofs-ink) 16%, transparent);\n  animation: ofs-draft-drift 18s ease-in-out infinite alternate;\n}\n\n.ofs-draft-backdrop span:nth-child(1) {\n  top: 8%;\n  left: 12%;\n  width: 46%;\n  height: 42%;\n}\n\n.ofs-draft-backdrop span:nth-child(2) {\n  right: 6%;\n  bottom: 10%;\n  width: 42%;\n  height: 46%;\n  animation-delay: -6s;\n  animation-duration: 22s;\n  background: color-mix(in oklab, var(--ofs-ink) 11%, transparent);\n}\n\n.ofs-draft-backdrop span:nth-child(3) {\n  top: 34%;\n  left: 42%;\n  width: 34%;\n  height: 32%;\n  animation-delay: -12s;\n  animation-duration: 26s;\n  background: color-mix(in oklab, var(--ofs-ink) 8%, transparent);\n}\n\n@keyframes ofs-draft-drift {\n  0% {\n    transform: translate3d(0, 0, 0) scale(1);\n  }\n  50% {\n    transform: translate3d(3%, -2.5%, 0) scale(1.06);\n  }\n  100% {\n    transform: translate3d(-2.5%, 3%, 0) scale(0.97);\n  }\n}\n\n/* 取景框：虚线纸边 + 透明底，和空舞台的实心相纸区分开。 */\n.ofs-frame.ofs-frame--draft {\n  z-index: 1;\n  border: 1px dashed color-mix(in oklab, var(--ofs-ink) 22%, transparent);\n  background: color-mix(in oklab, var(--ofs-card-solid) 42%, transparent);\n  box-shadow: none;\n}\n\n.ofs-frame.ofs-frame--draft .ofs-frame-body {\n  background: transparent;\n}\n\n.ofs-draft-blank .ofs-empty-title {\n  color: var(--ofs-ink);\n}\n\n.ofs-draft-blank .ofs-muted {\n  color: var(--ofs-ink-3);\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-draft-backdrop span {\n    animation: none;\n  }\n}\n";
 
 // src/styles/filmstrip.css
-var filmstrip_default = "/*\n * 底部最近生成栏：悬浮玻璃条，左边是批次缩略图流，右边去画廊。\n */\n\n.ofs-filmstrip {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  margin: 0 14px 14px;\n  padding: 10px 12px;\n  min-height: 92px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(18px);\n  -webkit-backdrop-filter: blur(18px);\n}\n\n.ofs-roll {\n  flex: 1 1 auto;\n  min-width: 0;\n  display: flex;\n  align-items: stretch;\n  gap: 16px;\n  overflow-x: auto;\n  overflow-y: hidden;\n  padding-bottom: 2px;\n}\n\n.ofs-batch {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.ofs-batch-thumbs {\n  display: flex;\n  gap: 3px;\n}\n\n.ofs-thumb {\n  appearance: none;\n  flex: 0 0 auto;\n  display: block;\n  width: 62px;\n  height: 62px;\n  padding: 0;\n  border: 2px solid transparent;\n  border-radius: 12px;\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  cursor: pointer;\n  transition:\n    transform 170ms cubic-bezier(0.22, 1, 0.36, 1),\n    border-color 170ms ease,\n    box-shadow 170ms ease;\n}\n\n.ofs-thumb img {\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n.ofs-thumb:hover {\n  transform: translateY(-2px);\n}\n\n.ofs-thumb.is-on {\n  border-color: var(--ofs-accent);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 20%, transparent);\n}\n\n.ofs-batch-meta {\n  display: flex;\n  align-items: center;\n  justify-content: flex-start;\n  gap: 6px;\n  font-size: 10px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-batch-meta em {\n  font-style: normal;\n  font-size: 9px;\n  letter-spacing: 0.06em;\n  text-transform: uppercase;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n/* 进行中的暗房计时卡：一格还在显影的相纸 + 阶段与已用时间 */\n.ofs-ghost {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 12px 8px 8px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 14px;\n  background: color-mix(in oklab, var(--ofs-card) 70%, transparent);\n}\n\n.ofs-ghost-frame {\n  position: relative;\n  flex: 0 0 auto;\n  display: grid;\n  place-items: center;\n  width: 46px;\n  height: 46px;\n  overflow: hidden;\n  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 30%, transparent);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n}\n\n/* 一道从下往上推的显影光，说明这一格还在出 */\n.ofs-ghost-bar {\n  width: 100%;\n  height: 100%;\n  background: linear-gradient(\n    180deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 18%, transparent) 46%,\n    color-mix(in oklab, var(--ofs-accent) 4%, transparent) 100%\n  );\n  background-size: 100% 240%;\n  animation: ofs-develop-scan 2.8s ease-in-out infinite;\n}\n\n@keyframes ofs-develop-scan {\n  0% {\n    background-position: 0 110%;\n  }\n  100% {\n    background-position: 0 -130%;\n  }\n}\n\n/* 排队中的卡：这一格还没开始显影，取景框里写位次，旁边写已排队时长 */\n.ofs-ghost.is-queued {\n  background: color-mix(in oklab, var(--ofs-card) 52%, transparent);\n}\n\n.ofs-ghost.is-queued .ofs-ghost-frame {\n  border-color: var(--ofs-sunken-border);\n}\n\n.ofs-ghost-slot {\n  font-size: 14px;\n  font-weight: 600;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-ghost.is-queued .ofs-ghost-label {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-ghost-text {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  min-width: 0;\n}\n\n.ofs-ghost-label {\n  max-width: 168px;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  font-size: 11px;\n  color: var(--ofs-ink-2);\n  white-space: nowrap;\n}\n\n.ofs-ghost-time {\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n/* 取消：排队卡立即出队，运行中的卡当前这张画完后停止 */\n.ofs-ghost-cancel {\n  appearance: none;\n  flex: 0 0 auto;\n  height: 24px;\n  padding: 0 9px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-ghost-cancel:hover:not(:disabled) {\n  border-color: color-mix(in oklab, var(--ofs-error) 34%, transparent);\n  background: var(--ofs-error-soft);\n  color: var(--ofs-error);\n}\n\n.ofs-ghost-cancel:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* 取消中的卡：显影光停下，只保留阶段文案说明「正在停止…」 */\n.ofs-ghost.is-cancelling {\n  border-color: color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n}\n\n.ofs-ghost.is-cancelling .ofs-ghost-bar {\n  animation: none;\n  opacity: 0.45;\n}\n\n.ofs-ghost.is-cancelling .ofs-ghost-label {\n  color: var(--ofs-ink-3);\n}\n\n/* 空态 */\n.ofs-filmstrip-empty {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  flex: 1 1 auto;\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n}\n\n.ofs-slots {\n  display: flex;\n  gap: 6px;\n}\n\n.ofs-slot {\n  display: block;\n  width: 46px;\n  height: 46px;\n  border: 1px dashed var(--ofs-sunken-border);\n  border-radius: 12px;\n  background: color-mix(in oklab, var(--ofs-card) 60%, transparent);\n}\n\n/* 去画廊 */\n.ofs-filmstrip-side {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  align-self: stretch;\n  padding-left: 12px;\n  border-left: 1px solid var(--ofs-hairline);\n}\n\n.ofs-filmstrip-link {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  padding: 8px 10px;\n  border: 0;\n  border-radius: 10px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-filmstrip-link:hover {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}";
+var filmstrip_default = '/*\n * 底部最近生成栏：悬浮玻璃条，左边是批次缩略图流，右边去画廊。\n */\n\n.ofs-filmstrip {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  margin: 0 14px 14px;\n  padding: 10px 12px;\n  min-height: 92px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(18px);\n  -webkit-backdrop-filter: blur(18px);\n}\n\n.ofs-roll {\n  flex: 1 1 auto;\n  min-width: 0;\n  display: flex;\n  align-items: stretch;\n  gap: 16px;\n  overflow-x: auto;\n  overflow-y: hidden;\n  padding-bottom: 2px;\n}\n\n.ofs-batch {\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.ofs-batch-thumbs {\n  display: flex;\n  gap: 3px;\n}\n\n.ofs-thumb {\n  appearance: none;\n  flex: 0 0 auto;\n  display: block;\n  width: 62px;\n  height: 62px;\n  padding: 0;\n  border: 2px solid transparent;\n  border-radius: 12px;\n  background: var(--ofs-sunken);\n  overflow: hidden;\n  cursor: pointer;\n  transition:\n    transform 170ms cubic-bezier(0.22, 1, 0.36, 1),\n    border-color 170ms ease,\n    box-shadow 170ms ease;\n}\n\n.ofs-thumb img {\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n.ofs-thumb:hover {\n  transform: translateY(-2px);\n}\n\n.ofs-thumb.is-on {\n  border-color: var(--ofs-accent);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 20%, transparent);\n}\n\n.ofs-batch-meta {\n  display: flex;\n  align-items: center;\n  justify-content: flex-start;\n  gap: 6px;\n  font-size: 10px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-batch-meta em {\n  font-style: normal;\n  font-size: 9px;\n  letter-spacing: 0.06em;\n  text-transform: uppercase;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n/* 进行中的暗房计时卡：一格还在显影的相纸 + 阶段与已用时间 */\n.ofs-ghost {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 12px 8px 8px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 14px;\n  background: color-mix(in oklab, var(--ofs-card) 70%, transparent);\n}\n\n.ofs-ghost-frame {\n  position: relative;\n  flex: 0 0 auto;\n  display: grid;\n  place-items: center;\n  width: 46px;\n  height: 46px;\n  overflow: hidden;\n  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 30%, transparent);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n}\n\n/* 一道从下往上推的显影光，说明这一格还在出 */\n.ofs-ghost-bar {\n  width: 100%;\n  height: 100%;\n  background: linear-gradient(\n    180deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 18%, transparent) 46%,\n    color-mix(in oklab, var(--ofs-accent) 4%, transparent) 100%\n  );\n  background-size: 100% 240%;\n  animation: ofs-develop-scan 2.8s ease-in-out infinite;\n}\n\n@keyframes ofs-develop-scan {\n  0% {\n    background-position: 0 110%;\n  }\n  100% {\n    background-position: 0 -130%;\n  }\n}\n\n/* 排队中的卡：这一格还没开始显影，取景框里写位次，旁边写已排队时长 */\n.ofs-ghost.is-queued {\n  background: color-mix(in oklab, var(--ofs-card) 52%, transparent);\n}\n\n.ofs-ghost.is-queued .ofs-ghost-frame {\n  border-color: var(--ofs-sunken-border);\n}\n\n.ofs-ghost-slot {\n  font-size: 14px;\n  font-weight: 600;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-ghost.is-queued .ofs-ghost-label {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-ghost-text {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  min-width: 0;\n}\n\n.ofs-ghost-label {\n  max-width: 168px;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  font-size: 11px;\n  color: var(--ofs-ink-2);\n  white-space: nowrap;\n}\n\n.ofs-ghost-time {\n  font-size: 10.5px;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n/* 取消：排队卡立即出队，运行中的卡当前这张画完后停止 */\n.ofs-ghost-cancel {\n  appearance: none;\n  flex: 0 0 auto;\n  height: 24px;\n  padding: 0 9px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    border-color 150ms ease,\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-ghost-cancel:hover:not(:disabled) {\n  border-color: color-mix(in oklab, var(--ofs-error) 34%, transparent);\n  background: var(--ofs-error-soft);\n  color: var(--ofs-error);\n}\n\n.ofs-ghost-cancel:disabled {\n  color: var(--ofs-ink-4);\n  cursor: default;\n}\n\n/* 取消中的卡：显影光停下，只保留阶段文案说明「正在停止…」 */\n.ofs-ghost.is-cancelling {\n  border-color: color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n}\n\n.ofs-ghost.is-cancelling .ofs-ghost-bar {\n  animation: none;\n  opacity: 0.45;\n}\n\n.ofs-ghost.is-cancelling .ofs-ghost-label {\n  color: var(--ofs-ink-3);\n}\n\n/* 空态 */\n.ofs-filmstrip-empty {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  flex: 1 1 auto;\n  color: var(--ofs-ink-3);\n  font-size: 12px;\n}\n\n.ofs-slots {\n  display: flex;\n  gap: 6px;\n}\n\n.ofs-slot {\n  display: block;\n  width: 46px;\n  height: 46px;\n  border: 1px dashed var(--ofs-sunken-border);\n  border-radius: 12px;\n  background: color-mix(in oklab, var(--ofs-card) 60%, transparent);\n}\n\n/* 去画廊 */\n.ofs-filmstrip-side {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  align-self: stretch;\n  padding-left: 12px;\n  border-left: 1px solid var(--ofs-hairline);\n}\n\n.ofs-filmstrip-link {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  padding: 8px 10px;\n  border: 0;\n  border-radius: 10px;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-filmstrip-link:hover {\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n/* ── 阶段十三：作品条版本角标 / 派生面板 / 新建草稿卡 ───────────────── */\n\n/* 版本角标容器：包裹一张作品缩略图，角标压在右上角，面板向上浮出。\n   面板与缩略图同处一个容器，鼠标从缩略图移进面板时不会触发鼠标离开，\n   配合 JS 的延迟收起构成 hover bridge。 */\n.ofs-version-anchor {\n  position: relative;\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n}\n\n.ofs-version-badge {\n  appearance: none;\n  position: absolute;\n  top: -6px;\n  right: -7px;\n  z-index: 2;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  min-width: 20px;\n  height: 17px;\n  padding: 0 5px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink-2);\n  font-family: var(--ofs-font);\n  font-size: 9.5px;\n  font-weight: 600;\n  line-height: 1;\n  letter-spacing: 0.02em;\n  box-shadow: var(--ofs-shadow-card);\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-version-badge:hover,\n.ofs-version-badge.is-on,\n.ofs-version-anchor.is-pinned .ofs-version-badge {\n  border-color: var(--ofs-accent);\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n}\n\n/* 生成中的角标轻呼吸，提示这棵树还有在途分支。 */\n.ofs-version-anchor.has-pending .ofs-version-badge::after {\n  content: "";\n  width: 4px;\n  height: 4px;\n  margin-left: 3px;\n  border-radius: 50%;\n  background: var(--ofs-warn);\n}\n\n/* 派生面板：默认贴在缩略图上方；面板下方留一条透明的 hover bridge，\n   指针穿过 10px 间隙时仍算在容器内。 */\n.ofs-version-panel {\n  position: absolute;\n  bottom: calc(100% + 10px);\n  left: 50%;\n  z-index: 40;\n  width: 272px;\n  max-height: min(58vh, 360px);\n  padding: 8px;\n  overflow-y: auto;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-md);\n  background: color-mix(in oklab, var(--ofs-card-solid) 96%, transparent);\n  box-shadow: var(--ofs-shadow-lift);\n  transform: translateX(-50%);\n  animation: ofs-version-rise 160ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.ofs-version-panel::before {\n  content: "";\n  position: absolute;\n  left: 0;\n  right: 0;\n  bottom: -12px;\n  height: 12px;\n}\n\n@keyframes ofs-version-rise {\n  0% {\n    opacity: 0;\n    transform: translateX(-50%) translateY(4px);\n  }\n  100% {\n    opacity: 1;\n    transform: translateX(-50%) translateY(0);\n  }\n}\n\n.ofs-version-note {\n  padding: 5px 6px 7px;\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  line-height: 1.4;\n}\n\n.ofs-version-empty {\n  padding: 10px 6px;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  text-align: center;\n}\n\n.ofs-version-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n}\n\n/* 面板行：左侧按 depth 缩进，行尾可带清空草稿按钮。 */\n.ofs-version-row {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n}\n\n.ofs-version-row-main {\n  appearance: none;\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex: 1 1 auto;\n  min-width: 0;\n  padding: 4px 6px;\n  border: 1px solid transparent;\n  border-radius: var(--ofs-r-sm);\n  background: transparent;\n  color: var(--ofs-ink-2);\n  text-align: left;\n  cursor: pointer;\n  transition:\n    background-color 140ms ease,\n    border-color 140ms ease;\n}\n\n.ofs-version-row-main:hover {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-version-row.is-on .ofs-version-row-main {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-ink);\n}\n\n.ofs-version-row.is-ghost .ofs-version-row-main {\n  cursor: default;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-version-label {\n  flex: 0 0 auto;\n  min-width: 38px;\n  font-size: 10px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-version-row.is-on .ofs-version-label {\n  color: var(--ofs-accent);\n}\n\n.ofs-version-row.is-ghost .ofs-version-label {\n  color: var(--ofs-warn);\n}\n\n.ofs-version-kind {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  color: var(--ofs-ink-4);\n}\n\n.ofs-version-thumb {\n  position: relative;\n  flex: 0 0 auto;\n  display: block;\n  width: 28px;\n  height: 28px;\n  overflow: hidden;\n  border-radius: 7px;\n  background: var(--ofs-sunken);\n}\n\n.ofs-version-thumb img {\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n/* 在途幽灵缩略图：复用作品条已有的显影扫描光。 */\n.ofs-version-thumb-ghost {\n  display: block;\n  width: 100%;\n  height: 100%;\n  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 30%, transparent);\n  border-radius: 7px;\n  background: linear-gradient(\n    180deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-accent) 18%, transparent) 46%,\n    color-mix(in oklab, var(--ofs-accent) 4%, transparent) 100%\n  );\n  background-size: 100% 240%;\n  animation: ofs-develop-scan 2.8s ease-in-out infinite;\n}\n\n.ofs-version-prompt {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 11px;\n}\n\n/* 草稿圆点：该版本上留有未提交的编辑草稿。 */\n.ofs-version-draft-dot {\n  flex: 0 0 auto;\n  display: inline-block;\n  width: 6px;\n  height: 6px;\n  border-radius: 50%;\n  background: var(--ofs-warn);\n  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ofs-warn) 16%, transparent);\n}\n\n.ofs-version-draft-clear {\n  appearance: none;\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  height: 22px;\n  padding: 0 6px;\n  border: 1px solid transparent;\n  border-radius: var(--ofs-r-pill);\n  background: transparent;\n  color: var(--ofs-ink-3);\n  font-family: var(--ofs-font);\n  font-size: 9.5px;\n  white-space: nowrap;\n  cursor: pointer;\n  opacity: 0;\n  transition:\n    opacity 140ms ease,\n    background-color 140ms ease,\n    color 140ms ease;\n}\n\n.ofs-version-row:hover .ofs-version-draft-clear,\n.ofs-version-draft-clear:focus-visible {\n  opacity: 1;\n}\n\n.ofs-version-draft-clear:hover {\n  background: var(--ofs-warn-soft);\n  color: var(--ofs-warn);\n}\n\n.ofs-version-draft-label {\n  line-height: 1;\n}\n\n/* 父图被删后提升的局部根：行内没有徽标位，用左侧窄条说明来源已断。 */\n.ofs-version-row.is-orphan .ofs-version-label {\n  color: var(--ofs-ink-4);\n}\n\n/* 新建绘图草稿卡：作品条最左端的待执行位，取景框按当前画幅比例展示。 */\n.ofs-draft-card {\n  appearance: none;\n  flex: 0 0 auto;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink-2);\n  font-family: var(--ofs-font);\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-draft-frame {\n  position: relative;\n  display: grid;\n  place-items: center;\n  width: 62px;\n  height: 62px;\n  border: 1px dashed var(--ofs-sunken-border);\n  border-radius: 12px;\n  background: color-mix(in oklab, var(--ofs-card) 60%, transparent);\n  transition:\n    border-color 160ms ease,\n    background-color 160ms ease,\n    box-shadow 160ms ease;\n}\n\n.ofs-draft-card:hover .ofs-draft-frame {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-draft-card.is-on .ofs-draft-frame {\n  border-color: var(--ofs-accent);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 16%, transparent);\n}\n\n.ofs-draft-viewfinder {\n  display: grid;\n  place-items: center;\n  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 32%, transparent);\n  border-radius: 6px;\n  color: var(--ofs-ink-4);\n  background: color-mix(in oklab, var(--ofs-card-solid) 72%, transparent);\n}\n\n.ofs-draft-card.is-pending .ofs-draft-viewfinder {\n  border-style: solid;\n  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);\n  color: var(--ofs-warn);\n}\n\n.ofs-draft-state {\n  position: absolute;\n  right: 3px;\n  bottom: 2px;\n  left: 3px;\n  overflow: hidden;\n  color: var(--ofs-ink-4);\n  font-size: 8px;\n  line-height: 1.2;\n  text-align: center;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-draft-card.is-pending .ofs-draft-state {\n  color: var(--ofs-warn);\n}\n\n.ofs-draft-meta {\n  display: flex;\n  align-items: center;\n  justify-content: flex-start;\n  gap: 5px;\n  min-width: 0;\n  font-size: 9.5px;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-draft-meta em {\n  flex: 0 0 auto;\n  font-style: normal;\n  font-size: 9px;\n  letter-spacing: 0.04em;\n  font-variant-numeric: tabular-nums;\n  color: var(--ofs-ink-3);\n}\n\n.ofs-draft-preset {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 9px;\n  color: var(--ofs-ink-4);\n}\n\n/* 窄屏：面板贴住作品条左缘，避免浮到窗口外。 */\n@media (max-width: 720px) {\n  .ofs-version-panel {\n    left: 0;\n    width: min(260px, 72vw);\n    transform: none;\n  }\n\n  @keyframes ofs-version-rise {\n    0% {\n      opacity: 0;\n      transform: translateY(4px);\n    }\n    100% {\n      opacity: 1;\n      transform: translateY(0);\n    }\n  }\n}\r\n\n/* ── 阶段十三：作品条缩略图草稿圆点与版本面板开合 ─────────────────── */\n\n/* 草稿圆点：该树有未提交的编辑时压在缩略图左上角（右上角留给 ⎇ N 角标）。\n   视觉只有 9px，但用透明外扩伪元素把点击热区撑到 22px。 */\n.ofs-thumb-dot {\n  appearance: none;\n  position: absolute;\n  top: -6px;\n  left: -6px;\n  z-index: 3;\n  width: 9px;\n  height: 9px;\n  padding: 0;\n  border: 1px solid var(--ofs-card-solid);\n  border-radius: 50%;\n  background: var(--ofs-warn);\n  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ofs-warn) 18%, transparent);\n  cursor: pointer;\n  transition:\n    transform 140ms ease,\n    box-shadow 140ms ease;\n}\n\n.ofs-thumb-dot::before {\n  content: "";\n  position: absolute;\n  inset: -7px;\n  border-radius: 50%;\n}\n\n.ofs-thumb-dot:hover {\n  transform: scale(1.25);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-warn) 26%, transparent);\n}\n\n/* 版本面板向上浮出，需要脱离作品条的横向滚动裁剪。\n   只在有面板打开时放开 overflow，关闭立刻恢复——正常浏览仍是可滚动、可裁剪的。 */\n.ofs-filmstrip.is-version-open .ofs-roll {\n  overflow: visible;\n}\r\n';
 
 // src/styles/gallery.css
 var gallery_default = "/*\n * 作品画廊：作品集式的卡片墙。\n *\n * 结构：\n *   .ofs-gallery          自身滚动容器（高度由 .ofs-main 决定）\n *     .ofs-gallery-tools  轻浮的玻璃工具卡：标题 / 搜索 / 模型 / 收藏 / 批量动作\n *     .ofs-gallery-group  今天 / 本周 / 更早\n *       .ofs-gallery-wall CSS columns 瀑布流：图片按原始宽高比自然高度\n *\n * 卡片是「图片 + 两行提示词 + 标签行」的白卡：圆角、描边、阴影全部来自\n * tokens.css；网格只负责列宽，不裁切图片、不拉伸比例。\n */\n\n/* ── 容器 ───────────────────────────────────────────────────── */\n.ofs-gallery {\n  /* 吸顶工具卡要贴住滚动口，padding-top 用变量参与 top 偏移，避免内容从顶部缝隙露出 */\n  --ofs-gallery-pad-top: 18px;\n  position: relative;\n  flex: 1 1 auto;\n  height: 100%;\n  min-height: 0;\n  overflow-y: auto;\n  overflow-x: hidden;\n  display: flex;\n  flex-direction: column;\n  gap: var(--ofs-gap);\n  padding: var(--ofs-gallery-pad-top) 20px 26px;\n  overscroll-behavior: contain;\n}\n\n.ofs-gallery.is-empty {\n  min-height: 360px;\n}\n\n/* ── 工具卡 ─────────────────────────────────────────────────── */\n.ofs-gallery-tools {\n  position: sticky;\n  top: calc(-1 * var(--ofs-gallery-pad-top));\n  z-index: 3;\n  flex: 0 0 auto;\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 10px 12px;\n  padding: 12px 14px;\n  border: 1px solid var(--ofs-window-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-window);\n  box-shadow: var(--ofs-shadow-card);\n  backdrop-filter: blur(18px) saturate(140%);\n  -webkit-backdrop-filter: blur(18px) saturate(140%);\n}\n\n.ofs-gallery-headline {\n  display: flex;\n  align-items: baseline;\n  gap: 9px;\n  min-width: 0;\n}\n\n.ofs-gallery-title {\n  font-size: 15px;\n  font-weight: 650;\n  letter-spacing: -0.01em;\n  line-height: 1.3;\n  color: var(--ofs-ink);\n  white-space: nowrap;\n}\n\n.ofs-gallery-count {\n  font-size: 12px;\n  line-height: 1.4;\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-gallery-count b {\n  font-weight: 600;\n  color: var(--ofs-ink-2);\n  font-variant-numeric: tabular-nums;\n}\n\n/* 搜索：胶囊内嵌放大镜 */\n.ofs-gallery-search {\n  position: relative;\n  display: flex;\n  align-items: center;\n  flex: 1 1 200px;\n  max-width: 320px;\n  height: 34px;\n  padding: 0 12px 0 32px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-3);\n  cursor: text;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease,\n    box-shadow 150ms ease,\n    color 150ms ease;\n}\n\n.ofs-gallery-search:focus-within {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-focus-ring);\n  color: var(--ofs-accent);\n}\n\n.ofs-gallery-search-icon {\n  position: absolute;\n  left: 11px;\n  top: 50%;\n  transform: translateY(-50%);\n  pointer-events: none;\n}\n\n.ofs-gallery-search-input {\n  width: 100%;\n  height: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n}\n\n.ofs-gallery-search-input::placeholder {\n  color: var(--ofs-ink-3);\n}\n\n.ofs-gallery-search-input:focus-visible {\n  outline: none;\n  box-shadow: none;\n}\n\n.ofs-gallery-search-input::-webkit-search-cancel-button,\n.ofs-gallery-search-input::-webkit-search-decoration {\n  appearance: none;\n  -webkit-appearance: none;\n}\n\n/* 模型过滤：原生 select，外观融进胶囊体系 */\n.ofs-gallery-select {\n  position: relative;\n  display: inline-flex;\n  align-items: center;\n  flex: 0 0 auto;\n}\n\n.ofs-gallery-select-input {\n  appearance: none;\n  -webkit-appearance: none;\n  height: 34px;\n  max-width: 200px;\n  padding: 0 30px 0 13px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  text-overflow: ellipsis;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease;\n}\n\n.ofs-gallery-select-input:hover {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-gallery-select-input:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-gallery-select-input option {\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink);\n}\n\n.ofs-gallery-select-caret {\n  position: absolute;\n  right: 11px;\n  top: 50%;\n  transform: translateY(-50%);\n  color: var(--ofs-ink-3);\n  pointer-events: none;\n}\n\n/* 工具条里的 chip 与输入同高，避免一排控件高低不齐 */\n.ofs-gallery-tools .ofs-chip {\n  height: 32px;\n  padding: 0 13px;\n  font-size: 12.5px;\n}\n\n.ofs-gallery-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 8px;\n  margin-left: auto;\n}\n\n.ofs-gallery-selected {\n  display: inline-flex;\n  align-items: center;\n  gap: 5px;\n  height: 32px;\n  padding: 0 12px;\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n  font-size: 12px;\n  font-weight: 600;\n  white-space: nowrap;\n}\n\n.ofs-gallery-selected b {\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 分组：小字重对比 + 一条极淡分隔 ─────────────────────────── */\n.ofs-gallery-group {\n  flex: 0 0 auto;\n}\n\n.ofs-gallery-group-title {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  margin: 0 0 12px;\n  padding-left: 2px;\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 600;\n  line-height: 1.4;\n  letter-spacing: 0.02em;\n}\n\n.ofs-gallery-group-title::after {\n  content: '';\n  flex: 1 1 auto;\n  height: 1px;\n  border-radius: 1px;\n  background: var(--ofs-hairline);\n}\n\n/* ── 卡片墙：JS 分列，图片按原始比例撑高 ─────────────────────── */\n/*\n * CSS 多列是列优先填充，最新作品会先占满左列；这里改成「每列一个纵向 flex」，\n * 由 Gallery.jsx 按行优先分桶（断点见 logic/gallery.js）。图片仍按原始宽高比\n * 撑高，不裁切、不拉伸。\n */\n.ofs-gallery-wall {\n  display: flex;\n  align-items: flex-start;\n  gap: var(--ofs-gap);\n}\n\n.ofs-gallery-col {\n  flex: 1 1 0;\n  min-width: 0;\n  display: flex;\n  flex-direction: column;\n}\n\n.ofs-gallery-card {\n  display: block;\n  width: 100%;\n  margin: 0 0 var(--ofs-gap);\n  padding: 6px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-lg);\n  background: var(--ofs-card);\n  color: var(--ofs-ink);\n  break-inside: avoid;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),\n    box-shadow 180ms ease,\n    border-color 180ms ease;\n}\n\n.ofs-gallery-card:hover {\n  transform: translateY(-2px);\n  box-shadow: var(--ofs-shadow-lift);\n}\n\n.ofs-gallery-card.is-picked {\n  border-color: var(--ofs-accent);\n  box-shadow: var(--ofs-focus-ring), var(--ofs-shadow-card);\n}\n\n.ofs-gallery-card.is-picked:hover {\n  box-shadow: var(--ofs-focus-ring), var(--ofs-shadow-lift);\n}\n\n/* 图片区：按钮铺满，悬浮操作覆盖在图片底部 */\n.ofs-gallery-stage {\n  position: relative;\n  display: block;\n  border-radius: calc(var(--ofs-r-lg) - 7px);\n  overflow: hidden;\n  background: var(--ofs-sunken);\n}\n\n.ofs-gallery-media {\n  appearance: none;\n  position: relative;\n  display: block;\n  width: 100%;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  cursor: pointer;\n}\n\n.ofs-gallery-media img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n/* 悬停操作：带回参数 / 生成变体 / 以此图重绘 / 查看大图 / 删除 */\n.ofs-gallery-hover {\n  position: absolute;\n  right: 6px;\n  bottom: 6px;\n  left: 6px;\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n  gap: 4px;\n  opacity: 0;\n  pointer-events: none;\n  transition: opacity 150ms ease;\n}\n\n.ofs-gallery-card:hover .ofs-gallery-hover,\n.ofs-gallery-card:focus-within .ofs-gallery-hover {\n  opacity: 1;\n  pointer-events: auto;\n}\n\n.ofs-gallery-action {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 4px;\n  height: 22px;\n  padding: 0 7px;\n  border: 1px solid rgb(255 255 255 / 26%);\n  border-radius: var(--ofs-r-pill);\n  background: rgb(20 20 22 / 62%);\n  color: #fff;\n  font-size: 10px;\n  white-space: nowrap;\n  cursor: pointer;\n  backdrop-filter: blur(6px);\n  -webkit-backdrop-filter: blur(6px);\n}\n\n.ofs-gallery-action:hover {\n  background: rgb(20 20 22 / 82%);\n}\n\n/*\n * 删除：破坏性动作单独一档。常态只给淡红描边，确认态实心红且其余动作已收起，\n * 让「已经上膛」这件事一眼可见；红只出现在这一颗小胶囊上，不扩散到大面积。\n */\n.ofs-gallery-action.is-danger {\n  border-color: rgb(255 138 138 / 34%);\n  color: #ffd6d6;\n}\n\n.ofs-gallery-action.is-danger:hover {\n  border-color: rgb(255 138 138 / 62%);\n  background: rgb(86 18 18 / 78%);\n  color: #fff;\n}\n\n.ofs-gallery-action.is-danger.is-confirming {\n  border-color: rgb(255 138 138 / 72%);\n  background: #9d2b2b;\n  color: #fff;\n}\n\n.ofs-gallery-action.is-danger.is-confirming:hover {\n  background: #b23434;\n}\n\n/* 触屏设备没有 hover：操作条常显，否则手机上无法「带回参数 / 生成变体」。 */\n@media (hover: none) {\n  .ofs-gallery-hover {\n    opacity: 1;\n    pointer-events: auto;\n  }\n}\n\n/* 批量选择：左上角圆点，选中后墨黑填充 */\n.ofs-gallery-pick {\n  position: absolute;\n  top: 9px;\n  left: 9px;\n  display: grid;\n  place-items: center;\n  width: 20px;\n  height: 20px;\n  border: 1.5px solid rgb(20 20 22 / 16%);\n  border-radius: 50%;\n  background: rgb(255 255 255 / 72%);\n  color: var(--ofs-accent-ink);\n  box-shadow: 0 1px 4px rgb(24 24 27 / 22%);\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease;\n}\n\n.ofs-gallery-pick.is-on {\n  border-color: var(--ofs-accent-ink);\n  background: var(--ofs-accent-grad);\n  box-shadow: var(--ofs-shadow-accent);\n}\n\n/* 收藏星标：右上角玻璃圆点，已收藏常显；未收藏在卡片悬停 / 键盘聚焦时出现。\n   它是图片上方的独立按钮，不嵌在图片按钮里，避免嵌套交互元素。 */\n.ofs-gallery-star {\n  appearance: none;\n  position: absolute;\n  top: 8px;\n  right: 8px;\n  z-index: 2;\n  display: grid;\n  place-items: center;\n  width: 24px;\n  height: 24px;\n  padding: 0;\n  border: 0;\n  border-radius: 50%;\n  background: color-mix(in oklab, var(--ofs-card-solid) 84%, transparent);\n  color: var(--ofs-ink-3);\n  box-shadow: 0 1px 4px rgb(24 24 27 / 22%);\n  backdrop-filter: blur(4px);\n  -webkit-backdrop-filter: blur(4px);\n  cursor: pointer;\n  opacity: 0;\n  pointer-events: none;\n  transition:\n    opacity 150ms ease,\n    color 150ms ease,\n    background-color 150ms ease;\n}\n\n.ofs-gallery-star.is-on {\n  opacity: 1;\n  pointer-events: auto;\n  color: var(--ofs-ink);\n}\n\n.ofs-gallery-card:hover .ofs-gallery-star,\n.ofs-gallery-card:focus-within .ofs-gallery-star {\n  opacity: 1;\n  pointer-events: auto;\n}\n\n.ofs-gallery-star:hover {\n  color: var(--ofs-accent);\n}\n\n/* 触屏没有 hover：星标常显，否则手机上无法收藏。 */\n@media (hover: none) {\n  .ofs-gallery-star {\n    opacity: 1;\n    pointer-events: auto;\n  }\n}\n\n/* 卡身：两行提示词 + 标签行；整块可点开大图 */\n.ofs-gallery-body {\n  appearance: none;\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  width: 100%;\n  min-width: 0;\n  padding: 10px 8px 8px;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ofs-gallery-caption {\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n  line-clamp: 2;\n  overflow: hidden;\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  font-weight: 500;\n  line-height: 1.5;\n  word-break: break-word;\n}\n\n.ofs-gallery-tags {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.3;\n}\n\n.ofs-gallery-tags em {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-style: normal;\n  font-weight: 500;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ofs-gallery-tags span {\n  flex: 0 0 auto;\n  color: var(--ofs-ink-3);\n  font-variant-numeric: tabular-nums;\n}\n\n/* ── 空态：一张柔光卡片，一句话 ─────────────────────────────── */\n.ofs-gallery-empty {\n  flex: 0 0 auto;\n  margin: auto;\n  width: 100%;\n  max-width: 380px;\n  padding: 40px 30px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-xl);\n  background:\n    radial-gradient(120% 150% at 50% -18%, color-mix(in oklab, var(--ofs-ink) 6%, transparent) 0%, transparent 62%),\n    var(--ofs-card);\n  box-shadow: var(--ofs-shadow-card);\n  text-align: center;\n}\n\n.ofs-gallery-empty p {\n  color: var(--ofs-ink-2);\n  font-size: 13px;\n  line-height: 1.7;\n}\n\n.ofs-gallery-empty-actions {\n  display: flex;\n  justify-content: center;\n  margin-top: 14px;\n}\n\n/* ── 历史分页脚 ─────────────────────────────────────────────── */\n.ofs-gallery-foot {\n  flex: 0 0 auto;\n  display: flex;\n  justify-content: center;\n  padding: 8px 0 4px;\n}\n\n.ofs-gallery-more {\n  height: 32px;\n  padding: 0 18px;\n}\n\n.ofs-gallery-more[aria-busy='true'] {\n  opacity: 0.6;\n}\n\n.ofs-gallery-all-loaded {\n  font-size: 11px;\n  color: var(--ofs-ink-3);\n  text-align: center;\n}\n\n/* ── 响应式 ─────────────────────────────────────────────────── */\n/* 列数由 Gallery.jsx 的 useColumnCount 按 900 / 1180 / 1400 三个断点决定，\n   这里只调工具卡各自在不同宽度下的排布。 */\n@media (max-width: 1180px) {\n  .ofs-gallery {\n    --ofs-gallery-pad-top: 16px;\n    padding: 16px 18px 24px;\n  }\n\n  .ofs-gallery-search {\n    max-width: 260px;\n  }\n}\n\n@media (max-width: 900px) {\n  /* 窄窗里工具卡不再吸顶：它本身会折成两三行，吸顶太占高度 */\n  .ofs-gallery-tools {\n    position: static;\n  }\n}\n\n@media (max-width: 700px) {\n  .ofs-gallery {\n    --ofs-gallery-pad-top: 12px;\n    gap: 12px;\n    padding: 12px 12px 22px;\n  }\n\n  .ofs-gallery-tools {\n    gap: 8px;\n    padding: 10px 11px;\n  }\n\n  .ofs-gallery-search {\n    flex: 1 1 100%;\n    max-width: none;\n  }\n\n  .ofs-gallery-select-input {\n    max-width: 116px;\n  }\n\n  .ofs-gallery-tools .ofs-chip {\n    padding: 0 10px;\n  }\n\n  .ofs-gallery-empty {\n    padding: 32px 22px;\n  }\n}";
@@ -3299,10 +3346,6 @@ function formSyncChips(t, message) {
   if (Number.isFinite(count) && count > 0) {
     chips.push({ key: "count", text: `${Math.round(count)} ${t("unit.image")}` });
   }
-  chips.push({
-    key: "reference",
-    text: summary.hasReference === true ? t("studio.chat.formSync.reference") : t("studio.chat.formSync.textOnly")
-  });
   const seedValue = summary.seed;
   const seed = seedValue === null || seedValue === void 0 || seedValue === "" ? NaN : Number(seedValue);
   if (Number.isFinite(seed) && seed >= 0) {
@@ -3602,20 +3645,886 @@ function ChatPanel(props) {
 }
 
 // src/studio/Filmstrip.jsx
+var import_react6 = __toESM(require("react"), 1);
+
+// src/logic/lineage.js
+var DRAFT_LRU_LIMIT = 8;
+var DRAFT_CHANGE_KEYS = Object.freeze(["mask", "prompt", "params"]);
+var PENDING_STATUS = Object.freeze({
+  queued: true,
+  running: true,
+  "waiting-session": true
+});
+var LINEAGE_KINDS = Object.freeze(["text", "img2img", "inpaint"]);
+var MAX_DEPTH = 64;
+var KIND_TEXT = "text";
+var KIND_IMG2IMG = "img2img";
+var KIND_INPAINT = "inpaint";
+var ALPHABET = "abcdefghijklmnopqrstuvwxyz";
+function textOf2(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+function numberOrNull(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+function timestampOf(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value) {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+function createdAtOf(source) {
+  if (!source || typeof source !== "object") return null;
+  for (const key of ["finishedAt", "createdAt", "mtime", "startedAt"]) {
+    const value = timestampOf(source[key]);
+    if (value !== null) return value;
+  }
+  return null;
+}
+function imagePathOf(image) {
+  if (!image || typeof image !== "object") return "";
+  return textOf2(image.path);
+}
+function itemKeyOf(item, index) {
+  if (!item || typeof item !== "object") return `raw:${index}`;
+  return textOf2(item.jobId) || textOf2(item.dir) || `raw:${textOf2(item.prompt)}:${index}`;
+}
+function pendingParentOf(job) {
+  if (!job || typeof job !== "object") return "";
+  const direct = textOf2(job.parentPath);
+  if (direct) return direct;
+  const params = job.params && typeof job.params === "object" ? job.params : null;
+  if (params) {
+    const reference = params.reference && typeof params.reference === "object" ? params.reference : null;
+    if (reference) {
+      const path = textOf2(reference.path) || textOf2(reference.sourcePath);
+      if (path) return path;
+    }
+    const source = textOf2(params.sourceImage);
+    if (source) return source;
+  }
+  return textOf2(job.sourceImage);
+}
+function pendingKindOf(job) {
+  if (!job || typeof job !== "object") return KIND_TEXT;
+  const mode = textOf2(job.sourceMode);
+  if (LINEAGE_KINDS.includes(mode)) return mode;
+  const params = job.params && typeof job.params === "object" ? job.params : null;
+  const reference = params && params.reference && typeof params.reference === "object" ? params.reference : null;
+  if (!reference) return KIND_TEXT;
+  const mask = reference.mask;
+  if (mask === true) return KIND_INPAINT;
+  if (mask && typeof mask === "object" && typeof mask.data === "string" && mask.data) return KIND_INPAINT;
+  return KIND_IMG2IMG;
+}
+function pendingRootOf(job) {
+  const params = job && job.params && typeof job.params === "object" ? job.params : null;
+  return textOf2(job && job.rootImage) || textOf2(params && params.rootImage);
+}
+function siblingLetter(index) {
+  let num = Number.isFinite(Number(index)) ? Math.max(0, Math.floor(Number(index))) : 0;
+  let out = "";
+  do {
+    out = ALPHABET[num % ALPHABET.length] + out;
+    num = Math.floor(num / ALPHABET.length) - 1;
+  } while (num >= 0);
+  return out;
+}
+function versionLabelOf(node) {
+  if (!node || typeof node !== "object") return "v1";
+  const depth = Number.isFinite(Number(node.depth)) ? Math.max(0, Math.floor(Number(node.depth))) : 0;
+  const base = `v${Math.min(depth, MAX_DEPTH) + 1}`;
+  const count = Number.isFinite(Number(node.siblingCount)) ? Math.floor(Number(node.siblingCount)) : 1;
+  if (count <= 1) return base;
+  const index = Number.isFinite(Number(node.siblingIndex)) ? Math.max(0, Math.floor(Number(node.siblingIndex))) : 0;
+  return `${base}${siblingLetter(index)}`;
+}
+function draftKeyOf(value) {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+  const image = value.image && typeof value.image === "object" ? value.image : value;
+  return textOf2(image.path);
+}
+function workDraftSummary(draft) {
+  const source = draft && typeof draft === "object" ? draft : null;
+  const mask = source && source.mask && typeof source.mask === "object" ? source.mask : null;
+  if (!source) {
+    return {
+      active: false,
+      items: [],
+      count: 0,
+      hasMask: false,
+      hasPrompt: false,
+      hasParams: false,
+      tool: "",
+      lastTouchedAt: 0,
+      coverage: 0
+    };
+  }
+  const changed = source.changed && typeof source.changed === "object" ? source.changed : {};
+  const hasFlag = (key) => Object.prototype.hasOwnProperty.call(changed, key);
+  const flags = {
+    mask: hasFlag("mask") ? changed.mask === true : Boolean(mask && textOf2(mask.data)),
+    prompt: hasFlag("prompt") ? changed.prompt === true : false,
+    params: hasFlag("params") ? changed.params === true : false
+  };
+  const items = DRAFT_CHANGE_KEYS.filter((key) => flags[key] === true);
+  const coverage = mask && Number.isFinite(Number(mask.coverage)) ? Math.max(0, Math.min(1, Number(mask.coverage))) : 0;
+  const lastTouchedAt = Number(source.lastTouchedAt);
+  return {
+    active: items.length > 0,
+    items,
+    count: items.length,
+    hasMask: flags.mask,
+    hasPrompt: flags.prompt,
+    hasParams: flags.params,
+    tool: textOf2(source.tool),
+    lastTouchedAt: Number.isFinite(lastTouchedAt) ? lastTouchedAt : 0,
+    coverage
+  };
+}
+function lruDrafts(drafts, limit) {
+  const max = Number.isFinite(Number(limit)) && Number(limit) >= 0 ? Math.floor(Number(limit)) : DRAFT_LRU_LIMIT;
+  const entries = drafts instanceof Map ? [...drafts.entries()] : drafts && typeof drafts === "object" ? Object.entries(drafts) : [];
+  const candidates = [];
+  entries.forEach(([key, draft], order) => {
+    const path = draftKeyOf(key);
+    if (!path || !draft || typeof draft !== "object") return;
+    candidates.push({ path, draft, touched: workDraftSummary(draft).lastTouchedAt, order });
+  });
+  candidates.sort((left, right) => right.touched - left.touched || left.order - right.order);
+  const kept = {};
+  for (const entry of candidates.slice(0, max)) kept[entry.path] = entry.draft;
+  return kept;
+}
+function compareSibling(left, right) {
+  const leftIndex = Number.isFinite(Number(left.siblingIndex)) ? Number(left.siblingIndex) : Number.MAX_SAFE_INTEGER;
+  const rightIndex = Number.isFinite(Number(right.siblingIndex)) ? Number(right.siblingIndex) : Number.MAX_SAFE_INTEGER;
+  if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+  const leftTime = createdAtOf(left) ?? 0;
+  const rightTime = createdAtOf(right) ?? 0;
+  if (leftTime !== rightTime) return leftTime - rightTime;
+  return textOf2(left.path).localeCompare(textOf2(right.path));
+}
+function buildLineage(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const items = Array.isArray(source.items) ? source.items.filter((item) => item && typeof item === "object") : [];
+  const pendingJobs = Array.isArray(source.pendingJobs) ? source.pendingJobs : [];
+  const nodes = [];
+  const byPath = {};
+  items.forEach((item, itemIndex) => {
+    const images = Array.isArray(item.images) ? item.images.filter((image) => image && typeof image === "object") : [];
+    if (images.length === 0) return;
+    const parentPath = textOf2(item.sourceImage);
+    const metaRoot = textOf2(item.rootImage);
+    const createdAt = createdAtOf(item);
+    const kind = item.inpaint === true ? KIND_INPAINT : parentPath ? KIND_IMG2IMG : KIND_TEXT;
+    const itemKey = itemKeyOf(item, itemIndex);
+    for (const image of images) {
+      const path = imagePathOf(image);
+      if (!path || byPath[path]) continue;
+      const node = {
+        path,
+        url: textOf2(image.url),
+        file: textOf2(image.file),
+        width: numberOrNull(image.width),
+        height: numberOrNull(image.height),
+        seed: image.seed === void 0 ? null : image.seed,
+        prompt: textOf2(item.prompt),
+        presetId: textOf2(item.presetId),
+        itemKey,
+        item,
+        createdAt,
+        kind,
+        ghost: false,
+        parentPath,
+        metaRoot,
+        rootPath: "",
+        depth: 0,
+        siblingIndex: 0,
+        siblingCount: 1,
+        versionLabel: "",
+        sourceDeleted: false
+      };
+      nodes.push(node);
+      byPath[path] = node;
+    }
+  });
+  for (const node of nodes) {
+    if (!node.parentPath) {
+      node.rootPath = node.path;
+      node.depth = 0;
+      node.siblingIndex = 0;
+      node.siblingCount = 1;
+      node.versionLabel = versionLabelOf(node);
+      continue;
+    }
+    if (!byPath[node.parentPath]) {
+      node.rootPath = node.path;
+      node.depth = 0;
+      node.sourceDeleted = true;
+      continue;
+    }
+    const ancestry = [];
+    const seen = /* @__PURE__ */ new Set();
+    let current = node;
+    while (current && typeof current === "object") {
+      if (seen.has(current.path)) break;
+      seen.add(current.path);
+      ancestry.push(current.path);
+      if (!current.parentPath) break;
+      const parent = byPath[current.parentPath];
+      if (!parent) break;
+      current = parent;
+    }
+    const top = ancestry[ancestry.length - 1];
+    node.rootPath = top || node.path;
+    node.depth = Math.min(Math.max(ancestry.length - 1, 0), MAX_DEPTH);
+  }
+  const ghosts = [];
+  for (const job of pendingJobs) {
+    if (!job || typeof job !== "object" || !job.id) continue;
+    if (PENDING_STATUS[job.status] !== true) continue;
+    const parentPath = pendingParentOf(job);
+    const rootHint = pendingRootOf(job);
+    let anchor = parentPath ? byPath[parentPath] : null;
+    let parentMissing = false;
+    if (!anchor && rootHint) {
+      anchor = byPath[rootHint] || null;
+      parentMissing = Boolean(anchor);
+    }
+    if (!anchor || anchor.ghost) continue;
+    const path = `pending:${String(job.id)}`;
+    if (byPath[path]) continue;
+    const ghost = {
+      path,
+      url: "",
+      file: "",
+      width: numberOrNull(job.params && job.params.width),
+      height: numberOrNull(job.params && job.params.height),
+      seed: null,
+      prompt: textOf2(job.params && job.params.prompt),
+      presetId: textOf2(job.presetId) || textOf2(job.params && job.params.presetId),
+      itemKey: path,
+      item: null,
+      job,
+      jobId: String(job.id),
+      createdAt: createdAtOf(job),
+      kind: pendingKindOf(job),
+      ghost: true,
+      parentPath: anchor.path,
+      parentMissing,
+      metaRoot: rootHint,
+      rootPath: anchor.rootPath,
+      depth: Math.min((anchor.depth || 0) + 1, MAX_DEPTH),
+      siblingIndex: 0,
+      siblingCount: 1,
+      versionLabel: "",
+      sourceDeleted: false,
+      status: textOf2(job.status)
+    };
+    ghosts.push(ghost);
+    nodes.push(ghost);
+    byPath[path] = ghost;
+  }
+  const childrenByParent = /* @__PURE__ */ new Map();
+  for (const node of nodes) {
+    if (!node.parentPath) continue;
+    if (!childrenByParent.has(node.parentPath)) childrenByParent.set(node.parentPath, []);
+    childrenByParent.get(node.parentPath).push(node);
+  }
+  for (const children of childrenByParent.values()) {
+    const real = children.filter((node) => !node.ghost).sort((left, right) => (createdAtOf(left) ?? 0) - (createdAtOf(right) ?? 0) || textOf2(left.path).localeCompare(textOf2(right.path)));
+    const pending = children.filter((node) => node.ghost).sort((left, right) => (createdAtOf(left) ?? Number.MAX_SAFE_INTEGER) - (createdAtOf(right) ?? Number.MAX_SAFE_INTEGER) || textOf2(left.path).localeCompare(textOf2(right.path)));
+    const ordered = [...real, ...pending];
+    ordered.forEach((node, index) => {
+      node.siblingIndex = index;
+      node.siblingCount = ordered.length;
+      node.versionLabel = versionLabelOf(node);
+    });
+  }
+  const orderIndex = /* @__PURE__ */ new Map();
+  nodes.forEach((node, index) => orderIndex.set(node.path, index));
+  const groups = /* @__PURE__ */ new Map();
+  for (const node of nodes) {
+    if (!node.rootPath) continue;
+    if (!groups.has(node.rootPath)) groups.set(node.rootPath, []);
+    groups.get(node.rootPath).push(node);
+  }
+  const roots = [];
+  for (const [rootPath, group] of groups) {
+    const rootNode = byPath[rootPath] && !byPath[rootPath].ghost ? byPath[rootPath] : null;
+    const real = group.filter((node) => !node.ghost);
+    const ghostNodes = group.filter((node) => node.ghost);
+    const timeScore = (node) => createdAtOf(node) ?? 0;
+    let latest = null;
+    for (const node of real) {
+      if (!latest) {
+        latest = node;
+        continue;
+      }
+      const nextScore = timeScore(node);
+      const bestScore = timeScore(latest);
+      if (nextScore > bestScore) latest = node;
+      else if (nextScore === bestScore && (orderIndex.get(node.path) ?? Number.MAX_SAFE_INTEGER) < (orderIndex.get(latest.path) ?? Number.MAX_SAFE_INTEGER)) latest = node;
+    }
+    const derivedCount = Math.max(real.length - 1, 0);
+    const activity = Math.max(
+      latest ? timeScore(latest) : 0,
+      ...ghostNodes.map((node) => timeScore(node)),
+      0
+    );
+    roots.push({
+      path: rootPath,
+      node: rootNode,
+      latest,
+      latestPath: latest ? latest.path : rootPath,
+      nodes: group,
+      count: group.length,
+      derivedCount,
+      pendingCount: ghostNodes.length,
+      badgeCount: derivedCount + ghostNodes.length,
+      hasPending: ghostNodes.length > 0,
+      sourceDeleted: Boolean(rootNode && rootNode.sourceDeleted),
+      activity,
+      order: orderIndex.get(rootPath) ?? Number.MAX_SAFE_INTEGER
+    });
+  }
+  roots.sort((left, right) => right.activity - left.activity || left.order - right.order);
+  return { roots, byPath, nodes, ghosts };
+}
+function insideTree(startPath, rootPath, byPath) {
+  let current = startPath;
+  const seen = /* @__PURE__ */ new Set();
+  while (current && !seen.has(current)) {
+    if (current === rootPath) return true;
+    seen.add(current);
+    const node = byPath[current];
+    if (!node) return false;
+    current = node.parentPath;
+  }
+  return false;
+}
+function lineagePanelRows(root, byPath, drafts, pendingJobs) {
+  const pathMap = byPath && typeof byPath === "object" ? byPath : {};
+  const rootEntry = root && typeof root === "object" ? root : null;
+  const rootPath = rootEntry ? textOf2(rootEntry.path) : textOf2(root);
+  if (!rootPath) return [];
+  const rootNode = pathMap[rootPath] || rootEntry && rootEntry.node || null;
+  if (!rootNode || rootNode.ghost) return [];
+  const draftsOf = (key) => {
+    if (!drafts || typeof drafts !== "object") return null;
+    if (drafts instanceof Map) return drafts.get(key) || null;
+    return drafts[key] || null;
+  };
+  const childrenByParent = /* @__PURE__ */ new Map();
+  for (const node of Object.values(pathMap)) {
+    if (!node || typeof node !== "object" || !node.parentPath) continue;
+    if (node.parentPath === node.path) continue;
+    if (!childrenByParent.has(node.parentPath)) childrenByParent.set(node.parentPath, []);
+    childrenByParent.get(node.parentPath).push(node);
+  }
+  const knownJobIds = /* @__PURE__ */ new Set();
+  for (const node of Object.values(pathMap)) {
+    if (node && node.ghost && node.jobId) knownJobIds.add(String(node.jobId));
+  }
+  const pendingList = Array.isArray(pendingJobs) ? pendingJobs : [];
+  for (const job of pendingList) {
+    if (!job || typeof job !== "object" || !job.id) continue;
+    if (PENDING_STATUS[job.status] !== true) continue;
+    const jobId = String(job.id);
+    if (knownJobIds.has(jobId)) continue;
+    const parentPath = pendingParentOf(job);
+    if (!parentPath || !pathMap[parentPath]) continue;
+    if (!insideTree(parentPath, rootPath, pathMap)) continue;
+    const anchor = pathMap[parentPath];
+    const ghost = {
+      path: `pending:${jobId}`,
+      ghost: true,
+      job,
+      jobId,
+      parentPath,
+      prompt: textOf2(job.params && job.params.prompt),
+      status: textOf2(job.status),
+      kind: pendingKindOf(job),
+      width: numberOrNull(job.params && job.params.width),
+      height: numberOrNull(job.params && job.params.height),
+      createdAt: createdAtOf(job),
+      depth: Math.min((anchor.depth || 0) + 1, MAX_DEPTH),
+      siblingIndex: Number.MAX_SAFE_INTEGER,
+      siblingCount: 1,
+      sourceDeleted: false,
+      parentMissing: false
+    };
+    knownJobIds.add(jobId);
+    if (!childrenByParent.has(parentPath)) childrenByParent.set(parentPath, []);
+    childrenByParent.get(parentPath).push(ghost);
+  }
+  const rows = [];
+  const visited = /* @__PURE__ */ new Set();
+  const rowOf = (node, depth) => {
+    const key = textOf2(node.path);
+    const draft = draftsOf(key);
+    return {
+      key,
+      path: key,
+      ghost: node.ghost === true,
+      jobId: node.jobId ? String(node.jobId) : "",
+      depth: Number.isFinite(Number(depth)) ? Number(depth) : Number(node.depth) || 0,
+      versionLabel: node.versionLabel || versionLabelOf(node),
+      kind: node.kind || KIND_TEXT,
+      url: textOf2(node.url),
+      file: textOf2(node.file),
+      width: node.width === void 0 ? null : node.width,
+      height: node.height === void 0 ? null : node.height,
+      prompt: textOf2(node.prompt),
+      presetId: textOf2(node.presetId),
+      status: textOf2(node.status),
+      createdAt: node.createdAt ?? null,
+      sourceDeleted: node.sourceDeleted === true,
+      parentMissing: node.parentMissing === true,
+      isRoot: key === rootPath,
+      isLatest: Boolean(rootEntry && rootEntry.latestPath === key),
+      node,
+      draft,
+      draftSummary: workDraftSummary(draft)
+    };
+  };
+  const walk = (path, depth) => {
+    if (!path || visited.has(path)) return;
+    const node = pathMap[path];
+    if (!node || node.ghost) return;
+    visited.add(path);
+    rows.push(rowOf(node, depth));
+    const children = (childrenByParent.get(path) || []).slice().sort(compareSibling);
+    for (const child of children) {
+      if (child.ghost) {
+        if (visited.has(child.path)) continue;
+        visited.add(child.path);
+        rows.push(rowOf(child, depth + 1));
+        continue;
+      }
+      walk(child.path, depth + 1);
+    }
+  };
+  walk(rootPath, 0);
+  return rows;
+}
+
+// src/studio/filmstrip/DraftCard.jsx
 var import_react4 = __toESM(require("react"), 1);
 var import_jsx_runtime4 = require("react/jsx-runtime");
+var FRAME_BOX = 46;
+function pickText(value, fallback) {
+  return typeof value === "string" && value ? value : fallback;
+}
+function sizeOf(value) {
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? Math.round(num) : 0;
+}
+function DraftCard(props) {
+  const labels = props.labels && typeof props.labels === "object" ? props.labels : {};
+  const width = sizeOf(props.width) || 1024;
+  const height = sizeOf(props.height) || 1024;
+  const ratio = width / height;
+  const viewfinderWidth = Math.max(12, ratio >= 1 ? FRAME_BOX : Math.round(FRAME_BOX * ratio));
+  const viewfinderHeight = Math.max(12, ratio >= 1 ? Math.round(FRAME_BOX / ratio) : FRAME_BOX);
+  const ratioText = (() => {
+    const template = pickText(labels.ratio, "{width} × {height}");
+    return template.split("{width}").join(String(width)).split("{height}").join(String(height));
+  })();
+  const active = Boolean(props.active);
+  const pending = Boolean(props.pending);
+  const classes = ["ofs-draft-card"];
+  if (active) classes.push("is-on");
+  if (pending) classes.push("is-pending");
+  const stateText = pending ? pickText(labels.pending, "已提交，等待出图") : active ? pickText(labels.active, "正在填写新画布") : pickText(labels.hint, "新建绘图");
+  const title = props.prompt || pickText(labels.title, "新建绘图");
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+    "button",
+    {
+      type: "button",
+      className: classes.join(" "),
+      "aria-pressed": active,
+      title,
+      onClick: () => {
+        if (typeof props.onClick === "function") props.onClick();
+      },
+      children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "ofs-draft-frame", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+            "span",
+            {
+              className: "ofs-draft-viewfinder",
+              style: { width: `${viewfinderWidth}px`, height: `${viewfinderHeight}px` },
+              "aria-hidden": "true",
+              children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Icon, { name: pending ? "clock" : "plus", size: 12 })
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "ofs-draft-state", children: stateText })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "ofs-draft-meta", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("em", { children: ratioText }),
+          props.presetLabel ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "ofs-draft-preset", children: props.presetLabel }) : null
+        ] })
+      ]
+    }
+  );
+}
+
+// src/studio/filmstrip/VersionPanel.jsx
+var import_react5 = __toESM(require("react"), 1);
+var import_jsx_runtime5 = require("react/jsx-runtime");
+var DEFAULT_HOVER_DELAY = 250;
+var DEFAULT_HIDE_DELAY = 160;
+var KIND_ICONS = Object.freeze({ text: "sparkles", img2img: "image", inpaint: "focus" });
+function pickText2(value, fallback) {
+  return typeof value === "string" && value ? value : fallback;
+}
+function delayOf(value, fallback) {
+  const num = Number(value);
+  return Number.isFinite(num) && num >= 0 ? num : fallback;
+}
+function fillTemplate(template, params) {
+  let out = typeof template === "string" ? template : "";
+  for (const key of Object.keys(params || {})) {
+    out = out.split(`{${key}}`).join(String(params[key]));
+  }
+  return out;
+}
+function kindLabelOf(labels, kind) {
+  if (kind === "inpaint") return pickText2(labels.kindInpaint, "局部涂抹");
+  if (kind === "img2img") return pickText2(labels.kindImg2img, "整图重绘");
+  return pickText2(labels.kindText, "文生图");
+}
+function VersionRow(props) {
+  const { labels, row, currentPath, onSelect, onClearDraft } = props;
+  const ghost = row.ghost === true;
+  const active = Boolean(currentPath) && row.path === currentPath;
+  const summary = row.draftSummary || workDraftSummary(null);
+  const kindLabel = kindLabelOf(labels, row.kind);
+  const classes = ["ofs-version-row"];
+  if (active) classes.push("is-on");
+  if (ghost) classes.push("is-ghost");
+  if (summary.active) classes.push("has-draft");
+  if (row.sourceDeleted) classes.push("is-orphan");
+  const depth = Number.isFinite(Number(row.depth)) ? Math.max(0, Math.floor(Number(row.depth))) : 0;
+  const title = row.prompt || row.path;
+  const draftItems = summary.items.map((key) => {
+    const itemLabels = labels.draftItems && typeof labels.draftItems === "object" ? labels.draftItems : {};
+    return pickText2(itemLabels[key], key);
+  });
+  const draftTitle = fillTemplate(
+    pickText2(labels.draftTitle, "已修改：{items}"),
+    { items: draftItems.join(" · ") }
+  );
+  const versionText = ghost ? pickText2(labels.inFlight, "生成中") : row.versionLabel || "v1";
+  const body = /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(import_jsx_runtime5.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-version-label", children: versionText }),
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-version-kind", title: kindLabel, "aria-label": kindLabel, children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Icon, { name: KIND_ICONS[row.kind] || "sparkles", size: 12 }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-version-thumb", children: ghost ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-version-thumb-ghost", "aria-hidden": "true" }) : row.url ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("img", { src: row.url, alt: row.prompt || row.file || "", loading: "lazy" }) : null }),
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-version-prompt", children: row.prompt || "—" }),
+    summary.active ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-version-draft-dot", title: draftTitle, "aria-label": draftTitle }) : null
+  ] });
+  return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+    "div",
+    {
+      className: classes.join(" "),
+      style: { paddingLeft: `${10 + depth * 12}px` },
+      "data-kind": row.kind || "text",
+      "data-ghost": ghost ? "true" : "false",
+      children: [
+        ghost ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-version-row-main is-ghost", children: body }) : /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+          "button",
+          {
+            type: "button",
+            className: "ofs-version-row-main",
+            title,
+            "aria-current": active ? "true" : void 0,
+            onClick: () => {
+              if (typeof onSelect === "function") onSelect(row);
+            },
+            children: body
+          }
+        ),
+        summary.active && !ghost ? /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+          "button",
+          {
+            type: "button",
+            className: "ofs-version-draft-clear",
+            title: draftTitle,
+            "aria-label": draftTitle,
+            onClick: () => {
+              if (typeof onClearDraft === "function") onClearDraft(row);
+            },
+            children: [
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-version-draft-dot", "aria-hidden": "true" }),
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-version-draft-label", children: pickText2(labels.draftClear, "清空") })
+            ]
+          }
+        ) : null
+      ]
+    }
+  );
+}
+function VersionPanel(props) {
+  const labels = props.labels && typeof props.labels === "object" ? props.labels : {};
+  const rows = Array.isArray(props.rows) ? props.rows.filter((row) => row && row.path) : [];
+  const badgeCount = Number.isFinite(Number(props.badgeCount)) ? Math.max(0, Math.floor(Number(props.badgeCount))) : 0;
+  const hoverDelay = delayOf(props.hoverDelay, DEFAULT_HOVER_DELAY);
+  const hideDelay = delayOf(props.hideDelay, DEFAULT_HIDE_DELAY);
+  const [open, setOpen] = import_react5.default.useState(false);
+  const [pinned, setPinned] = import_react5.default.useState(false);
+  const timersRef = import_react5.default.useRef({ hover: null, hide: null });
+  const openRef = import_react5.default.useRef(false);
+  const pinnedRef = import_react5.default.useRef(false);
+  openRef.current = open;
+  pinnedRef.current = pinned;
+  const clearTimer2 = (kind) => {
+    const id = timersRef.current[kind];
+    if (id !== null && id !== void 0 && typeof clearTimeout === "function") clearTimeout(id);
+    timersRef.current[kind] = null;
+  };
+  const clearTimers = () => {
+    clearTimer2("hover");
+    clearTimer2("hide");
+  };
+  const emit = (next) => {
+    if (typeof props.onOpenChange === "function") props.onOpenChange(next);
+  };
+  const openPanel = () => {
+    clearTimers();
+    if (openRef.current) return;
+    openRef.current = true;
+    setOpen(true);
+    emit(true);
+  };
+  const closePanel = (options = {}) => {
+    clearTimers();
+    pinnedRef.current = false;
+    setPinned(false);
+    if (!openRef.current) return;
+    openRef.current = false;
+    setOpen(false);
+    if (!options.silent) emit(false);
+  };
+  const scheduleOpen = () => {
+    clearTimer2("hide");
+    if (openRef.current) return;
+    clearTimer2("hover");
+    timersRef.current.hover = setTimeout(() => {
+      timersRef.current.hover = null;
+      openPanel();
+    }, hoverDelay);
+  };
+  const scheduleHide = () => {
+    clearTimer2("hover");
+    if (!openRef.current || pinnedRef.current) return;
+    clearTimer2("hide");
+    timersRef.current.hide = setTimeout(() => {
+      timersRef.current.hide = null;
+      if (!pinnedRef.current) closePanel();
+    }, hideDelay);
+  };
+  import_react5.default.useEffect(() => () => {
+    clearTimer2("hover");
+    clearTimer2("hide");
+  }, []);
+  const closeRef = import_react5.default.useRef(closePanel);
+  closeRef.current = closePanel;
+  import_react5.default.useEffect(() => {
+    if (!open) return void 0;
+    const doc = typeof document === "undefined" ? null : document;
+    if (!doc || typeof doc.addEventListener !== "function") return void 0;
+    const onKeyDown = (event) => {
+      if (!event || event.key !== "Escape") return;
+      if (typeof event.stopPropagation === "function") event.stopPropagation();
+      if (typeof event.preventDefault === "function") event.preventDefault();
+      closeRef.current();
+    };
+    doc.addEventListener("keydown", onKeyDown);
+    return () => {
+      if (typeof doc.removeEventListener === "function") doc.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+  import_react5.default.useEffect(() => {
+    if (badgeCount === 0 && openRef.current) closeRef.current({ silent: true });
+  }, [badgeCount]);
+  const anchorClasses = ["ofs-version-anchor"];
+  if (open) anchorClasses.push("is-open");
+  if (pinned) anchorClasses.push("is-pinned");
+  if (props.hasPending) anchorClasses.push("has-pending");
+  const treeSummary = props.draftSummary && typeof props.draftSummary === "object" && props.draftSummary.active ? props.draftSummary : null;
+  const draftItemLabels = labels.draftItems && typeof labels.draftItems === "object" ? labels.draftItems : {};
+  const draftItemsText = treeSummary ? treeSummary.items.map((key) => pickText2(draftItemLabels[key], key)).join(" · ") : "";
+  const draftTitle = fillTemplate(pickText2(labels.draftTitle, "已修改：{items}"), { items: draftItemsText });
+  if (treeSummary) anchorClasses.push("has-draft");
+  const badgeText = fillTemplate(pickText2(labels.badge, "⎇ {count}"), { count: badgeCount });
+  const badgeTitle = pickText2(labels.badgeHint, "版本分支");
+  return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+    "div",
+    {
+      className: anchorClasses.join(" "),
+      "data-derivations": badgeCount,
+      onMouseEnter: badgeCount > 0 ? scheduleOpen : void 0,
+      onMouseLeave: badgeCount > 0 ? scheduleHide : void 0,
+      onFocus: badgeCount > 0 ? () => clearTimer2("hide") : void 0,
+      onBlur: (event) => {
+        if (event && event.currentTarget && event.relatedTarget && typeof event.currentTarget.contains === "function" && event.currentTarget.contains(event.relatedTarget)) return;
+        scheduleHide();
+      },
+      children: [
+        props.children,
+        treeSummary ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+          "button",
+          {
+            type: "button",
+            className: "ofs-thumb-dot",
+            title: draftTitle,
+            "aria-label": draftTitle,
+            onClick: (event) => {
+              if (event && typeof event.stopPropagation === "function") event.stopPropagation();
+              if (event && typeof event.preventDefault === "function") event.preventDefault();
+              if (typeof props.onClearTreeDrafts === "function") props.onClearTreeDrafts();
+            }
+          }
+        ) : null,
+        badgeCount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+          "button",
+          {
+            type: "button",
+            className: pinned ? "ofs-version-badge is-on" : "ofs-version-badge",
+            "aria-expanded": open ? "true" : "false",
+            "aria-haspopup": "dialog",
+            title: badgeTitle,
+            onClick: (event) => {
+              if (event && typeof event.stopPropagation === "function") event.stopPropagation();
+              if (event && typeof event.preventDefault === "function") event.preventDefault();
+              if (pinnedRef.current) {
+                closePanel();
+                return;
+              }
+              pinnedRef.current = true;
+              setPinned(true);
+              openPanel();
+            },
+            children: badgeText
+          }
+        ) : null,
+        open ? /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+          "div",
+          {
+            className: "ofs-version-panel",
+            role: "dialog",
+            "aria-label": pickText2(labels.title, "版本"),
+            onMouseEnter: clearTimers,
+            onMouseLeave: scheduleHide,
+            onKeyDown: (event) => {
+              if (!event || event.key !== "Escape") return;
+              if (typeof event.stopPropagation === "function") event.stopPropagation();
+              closePanel();
+            },
+            children: [
+              props.loading || props.unavailable ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "ofs-version-note", children: props.loading ? pickText2(labels.loading, "正在拉取版本…") : pickText2(labels.unavailable, "当前宿主不支持版本树，仅显示已加载分页") }) : null,
+              props.loading ? null : /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(import_jsx_runtime5.Fragment, { children: rows.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "ofs-version-empty", children: pickText2(labels.empty, "暂无派生版本") }) : /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "ofs-version-rows", children: rows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+                VersionRow,
+                {
+                  labels,
+                  row,
+                  currentPath: props.currentPath,
+                  onSelect: (selectedRow) => {
+                    closePanel();
+                    if (typeof props.onSelect === "function") props.onSelect(selectedRow);
+                  },
+                  onClearDraft: props.onClearDraft
+                },
+                row.key || row.path
+              )) }) })
+            ]
+          }
+        ) : null
+      ]
+    }
+  );
+}
+
+// src/studio/Filmstrip.jsx
+var import_jsx_runtime6 = require("react/jsx-runtime");
+var DRAFT_ITEMS = ["mask", "prompt", "params"];
+var EMPTY_ROWS = [];
+function treeDraftSummary(rootCard, workDrafts, workDraftSummaryFn) {
+  if (!rootCard || !Array.isArray(rootCard.nodes) || !workDrafts || typeof workDrafts !== "object") return null;
+  const items = [];
+  let hasMask = false;
+  let hasPrompt = false;
+  let hasParams = false;
+  for (const node of rootCard.nodes) {
+    if (!node || node.ghost || !node.path) continue;
+    const summary = typeof workDraftSummaryFn === "function" ? workDraftSummaryFn(node.path) : workDraftSummary(workDrafts[node.path] || null);
+    if (!summary || summary.active !== true) continue;
+    if (summary.hasMask) hasMask = true;
+    if (summary.hasPrompt) hasPrompt = true;
+    if (summary.hasParams) hasParams = true;
+  }
+  const flags = { mask: hasMask, prompt: hasPrompt, params: hasParams };
+  for (const key of DRAFT_ITEMS) if (flags[key]) items.push(key);
+  if (items.length === 0) return null;
+  return {
+    active: true,
+    items,
+    count: items.length,
+    hasMask,
+    hasPrompt,
+    hasParams,
+    tool: "",
+    lastTouchedAt: 0,
+    coverage: 0
+  };
+}
+function entryOfNode(node) {
+  if (!node || !node.path) return null;
+  return {
+    image: {
+      path: node.path,
+      url: node.url || "",
+      file: node.file || "",
+      width: node.width,
+      height: node.height,
+      seed: node.seed
+    },
+    item: node.item || null
+  };
+}
 function Filmstrip(props) {
   const { t, ui, compute, library, actions, now } = props;
   const { setView } = ui;
   const { pendingJobs, sessionState, startSession: startSession2, status, cancelJob: cancelJob2, cancellingIds } = compute;
   const stopped = Boolean(status && status.stopped);
-  const { batches, selected, selectImage } = library;
+  const { selected, selectImage } = library;
   const previewWork = actions && typeof actions.previewWork === "function" ? actions.previewWork : null;
   const openWork = previewWork || selectImage;
+  const items = Array.isArray(library.items) ? library.items : [];
+  const pendingSignature = pendingJobs.map((job) => `${job.id}:${job.status}`).join(",");
+  const fallbackLineage = import_react6.default.useMemo(
+    () => buildLineage({ items, pendingJobs }),
+    [items, pendingSignature]
+  );
+  const lineage = library.lineage && Array.isArray(library.lineage.roots) ? library.lineage : fallbackLineage;
+  const roots = Array.isArray(lineage.roots) ? lineage.roots : [];
+  const byPath = lineage.byPath && typeof lineage.byPath === "object" ? lineage.byPath : {};
+  const workDrafts = library.workDrafts && typeof library.workDrafts === "object" ? library.workDrafts : {};
+  const newDraftCard = library.newDraftCard && typeof library.newDraftCard === "object" ? library.newDraftCard : {};
+  const workspaceMode = library.workspaceMode === "new_draft" ? "new_draft" : "work";
+  const clearWorkDraft = typeof library.clearWorkDraft === "function" ? library.clearWorkDraft : null;
+  const workDraftSummaryFn = typeof library.workDraftSummary === "function" ? library.workDraftSummary : null;
   const selectedPath = selected && selected.image ? selected.image.path : "";
-  const stripRef = import_react4.default.useRef(null);
-  const rollRef = import_react4.default.useRef(null);
-  import_react4.default.useEffect(() => {
+  const stripRef = import_react6.default.useRef(null);
+  const rollRef = import_react6.default.useRef(null);
+  const [openRoot, setOpenRoot] = import_react6.default.useState("");
+  import_react6.default.useEffect(() => {
     const strip = stripRef.current;
     const roll = rollRef.current;
     if (!strip || !roll || typeof strip.addEventListener !== "function") return void 0;
@@ -3635,26 +4544,95 @@ function Filmstrip(props) {
       }
     };
   }, []);
-  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("footer", { className: "ofs-filmstrip", ref: stripRef, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "ofs-roll", ref: rollRef, children: [
+  const openRootEntry = roots.find((rootCard) => rootCard && rootCard.path === openRoot) || null;
+  const panelRows = import_react6.default.useMemo(
+    () => openRootEntry ? lineagePanelRows(openRootEntry, byPath, workDrafts, pendingJobs) : EMPTY_ROWS,
+    [openRootEntry, byPath, workDrafts, pendingSignature]
+  );
+  const hasMore = library.hasMore === true;
+  const loadTree = typeof library.loadTree === "function" ? library.loadTree : null;
+  import_react6.default.useEffect(() => {
+    if (!openRootEntry || !hasMore || !loadTree) return;
+    loadTree(openRootEntry.path);
+  }, [openRootEntry && openRootEntry.path, hasMore]);
+  function openVersion(node) {
+    const entry = entryOfNode(node);
+    if (!entry) return;
+    if (openWork) openWork(entry);
+    setOpenRoot("");
+  }
+  function clearTreeDrafts(rootCard) {
+    if (!clearWorkDraft || !rootCard || !Array.isArray(rootCard.nodes)) return;
+    for (const node of rootCard.nodes) {
+      if (!node || node.ghost || !node.path) continue;
+      const summary = typeof workDraftSummaryFn === "function" ? workDraftSummaryFn(node.path) : workDraftSummary(workDrafts[node.path] || null);
+      if (!summary || summary.active !== true) continue;
+      clearWorkDraft(node.path);
+    }
+  }
+  const draftCardLabels = {
+    title: t("studio.filmstrip.newDraft"),
+    hint: t("studio.filmstrip.draftHint"),
+    active: t("studio.filmstrip.draftActive"),
+    pending: t("studio.filmstrip.draftPending"),
+    ratio: "{width} × {height}"
+  };
+  const panelLabels = {
+    title: t("studio.filmstrip.versionPanelTitle"),
+    empty: t("studio.filmstrip.versionPanelEmpty"),
+    loading: t("studio.filmstrip.versionLoading"),
+    unavailable: t("studio.filmstrip.treeUnavailable"),
+    inFlight: t("studio.filmstrip.versionInFlight"),
+    badge: t("studio.filmstrip.versionBadge"),
+    badgeHint: t("studio.filmstrip.versionBadgeHint"),
+    kindText: t("studio.filmstrip.versionKind.text"),
+    kindImg2img: t("studio.filmstrip.versionKind.img2img"),
+    kindInpaint: t("studio.filmstrip.versionKind.inpaint"),
+    draftItems: {
+      mask: t("studio.filmstrip.draftItems.mask"),
+      prompt: t("studio.filmstrip.draftItems.prompt"),
+      params: t("studio.filmstrip.draftItems.params")
+    },
+    draftTitle: t("studio.filmstrip.draftTitle"),
+    draftClear: t("studio.filmstrip.draftClear"),
+    sourceDeleted: t("studio.filmstrip.sourceDeleted")
+  };
+  const hasContent = roots.length > 0 || pendingJobs.length > 0 || workspaceMode === "new_draft";
+  return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("footer", { className: openRoot ? "ofs-filmstrip is-version-open" : "ofs-filmstrip", ref: stripRef, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-roll", ref: rollRef, children: [
+      workspaceMode === "new_draft" ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+        DraftCard,
+        {
+          labels: draftCardLabels,
+          width: newDraftCard.width,
+          height: newDraftCard.height,
+          presetLabel: newDraftCard.presetLabel,
+          prompt: newDraftCard.prompt,
+          active: true,
+          pending: newDraftCard.pending === true,
+          onClick: () => {
+            if (ui && typeof ui.setPanelMode === "function") ui.setPanelMode("form");
+          }
+        }
+      ) : null,
       pendingJobs.map((job, index) => {
         const queued = job.status === "queued";
         const cancelling = isJobCancelling(job, cancellingIds);
         const cancelLabel = t(cancelling ? "studio.job.cancelling" : "studio.job.cancel");
         const elapsedMs = jobElapsed(job, now);
         const elapsed = Number.isFinite(elapsedMs) ? formatDuration(t, elapsedMs) : "";
-        return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+        return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(
           "div",
           {
             className: jobCardClass(job, cancellingIds),
             title: job.params && typeof job.params.prompt === "string" ? job.params.prompt : void 0,
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "ofs-ghost-frame", "aria-hidden": "true", children: queued ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "ofs-ghost-slot", children: index + 1 }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "ofs-ghost-bar" }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "ofs-ghost-text", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "ofs-ghost-label", children: jobProgressText(t, job, sessionState) }),
-                elapsed ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "ofs-ghost-time", children: elapsed }) : null
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-ghost-frame", "aria-hidden": "true", children: queued ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-ghost-slot", children: index + 1 }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-ghost-bar" }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { className: "ofs-ghost-text", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-ghost-label", children: jobProgressText(t, job, sessionState) }),
+                elapsed ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-ghost-time", children: elapsed }) : null
               ] }),
-              isJobCancellable(job) && typeof cancelJob2 === "function" ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              isJobCancellable(job) && typeof cancelJob2 === "function" ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
                 "button",
                 {
                   type: "button",
@@ -3671,53 +4649,83 @@ function Filmstrip(props) {
           job.id
         );
       }),
-      batches.length === 0 && pendingJobs.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "ofs-filmstrip-empty", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "ofs-slots", "aria-hidden": "true", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "ofs-slot" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "ofs-slot" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "ofs-slot" })
+      !hasContent ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-filmstrip-empty", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-slots", "aria-hidden": "true", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-slot" }),
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-slot" }),
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "ofs-slot" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { children: [
           sessionState === "absent" ? stopped ? t("studio.filmstrip.offlineClosed") : t("studio.filmstrip.offline") : t("studio.filmstrip.empty"),
-          sessionState === "absent" ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", className: "ofs-link", onClick: startSession2, children: t("studio.compute.start") }) : null
+          sessionState === "absent" ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { type: "button", className: "ofs-link", onClick: startSession2, children: t("studio.compute.start") }) : null
         ] })
       ] }) : null,
-      batches.map((batch) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "ofs-batch", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "ofs-batch-thumbs", children: batch.entries.map((entry) => {
-          const path = entry.image.path || entry.image.file;
-          const active = path === selectedPath;
-          return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "button",
+      roots.map((rootCard) => {
+        const thumbNode = rootCard.latest || rootCard.node;
+        if (!thumbNode || !thumbNode.path) return null;
+        const badgeCount = Math.max(0, Number(rootCard.badgeCount) || 0);
+        const versionCount = badgeCount;
+        const summary = treeDraftSummary(rootCard, workDrafts, workDraftSummaryFn);
+        const metaText = versionCount > 0 ? formatText(t("studio.filmstrip.versionsCount"), { count: versionCount }) : `${Math.max(1, Number(rootCard.count) || 1)} ${t("unit.image")}`;
+        return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-batch", "data-root": rootCard.path, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "ofs-batch-thumbs", children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+            VersionPanel,
             {
-              type: "button",
-              className: active ? "ofs-thumb is-on" : "ofs-thumb",
-              onClick: () => openWork(entry),
-              title: batch.prompt || path,
-              children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("img", { src: entry.image.url, alt: batch.prompt || entry.image.file || t("studio.image.alt"), loading: "lazy" })
-            },
-            path
-          );
-        }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { className: "ofs-batch-meta", children: [
-          batch.presetId ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("em", { children: batch.presetId }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("em", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("span", { children: [
-            batch.entries.length,
-            " ",
-            t("unit.image")
+              labels: panelLabels,
+              rows: openRoot === rootCard.path ? panelRows : EMPTY_ROWS,
+              currentPath: selectedPath,
+              badgeCount,
+              hasPending: rootCard.pendingCount > 0,
+              loading: library.treeLoadingRoot === rootCard.path,
+              unavailable: library.treeUnavailable === true,
+              draftSummary: summary,
+              onClearTreeDrafts: () => clearTreeDrafts(rootCard),
+              onSelect: (row) => openVersion(row.node),
+              onClearDraft: (row) => {
+                if (clearWorkDraft && row && row.path) clearWorkDraft(row.path);
+              },
+              onOpenChange: (isOpen) => {
+                setOpenRoot((prev) => {
+                  if (isOpen) return rootCard.path;
+                  return prev === rootCard.path ? "" : prev;
+                });
+              },
+              children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+                "button",
+                {
+                  type: "button",
+                  className: thumbNode.path === selectedPath ? "ofs-thumb is-on" : "ofs-thumb",
+                  onClick: () => openWork(entryOfNode(thumbNode)),
+                  title: thumbNode.prompt || rootCard.path,
+                  children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+                    "img",
+                    {
+                      src: thumbNode.url,
+                      alt: thumbNode.prompt || thumbNode.file || t("studio.image.alt"),
+                      loading: "lazy"
+                    }
+                  )
+                }
+              )
+            }
+          ) }),
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { className: "ofs-batch-meta", children: [
+            thumbNode.presetId ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("em", { children: thumbNode.presetId }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("em", {}),
+            /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { children: metaText })
           ] })
-        ] })
-      ] }, batch.key))
+        ] }, rootCard.path);
+      })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "ofs-filmstrip-side", children: /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("button", { type: "button", className: "ofs-filmstrip-link", onClick: () => setView("gallery"), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Icon, { name: "images", size: 15 }),
+    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "ofs-filmstrip-side", children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("button", { type: "button", className: "ofs-filmstrip-link", onClick: () => setView("gallery"), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Icon, { name: "images", size: 15 }),
       t("studio.gallery.title"),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(Icon, { name: "chevronRight", size: 13 })
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Icon, { name: "chevronRight", size: 13 })
     ] }) })
   ] });
 }
 
 // src/studio/Gallery.jsx
-var import_react7 = __toESM(require("react"), 1);
+var import_react9 = __toESM(require("react"), 1);
 
 // src/logic/gallery.js
 var COLUMN_BREAKPOINTS = [
@@ -3744,8 +4752,8 @@ function galleryColumns(items, columns) {
 }
 
 // src/studio/gallery/GalleryCard.jsx
-var import_react5 = __toESM(require("react"), 1);
-var import_jsx_runtime5 = require("react/jsx-runtime");
+var import_react7 = __toESM(require("react"), 1);
+var import_jsx_runtime7 = require("react/jsx-runtime");
 function GalleryCard({
   t,
   entry,
@@ -3770,14 +4778,14 @@ function GalleryCard({
   const favoriteLabel = favorite ? t("studio.action.favorited") : t("studio.action.favorite");
   const openOrPick = () => selecting ? onTogglePick(cardKey) : onOpen(entry);
   const deleteLabel = confirming ? t("studio.gallery.confirmDelete") : t("studio.gallery.delete");
-  return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(
     "div",
     {
       className: checked ? "ofs-gallery-card is-picked" : "ofs-gallery-card",
       onMouseLeave: confirming ? () => onCancelDelete(entry) : void 0,
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-gallery-stage", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "ofs-gallery-stage", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(
             "button",
             {
               type: "button",
@@ -3787,12 +4795,12 @@ function GalleryCard({
               "aria-pressed": selecting ? checked : void 0,
               onClick: openOrPick,
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("img", { src: entry.image.url, alt: prompt || entry.image.file || t("studio.image.alt"), loading: "lazy" }),
-                selecting ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: checked ? "ofs-gallery-pick is-on" : "ofs-gallery-pick", "aria-hidden": "true", children: checked ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Icon, { name: "check", size: 11 }) : null }) : null
+                /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("img", { src: entry.image.url, alt: prompt || entry.image.file || t("studio.image.alt"), loading: "lazy" }),
+                selecting ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: checked ? "ofs-gallery-pick is-on" : "ofs-gallery-pick", "aria-hidden": "true", children: checked ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Icon, { name: "check", size: 11 }) : null }) : null
               ]
             }
           ),
-          selecting ? null : /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+          selecting ? null : /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
             "button",
             {
               type: "button",
@@ -3804,49 +4812,49 @@ function GalleryCard({
                 if (event && typeof event.stopPropagation === "function") event.stopPropagation();
                 onToggleFavorite(entry);
               },
-              children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Icon, { name: favorite ? "starFilled" : "star", size: 12 })
+              children: /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Icon, { name: favorite ? "starFilled" : "star", size: 12 })
             }
           ),
-          selecting ? null : /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: confirming ? "ofs-gallery-hover is-confirming" : "ofs-gallery-hover", children: [
-            confirming ? null : /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(import_jsx_runtime5.Fragment, { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("button", { type: "button", className: "ofs-gallery-action", onClick: () => onRecall(entry), children: [
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Icon, { name: "focus", size: 12 }),
+          selecting ? null : /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: confirming ? "ofs-gallery-hover is-confirming" : "ofs-gallery-hover", children: [
+            confirming ? null : /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(import_jsx_runtime7.Fragment, { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("button", { type: "button", className: "ofs-gallery-action", onClick: () => onRecall(entry), children: [
+                /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Icon, { name: "focus", size: 12 }),
                 t("studio.action.iterate")
               ] }, "iterate"),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("button", { type: "button", className: "ofs-gallery-action", onClick: () => onVariant(entry), children: [
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Icon, { name: "reroll", size: 12 }),
+              /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("button", { type: "button", className: "ofs-gallery-action", onClick: () => onVariant(entry), children: [
+                /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Icon, { name: "reroll", size: 12 }),
                 t("studio.action.reroll")
               ] }, "variant"),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("button", { type: "button", className: "ofs-gallery-action", onClick: () => onReference(entry), children: [
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Icon, { name: "image", size: 12 }),
+              /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("button", { type: "button", className: "ofs-gallery-action", onClick: () => onReference(entry), children: [
+                /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Icon, { name: "image", size: 12 }),
                 t("studio.action.reference")
               ] }, "reference"),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("button", { type: "button", className: "ofs-gallery-action", onClick: () => onZoom(entry), children: [
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Icon, { name: "expand", size: 12 }),
+              /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("button", { type: "button", className: "ofs-gallery-action", onClick: () => onZoom(entry), children: [
+                /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Icon, { name: "expand", size: 12 }),
                 t("studio.gallery.open")
               ] }, "zoom")
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(
               "button",
               {
                 type: "button",
                 className: confirming ? "ofs-gallery-action is-danger is-confirming" : "ofs-gallery-action is-danger",
                 onClick: () => confirming ? onDelete(entry) : onAskDelete(entry),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Icon, { name: "trash", size: 12 }),
+                  /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(Icon, { name: "trash", size: 12 }),
                   deleteLabel
                 ]
               },
               "delete"
             ),
-            confirming ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", className: "ofs-gallery-action", onClick: () => onCancelDelete(entry), children: t("studio.gallery.cancel") }, "cancel") : null
+            confirming ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("button", { type: "button", className: "ofs-gallery-action", onClick: () => onCancelDelete(entry), children: t("studio.gallery.cancel") }, "cancel") : null
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "ofs-gallery-body", onClick: openOrPick, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "ofs-gallery-caption", children: prompt || "—" }),
-          /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("span", { className: "ofs-gallery-tags", children: [
-            entry.item.presetId ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("em", { children: entry.item.presetId }) : null,
-            entry.image.seed != null ? /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("span", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "ofs-gallery-body", onClick: openOrPick, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: "ofs-gallery-caption", children: prompt || "—" }),
+          /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("span", { className: "ofs-gallery-tags", children: [
+            entry.item.presetId ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("em", { children: entry.item.presetId }) : null,
+            entry.image.seed != null ? /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("span", { children: [
               "#",
               entry.image.seed
             ] }) : null
@@ -3858,8 +4866,8 @@ function GalleryCard({
 }
 
 // src/studio/gallery/GalleryToolbar.jsx
-var import_react6 = __toESM(require("react"), 1);
-var import_jsx_runtime6 = require("react/jsx-runtime");
+var import_react8 = __toESM(require("react"), 1);
+var import_jsx_runtime8 = require("react/jsx-runtime");
 function GalleryToolbar({
   t,
   visibleCount,
@@ -3882,18 +4890,18 @@ function GalleryToolbar({
   onExport,
   hasItems
 }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-gallery-tools", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "ofs-gallery-headline", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { className: "ofs-gallery-title", children: t("studio.gallery.title") }),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { className: "ofs-gallery-count", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("b", { children: visibleCount }),
+  return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-gallery-tools", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-gallery-headline", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("h3", { className: "ofs-gallery-title", children: t("studio.gallery.title") }),
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("span", { className: "ofs-gallery-count", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("b", { children: visibleCount }),
         " ",
         t("unit.image")
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("label", { className: "ofs-gallery-search", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Icon, { name: "search", size: 15, className: "ofs-gallery-search-icon" }),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("label", { className: "ofs-gallery-search", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "search", size: 15, className: "ofs-gallery-search-icon" }),
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
         "input",
         {
           className: "ofs-gallery-search-input",
@@ -3905,8 +4913,8 @@ function GalleryToolbar({
         }
       )
     ] }),
-    usedPresets.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { className: "ofs-gallery-select", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(
+    usedPresets.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("span", { className: "ofs-gallery-select", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
         "select",
         {
           className: "ofs-gallery-select-input",
@@ -3914,14 +4922,14 @@ function GalleryToolbar({
           "aria-label": t("studio.gallery.allPresets"),
           onChange: (event) => onPresetFilterChange(event.target.value),
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("option", { value: "", children: t("studio.gallery.allPresets") }),
-            usedPresets.map((id) => /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("option", { value: id, children: presetNameOf2(presets, id) }, id))
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("option", { value: "", children: t("studio.gallery.allPresets") }),
+            usedPresets.map((id) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("option", { value: id, children: presetNameOf2(presets, id) }, id))
           ]
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Icon, { name: "chevronDown", size: 13, className: "ofs-gallery-select-caret" })
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "chevronDown", size: 13, className: "ofs-gallery-select-caret" })
     ] }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
       "button",
       {
         type: "button",
@@ -3929,19 +4937,19 @@ function GalleryToolbar({
         "aria-pressed": favoriteOnly,
         onClick: onToggleFavoriteOnly,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Icon, { name: favoriteOnly ? "starFilled" : "star", size: 13 }),
+          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: favoriteOnly ? "starFilled" : "star", size: 13 }),
           t("studio.gallery.favoriteOnly")
         ]
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "ofs-gallery-actions", children: selecting ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(import_jsx_runtime6.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { className: "ofs-gallery-selected", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "ofs-gallery-actions", children: selecting ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(import_jsx_runtime8.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("span", { className: "ofs-gallery-selected", children: [
         t("studio.gallery.selectedCount"),
         " ",
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("b", { children: picked.length })
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("b", { children: picked.length })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { type: "button", className: "ofs-chip", onClick: onExitSelect, children: t("studio.gallery.cancel") }),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-chip", onClick: onExitSelect, children: t("studio.gallery.cancel") }),
+      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
         "button",
         {
           type: "button",
@@ -3949,12 +4957,12 @@ function GalleryToolbar({
           onClick: () => onExport(picked),
           disabled: picked.length === 0,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Icon, { name: "copy", size: 13 }),
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "copy", size: 13 }),
             t("studio.gallery.export")
           ]
         }
       ),
-      confirming ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+      confirming ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
         "button",
         {
           type: "button",
@@ -3963,7 +4971,7 @@ function GalleryToolbar({
           disabled: picked.length === 0,
           children: t("studio.gallery.confirmDelete")
         }
-      ) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+      ) : /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
         "button",
         {
           type: "button",
@@ -3973,12 +4981,12 @@ function GalleryToolbar({
           children: t("studio.gallery.delete")
         }
       )
-    ] }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { type: "button", className: "ofs-chip", onClick: onEnterSelect, disabled: !hasItems, children: t("studio.gallery.select") }) })
+    ] }) : /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-chip", onClick: onEnterSelect, disabled: !hasItems, children: t("studio.gallery.select") }) })
   ] });
 }
 
 // src/studio/Gallery.jsx
-var import_jsx_runtime7 = require("react/jsx-runtime");
+var import_jsx_runtime9 = require("react/jsx-runtime");
 var DAY = 24 * 60 * 60 * 1e3;
 var BUCKETS = ["today", "week", "earlier"];
 function bucketOf(time, now) {
@@ -4003,8 +5011,8 @@ function presetNameOf(presets, id) {
   return found && found.label || id;
 }
 function useColumnCount() {
-  const [columns, setColumns] = import_react7.default.useState(() => typeof window === "undefined" ? 5 : galleryColumnCount(window.innerWidth));
-  import_react7.default.useEffect(() => {
+  const [columns, setColumns] = import_react9.default.useState(() => typeof window === "undefined" ? 5 : galleryColumnCount(window.innerWidth));
+  import_react9.default.useEffect(() => {
     if (typeof window === "undefined" || typeof window.addEventListener !== "function") return void 0;
     const onResize = () => setColumns(galleryColumnCount(window.innerWidth));
     window.addEventListener("resize", onResize);
@@ -4032,14 +5040,14 @@ function Gallery(props) {
     onLoadMore,
     defaultSelecting
   } = props;
-  const [presetFilter, setPresetFilter] = import_react7.default.useState("");
-  const [favoriteOnly, setFavoriteOnly] = import_react7.default.useState(false);
-  const [selecting, setSelecting] = import_react7.default.useState(Boolean(defaultSelecting));
-  const [picked, setPicked] = import_react7.default.useState([]);
-  const [confirming, setConfirming] = import_react7.default.useState(false);
-  const [confirmKey, setConfirmKey] = import_react7.default.useState("");
-  const deletingRef = import_react7.default.useRef(/* @__PURE__ */ new Set());
-  const [keyword, setKeyword] = import_react7.default.useState("");
+  const [presetFilter, setPresetFilter] = import_react9.default.useState("");
+  const [favoriteOnly, setFavoriteOnly] = import_react9.default.useState(false);
+  const [selecting, setSelecting] = import_react9.default.useState(Boolean(defaultSelecting));
+  const [picked, setPicked] = import_react9.default.useState([]);
+  const [confirming, setConfirming] = import_react9.default.useState(false);
+  const [confirmKey, setConfirmKey] = import_react9.default.useState("");
+  const deletingRef = import_react9.default.useRef(/* @__PURE__ */ new Set());
+  const [keyword, setKeyword] = import_react9.default.useState("");
   const columns = useColumnCount();
   const items = Array.isArray(gallery) ? gallery : [];
   const favoriteSet = new Set(favorites ?? []);
@@ -4061,7 +5069,7 @@ function Gallery(props) {
   const canLoadMore = hasMore === true && typeof onLoadMore === "function";
   function renderFooter() {
     if (items.length === 0) return null;
-    return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "ofs-gallery-foot", children: canLoadMore ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-gallery-foot", children: canLoadMore ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
       "button",
       {
         type: "button",
@@ -4071,7 +5079,7 @@ function Gallery(props) {
         "aria-busy": loadingMore === true ? "true" : void 0,
         children: t("studio.gallery.loadMore")
       }
-    ) : /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("p", { className: "ofs-gallery-all-loaded", children: t("studio.gallery.allLoaded") }) });
+    ) : /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("p", { className: "ofs-gallery-all-loaded", children: t("studio.gallery.allLoaded") }) });
   }
   function togglePick(key) {
     setPicked((prev) => prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]);
@@ -4138,8 +5146,8 @@ function Gallery(props) {
     }
     exitSelect();
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("section", { className: visibleCount === 0 ? "ofs-gallery is-empty" : "ofs-gallery", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("section", { className: visibleCount === 0 ? "ofs-gallery is-empty" : "ofs-gallery", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
       GalleryToolbar,
       {
         t,
@@ -4164,18 +5172,18 @@ function Gallery(props) {
         hasItems: items.length > 0
       }
     ),
-    visibleCount === 0 ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "ofs-gallery-empty", children: items.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(import_jsx_runtime7.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("p", { children: t("studio.gallery.noMatch") }),
-      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "ofs-gallery-empty-actions", children: /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("button", { type: "button", className: "ofs-chip", onClick: clearFilters, children: t("studio.gallery.clearFilters") }) })
-    ] }) : /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("p", { children: t("studio.gallery.empty") }) }) : /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(import_jsx_runtime7.Fragment, { children: [
+    visibleCount === 0 ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-gallery-empty", children: items.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(import_jsx_runtime9.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("p", { children: t("studio.gallery.noMatch") }),
+      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-gallery-empty-actions", children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("button", { type: "button", className: "ofs-chip", onClick: clearFilters, children: t("studio.gallery.clearFilters") }) })
+    ] }) : /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("p", { children: t("studio.gallery.empty") }) }) : /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(import_jsx_runtime9.Fragment, { children: [
       BUCKETS.map((bucket) => {
         const entries = groups[bucket];
         if (entries.length === 0) return null;
-        return /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("section", { className: "ofs-gallery-group", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("h4", { className: "ofs-gallery-group-title", children: t(`studio.gallery.${bucket}`) }),
-          /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "ofs-gallery-wall", children: galleryColumns(entries, columns).map((column, index) => /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "ofs-gallery-col", children: column.map((entry) => {
+        return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("section", { className: "ofs-gallery-group", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("h4", { className: "ofs-gallery-group-title", children: t(`studio.gallery.${bucket}`) }),
+          /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-gallery-wall", children: galleryColumns(entries, columns).map((column, index) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "ofs-gallery-col", children: column.map((entry) => {
             const cardKey = keyOf(entry);
-            return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+            return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
               GalleryCard,
               {
                 t,
@@ -4208,7 +5216,7 @@ function Gallery(props) {
 }
 
 // src/studio/GuidanceCard.jsx
-var import_react9 = __toESM(require("react"), 1);
+var import_react11 = __toESM(require("react"), 1);
 
 // src/logic/probe.js
 function transportOf(source) {
@@ -4493,8 +5501,8 @@ function buildDiagnostics(t, input = {}) {
 }
 
 // src/studio/guidance/DirectLoginCard.jsx
-var import_react8 = __toESM(require("react"), 1);
-var import_jsx_runtime8 = require("react/jsx-runtime");
+var import_react10 = __toESM(require("react"), 1);
+var import_jsx_runtime10 = require("react/jsx-runtime");
 function statusNotesOf({ t, state, pending, manual, login }) {
   if (pending) {
     return manual ? [t("studio.guidance.auth.waiting"), t("studio.guidance.auth.waitingManual")] : [t("studio.guidance.auth.waiting")];
@@ -4512,7 +5520,7 @@ function statusNotesOf({ t, state, pending, manual, login }) {
   return [];
 }
 function DirectLoginCard({ t, login, runProbe: runProbe2, copyText, openLogs, dismiss, detail }) {
-  const [code, setCode] = import_react8.default.useState("");
+  const [code, setCode] = import_react10.default.useState("");
   const view = login.login && typeof login.login === "object" ? login.login : {};
   const state = typeof view.state === "string" ? view.state : "idle";
   const pending = state === "pending";
@@ -4525,15 +5533,15 @@ function DirectLoginCard({ t, login, runProbe: runProbe2, copyText, openLogs, di
     if (typeof openLogs !== "function") return;
     openLogs(event && event.currentTarget ? event.currentTarget : null);
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-guidance", role: "alert", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "ofs-guidance-icon", children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Icon, { name: "alert", size: 15 }) }),
-    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-guidance-body", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-guidance-title", children: title }),
-      detail ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-guidance-detail", title: detail, children: detail }) : null,
-      pending && manual && url ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-guidance-manual", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-guidance-url", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("code", { className: "ofs-guidance-command", children: url }),
-          typeof copyText === "function" ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance", role: "alert", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "ofs-guidance-icon", children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Icon, { name: "alert", size: 15 }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance-body", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-guidance-title", children: title }),
+      detail ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-guidance-detail", title: detail, children: detail }) : null,
+      pending && manual && url ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance-manual", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance-url", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("code", { className: "ofs-guidance-command", children: url }),
+          typeof copyText === "function" ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
             "button",
             {
               type: "button",
@@ -4543,8 +5551,8 @@ function DirectLoginCard({ t, login, runProbe: runProbe2, copyText, openLogs, di
             }
           ) : null
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-guidance-code", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance-code", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
             "input",
             {
               className: "ofs-settings-input ofs-guidance-code-input",
@@ -4557,7 +5565,7 @@ function DirectLoginCard({ t, login, runProbe: runProbe2, copyText, openLogs, di
               onChange: (event) => setCode(event.target.value)
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
             "button",
             {
               type: "button",
@@ -4568,12 +5576,12 @@ function DirectLoginCard({ t, login, runProbe: runProbe2, copyText, openLogs, di
             }
           )
         ] }),
-        login.codeErrorKey ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-guidance-code-error", role: "alert", children: t(login.codeErrorKey) }) : null
+        login.codeErrorKey ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-guidance-code-error", role: "alert", children: t(login.codeErrorKey) }) : null
       ] }) : null,
-      notes.map((text) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-guidance-note", children: text }, text)),
-      !pending ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("p", { className: "ofs-guidance-note", children: note }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "ofs-guidance-actions", children: [
-        pending ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+      notes.map((text) => /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-guidance-note", children: text }, text)),
+      !pending ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-guidance-note", children: note }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance-actions", children: [
+        pending ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
           "button",
           {
             type: "button",
@@ -4582,7 +5590,7 @@ function DirectLoginCard({ t, login, runProbe: runProbe2, copyText, openLogs, di
             onClick: login.cancel,
             children: t("studio.guidance.auth.cancel")
           }
-        ) : state === "done" ? null : /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+        ) : state === "done" ? null : /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
           "button",
           {
             type: "button",
@@ -4592,9 +5600,9 @@ function DirectLoginCard({ t, login, runProbe: runProbe2, copyText, openLogs, di
             children: state === "failed" ? t("studio.guidance.auth.retry") : t("studio.guidance.auth.loginAction")
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-chip", onClick: runProbe2, children: t("studio.guidance.cli.action") }),
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "ofs-chip", onClick: viewLogs, children: t("studio.guidance.viewLogs") }),
-        dismiss ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", className: "ofs-chip", onClick: runProbe2, children: t("studio.guidance.cli.action") }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", className: "ofs-chip", onClick: viewLogs, children: t("studio.guidance.viewLogs") }),
+        dismiss ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
           "button",
           {
             type: "button",
@@ -4612,7 +5620,7 @@ function DirectLoginCard({ t, login, runProbe: runProbe2, copyText, openLogs, di
 }
 
 // src/studio/GuidanceCard.jsx
-var import_jsx_runtime9 = require("react/jsx-runtime");
+var import_jsx_runtime11 = require("react/jsx-runtime");
 var SECONDARY_KINDS = /* @__PURE__ */ new Set(["session", "network", "generate", "generic", "auth", "gpu"]);
 async function safeCall(request2) {
   try {
@@ -4635,7 +5643,7 @@ function GuidanceCard(props) {
   const isQueueTimeout = kind === "session" && errorCode === "queue_timeout";
   if (!kind) return null;
   if (directMode && login && (kind === "auth" || kind === "cli")) {
-    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
       DirectLoginCard,
       {
         t,
@@ -4756,15 +5764,15 @@ function GuidanceCard(props) {
     });
     if (typeof copyText === "function") copyText(text, "studio.logs.copied");
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: guidanceToneOf(kind) === "error" ? "ofs-guidance is-error" : "ofs-guidance", role: "alert", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "ofs-guidance-icon", children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(Icon, { name: "alert", size: 15 }) }),
-    /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-guidance-body", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("p", { className: "ofs-guidance-title", children: card.title }),
-      card.command ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("code", { className: "ofs-guidance-command", children: card.command }) : null,
-      detail ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("p", { className: "ofs-guidance-detail", title: detail, children: detail }) : null,
-      card.note ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("p", { className: "ofs-guidance-note", children: card.note }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "ofs-guidance-actions", children: [
-        actionList.map((action, index) => action.href ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: guidanceToneOf(kind) === "error" ? "ofs-guidance is-error" : "ofs-guidance", role: "alert", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-guidance-icon", children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(Icon, { name: "alert", size: 15 }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-guidance-body", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("p", { className: "ofs-guidance-title", children: card.title }),
+      card.command ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("code", { className: "ofs-guidance-command", children: card.command }) : null,
+      detail ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("p", { className: "ofs-guidance-detail", title: detail, children: detail }) : null,
+      card.note ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("p", { className: "ofs-guidance-note", children: card.note }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-guidance-actions", children: [
+        actionList.map((action, index) => action.href ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
           "a",
           {
             className: `ofs-chip${index === 0 ? " is-on" : ""}`,
@@ -4774,7 +5782,7 @@ function GuidanceCard(props) {
             children: action.label
           },
           action.key
-        ) : /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+        ) : /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
           "button",
           {
             type: "button",
@@ -4784,16 +5792,16 @@ function GuidanceCard(props) {
           },
           action.key
         )),
-        hasSecondary ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("button", { type: "button", className: "ofs-chip", onClick: viewLogs, children: t("studio.guidance.viewLogs") }) : null,
-        canCopyDiagnostics ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("button", { type: "button", className: "ofs-chip", onClick: copyDiagnostics, children: t("studio.guidance.copyDiag") }) : null,
-        dismiss ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("button", { type: "button", className: "ofs-chip", onClick: dismiss, children: t("studio.guidance.close") }) : null
+        hasSecondary ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", className: "ofs-chip", onClick: viewLogs, children: t("studio.guidance.viewLogs") }) : null,
+        canCopyDiagnostics ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", className: "ofs-chip", onClick: copyDiagnostics, children: t("studio.guidance.copyDiag") }) : null,
+        dismiss ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("button", { type: "button", className: "ofs-chip", onClick: dismiss, children: t("studio.guidance.close") }) : null
       ] })
     ] })
   ] });
 }
 
 // src/studio/LogsDrawer.jsx
-var import_react12 = __toESM(require("react"), 1);
+var import_react14 = __toESM(require("react"), 1);
 
 // src/logic/error.js
 function errorText(t, error) {
@@ -4809,12 +5817,12 @@ function errorText(t, error) {
 }
 
 // src/studio/hooks/useFocusTrap.js
-var import_react10 = __toESM(require("react"), 1);
+var import_react12 = __toESM(require("react"), 1);
 var FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 function useFocusTrap({ active = true, panelRef, initialFocusRef, returnFocusRef, onClose }) {
-  const onCloseRef = import_react10.default.useRef(onClose);
+  const onCloseRef = import_react12.default.useRef(onClose);
   onCloseRef.current = onClose;
-  import_react10.default.useEffect(() => {
+  import_react12.default.useEffect(() => {
     if (!active) return void 0;
     const initial = initialFocusRef && initialFocusRef.current;
     if (initial && typeof initial.focus === "function") initial.focus();
@@ -4854,7 +5862,7 @@ function useFocusTrap({ active = true, panelRef, initialFocusRef, returnFocusRef
 }
 
 // src/studio/hooks/useStudioLogs.js
-var import_react11 = __toESM(require("react"), 1);
+var import_react13 = __toESM(require("react"), 1);
 function sameLines(previous, next) {
   if (previous.length !== next.length) return false;
   return previous.every((line, index) => line === next[index]);
@@ -4876,16 +5884,16 @@ function sameEnv(previous, next) {
   return true;
 }
 function useStudioLogs(open) {
-  const [status, setStatus] = import_react11.default.useState("idle");
-  const [lines, setLines] = import_react11.default.useState([]);
-  const [hostLines, setHostLines] = import_react11.default.useState([]);
-  const [reason, setReason] = import_react11.default.useState(null);
-  const [env, setEnv] = import_react11.default.useState({});
-  const linesRef = import_react11.default.useRef([]);
-  const hostLinesRef = import_react11.default.useRef([]);
-  const envRef = import_react11.default.useRef({});
-  const sinceRef = import_react11.default.useRef(0);
-  import_react11.default.useEffect(() => {
+  const [status, setStatus] = import_react13.default.useState("idle");
+  const [lines, setLines] = import_react13.default.useState([]);
+  const [hostLines, setHostLines] = import_react13.default.useState([]);
+  const [reason, setReason] = import_react13.default.useState(null);
+  const [env, setEnv] = import_react13.default.useState({});
+  const linesRef = import_react13.default.useRef([]);
+  const hostLinesRef = import_react13.default.useRef([]);
+  const envRef = import_react13.default.useRef({});
+  const sinceRef = import_react13.default.useRef(0);
+  import_react13.default.useEffect(() => {
     if (!open) return void 0;
     let alive = true;
     let timer2 = null;
@@ -4958,8 +5966,8 @@ function useStudioLogs(open) {
   return { status, lines, hostLines, reason, env };
 }
 function useHostSnapshot(enabled) {
-  const [snapshot2, setSnapshot] = import_react11.default.useState(null);
-  import_react11.default.useEffect(() => {
+  const [snapshot2, setSnapshot] = import_react13.default.useState(null);
+  import_react13.default.useEffect(() => {
     if (!enabled) {
       setSnapshot(null);
       return void 0;
@@ -4977,23 +5985,23 @@ function useHostSnapshot(enabled) {
 }
 
 // src/studio/LogsDrawer.jsx
-var import_jsx_runtime10 = require("react/jsx-runtime");
+var import_jsx_runtime12 = require("react/jsx-runtime");
 function LogsDrawer(props) {
   const { t, ui, compute, logs, onClose } = props;
-  const panelRef = import_react12.default.useRef(null);
-  const closeRef = import_react12.default.useRef(null);
-  const bodyRef = import_react12.default.useRef(null);
+  const panelRef = import_react14.default.useRef(null);
+  const closeRef = import_react14.default.useRef(null);
+  const bodyRef = import_react14.default.useRef(null);
   const snapshot2 = useHostSnapshot(true);
   const remoteLines = Array.isArray(logs.lines) ? logs.lines : [];
   const hostLines = Array.isArray(logs.hostLines) ? logs.hostLines : [];
-  const [manualView, setManualView] = import_react12.default.useState(null);
+  const [manualView, setManualView] = import_react14.default.useState(null);
   const autoView = remoteLines.length === 0 && hostLines.length > 0 ? "host" : "remote";
   const view = manualView ?? autoView;
   const showingHost = view === "host";
   const autoFallback = manualView === null && autoView === "host";
   const visibleLines = showingHost ? hostLines : remoteLines;
   useFocusTrap({ panelRef, initialFocusRef: closeRef, onClose });
-  import_react12.default.useEffect(() => {
+  import_react14.default.useEffect(() => {
     const node = bodyRef.current;
     if (!node) return;
     node.scrollTop = node.scrollHeight;
@@ -5020,7 +6028,7 @@ function LogsDrawer(props) {
   const loading = logs.status === "loading" || logs.status === "idle";
   const unavailable = logs.status === "unavailable";
   const empty = logs.status === "empty";
-  return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "ofs-logs", role: "presentation", onClick: onClose, children: /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "ofs-logs", role: "presentation", onClick: onClose, children: /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
     "div",
     {
       className: "ofs-logs-panel",
@@ -5030,10 +6038,10 @@ function LogsDrawer(props) {
       ref: panelRef,
       onClick: (event) => event.stopPropagation(),
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("header", { className: "ofs-logs-head", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "ofs-logs-title", children: t("studio.logs.title") }),
-          /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-logs-tabs", role: "group", "aria-label": t("studio.logs.title"), children: [
-            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("header", { className: "ofs-logs-head", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-logs-title", children: t("studio.logs.title") }),
+          /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-logs-tabs", role: "group", "aria-label": t("studio.logs.title"), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
               "button",
               {
                 type: "button",
@@ -5043,7 +6051,7 @@ function LogsDrawer(props) {
                 children: t("studio.logs.tab.remote")
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
               "button",
               {
                 type: "button",
@@ -5054,12 +6062,12 @@ function LogsDrawer(props) {
               }
             )
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "ofs-grow" }),
-          /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("button", { type: "button", className: "ofs-chip ofs-logs-copy", onClick: copyDiagnostics, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Icon, { name: "copy", size: 13 }),
+          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-grow" }),
+          /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("button", { type: "button", className: "ofs-chip ofs-logs-copy", onClick: copyDiagnostics, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Icon, { name: "copy", size: 13 }),
             t("studio.logs.copy")
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
             "button",
             {
               ref: closeRef,
@@ -5068,18 +6076,18 @@ function LogsDrawer(props) {
               onClick: onClose,
               title: t("studio.logs.close"),
               "aria-label": t("studio.logs.close"),
-              children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(Icon, { name: "close", size: 16 })
+              children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Icon, { name: "close", size: 16 })
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-logs-body", ref: bodyRef, role: "log", children: [
-          autoFallback ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-logs-fallback", role: "status", children: t("studio.logs.hostFallbackTitle") }) : null,
-          loading && !showingHost && remoteLines.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-logs-note", children: t("studio.logs.loading") }) : null,
-          unavailable ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-logs-note is-warn", children: errorText(t, logs.reason) || t("error.code.logs_unavailable") }) : null,
-          !showingHost && empty && remoteLines.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-logs-note", children: t("studio.logs.empty") }) : null,
-          showingHost && hostLines.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-logs-note", children: t("studio.logs.hostEmpty") }) : null,
-          showingHost && hostLines.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-logs-note", children: t("studio.logs.hostNote") }) : null,
-          visibleLines.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("pre", { className: "ofs-logs-lines", children: visibleLines.join("\n") }) : null
+        /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-logs-body", ref: bodyRef, role: "log", children: [
+          autoFallback ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("p", { className: "ofs-logs-fallback", role: "status", children: t("studio.logs.hostFallbackTitle") }) : null,
+          loading && !showingHost && remoteLines.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("p", { className: "ofs-logs-note", children: t("studio.logs.loading") }) : null,
+          unavailable ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("p", { className: "ofs-logs-note is-warn", children: errorText(t, logs.reason) || t("error.code.logs_unavailable") }) : null,
+          !showingHost && empty && remoteLines.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("p", { className: "ofs-logs-note", children: t("studio.logs.empty") }) : null,
+          showingHost && hostLines.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("p", { className: "ofs-logs-note", children: t("studio.logs.hostEmpty") }) : null,
+          showingHost && hostLines.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("p", { className: "ofs-logs-note", children: t("studio.logs.hostNote") }) : null,
+          visibleLines.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("pre", { className: "ofs-logs-lines", children: visibleLines.join("\n") }) : null
         ] })
       ]
     }
@@ -5087,8 +6095,8 @@ function LogsDrawer(props) {
 }
 
 // src/studio/PipelineBar.jsx
-var import_react13 = __toESM(require("react"), 1);
-var import_jsx_runtime11 = require("react/jsx-runtime");
+var import_react15 = __toESM(require("react"), 1);
+var import_jsx_runtime13 = require("react/jsx-runtime");
 function nodeClassOf(node) {
   const classes = ["ofs-pl-node", `is-${node.state}`];
   if (node.warn) classes.push("is-warn");
@@ -5113,7 +6121,7 @@ function PipelineBar(props) {
     mode === "complete" ? "is-complete" : "",
     mode === "closing" ? "is-closing" : ""
   ].filter(Boolean).join(" ");
-  return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
     "div",
     {
       className,
@@ -5122,19 +6130,19 @@ function PipelineBar(props) {
       "aria-label": hidden ? void 0 : view.label || void 0,
       "aria-hidden": hidden ? "true" : void 0,
       "data-mode": mode,
-      children: hidden ? null : /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(import_react13.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: folded ? "ofs-pl-rail is-folded" : "ofs-pl-rail", children: nodes.map((node, index) => /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(import_react13.Fragment, { children: [
-          index > 0 ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: linkClassOf(nodes[index - 1], node), "aria-hidden": "true" }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("span", { className: nodeClassOf(node), title: node.title || void 0, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-pl-dot", "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-pl-label", children: node.label }),
-            node.sub ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-pl-sub", children: node.sub }) : null,
-            node.tag ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-pl-tag", children: node.tag }) : null
+      children: hidden ? null : /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(import_react15.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: folded ? "ofs-pl-rail is-folded" : "ofs-pl-rail", children: nodes.map((node, index) => /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(import_react15.Fragment, { children: [
+          index > 0 ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: linkClassOf(nodes[index - 1], node), "aria-hidden": "true" }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: nodeClassOf(node), title: node.title || void 0, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-pl-dot", "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-pl-label", children: node.label }),
+            node.sub ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-pl-sub", children: node.sub }) : null,
+            node.tag ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-pl-tag", children: node.tag }) : null
           ] })
         ] }, node.key)) }),
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "ofs-pl-meta", "aria-hidden": "true", children: [
-          view.queueText ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "ofs-pl-queue", children: view.queueText }) : null,
-          view.timeText ? /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("span", { className: "ofs-pl-time", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "ofs-pl-meta", "aria-hidden": "true", children: [
+          view.queueText ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "ofs-pl-queue", children: view.queueText }) : null,
+          view.timeText ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "ofs-pl-time", children: [
             view.timeLabel ? `${view.timeLabel} ` : "",
             view.timeText
           ] }) : null
@@ -5145,28 +6153,28 @@ function PipelineBar(props) {
 }
 
 // src/studio/QueueNotice.jsx
-var import_react14 = __toESM(require("react"), 1);
-var import_jsx_runtime12 = require("react/jsx-runtime");
+var import_react16 = __toESM(require("react"), 1);
+var import_jsx_runtime14 = require("react/jsx-runtime");
 function QueueNotice(props) {
   const { t, notice } = props;
   if (!notice) return null;
   const minutes = Number.isFinite(notice.minutes) ? notice.minutes : 10;
   const title = formatText(t("studio.queue.notice.title"), { minutes });
-  return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-guidance ofs-queue-notice", role: "status", "aria-live": "polite", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "ofs-guidance-icon", children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Icon, { name: "clock", size: 15 }) }),
-    /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-guidance-body", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("p", { className: "ofs-guidance-title", children: title }),
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("p", { className: "ofs-guidance-note", children: t("studio.queue.notice.note") }),
-      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "ofs-guidance-actions", children: [
-        typeof notice.requeue === "function" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: notice.requeue, children: t("studio.queue.notice.requeue") }) : null,
-        typeof notice.dismiss === "function" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("button", { type: "button", className: "ofs-chip", onClick: notice.dismiss, children: t("studio.queue.notice.wait") }) : null
+  return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "ofs-guidance ofs-queue-notice", role: "status", "aria-live": "polite", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-guidance-icon", children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Icon, { name: "clock", size: 15 }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "ofs-guidance-body", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("p", { className: "ofs-guidance-title", children: title }),
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("p", { className: "ofs-guidance-note", children: t("studio.queue.notice.note") }),
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "ofs-guidance-actions", children: [
+        typeof notice.requeue === "function" ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: notice.requeue, children: t("studio.queue.notice.requeue") }) : null,
+        typeof notice.dismiss === "function" ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("button", { type: "button", className: "ofs-chip", onClick: notice.dismiss, children: t("studio.queue.notice.wait") }) : null
       ] })
     ] })
   ] });
 }
 
 // src/studio/Rail.jsx
-var import_react21 = __toESM(require("react"), 1);
+var import_react22 = __toESM(require("react"), 1);
 
 // src/logic/clamp.js
 function clampInt(value, min, max, fallback) {
@@ -5197,171 +6205,146 @@ function parseSeed(text) {
   return Math.min(int, LIMITS.seed.max);
 }
 
-// src/logic/mask.js
-var MASK_BRUSH = Object.freeze({ min: 8, max: 96, step: 4, default: 40 });
-var MASK_MIN_COVERAGE = 5e-4;
-var MASK_DATA_URL_PREFIX = "data:image/png;base64,";
-var MASK_KEY_STEP = 32;
-var MASK_STRENGTH_DEFAULT = 0.8;
-var MASK_STRENGTH_NATIVE = 0.9;
-function maskStrengthTargetOf(native) {
-  return native === true ? MASK_STRENGTH_NATIVE : MASK_STRENGTH_DEFAULT;
+// src/studio/rail/FrameSection.jsx
+var import_react18 = __toESM(require("react"), 1);
+
+// src/studio/presets.js
+var RATIO_SPECS = {
+  "1:1": { width: 1024, height: 1024 },
+  "16:9": { width: 1280, height: 720 },
+  "9:16": { width: 720, height: 1280 },
+  "4:3": { width: 1152, height: 864 },
+  "3:4": { width: 864, height: 1152 }
+};
+var DEFAULT_RATIOS = RATIO_IDS.map((id) => RATIO_SPECS[id] ? { id, ...RATIO_SPECS[id] } : null).filter(Boolean);
+function ratioToSize(ratio) {
+  return { width: clampSize(ratio.width), height: clampSize(ratio.height) };
 }
-function maskStrengthPatch(current, options = {}) {
-  const target = maskStrengthTargetOf(options.native === true);
-  const auto = options.auto === true;
-  const number = Number(current);
-  if (auto) return { strength: target };
-  if (!Number.isFinite(number)) return { strength: target };
-  if (Math.abs(number - LIMITS.strength.default) > 1e-9) return null;
-  return { strength: target };
+
+// src/studio/rail/Fieldset.jsx
+var import_react17 = __toESM(require("react"), 1);
+var import_jsx_runtime15 = require("react/jsx-runtime");
+function Fieldset(props) {
+  return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("section", { className: "ofs-fieldset", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "ofs-fieldset-head", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("h3", { children: props.title }),
+      props.action ? props.action : null
+    ] }),
+    props.children
+  ] });
 }
-function maskStrengthPresetPatch(strengthAuto, options = {}) {
-  if (strengthAuto !== true) return null;
-  return { strength: maskStrengthTargetOf(options.native === true) };
+
+// src/studio/rail/FrameSection.jsx
+var import_jsx_runtime16 = require("react/jsx-runtime");
+function sizeDraftOf(width, height) {
+  return { width: String(clampSize(width)), height: String(clampSize(height)) };
 }
-function strengthMaxOf(hasMask) {
-  const max = Number(LIMITS.strength.max);
-  if (!hasMask) return max;
-  const inpaintMax = Number(LIMITS.strength.inpaintMax);
-  if (!Number.isFinite(inpaintMax)) return max;
-  return Math.max(max, inpaintMax);
-}
-function clampMaskStrength(value, hasMask) {
-  const { min, step, default: fallback } = LIMITS.strength;
-  const max = strengthMaxOf(hasMask);
-  if (value === null || value === void 0 || value === "" || typeof value === "boolean") return fallback;
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  const clamped = Math.min(max, Math.max(min, number));
-  const aligned = min + Math.round((clamped - min) / step) * step;
-  return Math.round(aligned * 1e3) / 1e3;
-}
-var MASK_CANVAS_EDGE = 1024;
-function clampBrushSize(value) {
-  if (value === null || value === void 0) return MASK_BRUSH.default;
-  if (typeof value === "string" && value.trim() === "") return MASK_BRUSH.default;
-  const number = Number(value);
-  if (!Number.isFinite(number)) return MASK_BRUSH.default;
-  const clamped = Math.min(MASK_BRUSH.max, Math.max(MASK_BRUSH.min, number));
-  const aligned = MASK_BRUSH.min + Math.round((clamped - MASK_BRUSH.min) / MASK_BRUSH.step) * MASK_BRUSH.step;
-  return Math.min(MASK_BRUSH.max, Math.max(MASK_BRUSH.min, aligned));
-}
-function brushStateOf(partial) {
-  const input = partial && typeof partial === "object" ? partial : {};
-  return { size: clampBrushSize(input.size), eraser: input.eraser === true };
-}
-function toggleEraser(state) {
-  const current = brushStateOf(state);
-  return { size: current.size, eraser: !current.eraser };
-}
-function coverageOf(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return 0;
-  if (number >= 1) return 1;
-  return Number(number.toFixed(6));
-}
-function maskStateOf(partial) {
-  const input = partial && typeof partial === "object" ? partial : {};
-  return { coverage: coverageOf(input.coverage) };
-}
-function emptyMaskState() {
-  return { coverage: 0 };
-}
-function clearMaskState() {
-  return emptyMaskState();
-}
-function invertMaskState(state) {
-  const { coverage } = maskStateOf(state);
-  return { coverage: coverage > 0 ? coverageOf(1 - coverage) : 1 };
-}
-function maskHasInk(state) {
-  return maskStateOf(state).coverage >= MASK_MIN_COVERAGE;
-}
-function maskCoverageOf(inkPixels, totalPixels) {
-  const ink = Number(inkPixels);
-  const total = Number(totalPixels);
-  if (!Number.isFinite(ink) || !Number.isFinite(total) || total <= 0 || ink <= 0) return 0;
-  return coverageOf(ink / total);
-}
-function maskCanvasSizeOf(width, height, edge = MASK_CANVAS_EDGE) {
-  const limit = Number.isFinite(Number(edge)) && Number(edge) >= 64 ? Math.round(Number(edge)) : MASK_CANVAS_EDGE;
-  const w = Number(width);
-  const h2 = Number(height);
-  if (!Number.isFinite(w) || !Number.isFinite(h2) || w <= 0 || h2 <= 0) {
-    return { width: limit, height: limit };
-  }
-  const scale = limit / Math.max(w, h2);
-  return {
-    width: Math.max(48, Math.round(w * scale)),
-    height: Math.max(48, Math.round(h2 * scale))
+function FrameSection({
+  t,
+  width,
+  height,
+  frameSizeText,
+  ratioId,
+  applyRatio,
+  applyCustomSize
+}) {
+  const [sizeDraft, setSizeDraft] = import_react18.default.useState(() => sizeDraftOf(width, height));
+  const syncedSize = import_react18.default.useRef(void 0);
+  import_react18.default.useEffect(() => {
+    const previous = syncedSize.current;
+    syncedSize.current = { width, height };
+    if (!previous) return;
+    if (previous.width === width && previous.height === height) return;
+    setSizeDraft(sizeDraftOf(width, height));
+  }, [width, height]);
+  const [customOpen, setCustomOpen] = import_react18.default.useState(false);
+  const onCustomSize = typeof applyCustomSize === "function" ? applyCustomSize : () => {
   };
-}
-function base64BytesOf(text) {
-  const value = typeof text === "string" ? text.trim() : "";
-  if (!value) return 0;
-  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
-  return Math.max(0, Math.floor(value.length * 3 / 4) - padding);
-}
-function normalizeMaskData(data) {
-  if (typeof data !== "string") return "";
-  let text = data.trim();
-  if (text.toLowerCase().startsWith(MASK_DATA_URL_PREFIX)) text = text.slice(MASK_DATA_URL_PREFIX.length);
-  text = text.replace(/\s+/g, "");
-  if (!text || text.length % 4 !== 0) return "";
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(text)) return "";
-  return text;
-}
-function referenceMaskOf(reference) {
-  const mask = reference && typeof reference === "object" ? reference.mask : null;
-  if (!mask) return null;
-  const raw = typeof mask === "string" ? { data: mask } : mask;
-  const data = normalizeMaskData(raw.data);
-  if (!data) return null;
-  return {
-    data,
-    coverage: maskStateOf({ coverage: raw.coverage }).coverage,
-    digest: maskDigestOf(data)
-  };
-}
-function referenceMaskDataOf(reference) {
-  const mask = referenceMaskOf(reference);
-  return mask ? mask.data : "";
-}
-function referenceMaskForSubmit(reference) {
-  const data = referenceMaskDataOf(reference);
-  if (!data) return "";
-  const bytes = base64BytesOf(data);
-  if (bytes <= 0 || bytes > LIMITS.mask.maxBytes) return "";
-  return data;
-}
-function referenceWithoutMask(reference) {
-  if (!reference || typeof reference !== "object") return reference ?? null;
-  if (!reference.mask) return reference;
-  const next = { ...reference };
-  delete next.mask;
-  return next;
-}
-function maskExportVerdict(data, coverage) {
-  const normalized = normalizeMaskData(data);
-  if (!normalized) return { ok: false, reason: "invalid" };
-  const state = maskStateOf({ coverage });
-  if (!maskHasInk(state)) return { ok: false, reason: "empty" };
-  const bytes = base64BytesOf(normalized);
-  if (bytes <= 0) return { ok: false, reason: "invalid" };
-  if (bytes > LIMITS.mask.maxBytes) return { ok: false, reason: "too_large" };
-  return { ok: true, data: normalized, coverage: state.coverage, bytes };
-}
-function maskDigestOf(data) {
-  const normalized = normalizeMaskData(data);
-  if (!normalized) return "";
-  let hash = 2166136261;
-  for (let index = 0; index < normalized.length; index += 1) {
-    hash ^= normalized.charCodeAt(index);
-    hash = Math.imul(hash, 16777619) >>> 0;
+  function updateSizeDraft(key, value) {
+    setSizeDraft((prev) => ({ ...prev, [key]: value }));
   }
-  return `${hash.toString(16)}-${normalized.length}`;
+  function commitSizeDraft(key) {
+    const raw = String(sizeDraft[key] ?? "").trim();
+    const currentValue = key === "width" ? width : height;
+    if (!raw) {
+      setSizeDraft((prev) => ({ ...prev, [key]: String(clampSize(currentValue)) }));
+      return;
+    }
+    const value = clampSize(raw);
+    setSizeDraft((prev) => ({ ...prev, [key]: String(value) }));
+    if (value !== clampSize(currentValue)) onCustomSize({ [key]: value });
+  }
+  const sizeFields = [
+    { key: "width", label: t("studio.rail.width"), limits: LIMITS.width },
+    { key: "height", label: t("studio.rail.height"), limits: LIMITS.height }
+  ];
+  return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
+    Fieldset,
+    {
+      title: t("studio.rail.frame"),
+      action: /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "ofs-frame-readout", children: frameSizeText }),
+      children: [
+        /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-frame-group", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "ofs-frame-label", children: t("studio.rail.ratio") }),
+          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "ofs-ratio-row", role: "group", "aria-label": t("studio.rail.ratio"), children: DEFAULT_RATIOS.map((ratio) => /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
+            "button",
+            {
+              type: "button",
+              className: ratioId === ratio.id ? "ofs-ratio is-on" : "ofs-ratio",
+              onClick: () => applyRatio(ratio.id),
+              "aria-pressed": ratioId === ratio.id,
+              children: [
+                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: `ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(":", "-")}`, "aria-hidden": "true" }),
+                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "ofs-ratio-label", children: ratio.id })
+              ]
+            },
+            ratio.id
+          )) })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-frame-group", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
+            "button",
+            {
+              type: "button",
+              className: "ofs-custom-toggle",
+              "aria-expanded": customOpen,
+              onClick: () => setCustomOpen((open) => !open),
+              children: [
+                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { children: t("studio.rail.customSize") }),
+                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: customOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Icon, { name: "chevronDown", size: 14 }) })
+              ]
+            }
+          ),
+          customOpen ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "ofs-custom-body", children: /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "ofs-size-custom", children: sizeFields.map((item, index) => /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(import_react18.default.Fragment, { children: [
+            index > 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "ofs-size-custom-times", "aria-hidden": "true", children: "×" }) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("label", { className: "ofs-size-custom-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { children: item.label }),
+              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+                "input",
+                {
+                  type: "number",
+                  min: item.limits.min,
+                  max: item.limits.max,
+                  step: item.limits.step,
+                  value: sizeDraft[item.key],
+                  "aria-label": item.label,
+                  onChange: (event) => updateSizeDraft(item.key, event.target.value),
+                  onBlur: () => commitSizeDraft(item.key),
+                  onKeyDown: (event) => {
+                    if (event.key === "Enter") event.currentTarget.blur();
+                  }
+                }
+              )
+            ] })
+          ] }, item.key)) }) }) : null
+        ] })
+      ]
+    }
+  );
 }
+
+// src/studio/rail/ParamsSection.jsx
+var import_react20 = __toESM(require("react"), 1);
 
 // shared/models-guide.js
 function effectiveCfgOf(preset, cfg) {
@@ -5408,659 +6391,8 @@ function safeResetPatch(preset) {
   return { width: size, height: size, steps, cfg };
 }
 
-// src/logic/prompt.js
-var NEGATIVE_LAYER_ORDER = ["model", "user"];
-function emptyNegativeLayers() {
-  return { model: "", user: "" };
-}
-function layerText(value) {
-  return typeof value === "string" ? value.trim() : "";
-}
-function normalizeNegativeLayers(layers) {
-  const source = layers && typeof layers === "object" ? layers : {};
-  const next = emptyNegativeLayers();
-  for (const name of NEGATIVE_LAYER_ORDER) next[name] = layerText(source[name]);
-  return next;
-}
-function splitNegativeTerms(text) {
-  return String(text ?? "").split(/[,，、;；]/).map((term) => term.trim()).filter(Boolean);
-}
-function mergeNegativeLayers(layers) {
-  const source = normalizeNegativeLayers(layers);
-  const seen = /* @__PURE__ */ new Set();
-  const terms = [];
-  for (const name of NEGATIVE_LAYER_ORDER) {
-    for (const term of splitNegativeTerms(source[name])) {
-      const key = term.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      terms.push(term);
-    }
-  }
-  return terms.join(", ");
-}
-function resolveNegativeLayers(form, presets) {
-  const input = form && typeof form === "object" ? form : {};
-  if (input.negativeLayers && typeof input.negativeLayers === "object") {
-    return normalizeNegativeLayers(input.negativeLayers);
-  }
-  const negative = layerText(input.negative);
-  if (!negative) return emptyNegativeLayers();
-  const list = Array.isArray(presets) ? presets : [];
-  const previous = list.find((item) => item && item.id === input.presetId);
-  const hint = previous && typeof previous.negativeHint === "string" ? previous.negativeHint.trim() : "";
-  if (hint && negative === hint) return { model: negative, user: "" };
-  return { model: "", user: negative };
-}
-function negativeLayersPatch(layers) {
-  const next = normalizeNegativeLayers(layers);
-  return { negativeLayers: next, negative: mergeNegativeLayers(next) };
-}
-function negativePromptOf(form) {
-  const input = form && typeof form === "object" ? form : {};
-  if (input.negativeLayers && typeof input.negativeLayers === "object") {
-    return mergeNegativeLayers(input.negativeLayers);
-  }
-  return layerText(input.negative);
-}
-function negativeForSubmit(form, active) {
-  if (active === false) return "";
-  return negativePromptOf(form);
-}
-function translateOutcomeOf(data) {
-  const holder = data && typeof data === "object" ? data : null;
-  const prompt = holder && typeof holder.prompt === "string" ? holder.prompt.trim() : "";
-  if (!holder || holder.source !== "model" || !prompt) return { ok: false, prompt: "" };
-  return { ok: true, prompt };
-}
-function applyNegativePatch(form, partial) {
-  const prev = form && typeof form === "object" ? form : {};
-  const patch = partial && typeof partial === "object" ? partial : {};
-  if (patch.negativeLayers && typeof patch.negativeLayers === "object") {
-    const layers = normalizeNegativeLayers(patch.negativeLayers);
-    return {
-      ...prev,
-      ...patch,
-      negativeLayers: layers,
-      negative: typeof patch.negative === "string" ? patch.negative : mergeNegativeLayers(layers)
-    };
-  }
-  if (typeof patch.negative === "string") {
-    return {
-      ...prev,
-      ...patch,
-      negativeLayers: { model: "", user: patch.negative }
-    };
-  }
-  return { ...prev, ...patch };
-}
-
-// src/logic/preset.js
-function detectCjk(text) {
-  return /[\u3400-\u9fff]/.test(String(text ?? ""));
-}
-function gcd(left, right) {
-  let a = Math.abs(left);
-  let b = Math.abs(right);
-  while (b) {
-    const next = a % b;
-    a = b;
-    b = next;
-  }
-  return a || 1;
-}
-function ratioIdOf(width, height) {
-  const w = Math.round(Number(width));
-  const h2 = Math.round(Number(height));
-  if (!Number.isFinite(w) || !Number.isFinite(h2) || w <= 0 || h2 <= 0) return "";
-  const divisor = gcd(w, h2);
-  const id = `${w / divisor}:${h2 / divisor}`;
-  return RATIO_IDS.includes(id) ? id : "";
-}
-function presetNeedsEnglish(preset) {
-  if (!preset || typeof preset !== "object") return true;
-  if (preset.supportsChinese === true || preset.promptStyle === "chinese") return false;
-  return true;
-}
-function hintOf(preset) {
-  return preset && typeof preset.negativeHint === "string" ? preset.negativeHint.trim() : "";
-}
-function customSizePatch(partial) {
-  const input = partial && typeof partial === "object" ? partial : {};
-  const patch = {};
-  if (Object.prototype.hasOwnProperty.call(input, "width")) patch.width = clampSize(input.width);
-  if (Object.prototype.hasOwnProperty.call(input, "height")) patch.height = clampSize(input.height);
-  return patch;
-}
-function supportsImg2Img(preset) {
-  return Boolean(preset && preset.supportsImg2Img === true);
-}
-function supportsInpaint(preset) {
-  return Boolean(preset && preset.supportsInpaint === true);
-}
-function inpaintOnlyOf(preset) {
-  return Boolean(preset && preset.inpaintOnly === true);
-}
-function referencePresetOf(presets) {
-  const list = Array.isArray(presets) ? presets.filter((item) => item && item.id && !inpaintOnlyOf(item)) : [];
-  const preferred = list.find((item) => item.id === DEFAULT_PRESET);
-  if (preferred && supportsImg2Img(preferred)) return preferred;
-  return list.find(supportsImg2Img) || null;
-}
-function presetSelectPatch(next, current, presets) {
-  const target = next && typeof next === "object" && next.id ? next : null;
-  if (!target) return {};
-  const form = current && typeof current === "object" ? current : {};
-  const hasActiveSize = Boolean(form.presetId) && Number(form.width) > 0 && Number(form.height) > 0;
-  const patch = {
-    presetId: target.id
-  };
-  if (!hasActiveSize) {
-    patch.width = clampSize(target.size || form.width);
-    patch.height = clampSize(target.size || form.height);
-  } else {
-    const options = Array.isArray(target.sizeOptions) ? target.sizeOptions.map(Number).filter((n) => Number.isFinite(n) && n > 0) : [];
-    const minSafe = options.length > 0 ? Math.min(...options) : 0;
-    const curW = Number(form.width);
-    const curH = Number(form.height);
-    const curLong = Math.max(curW, curH);
-    const targetSize = clampSize(target.size || minSafe);
-    if (minSafe > 0 && curLong > 0 && curLong < minSafe && targetSize > curLong) {
-      const scale = targetSize / curLong;
-      patch.width = clampSize(curW * scale);
-      patch.height = clampSize(curH * scale);
-    }
-  }
-  const steps = clampInt(target.steps, LIMITS.steps.min, LIMITS.steps.max, null);
-  if (steps !== null) patch.steps = steps;
-  const cfg = clampNumber(target.cfg, LIMITS.cfg.min, LIMITS.cfg.max, null);
-  if (cfg !== null) patch.cfg = cfg;
-  const list = Array.isArray(presets) ? presets : [];
-  const layers = resolveNegativeLayers(form, list);
-  const effectiveCfg = cfg !== null ? cfg : form.cfg;
-  const nextLayers = {
-    ...layers,
-    model: negativePromptActive(target, effectiveCfg) ? hintOf(target) : ""
-  };
-  Object.assign(patch, negativeLayersPatch(nextLayers));
-  return patch;
-}
-
-// src/logic/generate.js
-function referenceFileName(path) {
-  const value = String(path ?? "").trim();
-  if (!value) return "";
-  const parts = value.split(/[\\/]/);
-  return parts[parts.length - 1] || value;
-}
-function referenceUrlOf(path) {
-  const value = String(path ?? "").trim();
-  if (!value) return "";
-  return `${ROUTES.file.path}?path=${encodeURIComponent(value)}`;
-}
-function referencePathOf(form) {
-  const input = form && typeof form === "object" ? form : {};
-  const reference = input.reference && typeof input.reference === "object" ? input.reference : null;
-  return reference && typeof reference.path === "string" ? reference.path.trim() : "";
-}
-function buildGenerateBody(form, options = {}) {
-  const input = form || {};
-  const overrides = options.overrides && typeof options.overrides === "object" ? options.overrides : null;
-  const negativeActive = options.negativeActive !== false;
-  const explicit = overrides && typeof overrides.prompt === "string" ? overrides.prompt : null;
-  const maxPromptChars = LIMITS.prompt.maxChars;
-  const prompt = explicit !== null ? explicit.trim().slice(0, maxPromptChars) : String(input.prompt ?? "").trim().slice(0, maxPromptChars);
-  const body = {
-    prompt,
-    negativePrompt: negativeForSubmit(input, negativeActive),
-    width: clampSize(input.width),
-    height: clampSize(input.height),
-    steps: clampInt(input.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
-    cfg: clampNumber(input.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
-    seed: parseSeed(input.seed),
-    count: clampInt(input.count, LIMITS.count.min, LIMITS.count.max, 1),
-    waitSeconds: 0,
-    autoStart: true
-  };
-  const presetId = input.presetId || options.defaultPreset || "";
-  if (presetId) body.presetId = presetId;
-  const hasOverride = (key) => overrides !== null && Object.prototype.hasOwnProperty.call(overrides, key);
-  const reference = hasOverride("reference") ? overrides.reference : input.reference;
-  const referencePath = referencePathOf({ reference });
-  if (referencePath) {
-    const strength = hasOverride("strength") ? overrides.strength : input.strength;
-    const mask = options.maskActive === false ? "" : referenceMaskForSubmit(reference);
-    body.reference = { path: referencePath, strength: clampMaskStrength(strength, Boolean(mask)) };
-    if (mask) body.reference.mask = mask;
-  }
-  if (overrides) {
-    for (const [key, value] of Object.entries(overrides)) {
-      if (key === "prompt" || key === "reference" || key === "strength") continue;
-      body[key] = value;
-    }
-  }
-  if (!negativeActive) body.negativePrompt = "";
-  return body;
-}
-var GENERATE_SOURCES = Object.freeze(["form", "assistant", "variant", "retry"]);
-function normalizeGenerateSource(value) {
-  const source = typeof value === "string" ? value.trim() : "";
-  return GENERATE_SOURCES.includes(source) ? source : "form";
-}
-function presetLabelOf(preset) {
-  if (!preset || typeof preset !== "object") return "";
-  if (typeof preset.label === "string" && preset.label.trim()) return preset.label.trim();
-  if (typeof preset.short === "string" && preset.short.trim()) return preset.short.trim();
-  return typeof preset.id === "string" ? preset.id : "";
-}
-function effectivePresetOf(overrides, preset, presets) {
-  const list = Array.isArray(presets) ? presets : [];
-  const input = overrides && typeof overrides === "object" ? overrides : null;
-  const id = input && typeof input.presetId === "string" ? input.presetId.trim() : "";
-  if (id) {
-    const found = list.find((item) => item && item.id === id);
-    if (found) return found;
-  }
-  return preset && typeof preset === "object" ? preset : null;
-}
-function generateSourcePolicy(source, options = {}) {
-  const normalized = normalizeGenerateSource(source);
-  const overrides = options.overrides && typeof options.overrides === "object" ? { ...options.overrides } : {};
-  const presets = Array.isArray(options.presets) ? options.presets : [];
-  const preset = options.preset && typeof options.preset === "object" ? options.preset : null;
-  const policy = { source: normalized, ok: true, overrides, notice: null, blockedKey: "" };
-  if (normalized !== "assistant" && normalized !== "variant") return policy;
-  overrides.reference = null;
-  const effective = effectivePresetOf(overrides, preset, presets);
-  if (!inpaintOnlyOf(effective)) return policy;
-  const fallback = referencePresetOf(presets);
-  if (!fallback) {
-    policy.ok = false;
-    policy.blockedKey = "studio.reference.blocked";
-    return policy;
-  }
-  overrides.presetId = fallback.id;
-  policy.notice = {
-    key: "studio.reference.autoText2Image",
-    params: { preset: presetLabelOf(fallback) }
-  };
-  return policy;
-}
-function generateCapabilityOf(options = {}) {
-  const preset = options.preset && typeof options.preset === "object" ? options.preset : null;
-  const presets = Array.isArray(options.presets) ? options.presets : [];
-  const reference = options.reference && typeof options.reference === "object" ? options.reference : null;
-  const result = { ok: true, reason: "", noticeKey: "" };
-  if (presets.length > 0 && referencePathOf({ reference }) && !supportsImg2Img(preset)) {
-    result.ok = false;
-    result.reason = "reference";
-    result.noticeKey = "studio.reference.blocked";
-    return result;
-  }
-  if (inpaintOnlyOf(preset) && !referenceMaskOf(reference)) {
-    result.ok = false;
-    result.reason = "mask";
-    result.noticeKey = "studio.mask.onlyHint";
-  }
-  return result;
-}
-function frozenReferenceOf(source) {
-  const holder = source && typeof source === "object" ? source : null;
-  if (!holder) return null;
-  const params = holder.params && typeof holder.params === "object" ? holder.params : holder;
-  const raw = params && params.reference && typeof params.reference === "object" ? params.reference : null;
-  if (!raw) return null;
-  const path = typeof raw.sourcePath === "string" ? raw.sourcePath.trim() : typeof raw.path === "string" ? raw.path.trim() : "";
-  const strength = finiteNumber(raw.strength);
-  const mask = raw.mask === true || typeof raw.mask === "string" || Boolean(raw.mask && typeof raw.mask === "object");
-  return { path, strength, mask };
-}
-function submittedReferenceOf(body) {
-  const input = body && typeof body === "object" ? body : null;
-  const reference = input && input.reference && typeof input.reference === "object" ? input.reference : null;
-  return reference ? { ...reference } : null;
-}
-function retryReferencePlan(source, options = {}) {
-  const overrides = retryOverrides(source);
-  if (!overrides) return null;
-  const frozen = frozenReferenceOf(source);
-  const plan = {
-    overrides,
-    restored: "none",
-    maskLost: false,
-    fillReference: null,
-    requestPaint: false,
-    noticeKey: ""
-  };
-  if (!frozen || !frozen.path) {
-    overrides.reference = null;
-    return plan;
-  }
-  const pending = submittedReferenceOf(options.pendingRef);
-  const sameSource = Boolean(pending && referencePathOf({ reference: pending }) === frozen.path);
-  const pendingMask = sameSource ? referenceMaskForSubmit(pending) : "";
-  const strength = frozen.strength ?? (sameSource && pending ? finiteNumber(pending.strength) : null);
-  if (strength !== null) overrides.strength = strength;
-  if (sameSource && frozen.mask && pendingMask) {
-    overrides.reference = { ...pending, path: frozen.path };
-    plan.restored = "mask";
-  } else if (sameSource && !frozen.mask) {
-    overrides.reference = referenceWithoutMask({ ...pending, path: frozen.path });
-    plan.restored = "reference";
-  } else if (frozen.mask) {
-    plan.maskLost = true;
-    plan.fillReference = { path: frozen.path, url: referenceUrlOf(frozen.path) };
-    plan.requestPaint = true;
-    plan.noticeKey = "studio.toast.maskLost";
-    overrides.reference = null;
-    return plan;
-  } else {
-    overrides.reference = { path: frozen.path, url: referenceUrlOf(frozen.path) };
-    plan.restored = "reference";
-  }
-  return plan;
-}
-function retryFormPatch(overrides) {
-  const input = overrides && typeof overrides === "object" ? overrides : {};
-  const patch = {};
-  if (typeof input.prompt === "string" && input.prompt.trim()) {
-    patch.prompt = input.prompt.trim().slice(0, LIMITS.prompt.maxChars);
-  }
-  if (typeof input.negativePrompt === "string") {
-    const negative = input.negativePrompt.slice(0, LIMITS.negativePrompt.maxChars);
-    const layers = normalizeNegativeLayers({ user: negative });
-    Object.assign(patch, negativeLayersPatch(layers));
-  }
-  const width = positiveSize(input.width);
-  const height = positiveSize(input.height);
-  if (width !== null) patch.width = clampSize(width);
-  if (height !== null) patch.height = clampSize(height);
-  const steps = finiteNumber(input.steps);
-  if (steps !== null) patch.steps = clampInt(steps, LIMITS.steps.min, LIMITS.steps.max, 4);
-  const cfg = finiteNumber(input.cfg);
-  if (cfg !== null) patch.cfg = clampNumber(cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0);
-  const count = finiteNumber(input.count);
-  if (count !== null) patch.count = clampInt(count, LIMITS.count.min, LIMITS.count.max, 1);
-  const strength = finiteNumber(input.strength);
-  if (strength !== null) patch.strength = clampMaskStrength(strength, true);
-  return patch;
-}
-function retryRestoreOf(plan, presets) {
-  const holder = plan && typeof plan === "object" ? plan : {};
-  const fill = holder.fillReference && typeof holder.fillReference === "object" ? holder.fillReference : null;
-  const path = fill && typeof fill.path === "string" ? fill.path.trim() : "";
-  if (!path) return { ok: false, reason: "no_path", preset: null, patch: {} };
-  const list = Array.isArray(presets) ? presets : [];
-  const overrides = holder.overrides && typeof holder.overrides === "object" ? holder.overrides : {};
-  const wanted = typeof overrides.presetId === "string" ? overrides.presetId.trim() : "";
-  const candidate = wanted ? list.find((item) => item && item.id === wanted) || null : null;
-  const preset = candidate && supportsImg2Img(candidate) ? candidate : referencePresetOf(list);
-  const patch = retryFormPatch(overrides);
-  patch.reference = {
-    path,
-    url: fill && typeof fill.url === "string" && fill.url ? fill.url : referenceUrlOf(path)
-  };
-  if (!preset) return { ok: false, reason: "unsupported", preset: null, patch };
-  return { ok: true, reason: "", preset, patch };
-}
-function previewRecallOf(options = {}) {
-  const reference = options.reference && typeof options.reference === "object" ? options.reference : null;
-  if (referencePathOf({ reference })) {
-    return {
-      action: "reference",
-      noticeKey: referenceMaskOf(reference) ? "studio.toast.referenceKept" : "studio.toast.referenceImageKept"
-    };
-  }
-  if (options.dirty === true) return { action: "draft", noticeKey: "studio.toast.draftKept" };
-  const patch = options.patch && typeof options.patch === "object" ? options.patch : {};
-  if (Object.keys(patch).length === 0) return { action: "idle", noticeKey: "" };
-  return { action: "recall", noticeKey: "studio.toast.recalled" };
-}
-function formSummaryOf(body) {
-  const input = body && typeof body === "object" ? body : {};
-  const width = positiveSize(input.width);
-  const height = positiveSize(input.height);
-  const count = finiteNumber(input.count);
-  const seed = finiteNumber(input.seed);
-  return {
-    presetId: typeof input.presetId === "string" ? input.presetId : "",
-    ratioId: ratioIdOf(width, height),
-    width,
-    height,
-    count: count === null ? 1 : Math.min(LIMITS.count.max, Math.max(LIMITS.count.min, Math.round(count))),
-    hasReference: Boolean(referencePathOf(input)),
-    seed: seed !== null && seed >= 0 ? Math.trunc(seed) : null
-  };
-}
-function finiteNumber(value) {
-  if (value === null || value === void 0 || value === "") return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-function positiveSize(value) {
-  const number = finiteNumber(value);
-  if (number === null || number <= 0) return null;
-  return Math.round(number);
-}
-function presetOf(presets, id) {
-  if (!id || !Array.isArray(presets)) return null;
-  return presets.find((item) => item && item.id === id) || null;
-}
-function recallOf(entry, presets) {
-  const image = entry && entry.image || null;
-  const item = entry && entry.item || null;
-  const params = item && item.params || null;
-  const presetId = item && item.presetId || "";
-  const preset = presetOf(presets, presetId);
-  const prompt = item && typeof item.prompt === "string" && item.prompt || params && typeof params.prompt === "string" && params.prompt || "";
-  const width = positiveSize(image && image.width) ?? positiveSize(params && params.width) ?? positiveSize(preset && preset.size);
-  const height = positiveSize(image && image.height) ?? positiveSize(params && params.height) ?? positiveSize(preset && preset.size);
-  const steps = finiteNumber(params && params.steps) ?? finiteNumber(preset && preset.steps);
-  const cfg = finiteNumber(params && params.cfg) ?? finiteNumber(preset && preset.cfg);
-  const seed = finiteNumber(image && image.seed) ?? finiteNumber(params && params.seed);
-  const negative = params && typeof params.negativePrompt === "string" ? params.negativePrompt : null;
-  return { image, item, params, presetId, prompt, width, height, steps, cfg, seed, negative };
-}
-function iteratePatch(entry, form, presets) {
-  const base = form || {};
-  const recall = recallOf(entry, presets);
-  const patch = {};
-  const prompt = recall.prompt.trim();
-  if (prompt) patch.prompt = prompt;
-  if (recall.negative !== null) patch.negative = recall.negative;
-  if (recall.width !== null) patch.width = recall.width;
-  if (recall.height !== null) patch.height = recall.height;
-  if (recall.steps !== null) patch.steps = recall.steps;
-  if (recall.cfg !== null) patch.cfg = recall.cfg;
-  if (recall.seed !== null && recall.seed >= 0) patch.seed = String(Math.trunc(recall.seed));
-  if (recall.presetId) patch.presetId = recall.presetId;
-  if (Object.keys(patch).length > 0) {
-    if (!Object.prototype.hasOwnProperty.call(patch, "seed")) patch.seed = "";
-    patch.reference = null;
-  }
-  return patch;
-}
-function rerollOverrides(entry, presets) {
-  const recall = recallOf(entry, presets);
-  const prompt = recall.prompt.trim();
-  if (!prompt) return null;
-  const overrides = { prompt, seed: -1, count: 1 };
-  if (recall.negative !== null) overrides.negativePrompt = recall.negative;
-  if (recall.width !== null) overrides.width = recall.width;
-  if (recall.height !== null) overrides.height = recall.height;
-  if (recall.steps !== null) overrides.steps = recall.steps;
-  if (recall.cfg !== null) overrides.cfg = recall.cfg;
-  if (recall.presetId) overrides.presetId = recall.presetId;
-  return overrides;
-}
-function retryOverrides(source) {
-  const holder = source && typeof source === "object" ? source : null;
-  if (!holder) return null;
-  const params = holder.params && typeof holder.params === "object" ? holder.params : holder;
-  const prompt = typeof params.prompt === "string" ? params.prompt.trim() : "";
-  if (!prompt) return null;
-  const overrides = { prompt, seed: -1 };
-  const count = finiteNumber(params.count);
-  if (count !== null) overrides.count = Math.min(4, Math.max(1, Math.round(count)));
-  const width = positiveSize(params.width);
-  const height = positiveSize(params.height);
-  if (width !== null) overrides.width = width;
-  if (height !== null) overrides.height = height;
-  const steps = finiteNumber(params.steps);
-  const cfg = finiteNumber(params.cfg);
-  if (steps !== null) overrides.steps = steps;
-  if (cfg !== null) overrides.cfg = cfg;
-  if (typeof params.negativePrompt === "string") overrides.negativePrompt = params.negativePrompt;
-  const presetId = holder.presetId || params.presetId || "";
-  if (presetId) overrides.presetId = presetId;
-  return overrides;
-}
-
-// src/studio/rail/FrameSection.jsx
-var import_react16 = __toESM(require("react"), 1);
-
-// src/studio/presets.js
-var RATIO_SPECS = {
-  "1:1": { width: 1024, height: 1024 },
-  "16:9": { width: 1280, height: 720 },
-  "9:16": { width: 720, height: 1280 },
-  "4:3": { width: 1152, height: 864 },
-  "3:4": { width: 864, height: 1152 }
-};
-var DEFAULT_RATIOS = RATIO_IDS.map((id) => RATIO_SPECS[id] ? { id, ...RATIO_SPECS[id] } : null).filter(Boolean);
-function ratioToSize(ratio) {
-  return { width: clampSize(ratio.width), height: clampSize(ratio.height) };
-}
-
-// src/studio/rail/Fieldset.jsx
-var import_react15 = __toESM(require("react"), 1);
-var import_jsx_runtime13 = require("react/jsx-runtime");
-function Fieldset(props) {
-  return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("section", { className: "ofs-fieldset", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "ofs-fieldset-head", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("h3", { children: props.title }),
-      props.action ? props.action : null
-    ] }),
-    props.children
-  ] });
-}
-
-// src/studio/rail/FrameSection.jsx
-var import_jsx_runtime14 = require("react/jsx-runtime");
-function sizeDraftOf(width, height) {
-  return { width: String(clampSize(width)), height: String(clampSize(height)) };
-}
-function FrameSection({
-  t,
-  width,
-  height,
-  frameSizeText,
-  ratioId,
-  applyRatio,
-  applyCustomSize,
-  hasReference,
-  referenceSize
-}) {
-  const [sizeDraft, setSizeDraft] = import_react16.default.useState(() => sizeDraftOf(width, height));
-  const syncedSize = import_react16.default.useRef(void 0);
-  import_react16.default.useEffect(() => {
-    const previous = syncedSize.current;
-    syncedSize.current = { width, height };
-    if (!previous) return;
-    if (previous.width === width && previous.height === height) return;
-    setSizeDraft(sizeDraftOf(width, height));
-  }, [width, height]);
-  const [customOpen, setCustomOpen] = import_react16.default.useState(false);
-  const onCustomSize = typeof applyCustomSize === "function" ? applyCustomSize : () => {
-  };
-  function updateSizeDraft(key, value) {
-    setSizeDraft((prev) => ({ ...prev, [key]: value }));
-  }
-  function commitSizeDraft(key) {
-    const raw = String(sizeDraft[key] ?? "").trim();
-    const currentValue = key === "width" ? width : height;
-    if (!raw) {
-      setSizeDraft((prev) => ({ ...prev, [key]: String(clampSize(currentValue)) }));
-      return;
-    }
-    const value = clampSize(raw);
-    setSizeDraft((prev) => ({ ...prev, [key]: String(value) }));
-    if (value !== clampSize(currentValue)) onCustomSize({ [key]: value });
-  }
-  const sizeFields = [
-    { key: "width", label: t("studio.rail.width"), limits: LIMITS.width },
-    { key: "height", label: t("studio.rail.height"), limits: LIMITS.height }
-  ];
-  return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
-    Fieldset,
-    {
-      title: t("studio.rail.frame"),
-      action: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-frame-readout", children: hasReference ? referenceSize ? `${referenceSize} · ${t("studio.rail.followReference")}` : t("studio.rail.followReference") : frameSizeText }),
-      children: hasReference ? null : /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(import_jsx_runtime14.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "ofs-frame-group", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-frame-label", children: t("studio.rail.ratio") }),
-          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "ofs-ratio-row", role: "group", "aria-label": t("studio.rail.ratio"), children: DEFAULT_RATIOS.map((ratio) => /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
-            "button",
-            {
-              type: "button",
-              className: ratioId === ratio.id ? "ofs-ratio is-on" : "ofs-ratio",
-              onClick: () => applyRatio(ratio.id),
-              "aria-pressed": ratioId === ratio.id,
-              children: [
-                /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: `ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(":", "-")}`, "aria-hidden": "true" }),
-                /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-ratio-label", children: ratio.id })
-              ]
-            },
-            ratio.id
-          )) })
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "ofs-frame-group", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
-            "button",
-            {
-              type: "button",
-              className: "ofs-custom-toggle",
-              "aria-expanded": customOpen,
-              onClick: () => setCustomOpen((open) => !open),
-              children: [
-                /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { children: t("studio.rail.customSize") }),
-                /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: customOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(Icon, { name: "chevronDown", size: 14 }) })
-              ]
-            }
-          ),
-          customOpen ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "ofs-custom-body", children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "ofs-size-custom", children: sizeFields.map((item, index) => /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(import_react16.default.Fragment, { children: [
-            index > 0 ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "ofs-size-custom-times", "aria-hidden": "true", children: "×" }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("label", { className: "ofs-size-custom-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { children: item.label }),
-              /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
-                "input",
-                {
-                  type: "number",
-                  min: item.limits.min,
-                  max: item.limits.max,
-                  step: item.limits.step,
-                  value: sizeDraft[item.key],
-                  "aria-label": item.label,
-                  onChange: (event) => updateSizeDraft(item.key, event.target.value),
-                  onBlur: () => commitSizeDraft(item.key),
-                  onKeyDown: (event) => {
-                    if (event.key === "Enter") event.currentTarget.blur();
-                  }
-                }
-              )
-            ] })
-          ] }, item.key)) }) }) : null
-        ] })
-      ] })
-    }
-  );
-}
-
-// src/studio/rail/ParamsSection.jsx
-var import_react18 = __toESM(require("react"), 1);
-
 // src/components/Tooltip.jsx
-var import_react17 = __toESM(require("react"), 1);
+var import_react19 = __toESM(require("react"), 1);
 
 // src/logic/tooltip.js
 var GAP = 8;
@@ -6089,19 +6421,19 @@ function tooltipPlacement(input) {
 }
 
 // src/components/Tooltip.jsx
-var import_jsx_runtime15 = require("react/jsx-runtime");
+var import_jsx_runtime17 = require("react/jsx-runtime");
 var POPUP_MAX = 248;
 function Tooltip(props) {
   const { text, tone = "info", side = "top" } = props;
-  const [open, setOpen] = import_react17.default.useState(false);
-  const [pinned, setPinned] = import_react17.default.useState(false);
-  const [pos, setPos] = import_react17.default.useState(null);
-  const triggerRef = import_react17.default.useRef(null);
-  const close = import_react17.default.useCallback(() => {
+  const [open, setOpen] = import_react19.default.useState(false);
+  const [pinned, setPinned] = import_react19.default.useState(false);
+  const [pos, setPos] = import_react19.default.useState(null);
+  const triggerRef = import_react19.default.useRef(null);
+  const close = import_react19.default.useCallback(() => {
     setPinned(false);
     setOpen(false);
   }, []);
-  const measure = import_react17.default.useCallback(() => {
+  const measure = import_react19.default.useCallback(() => {
     const node = triggerRef.current;
     if (!node) return;
     const anchor = node.getBoundingClientRect();
@@ -6114,7 +6446,7 @@ function Tooltip(props) {
     }
     setPos(tooltipPlacement({ anchor, frame, width: POPUP_MAX, preferBelow: side === "bottom" }));
   }, [side]);
-  import_react17.default.useEffect(() => {
+  import_react19.default.useEffect(() => {
     if (!open) return void 0;
     measure();
     const remeasure = () => measure();
@@ -6130,7 +6462,7 @@ function Tooltip(props) {
       document.removeEventListener("keydown", onKey);
     };
   }, [open, measure, close]);
-  import_react17.default.useEffect(() => {
+  import_react19.default.useEffect(() => {
     if (!pinned) return void 0;
     const onDown = (event) => {
       const node = triggerRef.current;
@@ -6142,8 +6474,8 @@ function Tooltip(props) {
   }, [pinned, close]);
   if (!text) return null;
   const popupStyle = pos ? { left: `${pos.left}px`, top: `${pos.top}px`, maxWidth: `${pos.maxWidth}px` } : void 0;
-  return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { className: `ofs-tip ofs-tip--${tone}${open ? " is-open" : ""}`, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("span", { className: `ofs-tip ofs-tip--${tone}${open ? " is-open" : ""}`, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
       "button",
       {
         ref: triggerRef,
@@ -6167,15 +6499,15 @@ function Tooltip(props) {
             setOpen(true);
           }
         },
-        children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { "aria-hidden": "true", children: tone === "warn" ? "!" : "i" })
+        children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { "aria-hidden": "true", children: tone === "warn" ? "!" : "i" })
       }
     ),
-    open && pos ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { role: "tooltip", className: pos.below ? "ofs-tip-pop is-below" : "ofs-tip-pop", style: popupStyle, children: text }) : null
+    open && pos ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { role: "tooltip", className: pos.below ? "ofs-tip-pop is-below" : "ofs-tip-pop", style: popupStyle, children: text }) : null
   ] });
 }
 
 // src/studio/rail/ParamsSection.jsx
-var import_jsx_runtime16 = require("react/jsx-runtime");
+var import_jsx_runtime18 = require("react/jsx-runtime");
 function AdvancedParamsGrid({
   t,
   fields,
@@ -6191,19 +6523,19 @@ function AdvancedParamsGrid({
   const displayedSteps = stepMode === "fixed" && Number.isFinite(Number(activePreset?.steps)) ? Number(activePreset.steps) : Number(fields.steps) || 1;
   const onResetSeed = typeof resetSeed === "function" ? resetSeed : () => patchForm({ seed: "" });
   const onCfgChange = typeof applyCfg === "function" ? applyCfg : (value) => patchForm({ cfg: Number(value) });
-  return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-grid2", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-field ofs-field--wide", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-step-head", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { className: "ofs-field-label", children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-grid2", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-field ofs-field--wide", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-step-head", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "ofs-field-label", children: [
           t("studio.steps"),
-          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Tooltip, { text: t(stepMode === "fixed" ? "studio.stepsFixedTooltip" : "studio.stepsTooltip") })
+          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Tooltip, { text: t(stepMode === "fixed" ? "studio.stepsFixedTooltip" : "studio.stepsTooltip") })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: stepMode === "fixed" ? "ofs-step-readout is-fixed" : "ofs-step-readout", children: formatText(t("studio.stepsReadout"), {
+        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: stepMode === "fixed" ? "ofs-step-readout is-fixed" : "ofs-step-readout", children: formatText(t("studio.stepsReadout"), {
           steps: displayedSteps,
           tier: t(`studio.stepsTier.${stepTier}`)
         }) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
         "input",
         {
           type: "range",
@@ -6217,7 +6549,7 @@ function AdvancedParamsGrid({
           onChange: (event) => patchForm({ steps: Number(event.target.value) })
         }
       ),
-      stepRange ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "ofs-step-ticks", children: ["fast", "balanced", "fine"].map((key) => /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+      stepRange ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "ofs-step-ticks", children: ["fast", "balanced", "fine"].map((key) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
         "button",
         {
           type: "button",
@@ -6228,12 +6560,12 @@ function AdvancedParamsGrid({
         key
       )) }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-field ofs-field--wide", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { className: "ofs-field-label", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-field ofs-field--wide", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "ofs-field-label", children: [
         t("studio.cfg"),
-        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Tooltip, { text: t("studio.cfgTooltip") })
+        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Tooltip, { text: t("studio.cfgTooltip") })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
         "input",
         {
           type: "number",
@@ -6246,10 +6578,10 @@ function AdvancedParamsGrid({
         }
       )
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-field ofs-field--wide", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { children: t("studio.seed") }),
-      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-seed-row", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-field ofs-field--wide", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: t("studio.seed") }),
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-seed-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
           "input",
           {
             type: "text",
@@ -6260,7 +6592,7 @@ function AdvancedParamsGrid({
             onChange: (event) => patchForm({ seed: event.target.value })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
           "button",
           {
             type: "button",
@@ -6296,15 +6628,15 @@ function ParamsSection({
     `CFG ${cfgValue}`,
     seedText ? `${t("studio.meta.seed")} ${seedText}` : t("studio.seed")
   ].join(" · ");
-  return /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
     Fieldset,
     {
       title: t("studio.rail.advanced"),
-      action: advancedOpen ? null : /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "ofs-row-readout", children: paramsReadout }),
-      children: /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-rows", children: [
-        showNegative ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: negativeOpen ? "ofs-row is-open" : "ofs-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "ofs-row-head", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
+      action: advancedOpen ? null : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "ofs-row-readout", children: paramsReadout }),
+      children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-rows", children: [
+        showNegative ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: negativeOpen ? "ofs-row is-open" : "ofs-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-row-head", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
               "button",
               {
                 type: "button",
@@ -6312,14 +6644,14 @@ function ParamsSection({
                 onClick: () => setNegativeOpen((open) => !open),
                 "aria-expanded": negativeOpen,
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { children: t("studio.negative") }),
-                  /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: negativeOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Icon, { name: "chevronDown", size: 14 }) })
+                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: t("studio.negative") }),
+                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: negativeOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Icon, { name: "chevronDown", size: 14 }) })
                 ]
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Tooltip, { text: t("studio.negativeTooltip") })
+            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Tooltip, { text: t("studio.negativeTooltip") })
           ] }),
-          negativeOpen ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+          negativeOpen ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
             "textarea",
             {
               className: "ofs-row-textarea",
@@ -6331,8 +6663,8 @@ function ParamsSection({
             }
           ) : null
         ] }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: advancedOpen ? "ofs-row is-open" : "ofs-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "ofs-row-head", children: /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: advancedOpen ? "ofs-row is-open" : "ofs-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "ofs-row-head", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
             "button",
             {
               type: "button",
@@ -6340,12 +6672,12 @@ function ParamsSection({
               onClick: toggleAdvanced,
               "aria-expanded": advancedOpen,
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { children: t("studio.rail.params") }),
-                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: advancedOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(Icon, { name: "chevronDown", size: 14 }) })
+                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: t("studio.rail.params") }),
+                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: advancedOpen ? "ofs-chevron is-open" : "ofs-chevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Icon, { name: "chevronDown", size: 14 }) })
               ]
             }
           ) }),
-          advancedOpen ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+          advancedOpen ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
             AdvancedParamsGrid,
             {
               t,
@@ -6364,8 +6696,8 @@ function ParamsSection({
 }
 
 // src/studio/rail/PromptSection.jsx
-var import_react19 = __toESM(require("react"), 1);
-var import_jsx_runtime17 = require("react/jsx-runtime");
+var import_react21 = __toESM(require("react"), 1);
+var import_jsx_runtime19 = require("react/jsx-runtime");
 var PROMPT_MAX = LIMITS.prompt.maxChars;
 function PromptSection({
   t,
@@ -6382,17 +6714,17 @@ function PromptSection({
   refineSource,
   toggleRefine
 }) {
-  const [refineOpen, setRefineOpen] = import_react19.default.useState(true);
+  const [refineOpen, setRefineOpen] = import_react21.default.useState(true);
   const promptLength = prompt.length;
   const hasPrompt = prompt.trim().length > 0;
-  return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
     Fieldset,
     {
       title: t("studio.prompt"),
-      action: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(Tooltip, { text: t("studio.promptTooltip") }),
+      action: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Tooltip, { text: t("studio.promptTooltip") }),
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-composer", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "ofs-composer", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "textarea",
             {
               className: "ofs-composer-input",
@@ -6406,14 +6738,14 @@ function PromptSection({
               }
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-composer-foot", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("span", { className: "ofs-counter", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "ofs-composer-foot", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "ofs-counter", children: [
               promptLength,
               " / ",
               PROMPT_MAX
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("span", { className: "ofs-composer-actions", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "ofs-composer-actions", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "button",
                 {
                   type: "button",
@@ -6424,17 +6756,17 @@ function PromptSection({
                   children: translating ? t("studio.translate.thinking") : t("studio.translate.button")
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("button", { type: "button", className: "ofs-text-action", onClick: enhance, disabled: enhancing || translating, children: [
-                /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(Icon, { name: "expandText", size: 13 }),
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("button", { type: "button", className: "ofs-text-action", onClick: enhance, disabled: enhancing || translating, children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Icon, { name: "expandText", size: 13 }),
                 enhancing ? t("studio.enhance.thinking") : t("studio.enhance.button")
               ] })
             ] })
           ] })
         ] }),
-        englishPromptHint ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("p", { className: "ofs-hint ofs-prompt-lang-hint", children: t("studio.prompt.englishHint") }) : null,
-        hasPrompt ? null : /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-inspire", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "ofs-inspire-label", children: t("studio.inspire.title") }),
-          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "ofs-suggestions", children: INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+        englishPromptHint ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "ofs-hint ofs-prompt-lang-hint", children: t("studio.prompt.englishHint") }) : null,
+        hasPrompt ? null : /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "ofs-inspire", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "ofs-inspire-label", children: t("studio.inspire.title") }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "ofs-suggestions", children: INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "button",
             {
               type: "button",
@@ -6446,12 +6778,12 @@ function PromptSection({
             key
           )) })
         ] }),
-        refineGroups.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-refine", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-refine-head", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { children: t("studio.refine.title") }),
-            /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("span", { className: "ofs-refine-head-actions", children: [
-              refineSource === "local" ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "ofs-muted", children: t("studio.enhance.local") }) : null,
-              /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+        refineGroups.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "ofs-refine", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "ofs-refine-head", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: t("studio.refine.title") }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "ofs-refine-head-actions", children: [
+              refineSource === "local" ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "ofs-muted", children: t("studio.enhance.local") }) : null,
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "button",
                 {
                   type: "button",
@@ -6463,9 +6795,9 @@ function PromptSection({
               )
             ] })
           ] }),
-          refineOpen ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(import_jsx_runtime17.Fragment, { children: refineGroups.map((group) => /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "ofs-refine-group", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "ofs-refine-dim", children: t(`studio.refine.${group.dimension}`) }),
-            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "ofs-suggestions", children: group.options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+          refineOpen ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(import_jsx_runtime19.Fragment, { children: refineGroups.map((group) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "ofs-refine-group", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "ofs-refine-dim", children: t(`studio.refine.${group.dimension}`) }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "ofs-suggestions", children: group.options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "button",
               {
                 type: "button",
@@ -6484,135 +6816,8 @@ function PromptSection({
   );
 }
 
-// src/studio/rail/ReferenceSection.jsx
-var import_react20 = __toESM(require("react"), 1);
-var import_jsx_runtime18 = require("react/jsx-runtime");
-var MASK_HIT_STYLE = { minHeight: 44, minWidth: 44 };
-function percentOf(coverage) {
-  const value = Number(coverage);
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  const percent = Math.min(100, value * 100);
-  return percent >= 10 ? Math.round(percent) : Math.round(percent * 10) / 10;
-}
-function ReferenceSection({
-  t,
-  referenceImage,
-  referenceSupported,
-  strength,
-  strengthMax,
-  mask,
-  inpaintOnly,
-  inpaintSupported,
-  referenceBlocked,
-  applyStrength,
-  removeReference,
-  onBeginPaint,
-  onClearMask,
-  onPickFromGallery
-}) {
-  const supported = referenceSupported === true;
-  const hasReference = Boolean(referenceImage);
-  const pickFromGallery = typeof onPickFromGallery === "function" ? onPickFromGallery : () => {
-  };
-  if (!hasReference) {
-    if (!supported) return null;
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Fieldset, { title: t("studio.reference.title"), children: inpaintOnly ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-reference-empty", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "ofs-reference-empty-title", children: t("studio.reference.emptyTitle") }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "ofs-reference-empty-hint", children: t("studio.reference.emptyHint") }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("button", { type: "button", className: "ofs-reference-pick", style: MASK_HIT_STYLE, onClick: pickFromGallery, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Icon, { name: "images", size: 15 }),
-        t("studio.reference.emptyAction")
-      ] })
-    ] }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-reference-entry", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "ofs-hint ofs-reference-entry-hint", children: t("studio.reference.emptySimple") }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("button", { type: "button", className: "ofs-reference-pick", style: MASK_HIT_STYLE, onClick: pickFromGallery, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Icon, { name: "images", size: 15 }),
-        t("studio.reference.emptyAction")
-      ] })
-    ] }) });
-  }
-  const referenceName = referenceFileName(referenceImage.path);
-  const strengthValue = Number.isFinite(Number(strength)) ? Number(strength) : LIMITS.strength.default;
-  const strengthLimit = Number.isFinite(Number(strengthMax)) ? Number(strengthMax) : LIMITS.strength.max;
-  const onRemoveReference = typeof removeReference === "function" ? removeReference : () => {
-  };
-  const onStrengthChange = typeof applyStrength === "function" ? applyStrength : () => {
-  };
-  const onBeginPaintAction = typeof onBeginPaint === "function" ? onBeginPaint : () => {
-  };
-  const onClearMaskAction = typeof onClearMask === "function" ? onClearMask : () => {
-  };
-  const showMask = inpaintSupported === true;
-  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
-    Fieldset,
-    {
-      title: t("studio.reference.title"),
-      action: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("button", { type: "button", className: "ofs-text-action ofs-reference-remove", onClick: onRemoveReference, children: t("studio.reference.remove") }),
-      children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: referenceBlocked ? "ofs-reference is-unsupported" : "ofs-reference", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "ofs-reference-thumb", children: referenceImage.url ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("img", { src: referenceImage.url, alt: referenceName || t("studio.reference.title"), loading: "lazy" }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Icon, { name: "image", size: 18 }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-reference-meta", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "ofs-reference-name", title: referenceName || void 0, children: referenceName || "—" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("label", { className: "ofs-reference-strength", title: t("studio.reference.hint"), children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "ofs-reference-strength-head", children: [
-                t("studio.reference.strength"),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("b", { children: strengthValue.toFixed(2) })
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
-                "input",
-                {
-                  type: "range",
-                  className: "ofs-reference-range",
-                  min: LIMITS.strength.min,
-                  max: strengthLimit,
-                  step: LIMITS.strength.step,
-                  value: strengthValue,
-                  disabled: Boolean(referenceBlocked),
-                  "aria-label": t("studio.reference.strength"),
-                  onChange: (event) => onStrengthChange(event.target.value)
-                }
-              )
-            ] })
-          ] })
-        ] }),
-        showMask ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-reference-mask", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: mask ? "ofs-hint ofs-reference-mask-readout" : "ofs-muted ofs-reference-mask-readout", children: mask ? formatText(t("studio.reference.maskCoverage"), { percent: percentOf(mask.coverage) }) : t("studio.reference.maskEmpty") }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "ofs-reference-mask-actions", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
-              "button",
-              {
-                type: "button",
-                className: "ofs-reference-action ofs-reference-paint",
-                style: MASK_HIT_STYLE,
-                onClick: onBeginPaintAction,
-                children: t("studio.reference.continuePaint")
-              }
-            ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
-              "button",
-              {
-                type: "button",
-                className: "ofs-reference-action ofs-reference-clear",
-                style: MASK_HIT_STYLE,
-                onClick: onClearMaskAction,
-                disabled: !mask,
-                children: t("studio.reference.clearMask")
-              }
-            )
-          ] })
-        ] }) : null,
-        referenceBlocked ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "ofs-hint ofs-reference-warn", children: t("studio.reference.unsupported") }) : null
-      ]
-    }
-  );
-}
-
 // src/studio/Rail.jsx
-var import_jsx_runtime19 = require("react/jsx-runtime");
-function finiteSize(value) {
-  const number = Number(value);
-  return Number.isFinite(number) && number > 0 ? Math.round(number) : null;
-}
+var import_jsx_runtime20 = require("react/jsx-runtime");
 function Rail(props) {
   const { t, ui, form, actions } = props;
   const {
@@ -6645,23 +6850,9 @@ function Rail(props) {
     toggleRefine,
     useInspiration,
     englishPromptHint,
-    reference,
-    strength,
-    // 参考图能力与蒙版状态：空槽位 / 强度上限 / 覆盖率读数都按这几项门控。
-    referenceSupported,
-    strengthMax,
-    mask,
-    inpaintOnly,
-    inpaintSupported,
-    referenceBlocked,
-    applyStrength,
-    removeReference,
-    clearMask,
     // 微调来源（从胶卷 / 画廊回填而来）与「新建创作」重置入口。
     tuning,
-    newCreation,
-    // 专用局部重绘模型：缺蒙版时常驻一条「需要先涂抹」的说明。
-    maskRequiredBlocked
+    newCreation
   } = form;
   const { sending, generate } = actions;
   const hasPrompt = fields.prompt.trim().length > 0;
@@ -6676,32 +6867,20 @@ function Rail(props) {
   };
   const showNegative = negativeActive === true;
   const negativePlaceholder = negativeHint.length > 60 ? `${negativeHint.slice(0, 60)}…` : negativeHint || t("studio.negativePlaceholder");
-  const referenceImage = reference && typeof reference === "object" ? reference : null;
-  const referenceWidth = referenceImage ? finiteSize(referenceImage.width) : null;
-  const referenceHeight = referenceImage ? finiteSize(referenceImage.height) : null;
-  const referenceSize = referenceWidth && referenceHeight ? `${referenceWidth} × ${referenceHeight}` : "";
-  const requestPaint = ui && typeof ui.requestPaint === "function" ? ui.requestPaint : null;
-  const beginPaint = requestPaint ? () => requestPaint() : null;
-  const clearMaskAction = typeof clearMask === "function" ? clearMask : null;
-  const removeMask = clearMaskAction ? () => clearMaskAction() : null;
-  const setView = ui && typeof ui.setView === "function" ? ui.setView : null;
-  const pickFromGallery = setView ? () => setView("gallery") : null;
   const countValue = Number.isFinite(Number(fields.count)) ? Math.round(Number(fields.count)) : 1;
   const specParts = [
     frameSizeText,
     ratioId || t("studio.rail.custom"),
     `${countValue} ${t("unit.image")}`
   ];
-  if (referenceImage) specParts.push(t("studio.reference.title"));
-  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("aside", { className: "ofs-panel ofs-panel--form", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(PanelModeTabs, { t, mode, setMode }),
-    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: tuning ? "ofs-tuning" : "ofs-tuning is-idle", children: [
-      tuning ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "ofs-tuning-source", title: tuningPrompt || void 0, children: tuningText }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("button", { type: "button", className: "ofs-chip ofs-tuning-new", onClick: startNewCreation, children: t("studio.rail.newCreation") })
+  return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("aside", { className: "ofs-panel ofs-panel--form", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(PanelModeTabs, { t, mode, setMode }),
+    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: tuning ? "ofs-tuning" : "ofs-tuning is-idle", children: [
+      tuning ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("p", { className: "ofs-tuning-source", title: tuningPrompt || void 0, children: tuningText }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("button", { type: "button", className: "ofs-chip ofs-tuning-new", onClick: startNewCreation, children: t("studio.rail.newCreation") })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "ofs-panel-scroll", children: [
-      maskRequiredBlocked ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "ofs-hint ofs-rail-note", children: t("studio.mask.onlyHint") }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "ofs-panel-scroll", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
         PromptSection,
         {
           t,
@@ -6719,26 +6898,7 @@ function Rail(props) {
           toggleRefine
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-        ReferenceSection,
-        {
-          t,
-          referenceImage,
-          referenceSupported,
-          strength,
-          strengthMax,
-          mask,
-          inpaintOnly,
-          inpaintSupported,
-          referenceBlocked,
-          applyStrength,
-          removeReference,
-          onBeginPaint: beginPaint,
-          onClearMask: removeMask,
-          onPickFromGallery: pickFromGallery
-        }
-      ),
-      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
         FrameSection,
         {
           t,
@@ -6747,12 +6907,10 @@ function Rail(props) {
           frameSizeText,
           ratioId,
           applyRatio,
-          applyCustomSize,
-          hasReference: Boolean(referenceImage),
-          referenceSize
+          applyCustomSize
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
         ParamsSection,
         {
           t,
@@ -6768,12 +6926,13 @@ function Rail(props) {
           advancedOpen,
           toggleAdvanced
         }
-      )
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("p", { className: "ofs-hint ofs-rail-note ofs-rail-tools-hint", children: t("studio.rail.imageToolsHint") })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "ofs-panel-foot", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "ofs-qty-row", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "ofs-qty-label", children: t("studio.countShort") }),
-        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "ofs-qty", role: "group", "aria-label": t("studio.count"), children: COUNT_OPTIONS.map((value) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "ofs-panel-foot", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "ofs-qty-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "ofs-qty-label", children: t("studio.countShort") }),
+        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { className: "ofs-qty", role: "group", "aria-label": t("studio.count"), children: COUNT_OPTIONS.map((value) => /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
           "button",
           {
             type: "button",
@@ -6785,7 +6944,7 @@ function Rail(props) {
           value
         )) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
         "button",
         {
           type: "button",
@@ -6793,22 +6952,21 @@ function Rail(props) {
           onClick: () => generate(),
           disabled: sending || !hasPrompt,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Icon, { name: "sparkles", size: 16 }),
+            /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(Icon, { name: "sparkles", size: 16 }),
             sending ? t("studio.generating") : t("studio.generate")
           ]
         }
       ),
-      referenceImage ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "ofs-hint ofs-reference-based", children: formatText(t("studio.reference.basedOn"), { name: referenceFileName(referenceImage.path) }) }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "ofs-hint ofs-spec-summary", children: specParts.join(" · ") })
+      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("p", { className: "ofs-hint ofs-spec-summary", children: specParts.join(" · ") })
     ] })
   ] });
 }
 
 // src/studio/SettingsDrawer.jsx
-var import_react24 = __toESM(require("react"), 1);
+var import_react25 = __toESM(require("react"), 1);
 
 // src/studio/settings/SettingsForm.jsx
-var import_react23 = __toESM(require("react"), 1);
+var import_react24 = __toESM(require("react"), 1);
 
 // src/logic/settings.js
 var IDLE = SETTINGS.idleTimeoutSec;
@@ -6990,8 +7148,8 @@ function hfTokenSourceKey(source) {
 }
 
 // src/studio/settings/SettingsAdvancedSection.jsx
-var import_react22 = __toESM(require("react"), 1);
-var import_jsx_runtime20 = require("react/jsx-runtime");
+var import_react23 = __toESM(require("react"), 1);
+var import_jsx_runtime21 = require("react/jsx-runtime");
 function SettingsAdvancedSection({
   t,
   form,
@@ -7000,8 +7158,8 @@ function SettingsAdvancedSection({
   onToggleAdvanced,
   validationErrors
 }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("section", { className: "ofs-settings-section", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("section", { className: "ofs-settings-section", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
       "button",
       {
         type: "button",
@@ -7009,26 +7167,26 @@ function SettingsAdvancedSection({
         "aria-expanded": advancedOpen,
         onClick: onToggleAdvanced,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { children: t("studio.settings.advanced.toggle") }),
-          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: `ofs-chevron${advancedOpen ? " is-open" : ""}`, children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(Icon, { name: "chevronDown", size: 13 }) })
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: t("studio.settings.advanced.toggle") }),
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: `ofs-chevron${advancedOpen ? " is-open" : ""}`, children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Icon, { name: "chevronDown", size: 13 }) })
         ]
       }
     ),
-    advancedOpen ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "ofs-settings-advanced", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "ofs-settings-row", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.kaggleTransport.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+    advancedOpen ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ofs-settings-advanced", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ofs-settings-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.kaggleTransport.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
           "div",
           {
             className: "ofs-settings-options",
             role: "radiogroup",
             "aria-label": t("studio.settings.kaggleTransport.label"),
-            children: SETTINGS.kaggleTransports.map((transport) => /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+            children: SETTINGS.kaggleTransports.map((transport) => /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
               "label",
               {
                 className: `ofs-settings-option${form.kaggleTransport === transport ? " is-on" : ""}`,
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
                     "input",
                     {
                       type: "radio",
@@ -7038,20 +7196,20 @@ function SettingsAdvancedSection({
                       onChange: () => patchForm({ kaggleTransport: transport })
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { children: t(kaggleTransportLabelKey(transport)) })
+                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: t(kaggleTransportLabelKey(transport)) })
                 ]
               },
               transport
             ))
           }
         ),
-        form.kaggleTransport === "direct" ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("small", { className: "ofs-settings-hint", children: formatText(t("studio.settings.kaggleTransport.directHint"), {
+        form.kaggleTransport === "direct" ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("small", { className: "ofs-settings-hint", children: formatText(t("studio.settings.kaggleTransport.directHint"), {
           path: KAGGLE_CREDENTIAL_PATH
         }) }) : null
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("label", { className: "ofs-settings-field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.dataset.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("label", { className: "ofs-settings-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.dataset.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
           "textarea",
           {
             className: "ofs-settings-textarea",
@@ -7061,11 +7219,11 @@ function SettingsAdvancedSection({
             onChange: (event) => patchForm({ datasetSourcesText: event.target.value })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("small", { className: "ofs-settings-hint", children: formatText(t("studio.settings.dataset.hint"), { max: SETTINGS.maxItems }) })
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("small", { className: "ofs-settings-hint", children: formatText(t("studio.settings.dataset.hint"), { max: SETTINGS.maxItems }) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("label", { className: "ofs-settings-field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.localModels.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("label", { className: "ofs-settings-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.localModels.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
           "textarea",
           {
             className: "ofs-settings-textarea",
@@ -7075,12 +7233,12 @@ function SettingsAdvancedSection({
             onChange: (event) => patchForm({ localModelsText: event.target.value })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("small", { className: "ofs-settings-hint", children: t("studio.settings.localModels.hint") })
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("small", { className: "ofs-settings-hint", children: t("studio.settings.localModels.hint") })
       ] }),
-      validationErrors.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("ul", { className: "ofs-settings-errors", children: validationErrors.map((error) => /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("li", { className: "ofs-settings-error-item", children: formatText(t(error.message), { line: error.line, ...error.params || {} }) }, `${error.line}-${error.message}`)) }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("label", { className: "ofs-settings-field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.pip.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+      validationErrors.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("ul", { className: "ofs-settings-errors", children: validationErrors.map((error) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("li", { className: "ofs-settings-error-item", children: formatText(t(error.message), { line: error.line, ...error.params || {} }) }, `${error.line}-${error.message}`)) }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("label", { className: "ofs-settings-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.pip.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
           "textarea",
           {
             className: "ofs-settings-textarea",
@@ -7090,14 +7248,14 @@ function SettingsAdvancedSection({
             onChange: (event) => patchForm({ pipConstraintsText: event.target.value })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("small", { className: "ofs-settings-hint", children: t("studio.settings.pip.hint") })
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("small", { className: "ofs-settings-hint", children: t("studio.settings.pip.hint") })
       ] })
     ] }) : null
   ] });
 }
 
 // src/studio/settings/SettingsForm.jsx
-var import_jsx_runtime21 = require("react/jsx-runtime");
+var import_jsx_runtime22 = require("react/jsx-runtime");
 function SettingsForm({
   t,
   view,
@@ -7114,13 +7272,13 @@ function SettingsForm({
   onSubmit
 }) {
   const activeQuick = quickIdleMinutes(form.idleMinutes);
-  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ofs-settings-form", children: [
-    view && view.effectiveOnNextSession === true ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { className: "ofs-settings-effective", role: "status", children: t("studio.settings.effectiveNext") }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("section", { className: "ofs-settings-section", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("h3", { className: "ofs-settings-section-title", children: t("studio.settings.section.runtime") }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ofs-settings-row", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.idle.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "ofs-settings-quick", role: "group", "aria-label": t("studio.settings.idle.label"), children: SETTINGS.idleTimeoutSec.quickMinutes.map((minutes) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-form", children: [
+    view && view.effectiveOnNextSession === true ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "ofs-settings-effective", role: "status", children: t("studio.settings.effectiveNext") }) : null,
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("section", { className: "ofs-settings-section", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("h3", { className: "ofs-settings-section-title", children: t("studio.settings.section.runtime") }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.idle.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { className: "ofs-settings-quick", role: "group", "aria-label": t("studio.settings.idle.label"), children: SETTINGS.idleTimeoutSec.quickMinutes.map((minutes) => /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           "button",
           {
             type: "button",
@@ -7132,9 +7290,9 @@ function SettingsForm({
           minutes
         )) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("label", { className: "ofs-settings-field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: formatText(t("studio.settings.idle.custom"), { min: IDLE_MIN_MINUTES, max: IDLE_MAX_MINUTES }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("label", { className: "ofs-settings-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: formatText(t("studio.settings.idle.custom"), { min: IDLE_MIN_MINUTES, max: IDLE_MAX_MINUTES }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           "input",
           {
             className: "ofs-settings-input",
@@ -7148,14 +7306,14 @@ function SettingsForm({
           }
         )
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ofs-settings-row", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.accelerator.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "ofs-settings-options", role: "radiogroup", "aria-label": t("studio.settings.accelerator.label"), children: SETTINGS.accelerators.map((id) => /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.accelerator.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { className: "ofs-settings-options", role: "radiogroup", "aria-label": t("studio.settings.accelerator.label"), children: SETTINGS.accelerators.map((id) => /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
           "label",
           {
             className: `ofs-settings-option${form.accelerator === id ? " is-on" : ""}`,
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                 "input",
                 {
                   type: "radio",
@@ -7165,18 +7323,18 @@ function SettingsForm({
                   onChange: () => patchForm({ accelerator: id })
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: t(`studio.settings.accelerator.${id}`) })
+              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { children: t(`studio.settings.accelerator.${id}`) })
             ]
           },
           id
         )) })
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("section", { className: "ofs-settings-section", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("h3", { className: "ofs-settings-section-title", children: t("studio.settings.section.download") }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("label", { className: "ofs-settings-field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.hfToken.label") }),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("section", { className: "ofs-settings-section", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("h3", { className: "ofs-settings-section-title", children: t("studio.settings.section.download") }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("label", { className: "ofs-settings-field", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.hfToken.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           "input",
           {
             className: "ofs-settings-input",
@@ -7188,9 +7346,9 @@ function SettingsForm({
           }
         )
       ] }),
-      view && view.hasHfToken === true ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ofs-settings-inline", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-muted", children: formatText(t("studio.settings.hfToken.source"), { source: tokenSource }) }),
-        form.clearHfToken ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-settings-muted", children: t("studio.settings.hfToken.clearPending") }) : /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+      view && view.hasHfToken === true ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-inline", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-muted", children: formatText(t("studio.settings.hfToken.source"), { source: tokenSource }) }),
+        form.clearHfToken ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-muted", children: t("studio.settings.hfToken.clearPending") }) : /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           "button",
           {
             type: "button",
@@ -7201,7 +7359,7 @@ function SettingsForm({
         )
       ] }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
       SettingsAdvancedSection,
       {
         t,
@@ -7212,12 +7370,12 @@ function SettingsForm({
         validationErrors: validation.errors
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("footer", { className: "ofs-settings-foot", children: [
-      !validation.ok ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { className: "ofs-settings-error", role: "alert", children: formatText(t("studio.settings.invalid"), { count: validation.errors.length }) }) : null,
-      saveError ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { className: "ofs-settings-error", role: "alert", children: settingsErrorText(t, saveError) }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ofs-grow" }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", className: "ofs-chip", onClick: onCancel, children: t("studio.settings.cancel") }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("footer", { className: "ofs-settings-foot", children: [
+      !validation.ok ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "ofs-settings-error", role: "alert", children: formatText(t("studio.settings.invalid"), { count: validation.errors.length }) }) : null,
+      saveError ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "ofs-settings-error", role: "alert", children: settingsErrorText(t, saveError) }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-grow" }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", className: "ofs-chip", onClick: onCancel, children: t("studio.settings.cancel") }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
         "button",
         {
           type: "button",
@@ -7233,23 +7391,23 @@ function SettingsForm({
 }
 
 // src/studio/SettingsDrawer.jsx
-var import_jsx_runtime22 = require("react/jsx-runtime");
+var import_jsx_runtime23 = require("react/jsx-runtime");
 function SettingsDrawer(props) {
   const { t, ui, onClose } = props;
   const { defaultAdvancedOpen, defaultDraft } = props;
-  const panelRef = import_react24.default.useRef(null);
-  const closeRef = import_react24.default.useRef(null);
-  const onCloseRef = import_react24.default.useRef(onClose);
+  const panelRef = import_react25.default.useRef(null);
+  const closeRef = import_react25.default.useRef(null);
+  const onCloseRef = import_react25.default.useRef(onClose);
   onCloseRef.current = onClose;
-  const [status, setStatus] = import_react24.default.useState("loading");
-  const [view, setView] = import_react24.default.useState(null);
-  const [form, setForm] = import_react24.default.useState(null);
-  const [loadError, setLoadError] = import_react24.default.useState(null);
-  const [saveError, setSaveError] = import_react24.default.useState(null);
-  const [saving, setSaving] = import_react24.default.useState(false);
-  const [advancedOpen, setAdvancedOpen] = import_react24.default.useState(Boolean(defaultAdvancedOpen));
-  const [reloadKey, setReloadKey] = import_react24.default.useState(0);
-  import_react24.default.useEffect(() => {
+  const [status, setStatus] = import_react25.default.useState("loading");
+  const [view, setView] = import_react25.default.useState(null);
+  const [form, setForm] = import_react25.default.useState(null);
+  const [loadError, setLoadError] = import_react25.default.useState(null);
+  const [saveError, setSaveError] = import_react25.default.useState(null);
+  const [saving, setSaving] = import_react25.default.useState(false);
+  const [advancedOpen, setAdvancedOpen] = import_react25.default.useState(Boolean(defaultAdvancedOpen));
+  const [reloadKey, setReloadKey] = import_react25.default.useState(0);
+  import_react25.default.useEffect(() => {
     let alive = true;
     setStatus("loading");
     setLoadError(null);
@@ -7295,15 +7453,15 @@ function SettingsDrawer(props) {
     setSaveError({ code: result && result.code || "internal_error", message: result && result.message || "" });
   }
   function renderLoadError() {
-    return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-error-state", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("p", { className: "ofs-settings-error", role: "alert", children: [
+    return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-settings-error-state", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("p", { className: "ofs-settings-error", role: "alert", children: [
         t("studio.settings.loadFailed"),
         loadError && (loadError.code || loadError.message) ? ` · ${settingsErrorText(t, loadError)}` : ""
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", className: "ofs-chip", onClick: () => setReloadKey((value) => value + 1), children: t("studio.settings.retry") })
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-chip", onClick: () => setReloadKey((value) => value + 1), children: t("studio.settings.retry") })
     ] });
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { className: "ofs-settings", role: "presentation", onClick: () => onCloseRef.current && onCloseRef.current(), children: /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "ofs-settings", role: "presentation", onClick: () => onCloseRef.current && onCloseRef.current(), children: /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
     "div",
     {
       className: "ofs-settings-panel",
@@ -7313,10 +7471,10 @@ function SettingsDrawer(props) {
       ref: panelRef,
       onClick: (event) => event.stopPropagation(),
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("header", { className: "ofs-settings-head", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-title", children: t("studio.settings.title") }),
-          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-grow" }),
-          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("header", { className: "ofs-settings-head", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-settings-title", children: t("studio.settings.title") }),
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-grow" }),
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
             "button",
             {
               ref: closeRef,
@@ -7325,14 +7483,14 @@ function SettingsDrawer(props) {
               onClick: () => onCloseRef.current && onCloseRef.current(),
               title: t("studio.settings.close"),
               "aria-label": t("studio.settings.close"),
-              children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Icon, { name: "close", size: 16 })
+              children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "close", size: 16 })
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-body", children: [
-          status === "loading" ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "ofs-settings-note", children: t("studio.settings.loading") }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-settings-body", children: [
+          status === "loading" ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-settings-note", children: t("studio.settings.loading") }) : null,
           status === "error" ? renderLoadError() : null,
-          status === "ready" && form ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+          status === "ready" && form ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
             SettingsForm,
             {
               t,
@@ -7357,76 +7515,1008 @@ function SettingsDrawer(props) {
 }
 
 // src/studio/Stage.jsx
-var import_react25 = __toESM(require("react"), 1);
-var import_jsx_runtime23 = require("react/jsx-runtime");
-var FRESH_MS = 6e4;
-var MASK_HIT_STYLE2 = { minHeight: 44, minWidth: 44 };
-function isFreshItem(item, now) {
-  const finishedAt = Date.parse(String(item && item.finishedAt || ""));
-  if (!Number.isFinite(finishedAt)) return false;
-  const current = Number.isFinite(now) ? now : Date.now();
-  const delta = current - finishedAt;
-  return delta > -5e3 && delta < FRESH_MS;
+var import_react30 = __toESM(require("react"), 1);
+
+// src/logic/mask.js
+var MASK_BRUSH = Object.freeze({ min: 8, max: 96, step: 4, default: 40 });
+var MASK_MIN_COVERAGE = 5e-4;
+var MASK_DATA_URL_PREFIX = "data:image/png;base64,";
+var MASK_KEY_STEP = 32;
+var MASK_STRENGTH_DEFAULT = 0.8;
+var MASK_STRENGTH_NATIVE = 0.9;
+function strengthMaxOf(hasMask) {
+  const max = Number(LIMITS.strength.max);
+  if (!hasMask) return max;
+  const inpaintMax = Number(LIMITS.strength.inpaintMax);
+  if (!Number.isFinite(inpaintMax)) return max;
+  return Math.max(max, inpaintMax);
 }
+function clampMaskStrength(value, hasMask) {
+  const { min, step, default: fallback } = LIMITS.strength;
+  const max = strengthMaxOf(hasMask);
+  if (value === null || value === void 0 || value === "" || typeof value === "boolean") return fallback;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  const clamped = Math.min(max, Math.max(min, number));
+  const aligned = min + Math.round((clamped - min) / step) * step;
+  return Math.round(aligned * 1e3) / 1e3;
+}
+var MASK_CANVAS_EDGE = 1024;
+function clampBrushSize(value) {
+  if (value === null || value === void 0) return MASK_BRUSH.default;
+  if (typeof value === "string" && value.trim() === "") return MASK_BRUSH.default;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return MASK_BRUSH.default;
+  const clamped = Math.min(MASK_BRUSH.max, Math.max(MASK_BRUSH.min, number));
+  const aligned = MASK_BRUSH.min + Math.round((clamped - MASK_BRUSH.min) / MASK_BRUSH.step) * MASK_BRUSH.step;
+  return Math.min(MASK_BRUSH.max, Math.max(MASK_BRUSH.min, aligned));
+}
+function brushStateOf(partial) {
+  const input = partial && typeof partial === "object" ? partial : {};
+  return { size: clampBrushSize(input.size), eraser: input.eraser === true };
+}
+function toggleEraser(state) {
+  const current = brushStateOf(state);
+  return { size: current.size, eraser: !current.eraser };
+}
+function coverageOf(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return 0;
+  if (number >= 1) return 1;
+  return Number(number.toFixed(6));
+}
+function maskStateOf(partial) {
+  const input = partial && typeof partial === "object" ? partial : {};
+  return { coverage: coverageOf(input.coverage) };
+}
+function emptyMaskState() {
+  return { coverage: 0 };
+}
+function maskHasInk(state) {
+  return maskStateOf(state).coverage >= MASK_MIN_COVERAGE;
+}
+function maskCoverageOf(inkPixels, totalPixels) {
+  const ink = Number(inkPixels);
+  const total = Number(totalPixels);
+  if (!Number.isFinite(ink) || !Number.isFinite(total) || total <= 0 || ink <= 0) return 0;
+  return coverageOf(ink / total);
+}
+function maskCanvasSizeOf(width, height, edge = MASK_CANVAS_EDGE) {
+  const limit = Number.isFinite(Number(edge)) && Number(edge) >= 64 ? Math.round(Number(edge)) : MASK_CANVAS_EDGE;
+  const w = Number(width);
+  const h2 = Number(height);
+  if (!Number.isFinite(w) || !Number.isFinite(h2) || w <= 0 || h2 <= 0) {
+    return { width: limit, height: limit };
+  }
+  const scale = limit / Math.max(w, h2);
+  return {
+    width: Math.max(48, Math.round(w * scale)),
+    height: Math.max(48, Math.round(h2 * scale))
+  };
+}
+function base64BytesOf(text) {
+  const value = typeof text === "string" ? text.trim() : "";
+  if (!value) return 0;
+  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor(value.length * 3 / 4) - padding);
+}
+function normalizeMaskData(data) {
+  if (typeof data !== "string") return "";
+  let text = data.trim();
+  if (text.toLowerCase().startsWith(MASK_DATA_URL_PREFIX)) text = text.slice(MASK_DATA_URL_PREFIX.length);
+  text = text.replace(/\s+/g, "");
+  if (!text || text.length % 4 !== 0) return "";
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(text)) return "";
+  return text;
+}
+function referenceMaskOf(reference) {
+  const mask = reference && typeof reference === "object" ? reference.mask : null;
+  if (!mask) return null;
+  const raw = typeof mask === "string" ? { data: mask } : mask;
+  const data = normalizeMaskData(raw.data);
+  if (!data) return null;
+  return {
+    data,
+    coverage: maskStateOf({ coverage: raw.coverage }).coverage,
+    digest: maskDigestOf(data)
+  };
+}
+function referenceMaskDataOf(reference) {
+  const mask = referenceMaskOf(reference);
+  return mask ? mask.data : "";
+}
+function referenceMaskForSubmit(reference) {
+  const data = referenceMaskDataOf(reference);
+  if (!data) return "";
+  const bytes = base64BytesOf(data);
+  if (bytes <= 0 || bytes > LIMITS.mask.maxBytes) return "";
+  return data;
+}
+function maskExportVerdict(data, coverage) {
+  const normalized = normalizeMaskData(data);
+  if (!normalized) return { ok: false, reason: "invalid" };
+  const state = maskStateOf({ coverage });
+  if (!maskHasInk(state)) return { ok: false, reason: "empty" };
+  const bytes = base64BytesOf(normalized);
+  if (bytes <= 0) return { ok: false, reason: "invalid" };
+  if (bytes > LIMITS.mask.maxBytes) return { ok: false, reason: "too_large" };
+  return { ok: true, data: normalized, coverage: state.coverage, bytes };
+}
+function maskDigestOf(data) {
+  const normalized = normalizeMaskData(data);
+  if (!normalized) return "";
+  let hash = 2166136261;
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash ^= normalized.charCodeAt(index);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return `${hash.toString(16)}-${normalized.length}`;
+}
+
+// src/logic/prompt.js
+var NEGATIVE_LAYER_ORDER = ["model", "user"];
+function emptyNegativeLayers() {
+  return { model: "", user: "" };
+}
+function layerText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+function normalizeNegativeLayers(layers) {
+  const source = layers && typeof layers === "object" ? layers : {};
+  const next = emptyNegativeLayers();
+  for (const name of NEGATIVE_LAYER_ORDER) next[name] = layerText(source[name]);
+  return next;
+}
+function splitNegativeTerms(text) {
+  return String(text ?? "").split(/[,，、;；]/).map((term) => term.trim()).filter(Boolean);
+}
+function mergeNegativeLayers(layers) {
+  const source = normalizeNegativeLayers(layers);
+  const seen = /* @__PURE__ */ new Set();
+  const terms = [];
+  for (const name of NEGATIVE_LAYER_ORDER) {
+    for (const term of splitNegativeTerms(source[name])) {
+      const key = term.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      terms.push(term);
+    }
+  }
+  return terms.join(", ");
+}
+function resolveNegativeLayers(form, presets) {
+  const input = form && typeof form === "object" ? form : {};
+  if (input.negativeLayers && typeof input.negativeLayers === "object") {
+    return normalizeNegativeLayers(input.negativeLayers);
+  }
+  const negative = layerText(input.negative);
+  if (!negative) return emptyNegativeLayers();
+  const list = Array.isArray(presets) ? presets : [];
+  const previous = list.find((item) => item && item.id === input.presetId);
+  const hint = previous && typeof previous.negativeHint === "string" ? previous.negativeHint.trim() : "";
+  if (hint && negative === hint) return { model: negative, user: "" };
+  return { model: "", user: negative };
+}
+function negativeLayersPatch(layers) {
+  const next = normalizeNegativeLayers(layers);
+  return { negativeLayers: next, negative: mergeNegativeLayers(next) };
+}
+function negativePromptOf(form) {
+  const input = form && typeof form === "object" ? form : {};
+  if (input.negativeLayers && typeof input.negativeLayers === "object") {
+    return mergeNegativeLayers(input.negativeLayers);
+  }
+  return layerText(input.negative);
+}
+function negativeForSubmit(form, active) {
+  if (active === false) return "";
+  return negativePromptOf(form);
+}
+function translateOutcomeOf(data) {
+  const holder = data && typeof data === "object" ? data : null;
+  const prompt = holder && typeof holder.prompt === "string" ? holder.prompt.trim() : "";
+  if (!holder || holder.source !== "model" || !prompt) return { ok: false, prompt: "" };
+  return { ok: true, prompt };
+}
+function applyNegativePatch(form, partial) {
+  const prev = form && typeof form === "object" ? form : {};
+  const patch = partial && typeof partial === "object" ? partial : {};
+  if (patch.negativeLayers && typeof patch.negativeLayers === "object") {
+    const layers = normalizeNegativeLayers(patch.negativeLayers);
+    return {
+      ...prev,
+      ...patch,
+      negativeLayers: layers,
+      negative: typeof patch.negative === "string" ? patch.negative : mergeNegativeLayers(layers)
+    };
+  }
+  if (typeof patch.negative === "string") {
+    return {
+      ...prev,
+      ...patch,
+      negativeLayers: { model: "", user: patch.negative }
+    };
+  }
+  return { ...prev, ...patch };
+}
+
+// src/logic/preset.js
+function detectCjk(text) {
+  return /[\u3400-\u9fff]/.test(String(text ?? ""));
+}
+function gcd(left, right) {
+  let a = Math.abs(left);
+  let b = Math.abs(right);
+  while (b) {
+    const next = a % b;
+    a = b;
+    b = next;
+  }
+  return a || 1;
+}
+function ratioIdOf(width, height) {
+  const w = Math.round(Number(width));
+  const h2 = Math.round(Number(height));
+  if (!Number.isFinite(w) || !Number.isFinite(h2) || w <= 0 || h2 <= 0) return "";
+  const divisor = gcd(w, h2);
+  const id = `${w / divisor}:${h2 / divisor}`;
+  return RATIO_IDS.includes(id) ? id : "";
+}
+function presetNeedsEnglish(preset) {
+  if (!preset || typeof preset !== "object") return true;
+  if (preset.supportsChinese === true || preset.promptStyle === "chinese") return false;
+  return true;
+}
+function hintOf(preset) {
+  return preset && typeof preset.negativeHint === "string" ? preset.negativeHint.trim() : "";
+}
+function customSizePatch(partial) {
+  const input = partial && typeof partial === "object" ? partial : {};
+  const patch = {};
+  if (Object.prototype.hasOwnProperty.call(input, "width")) patch.width = clampSize(input.width);
+  if (Object.prototype.hasOwnProperty.call(input, "height")) patch.height = clampSize(input.height);
+  return patch;
+}
+function supportsImg2Img(preset) {
+  return Boolean(preset && preset.supportsImg2Img === true);
+}
+function supportsInpaint(preset) {
+  return Boolean(preset && preset.supportsInpaint === true);
+}
+function inpaintOnlyOf(preset) {
+  return Boolean(preset && preset.inpaintOnly === true);
+}
+function referencePresetOf(presets) {
+  const list = Array.isArray(presets) ? presets.filter((item) => item && item.id && !inpaintOnlyOf(item)) : [];
+  const preferred = list.find((item) => item.id === DEFAULT_PRESET);
+  if (preferred && supportsImg2Img(preferred)) return preferred;
+  return list.find(supportsImg2Img) || null;
+}
+function presetSelectPatch(next, current, presets) {
+  const target = next && typeof next === "object" && next.id ? next : null;
+  if (!target) return {};
+  const form = current && typeof current === "object" ? current : {};
+  const hasActiveSize = Boolean(form.presetId) && Number(form.width) > 0 && Number(form.height) > 0;
+  const patch = {
+    presetId: target.id
+  };
+  if (!hasActiveSize) {
+    patch.width = clampSize(target.size || form.width);
+    patch.height = clampSize(target.size || form.height);
+  } else {
+    const options = Array.isArray(target.sizeOptions) ? target.sizeOptions.map(Number).filter((n) => Number.isFinite(n) && n > 0) : [];
+    const minSafe = options.length > 0 ? Math.min(...options) : 0;
+    const curW = Number(form.width);
+    const curH = Number(form.height);
+    const curLong = Math.max(curW, curH);
+    const targetSize = clampSize(target.size || minSafe);
+    if (minSafe > 0 && curLong > 0 && curLong < minSafe && targetSize > curLong) {
+      const scale = targetSize / curLong;
+      patch.width = clampSize(curW * scale);
+      patch.height = clampSize(curH * scale);
+    }
+  }
+  const steps = clampInt(target.steps, LIMITS.steps.min, LIMITS.steps.max, null);
+  if (steps !== null) patch.steps = steps;
+  const cfg = clampNumber(target.cfg, LIMITS.cfg.min, LIMITS.cfg.max, null);
+  if (cfg !== null) patch.cfg = cfg;
+  const list = Array.isArray(presets) ? presets : [];
+  const layers = resolveNegativeLayers(form, list);
+  const effectiveCfg = cfg !== null ? cfg : form.cfg;
+  const nextLayers = {
+    ...layers,
+    model: negativePromptActive(target, effectiveCfg) ? hintOf(target) : ""
+  };
+  Object.assign(patch, negativeLayersPatch(nextLayers));
+  return patch;
+}
+
+// src/logic/imageTool.js
+var IMAGE_TOOL_FORMS = Object.freeze(["instant", "inline", "canvas"]);
+var IMAGE_TOOL_GROUPS = Object.freeze(["process", "reuse"]);
+var INPAINT_PRESET_ID = "sdxl-inpaint";
+var IMAGE_TOOLS = Object.freeze([
+  Object.freeze({
+    id: "inpaint",
+    form: "canvas",
+    group: "process",
+    icon: "focus",
+    capability: "supportsInpaint",
+    labelKey: "studio.imageTool.inpaint",
+    ready: true
+  }),
+  Object.freeze({
+    id: "img2img",
+    form: "inline",
+    group: "process",
+    icon: "image",
+    capability: "supportsImg2Img",
+    labelKey: "studio.imageTool.img2img",
+    ready: true
+  }),
+  Object.freeze({
+    id: "upscale",
+    form: "instant",
+    group: "process",
+    icon: "expand",
+    capability: null,
+    labelKey: "studio.imageTool.upscale",
+    ready: false,
+    plannedKey: "studio.imageTool.planned"
+  }),
+  Object.freeze({
+    id: "outpaint",
+    form: "canvas",
+    group: "process",
+    icon: "frame",
+    capability: "supportsInpaint",
+    labelKey: "studio.imageTool.outpaint",
+    ready: false,
+    plannedKey: "studio.imageTool.planned"
+  })
+]);
+function imageToolOf(id) {
+  const key = typeof id === "string" ? id.trim() : "";
+  if (!key) return null;
+  return IMAGE_TOOLS.find((tool) => tool.id === key) || null;
+}
+function resolveTool(value) {
+  if (value && typeof value === "object") {
+    return typeof value.id === "string" ? imageToolOf(value.id) || null : null;
+  }
+  return imageToolOf(value);
+}
+function toolPresetOf(presets, currentId, toolId) {
+  const list = Array.isArray(presets) ? presets.filter((item) => item && item.id) : [];
+  const tool = imageToolOf(toolId);
+  const missing = { preset: null, switched: false, fallback: false };
+  if (!tool || !tool.ready) return missing;
+  const wanted = typeof currentId === "string" ? currentId.trim() : "";
+  const current = wanted ? list.find((item) => item.id === wanted) || null : null;
+  if (tool.id === "inpaint") {
+    if (supportsInpaint(current)) return { preset: current, switched: false, fallback: false };
+    const native = list.find((item) => item.id === INPAINT_PRESET_ID && supportsInpaint(item)) || null;
+    if (native) {
+      return { preset: native, switched: !current || native.id !== current.id, fallback: false };
+    }
+    const fallback = referencePresetOf(list);
+    if (fallback) return { preset: fallback, switched: true, fallback: true };
+    return { preset: null, switched: false, fallback: true };
+  }
+  if (tool.id === "img2img") {
+    if (supportsImg2Img(current) && !inpaintOnlyOf(current)) {
+      return { preset: current, switched: false, fallback: false };
+    }
+    const fallback = referencePresetOf(list);
+    if (fallback) return { preset: fallback, switched: true, fallback: true };
+    return { preset: null, switched: false, fallback: true };
+  }
+  return missing;
+}
+function toolStrengthDefaultOf(toolId, preset) {
+  const tool = imageToolOf(toolId);
+  if (tool && tool.id === "inpaint") {
+    return inpaintOnlyOf(preset) ? MASK_STRENGTH_NATIVE : MASK_STRENGTH_DEFAULT;
+  }
+  return LIMITS.strength.default;
+}
+function toolStrengthMaxOf(toolId, hasMask) {
+  const tool = imageToolOf(toolId);
+  const max = Number(LIMITS.strength.max);
+  if (!tool || tool.form !== "canvas" || hasMask !== true) return max;
+  const inpaintMax = Number(LIMITS.strength.inpaintMax);
+  return Number.isFinite(inpaintMax) ? Math.max(max, inpaintMax) : max;
+}
+function toolPromptFallback(targetPrompt) {
+  return String(targetPrompt ?? "").trim().slice(0, LIMITS.prompt.maxChars);
+}
+function positiveSize(value) {
+  if (value === null || value === void 0 || value === "") return null;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return null;
+  return Math.round(number);
+}
+function finiteNumber(value) {
+  if (value === null || value === void 0 || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+function presetSteps(preset) {
+  const raw = finiteNumber(preset && preset.steps);
+  return raw === null ? 4 : clampInt(raw, LIMITS.steps.min, LIMITS.steps.max, 4);
+}
+function presetCfg(preset) {
+  const raw = finiteNumber(preset && preset.cfg);
+  return raw === null ? 0 : clampNumber(raw, LIMITS.cfg.min, LIMITS.cfg.max, 0);
+}
+function maskForSubmit(tool, mask) {
+  if (!tool || tool.form !== "canvas") return "";
+  const raw = mask && typeof mask === "object" ? mask.data : mask;
+  const data = normalizeMaskData(raw);
+  if (!data) return "";
+  if (base64BytesOf(data) > Number(LIMITS.mask.maxBytes)) return "";
+  return data;
+}
+function buildImageToolBody(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const tool = resolveTool(source.tool);
+  if (!tool || !tool.ready) return null;
+  const targetPath = typeof source.targetPath === "string" ? source.targetPath.trim() : "";
+  if (!targetPath) return null;
+  const list = Array.isArray(source.presets) ? source.presets : [];
+  const wantedId = typeof source.presetId === "string" ? source.presetId.trim() : "";
+  const presetCandidate = source.preset && typeof source.preset === "object" && source.preset.id ? source.preset : list.find((item) => item && item.id === wantedId) || null;
+  if (!presetCandidate) return null;
+  const preset = presetCandidate;
+  const typed = typeof source.prompt === "string" ? source.prompt.trim() : "";
+  const prompt = (typed || toolPromptFallback(source.targetPrompt)).slice(0, LIMITS.prompt.maxChars);
+  if (!prompt) return null;
+  const target = source.target && typeof source.target === "object" ? source.target : null;
+  const rawWidth = positiveSize(source.targetWidth) ?? positiveSize(target && target.width) ?? positiveSize(preset.size);
+  const rawHeight = positiveSize(source.targetHeight) ?? positiveSize(target && target.height) ?? positiveSize(preset.size);
+  const data = maskForSubmit(tool, source.mask);
+  const hasMask = Boolean(data);
+  const rawStrength = finiteNumber(source.strength);
+  const strength = clampMaskStrength(rawStrength === null ? toolStrengthDefaultOf(tool.id, preset) : rawStrength, hasMask);
+  const body = {
+    presetId: preset.id,
+    prompt,
+    negativePrompt: source.negativeActive === true ? hintOf(preset) : "",
+    width: clampSize(rawWidth),
+    height: clampSize(rawHeight),
+    steps: presetSteps(preset),
+    cfg: presetCfg(preset),
+    seed: "",
+    count: 1,
+    waitSeconds: 0,
+    autoStart: true,
+    reference: {
+      path: targetPath,
+      strength
+    }
+  };
+  if (data) body.reference.mask = data;
+  return body;
+}
+function imageToolBlockedKeyOf(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const tool = resolveTool(source.tool);
+  if (!tool) return "studio.imageTool.blockedTarget";
+  if (!tool.ready) return tool.plannedKey || "studio.imageTool.planned";
+  const targetPath = typeof source.targetPath === "string" ? source.targetPath.trim() : "";
+  if (!targetPath) return "studio.imageTool.blockedTarget";
+  if (!source.preset || typeof source.preset !== "object" || !source.preset.id) {
+    return "studio.imageTool.blockedNoPreset";
+  }
+  const typed = typeof source.prompt === "string" ? source.prompt.trim() : "";
+  if (!typed && !toolPromptFallback(source.targetPrompt)) return "studio.imageTool.blockedNoPrompt";
+  if (tool.form === "canvas" && inpaintOnlyOf(source.preset) && !maskForSubmit(tool, source.mask)) {
+    return "studio.mask.onlyHint";
+  }
+  return "";
+}
+function workKeyOf(value) {
+  if (typeof value === "string") return value.trim();
+  const holder = value && typeof value === "object" ? value : null;
+  if (!holder) return "";
+  const image = holder.image && typeof holder.image === "object" ? holder.image : holder;
+  const path = typeof image.path === "string" ? image.path.trim() : typeof image.file === "string" ? image.file.trim() : "";
+  return path;
+}
+
+// src/studio/stage/ImageDock.jsx
+var import_react26 = __toESM(require("react"), 1);
+var import_jsx_runtime24 = require("react/jsx-runtime");
+var ICON_FALLBACK = { frame: "expand" };
+function ImageDock(props) {
+  const {
+    t,
+    tools,
+    activeToolId,
+    editing,
+    resumeLabel,
+    draftStatusLabel,
+    onOpen,
+    onResume,
+    onClose,
+    onIterate,
+    onReroll,
+    plannedTitle
+  } = props;
+  const list = Array.isArray(tools) ? tools.filter((item) => item && item.id) : [];
+  const active = list.find((item) => item.id === activeToolId) || null;
+  const closeLabel = t("studio.imageTool.exit");
+  return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-dock", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-dock-group", "data-group": "process", role: "group", "aria-label": t("studio.imageTool.groupLabel"), children: [
+      list.map((tool) => {
+        const enabled = tool.enabled !== false && tool.ready !== false;
+        const label = tool.label || t(tool.labelKey);
+        const icon = ICON_FALLBACK[tool.icon] || tool.icon;
+        const isActive = Boolean(editing) && tool.id === activeToolId;
+        return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
+          "button",
+          {
+            type: "button",
+            className: isActive ? "ofs-dock-button is-on" : "ofs-dock-button",
+            title: enabled ? tool.hint || label : plannedTitle || label,
+            "aria-disabled": enabled ? void 0 : "true",
+            "aria-pressed": isActive ? "true" : void 0,
+            onClick: enabled ? () => onOpen(tool.id) : void 0,
+            children: [
+              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: icon, size: 15 }),
+              label
+            ]
+          },
+          tool.id
+        );
+      }),
+      active && editing ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("button", { type: "button", className: "ofs-dock-button ofs-dock-close", onClick: onClose, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: "close", size: 15 }),
+        closeLabel
+      ] }) : null,
+      active && !editing && resumeLabel ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("button", { type: "button", className: "ofs-dock-button ofs-dock-resume", onClick: onResume, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: "focus", size: 15 }),
+        resumeLabel,
+        draftStatusLabel ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "ofs-dock-draft", children: draftStatusLabel }) : null
+      ] }) : null
+    ] }),
+    !editing ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-dock-group", "data-group": "reuse", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: onIterate, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: "focus", size: 15 }),
+        t("studio.action.iterate")
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: onReroll, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: "reroll", size: 15 }),
+        t("studio.action.reroll")
+      ] })
+    ] }) : null
+  ] });
+}
+
+// src/studio/stage/InlineTool.jsx
+var import_react28 = __toESM(require("react"), 1);
+
+// src/logic/generate.js
+function referenceFileName(path) {
+  const value = String(path ?? "").trim();
+  if (!value) return "";
+  const parts = value.split(/[\\/]/);
+  return parts[parts.length - 1] || value;
+}
+function referenceUrlOf(path) {
+  const value = String(path ?? "").trim();
+  if (!value) return "";
+  return `${ROUTES.file.path}?path=${encodeURIComponent(value)}`;
+}
+function referencePathOf(form) {
+  const input = form && typeof form === "object" ? form : {};
+  const reference = input.reference && typeof input.reference === "object" ? input.reference : null;
+  return reference && typeof reference.path === "string" ? reference.path.trim() : "";
+}
+function buildGenerateBody(form, options = {}) {
+  const input = form || {};
+  const overrides = options.overrides && typeof options.overrides === "object" ? options.overrides : null;
+  const negativeActive = options.negativeActive !== false;
+  const explicit = overrides && typeof overrides.prompt === "string" ? overrides.prompt : null;
+  const maxPromptChars = LIMITS.prompt.maxChars;
+  const prompt = explicit !== null ? explicit.trim().slice(0, maxPromptChars) : String(input.prompt ?? "").trim().slice(0, maxPromptChars);
+  const body = {
+    prompt,
+    negativePrompt: negativeForSubmit(input, negativeActive),
+    width: clampSize(input.width),
+    height: clampSize(input.height),
+    steps: clampInt(input.steps, LIMITS.steps.min, LIMITS.steps.max, 4),
+    cfg: clampNumber(input.cfg, LIMITS.cfg.min, LIMITS.cfg.max, 0),
+    seed: parseSeed(input.seed),
+    count: clampInt(input.count, LIMITS.count.min, LIMITS.count.max, 1),
+    waitSeconds: 0,
+    autoStart: true
+  };
+  const presetId = input.presetId || options.defaultPreset || "";
+  if (presetId) body.presetId = presetId;
+  const hasOverride = (key) => overrides !== null && Object.prototype.hasOwnProperty.call(overrides, key);
+  const reference = hasOverride("reference") ? overrides.reference : input.reference;
+  const referencePath = referencePathOf({ reference });
+  if (referencePath) {
+    const strength = hasOverride("strength") ? overrides.strength : input.strength;
+    const mask = options.maskActive === false ? "" : referenceMaskForSubmit(reference);
+    body.reference = { path: referencePath, strength: clampMaskStrength(strength, Boolean(mask)) };
+    if (mask) body.reference.mask = mask;
+  }
+  if (overrides) {
+    for (const [key, value] of Object.entries(overrides)) {
+      if (key === "prompt" || key === "reference" || key === "strength") continue;
+      body[key] = value;
+    }
+  }
+  if (!negativeActive) body.negativePrompt = "";
+  return body;
+}
+function presetLabelOf(preset) {
+  if (!preset || typeof preset !== "object") return "";
+  if (typeof preset.label === "string" && preset.label.trim()) return preset.label.trim();
+  if (typeof preset.short === "string" && preset.short.trim()) return preset.short.trim();
+  return typeof preset.id === "string" ? preset.id : "";
+}
+function effectivePresetOf(overrides, preset, presets) {
+  const list = Array.isArray(presets) ? presets : [];
+  const input = overrides && typeof overrides === "object" ? overrides : null;
+  const id = input && typeof input.presetId === "string" ? input.presetId.trim() : "";
+  if (id) {
+    const found = list.find((item) => item && item.id === id);
+    if (found) return found;
+  }
+  return preset && typeof preset === "object" ? preset : null;
+}
+function generateCapabilityOf(options = {}) {
+  const preset = options.preset && typeof options.preset === "object" ? options.preset : null;
+  const presets = Array.isArray(options.presets) ? options.presets : [];
+  const result = { ok: true, reason: "", blockedKey: "", notice: null, preset: null };
+  if (presets.length === 0 || !inpaintOnlyOf(preset)) return result;
+  const fallback = referencePresetOf(presets);
+  if (!fallback) {
+    result.ok = false;
+    result.reason = "preset";
+    result.blockedKey = "studio.form.blockedInpaintOnly";
+    return result;
+  }
+  result.preset = fallback;
+  result.notice = {
+    key: "studio.form.autoText2Image",
+    params: { preset: presetLabelOf(fallback) }
+  };
+  return result;
+}
+function previewRecallOf(options = {}) {
+  if (options.dirty === true) return { action: "draft", noticeKey: "studio.toast.draftKept" };
+  const patch = options.patch && typeof options.patch === "object" ? options.patch : {};
+  if (Object.keys(patch).length === 0) return { action: "idle", noticeKey: "" };
+  return { action: "recall", noticeKey: "studio.toast.recalled" };
+}
+function formSummaryOf(body) {
+  const input = body && typeof body === "object" ? body : {};
+  const width = positiveSize2(input.width);
+  const height = positiveSize2(input.height);
+  const count = finiteNumber2(input.count);
+  const seed = finiteNumber2(input.seed);
+  return {
+    presetId: typeof input.presetId === "string" ? input.presetId : "",
+    ratioId: ratioIdOf(width, height),
+    width,
+    height,
+    count: count === null ? 1 : Math.min(LIMITS.count.max, Math.max(LIMITS.count.min, Math.round(count))),
+    seed: seed !== null && seed >= 0 ? Math.trunc(seed) : null
+  };
+}
+function finiteNumber2(value) {
+  if (value === null || value === void 0 || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+function positiveSize2(value) {
+  const number = finiteNumber2(value);
+  if (number === null || number <= 0) return null;
+  return Math.round(number);
+}
+function presetOf(presets, id) {
+  if (!id || !Array.isArray(presets)) return null;
+  return presets.find((item) => item && item.id === id) || null;
+}
+function recallOf(entry, presets) {
+  const image = entry && entry.image || null;
+  const item = entry && entry.item || null;
+  const params = item && item.params || null;
+  const presetId = item && item.presetId || "";
+  const preset = presetOf(presets, presetId);
+  const prompt = item && typeof item.prompt === "string" && item.prompt || params && typeof params.prompt === "string" && params.prompt || "";
+  const width = positiveSize2(image && image.width) ?? positiveSize2(params && params.width) ?? positiveSize2(preset && preset.size);
+  const height = positiveSize2(image && image.height) ?? positiveSize2(params && params.height) ?? positiveSize2(preset && preset.size);
+  const steps = finiteNumber2(params && params.steps) ?? finiteNumber2(preset && preset.steps);
+  const cfg = finiteNumber2(params && params.cfg) ?? finiteNumber2(preset && preset.cfg);
+  const seed = finiteNumber2(image && image.seed) ?? finiteNumber2(params && params.seed);
+  const negative = params && typeof params.negativePrompt === "string" ? params.negativePrompt : null;
+  return { image, item, params, presetId, prompt, width, height, steps, cfg, seed, negative };
+}
+function iteratePatch(entry, form, presets) {
+  const recall = recallOf(entry, presets);
+  const patch = {};
+  const prompt = recall.prompt.trim();
+  if (prompt) patch.prompt = prompt;
+  if (recall.negative !== null) patch.negative = recall.negative;
+  if (recall.width !== null) patch.width = recall.width;
+  if (recall.height !== null) patch.height = recall.height;
+  if (recall.steps !== null) patch.steps = recall.steps;
+  if (recall.cfg !== null) patch.cfg = recall.cfg;
+  if (recall.seed !== null && recall.seed >= 0) patch.seed = String(Math.trunc(recall.seed));
+  if (recall.presetId) patch.presetId = recall.presetId;
+  if (Object.keys(patch).length > 0) {
+    if (!Object.prototype.hasOwnProperty.call(patch, "seed")) patch.seed = "";
+  }
+  return patch;
+}
+function rerollOverrides(entry, presets) {
+  const recall = recallOf(entry, presets);
+  const prompt = recall.prompt.trim();
+  if (!prompt) return null;
+  const overrides = { prompt, seed: -1, count: 1 };
+  if (recall.negative !== null) overrides.negativePrompt = recall.negative;
+  if (recall.width !== null) overrides.width = recall.width;
+  if (recall.height !== null) overrides.height = recall.height;
+  if (recall.steps !== null) overrides.steps = recall.steps;
+  if (recall.cfg !== null) overrides.cfg = recall.cfg;
+  if (recall.presetId) overrides.presetId = recall.presetId;
+  return overrides;
+}
+function retryOverrides(source) {
+  const holder = source && typeof source === "object" ? source : null;
+  if (!holder) return null;
+  const params = holder.params && typeof holder.params === "object" ? holder.params : holder;
+  const prompt = typeof params.prompt === "string" ? params.prompt.trim() : "";
+  if (!prompt) return null;
+  const overrides = { prompt, seed: -1 };
+  const count = finiteNumber2(params.count);
+  if (count !== null) overrides.count = Math.min(4, Math.max(1, Math.round(count)));
+  const width = positiveSize2(params.width);
+  const height = positiveSize2(params.height);
+  if (width !== null) overrides.width = width;
+  if (height !== null) overrides.height = height;
+  const steps = finiteNumber2(params.steps);
+  const cfg = finiteNumber2(params.cfg);
+  if (steps !== null) overrides.steps = steps;
+  if (cfg !== null) overrides.cfg = cfg;
+  if (typeof params.negativePrompt === "string") overrides.negativePrompt = params.negativePrompt;
+  const presetId = holder.presetId || params.presetId || "";
+  if (presetId) overrides.presetId = presetId;
+  return overrides;
+}
+
+// src/studio/stage/ToolSubmitBar.jsx
+var import_react27 = __toESM(require("react"), 1);
+var import_jsx_runtime25 = require("react/jsx-runtime");
+function percentOf(coverage) {
+  const value = Number(coverage);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  const percent = Math.min(100, value * 100);
+  return percent >= 10 ? Math.round(percent) : Math.round(percent * 10) / 10;
+}
+function ToolSubmitBar(props) {
+  const {
+    t,
+    tool,
+    presets,
+    presetId,
+    onPresetChange,
+    prompt,
+    onPromptChange,
+    promptPlaceholder,
+    strength,
+    strengthMax,
+    onStrengthChange,
+    maskCoverage,
+    submitting,
+    canSubmit,
+    blockedKey,
+    onSubmit,
+    onExit
+  } = props;
+  const list = Array.isArray(presets) ? presets : [];
+  const showCoverage = maskCoverage !== null && maskCoverage !== void 0;
+  const percent = showCoverage ? percentOf(maskCoverage) : 0;
+  const max = Number.isFinite(Number(strengthMax)) ? Number(strengthMax) : LIMITS.strength.max;
+  const value = Number.isFinite(Number(strength)) ? Number(strength) : LIMITS.strength.default;
+  const busy = submitting === true;
+  const blocked = !canSubmit && Boolean(blockedKey);
+  return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "ofs-tool-bar", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "ofs-tool-bar-head", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-tool-name", children: tool ? t(tool.labelKey) : "" }),
+      list.length > 1 ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("label", { className: "ofs-tool-preset", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-tool-preset-label", children: t("studio.imageTool.presetLabel") }),
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+          "select",
+          {
+            className: "ofs-tool-select",
+            value: presetId || "",
+            "aria-label": t("studio.imageTool.presetLabel"),
+            onChange: (event) => onPresetChange(event.target.value),
+            children: list.map((item) => /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("option", { value: item.id, children: presetLabelOf(item) }, item.id))
+          }
+        )
+      ] }) : list.length === 1 ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-tool-preset-name", children: presetLabelOf(list[0]) }) : null
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("label", { className: "ofs-tool-prompt", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-tool-label", children: t("studio.imageTool.promptLabel") }),
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+        "textarea",
+        {
+          className: "ofs-tool-prompt-input",
+          rows: 2,
+          value: prompt || "",
+          placeholder: promptPlaceholder || "",
+          "aria-label": t("studio.imageTool.promptLabel"),
+          onChange: (event) => onPromptChange(event.target.value)
+        }
+      )
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("label", { className: "ofs-tool-strength", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-tool-label", children: t("studio.imageTool.strengthLabel") }),
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+        "input",
+        {
+          type: "range",
+          className: "ofs-tool-range",
+          min: LIMITS.strength.min,
+          max,
+          step: LIMITS.strength.step,
+          value,
+          "aria-label": t("studio.imageTool.strengthLabel"),
+          onChange: (event) => onStrengthChange(event.target.value)
+        }
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("b", { className: "ofs-tool-readout", children: value.toFixed(2) })
+    ] }),
+    showCoverage ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "ofs-tool-mask ofs-hint", children: percent > 0 ? formatText(t("studio.mask.coverage"), { percent }) : t("studio.imageTool.maskEmpty") }) : null,
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "ofs-tool-actions", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+        "button",
+        {
+          type: "button",
+          className: "ofs-btn is-primary ofs-tool-submit",
+          disabled: canSubmit !== true || busy,
+          "aria-busy": busy ? "true" : void 0,
+          onClick: onSubmit,
+          children: t("studio.imageTool.submit")
+        }
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("button", { type: "button", className: "ofs-btn is-quiet ofs-tool-exit", onClick: onExit, children: t("studio.imageTool.exit") })
+    ] }),
+    blocked ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "ofs-hint ofs-tool-blocked", role: "status", children: t(blockedKey) }) : null
+  ] });
+}
+
+// src/studio/stage/InlineTool.jsx
+var import_jsx_runtime26 = require("react/jsx-runtime");
 function ratioOf(width, height) {
   const w = Number(width);
   const h2 = Number(height);
   if (!Number.isFinite(w) || !Number.isFinite(h2) || w <= 0 || h2 <= 0) return 1;
   return w / h2;
 }
+function InlineTool(props) {
+  const {
+    t,
+    target,
+    tool,
+    presets,
+    presetId,
+    onPresetChange,
+    prompt,
+    onPromptChange,
+    strength,
+    strengthMax,
+    onStrengthChange,
+    submitting,
+    canSubmit,
+    blockedKey,
+    onSubmit,
+    onExit
+  } = props;
+  if (!target || !target.path) return null;
+  const list = Array.isArray(presets) ? presets : [];
+  const ratio = ratioOf(target.width, target.height);
+  const promptPlaceholder = target.prompt || t("studio.imageTool.promptPlaceholder");
+  return /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("div", { className: "ofs-inline-tool", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("div", { className: "ofs-inline-stage", style: { "--ofs-print-r": String(ratio) }, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
+      "img",
+      {
+        src: target.url,
+        alt: target.prompt || referenceFileName(target.path) || t("studio.image.alt"),
+        className: "ofs-print",
+        style: { "--ofs-print-r": String(ratio) },
+        draggable: false
+      }
+    ) }),
+    /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
+      ToolSubmitBar,
+      {
+        t,
+        tool,
+        presets: list,
+        presetId,
+        onPresetChange,
+        prompt,
+        onPromptChange,
+        promptPlaceholder,
+        strength,
+        strengthMax,
+        onStrengthChange,
+        maskCoverage: void 0,
+        submitting,
+        canSubmit,
+        blockedKey,
+        onSubmit,
+        onExit
+      }
+    )
+  ] });
+}
+
+// src/studio/stage/MaskEditor.jsx
+var import_react29 = __toESM(require("react"), 1);
+var import_jsx_runtime27 = require("react/jsx-runtime");
+var MASK_HIT_STYLE = { minHeight: 44, minWidth: 44 };
 function percentOf2(coverage) {
   const value = Number(coverage);
   if (!Number.isFinite(value) || value <= 0) return 0;
   const percent = Math.min(100, value * 100);
   return percent >= 10 ? Math.round(percent) : Math.round(percent * 10) / 10;
 }
-function Stage(props) {
-  const { t, ui, compute, form, library, actions, now } = props;
-  const { zoom, setZoom, copyPath } = ui;
-  const { activeJob } = compute;
-  const progressText = activeJob ? jobCountText(t, activeJob) : "";
-  const { useInspiration } = form;
-  const { selected, isFavorite, toggleFavorite } = library;
-  const { iterate, reroll, referenceImage } = actions;
-  const image = selected && selected.image ? selected.image : null;
-  const item = selected && selected.item || null;
-  const params = item && item.params || null;
-  const prompt = item && typeof item.prompt === "string" && item.prompt || params && typeof params.prompt === "string" && params.prompt || "";
-  const closeRef = import_react25.default.useRef(null);
-  const lightboxRef = import_react25.default.useRef(null);
-  const zoomOpenerRef = import_react25.default.useRef(null);
-  function openZoom() {
-    zoomOpenerRef.current = document.activeElement || null;
-    setZoom(true);
-  }
-  const reference = form && form.reference || null;
-  const inpaintSupported = Boolean(form && form.inpaintSupported === true);
-  const mask = form && form.mask || null;
-  const applyMaskAction = form && typeof form.applyMask === "function" ? form.applyMask : null;
-  const clearMaskAction = form && typeof form.clearMask === "function" ? form.clearMask : null;
-  const canPaint = Boolean(reference && inpaintSupported && applyMaskAction);
-  const showToast = ui && typeof ui.showToast === "function" ? ui.showToast : null;
-  const referenceWidth = Number(reference && reference.width);
-  const referenceHeight = Number(reference && reference.height);
-  const [naturalSize, setNaturalSize] = import_react25.default.useState(() => ({
-    width: Number.isFinite(referenceWidth) && referenceWidth > 0 ? Math.round(referenceWidth) : 0,
-    height: Number.isFinite(referenceHeight) && referenceHeight > 0 ? Math.round(referenceHeight) : 0
+function MaskEditor(props) {
+  const {
+    t,
+    target,
+    tool,
+    presets,
+    presetId,
+    onPresetChange,
+    prompt,
+    onPromptChange,
+    strength,
+    strengthMax,
+    onStrengthChange,
+    mask,
+    coverage,
+    onMaskApply,
+    onMaskClear,
+    submitting,
+    canSubmit,
+    blockedKey,
+    onSubmit,
+    onExit
+  } = props;
+  const list = Array.isArray(presets) ? presets : [];
+  const activePreset = list.find((item) => item && item.id === presetId) || null;
+  const canPaint = Boolean(target && target.path && tool && tool.form === "canvas");
+  const targetWidth = Number(target && target.width);
+  const targetHeight = Number(target && target.height);
+  const [naturalSize, setNaturalSize] = import_react29.default.useState(() => ({
+    width: Number.isFinite(targetWidth) && targetWidth > 0 ? Math.round(targetWidth) : 0,
+    height: Number.isFinite(targetHeight) && targetHeight > 0 ? Math.round(targetHeight) : 0
   }));
   const canvasSize = maskCanvasSizeOf(naturalSize.width, naturalSize.height, MASK_CANVAS_EDGE);
-  const [painting, setPainting] = import_react25.default.useState(false);
-  const [brush, setBrush] = import_react25.default.useState(() => brushStateOf());
-  const [maskState, setMaskState] = import_react25.default.useState(() => maskStateOf({ coverage: mask ? mask.coverage : 0 }));
-  const canvasRef = import_react25.default.useRef(null);
-  const cursorRef = import_react25.default.useRef(null);
-  const drawingRef = import_react25.default.useRef(null);
-  const keyboardCursorRef = import_react25.default.useRef(null);
-  const restoreRef = import_react25.default.useRef(mask);
+  const [brush, setBrush] = import_react29.default.useState(() => brushStateOf());
+  const [inkCoverage, setInkCoverage] = import_react29.default.useState(() => maskStateOf({ coverage: mask ? mask.coverage : 0 }).coverage);
+  const [maskNotice, setMaskNotice] = import_react29.default.useState("");
+  const canvasRef = import_react29.default.useRef(null);
+  const cursorRef = import_react29.default.useRef(null);
+  const drawingRef = import_react29.default.useRef(null);
+  const keyboardCursorRef = import_react29.default.useRef(null);
+  const restoreRef = import_react29.default.useRef(mask);
   restoreRef.current = mask;
-  const referenceIdentity = reference ? `${reference.path || ""}|${reference.url || ""}|${referenceWidth || ""}|${referenceHeight || ""}` : "";
-  const paintRequest = ui && Number.isFinite(Number(ui.paintRequest)) ? Number(ui.paintRequest) : 0;
-  const clearPaintRequest = ui && typeof ui.clearPaintRequest === "function" ? ui.clearPaintRequest : null;
-  const selectedIdentity = selected && selected.image ? `${selected.image.path || ""}|${selected.image.file || ""}|${selected.image.url || ""}` : "";
-  const selectedIdentityRef = import_react25.default.useRef(selectedIdentity);
+  const coverageProp = Number(coverage);
+  import_react29.default.useEffect(() => {
+    if (!Number.isFinite(coverageProp)) return;
+    setInkCoverage(maskStateOf({ coverage: coverageProp }).coverage);
+  }, [coverageProp]);
   function canvasContext() {
     const canvas = canvasRef.current;
     if (!canvas || typeof canvas.getContext !== "function") return null;
@@ -7508,8 +8598,9 @@ function Stage(props) {
     const geometry = canvasContext();
     if (!geometry) return;
     const { canvas, ctx } = geometry;
-    const coverage = Number.isFinite(Number(coverageOverride)) ? maskStateOf({ coverage: coverageOverride }).coverage : coverageOfCanvas(canvas, ctx);
-    setMaskState(maskStateOf({ coverage }));
+    const coverage2 = Number.isFinite(Number(coverageOverride)) ? maskStateOf({ coverage: coverageOverride }).coverage : coverageOfCanvas(canvas, ctx);
+    setInkCoverage(coverage2);
+    setMaskNotice("");
     if (typeof document === "undefined" || typeof document.createElement !== "function") return;
     const exporter = document.createElement("canvas");
     exporter.width = canvas.width;
@@ -7519,30 +8610,22 @@ function Stage(props) {
     exportCtx.fillStyle = "#000000";
     exportCtx.fillRect(0, 0, exporter.width, exporter.height);
     exportCtx.drawImage(canvas, 0, 0);
-    const verdict = maskExportVerdict(exporter.toDataURL("image/png"), coverage);
+    const verdict = maskExportVerdict(exporter.toDataURL("image/png"), coverage2);
     if (!verdict.ok) {
       if (verdict.reason === "empty") {
-        if (restoreRef.current && clearMaskAction) {
+        if (restoreRef.current) {
           restoreRef.current = null;
-          clearMaskAction();
+          if (typeof onMaskClear === "function") onMaskClear();
         }
         return;
       }
-      if (verdict.reason === "too_large" && showToast) showToast(t("studio.mask.tooLarge"));
+      if (verdict.reason === "too_large") setMaskNotice(t("studio.mask.tooLarge"));
       return;
     }
-    const result = applyMaskAction ? applyMaskAction({ data: verdict.data, coverage: verdict.coverage }) : null;
-    if (result && result.ok === false && result.reason === "too_large" && showToast) {
-      showToast(t("studio.mask.tooLarge"));
+    const result = typeof onMaskApply === "function" ? onMaskApply({ data: verdict.data, coverage: verdict.coverage }) : null;
+    if (result && result.ok === false) {
+      if (result.reason === "too_large" || result.reason === "invalid") setMaskNotice(t("studio.mask.tooLarge"));
     }
-  }
-  function openMaskEditor() {
-    if (!canPaint) return;
-    if (typeof form.beginMaskEdit === "function") form.beginMaskEdit();
-    setPainting(true);
-  }
-  function closeMaskEditor() {
-    setPainting(false);
   }
   function placeMaskCursor(left, top, scale) {
     const cursor = cursorRef.current;
@@ -7614,7 +8697,7 @@ function Stage(props) {
   function onMaskKeyDown(event) {
     const key = event && event.key;
     if (key === "Escape") {
-      closeMaskEditor();
+      if (typeof onExit === "function") onExit();
       return;
     }
     const geometry = canvasContext();
@@ -7648,11 +8731,12 @@ function Stage(props) {
   }
   function clearMaskCanvas() {
     const geometry = canvasContext();
-    setMaskState(clearMaskState());
+    setInkCoverage(0);
+    setMaskNotice("");
     if (geometry) geometry.ctx.clearRect(0, 0, geometry.canvas.width, geometry.canvas.height);
     if (restoreRef.current) {
       restoreRef.current = null;
-      if (clearMaskAction) clearMaskAction();
+      if (typeof onMaskClear === "function") onMaskClear();
     }
   }
   function invertMaskCanvas() {
@@ -7673,45 +8757,20 @@ function Stage(props) {
       }
     }
     ctx.putImageData(pixels, 0, 0);
-    commitMask(invertMaskState(maskState).coverage);
+    setMaskNotice("");
+    commitMask(inkCoverage > 0 ? 1 - inkCoverage : 1);
   }
-  function onReferencePreviewLoad(event) {
-    const target = event && event.target ? event.target : null;
-    const width = Number(target && target.naturalWidth);
-    const height = Number(target && target.naturalHeight);
+  function onTargetLoad(event) {
+    const imageElement = event && event.target ? event.target : null;
+    const width = Number(imageElement && imageElement.naturalWidth);
+    const height = Number(imageElement && imageElement.naturalHeight);
     if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
     setNaturalSize((prev) => prev.width === width && prev.height === height ? prev : { width, height });
   }
-  const referenceChangedRef = import_react25.default.useRef(referenceIdentity);
-  import_react25.default.useEffect(() => {
-    const referenceChanged = referenceChangedRef.current !== referenceIdentity;
-    referenceChangedRef.current = referenceIdentity;
-    if (referenceChanged) {
-      const width = Number(reference && reference.width);
-      const height = Number(reference && reference.height);
-      setNaturalSize({
-        width: Number.isFinite(width) && width > 0 ? Math.round(width) : 0,
-        height: Number.isFinite(height) && height > 0 ? Math.round(height) : 0
-      });
-      setMaskState(maskStateOf({ coverage: mask ? mask.coverage : 0 }));
-    }
-    if (paintRequest > 0 && canPaint) {
-      openMaskEditor();
-      if (clearPaintRequest) clearPaintRequest();
-      return;
-    }
-    if (referenceChanged) setPainting(false);
-  }, [referenceIdentity, paintRequest, canPaint]);
-  import_react25.default.useEffect(() => {
-    if (!canPaint) setPainting(false);
-  }, [canPaint]);
-  import_react25.default.useEffect(() => {
-    if (selectedIdentityRef.current === selectedIdentity) return;
-    selectedIdentityRef.current = selectedIdentity;
-    setPainting(false);
-  }, [selectedIdentity]);
-  const maskLayoutKey = `${painting ? 1 : 0}|${canvasSize.width}x${canvasSize.height}`;
-  import_react25.default.useEffect(() => {
+  const targetKey = target ? `${target.path}|${target.width || ""}x${target.height || ""}` : "";
+  const maskLayoutKey = `${targetKey}|${canvasSize.width}x${canvasSize.height}`;
+  import_react29.default.useEffect(() => {
+    setInkCoverage(maskStateOf({ coverage: restoreRef.current ? restoreRef.current.coverage : 0 }).coverage);
     const canvas = canvasRef.current;
     if (!canvas || typeof canvas.getContext !== "function") return void 0;
     canvas.width = canvasSize.width;
@@ -7719,17 +8778,17 @@ function Stage(props) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return void 0;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const stored = painting ? restoreRef.current : null;
+    const stored = restoreRef.current;
     if (!stored || !stored.data || typeof Image !== "function" || typeof document === "undefined") return void 0;
     let cancelled = false;
     const maskImage = new Image();
     maskImage.onload = () => {
       if (cancelled) return;
       restoreStoredMask(ctx, canvas, maskImage);
-      setMaskState(maskStateOf({ coverage: stored.coverage }));
+      setInkCoverage(maskStateOf({ coverage: stored.coverage }).coverage);
     };
     maskImage.onerror = () => {
-      if (!cancelled) setMaskState(emptyMaskState());
+      if (!cancelled) setInkCoverage(emptyMaskState().coverage);
     };
     maskImage.src = `data:image/png;base64,${stored.data}`;
     return () => {
@@ -7738,42 +8797,34 @@ function Stage(props) {
       maskImage.onerror = null;
     };
   }, [maskLayoutKey]);
-  useFocusTrap({
-    active: Boolean(zoom),
-    panelRef: lightboxRef,
-    initialFocusRef: closeRef,
-    returnFocusRef: zoomOpenerRef,
-    onClose: () => setZoom(false)
-  });
-  const referencePreviewUrl = reference && reference.url ? reference.url : "";
-  const referenceAlt = prompt || referenceFileName(reference && reference.path) || t("studio.reference.title");
+  if (!canPaint) return null;
   const editorAspect = naturalSize.width > 0 && naturalSize.height > 0 ? `${naturalSize.width} / ${naturalSize.height}` : "1";
   const maskRatio = naturalSize.width > 0 && naturalSize.height > 0 ? naturalSize.width / naturalSize.height : 1;
-  const maskPercent = percentOf2(maskState.coverage);
-  const paintingActive = painting && canPaint;
-  const fastModel = Number(form && form.activePreset && form.activePreset.steps) <= 8;
-  const maskEditor = /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-editor", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-head", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-mask-title", children: t("studio.mask.title") }),
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-mask-coverage ofs-muted", children: formatText(t("studio.mask.coverage"), { percent: maskPercent }) })
+  const maskPercent = percentOf2(inkCoverage);
+  const fastModel = Number(activePreset && activePreset.steps) <= 8;
+  const promptPlaceholder = target.prompt || t("studio.imageTool.promptPlaceholder");
+  return /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-mask-editor", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-mask-head", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-mask-title", children: t("studio.mask.title") }),
+      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-mask-coverage ofs-muted", children: formatText(t("studio.mask.coverage"), { percent: maskPercent }) })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
+    /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
       "div",
       {
         className: "ofs-mask-stage",
         style: { "--ofs-mask-r": String(maskRatio), aspectRatio: editorAspect },
         children: [
-          referencePreviewUrl ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+          target.url ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
             "img",
             {
-              src: referencePreviewUrl,
-              alt: referenceAlt,
+              src: target.url,
+              alt: target.prompt || referenceFileName(target.path) || t("studio.image.alt"),
               draggable: false,
-              onLoad: onReferencePreviewLoad,
+              onLoad: onTargetLoad,
               className: "ofs-mask-photo"
             }
           ) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
             "canvas",
             {
               ref: canvasRef,
@@ -7790,7 +8841,7 @@ function Stage(props) {
               onBlur: hideMaskCursor
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
             "span",
             {
               ref: cursorRef,
@@ -7802,10 +8853,10 @@ function Stage(props) {
         ]
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-tools", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("label", { className: "ofs-mask-brush", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { children: t("studio.mask.brush") }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-mask-tools", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("label", { className: "ofs-mask-brush", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { children: t("studio.mask.brush") }),
+        /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
           "input",
           {
             type: "range",
@@ -7818,172 +8869,286 @@ function Stage(props) {
             onChange: (event) => setBrush((prev) => brushStateOf({ ...prev, size: clampBrushSize(event.target.value) }))
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("b", { children: brush.size })
+        /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("b", { children: brush.size })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
         "button",
         {
           type: "button",
           className: brush.eraser ? "ofs-dock-button is-on" : "ofs-dock-button",
-          style: MASK_HIT_STYLE2,
+          style: MASK_HIT_STYLE,
           "aria-pressed": brush.eraser,
           onClick: () => setBrush((prev) => toggleEraser(prev)),
           children: t("studio.mask.eraser")
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-dock-button", style: MASK_HIT_STYLE2, onClick: clearMaskCanvas, children: t("studio.mask.clear") }),
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-dock-button", style: MASK_HIT_STYLE2, onClick: invertMaskCanvas, children: t("studio.mask.invert") }),
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-dock-button ofs-mask-close", style: MASK_HIT_STYLE2, onClick: closeMaskEditor, children: t("studio.mask.close") })
+      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("button", { type: "button", className: "ofs-dock-button", style: MASK_HIT_STYLE, onClick: clearMaskCanvas, children: t("studio.mask.clear") }),
+      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("button", { type: "button", className: "ofs-dock-button", style: MASK_HIT_STYLE, onClick: invertMaskCanvas, children: t("studio.mask.invert") }),
+      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("button", { type: "button", className: "ofs-dock-button ofs-mask-close", style: MASK_HIT_STYLE, onClick: onExit, children: t("studio.mask.close") })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-hint", children: t("studio.mask.hint") }),
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-guide", children: t("studio.mask.guide") }),
-    fastModel ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-fast", children: t("studio.mask.fastModelHint") }) : null
-  ] });
-  const paintBar = reference && inpaintSupported && !paintingActive ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-bar", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
-      "button",
+    maskNotice ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("p", { className: "ofs-hint ofs-mask-warn", role: "status", children: maskNotice }) : null,
+    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("p", { className: "ofs-hint ofs-mask-hint", children: t("studio.mask.hint") }),
+    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("p", { className: "ofs-hint ofs-mask-guide", children: t("studio.mask.guide") }),
+    fastModel ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("p", { className: "ofs-hint ofs-mask-fast", children: t("studio.mask.fastModelHint") }) : null,
+    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+      ToolSubmitBar,
       {
-        type: "button",
-        className: "ofs-dock-button ofs-mask-toggle",
-        style: MASK_HIT_STYLE2,
-        "aria-pressed": false,
-        onClick: openMaskEditor,
-        children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "focus", size: 15 }),
-          t("studio.mask.toggle")
-        ]
+        t,
+        tool,
+        presets: list,
+        presetId,
+        onPresetChange,
+        prompt,
+        onPromptChange,
+        promptPlaceholder,
+        strength,
+        strengthMax,
+        onStrengthChange,
+        maskCoverage: inkCoverage,
+        submitting,
+        canSubmit,
+        blockedKey,
+        onSubmit,
+        onExit
       }
-    ),
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: mask ? "ofs-hint ofs-mask-status" : "ofs-muted ofs-mask-status", children: mask ? formatText(t("studio.mask.applied"), { percent: percentOf2(mask.coverage) }) : t("studio.mask.empty") })
-  ] }) : null;
-  const unsupportedNote = reference && !inpaintSupported ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-mask-unsupported", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-warn", children: t("studio.mask.unsupported") }),
-    mask ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-hint ofs-mask-warn", children: t("studio.mask.kept") }) : null
-  ] }) : null;
+    )
+  ] });
+}
+
+// src/studio/Stage.jsx
+var import_jsx_runtime28 = require("react/jsx-runtime");
+var FRESH_MS = 6e4;
+function isFreshItem(item, now) {
+  const finishedAt = Date.parse(String(item && item.finishedAt || ""));
+  if (!Number.isFinite(finishedAt)) return false;
+  const current = Number.isFinite(now) ? now : Date.now();
+  const delta = current - finishedAt;
+  return delta > -5e3 && delta < FRESH_MS;
+}
+function ratioOf2(width, height) {
+  const w = Number(width);
+  const h2 = Number(height);
+  if (!Number.isFinite(w) || !Number.isFinite(h2) || w <= 0 || h2 <= 0) return 1;
+  return w / h2;
+}
+function percentOf3(coverage) {
+  const value = Number(coverage);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  const percent = Math.min(100, value * 100);
+  return percent >= 10 ? Math.round(percent) : Math.round(percent * 10) / 10;
+}
+function Stage(props) {
+  const { t, ui, compute, form, library, imageTool, actions, now } = props;
+  const { zoom, setZoom, copyPath } = ui;
+  const { activeJob } = compute;
+  const progressText = activeJob ? jobCountText(t, activeJob) : "";
+  const { useInspiration } = form;
+  const { selected, isFavorite, toggleFavorite } = library;
+  const image = selected && selected.image ? selected.image : null;
+  const item = selected && selected.item || null;
+  const params = item && item.params || null;
+  const prompt = item && typeof item.prompt === "string" && item.prompt || params && typeof params.prompt === "string" && params.prompt || "";
+  const closeRef = import_react30.default.useRef(null);
+  const lightboxRef = import_react30.default.useRef(null);
+  const zoomOpenerRef = import_react30.default.useRef(null);
+  function openZoom() {
+    zoomOpenerRef.current = document.activeElement || null;
+    setZoom(true);
+  }
+  const activeTool = imageTool && imageTool.activeTool ? imageTool.activeTool : null;
+  const editorOpen = Boolean(imageTool && imageTool.editorOpen && activeTool && imageTool.target);
+  const toolItems = IMAGE_TOOLS.map((tool) => ({
+    ...tool,
+    label: t(tool.labelKey),
+    enabled: tool.ready === true,
+    hint: tool.ready === true ? "" : t(tool.plannedKey || "studio.imageTool.planned")
+  }));
+  const draftStatusLabel = activeTool && !editorOpen && imageTool.mask ? formatText(t("studio.imageTool.draftStatus"), { percent: percentOf3(imageTool.coverage) }) : "";
+  const resumeLabel = activeTool ? t("studio.imageTool.resumeDraft") : "";
+  const submitProps = {
+    t,
+    target: imageTool ? imageTool.target : null,
+    tool: activeTool,
+    // 只列当前工具真正可用的预设（inpaint 要 supportsInpaint、img2img 要 supportsImg2Img 且非 inpaintOnly）：
+    // 列全量会让用户选到不支持能力的模型，切换请求被静默拒绝。
+    presets: imageTool && Array.isArray(imageTool.toolPresets) ? imageTool.toolPresets : [],
+    presetId: imageTool ? imageTool.presetId : "",
+    onPresetChange: imageTool ? imageTool.selectPreset : () => {
+    },
+    prompt: imageTool ? imageTool.prompt : "",
+    onPromptChange: imageTool ? imageTool.setPrompt : () => {
+    },
+    strength: imageTool ? imageTool.strength : 0,
+    strengthMax: imageTool ? imageTool.strengthMax : 0,
+    strengthAuto: imageTool ? imageTool.strengthAuto : false,
+    onStrengthChange: imageTool ? imageTool.setStrength : () => {
+    },
+    submitting: Boolean(imageTool && imageTool.submitting),
+    canSubmit: Boolean(imageTool && imageTool.canSubmit),
+    blockedKey: imageTool ? imageTool.submitBlockedKey : "",
+    onSubmit: imageTool ? imageTool.submit : () => {
+    },
+    onExit: imageTool ? imageTool.closeTool : () => {
+    }
+  };
+  const editorNode = editorOpen ? activeTool.form === "canvas" ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(MaskEditor, { ...submitProps, mask: imageTool.mask, coverage: imageTool.coverage, onMaskApply: imageTool.applyMask, onMaskClear: imageTool.clearMask, now }) : /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(InlineTool, { ...submitProps }) : null;
+  const dock = /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+    ImageDock,
+    {
+      t,
+      tools: toolItems,
+      activeToolId: activeTool ? activeTool.id : "",
+      editing: editorOpen,
+      resumeLabel,
+      draftStatusLabel,
+      onOpen: (toolId) => actions.openImageTool(toolId),
+      onResume: () => {
+        if (!activeTool) return;
+        const target = imageTool.target;
+        const entry = target ? { image: { path: target.path, url: target.url, width: target.width, height: target.height }, item: target.item || null } : selected;
+        actions.openImageTool(activeTool.id, entry);
+      },
+      onClose: () => imageTool.closeTool(),
+      onIterate: () => actions.iterate(selected),
+      onReroll: () => actions.reroll(selected),
+      plannedTitle: t("studio.imageTool.planned")
+    }
+  );
+  if (editorOpen) {
+    return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("section", { className: "ofs-stage", children: [
+      activeTool.form === "canvas" ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("figure", { className: "ofs-figure", children: editorNode }) : editorNode,
+      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-stage-progress", "aria-hidden": "true", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-progress-label", children: progressText })
+      ] }) : null,
+      dock
+    ] });
+  }
+  if (library.workspaceMode === "new_draft") {
+    const fields = form && form.form || {};
+    const frameRatio = ratioOf2(fields.width, fields.height);
+    const draftCard = library.newDraftCard && typeof library.newDraftCard === "object" ? library.newDraftCard : {};
+    return /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("section", { className: "ofs-stage ofs-stage--draft", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-figure ofs-figure--draft", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-draft-backdrop", "aria-hidden": "true", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", {}),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", {}),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", {})
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-frame ofs-frame--draft", style: { "--ofs-frame-r": String(frameRatio) }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { className: "ofs-marks", "aria-hidden": "true", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", {})
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { className: "ofs-frame-body", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-empty-card ofs-draft-blank", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.newDraftTitle") }),
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("p", { className: "ofs-muted", children: draftCard.pending ? t("studio.stage.newDraftPending") : t("studio.stage.newDraftHint") })
+        ] }) })
+      ] }),
+      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-stage-progress is-inside", "aria-hidden": "true", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-progress-label", children: progressText })
+      ] }) : null
+    ] }) });
+  }
   if (!image) {
     const stopped = Boolean(compute.status && compute.status.stopped);
     const jobParams = activeJob && activeJob.params || {};
     const fields = form && form.form || {};
-    const frameRatio = ratioOf(jobParams.width || fields.width, jobParams.height || fields.height);
+    const frameRatio = ratioOf2(jobParams.width || fields.width, jobParams.height || fields.height);
     const preset = (compute.presets || []).find((option) => option && option.id === fields.presetId) || null;
     const steady = preset && Number.isFinite(Number(preset.steadySeconds)) ? Number(preset.steadySeconds) : null;
-    return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("section", { className: "ofs-stage", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "ofs-figure ofs-figure--empty", children: paintingActive ? maskEditor : /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(import_jsx_runtime23.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-frame", style: { "--ofs-frame-r": String(frameRatio) }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("span", { className: "ofs-marks", "aria-hidden": "true", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {}),
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {}),
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {}),
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", {})
-          ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "ofs-frame-body", children: activeJob ? null : /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-empty-card", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.empty") }),
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-muted", children: stopped ? t("studio.stage.stoppedHint") : t("studio.stage.emptyHint") }),
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-examples", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
-              INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
-            ] }),
-            steady !== null ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("p", { className: "ofs-exposure", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" }),
-              t("studio.stage.steady"),
-              " ",
-              formatSeconds(t, steady),
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" })
-            ] }) : null
-          ] }) })
+    return /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("section", { className: "ofs-stage", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-figure ofs-figure--empty", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-frame", style: { "--ofs-frame-r": String(frameRatio) }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { className: "ofs-marks", "aria-hidden": "true", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", {})
         ] }),
-        activeJob ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-stage-progress is-inside", "aria-hidden": "true", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-progress-label", children: progressText })
-        ] }) : null
-      ] }) }),
-      paintBar,
-      unsupportedNote
-    ] });
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { className: "ofs-frame-body", children: activeJob ? null : /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-empty-card", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("p", { className: "ofs-empty-title", children: t("studio.stage.empty") }),
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("p", { className: "ofs-muted", children: stopped ? t("studio.stage.stoppedHint") : t("studio.stage.emptyHint") }),
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-examples", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-examples-label", children: t("studio.stage.examples") }),
+            INSPIRE_KEYS.map((key) => /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("button", { type: "button", className: "ofs-example", onClick: () => useInspiration(t(key)), title: t(key), children: t(`${key}.label`) }, key))
+          ] }),
+          steady !== null ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("p", { className: "ofs-exposure", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" }),
+            t("studio.stage.steady"),
+            " ",
+            formatSeconds(t, steady),
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-exposure-rule", "aria-hidden": "true" })
+          ] }) : null
+        ] }) })
+      ] }),
+      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-stage-progress is-inside", "aria-hidden": "true", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-progress-label", children: progressText })
+      ] }) : null
+    ] }) });
   }
   const favorite = isFavorite(image.path || image.file);
   const copyTarget = image.absolute || image.path || image.file;
   const imageKey = image.path || image.file || image.url;
-  const printRatio = ratioOf(image.width, image.height);
+  const printRatio = ratioOf2(image.width, image.height);
   const developing = isFreshItem(item, now);
-  const continueInpaint = actions && typeof actions.continueInpaint === "function" ? actions.continueInpaint : null;
-  const canContinueInpaint = Boolean(image && inpaintSupported && continueInpaint);
-  return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("section", { className: "ofs-stage", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("figure", { className: "ofs-figure", children: [
-      paintingActive ? maskEditor : /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(import_jsx_runtime23.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("section", { className: "ofs-stage", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("figure", { className: "ofs-figure", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+        "button",
+        {
+          type: "button",
+          className: developing ? "ofs-print is-developing" : "ofs-print",
+          style: { "--ofs-print-r": String(printRatio) },
+          onClick: openZoom,
+          title: t("studio.stage.zoom"),
+          children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("img", { src: image.url, alt: prompt || image.file || t("studio.image.alt"), className: "ofs-image" })
+        },
+        imageKey
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-figure-tools", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: openZoom, title: t("studio.stage.zoom"), "aria-label": t("studio.stage.zoom"), children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "expand", size: 16 }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: () => copyPath(copyTarget), title: t("studio.action.copyPath"), "aria-label": t("studio.action.copyPath"), children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "copy", size: 16 }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
           "button",
           {
             type: "button",
-            className: developing ? "ofs-print is-developing" : "ofs-print",
-            style: { "--ofs-print-r": String(printRatio) },
-            onClick: openZoom,
-            title: t("studio.stage.zoom"),
-            children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("img", { src: image.url, alt: prompt || image.file || t("studio.image.alt"), className: "ofs-image" })
-          },
-          imageKey
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-figure-tools", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: openZoom, title: t("studio.stage.zoom"), "aria-label": t("studio.stage.zoom"), children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "expand", size: 16 }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("button", { type: "button", className: "ofs-glass-btn", onClick: () => copyPath(copyTarget), title: t("studio.action.copyPath"), "aria-label": t("studio.action.copyPath"), children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "copy", size: 16 }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
-            "button",
-            {
-              type: "button",
-              className: favorite ? "ofs-glass-btn is-on" : "ofs-glass-btn",
-              onClick: () => toggleFavorite(image.path || image.file),
-              title: favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
-              "aria-label": favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
-              "aria-pressed": favorite,
-              children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: favorite ? "starFilled" : "star", size: 16 })
-            }
-          )
-        ] })
+            className: favorite ? "ofs-glass-btn is-on" : "ofs-glass-btn",
+            onClick: () => toggleFavorite(image.path || image.file),
+            title: favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
+            "aria-label": favorite ? t("studio.action.favorited") : t("studio.action.favorite"),
+            "aria-pressed": favorite,
+            children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: favorite ? "starFilled" : "star", size: 16 })
+          }
+        )
       ] }),
-      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-stage-progress", "aria-hidden": "true", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "ofs-progress-label", children: progressText })
+      activeJob ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-stage-progress", "aria-hidden": "true", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-shimmer", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-progress-label", children: progressText })
       ] }) : null
     ] }),
-    paintBar,
-    unsupportedNote,
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-stage-foot", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "ofs-stage-prompt", title: prompt || void 0, children: prompt }),
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-stage-meta", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("span", { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-stage-foot", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("p", { className: "ofs-stage-prompt", title: prompt || void 0, children: prompt }),
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-stage-meta", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { children: [
           image.width || "—",
           " × ",
           image.height || "—"
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { "aria-hidden": "true", children: "·" }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { children: formatSeconds(t, image.seconds) }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { "aria-hidden": "true", children: "·" }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("span", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { "aria-hidden": "true", children: "·" }),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { children: formatSeconds(t, image.seconds) }),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { "aria-hidden": "true", children: "·" }),
+        /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { children: [
           t("studio.meta.seed"),
           " ",
           image.seed ?? "—"
         ] })
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "ofs-dock", children: [
-      canContinueInpaint ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("button", { type: "button", className: "ofs-dock-button ofs-continue-inpaint", onClick: () => continueInpaint(selected), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "image", size: 15 }),
-        t("studio.mask.continueFromResult")
-      ] }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => iterate(selected), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "focus", size: 15 }),
-        t("studio.action.iterate")
-      ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => reroll(selected), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "reroll", size: 15 }),
-        t("studio.action.reroll")
-      ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("button", { type: "button", className: "ofs-dock-button", onClick: () => copyPath(copyTarget), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "copy", size: 15 }),
-        t("studio.action.copyPath")
-      ] })
-    ] }),
-    zoom ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
+    dock,
+    zoom ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
       "div",
       {
         className: "ofs-lightbox",
@@ -7993,7 +9158,7 @@ function Stage(props) {
         ref: lightboxRef,
         onClick: () => setZoom(false),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
             "img",
             {
               src: image.url,
@@ -8001,7 +9166,7 @@ function Stage(props) {
               onClick: (event) => event.stopPropagation()
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
             "button",
             {
               ref: closeRef,
@@ -8009,20 +9174,20 @@ function Stage(props) {
               className: "ofs-lightbox-close",
               onClick: () => setZoom(false),
               "aria-label": t("studio.stage.close"),
-              children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "close", size: 16 })
+              children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "close", size: 16 })
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
             "button",
             {
               type: "button",
               className: "ofs-lightbox-action",
               onClick: (event) => {
                 if (event && typeof event.stopPropagation === "function") event.stopPropagation();
-                if (typeof referenceImage === "function") referenceImage(selected);
+                actions.openImageTool("inpaint", selected);
               },
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Icon, { name: "image", size: 15 }),
+                /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Icon, { name: "image", size: 15 }),
                 t("studio.action.reference")
               ]
             }
@@ -8034,8 +9199,8 @@ function Stage(props) {
 }
 
 // src/studio/Toast.jsx
-var import_react26 = __toESM(require("react"), 1);
-var import_jsx_runtime24 = require("react/jsx-runtime");
+var import_react31 = __toESM(require("react"), 1);
+var import_jsx_runtime29 = require("react/jsx-runtime");
 function noticeSpecOf(t, kind, compute, actions) {
   if (!kind) return null;
   const specs = {
@@ -8073,28 +9238,28 @@ function Toast(props) {
   const dismiss = guidance && typeof guidance.dismiss === "function" ? guidance.dismiss : null;
   const openLogs = ui && typeof ui.openLogs === "function" ? ui.openLogs : null;
   const actionRun = spec && spec.action && typeof spec.action.run === "function" ? spec.action.run : null;
-  return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-toast-stack", "aria-live": "polite", children: [
-    spec ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-toast ofs-toast--notice", role: "alert", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "ofs-toast-icon", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Icon, { name: "alert", size: 14 }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-toast-body", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "ofs-toast-title", children: spec.title }),
-        detail ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "ofs-toast-detail", title: detail, children: detail }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "ofs-toast-actions", children: [
-          actionRun ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: actionRun, children: spec.action.label }) : null,
-          spec.logs && openLogs ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { type: "button", className: "ofs-chip", onClick: (event) => openLogs(event.currentTarget), children: t("studio.guidance.viewLogs") }) : null,
-          dismiss ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { type: "button", className: "ofs-chip", onClick: dismiss, children: t("studio.guidance.close") }) : null
+  return /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "ofs-toast-stack", "aria-live": "polite", children: [
+    spec ? /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "ofs-toast ofs-toast--notice", role: "alert", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "ofs-toast-icon", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Icon, { name: "alert", size: 14 }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "ofs-toast-body", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("p", { className: "ofs-toast-title", children: spec.title }),
+        detail ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("p", { className: "ofs-toast-detail", title: detail, children: detail }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "ofs-toast-actions", children: [
+          actionRun ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("button", { type: "button", className: "ofs-chip is-on", onClick: actionRun, children: spec.action.label }) : null,
+          spec.logs && openLogs ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("button", { type: "button", className: "ofs-chip", onClick: (event) => openLogs(event.currentTarget), children: t("studio.guidance.viewLogs") }) : null,
+          dismiss ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("button", { type: "button", className: "ofs-chip", onClick: dismiss, children: t("studio.guidance.close") }) : null
         ] })
       ] })
     ] }) : null,
-    toast ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "ofs-toast", role: "status", children: toast.text }, toast.id) : null
+    toast ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "ofs-toast", role: "status", children: toast.text }, toast.id) : null
   ] });
 }
 
 // src/studio/TopBar.jsx
-var import_react29 = __toESM(require("react"), 1);
+var import_react34 = __toESM(require("react"), 1);
 
 // src/studio/ModelCardPicker.jsx
-var import_react27 = __toESM(require("react"), 1);
+var import_react32 = __toESM(require("react"), 1);
 
 // src/studio/posters/animagine-xl-3.1.webp
 var animagine_xl_3_1_default = "data:image/webp;base64,UklGRj4MAABXRUJQVlA4IDIMAABQLgCdASpwAHAAPo02kUglIyGhN3qrsKARiWIAzfSNxBe78md9X0YberzAeax6P/Oq6l70AOlw/wVqk6S+Dvjb+W5++XO0X7Po02SPx/1AsQuyL2j/Z+gX368CHVH8S9HX/F8SX796g/6Y9IrROqJn+d/fwl10dH5rN1Mwf6wcOvBCsj4oRO5xLIjXy0h7VGvOWDAMoFJoOB9tpwjnETvss2lM5HBTdm3sUM+iwYYRIM9UTmjhjcvT11mabLsn5cHP3MdHst1brWsgno5VaFn6E9JE2OxFhK/DV2WFSh7zHO5sl9x4X/WrK8T7/cTS7OGzUqHX2I2sTRTcElTCQ0u347Xz4F0j021izy4cBOvGoEiCdR+FavR2N8O8NamscwcSQ3oVdGpenpLMQLAffvPn3CHdfr6X9dOj1NExZbWO3tN0WCfEU9BubTQVjIq/DrKIx3rE4c2o7JdrKEfxeny5ca0eO1rKe9cOzWwLbNflGYICnep3foalz3gAAP7000ZnhZ4vmuuMkTKDJHFBdi/mmEDLo1llzm/qISqNVdyayyKOhpVGu62ysf21Dp/vn03XbwRv2tDxXJLm+D+ytSObZdL69zaWrC8Kdy2Qrid3p2wPImDzOHosc6Suo3YILzADT3ehxFnBGwhZ/Wm6gxlS5vIA2sMpv7MtircKiIpqwfeBcaBx5dQsWJ4brr8S6kKqnzP+9svtYgYnuQG148turJrS7IVLYNznA95z/drhdF5R9Dr/uXQiIdCegcOHDm2Fojs7fgGTlEoXh/xx/YayHnJwBp7jMrQ2W9pPq6hREBGLiIvKT1omBjtXeUJXXoFHiRp5JA4MtMxSlpP5o/mDyR5M2v6uG9CSUgsTxP58hf3P97Pt/MuqP9eo6YJoDJw7ArV4lTcOU+DC+mJ3ZQDYtd5anzX7WreLSrVwKBW1U75Q/3fnEhmkfAufqg4i+C+81AJGr+1BFyk0JiACJgCqs89/PTU+D9PKaZCc1erGbfmofGwX+GSoYn1t+jz9F68KDm7Gz+2qO+6oYRl/q5MXO+fNG5VPGAPMHt50MN4twH+i/6BQYTiniz7GMoAyiJUrHr4KErCP21zKly9jV2rGTJB6T+oRvwmA7zpVE1Sd5OYFq0hJOprb36xkuy0vAgG2oy+Mz0rH/Ht8I4shOM8mBxUhtc3XaEQpL7EHIp7+EVjqVeg97yNEttvDFtaDH1FnYcfabx7+vIB6ACLb99WlRt0kiINwsttJTsJuD/E45gKIDBbtlEUl5uket/eWlh0CtzV6pn5+3p+ZuTtc/DVZ2wcevUPpqqv3eCcK0LVNiC3JJpb5cpLBpunMfSGzZ2Ye4zXDd0I2ogyasH3H6CAX9cqzi8tK3SAWGzoXQWBCPzQ17c9QUUavVe5jMrulmV27fD2GqD9etsFHasHhv4j7tIkUpT1EbPhPhLN8MCAxrA0HXgQGKZIX6UK1YvcWywz+3BFek2Is/Y2MuO57eTTMk0J8WGYmyd4pUfP+xcixXZyuXLUOLdwJqGt1P69pg3/jKRT5NSOAqnZfO/12OZdRXhgvD+gfVIKRwdApojBMq8TdpUSqIooHuqCgDaqyn2B8rp2nG+Kmc639uGKuXCa6vTUHvuOqvCw/U5qQJqbtSAOLjdYWuMSxU5RK7B4RlBGvp3pO8fHgHqDrMGywz5nTQZRbDnuycWdpZTBvpDgz9RbiN3mfKalqbKNoUr1liODuGks4Jvwqr49vS812pP893dLZkFtis6kFA2dAwgQZDRl/DXfXMs+0PEk3E2U7ZHVTK53zsfK+aZNd0zhrqjnAUjdsMdfGq+eH7gLwbnxcydzF9Uh3oKKus1IB69tK1nJ3QmV1hZPsxFe1jaMdKP9KGGOXlXCWMx666oviGICin6sMj9KQYjPtbR1+BzULQeM79UNnn0ySuZ8yYl1n8Yvl1VR2JFxTfbAHOn3WJm5BtWdlkBVgF1xxHDfdqS2tQzhZrlnrtha242RHRVjpweOFjggi7yYDk5t5JoKqGL4opofQISwwEriwuo+bpjq12t6N2WzNna9oQI3lxbuW+Cix5k1fb6MeFST/9RFC9WeJI0S7nRLpjEMB83yFLKc13UNwj3h0cT+cQotgP7+VhGIuxRBZIlVwGwKlFWt0F1nGepdpIQ7KzVPcmfz4IShcUr70bRcOpBRnApDnv/vBqrg1/va1JXdAIlRX2LJuOT25nDD+XjKlWK+xRZxlPg45zfGTrrpLNVaSWjZCSITn/IluVsekszCZj542nNCEN7O8WB+2rH1Hgu7a8kEGrw6/UBgedAIq07DoJvMrMS5E7//4dOMD5V1y2ppH4x6lEZn+YtcHeELvivgDQqJW5JMp2/3O+3J9pgHzG5YJuqbtCZrgmy++FGNwlwLJlzazHL+1tlTTC4/zCZBkKd8hwgzIqjJfsmNilE2A1BmlNceFDm4Q8qzAm/sO86Fw1Xzs1EuVe+fk5T9KymZ9uI954QfJRxW00xxaMHt+dfw4lBThUooj8p7RdQV8bd0pFLxRG0iQ2GgxlRyuaT5iBAr/XCTMO8HAXGf7nJSyL2rLvjbP1M/QXTYTuP//ZD5S1xSUmEJXzU/1PKhc9iqW3NrQwe5lfTCMBLYlXWv0q8/hBNWtmqK01288hpmRwunEijcmd7qAaNKJb6wwv4exBn+b2/ttkbNFW8UIie65jfSJO2OVZZSBXr3sTw62arC+cpPcODCaIe7m6j3GyqCY2RxA2EmuX7bwCkQvEwAnH5mZ6wr1a5WpuQcwoBnEA43KyPpb/4zTmheI+pxo7B3jJCTjt/iMuzzd9s8kVH5AwwLENivQ27yaOxjLDH51y9v0b+IHp8MHIroYCm61DDyDghfA0d62pc16e1KsSQ1tTvMW97yG+7pDzsG5OqX0PgPJTTDr9kit13rBnjeZUeOFC4DCWrbbtQuJgcgDUfgCTuRDqXYmCOQmvLqJDz2VSlj6yG1Bjd63VQGiZY3y/6bns7/mdOa90d/Z5QmgolBHzfLEKyvRcrEG/M5wYwCz4PT7LGKafWQcIfX8uNyCeUm0k1/cQxx2NcRMIKy8ATg3Ds6njAs46wN2SmyXiQBZQYlgaes/7AvRSBDOI40W9G1ZiRTScsbWpE4QItRXM7q5LZmnWIqfCzuVF8au4QnXojHH32LxVGFHbG4DDVaGi0LZSCHppSUk2yPVObuwl01uDNpsgcBvNbOtIs2aoLYr+Kkzysu7jbqXbsiPEUr/7MH+gFvopyfOizqem1Un8VKK39KMmxBg1j4vu5p5Byp/WQkpXrM7h3bZdk9BHP52gmSEhuxhtz+EsNHrJfq3qQ+vO0N9CunS0rrIN/AhjcU81ZjNUoxLc0XT8WicXO1Ix+b1vKXj2INDPO8knrBWZwRTtYKec+edlz3wUbUB+95loU0jdgg/cwJT4FfxRA9QbTQlK/Wj+ic5XJnVa85Z8Xub50zj4Wx9U7cUow7yf6AAuMUh7MO4WRnu2xh2AnEIt5lQawkZga/cIMUk5/wkvBzBmwCfw2X1ZQC7vvNcjhSz2VXEeX3uYXfhtB7dGGo/QXgvDfoSlqHnMOd9aRJaV83cpFgLrCO6QW/IpZrsLho2swkrvun3wxdK89rzd4kwGw7OPsL6QJHaHGPRLJsbCpCmGZG7nJLdhWa9Fly74GkqkU+I4XVIV5T60KiS/9cgUL68UXz00zPz0CRUNWnBrDLcHFYReUZ4w7BGlilnkCfM3WgktXOBZTtqRuvlEs39yIPU/zjNKnA1kQDC+NQyZw4a3R5Gr5Vpb5b9wst1VwedQzu5D2loS42J3ge9bXlekU0u3UG8csq/j8sE0aVH9HhvIvVu1tYJyR3apqTPj2JglKaHzzNRdIUfD3TvI7ChQRzx46l0Cscw2BCqEhDm4PXQyUtu54tfYn9Eos6WvlJvCg2iCSWwjVnRACkS/MIBFvLuGg/qViFYpnASj7psF7t08Ph4hjQQkKROwn/VA3JyAlrI+fTAqlpTy/Ri567w9do/HYMoIH4WEoS2N2Ba6FaSByZhGAFqstIYvj9hI+v8aaSQ5AJz9pyxfgonu6S+RJ2/ut6Lcl1b+TkyP9fPKQf57kFQcvkg8ssQRBMWd+g2wVTa0gSC/jP8v8GFqH87d8AapdP5UgA/EAAAAA==";
@@ -8124,7 +9289,7 @@ var realvis_v5_default = "data:image/webp;base64,UklGRmQFAABXRUJQVlA4IFgFAAAQJAC
 var sdxl_turbo_default = "data:image/webp;base64,UklGRkwLAABXRUJQVlA4IEALAACQLACdASpwAHAAPo06lUglI6IhNZdO+KARiWwAsv8hR2fK+ZFXH8FsJldeUq+N/tvUx+ht6d+6Pq5/bT9nffV9Mf/P9HL+zdbD6AHnO+sB5XPX6ad3xnxa9KIihxfVJ39/MHUCuOd3Bs3+o5R6eF+u6NPT7wlTSGl89H4ZbwsqMPCzFFT1xA7/1Hwgdf/zx//s4HTf+YQiPvW81nqOl8A2xN6o0G9ri0cXcduyW5uMLu5dwnCzsr52TzLvamBwPDWjAI9O9MFzWNsI7EtL6HdufnA1lMBeBtgovAksGg/Klqe5uC4Qtq+c/slf/W+Zq3U4EMc5ksQDegTrlJgL3WaYoDzHM6iE/uSiaLkvVN/QLC6Z6tzsJb7ZI0MtyhlN6B1UKDRfIL7s28SqNx1BOLi9N1LlWilbXS1n8YgxNH4oQW6EiUF7s+f7CgrsKG2pu2RiMUp2nyuKKSl8kKJ9utYCsY/z938dUEnuJkdDgAD+2IvRErU87UDtgc3To785vxbvrG9Y7uxklJG5T872jf6wxr+OWDMMClFgIzdIyrrwsAv+z9MySVMXqrNTReZTBymIQyIUvK1ys3TvSWMmvzvMGVyAA/t9mau9fsZQLFnvRqyuDOJm40Ji/YWjj471EDTlD+uW51wv6pz0W4aXaXHbvgPjFe+2uCuBlsqs4ULv4TQ5J67wUauutxlUm2QZ77Xt9F1/Nvph2Sq4rmvuSXxEc4tfBb8/ODBw5OifshVtDG3MYUnAOx9mlnV3Wbh7ti5gnoT+pk9MVmlgwtnpBcTXXnzx6McGNeDNsIQb7slBx4JdJWI6kI8Bx9zS1LKYFx9CGq7k3cBQS7QUHo+rCbFa0lXPfTtUKGk/H8jiK0HuTDvxoFaeCNu/cYhfewe/PRkQayjTAd2huSq5YACqQ4IGTBqm7JJq9lTQ0GcrQ76L+Zf2NjfVD5QmbQnaokgnk0Q/EFsLl8Sp5ve25LSRI32vmCyzTMu34jwhRRERm5tvVAFAO/nV0DS+6ZnO9MFUD5ct89HzyPFqNvcktQulN4du9KtuLIR+BhVvnw+HN2IamOt/tIeaGrKbqEdVfgJRLlnzmQMZZ9g6llz1zAe4pGT4fgaqhMbkZ7vCmHK5VbKeBNEzPgDKk5BDO71cyZXPmBwXLFdHK9Icq+yUT18lpMuSkweVV8bFIU4x754zPKLbt61N8Xi1SY6ss4T8HdIdPkmIr/BKwuxO7Mgw0zzAUyR3eGtm3i8xFaPaUCf9lOemLW0MoYimfrzDHU7KIWup5fDimmZcepwqHepdxlrn5DPAMguXeZy8vkTRMUhm6kNihDW0S0o3RrBj7YPBSbnUGM5hBtmdoWxZ1fKLb+9rLQQjCw28FKZULmWOWh9FjQHiFrQHG5QIXEx0LYnIDo15d+yLDbndpV2VFznQ+knpeNYPu8/aXgKCqM/8xYH8PCF3T628j+NKAf528r7MsAd1BH0XATPVtIhu6mK3PUlvJKbqQOylSP2QzpFIPDGCTkAEVDBF2DJ3tQAU4XP96r0FF7Uan94OWr5EoFqhHm9h3NVJ26gZCiyf21syyEHA0rCsBdJYz/rcQsD9ixzGUWu0u2aXy9SOFtNLjBfOSVyMJZz8zesgNuhw1aekEfUSw1EdnuYpF7dAN5UYhAxT4m7Ms75XkxJh1c3uHYEEbjYw5l/dezaKGVt95NhoD8K4F/wd1KuZWCNJXRDC/6rR2OZ8p22P97Ka5e6MD7SNf5vq2bfzd26CDoWFPqu17a8Vohvg8VxgSNe0M5Kj/IQPtTk7IoiTbCuDsgyFgX5JiZakIFhJHRu9jWCsU0QOLOwzdZzpvOp+Ky635rqqLQM7ACcCS6quaixQ3PS7xg8DBrlAPWGBBYujdSGsmnZi2ZdxSTN0Vh1hYHDmuLOLkn24jAmfg7Q8csiKaSq76BZIj5+G3Rp5h5xy8aZsuucCcENoqwrn+HVHFhVpQn7eo5Z0TGbd9kuu04z9av2LsHzJmXKD38U3e9eWdSvq84QK5dOIVBxJ3Jz7RLH/7Zub13NKuamJsGVPIjSgq/WUFtEmDOgV0s7oWCJ5H5dmwrjTcAkX5pOddRXi0PiZQ40hV9FFTzg61v1S3al0cvM9kAjIiroaUKuw5YtYY39NSOnW3xDWwXpPaB4etcxvX2Ou+BA57CxGBgCGJm487yuGbDdHpOjVGBV7/y5NiVNSK/dfp5mSruH55XOeGdRfcqmXj3Re3ykk49u0+lpJfiW5ox/PqibhL502IoWGd0d+b7Siza+ej3Oi6EsvgKxg5jWrMd53uEdewRPg9KIDtDHIwuKZ5DSd2e7ratdU3JdbacU6N+KfT/ZrIfRHLwUk22uxJy1sIXewegO1yxXRNlEoLHLTCK+wGyT2U9okgRdYVPqmax1SPXo2O30zubcnl3fZ74ODvEGlgQr/RMnjeCBDhjvXKweT0FhpEDlkWytlSBwxB65zc285Rv9AztBXNy6XgnAr6Tqh5RR97xdXNurY2N3ZKP+1j99ybEN2ZNiYJLYaZKYV6DaSVbXgcr2b83toq3L74X5wM7yUEeHBbpEBNvLtlWENpZtBkp8WTptCwTNT4UOlU6OFQTq5fdgoE+Z+UxDCDLCl98UWVfvSCE7gsuEGcrxv04iKo/qYv/MS+MWWWyWINjnlRgiPseEycbadm6IxmJC2/QHI7EWyx3D4GMsV3HWTj7kE00GO6w09G2jBUjCbM1MqwsinPzOXgkSEz8IJVWNPmvZHvnE3HsrpW9T8vJKYXfGfW0RCWs4XvOPXNltuwEqE91PtQP45JNSn/+kwfFrHCaXkBkM2Czo1Rmumqo6S+DrH85eaee5MHNHkzGFvjPYSnzynV48lxDntaS9iSMdzGlQc3LY7j8QwLBuN/JOFFjwIpy9bL7yAAAC3IEMqdhRHA6lQfgdlYHY4IaAx4Er/zF4tcnN97wTdLX7f9Fo9Dk0i6pfiwHNiAB9oPk5w70hY4/sPBXdTdRApd/c4lZfRg67R+JMwolB8Utn7NDDe3gaPo/7r8og2gxbaML30q9Ul4okz/pj/MjvNULV0Sg6Ao5vb6Zaf8wLCnV/6GI6B/v71rTQPwqSgpFY3Wlc+d48FBJMhHU4mZj2XCZIn2liDlDPdpA+LjIELb5JJMSYoyqnjv8l47blKRtbZ9rBQ+OMn56STv4ncrOdoWCHSPLZEp2icLw70lHdtjX6Mky7eVGv9lc+M4/UqbpOFAZbfvn0HEHrGgSijozpFiPqehnMtXdLpXv1EYGEpjaQ+BZuSD2v0iKrvCtwjrNgPQ+XDtz8tRpVD8SW3aZ7A1ylo+Txm2nD4Lg+jHNXKCjiAhBgOCA7I2Ovrl2v9p1TLYjFcOV/YKF/BQ/iK7GhCZkI7UFLkvD6synmPyE4/4OxdQEnzc84EK1ogK/8wuKowKItmfaBFkzhPtPsQ9/moVQHqR/G2P6BIQsF+fxzXprCxYMB8oj6177N+GXi8P5gPAiawl1sTbjB98GWLDjtaRzJPYXwYBmkxV6yR8VAiCIdzf3NZFq10mdzJuM8z1rbmr+dw9M3yX5OS6dtRoDQnTu51O+SCaKA5TBW1nsJs/2Lpb7VMSAZyFDrCiJ4M9j31BuqgpSpqnJdgyMMFOE3Ik+pYOdWZ92BOurYEDxZBNyySNiugFHYLIlZgqsOcYvXVWJJIa3n1Z8O/WmqRnqprSpfd7bAxVTk5odM7VhCCkFSSgUl+LKwLxrAc0MZHT3LEoURP885MjEg6sJodrCRLktMa6MyNO2FkplRaYbdb1ZbP6iB5rryzgUupUXWQBobhOivudDCeOCMWDAukjbEKSLer5kCgEAA=";
 
 // src/studio/ModelCardPicker.jsx
-var import_jsx_runtime25 = require("react/jsx-runtime");
+var import_jsx_runtime30 = require("react/jsx-runtime");
 var MENU_ID = "ofs-model-menu";
 var POSTERS = {
   "sdxl-lightning": sdxl_lightning_default,
@@ -8145,6 +9310,7 @@ var LABELS = {
   default: "studio.preset.default",
   langZhEn: "studio.preset.langZhEn",
   langEnOnly: "studio.preset.langEnOnly",
+  imageToolOnly: "studio.preset.imageToolOnly",
   footer: "studio.preset.footer",
   steps: "studio.preset.stepsUnit",
   dualGpu: "studio.preset.dualGpu"
@@ -8174,10 +9340,10 @@ function ModelCardPicker(props) {
   const { t, isEn, presets, value, defaultPreset, onChange, open, onOpenChange } = props;
   const list = Array.isArray(presets) ? presets : [];
   const active = list.find((preset) => preset.id === value) || list[0] || null;
-  const rootRef = import_react27.default.useRef(null);
-  const triggerRef = import_react27.default.useRef(null);
-  const listRef = import_react27.default.useRef(null);
-  import_react27.default.useEffect(() => {
+  const rootRef = import_react32.default.useRef(null);
+  const triggerRef = import_react32.default.useRef(null);
+  const listRef = import_react32.default.useRef(null);
+  import_react32.default.useEffect(() => {
     if (!open || !listRef.current) return;
     const options = listRef.current.querySelectorAll('[role="option"]');
     if (options.length === 0) return;
@@ -8186,7 +9352,7 @@ function ModelCardPicker(props) {
     if (typeof target.focus === "function") target.focus({ preventScroll: true });
     if (typeof target.scrollIntoView === "function") target.scrollIntoView({ block: "nearest" });
   }, [open, value, list]);
-  import_react27.default.useEffect(() => {
+  import_react32.default.useEffect(() => {
     if (!open) return void 0;
     function onKeyDown(event) {
       if (event.key === "Escape") {
@@ -8208,13 +9374,14 @@ function ModelCardPicker(props) {
     };
   }, [open, onOpenChange]);
   function choose(preset) {
+    if (!preset || preset.inpaintOnly === true) return;
     if (onChange) onChange(preset);
     onOpenChange(false);
     if (triggerRef.current) triggerRef.current.focus({ preventScroll: true });
   }
   function onListKeyDown(event) {
     if (!listRef.current) return;
-    const options = Array.prototype.slice.call(listRef.current.querySelectorAll('[role="option"]'));
+    const options = Array.prototype.slice.call(listRef.current.querySelectorAll('[role="option"]')).filter((option) => option.disabled !== true && option.getAttribute("aria-disabled") !== "true");
     if (options.length === 0) return;
     const current = options.indexOf(document.activeElement);
     let next = null;
@@ -8228,15 +9395,15 @@ function ModelCardPicker(props) {
     if (typeof next.scrollIntoView === "function") next.scrollIntoView({ block: "nearest" });
   }
   if (!active) {
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { className: "ofs-model is-empty", "aria-hidden": "true", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Icon, { name: "sliders", size: 14 }),
-      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-now", children: "—" })
+    return /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { className: "ofs-model is-empty", "aria-hidden": "true", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Icon, { name: "sliders", size: 14 }),
+      /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-now", children: "—" })
     ] });
   }
   const eta = etaOf(t, active);
   const poster = POSTERS[active.id] || "";
-  return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "ofs-model-wrap", ref: rootRef, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-model-wrap", ref: rootRef, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(
       "button",
       {
         ref: triggerRef,
@@ -8254,69 +9421,73 @@ function ModelCardPicker(props) {
           }
         },
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Icon, { name: "sliders", size: 14 }),
-          active.family ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-family", children: active.family }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-now", children: shortOf(active) }),
-          eta ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(import_jsx_runtime25.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-div", "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-eta", children: eta })
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Icon, { name: "sliders", size: 14 }),
+          active.family ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-family", children: active.family }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-now", children: shortOf(active) }),
+          eta ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(import_jsx_runtime30.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-div", "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-eta", children: eta })
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Icon, { name: "chevronDown", size: 13, className: "ofs-model-caret" })
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Icon, { name: "chevronDown", size: 13, className: "ofs-model-caret" })
         ]
       }
     ),
-    open ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "ofs-model-menu", id: MENU_ID, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "ofs-model-head", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { children: `${t(LABELS.menuTitle)}${list.length > 1 ? ` · ${list.length}` : ""}` }),
-        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { children: t(LABELS.measured) })
+    open ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-model-menu", id: MENU_ID, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "ofs-model-head", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { children: `${t(LABELS.menuTitle)}${list.length > 1 ? ` · ${list.length}` : ""}` }),
+        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { children: t(LABELS.measured) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "ofs-model-list", role: "listbox", "aria-label": t(LABELS.menuTitle), ref: listRef, onKeyDown: onListKeyDown, children: list.map((preset) => {
+      /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { className: "ofs-model-list", role: "listbox", "aria-label": t(LABELS.menuTitle), ref: listRef, onKeyDown: onListKeyDown, children: list.map((preset) => {
         const selected = preset.id === active.id;
         const image = POSTERS[preset.id] || "";
         const isDefault = preset.id === defaultPreset;
+        const imageToolOnly = preset.inpaintOnly === true;
         const optionEta = etaOf(t, preset);
         const description = descriptionOf(preset, isEn);
-        return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
+        return /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(
           "button",
           {
             type: "button",
             role: "option",
             "aria-selected": selected ? "true" : "false",
-            className: `ofs-model-option${selected ? " is-on" : ""}`,
+            "aria-disabled": imageToolOnly ? "true" : void 0,
+            disabled: imageToolOnly,
+            className: `ofs-model-option${selected ? " is-on" : ""}${imageToolOnly ? " is-tool-only" : ""}`,
             "data-preset-id": preset.id,
+            title: imageToolOnly ? t(LABELS.imageToolOnly) : void 0,
             onClick: () => choose(preset),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-poster", "aria-hidden": "true", children: image ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("img", { src: image, alt: "", width: "56", height: "56", draggable: "false" }) : /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-poster-fallback", children: (preset.family || preset.id || "M").slice(0, 1) }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { className: "ofs-model-copy", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { className: "ofs-model-line", children: [
-                  preset.family ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-fam", children: preset.family }) : null,
-                  /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-name", children: shortOf(preset) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: preset.supportsChinese === true ? "ofs-model-lang is-zh" : "ofs-model-lang", children: t(preset.supportsChinese === true ? LABELS.langZhEn : LABELS.langEnOnly) }),
-                  isDefault ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-default", children: t(LABELS.default) }) : null
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-poster", "aria-hidden": "true", children: image ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("img", { src: image, alt: "", width: "56", height: "56", draggable: "false" }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-poster-fallback", children: (preset.family || preset.id || "M").slice(0, 1) }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { className: "ofs-model-copy", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { className: "ofs-model-line", children: [
+                  preset.family ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-fam", children: preset.family }) : null,
+                  /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-name", children: shortOf(preset) }),
+                  imageToolOnly ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-lang is-tool-only", children: t(LABELS.imageToolOnly) }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: preset.supportsChinese === true ? "ofs-model-lang is-zh" : "ofs-model-lang", children: t(preset.supportsChinese === true ? LABELS.langZhEn : LABELS.langEnOnly) }),
+                  isDefault ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-default", children: t(LABELS.default) }) : null
                 ] }),
-                description ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-desc", children: description }) : null,
-                /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-spec", children: specOf(t, preset) })
+                description ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-desc", children: description }) : null,
+                /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-spec", children: specOf(t, preset) })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { className: "ofs-model-side", children: [
-                optionEta ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-option-eta", children: optionEta }) : /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-option-eta" }),
-                /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "ofs-model-check", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Icon, { name: "check", size: 15 }) })
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { className: "ofs-model-side", children: [
+                optionEta ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-option-eta", children: optionEta }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-option-eta" }),
+                /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "ofs-model-check", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Icon, { name: "check", size: 15 }) })
               ] })
             ]
           },
           preset.id
         );
       }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "ofs-model-foot", children: t(LABELS.footer) })
+      /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { className: "ofs-model-foot", children: t(LABELS.footer) })
     ] }) : null
   ] });
 }
 
 // src/studio/StudioIcon.jsx
-var import_react28 = __toESM(require("react"), 1);
-var import_jsx_runtime26 = require("react/jsx-runtime");
+var import_react33 = __toESM(require("react"), 1);
+var import_jsx_runtime31 = require("react/jsx-runtime");
 function StudioIcon(props) {
   const size = props && props.size || 20;
-  return /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)(
     "svg",
     {
       width: size,
@@ -8329,18 +9500,18 @@ function StudioIcon(props) {
       strokeLinejoin: "round",
       "aria-hidden": "true",
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("path", { d: "M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8" }),
-        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("path", { d: "M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8" }),
-        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("path", { d: "M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16" }),
-        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("path", { d: "M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" }),
-        /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("circle", { cx: "12", cy: "12", r: "3.2" })
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("path", { d: "M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8" }),
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("path", { d: "M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8" }),
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("path", { d: "M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16" }),
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("path", { d: "M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" }),
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("circle", { cx: "12", cy: "12", r: "3.2" })
       ]
     }
   );
 }
 
 // src/studio/TopBar.jsx
-var import_jsx_runtime27 = require("react/jsx-runtime");
+var import_jsx_runtime32 = require("react/jsx-runtime");
 function TopBar(props) {
   const { t, isEn, ui, compute, library } = props;
   const { form: fields, patchForm, selectPreset } = props.form;
@@ -8361,13 +9532,13 @@ function TopBar(props) {
     openFolder
   } = compute;
   const status = compute.status || computeStatusOf(t, { session });
-  const [open, setOpen] = import_react29.default.useState(Boolean(props.defaultOpen));
-  const [modelOpen, setModelOpen] = import_react29.default.useState(Boolean(props.defaultModelOpen));
-  const wrapRef = import_react29.default.useRef(null);
-  const pillRef = import_react29.default.useRef(null);
+  const [open, setOpen] = import_react34.default.useState(Boolean(props.defaultOpen));
+  const [modelOpen, setModelOpen] = import_react34.default.useState(Boolean(props.defaultModelOpen));
+  const wrapRef = import_react34.default.useRef(null);
+  const pillRef = import_react34.default.useRef(null);
   const snapshot2 = useHostSnapshot(open);
   const now = useNow(open);
-  import_react29.default.useEffect(() => {
+  import_react34.default.useEffect(() => {
     if (!open) return void 0;
     function onKey(event) {
       if (event.key === "Escape") setOpen(false);
@@ -8409,24 +9580,24 @@ function TopBar(props) {
     if (value === "unavailable") return t("value.quotaUnavailable");
     return t("value.unknown");
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("header", { className: "ofs-topbar", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-brand", title: t("studio.nav.label"), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-brand-mark", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(StudioIcon, { size: 18 }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-brand-name", children: t("studio.brand") }),
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-brand-sub", children: t("studio.brandSub") })
+  return /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("header", { className: "ofs-topbar", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-brand", title: t("studio.nav.label"), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-brand-mark", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(StudioIcon, { size: 18 }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-brand-name", children: t("studio.brand") }),
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-brand-sub", children: t("studio.brandSub") })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("nav", { className: "ofs-tabs", "aria-label": t("studio.tabs"), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("button", { type: "button", className: view === "studio" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("studio"), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "sparkles", size: 15 }),
+    /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("nav", { className: "ofs-tabs", "aria-label": t("studio.tabs"), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("button", { type: "button", className: view === "studio" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("studio"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "sparkles", size: 15 }),
         t("studio.tab.studio")
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("button", { type: "button", className: view === "gallery" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("gallery"), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "images", size: 15 }),
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("button", { type: "button", className: view === "gallery" ? "ofs-tab is-on" : "ofs-tab", onClick: () => setView("gallery"), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "images", size: 15 }),
         t("studio.tab.gallery")
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-grow" }),
-    openFolder ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-grow" }),
+    openFolder ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
       "button",
       {
         type: "button",
@@ -8434,12 +9605,12 @@ function TopBar(props) {
         onClick: openFolder,
         title: t("studio.action.openFolder"),
         "aria-label": t("studio.action.openFolder"),
-        children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "folder", size: 16 })
+        children: /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "folder", size: 16 })
       }
     ) : null,
-    library.loadHistory ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("button", { type: "button", className: "ofs-icon-btn", onClick: library.loadHistory, title: t("studio.refresh"), "aria-label": t("studio.refresh"), children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "refresh", size: 16 }) }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-pill-wrap", ref: wrapRef, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
+    library.loadHistory ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("button", { type: "button", className: "ofs-icon-btn", onClick: library.loadHistory, title: t("studio.refresh"), "aria-label": t("studio.refresh"), children: /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "refresh", size: 16 }) }) : null,
+    /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-pill-wrap", ref: wrapRef, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(
         "button",
         {
           ref: pillRef,
@@ -8455,16 +9626,16 @@ function TopBar(props) {
           "aria-expanded": open,
           "aria-haspopup": "menu",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { children: status.label }),
-            quotaUsed !== null && quotaTotal !== null ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("em", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { children: status.label }),
+            quotaUsed !== null && quotaTotal !== null ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("em", { children: [
               quotaUsed,
               " / ",
               quotaTotal,
               " ",
               t("unit.hour")
             ] }) : null,
-            update ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+            update ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
               "span",
               {
                 className: "ofs-update-dot",
@@ -8473,55 +9644,55 @@ function TopBar(props) {
                 title: formatText(t("studio.update.available"), { latest: update.latest, current: update.current })
               }
             ) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-pill-caret", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "chevronDown", size: 13 }) })
+            /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-pill-caret", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "chevronDown", size: 13 }) })
           ]
         }
       ),
-      open ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-popover", role: "menu", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-popover-head", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("b", { children: status.label }),
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Tooltip, { text: status.tooltip, side: "bottom" })
+      open ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-popover", role: "menu", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-popover-head", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("i", { className: `ofs-dot is-${status.tone}${status.tone === "ok" || status.tone === "warn" ? " is-live" : ""}`, "aria-hidden": "true" }),
+            /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("b", { children: status.label }),
+            /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Tooltip, { text: status.tooltip, side: "bottom" })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { className: "ofs-muted", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.quota"),
             " ",
             quotaUsed !== null && quotaTotal !== null ? `${quotaUsed} / ${quotaTotal} ${t("unit.hour")}` : "—"
           ] }),
-          status.phaseLabel ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { className: "ofs-muted", children: [
+          status.phaseLabel ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.phase"),
             " · ",
             status.phaseLabel
           ] }) : null,
-          status.ready && steadySeconds !== null ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { className: "ofs-muted", children: [
+          status.ready && steadySeconds !== null ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.speedLine"),
             " ",
             formatSeconds(t, steadySeconds)
           ] }) : null,
-          idleShutdown ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-muted", children: formatText(t("studio.compute.idleCountdown"), {
+          idleShutdown ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-muted", children: formatText(t("studio.compute.idleCountdown"), {
             idle: idleShutdown.idleMinutes,
             total: idleShutdown.totalMinutes
-          }) }) : idleMinutes > 0 ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { className: "ofs-muted", children: [
+          }) }) : idleMinutes > 0 ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.idleFor"),
             " ",
             idleMinutes,
             " ",
             t("unit.min")
           ] }) : null,
-          session && session.device ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-muted", children: session.device }) : null,
-          tunnelLabel ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { className: "ofs-muted", children: [
+          session && session.device ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-muted", children: session.device }) : null,
+          tunnelLabel ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { className: "ofs-muted", children: [
             t("studio.compute.tunnel"),
             " · ",
             tunnelLabel
           ] }) : null
         ] }),
-        status.hint ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("p", { className: "ofs-popover-hint", children: status.hint }) : null,
-        update ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-popover-fallback ofs-popover-update", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-popover-fallback-title", children: formatText(t("studio.update.available"), { latest: update.latest, current: update.current }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { children: t("studio.update.hint") }),
-          update.enginesDsh ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { children: formatText(t("studio.update.requiresDsh"), { range: update.enginesDsh }) }) : null,
-          update.releaseUrl ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+        status.hint ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("p", { className: "ofs-popover-hint", children: status.hint }) : null,
+        update ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-popover-fallback ofs-popover-update", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-popover-fallback-title", children: formatText(t("studio.update.available"), { latest: update.latest, current: update.current }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { children: t("studio.update.hint") }),
+          update.enginesDsh ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { children: formatText(t("studio.update.requiresDsh"), { range: update.enginesDsh }) }) : null,
+          update.releaseUrl ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
             "a",
             {
               className: "ofs-popover-link",
@@ -8533,35 +9704,35 @@ function TopBar(props) {
             }
           ) : null
         ] }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-popover-note", children: [
-          probing ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { children: t("action.probing") }) : null,
-          probeInfo ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(import_jsx_runtime27.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-popover-note", children: [
+          probing ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { children: t("action.probing") }) : null,
+          probeInfo ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(import_jsx_runtime32.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { children: [
               t(accessMethodKey(kaggleTransport)),
               " · ",
               t(accessStatusKey(kaggleTransport, accessStatusOf(probeInfo, kaggleTransport)))
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { children: [
               t("studio.probe.quota"),
               " · ",
               statusText(probeInfo.quota)
             ] })
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { children: [
             t("studio.probe.account"),
             " · ",
             statusText(accountStatus),
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Tooltip, { text: t("studio.compute.authTooltip"), tone: "warn", side: "bottom" })
+            /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Tooltip, { text: t("studio.compute.authTooltip"), tone: "warn", side: "bottom" })
           ] }),
-          probeFailed ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { title: probeFailed.message || void 0, children: [
+          probeFailed ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { title: probeFailed.message || void 0, children: [
             probeFailed.status === "timeout" ? t("studio.probe.timeout") : t("studio.probe.failed"),
             probeFailed.message ? ` · ${probeFailed.message}` : ""
           ] }) : null,
-          probeNote ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { title: probeInfo.notes.join(" · "), children: probeNote }) : null
+          probeNote ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { title: probeInfo.notes.join(" · "), children: probeNote }) : null
         ] }),
-        quotaUnavailable ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "ofs-popover-fallback", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "ofs-popover-fallback-title", children: t("studio.compute.quotaFallback") }),
-          lastCheckTime ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { children: [
+        quotaUnavailable ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "ofs-popover-fallback", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "ofs-popover-fallback-title", children: t("studio.compute.quotaFallback") }),
+          lastCheckTime ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { children: [
             t("studio.compute.lastGood"),
             " ",
             lastCheckTime,
@@ -8569,13 +9740,13 @@ function TopBar(props) {
             t("studio.compute.quota"),
             " ",
             lastGoodQuota
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { children: t("studio.compute.neverChecked") }),
-          sessionRunMs !== null ? /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("span", { children: [
+          ] }) : /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { children: t("studio.compute.neverChecked") }),
+          sessionRunMs !== null ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { children: [
             t("studio.compute.sessionRan"),
             " ",
             formatDuration(t, sessionRunMs)
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
             "a",
             {
               className: "ofs-popover-link",
@@ -8587,15 +9758,15 @@ function TopBar(props) {
             }
           )
         ] }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: startSession2, disabled: !!busy || !status.canStart, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "cloud", size: 15 }),
+        /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: startSession2, disabled: !!busy || !status.canStart, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "cloud", size: 15 }),
           t("studio.compute.start")
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: stopSession2, disabled: !!busy || !status.canStop, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "clock", size: 15 }),
+        /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("button", { type: "button", role: "menuitem", className: "ofs-popover-row", onClick: stopSession2, disabled: !!busy || !status.canStop, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "clock", size: 15 }),
           t("studio.compute.stop")
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(
           "button",
           {
             type: "button",
@@ -8605,12 +9776,12 @@ function TopBar(props) {
             disabled: !!busy || probing,
             "aria-busy": probing,
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "refresh", size: 15 }),
+              /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "refresh", size: 15 }),
               probing ? t("action.probing") : t("studio.compute.check")
             ]
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(
           "button",
           {
             type: "button",
@@ -8621,12 +9792,12 @@ function TopBar(props) {
               if (openLogs) openLogs(pillRef.current);
             },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "message", size: 15 }),
+              /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "message", size: 15 }),
               t("studio.logs.open")
             ]
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(
           "button",
           {
             type: "button",
@@ -8637,14 +9808,14 @@ function TopBar(props) {
               if (openSettings) openSettings(pillRef.current);
             },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Icon, { name: "sliders", size: 15 }),
+              /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Icon, { name: "sliders", size: 15 }),
               t("studio.settings.open")
             ]
           }
         )
       ] }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
       ModelCardPicker,
       {
         t,
@@ -8668,7 +9839,7 @@ function TopBar(props) {
 }
 
 // src/studio/hooks/useStudioUi.js
-var import_react30 = __toESM(require("react"), 1);
+var import_react35 = __toESM(require("react"), 1);
 
 // src/logic/notice.js
 var NOTICE_TITLE_PREFIX = "● 生成完成 · ";
@@ -8706,26 +9877,25 @@ function uiStateViewOf(result) {
 // src/studio/hooks/useStudioUi.js
 var nextToastId = 0;
 function useStudioUi({ t, initialView, initialPanelMode }) {
-  const [view, setView] = import_react30.default.useState(initialView);
-  const [advancedOpen, setAdvancedOpen] = import_react30.default.useState(UI_STATE.defaults.advancedOpen);
-  const [negativeOpen, setNegativeOpen] = import_react30.default.useState(false);
-  const [error, setError] = import_react30.default.useState(null);
-  const [dismissed, setDismissed] = import_react30.default.useState("");
-  const [toast, setToast] = import_react30.default.useState(null);
-  const [panelMode, setPanelMode] = import_react30.default.useState(initialPanelMode);
-  const [zoom, setZoom] = import_react30.default.useState(false);
-  const [logsOpen, setLogsOpen] = import_react30.default.useState(false);
-  const [paintRequest, setPaintRequest] = import_react30.default.useState(0);
-  const logsReturnRef = import_react30.default.useRef(null);
-  const [settingsOpen, setSettingsOpen] = import_react30.default.useState(false);
-  const settingsReturnRef = import_react30.default.useRef(null);
-  const advancedOpenRef = import_react30.default.useRef(advancedOpen);
+  const [view, setView] = import_react35.default.useState(initialView);
+  const [advancedOpen, setAdvancedOpen] = import_react35.default.useState(UI_STATE.defaults.advancedOpen);
+  const [negativeOpen, setNegativeOpen] = import_react35.default.useState(false);
+  const [error, setError] = import_react35.default.useState(null);
+  const [dismissed, setDismissed] = import_react35.default.useState("");
+  const [toast, setToast] = import_react35.default.useState(null);
+  const [panelMode, setPanelMode] = import_react35.default.useState(initialPanelMode);
+  const [zoom, setZoom] = import_react35.default.useState(false);
+  const [logsOpen, setLogsOpen] = import_react35.default.useState(false);
+  const logsReturnRef = import_react35.default.useRef(null);
+  const [settingsOpen, setSettingsOpen] = import_react35.default.useState(false);
+  const settingsReturnRef = import_react35.default.useRef(null);
+  const advancedOpenRef = import_react35.default.useRef(advancedOpen);
   advancedOpenRef.current = advancedOpen;
   function showToast(text) {
     nextToastId += 1;
     setToast({ text, id: nextToastId });
   }
-  import_react30.default.useEffect(() => {
+  import_react35.default.useEffect(() => {
     let alive = true;
     Promise.resolve(fetchUiState()).then((result) => {
       if (!alive) return;
@@ -8754,7 +9924,7 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
     if (guidanceKey) setDismissed(guidanceKey);
     setError(null);
   }
-  import_react30.default.useEffect(() => {
+  import_react35.default.useEffect(() => {
     if (!toast) return void 0;
     const timer2 = setTimeout(() => setToast(null), 2600);
     return () => clearTimeout(timer2);
@@ -8798,12 +9968,6 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
     settingsReturnRef.current = null;
     if (target && typeof target.focus === "function" && target.isConnected !== false) target.focus();
   }
-  function requestPaint() {
-    setPaintRequest((prev) => prev + 1);
-  }
-  function clearPaintRequest() {
-    setPaintRequest(0);
-  }
   return {
     view,
     setView,
@@ -8832,23 +9996,19 @@ function useStudioUi({ t, initialView, initialPanelMode }) {
     closeLogs,
     settingsOpen,
     openSettings,
-    closeSettings,
-    // 涂抹请求信号：Stage 通过 paintRequest 的计数变化进入涂抹，消费后调用 clearPaintRequest。
-    paintRequest,
-    requestPaint,
-    clearPaintRequest
+    closeSettings
   };
 }
 function useCompletionNotice({ t, ui, job, activeJob }) {
-  const previousRef = import_react30.default.useRef(void 0);
-  const pendingRef = import_react30.default.useRef(false);
-  const hiddenJobRef = import_react30.default.useRef(null);
-  const returningRef = import_react30.default.useRef(null);
-  const tRef = import_react30.default.useRef(t);
-  const uiRef = import_react30.default.useRef(ui);
+  const previousRef = import_react35.default.useRef(void 0);
+  const pendingRef = import_react35.default.useRef(false);
+  const hiddenJobRef = import_react35.default.useRef(null);
+  const returningRef = import_react35.default.useRef(null);
+  const tRef = import_react35.default.useRef(t);
+  const uiRef = import_react35.default.useRef(ui);
   tRef.current = t;
   uiRef.current = ui;
-  const judge = import_react30.default.useCallback((nextJob) => {
+  const judge = import_react35.default.useCallback((nextJob) => {
     const previous = previousRef.current;
     previousRef.current = nextJob || null;
     if (previous === void 0) return;
@@ -8869,10 +10029,10 @@ function useCompletionNotice({ t, ui, job, activeJob }) {
       uiRef.current.showToast(tRef.current("studio.toast.generationDone"));
     }
   }, []);
-  import_react30.default.useEffect(() => {
+  import_react35.default.useEffect(() => {
     judge(job);
   }, [judge, job && job.id, job && job.status, job && (job.finishedAt ?? "")]);
-  import_react30.default.useEffect(() => {
+  import_react35.default.useEffect(() => {
     let timer2 = null;
     let alive = true;
     function stop() {
@@ -8925,10 +10085,10 @@ function useCompletionNotice({ t, ui, job, activeJob }) {
 }
 
 // src/studio/useStudio.js
-var import_react36 = __toESM(require("react"), 1);
+var import_react42 = __toESM(require("react"), 1);
 
 // src/studio/hooks/useChatThread.js
-var import_react31 = __toESM(require("react"), 1);
+var import_react36 = __toESM(require("react"), 1);
 function bubblePatch(t, job, current) {
   if (job.status === "waiting-session") return { stage: "queued", text: t("studio.chat.waitingSession") };
   if (job.status === "queued") return { stage: "queued", text: t("studio.chat.queued") };
@@ -8950,15 +10110,15 @@ function bubblePatch(t, job, current) {
   return null;
 }
 function useChatThread({ t, isEn, alive, state, form, generate }) {
-  const [messages, setMessages] = import_react31.default.useState([]);
-  const [interpreting, setInterpreting] = import_react31.default.useState(false);
-  const messageSeq = import_react31.default.useRef(0);
-  const interpretingRef = import_react31.default.useRef(false);
-  const threadSeq = import_react31.default.useRef(0);
+  const [messages, setMessages] = import_react36.default.useState([]);
+  const [interpreting, setInterpreting] = import_react36.default.useState(false);
+  const messageSeq = import_react36.default.useRef(0);
+  const interpretingRef = import_react36.default.useRef(false);
+  const threadSeq = import_react36.default.useRef(0);
   const jobs = stateJobs(state);
   const threadJobs = jobs.length > 0 ? jobs : state && state.lastJob ? [state.lastJob] : [];
   const threadKey = threadJobs.map((job) => `${job.id}:${job.status}`).join("|");
-  import_react31.default.useEffect(() => {
+  import_react36.default.useEffect(() => {
     if (messages.length === 0 || threadJobs.length === 0) return;
     setMessages((prev) => {
       let next = prev;
@@ -9091,25 +10251,368 @@ function useChatThread({ t, isEn, alive, state, form, generate }) {
   };
 }
 
+// src/studio/hooks/useImageTool.js
+var import_react37 = __toESM(require("react"), 1);
+function emptyDraft() {
+  return {
+    toolId: "",
+    target: null,
+    prompt: "",
+    strength: LIMITS.strength.default,
+    strengthAuto: true,
+    presetId: "",
+    mask: null
+  };
+}
+function positiveSize3(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : null;
+}
+function targetOf(entry) {
+  const holder = entry && typeof entry === "object" ? entry : null;
+  if (!holder) return null;
+  const image = holder.image && typeof holder.image === "object" ? holder.image : holder;
+  const path = typeof image.path === "string" ? image.path.trim() : "";
+  if (!path) return null;
+  const item = holder.item && typeof holder.item === "object" ? holder.item : null;
+  const params = item && item.params && typeof item.params === "object" ? item.params : null;
+  const ownPrompt = item && typeof item.prompt === "string" ? item.prompt.trim() : "";
+  const paramsPrompt = params && typeof params.prompt === "string" ? params.prompt.trim() : "";
+  const prompt = (ownPrompt || paramsPrompt).slice(0, LIMITS.prompt.maxChars);
+  return {
+    path,
+    url: typeof image.url === "string" && image.url ? image.url : referenceUrlOf(path),
+    width: positiveSize3(image.width),
+    height: positiveSize3(image.height),
+    item,
+    prompt
+  };
+}
+function presetsForTool(list, tool) {
+  if (!tool || !tool.capability) return [];
+  if (tool.id === "inpaint") return list.filter((item) => item.supportsInpaint === true);
+  if (tool.id === "img2img") {
+    return list.filter((item) => item.supportsImg2Img === true && item.inpaintOnly !== true);
+  }
+  return [];
+}
+function useImageTool({ t, isEn, alive, ui, presets, defaultPreset, onSubmitted, currentPresetId }) {
+  const list = Array.isArray(presets) ? presets.filter((item) => item && item.id) : [];
+  const [draft, setDraft] = import_react37.default.useState(() => emptyDraft());
+  const [editorOpen, setEditorOpen] = import_react37.default.useState(false);
+  const [submitting, setSubmitting] = import_react37.default.useState(false);
+  const [pendingTool, setPendingTool] = import_react37.default.useState(null);
+  const draftRef = import_react37.default.useRef(draft);
+  draftRef.current = draft;
+  const inFlightRef = import_react37.default.useRef(false);
+  const [workDrafts, setWorkDrafts] = import_react37.default.useState({});
+  const baselinesRef = import_react37.default.useRef({});
+  const removeWorkDraft = (key) => {
+    const path = draftKeyOf(key);
+    if (!path) return;
+    delete baselinesRef.current[path];
+    setWorkDrafts((prev) => {
+      if (!prev[path]) return prev;
+      const next = { ...prev };
+      delete next[path];
+      return next;
+    });
+  };
+  import_react37.default.useEffect(() => {
+    const key = draftKeyOf(draft.target);
+    if (!key) return;
+    const baseline = baselinesRef.current[key] || {};
+    const changed = {
+      mask: Boolean(draft.mask),
+      prompt: draft.prompt.trim() !== "",
+      params: draft.presetId !== baseline.presetId || draft.strength !== baseline.strength
+    };
+    const active = changed.mask || changed.prompt || changed.params;
+    setWorkDrafts((prev) => {
+      if (!active) {
+        if (!prev[key]) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return lruDrafts({
+        ...prev,
+        [key]: {
+          tool: draft.toolId,
+          prompt: draft.prompt,
+          strength: draft.strength,
+          strengthAuto: draft.strengthAuto,
+          presetId: draft.presetId,
+          mask: draft.mask,
+          changed,
+          lastTouchedAt: Date.now()
+        }
+      }, DRAFT_LRU_LIMIT);
+    });
+  }, [draft]);
+  const activeTool = imageToolOf(draft.toolId);
+  const preset = list.find((item) => item.id === draft.presetId) || null;
+  const toolPresets = presetsForTool(list, activeTool);
+  const hasMask = Boolean(draft.mask);
+  const strength = clampMaskStrength(draft.strength, hasMask);
+  const strengthMax = toolStrengthMaxOf(draft.toolId, hasMask);
+  const coverage = draft.mask ? draft.mask.coverage : 0;
+  const blockedKey = imageToolBlockedKeyOf({
+    tool: draft.toolId,
+    targetPath: draft.target ? draft.target.path : "",
+    preset,
+    prompt: draft.prompt,
+    targetPrompt: draft.target ? draft.target.prompt : "",
+    mask: draft.mask
+  });
+  const canSubmit = Boolean(activeTool && activeTool.ready && draft.target) && blockedKey === "" && !submitting;
+  function setPrompt(value) {
+    const text = String(value ?? "").slice(0, LIMITS.prompt.maxChars);
+    setDraft((prev) => prev.prompt === text ? prev : { ...prev, prompt: text });
+  }
+  function openTool(kind, entry) {
+    if (inFlightRef.current) return false;
+    const tool = imageToolOf(typeof kind === "string" ? kind : kind && kind.id);
+    if (!tool) return false;
+    if (!tool.ready) {
+      const key = tool.plannedKey || "studio.imageTool.planned";
+      ui.showToast(formatText(t(key), { tool: t(tool.labelKey) }));
+      return false;
+    }
+    const target = targetOf(entry);
+    if (!target) {
+      ui.showToast(t("studio.imageTool.blockedTarget"));
+      return false;
+    }
+    const previous = draftRef.current;
+    const workKey = draftKeyOf(target);
+    const saved = workKey ? workDrafts[workKey] : null;
+    const restored = saved && saved.tool === tool.id ? saved : null;
+    const sameWork = Boolean(previous.target && workKeyOf(previous.target) === workKeyOf(target));
+    const sameTool = !restored && sameWork && previous.toolId === tool.id;
+    const savedPreset = restored ? list.find((item) => item.id === restored.presetId) || null : null;
+    const restoredPreset = savedPreset || (sameTool ? list.find((item) => item.id === previous.presetId) || null : null);
+    const choice = restoredPreset ? { preset: restoredPreset, switched: false, fallback: false } : toolPresetOf(list, currentPresetId || defaultPreset, tool.id);
+    if (!choice.preset) {
+      ui.showToast(t("studio.imageTool.blockedNoPreset"));
+      return false;
+    }
+    const nextPreset = choice.preset;
+    const prompt = restored ? restored.prompt : sameTool ? previous.prompt : "";
+    const strength2 = restored ? clampMaskStrength(restored.strength, Boolean(restored.mask)) : sameTool ? clampMaskStrength(previous.strength, Boolean(previous.mask)) : toolStrengthDefaultOf(tool.id, nextPreset);
+    const strengthAuto = restored ? restored.strengthAuto !== false : sameTool ? previous.strengthAuto : true;
+    const mask = restored ? restored.mask : sameTool ? previous.mask : null;
+    setDraft({
+      toolId: tool.id,
+      target,
+      // 同一作品同一工具：恢复未提交的提示词 / 蒙版 / 强度（修复中断后可继续编辑）。
+      prompt,
+      strength: strength2,
+      strengthAuto,
+      presetId: nextPreset.id,
+      mask
+    });
+    if (workKey && !baselinesRef.current[workKey]) {
+      baselinesRef.current[workKey] = { presetId: nextPreset.id, strength: strength2 };
+    }
+    setEditorOpen(true);
+    if (!restored && !sameTool && (choice.switched || choice.fallback)) {
+      ui.showToast(formatText(t("studio.imageTool.autoPreset"), { preset: presetLabelOf(nextPreset) }));
+    }
+    return true;
+  }
+  function closeTool() {
+    setEditorOpen(false);
+  }
+  function selectPreset(next) {
+    const tool = imageToolOf(draftRef.current.toolId);
+    if (!tool) return false;
+    const wanted = typeof next === "string" ? next : next && next.id;
+    if (!wanted) return false;
+    const found = presetsForTool(list, tool).find((item) => item.id === wanted) || null;
+    if (!found) return false;
+    setDraft((prev) => {
+      const value = prev.strengthAuto ? toolStrengthDefaultOf(tool.id, found) : clampMaskStrength(prev.strength, Boolean(prev.mask));
+      return { ...prev, presetId: found.id, strength: value };
+    });
+    return true;
+  }
+  function setStrength(value) {
+    setDraft((prev) => {
+      const tool = imageToolOf(prev.toolId);
+      const withMask = Boolean(prev.mask) && Boolean(tool && tool.form === "canvas");
+      return { ...prev, strengthAuto: false, strength: clampMaskStrength(value, withMask) };
+    });
+  }
+  function applyMask(input) {
+    const tool = imageToolOf(draftRef.current.toolId);
+    if (!tool || tool.form !== "canvas") return { ok: false, reason: "unsupported" };
+    if (!draftRef.current.target) return { ok: false, reason: "no_target" };
+    const candidate = input && typeof input === "object" ? input : { data: input };
+    const verdict = maskExportVerdict(candidate.data, candidate.coverage);
+    if (!verdict.ok) return { ok: false, reason: verdict.reason };
+    setDraft((prev) => ({
+      ...prev,
+      mask: {
+        data: verdict.data,
+        coverage: verdict.coverage,
+        digest: maskDigestOf(verdict.data)
+      }
+    }));
+    return { ok: true };
+  }
+  function clearMask() {
+    setDraft((prev) => prev.mask ? { ...prev, mask: null } : prev);
+    return true;
+  }
+  function clearWorkDraft(value) {
+    const key = draftKeyOf(value);
+    if (!key) return false;
+    removeWorkDraft(key);
+    if (draftKeyOf(draftRef.current.target) === key) {
+      setDraft(emptyDraft());
+      setEditorOpen(false);
+    }
+    return true;
+  }
+  function workDraftSummary2(value) {
+    const key = draftKeyOf(value);
+    if (!key) return workDraftSummary(null);
+    return workDraftSummary(workDrafts[key] || null);
+  }
+  function patchDraft(patch) {
+    const partial = patch && typeof patch === "object" ? patch : null;
+    if (!partial) return false;
+    setDraft((prev) => ({ ...prev, ...partial }));
+    return true;
+  }
+  async function submit() {
+    if (inFlightRef.current) return false;
+    const current = draftRef.current;
+    const tool = imageToolOf(current.toolId);
+    if (!tool || !tool.ready) return false;
+    const currentPreset = list.find((item) => item.id === current.presetId) || null;
+    const blocked = imageToolBlockedKeyOf({
+      tool: tool.id,
+      targetPath: current.target ? current.target.path : "",
+      preset: currentPreset,
+      prompt: current.prompt,
+      targetPrompt: current.target ? current.target.prompt : "",
+      mask: current.mask
+    });
+    if (blocked) {
+      ui.showToast(t(blocked));
+      return false;
+    }
+    const body = buildImageToolBody({
+      tool: tool.id,
+      targetPath: current.target.path,
+      targetPrompt: current.target.prompt,
+      target: current.target,
+      preset: currentPreset,
+      presets: list,
+      prompt: current.prompt,
+      strength: current.strength,
+      mask: current.mask,
+      negativeActive: negativePromptActive(currentPreset, currentPreset && currentPreset.cfg)
+    });
+    if (!body) {
+      ui.showToast(t("studio.imageTool.blockedTarget"));
+      return false;
+    }
+    inFlightRef.current = true;
+    setSubmitting(true);
+    ui.setError(null);
+    try {
+      const result = await alive(submitGenerate(body));
+      if (!result) return false;
+      if (result.ok && result.data && result.data.id) {
+        setPendingTool({
+          jobId: result.data.id,
+          target: current.target,
+          body,
+          // 阶段十三：幽灵节点溯源（Host /state 快照里 params.reference.sourcePath 也能推断，
+          // 这里再补一份客户端已知的根，父图在更早分页时版本面板仍能挂对位置）。
+          parentPath: current.target.path,
+          rootImage: current.target.item && current.target.item.rootImage || current.target.path,
+          sourceMode: tool.id
+        });
+        removeWorkDraft(current.target.path);
+        setDraft(emptyDraft());
+        setEditorOpen(false);
+        ui.showToast(t("studio.imageTool.submitted"));
+        if (typeof onSubmitted === "function") {
+          onSubmitted(result.data, { tool: tool.id, target: current.target, body });
+        }
+        return true;
+      }
+      setEditorOpen(false);
+      ui.fail(result.code, result.message);
+      return false;
+    } finally {
+      inFlightRef.current = false;
+      setSubmitting(false);
+    }
+  }
+  return {
+    // 工具与底图：activeTool 关闭编辑态后仍保留（草稿的 owner），用 editorOpen 区分是否在编辑。
+    activeTool,
+    target: draft.target,
+    // 工具自己的提示词输入（默认空；提交时为空回退目标作品提示词）。
+    prompt: draft.prompt,
+    setPrompt,
+    // 强度：自动档跟随预设推荐档，用户拖动后退出自动档。
+    strength,
+    strengthMax,
+    strengthAuto: draft.strengthAuto,
+    setStrength,
+    // 工具预设：不回写左栏 form.presetId。
+    presetId: draft.presetId,
+    preset,
+    toolPresets,
+    selectPreset,
+    // 蒙版：{ data, coverage, digest } | null。
+    mask: draft.mask,
+    coverage,
+    applyMask,
+    clearMask,
+    // 编辑态与提交。
+    editorOpen,
+    openTool,
+    closeTool,
+    canSubmit,
+    submitBlockedKey: blockedKey,
+    submitting,
+    submit,
+    // 阶段十三：按作品路径缓存的未提交编辑草稿（LRU 8，会话内内存、不落盘）。
+    workDrafts,
+    clearWorkDraft,
+    workDraftSummary: workDraftSummary2,
+    patchDraft,
+    // 成功提交的任务信息，供失败重试恢复 / 阶段十三幽灵节点使用。
+    pendingTool
+  };
+}
+
 // src/studio/hooks/useKaggleLogin.js
-var import_react32 = __toESM(require("react"), 1);
+var import_react38 = __toESM(require("react"), 1);
 var NETWORK_ERROR_KEY = "studio.guidance.auth.reason.network";
 var REQUEST_ERROR_KEY = "studio.guidance.auth.reason.request";
 var UNAVAILABLE_ERROR_KEY = "studio.guidance.auth.reason.unavailable";
 var TIMEOUT_ERROR_KEY = "studio.guidance.auth.reason.timeout";
 function useKaggleLogin({ t, ui, onDone } = {}) {
   const translate = typeof t === "function" ? t : (key) => key;
-  const [login, setLogin] = import_react32.default.useState(emptyLoginView);
-  const [busy, setBusy] = import_react32.default.useState(false);
-  const [errorKey, setErrorKey] = import_react32.default.useState("");
-  const [codeErrorKey, setCodeErrorKey] = import_react32.default.useState("");
-  const timerRef = import_react32.default.useRef(null);
-  const startedAtRef = import_react32.default.useRef(0);
-  const busyRef = import_react32.default.useRef(false);
-  const sessionRef = import_react32.default.useRef(0);
-  const aliveRef = import_react32.default.useRef(true);
-  const viewRef = import_react32.default.useRef(emptyLoginView());
-  const onDoneRef = import_react32.default.useRef(onDone);
+  const [login, setLogin] = import_react38.default.useState(emptyLoginView);
+  const [busy, setBusy] = import_react38.default.useState(false);
+  const [errorKey, setErrorKey] = import_react38.default.useState("");
+  const [codeErrorKey, setCodeErrorKey] = import_react38.default.useState("");
+  const timerRef = import_react38.default.useRef(null);
+  const startedAtRef = import_react38.default.useRef(0);
+  const busyRef = import_react38.default.useRef(false);
+  const sessionRef = import_react38.default.useRef(0);
+  const aliveRef = import_react38.default.useRef(true);
+  const viewRef = import_react38.default.useRef(emptyLoginView());
+  const onDoneRef = import_react38.default.useRef(onDone);
   onDoneRef.current = onDone;
   function toast(key) {
     if (ui && typeof ui.showToast === "function") ui.showToast(translate(key));
@@ -9262,7 +10765,7 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
     setErrorKey("");
     setCodeErrorKey("");
   }
-  import_react32.default.useEffect(() => {
+  import_react38.default.useEffect(() => {
     aliveRef.current = true;
     function onVisibility() {
       if (document.hidden) {
@@ -9293,7 +10796,7 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
 }
 
 // src/studio/hooks/useSessionControl.js
-var import_react33 = __toESM(require("react"), 1);
+var import_react39 = __toESM(require("react"), 1);
 
 // src/logic/update.js
 function safeUrl(value) {
@@ -9324,12 +10827,12 @@ function rememberCancelling(previous, id) {
   return previous.includes(id) ? previous : [...previous, id];
 }
 function useSessionControl({ t, host, ui, alive }) {
-  const [busy, setBusy] = import_react33.default.useState("");
-  const [probing, setProbing] = import_react33.default.useState(false);
-  const [probeReport, setProbeReport] = import_react33.default.useState(null);
-  const [cancellingIds, setCancellingIds] = import_react33.default.useState([]);
-  const cancellingRef = import_react33.default.useRef(/* @__PURE__ */ new Set());
-  const startingRef = import_react33.default.useRef(false);
+  const [busy, setBusy] = import_react39.default.useState("");
+  const [probing, setProbing] = import_react39.default.useState(false);
+  const [probeReport, setProbeReport] = import_react39.default.useState(null);
+  const [cancellingIds, setCancellingIds] = import_react39.default.useState([]);
+  const cancellingRef = import_react39.default.useRef(/* @__PURE__ */ new Set());
+  const startingRef = import_react39.default.useRef(false);
   const state = host.state;
   const session = state && state.session || null;
   const kaggleTransport = transportOf(state);
@@ -9348,7 +10851,7 @@ function useSessionControl({ t, host, ui, alive }) {
     stalledMinutes: queueStalledMinutesOf(queuePolicy)
   };
   const pendingSignature = pendingJobs.map((job) => job.id).join(",");
-  import_react33.default.useEffect(() => {
+  import_react39.default.useEffect(() => {
     const activeIds = new Set(pendingJobs.map((job) => job.id));
     for (const id of [...cancellingRef.current]) {
       if (!activeIds.has(id)) cancellingRef.current.delete(id);
@@ -9358,9 +10861,9 @@ function useSessionControl({ t, host, ui, alive }) {
       return next.length === prev.length ? prev : next;
     });
   }, [pendingSignature]);
-  const hostErrorKeyRef = import_react33.default.useRef("");
-  const hostErrorCodeRef = import_react33.default.useRef("");
-  import_react33.default.useEffect(() => {
+  const hostErrorKeyRef = import_react39.default.useRef("");
+  const hostErrorCodeRef = import_react39.default.useRef("");
+  import_react39.default.useEffect(() => {
     if (!host.error) {
       if (!hostErrorCodeRef.current) return;
       const code = hostErrorCodeRef.current;
@@ -9494,47 +10997,28 @@ function useSessionControl({ t, host, ui, alive }) {
 }
 
 // src/studio/hooks/useStudioForm.js
-var import_react34 = __toESM(require("react"), 1);
+var import_react40 = __toESM(require("react"), 1);
 
 // src/logic/form.js
 var SNAPSHOT_FIELDS = ["prompt", "negative", "presetId", "seed"];
-function textOf2(value) {
+function textOf3(value) {
   return typeof value === "string" ? value : String(value ?? "");
 }
 function numberish(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
 }
-function maskSnapshot(mask) {
-  if (!mask) return "";
-  if (typeof mask === "object" && typeof mask.digest === "string" && mask.digest) return mask.digest;
-  const data = typeof mask === "object" ? mask.data : mask;
-  return maskDigestOf(data);
-}
-function referenceSnapshot(reference) {
-  if (!reference || typeof reference !== "object") return null;
-  return [
-    textOf2(reference.path).trim(),
-    textOf2(reference.url),
-    numberish(reference.width),
-    numberish(reference.height),
-    // 蒙版也是未提交的手动修改：涂完还没生成就切胶卷，同样要按草稿保护处理。
-    maskSnapshot(reference.mask)
-  ];
-}
 function formSnapshotOf(form) {
   const input = form && typeof form === "object" ? form : {};
   const snapshot2 = {};
   for (const field of SNAPSHOT_FIELDS) {
-    snapshot2[field] = field === "seed" ? textOf2(input.seed).trim() : textOf2(input[field]);
+    snapshot2[field] = field === "seed" ? textOf3(input.seed).trim() : textOf3(input[field]);
   }
   snapshot2.width = numberish(input.width);
   snapshot2.height = numberish(input.height);
   snapshot2.steps = numberish(input.steps);
   snapshot2.cfg = numberish(input.cfg);
   snapshot2.count = numberish(input.count);
-  snapshot2.strength = numberish(input.strength);
-  snapshot2.reference = referenceSnapshot(input.reference);
   return JSON.stringify(snapshot2);
 }
 function isFormDirty(form, baseline) {
@@ -9552,9 +11036,7 @@ function newCreationPatch(form, preset) {
   });
   return {
     prompt: "",
-    reference: null,
     seed: "",
-    strength: LIMITS.strength.default,
     ...negativeLayersPatch(layers)
   };
 }
@@ -9615,20 +11097,8 @@ var EMPTY_FORM = {
   steps: 4,
   cfg: 0,
   seed: "",
-  count: 1,
-  // 图生图：参考图来自画廊「以此图重绘」（{ path, url, width?, height? }），strength 是重绘强度。
-  // 局部重绘的蒙版挂在 `reference.mask`（{ data, coverage, digest }）上，换/移除参考图时一起清掉。
-  reference: null,
-  strength: LIMITS.strength.default
+  count: 1
 };
-function referenceOf(image, path) {
-  const next = { path, url: image && typeof image.url === "string" ? image.url : "" };
-  const width = Number(image && image.width);
-  const height = Number(image && image.height);
-  if (Number.isFinite(width) && width > 0) next.width = Math.round(width);
-  if (Number.isFinite(height) && height > 0) next.height = Math.round(height);
-  return next;
-}
 function tuningSourceOf(entry, prompt) {
   const text = typeof prompt === "string" ? prompt.trim() : "";
   if (text) return { prompt: text };
@@ -9638,18 +11108,17 @@ function tuningSourceOf(entry, prompt) {
 }
 function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const { presets, defaultPreset } = preset;
-  const [form, setForm] = import_react34.default.useState(() => ({
+  const [form, setForm] = import_react40.default.useState(() => ({
     ...EMPTY_FORM,
     prompt: initialPrompt
   }));
-  const [refineGroups, setRefineGroups] = import_react34.default.useState([]);
-  const [refineSource, setRefineSource] = import_react34.default.useState("");
-  const [enhancing, setEnhancing] = import_react34.default.useState(false);
-  const [translating, setTranslating] = import_react34.default.useState(false);
-  const [strengthAuto, setStrengthAuto] = import_react34.default.useState(false);
-  const [cleanBaseline, setCleanBaseline] = import_react34.default.useState("");
-  const [tuning, setTuning] = import_react34.default.useState(null);
-  const formRef = import_react34.default.useRef(form);
+  const [refineGroups, setRefineGroups] = import_react40.default.useState([]);
+  const [refineSource, setRefineSource] = import_react40.default.useState("");
+  const [enhancing, setEnhancing] = import_react40.default.useState(false);
+  const [translating, setTranslating] = import_react40.default.useState(false);
+  const [cleanBaseline, setCleanBaseline] = import_react40.default.useState("");
+  const [tuning, setTuning] = import_react40.default.useState(null);
+  const formRef = import_react40.default.useRef(form);
   formRef.current = form;
   const dirty = isFormDirty(form, cleanBaseline);
   const ratioId = ratioIdOf(form.width, form.height);
@@ -9657,15 +11126,7 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const negativeHint = hintOf(activePreset);
   const negativeActive = negativePromptActive(activePreset, form.cfg);
   const englishPromptHint = detectCjk(form.prompt) && presetNeedsEnglish(activePreset);
-  const reference = form.reference || null;
-  const referenceSupported = supportsImg2Img(activePreset);
-  const referenceBlocked = Boolean(reference && presets.length > 0 && !referenceSupported);
-  const inpaintSupported = supportsInpaint(activePreset);
-  const mask = referenceMaskOf(reference);
-  const maskBlocked = Boolean(mask && presets.length > 0 && !inpaintSupported);
-  const inpaintOnly = inpaintOnlyOf(activePreset);
-  const maskRequiredBlocked = inpaintOnly && !mask;
-  import_react34.default.useEffect(() => {
+  import_react40.default.useEffect(() => {
     if (presets.length === 0) return;
     setForm((prev) => {
       if (prev.presetId && presets.some((item2) => item2.id === prev.presetId)) return prev;
@@ -9675,7 +11136,7 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
       return applyNegativePatch(prev, presetSelectPatch(item, prev, presets));
     });
   }, [presets.length, defaultPreset]);
-  import_react34.default.useEffect(() => {
+  import_react40.default.useEffect(() => {
     if (cleanBaseline || !form.presetId) return;
     setCleanBaseline(formSnapshotOf(form));
   }, [cleanBaseline, form.presetId]);
@@ -9684,12 +11145,7 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   }
   function selectPreset(next) {
     if (!next || !next.id) return;
-    setForm((prev) => {
-      const patch = presetSelectPatch(next, prev, presets);
-      const strengthPatch = maskStrengthPresetPatch(strengthAuto, { native: inpaintOnlyOf(next) });
-      if (strengthPatch) Object.assign(patch, strengthPatch);
-      return applyNegativePatch(prev, patch);
-    });
+    setForm((prev) => applyNegativePatch(prev, presetSelectPatch(next, prev, presets)));
   }
   function markClean(submitted) {
     if (submitted && formRef.current !== submitted) return false;
@@ -9699,9 +11155,6 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   function applyRecall(patch, entry) {
     const partial = patch && typeof patch === "object" ? { ...patch } : {};
     if (Object.keys(partial).length === 0) return false;
-    if (Object.prototype.hasOwnProperty.call(partial, "reference")) {
-      partial.reference = referenceWithoutMask(partial.reference);
-    }
     const next = applyNegativePatch(formRef.current, partial);
     setForm(next);
     setCleanBaseline(formSnapshotOf(next));
@@ -9713,7 +11166,6 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     setForm(next);
     setCleanBaseline(formSnapshotOf(next));
     setTuning(null);
-    setStrengthAuto(false);
     ui.showToast(t("studio.toast.newCreation"));
   }
   function buildBody(overrides, options = {}) {
@@ -9721,12 +11173,15 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     const effectivePreset = presetOverride || activePreset;
     const effectiveCfg = overrides && Object.prototype.hasOwnProperty.call(overrides, "cfg") ? overrides.cfg : form.cfg;
     return buildGenerateBody(
-      { ...form, negative: negativePromptOf(form) },
+      {
+        ...form,
+        presetId: effectivePreset ? effectivePreset.id : form.presetId,
+        negative: negativePromptOf(form)
+      },
       {
         defaultPreset,
         overrides,
-        negativeActive: negativePromptActive(effectivePreset, effectiveCfg),
-        maskActive: supportsInpaint(effectivePreset)
+        negativeActive: negativePromptActive(effectivePreset, effectiveCfg)
       }
     );
   }
@@ -9776,76 +11231,6 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   }
   function applyCustomSize(partial) {
     patchForm(customSizePatch(partial));
-  }
-  function applyStrength(value) {
-    setStrengthAuto(false);
-    patchForm({ strength: clampMaskStrength(value, Boolean(mask)) });
-  }
-  function beginMaskEdit() {
-    const patch = maskStrengthPatch(formRef.current.strength, { native: inpaintOnly, auto: strengthAuto });
-    if (!patch) return false;
-    setStrengthAuto(true);
-    patchForm(patch);
-    return true;
-  }
-  function removeReference() {
-    patchForm({ reference: null });
-  }
-  function applyMask(input) {
-    const candidate = input && typeof input === "object" ? input : { data: input };
-    const currentReference = formRef.current.reference;
-    if (!currentReference || typeof currentReference !== "object" || !currentReference.path) {
-      return { ok: false, reason: "no_reference" };
-    }
-    const currentPreset = presets.find((item) => item && item.id === formRef.current.presetId) || null;
-    if (!supportsInpaint(currentPreset)) return { ok: false, reason: "unsupported" };
-    const verdict = maskExportVerdict(candidate.data, candidate.coverage);
-    if (!verdict.ok) return { ok: false, reason: verdict.reason };
-    patchForm({
-      reference: {
-        ...currentReference,
-        mask: {
-          data: verdict.data,
-          coverage: verdict.coverage,
-          digest: maskDigestOf(verdict.data)
-        }
-      }
-    });
-    return { ok: true };
-  }
-  function clearMask() {
-    const currentReference = formRef.current.reference;
-    if (!currentReference || typeof currentReference !== "object" || !currentReference.mask) return false;
-    patchForm({ reference: referenceWithoutMask(currentReference) });
-    return true;
-  }
-  function applyReference(entry) {
-    const image = entry && entry.image ? entry.image : null;
-    const path = image && typeof image.path === "string" ? image.path.trim() : "";
-    if (!path) return { ok: false, switchedPreset: null, reason: "no_path" };
-    const referencePatch = referenceOf(image, path);
-    const active = presets.find((item) => item.id === form.presetId) || null;
-    if (supportsImg2Img(active)) {
-      patchForm({ reference: referencePatch });
-      return { ok: true, switchedPreset: null, reason: "" };
-    }
-    const target = referencePresetOf(presets);
-    if (!target) return { ok: false, switchedPreset: null, reason: "unsupported" };
-    setForm((prev) => applyNegativePatch(prev, {
-      ...presetSelectPatch(target, prev, presets),
-      reference: referencePatch
-    }));
-    return { ok: true, switchedPreset: target, reason: "" };
-  }
-  function restoreRetryTask(plan) {
-    const restored = retryRestoreOf(plan, presets);
-    if (!restored.ok) return restored;
-    setForm((prev) => applyNegativePatch(prev, {
-      ...presetSelectPatch(restored.preset, prev, presets),
-      ...restored.patch
-    }));
-    setStrengthAuto(false);
-    return restored;
   }
   async function enhance() {
     if (enhancing) return;
@@ -9943,29 +11328,6 @@ ${value}` : value });
     applyCfg,
     resetSeed,
     applyIntent,
-    // 图生图：参考图 / 重绘强度与它们的能力判断、动作。
-    reference,
-    strength: clampMaskStrength(form.strength, Boolean(mask)),
-    // 强度滑块上限：有蒙版时用契约 inpaintMax（局部重绘允许更强替换），否则通用 max。
-    strengthMax: strengthMaxOf(Boolean(mask)),
-    // 强度是否处于自动档：自动档下切预设跟随推荐档，用户手调后为 false。
-    strengthAuto,
-    referenceSupported,
-    referenceBlocked,
-    applyStrength,
-    removeReference,
-    applyReference,
-    // 失败重试的「蒙版不可恢复」回填：恢复任务预设与参数 + 参考图，等用户重新涂抹。
-    restoreRetryTask,
-    // 局部重绘：蒙版挂在参考图上；能力判断、当前蒙版与写入/清空动作。
-    mask,
-    inpaintSupported,
-    inpaintOnly,
-    maskBlocked,
-    maskRequiredBlocked,
-    applyMask,
-    clearMask,
-    beginMaskEdit,
     refineGroups: refineGroups.map((group) => ({
       ...group,
       options: group.options.map((option) => ({ ...option, applied: isRefineApplied(form.prompt, option.text) }))
@@ -9981,7 +11343,7 @@ ${value}` : value });
 }
 
 // src/studio/hooks/useWorkLibrary.js
-var import_react35 = __toESM(require("react"), 1);
+var import_react41 = __toESM(require("react"), 1);
 var PAGE_SIZE = LIMITS.history.pageSize;
 function flattenHistory(items) {
   const images = [];
@@ -10004,23 +11366,30 @@ function mergePendingFavorites(serverList, pendingMap) {
   return merged;
 }
 function useWorkLibrary({ t, alive, ui, state }) {
-  const [selectedPath, setSelectedPath] = import_react35.default.useState("");
-  const [historyItems, setHistoryItems] = import_react35.default.useState([]);
-  const [historyHasMoreState, setHistoryHasMoreState] = import_react35.default.useState(false);
-  const [historyLoadingMore, setHistoryLoadingMore] = import_react35.default.useState(false);
-  const [favorites, setFavorites] = import_react35.default.useState([]);
-  const tRef = import_react35.default.useRef(t);
-  const uiRef = import_react35.default.useRef(ui);
+  const [selectedPath, setSelectedPath] = import_react41.default.useState("");
+  const [historyItems, setHistoryItems] = import_react41.default.useState([]);
+  const [historyHasMoreState, setHistoryHasMoreState] = import_react41.default.useState(false);
+  const [historyLoadingMore, setHistoryLoadingMore] = import_react41.default.useState(false);
+  const [favorites, setFavorites] = import_react41.default.useState([]);
+  const [workspaceMode, setWorkspaceMode] = import_react41.default.useState("work");
+  const [newDraftPending, setNewDraftPending] = import_react41.default.useState(false);
+  const [treeUnavailable, setTreeUnavailable] = import_react41.default.useState(false);
+  const [treeLoadingRoot, setTreeLoadingRoot] = import_react41.default.useState("");
+  const pendingNewDraftRef = import_react41.default.useRef("");
+  const treeUnavailableRef = import_react41.default.useRef(false);
+  const treeLoadedRef = import_react41.default.useRef(/* @__PURE__ */ new Set());
+  const tRef = import_react41.default.useRef(t);
+  const uiRef = import_react41.default.useRef(ui);
   tRef.current = t;
   uiRef.current = ui;
-  const favoritesRef = import_react35.default.useRef(favorites);
+  const favoritesRef = import_react41.default.useRef(favorites);
   favoritesRef.current = favorites;
-  const favSeqRef = import_react35.default.useRef(/* @__PURE__ */ new Map());
-  const favPendingRef = import_react35.default.useRef(/* @__PURE__ */ new Map());
-  const offsetRef = import_react35.default.useRef(0);
-  const hasMoreRef = import_react35.default.useRef(false);
-  const loadingMoreRef = import_react35.default.useRef(false);
-  const loadHistory = import_react35.default.useCallback(async () => {
+  const favSeqRef = import_react41.default.useRef(/* @__PURE__ */ new Map());
+  const favPendingRef = import_react41.default.useRef(/* @__PURE__ */ new Map());
+  const offsetRef = import_react41.default.useRef(0);
+  const hasMoreRef = import_react41.default.useRef(false);
+  const loadingMoreRef = import_react41.default.useRef(false);
+  const loadHistory = import_react41.default.useCallback(async () => {
     const result = await alive(fetchHistory(PAGE_SIZE, 0));
     if (!result) return;
     if (result.ok && result.data && Array.isArray(result.data.items)) {
@@ -10036,7 +11405,7 @@ function useWorkLibrary({ t, alive, ui, state }) {
       uiRef.current.fail(result.code, result.message);
     }
   }, [alive]);
-  const loadMoreHistory = import_react35.default.useCallback(async () => {
+  const loadMoreHistory = import_react41.default.useCallback(async () => {
     if (loadingMoreRef.current || !hasMoreRef.current) return;
     loadingMoreRef.current = true;
     setHistoryLoadingMore(true);
@@ -10059,10 +11428,10 @@ function useWorkLibrary({ t, alive, ui, state }) {
       setHistoryLoadingMore(false);
     }
   }, [alive]);
-  import_react35.default.useEffect(() => {
+  import_react41.default.useEffect(() => {
     loadHistory();
   }, [loadHistory]);
-  const loadLibrary = import_react35.default.useCallback(async () => {
+  const loadLibrary = import_react41.default.useCallback(async () => {
     const result = await alive(fetchLibrary());
     if (!result) return;
     if (result.ok && result.data && Array.isArray(result.data.favorites)) {
@@ -10073,17 +11442,17 @@ function useWorkLibrary({ t, alive, ui, state }) {
       uiRef.current.fail(result.code, result.message);
     }
   }, [alive]);
-  import_react35.default.useEffect(() => {
+  import_react41.default.useEffect(() => {
     loadLibrary();
   }, [loadLibrary]);
   const hasState = Boolean(state);
-  const baselineRef = import_react35.default.useRef(false);
-  const seenJobRef = import_react35.default.useRef("");
-  const announcedRef = import_react35.default.useRef(false);
+  const baselineRef = import_react41.default.useRef(false);
+  const seenJobRef = import_react41.default.useRef("");
+  const announcedRef = import_react41.default.useRef(false);
   const lastJob = state && state.lastJob ? state.lastJob : null;
   const lastJobKey = lastJob ? `${lastJob.id}:${lastJob.status}` : "";
   const sessionState = state && state.session && state.session.state || "absent";
-  import_react35.default.useEffect(() => {
+  import_react41.default.useEffect(() => {
     if (!hasState) return;
     if (!baselineRef.current) {
       baselineRef.current = true;
@@ -10098,10 +11467,10 @@ function useWorkLibrary({ t, alive, ui, state }) {
     announcedRef.current = true;
     uiRef.current.showToast(tRef.current("studio.toast.firstImage"));
   }, [hasState, lastJobKey, sessionState]);
-  const historyBaselineRef = import_react35.default.useRef(false);
+  const historyBaselineRef = import_react41.default.useRef(false);
   const lastJobId = state && state.lastJob ? `${state.lastJob.id}:${state.lastJob.finishedAt ?? ""}` : "";
-  const lastSeenRef = import_react35.default.useRef("");
-  import_react35.default.useEffect(() => {
+  const lastSeenRef = import_react41.default.useRef("");
+  import_react41.default.useEffect(() => {
     if (!hasState) return;
     if (!historyBaselineRef.current) {
       historyBaselineRef.current = true;
@@ -10112,6 +11481,21 @@ function useWorkLibrary({ t, alive, ui, state }) {
     lastSeenRef.current = lastJobId;
     loadHistory();
   }, [hasState, lastJobId, loadHistory]);
+  import_react41.default.useEffect(() => {
+    const jobId = pendingNewDraftRef.current;
+    if (!jobId || !lastJob || lastJob.id !== jobId) return;
+    if (lastJob.status === "failed" || lastJob.status === "cancelled") {
+      pendingNewDraftRef.current = "";
+      setNewDraftPending(false);
+      return;
+    }
+    if (lastJob.status !== "done") return;
+    pendingNewDraftRef.current = "";
+    setNewDraftPending(false);
+    const first = Array.isArray(lastJob.output?.images) ? lastJob.output.images[0] : null;
+    setWorkspaceMode("work");
+    setSelectedPath(first && first.path ? first.path : "");
+  }, [hasState, lastJobId]);
   const gallery = flattenHistory(historyItems);
   const batches = historyItems.map((item) => ({
     key: item.jobId || item.dir || String(item.prompt),
@@ -10120,12 +11504,65 @@ function useWorkLibrary({ t, alive, ui, state }) {
     entries: (Array.isArray(item.images) ? item.images.filter(Boolean) : []).map((image) => ({ image, item }))
   })).filter((batch) => batch.entries.length > 0);
   const newest = gallery[0] || null;
-  const selected = selectedPath && gallery.find((entry) => entry.image.path === selectedPath) || newest;
+  const selected = workspaceMode === "new_draft" ? null : selectedPath && gallery.find((entry) => entry.image.path === selectedPath) || newest;
+  const pendingJobs = pendingJobsOf(state);
+  const pendingSignature = pendingJobs.map((job) => `${job.id}:${job.status}`).join(",");
+  const lineage = import_react41.default.useMemo(
+    () => buildLineage({ items: historyItems, pendingJobs }),
+    [historyItems, pendingSignature]
+  );
+  function newDraft() {
+    pendingNewDraftRef.current = "";
+    setNewDraftPending(false);
+    setWorkspaceMode("new_draft");
+    setSelectedPath("");
+  }
+  function markNewDraftSubmitted(jobId) {
+    pendingNewDraftRef.current = typeof jobId === "string" ? jobId : "";
+    setNewDraftPending(true);
+    setWorkspaceMode("new_draft");
+    setSelectedPath("");
+  }
   function selectImage(entry) {
+    pendingNewDraftRef.current = "";
+    setNewDraftPending(false);
+    setWorkspaceMode("work");
     setSelectedPath(entry && entry.image ? entry.image.path : "");
   }
   function openMessage(path) {
-    if (path) setSelectedPath(path);
+    if (!path) return;
+    pendingNewDraftRef.current = "";
+    setNewDraftPending(false);
+    setWorkspaceMode("work");
+    setSelectedPath(path);
+  }
+  async function loadTree(root) {
+    const path = typeof root === "string" ? root.trim() : "";
+    if (!path || treeLoadedRef.current.has(path) || treeUnavailableRef.current) return null;
+    treeLoadedRef.current.add(path);
+    setTreeLoadingRoot(path);
+    try {
+      const result = await alive(fetchHistoryTree(path));
+      if (!result) {
+        treeLoadedRef.current.delete(path);
+        return null;
+      }
+      if (result.ok && result.data && Array.isArray(result.data.items)) {
+        const treeItems = result.data.items.filter(Boolean);
+        if (treeItems.length > 0) setHistoryItems((prev) => mergeHistoryPages(prev, treeItems));
+        return result.data;
+      }
+      if (result.status === 404 || result.code === "http_404") {
+        treeUnavailableRef.current = true;
+        setTreeUnavailable(true);
+        return null;
+      }
+      treeLoadedRef.current.delete(path);
+      uiRef.current.fail(result.code, result.message);
+      return null;
+    } finally {
+      setTreeLoadingRoot("");
+    }
   }
   function isFavorite(path) {
     return Boolean(path) && favorites.includes(String(path));
@@ -10219,20 +11656,32 @@ function useWorkLibrary({ t, alive, ui, state }) {
     offset: offsetRef.current,
     hasMore: historyHasMoreState,
     loadingMore: historyLoadingMore,
-    loadMore: loadMoreHistory
+    loadMore: loadMoreHistory,
+    // 阶段十三：原始历史条目与版本树索引（Filmstrip 按根折叠、版本面板取数据）。
+    items: historyItems,
+    lineage,
+    // 工作区焦点：new_draft 时 selected 为 null，作品条显示新建草稿卡。
+    workspaceMode,
+    newDraftPending,
+    newDraft,
+    markNewDraftSubmitted,
+    // 版本树按需拉取与旧宿主降级状态。
+    loadTree,
+    treeUnavailable,
+    treeLoadingRoot
   };
 }
 
 // src/studio/useStudio.js
 function useAlive() {
-  const ref = import_react36.default.useRef(true);
-  import_react36.default.useEffect(() => {
+  const ref = import_react42.default.useRef(true);
+  import_react42.default.useEffect(() => {
     ref.current = true;
     return () => {
       ref.current = false;
     };
   }, []);
-  return import_react36.default.useCallback(async (promise) => {
+  return import_react42.default.useCallback(async (promise) => {
     const value = await promise;
     return ref.current ? value : null;
   }, []);
@@ -10248,15 +11697,49 @@ function useStudio(props) {
   const initialPanelMode = props && props.panelMode === "chat" ? "chat" : "form";
   const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : [];
   const defaultPreset = state && state.defaultPreset || "";
-  const [sending, setSending] = import_react36.default.useState(false);
-  const pendingRef = import_react36.default.useRef(null);
+  const [sending, setSending] = import_react42.default.useState(false);
+  const pendingRef = import_react42.default.useRef(null);
   const ui = useStudioUi({ t, initialView, initialPanelMode });
   const control = useSessionControl({ t, host, ui, alive });
-  const [dismissedQueueKey, setDismissedQueueKey] = import_react36.default.useState("");
+  const [dismissedQueueKey, setDismissedQueueKey] = import_react42.default.useState("");
   const kaggleLogin = useKaggleLogin({ t, ui, onDone: () => control.runProbe() });
   const form = useStudioForm({ t, isEn, alive, ui, preset: { presets, defaultPreset }, initialPrompt });
+  const imageTool = useImageTool({
+    t,
+    isEn,
+    alive,
+    ui,
+    presets,
+    defaultPreset,
+    // 工具优先沿用左栏当前模型（支持对应能力时），但不回写左栏。
+    currentPresetId: form.form.presetId,
+    onSubmitted: () => host.refresh()
+  });
   const chat = useChatThread({ t, isEn, alive, state, form, generate });
   const library = useWorkLibrary({ t, alive, ui, state });
+  function newDraft() {
+    imageTool.closeTool();
+    form.newCreation();
+    library.newDraft();
+    ui.setView("studio");
+    ui.setPanelMode("form");
+  }
+  const formView = { ...form, newCreation: newDraft };
+  const libraryView = {
+    ...library,
+    newDraftCard: {
+      active: library.workspaceMode === "new_draft",
+      pending: library.newDraftPending === true,
+      width: form.form.width,
+      height: form.form.height,
+      presetLabel: form.activePreset ? presetLabelOf(form.activePreset) : "",
+      prompt: form.form.prompt
+    },
+    // 工具域的未提交编辑草稿：缩略图圆点 / 版本面板圆点与清空都用这一份。
+    workDrafts: imageTool.workDrafts,
+    clearWorkDraft: imageTool.clearWorkDraft,
+    workDraftSummary: imageTool.workDraftSummary
+  };
   function startSession2() {
     return control.startSession(form.form.presetId || defaultPreset);
   }
@@ -10284,34 +11767,20 @@ function useStudio(props) {
   };
   async function generate(overrides, options = {}) {
     if (sending) return false;
-    const policy = generateSourcePolicy(options.source, {
-      overrides,
-      preset: form.activePreset,
-      presets
-    });
-    if (!policy.ok) {
-      ui.showToast(t(policy.blockedKey));
-      return false;
-    }
-    const effectivePreset = effectivePresetOf(policy.overrides, form.activePreset, presets);
-    const hasReferenceOverride = Boolean(policy.overrides) && Object.prototype.hasOwnProperty.call(policy.overrides, "reference");
-    const effectiveReference = hasReferenceOverride ? policy.overrides.reference : form.reference;
-    const capability = generateCapabilityOf({
-      preset: effectivePreset,
-      presets,
-      reference: effectiveReference
-    });
+    const effectivePreset = effectivePresetOf(overrides, form.activePreset, presets);
+    const capability = generateCapabilityOf({ preset: effectivePreset, presets });
     if (!capability.ok) {
-      ui.showToast(t(capability.noticeKey));
+      ui.showToast(t(capability.blockedKey));
       return false;
     }
-    const body = form.buildBody(policy.overrides, { preset: effectivePreset });
+    const requestPreset = capability.preset || effectivePreset;
+    const body = form.buildBody(overrides, { preset: requestPreset });
     if (!body.prompt) {
       ui.fail("need_prompt", "");
       return false;
     }
     const showPolicyNotice = () => {
-      if (policy.notice) ui.showToast(formatText(t(policy.notice.key), policy.notice.params));
+      if (capability.notice) ui.showToast(formatText(t(capability.notice.key), capability.notice.params));
     };
     const submittedForm = form.form;
     pendingRef.current = body;
@@ -10335,6 +11804,7 @@ function useStudio(props) {
         entries.push({ role: "assistant", kind: "job", jobId, stage: "pending", text: t("studio.chat.pending") });
         chat.pushMessages(entries);
         if (options.pushUser !== false) form.markClean(submittedForm);
+        if (library.workspaceMode === "new_draft") library.markNewDraftSubmitted(jobId);
         host.refresh();
         ui.showToast(t("studio.toast.submitted"));
         showPolicyNotice();
@@ -10370,70 +11840,38 @@ function useStudio(props) {
     if (!target) return;
     library.selectImage(target);
     const patch = iteratePatch(target, form.form, presets);
-    const decision = previewRecallOf({ reference: form.reference, dirty: form.dirty, patch });
+    const decision = previewRecallOf({ dirty: form.dirty, patch });
     if (decision.noticeKey) ui.showToast(t(decision.noticeKey));
     if (decision.action !== "recall") return;
     form.applyRecall(patch, target);
   }
-  function referenceImage(entry) {
+  function openImageTool(kind, entry) {
     const target = entry || library.selected;
-    const result = form.applyReference(target);
-    if (!result || !result.ok) {
-      const failedKey = result && result.reason === "no_path" ? "studio.reference.noPath" : "studio.reference.unavailable";
-      ui.showToast(t(failedKey));
-      return;
-    }
-    ui.setView("studio");
-    ui.setPanelMode("form");
-    ui.setZoom(false);
-    const effectivePreset = result.switchedPreset || form.activePreset;
-    if (inpaintOnlyOf(effectivePreset)) ui.requestPaint();
-    if (result.switchedPreset) {
-      const preset = result.switchedPreset;
-      const label = preset.label || preset.short || preset.id;
-      ui.showToast(formatText(t("studio.reference.switched"), { preset: label }));
-      return;
-    }
-    ui.showToast(t("studio.reference.applied"));
-  }
-  function continueInpaint(entry) {
-    const target = entry || library.selected;
-    const result = form.applyReference(target);
-    if (!result || !result.ok) {
-      const failedKey = result && result.reason === "no_path" ? "studio.reference.noPath" : "studio.reference.unavailable";
-      ui.showToast(t(failedKey));
+    if (!target) {
+      ui.showToast(t("studio.imageTool.blockedTarget"));
       return false;
     }
+    library.selectImage(target.image ? target : { image: target });
+    if (!imageTool.openTool(kind, target)) return false;
     ui.setView("studio");
     ui.setPanelMode("form");
     ui.setZoom(false);
-    ui.requestPaint();
-    ui.showToast(t("studio.mask.continueHint"));
     return true;
   }
   function retryFocusedJob() {
     const pending = pendingRef.current;
-    let plan = retryReferencePlan(control.focusedJob, { pendingRef: pending });
-    if (!plan && pending) plan = retryReferencePlan(pending, { pendingRef: pending });
-    if (!plan) {
+    const focused = control.focusedJob;
+    const focusedParams = focused && focused.params && typeof focused.params === "object" ? focused.params : null;
+    if (focusedParams && focusedParams.reference) {
+      ui.showToast(t("studio.imageTool.retryMoved"));
+      return;
+    }
+    const overrides = retryOverrides(focused) || (pending ? retryOverrides(pending) : null);
+    if (!overrides) {
       ui.showToast(t("workbench.needPrompt"));
       return;
     }
-    if (plan.maskLost) {
-      const restored = form.restoreRetryTask(plan);
-      if (!restored || !restored.ok) {
-        const failedKey = restored && restored.reason === "no_path" ? "studio.reference.noPath" : "studio.reference.unavailable";
-        ui.showToast(t(failedKey));
-        return;
-      }
-      ui.setView("studio");
-      ui.setPanelMode("form");
-      ui.setZoom(false);
-      if (plan.requestPaint) ui.requestPaint();
-      ui.showToast(t(plan.noticeKey));
-      return;
-    }
-    generate(plan.overrides, { source: "retry" });
+    generate(overrides, { source: "retry" });
   }
   function resetToSafe() {
     const safe = safeResetPatch(form.activePreset);
@@ -10463,21 +11901,22 @@ function useStudio(props) {
     isEn,
     ui,
     compute,
-    form,
+    form: formView,
     chat,
-    library,
+    library: libraryView,
+    imageTool,
     guidance: { kind: guidanceKind, code: guidanceCode, surface: guidanceSurface, detail: guidanceDetail, key: guidanceKey, dismiss: dismissGuidance },
-    actions: { sending, generate, previewWork, reroll, iterate, referenceImage, continueInpaint, retryFocusedJob, resetToSafe }
+    actions: { sending, generate, newDraft, previewWork, reroll, iterate, openImageTool, retryFocusedJob, resetToSafe }
   };
 }
 
 // src/studio/Studio.jsx
-var import_jsx_runtime28 = require("react/jsx-runtime");
-var StudioStyles = import_react37.default.memo(function StudioStyles2() {
-  return /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("style", { children: CSS });
+var import_jsx_runtime33 = require("react/jsx-runtime");
+var StudioStyles = import_react43.default.memo(function StudioStyles2() {
+  return /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("style", { children: CSS });
 });
 function Studio(props) {
-  const { t, isEn, ui, compute, form, chat, library, guidance, actions } = useStudio(props);
+  const { t, isEn, ui, compute, form, chat, library, imageTool, guidance, actions } = useStudio(props);
   const status = compute.status;
   const pipelineHold = pipelineHoldOf(compute.focusedJob, Date.now());
   const now = useNow(Boolean(compute.activeJob) || status.transient || pipelineHold);
@@ -10493,20 +11932,20 @@ function Studio(props) {
     failureDismissed: Boolean(guidance.key) && ui.dismissed === guidance.key,
     now: Date.now()
   });
-  const panel = chatMode ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(ChatPanel, { t, ui, form, chat, library, actions }) : /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Rail, { t, ui, form, actions });
+  const panel = chatMode ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(ChatPanel, { t, ui, form, chat, library, actions }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Rail, { t, ui, form, actions });
   const guidanceSurface = guidance && guidance.kind ? guidance.surface || guidanceSurfaceOf(guidance.kind) : "";
   const bannerGuidance = guidanceSurface === "banner" ? guidance : null;
   const noticeGuidance = guidanceSurface === "toast" ? guidance : null;
-  return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-root", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(StudioStyles, {}),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-app", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(TopBar, { t, isEn, ui, compute, form, library, defaultModelOpen: props.defaultModelOpen }),
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(PipelineBar, { view: pipeline }),
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(QueueNotice, { t, notice: compute.queueNotice }),
-      bannerGuidance ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(GuidanceCard, { t, guidance: bannerGuidance, compute, actions, ui }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: `ofs-body${ui.view === "gallery" ? " is-gallery" : ""}`, children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { className: "ofs-root", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(StudioStyles, {}),
+    /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { className: "ofs-app", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(TopBar, { t, isEn, ui, compute, form, library, defaultModelOpen: props.defaultModelOpen }),
+      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(PipelineBar, { view: pipeline }),
+      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(QueueNotice, { t, notice: compute.queueNotice }),
+      bannerGuidance ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(GuidanceCard, { t, guidance: bannerGuidance, compute, actions, ui }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { className: `ofs-body${ui.view === "gallery" ? " is-gallery" : ""}`, children: [
         ui.view === "studio" ? panel : null,
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { className: "ofs-main", children: ui.view === "gallery" ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { className: "ofs-main", children: ui.view === "gallery" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
           Gallery,
           {
             t,
@@ -10521,7 +11960,7 @@ function Studio(props) {
             onExport: library.exportPaths,
             onRecall: actions.iterate,
             onVariant: actions.reroll,
-            onReference: actions.referenceImage,
+            onReference: (entry) => actions.openImageTool("inpaint", entry),
             onToggleFavorite: library.toggleFavorite,
             onZoom: library.zoomImage,
             onOpen: (entry) => {
@@ -10529,13 +11968,13 @@ function Studio(props) {
               ui.setView("studio");
             }
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Stage, { t, ui, compute, form, library, actions, now }) })
+        ) : /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Stage, { t, ui, compute, form, library, imageTool, actions, now }) })
       ] }),
-      ui.view === "studio" ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Filmstrip, { t, ui, compute, library, actions, now }) : null
+      ui.view === "studio" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Filmstrip, { t, ui, compute, library, actions, now }) : null
     ] }),
-    ui.logsOpen ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(LogsDrawer, { t, ui, compute, logs, onClose: ui.closeLogs }) : null,
-    ui.settingsOpen ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(SettingsDrawer, { t, ui, onClose: ui.closeSettings }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Toast, { t, toast: ui.toast, guidance: noticeGuidance, compute, actions, ui })
+    ui.logsOpen ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(LogsDrawer, { t, ui, compute, logs, onClose: ui.closeLogs }) : null,
+    ui.settingsOpen ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(SettingsDrawer, { t, ui, onClose: ui.closeSettings }) : null,
+    /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Toast, { t, toast: ui.toast, guidance: noticeGuidance, compute, actions, ui })
   ] });
 }
 

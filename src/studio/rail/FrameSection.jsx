@@ -1,7 +1,8 @@
 /**
  * 左栏第 3 节：画面比例预设与折叠的自定义宽高草稿输入。
  *
- * 有参考图时尺寸跟随参考图，只显示像素读数并收起比例/宽高控件。
+ * 主表单只做纯文生图，尺寸始终由用户选择；参考图 / 蒙版迁到舞台图片工具后
+ * 这里不再有「跟随参考图」分支。
  */
 
 import React from 'react'
@@ -31,8 +32,6 @@ export function FrameSection({
   ratioId,
   applyRatio,
   applyCustomSize,
-  hasReference,
-  referenceSize,
 }) {
   // 宽/高输入框的编辑草稿：表单里只存合法数字，输入过程中的原始文本（含空串）先落在本地，
   // 失焦 / 回车时再归一化提交。外部改动（比例、档位、切换模型、带回参数）通过下面这个
@@ -78,77 +77,67 @@ export function FrameSection({
   return (
     <Fieldset
       title={t('studio.rail.frame')}
-      action={(
-        <span className="ofs-frame-readout">
-          {hasReference
-            ? (referenceSize ? `${referenceSize} · ${t('studio.rail.followReference')}` : t('studio.rail.followReference'))
-            : frameSizeText}
-        </span>
-      )}
+      action={<span className="ofs-frame-readout">{frameSizeText}</span>}
     >
-      {hasReference ? null : (
-        <>
-          <div className="ofs-frame-group">
-            <span className="ofs-frame-label">{t('studio.rail.ratio')}</span>
-            <div className="ofs-ratio-row" role="group" aria-label={t('studio.rail.ratio')}>
-              {DEFAULT_RATIOS.map((ratio) => (
-                <button
-                  type="button"
-                  key={ratio.id}
-                  className={ratioId === ratio.id ? 'ofs-ratio is-on' : 'ofs-ratio'}
-                  onClick={() => applyRatio(ratio.id)}
-                  aria-pressed={ratioId === ratio.id}
-                >
-                  <span className={`ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(':', '-')}`} aria-hidden="true" />
-                  <span className="ofs-ratio-label">{ratio.id}</span>
-                </button>
+      <div className="ofs-frame-group">
+        <span className="ofs-frame-label">{t('studio.rail.ratio')}</span>
+        <div className="ofs-ratio-row" role="group" aria-label={t('studio.rail.ratio')}>
+          {DEFAULT_RATIOS.map((ratio) => (
+            <button
+              type="button"
+              key={ratio.id}
+              className={ratioId === ratio.id ? 'ofs-ratio is-on' : 'ofs-ratio'}
+              onClick={() => applyRatio(ratio.id)}
+              aria-pressed={ratioId === ratio.id}
+            >
+              <span className={`ofs-ratio-glyph ofs-ratio-glyph--${ratio.id.replace(':', '-')}`} aria-hidden="true" />
+              <span className="ofs-ratio-label">{ratio.id}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 自定义宽高：默认折叠，编辑过程走本地草稿，失焦才提交。 */}
+      <div className="ofs-frame-group">
+        <button
+          type="button"
+          className="ofs-custom-toggle"
+          aria-expanded={customOpen}
+          onClick={() => setCustomOpen((open) => !open)}
+        >
+          <span>{t('studio.rail.customSize')}</span>
+          <span className={customOpen ? 'ofs-chevron is-open' : 'ofs-chevron'} aria-hidden="true">
+            <Icon name="chevronDown" size={14} />
+          </span>
+        </button>
+        {customOpen ? (
+          <div className="ofs-custom-body">
+            <div className="ofs-size-custom">
+              {sizeFields.map((item, index) => (
+                <React.Fragment key={item.key}>
+                  {index > 0 ? <span className="ofs-size-custom-times" aria-hidden="true">×</span> : null}
+                  <label className="ofs-size-custom-field">
+                    <span>{item.label}</span>
+                    <input
+                      type="number"
+                      min={item.limits.min}
+                      max={item.limits.max}
+                      step={item.limits.step}
+                      value={sizeDraft[item.key]}
+                      aria-label={item.label}
+                      onChange={(event) => updateSizeDraft(item.key, event.target.value)}
+                      onBlur={() => commitSizeDraft(item.key)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') event.currentTarget.blur()
+                      }}
+                    />
+                  </label>
+                </React.Fragment>
               ))}
             </div>
           </div>
-
-          {/* 自定义宽高：默认折叠，编辑过程走本地草稿，失焦才提交。 */}
-          <div className="ofs-frame-group">
-            <button
-              type="button"
-              className="ofs-custom-toggle"
-              aria-expanded={customOpen}
-              onClick={() => setCustomOpen((open) => !open)}
-            >
-              <span>{t('studio.rail.customSize')}</span>
-              <span className={customOpen ? 'ofs-chevron is-open' : 'ofs-chevron'} aria-hidden="true">
-                <Icon name="chevronDown" size={14} />
-              </span>
-            </button>
-            {customOpen ? (
-              <div className="ofs-custom-body">
-                <div className="ofs-size-custom">
-                  {sizeFields.map((item, index) => (
-                    <React.Fragment key={item.key}>
-                      {index > 0 ? <span className="ofs-size-custom-times" aria-hidden="true">×</span> : null}
-                      <label className="ofs-size-custom-field">
-                        <span>{item.label}</span>
-                        <input
-                          type="number"
-                          min={item.limits.min}
-                          max={item.limits.max}
-                          step={item.limits.step}
-                          value={sizeDraft[item.key]}
-                          aria-label={item.label}
-                          onChange={(event) => updateSizeDraft(item.key, event.target.value)}
-                          onBlur={() => commitSizeDraft(item.key)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') event.currentTarget.blur()
-                          }}
-                        />
-                      </label>
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </>
-      )}
+        ) : null}
+      </div>
     </Fieldset>
   )
 }

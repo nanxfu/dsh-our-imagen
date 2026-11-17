@@ -286,3 +286,444 @@
   background: var(--ofs-accent-soft);
   color: var(--ofs-accent);
 }
+/* ── 阶段十三：作品条版本角标 / 派生面板 / 新建草稿卡 ───────────────── */
+
+/* 版本角标容器：包裹一张作品缩略图，角标压在右上角，面板向上浮出。
+   面板与缩略图同处一个容器，鼠标从缩略图移进面板时不会触发鼠标离开，
+   配合 JS 的延迟收起构成 hover bridge。 */
+.ofs-version-anchor {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+.ofs-version-badge {
+  appearance: none;
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 17px;
+  padding: 0 5px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-pill);
+  background: var(--ofs-card-solid);
+  color: var(--ofs-ink-2);
+  font-family: var(--ofs-font);
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  box-shadow: var(--ofs-shadow-card);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.ofs-version-badge:hover,
+.ofs-version-badge.is-on,
+.ofs-version-anchor.is-pinned .ofs-version-badge {
+  border-color: var(--ofs-accent);
+  background: var(--ofs-accent);
+  color: var(--ofs-accent-ink);
+}
+
+/* 生成中的角标轻呼吸，提示这棵树还有在途分支。 */
+.ofs-version-anchor.has-pending .ofs-version-badge::after {
+  content: "";
+  width: 4px;
+  height: 4px;
+  margin-left: 3px;
+  border-radius: 50%;
+  background: var(--ofs-warn);
+}
+
+/* 派生面板：默认贴在缩略图上方；面板下方留一条透明的 hover bridge，
+   指针穿过 10px 间隙时仍算在容器内。 */
+.ofs-version-panel {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  z-index: 40;
+  width: 272px;
+  max-height: min(58vh, 360px);
+  padding: 8px;
+  overflow-y: auto;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: var(--ofs-r-md);
+  background: color-mix(in oklab, var(--ofs-card-solid) 96%, transparent);
+  box-shadow: var(--ofs-shadow-lift);
+  transform: translateX(-50%);
+  animation: ofs-version-rise 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ofs-version-panel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -12px;
+  height: 12px;
+}
+
+@keyframes ofs-version-rise {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.ofs-version-note {
+  padding: 5px 6px 7px;
+  color: var(--ofs-ink-3);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.ofs-version-empty {
+  padding: 10px 6px;
+  color: var(--ofs-ink-3);
+  font-size: 11px;
+  text-align: center;
+}
+
+.ofs-version-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 面板行：左侧按 depth 缩进，行尾可带清空草稿按钮。 */
+.ofs-version-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ofs-version-row-main {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--ofs-r-sm);
+  background: transparent;
+  color: var(--ofs-ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.ofs-version-row-main:hover {
+  background: var(--ofs-accent-soft);
+}
+
+.ofs-version-row.is-on .ofs-version-row-main {
+  border-color: var(--ofs-accent-soft-border);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-ink);
+}
+
+.ofs-version-row.is-ghost .ofs-version-row-main {
+  cursor: default;
+  color: var(--ofs-ink-3);
+}
+
+.ofs-version-label {
+  flex: 0 0 auto;
+  min-width: 38px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--ofs-ink-3);
+}
+
+.ofs-version-row.is-on .ofs-version-label {
+  color: var(--ofs-accent);
+}
+
+.ofs-version-row.is-ghost .ofs-version-label {
+  color: var(--ofs-warn);
+}
+
+.ofs-version-kind {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--ofs-ink-4);
+}
+
+.ofs-version-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  display: block;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--ofs-sunken);
+}
+
+.ofs-version-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 在途幽灵缩略图：复用作品条已有的显影扫描光。 */
+.ofs-version-thumb-ghost {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 30%, transparent);
+  border-radius: 7px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in oklab, var(--ofs-accent) 18%, transparent) 46%,
+    color-mix(in oklab, var(--ofs-accent) 4%, transparent) 100%
+  );
+  background-size: 100% 240%;
+  animation: ofs-develop-scan 2.8s ease-in-out infinite;
+}
+
+.ofs-version-prompt {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+/* 草稿圆点：该版本上留有未提交的编辑草稿。 */
+.ofs-version-draft-dot {
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ofs-warn);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ofs-warn) 16%, transparent);
+}
+
+.ofs-version-draft-clear {
+  appearance: none;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--ofs-r-pill);
+  background: transparent;
+  color: var(--ofs-ink-3);
+  font-family: var(--ofs-font);
+  font-size: 9.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.ofs-version-row:hover .ofs-version-draft-clear,
+.ofs-version-draft-clear:focus-visible {
+  opacity: 1;
+}
+
+.ofs-version-draft-clear:hover {
+  background: var(--ofs-warn-soft);
+  color: var(--ofs-warn);
+}
+
+.ofs-version-draft-label {
+  line-height: 1;
+}
+
+/* 父图被删后提升的局部根：行内没有徽标位，用左侧窄条说明来源已断。 */
+.ofs-version-row.is-orphan .ofs-version-label {
+  color: var(--ofs-ink-4);
+}
+
+/* 新建绘图草稿卡：作品条最左端的待执行位，取景框按当前画幅比例展示。 */
+.ofs-draft-card {
+  appearance: none;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ofs-ink-2);
+  font-family: var(--ofs-font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ofs-draft-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border: 1px dashed var(--ofs-sunken-border);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--ofs-card) 60%, transparent);
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.ofs-draft-card:hover .ofs-draft-frame {
+  border-color: var(--ofs-accent-soft-border);
+  background: var(--ofs-accent-soft);
+}
+
+.ofs-draft-card.is-on .ofs-draft-frame {
+  border-color: var(--ofs-accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 16%, transparent);
+}
+
+.ofs-draft-viewfinder {
+  display: grid;
+  place-items: center;
+  border: 1px dashed color-mix(in oklab, var(--ofs-accent) 32%, transparent);
+  border-radius: 6px;
+  color: var(--ofs-ink-4);
+  background: color-mix(in oklab, var(--ofs-card-solid) 72%, transparent);
+}
+
+.ofs-draft-card.is-pending .ofs-draft-viewfinder {
+  border-style: solid;
+  border-color: color-mix(in oklab, var(--ofs-warn) 34%, transparent);
+  color: var(--ofs-warn);
+}
+
+.ofs-draft-state {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  left: 3px;
+  overflow: hidden;
+  color: var(--ofs-ink-4);
+  font-size: 8px;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ofs-draft-card.is-pending .ofs-draft-state {
+  color: var(--ofs-warn);
+}
+
+.ofs-draft-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  min-width: 0;
+  font-size: 9.5px;
+  color: var(--ofs-ink-3);
+}
+
+.ofs-draft-meta em {
+  flex: 0 0 auto;
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ofs-ink-3);
+}
+
+.ofs-draft-preset {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  color: var(--ofs-ink-4);
+}
+
+/* 窄屏：面板贴住作品条左缘，避免浮到窗口外。 */
+@media (max-width: 720px) {
+  .ofs-version-panel {
+    left: 0;
+    width: min(260px, 72vw);
+    transform: none;
+  }
+
+  @keyframes ofs-version-rise {
+    0% {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* ── 阶段十三：作品条缩略图草稿圆点与版本面板开合 ─────────────────── */
+
+/* 草稿圆点：该树有未提交的编辑时压在缩略图左上角（右上角留给 ⎇ N 角标）。
+   视觉只有 9px，但用透明外扩伪元素把点击热区撑到 22px。 */
+.ofs-thumb-dot {
+  appearance: none;
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  z-index: 3;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: 1px solid var(--ofs-card-solid);
+  border-radius: 50%;
+  background: var(--ofs-warn);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ofs-warn) 18%, transparent);
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.ofs-thumb-dot::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+}
+
+.ofs-thumb-dot:hover {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-warn) 26%, transparent);
+}
+
+/* 版本面板向上浮出，需要脱离作品条的横向滚动裁剪。
+   只在有面板打开时放开 overflow，关闭立刻恢复——正常浏览仍是可滚动、可裁剪的。 */
+.ofs-filmstrip.is-version-open .ofs-roll {
+  overflow: visible;
+}

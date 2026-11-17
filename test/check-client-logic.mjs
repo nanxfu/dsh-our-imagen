@@ -1433,16 +1433,12 @@ await check('局部涂抹：画笔尺寸与涂抹状态归一', () => {
   assert.deepEqual(logic.toggleEraser({ size: 60, eraser: false }), { size: 60, eraser: true })
   assert.deepEqual(logic.toggleEraser({ size: 60, eraser: true }), { size: 60, eraser: false })
 
-  // 涂抹状态：覆盖率钳制 / 清空 / 反选。
+  // 涂抹状态：覆盖率钳制与空状态。
   assert.deepEqual(logic.emptyMaskState(), { coverage: 0 })
-  assert.deepEqual(logic.clearMaskState(), { coverage: 0 })
   assert.deepEqual(logic.maskStateOf({ coverage: 0.4 }), { coverage: 0.4 })
   assert.deepEqual(logic.maskStateOf({ coverage: -1 }), { coverage: 0 })
   assert.deepEqual(logic.maskStateOf({ coverage: 3 }), { coverage: 1 })
   assert.deepEqual(logic.maskStateOf(null), { coverage: 0 })
-  assert.deepEqual(logic.invertMaskState({ coverage: 0.25 }), { coverage: 0.75 })
-  assert.deepEqual(logic.invertMaskState(logic.emptyMaskState()), { coverage: 1 }, '空蒙版反选即全选')
-  assert.deepEqual(logic.invertMaskState({ coverage: 1 }), { coverage: 0 }, '全选反选即清空')
   assert.equal(logic.maskHasInk({ coverage: logic.MASK_MIN_COVERAGE }), true)
   assert.equal(logic.maskHasInk({ coverage: logic.MASK_MIN_COVERAGE / 2 }), false, '低于最小有效面积按空蒙版处理')
   assert.equal(logic.maskCoverageOf(0, 100), 0)
@@ -1452,8 +1448,10 @@ await check('局部涂抹：画笔尺寸与涂抹状态归一', () => {
   assert.equal(logic.maskCoverageOf(10, 0), 0)
 })
 
-await check('局部涂抹：进入涂抹模式时抬到重绘强度默认档', () => {
-  // 真机验收（2026-11-16）：4 步极速模型在契约默认 0.6 下蒙版区改动偏弱，0.8 才有可见重写。
+await check('局部涂抹：推荐强度常量与契约区间一致', () => {
+  // 真机验收（2026-11-16）：4 步极速模型在契约默认 0.6 下蒙版区改动偏弱，0.8 才有可见重写；
+  // 专用 inpaint 权重（9 通道）需要 0.9 才会明显替换。工具打开时由 `toolStrengthDefaultOf`
+  // 按这两个常量套用默认档，用户拖动后保持自己的值。
   assert.ok(logic.MASK_STRENGTH_DEFAULT > LIMITS.strength.default, '涂抹默认强度应高于契约默认值')
   assert.ok(
     logic.MASK_STRENGTH_DEFAULT >= LIMITS.strength.min && logic.MASK_STRENGTH_DEFAULT <= LIMITS.strength.max,
@@ -1463,22 +1461,9 @@ await check('局部涂抹：进入涂抹模式时抬到重绘强度默认档', (
     Math.abs((logic.MASK_STRENGTH_DEFAULT - LIMITS.strength.min) % LIMITS.strength.step) < 1e-9,
     '必须对齐契约步长（浮点余量按 1e-9 判断）',
   )
-  // 仍是契约默认值时抬档；用户主动调过的值保持不动。
-  assert.deepEqual(logic.maskStrengthPatch(LIMITS.strength.default), { strength: logic.MASK_STRENGTH_DEFAULT })
-  assert.deepEqual(logic.maskStrengthPatch(String(LIMITS.strength.default)), { strength: logic.MASK_STRENGTH_DEFAULT })
-  assert.equal(logic.maskStrengthPatch(0.7), null, '用户调过的强度不覆盖')
-  assert.equal(logic.maskStrengthPatch(0.9), null)
-  assert.deepEqual(logic.maskStrengthPatch(undefined), { strength: logic.MASK_STRENGTH_DEFAULT }, '缺失值按默认处理')
-  assert.deepEqual(logic.maskStrengthPatch('x'), { strength: logic.MASK_STRENGTH_DEFAULT })
   // 专用 inpaint 权重（9 通道）：小蒙版需要更高的强度才会明显替换，默认抬到 0.9。
   assert.ok(logic.MASK_STRENGTH_NATIVE > logic.MASK_STRENGTH_DEFAULT)
   assert.ok(logic.MASK_STRENGTH_NATIVE <= LIMITS.strength.max, '专用模型默认强度不能超过契约上限')
-  assert.deepEqual(
-    logic.maskStrengthPatch(LIMITS.strength.default, { native: true }),
-    { strength: logic.MASK_STRENGTH_NATIVE },
-    '专用模型缺省强度抬到 0.9',
-  )
-  assert.equal(logic.maskStrengthPatch(0.7, { native: true }), null, '用户调过的强度不覆盖')
 })
 
 await check('局部涂抹：蒙版导出前置校验与画布比例', () => {
@@ -1533,10 +1518,6 @@ await check('局部涂抹：蒙版导出前置校验与画布比例', () => {
   assert.equal(logic.referenceMaskForSubmit({ path: 'x' }), '')
   assert.equal(logic.referenceMaskForSubmit(null), '')
   assert.equal(logic.referenceMaskDataOf({ mask: MASK_PNG_B64 }), MASK_PNG_B64, '裸字符串形态同样可读')
-  const stripped = logic.referenceWithoutMask(reference)
-  assert.equal(stripped.mask, undefined)
-  assert.equal(stripped.path, reference.path, '只去蒙版，参考图其它字段保留')
-  assert.equal(logic.referenceWithoutMask(null), null)
 })
 
 await check('请求体：有蒙版时输出 reference.mask，无蒙版时保持现状', () => {
@@ -1594,7 +1575,8 @@ await check('请求体：有蒙版时输出 reference.mask，无蒙版时保持�
   assert.equal(overridden.reference.strength, 0.4)
 })
 
-await check('表单快照纳入蒙版：涂抹算脏，回填 / 新建创作清空', () => {
+// 0.13.0：参考图 / 蒙版 / 重绘强度迁到舞台图片工具，主表单快照只比较纯文生图字段。
+await check('表单快照只管纯文生图字段：参考图 / 强度不再参与脏判定', () => {
   const base = {
     prompt: 'a',
     negative: '',
@@ -1606,38 +1588,28 @@ await check('表单快照纳入蒙版：涂抹算脏，回填 / 新建创作清�
     cfg: 0,
     seed: '',
     count: 1,
-    strength: 0.6,
-    reference: { path: 'imagen-output/job-1/7.png', url: '/u', width: 1024, height: 1024 },
   }
   const baseline = logic.formSnapshotOf(base)
   assert.equal(logic.isFormDirty(base, baseline), false)
-  const painted = {
-    ...base,
-    reference: { ...base.reference, mask: { data: MASK_PNG_B64, coverage: 0.05, digest: logic.maskDigestOf(MASK_PNG_B64) } },
-  }
-  assert.equal(logic.isFormDirty(painted, baseline), true, '涂抹蒙版属于未提交的手动修改')
-  // 同内容、重新构造的蒙版对象仍算干净：比较的是指纹，不是对象引用。
-  const repainted = {
-    ...painted,
-    reference: { ...painted.reference, mask: { data: `data:image/png;base64,${MASK_PNG_B64}`, coverage: 0.05 } },
-  }
-  assert.equal(logic.isFormDirty(repainted, logic.formSnapshotOf(painted)), false, '指纹一致即为干净')
-  // 换一笔蒙版算脏；清掉蒙版与「已涂抹基准」也不同。
-  const other = {
-    ...painted,
-    reference: { ...painted.reference, mask: { data: 'A'.repeat(96), coverage: 0.2, digest: logic.maskDigestOf('A'.repeat(96)) } },
-  }
-  assert.equal(logic.isFormDirty(other, logic.formSnapshotOf(painted)), true)
-  assert.equal(logic.isFormDirty({ ...painted, reference: base.reference }, logic.formSnapshotOf(painted)), true)
+  // 旧表单残留的 reference / strength 字段不再写进快照，也不影响脏判定。
+  assert.equal(
+    logic.isFormDirty({ ...base, reference: { path: 'imagen-output/a.png' }, strength: 0.9 }, baseline),
+    false,
+    '参考图 / 强度不属于主表单，旧字段不参与脏判定',
+  )
+  assert.ok(!logic.formSnapshotOf(base).includes('reference'), '快照里不应再出现 reference 字段')
+  assert.equal(logic.isFormDirty({ ...base, count: 2 }, baseline), true, '改张数仍算脏')
 
-  // 回填 / 新建创作：reference 整块清空或替换，蒙版不会跟到下一张图。
-  assert.equal(logic.newCreationPatch(painted, null).reference, null)
+  // 新建创作 / 回填不再产出参考图与强度字段。
+  const created = logic.newCreationPatch({ ...base, prompt: '旧提示词', reference: { path: 'x' }, strength: 0.8 }, null)
+  assert.equal(Object.prototype.hasOwnProperty.call(created, 'reference'), false, '新建创作不再处理参考图')
+  assert.equal(Object.prototype.hasOwnProperty.call(created, 'strength'), false, '新建创作不再处理重绘强度')
   const recalled = logic.iteratePatch(
     { image: { path: 'imagen-output/job-2/1.png', width: 512, height: 512 }, item: { prompt: '新图' } },
-    painted,
+    base,
     [],
   )
-  assert.equal(recalled.reference, null, '回填另一张作品清空参考图，蒙版随 reference 一起清掉')
+  assert.equal(Object.prototype.hasOwnProperty.call(recalled, 'reference'), false, '回填不再写参考图字段')
 })
 
 await check('负向分层：model → user 两层合并，用户编辑整段接管', () => {
@@ -1959,7 +1931,7 @@ await check('带回参数的回填参数', () => {
   assert.equal(patch.presetId, 'sdxl-base')
   assert.equal(Object.prototype.hasOwnProperty.call(patch, 'styleId'), false, '0.10.0 起回填不再写 styleId')
   assert.equal(Object.prototype.hasOwnProperty.call(patch, 'negative'), false, '没有作品负向提示词时不覆盖草稿')
-  assert.equal(patch.reference, null, '回填普通作品要清掉上一轮残留的参考图')
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, 'reference'), false, '参考图不再属于主表单，回填不写该字段')
 
   const withParams = {
     image: real.image,
@@ -1971,10 +1943,10 @@ await check('带回参数的回填参数', () => {
   assert.equal(patch2.cfg, 5)
   assert.equal(patch2.negative, 'blurry')
   assert.equal(patch2.width, 1152, '尺寸始终以产物像素为准')
-  assert.equal(patch2.reference, null)
+  assert.equal(Object.prototype.hasOwnProperty.call(patch2, 'reference'), false)
 
   assert.deepEqual(logic.iteratePatch(null, form, presets), {})
-  // 完全没有可回填字段的条目返回空补丁，不应顺手清参考图。
+  // 完全没有可回填字段的条目返回空补丁。
   assert.deepEqual(logic.iteratePatch({ image: {}, item: {} }, form, presets), {})
   // 作品没有记录有效 seed：种子恢复为随机（空串），不能沿用上一张作品的固定种子。
   const noSeed = logic.iteratePatch(
@@ -1987,7 +1959,7 @@ await check('带回参数的回填参数', () => {
 })
 
 await check('表单提交摘要、脏判定与新建创作补丁', () => {
-  // 表单提交请求体 → 参数摘要：模型 / 比例像素 / 张数 / 参考图 / 种子策略。
+  // 表单提交请求体 → 参数摘要：模型 / 比例像素 / 张数 / 种子策略（主表单固定纯文生图）。
   const summary = logic.formSummaryOf({
     prompt: '雨夜街景',
     presetId: 'sdxl-lightning',
@@ -1995,20 +1967,18 @@ await check('表单提交摘要、脏判定与新建创作补丁', () => {
     height: 720,
     count: 2,
     seed: 42,
-    reference: { path: 'imagen-output/a/01.png', strength: 0.5 },
   })
   assert.equal(summary.presetId, 'sdxl-lightning')
   assert.equal(summary.ratioId, '16:9', '比例由像素反推')
   assert.equal(summary.width, 1280)
   assert.equal(summary.height, 720)
   assert.equal(summary.count, 2)
-  assert.equal(summary.hasReference, true)
   assert.equal(summary.seed, 42, '固定种子按数字展示')
+  assert.equal(Object.prototype.hasOwnProperty.call(summary, 'hasReference'), false, '摘要不再输出参考图标记')
 
   const random = logic.formSummaryOf({ prompt: 'x', width: 1024, height: 1024, count: 9, seed: -1 })
   assert.equal(random.ratioId, '1:1')
   assert.equal(random.seed, null, '随机种子（-1 / 缺失）归一为 null')
-  assert.equal(random.hasReference, false)
   assert.equal(random.count, 4, '张数按契约钳制')
   const empty = logic.formSummaryOf(null)
   assert.deepEqual(empty, {
@@ -2017,7 +1987,6 @@ await check('表单提交摘要、脏判定与新建创作补丁', () => {
     width: null,
     height: null,
     count: 1,
-    hasReference: false,
     seed: null,
   })
 
@@ -2033,8 +2002,6 @@ await check('表单提交摘要、脏判定与新建创作补丁', () => {
     cfg: 0,
     seed: '',
     count: 1,
-    reference: null,
-    strength: 0.5,
   }
   const baseline = logic.formSnapshotOf(cleanForm)
   assert.equal(logic.isFormDirty(cleanForm, baseline), false)
@@ -2042,7 +2009,8 @@ await check('表单提交摘要、脏判定与新建创作补丁', () => {
   assert.equal(logic.isFormDirty({ ...cleanForm, prompt: 'b' }, baseline), true, '改提示词算脏')
   assert.equal(logic.isFormDirty({ ...cleanForm, seed: '42' }, baseline), true, '改种子算脏')
   assert.equal(logic.isFormDirty({ ...cleanForm, width: 1280 }, baseline), true, '改画幅算脏')
-  assert.equal(logic.isFormDirty({ ...cleanForm, reference: { path: 'x' } }, baseline), true, '加参考图算脏')
+  // 旧表单残留的参考图 / 强度字段不属于主表单，不参与脏判定。
+  assert.equal(logic.isFormDirty({ ...cleanForm, reference: { path: 'x' }, strength: 0.8 }, baseline), false)
   assert.equal(logic.isFormDirty(cleanForm, ''), false, '基准未建立时按干净处理')
   // 改回原样后重新变干净：这一层保护不应变成「点过输入框就永久脏」。
   const reverted = { ...cleanForm, prompt: 'b' }
@@ -2050,7 +2018,7 @@ await check('表单提交摘要、脏判定与新建创作补丁', () => {
   assert.equal(logic.isFormDirty({ ...reverted, prompt: 'a' }, revertedBaseline), true)
   assert.equal(logic.isFormDirty({ ...reverted }, revertedBaseline), false)
 
-  // 新建创作：清提示词 / 参考图 / 固定种子 + 负向层回到当前预设默认；保留预设与画幅。
+  // 新建创作：清提示词 / 固定种子 + 负向层回到当前预设默认；保留预设与画幅。
   const activePreset = { id: 'realvis-v5', cfg: 5, supportsNegative: true, negativeHint: 'blurry, low quality' }
   const patch = logic.newCreationPatch({
     ...cleanForm,
@@ -2066,9 +2034,9 @@ await check('表单提交摘要、脏判定与新建创作补丁', () => {
     strength: 0.7,
   }, activePreset)
   assert.equal(patch.prompt, '')
-  assert.equal(patch.reference, null, '新建创作清空参考图')
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, 'reference'), false, '新建创作不再处理参考图')
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, 'strength'), false, '新建创作不再处理重绘强度')
   assert.equal(patch.seed, '', '新建创作把种子恢复为随机')
-  assert.equal(patch.strength, LIMITS.strength.default, '重绘强度回默认')
   assert.equal(patch.negative, 'blurry, low quality', '排除项回到当前预设默认推荐状态')
   assert.deepEqual(patch.negativeLayers, { model: 'blurry, low quality', user: '' })
   assert.equal(Object.prototype.hasOwnProperty.call(patch, 'presetId'), false, '保留当前模型预设')
@@ -2651,66 +2619,38 @@ await check('更新提示：只在 hasUpdate 时派生，链接与字段做归�
   assert.equal(fallbackFields.checkedAt, null)
 })
 
-// 生成来源策略：form 沿用表单，assistant / variant 强制纯文生图，retry 只透传恢复计划。
-await check('生成来源策略：助手与变体强制纯文生图，inpaintOnly 切兜底预设', () => {
+// 纯文生图能力预检：专用局部重绘预设（inpaintOnly）本次请求改用兜底预设并轻提示；
+// 一个可文生图的预设都没有（旧宿主）时拦下。主表单不再校验参考图 / 蒙版。
+await check('纯文生图能力预检：专用局部重绘预设自动兜底，无可用预设时拦下', () => {
   const lightning = { id: 'sdxl-lightning', label: 'SDXL Lightning', supportsImg2Img: true, supportsInpaint: true }
   const native = { id: 'sdxl-inpaint', label: 'SDXL Inpaint', supportsImg2Img: true, supportsInpaint: true, inpaintOnly: true }
   const flux = { id: 'flux2-klein-4b', label: 'FLUX.2 Klein', supportsImg2Img: false }
   const presets = [flux, native, lightning]
 
-  // 来源归一：缺省与未知值都按表单来源处理，旧调用方行为不变。
-  assert.deepEqual(logic.GENERATE_SOURCES, ['form', 'assistant', 'variant', 'retry'])
-  assert.equal(logic.normalizeGenerateSource(undefined), 'form')
-  assert.equal(logic.normalizeGenerateSource(' retry '), 'retry')
-  assert.equal(logic.normalizeGenerateSource('bogus'), 'form')
+  // 普通预设：放行，不覆盖任何东西。
+  const plain = logic.generateCapabilityOf({ preset: lightning, presets })
+  assert.equal(plain.ok, true)
+  assert.equal(plain.notice, null)
+  assert.equal(plain.preset, null)
+  // 预设列表未就绪（启动瞬间）：不做判断，交给宿主。
+  assert.equal(logic.generateCapabilityOf({ preset: native, presets: [] }).ok, true)
+  assert.equal(logic.generateCapabilityOf({ preset: null, presets }).ok, true)
 
-  // form：覆盖项原样透传，参考图继续由表单提供。
-  const formPolicy = logic.generateSourcePolicy('form', { overrides: { prompt: 'a' }, preset: lightning, presets })
-  assert.equal(formPolicy.ok, true)
-  assert.deepEqual(formPolicy.overrides, { prompt: 'a' })
-  assert.equal(Object.prototype.hasOwnProperty.call(formPolicy.overrides, 'reference'), false, 'form 不覆盖参考图')
-  assert.equal(formPolicy.notice, null)
+  // 专用局部重绘预设：本次改用可文生图的兜底预设并给展示名。
+  const switched = logic.generateCapabilityOf({ preset: native, presets })
+  assert.equal(switched.ok, true)
+  assert.equal(switched.preset.id, 'sdxl-lightning', '兜底预设优先 sdxl-lightning')
+  assert.equal(switched.notice.key, 'studio.form.autoText2Image')
+  assert.equal(switched.notice.params.preset, 'SDXL Lightning', '提示里的预设用展示名')
+  assert.equal(native.id, 'sdxl-inpaint', '预设对象本身不能被就地修改')
 
-  // assistant / variant：无论调用方带了什么，本次都显式纯文生图。
-  for (const source of ['assistant', 'variant']) {
-    const policy = logic.generateSourcePolicy(source, {
-      overrides: { prompt: 'a', reference: { path: 'imagen-output/a.png' } },
-      preset: lightning,
-      presets,
-    })
-    assert.equal(policy.overrides.reference, null, `${source} 必须显式清空参考图`)
-    assert.equal(policy.overrides.prompt, 'a')
-    assert.equal(policy.notice, null)
-  }
+  // 一个能文生图的预设都没有：拦下并说明切模型。
+  const blocked = logic.generateCapabilityOf({ preset: native, presets: [native] })
+  assert.equal(blocked.ok, false)
+  assert.equal(blocked.reason, 'preset')
+  assert.equal(blocked.blockedKey, 'studio.form.blockedInpaintOnly')
 
-  // 当前有效预设是 inpaintOnly：仅本次切到参考图兜底预设并轻提示，预设对象本身不改。
-  const assistant = logic.generateSourcePolicy('assistant', { overrides: { prompt: 'a' }, preset: native, presets })
-  assert.equal(assistant.ok, true)
-  assert.equal(assistant.overrides.presetId, 'sdxl-lightning', '兜底预设优先 sdxl-lightning')
-  assert.equal(assistant.notice.key, 'studio.reference.autoText2Image')
-  assert.equal(assistant.notice.params.preset, 'SDXL Lightning', '提示里的预设用展示名')
-  assert.equal(native.id, 'sdxl-inpaint', '左栏预设对象不能被本次覆盖项修改')
-
-  // variant 的覆盖项可能带作品自己的预设（例如 inpaint 模型生成的图）：按有效预设判断。
-  const variant = logic.generateSourcePolicy('variant', {
-    overrides: { prompt: 'a', presetId: 'sdxl-inpaint' },
-    preset: lightning,
-    presets,
-  })
-  assert.equal(variant.overrides.reference, null)
-  assert.equal(variant.overrides.presetId, 'sdxl-lightning', '作品预设是 inpaintOnly 时本次改用兜底预设')
-
-  // 一个可做文生图的预设都没有：拦下，交给调用方提示切模型。
-  const noFallback = logic.generateSourcePolicy('assistant', { overrides: { prompt: 'a' }, preset: native, presets: [native] })
-  assert.equal(noFallback.ok, false)
-  assert.equal(noFallback.blockedKey, 'studio.reference.blocked')
-
-  // retry：参考图由恢复计划决定，策略只透传覆盖项。
-  const retry = logic.generateSourcePolicy('retry', { overrides: { prompt: 'a', reference: null }, preset: native, presets })
-  assert.equal(retry.overrides.reference, null)
-  assert.equal(retry.notice, null)
-
-  // 有效预设解析：覆盖项优先，未知 id 回落到表单预设。
+  // 有效预设解析与展示名（重试 / 变体仍按覆盖项解析预设）。
   assert.equal(logic.effectivePresetOf({ presetId: 'sdxl-inpaint' }, lightning, presets), native)
   assert.equal(logic.effectivePresetOf({}, lightning, presets), lightning)
   assert.equal(logic.effectivePresetOf({ presetId: 'gone' }, lightning, presets), lightning)
@@ -2721,269 +2661,56 @@ await check('生成来源策略：助手与变体强制纯文生图，inpaintOnl
   assert.equal(logic.presetLabelOf(null), '')
 })
 
-// 失败重试：任务参数只冻结参考图出处与「是否带蒙版」，完整蒙版只能从同源提交体恢复。
-await check('失败重试参考图恢复：无参考图 / 普通参考图 / 同源蒙版 / 蒙版不可恢复', () => {
-  const maskPath = 'imagen-output/job-1/07.png'
-  const pendingBody = {
-    prompt: '局部改成红灯笼',
-    reference: { path: maskPath, strength: 0.8, mask: { data: MASK_PNG_B64, coverage: 0.2 } },
-  }
-  const maskJob = {
-    id: 'j-mask',
-    presetId: 'sdxl-inpaint',
-    params: { prompt: '局部改成红灯笼', reference: { sourcePath: maskPath, strength: 0.95, mask: true } },
-  }
-
-  // 连提示词都没有：返回 null，由调用方提示「缺少提示词」。
-  assert.equal(logic.retryReferencePlan(null), null)
-  assert.equal(logic.retryReferencePlan({ params: { prompt: '  ' } }), null)
-
-  // 失败任务没有参考图：必须显式 reference: null，不得继承表单 / 上一次提交体的参考图。
-  const plainJob = { id: 'j-plain', presetId: 'sdxl-lightning', params: { prompt: '失败', width: 1024, height: 1024 } }
-  const plain = logic.retryReferencePlan(plainJob, { pendingRef: pendingBody })
-  assert.equal(plain.restored, 'none')
-  assert.equal(plain.maskLost, false)
-  assert.equal(plain.overrides.reference, null, '没有参考图的任务重试时不得静默带上表单里的参考图')
-  assert.equal(Object.prototype.hasOwnProperty.call(plain.overrides, 'reference'), true, 'reference 必须显式写出')
-
-  // 普通参考图（无蒙版）：按冻结的出处与强度恢复，并补出同口径缩略图地址。
-  const img2imgJob = {
-    id: 'j-img2img',
+// 失败重试参数：只重放纯文生图字段；参考图 / 蒙版的恢复迁到 useImageTool（决策 D5）。
+await check('失败重试参数：只重放纯文生图字段', () => {
+  const job = {
+    id: 'job-1',
     presetId: 'sdxl-base',
-    params: { prompt: '失败', width: 1024, height: 1024, reference: { sourcePath: 'imagen-output/job-2/01.png', strength: 0.75 } },
+    params: { prompt: '失败的任务', negativePrompt: 'blur', width: 512, height: 768, steps: 30, cfg: 5, count: 2, seed: 7 },
   }
-  const img2img = logic.retryReferencePlan(img2imgJob)
-  assert.equal(img2img.restored, 'reference')
-  assert.equal(img2img.maskLost, false)
-  assert.equal(img2img.overrides.reference.path, 'imagen-output/job-2/01.png')
-  assert.equal(
-    img2img.overrides.reference.url,
-    `/imagen-api/file?path=${encodeURIComponent('imagen-output/job-2/01.png')}`,
-    '缩略图地址与 lib/output.js 的 fileUrl 同口径',
-  )
-  assert.equal(img2img.overrides.strength, 0.75, '强度跟失败任务走')
-  assert.equal(img2img.overrides.presetId, 'sdxl-base')
-  assert.equal(img2img.requestPaint, false)
+  const overrides = logic.retryOverrides(job)
+  assert.equal(overrides.prompt, '失败的任务')
+  assert.equal(overrides.seed, -1, '重试重新抽一张')
+  assert.equal(overrides.count, 2)
+  assert.equal(overrides.width, 512)
+  assert.equal(overrides.height, 768)
+  assert.equal(overrides.steps, 30)
+  assert.equal(overrides.cfg, 5)
+  assert.equal(overrides.negativePrompt, 'blur')
+  assert.equal(overrides.presetId, 'sdxl-base')
+  assert.equal(Object.prototype.hasOwnProperty.call(overrides, 'reference'), false, '重试覆盖项不再携带参考图')
 
-  // 同源提交体还留着完整蒙版：恢复原参数直接重试。
-  const recovered = logic.retryReferencePlan(maskJob, { pendingRef: pendingBody })
-  assert.equal(recovered.restored, 'mask')
-  assert.equal(recovered.maskLost, false)
-  assert.equal(recovered.overrides.reference.path, maskPath)
-  assert.equal(recovered.overrides.reference.mask.data, MASK_PNG_B64, '同源提交体的完整蒙版要恢复')
-  assert.equal(recovered.overrides.strength, 0.95, '强度以失败任务冻结值为准')
+  // 兼容传上一次提交体：字段平铺在 body 上。
+  const fromBody = logic.retryOverrides({ prompt: '上一次提交', width: 1024, height: 1024, count: 1, seed: -1 })
+  assert.equal(fromBody.prompt, '上一次提交')
+  assert.equal(fromBody.count, 1)
+  assert.equal(fromBody.seed, -1)
 
-  // 同源但蒙版已不可恢复（提交体只剩参考图）：只填回参考图 + 请求涂抹，不自动提交。
-  const lost = logic.retryReferencePlan(maskJob, {
-    pendingRef: { prompt: '局部改成红灯笼', reference: { path: maskPath, strength: 0.9 } },
-  })
-  assert.equal(lost.maskLost, true)
-  assert.equal(lost.restored, 'none')
-  assert.equal(lost.requestPaint, true)
-  assert.equal(lost.noticeKey, 'studio.toast.maskLost')
-  assert.equal(lost.overrides.reference, null, '蒙版不可恢复时不自动提交带参考图的请求')
-  assert.equal(lost.fillReference.path, maskPath)
-  assert.equal(lost.fillReference.url, `/imagen-api/file?path=${encodeURIComponent(maskPath)}`)
+  // 没有提示词：返回 null，调用方提示「先写提示词」。
+  assert.equal(logic.retryOverrides(null), null)
+  assert.equal(logic.retryOverrides({ params: { prompt: '  ' } }), null)
+  // 工具任务（带 reference）不会被压成纯文生图重试：不产出 reference 覆盖项。
+  const toolJob = { params: { prompt: '局部', reference: { sourcePath: 'imagen-output/a.png', strength: 0.8, mask: true } } }
+  assert.equal(Object.prototype.hasOwnProperty.call(logic.retryOverrides(toolJob), 'reference'), false)
 
-  // 提交体不同源 / 没有提交体：蒙版同样不可恢复。
-  const otherSource = logic.retryReferencePlan(maskJob, {
-    pendingRef: { prompt: '别的图', reference: { path: 'imagen-output/other.png', mask: { data: MASK_PNG_B64, coverage: 0.2 } } },
-  })
-  assert.equal(otherSource.maskLost, true, '蒙版只能从同源提交体恢复，不能挪用到别的图')
-  assert.equal(logic.retryReferencePlan(maskJob).maskLost, true, '没有上一次提交体时蒙版同样不可恢复')
-
-  // 失败任务是普通图生图，但同源提交体带着更晚一次涂抹的蒙版：不能凭它变成局部重绘。
-  const samePathMasked = { prompt: 'x', reference: { path: 'imagen-output/job-2/01.png', strength: 0.6, mask: { data: MASK_PNG_B64, coverage: 0.2 } } }
-  const stripped = logic.retryReferencePlan(img2imgJob, { pendingRef: samePathMasked })
-  assert.equal(stripped.restored, 'reference')
-  assert.equal('mask' in stripped.overrides.reference, false)
-
-  // 没有失败任务时直接用上一次提交体作为来源（带完整蒙版也能恢复）。
-  const fromBody = logic.retryReferencePlan(pendingBody, { pendingRef: pendingBody })
-  assert.equal(fromBody.restored, 'mask')
-  assert.equal(fromBody.overrides.reference.mask.data, MASK_PNG_B64)
-  assert.equal(fromBody.overrides.strength, 0.8)
-
-  // 缩略图地址纯函数：空值返回空串，相对路径做一次 URL 编码。
+  // 缩略图地址纯函数（图片工具补 url 用）：空值返回空串，相对路径做一次 URL 编码。
   assert.equal(logic.referenceUrlOf(''), '')
   assert.equal(logic.referenceUrlOf(null), '')
   assert.equal(logic.referenceUrlOf(' imagen-output/a b.png '), `/imagen-api/file?path=${encodeURIComponent('imagen-output/a b.png')}`)
 })
 
-await check('蒙版不可恢复的重试回填：恢复失败任务的预设、提示词与参数', () => {
-  const presets = [
-    { id: 'sdxl-lightning', supportsImg2Img: true, supportsInpaint: true, size: 1024, steps: 4, cfg: 0 },
-    { id: 'sdxl-inpaint', supportsImg2Img: true, supportsInpaint: true, inpaintOnly: true, size: 1024, steps: 30, cfg: 8 },
-    { id: 'flux2-klein-4b', supportsImg2Img: false, supportsInpaint: false },
-  ]
-  const maskJob = {
-    id: 'j-mask',
-    presetId: 'sdxl-inpaint',
-    params: {
-      prompt: '局部改成红灯笼',
-      negativePrompt: 'blurry, low quality',
-      width: 1152,
-      height: 768,
-      steps: 30,
-      cfg: 8,
-      count: 2,
-      reference: { sourcePath: 'imagen-output/job-1/07.png', strength: 0.95, mask: true },
-    },
-  }
-  const plan = logic.retryReferencePlan(maskJob)
-  const restore = logic.retryRestoreOf(plan, presets)
-  assert.equal(restore.ok, true)
-  assert.equal(restore.reason, '')
-  assert.equal(restore.preset.id, 'sdxl-inpaint', '优先恢复失败任务原本使用的预设')
-  assert.equal(restore.patch.prompt, '局部改成红灯笼')
-  assert.equal(restore.patch.width, 1152)
-  assert.equal(restore.patch.height, 768)
-  assert.equal(restore.patch.steps, 30)
-  assert.equal(restore.patch.cfg, 8)
-  assert.equal(restore.patch.count, 2)
-  assert.equal(restore.patch.strength, 0.95)
-  assert.equal(restore.patch.negative, 'blurry, low quality', '任务的合并负向词整体进入 user 层')
-  assert.equal(restore.patch.reference.path, 'imagen-output/job-1/07.png')
-  assert.equal(restore.patch.reference.mask, undefined, '不得伪造蒙版')
-  assert.equal(
-    restore.patch.reference.url,
-    `/imagen-api/file?path=${encodeURIComponent('imagen-output/job-1/07.png')}`,
-    '缩略图地址与 fileUrl 同口径',
-  )
-
-  // 任务原本的预设已被删除：退回垫图兜底预设，但提示词等参数仍按任务值回填。
-  const gonePlan = logic.retryReferencePlan({
-    ...maskJob,
-    presetId: 'removed-preset',
-    params: { ...maskJob.params, presetId: 'removed-preset' },
+// 胶片条点击：只保护脏草稿；参考图 / 蒙版已不属于主表单，不再参与判定。
+await check('胶片条点击判定：脏草稿保护优先，干净才回填', () => {
+  const patch = { prompt: '作品提示词' }
+  assert.deepEqual(logic.previewRecallOf({ dirty: true, patch }), { action: 'draft', noticeKey: 'studio.toast.draftKept' })
+  assert.deepEqual(logic.previewRecallOf({ dirty: false, patch }), { action: 'recall', noticeKey: 'studio.toast.recalled' })
+  assert.deepEqual(logic.previewRecallOf({ dirty: false, patch: {} }), { action: 'idle', noticeKey: '' })
+  assert.deepEqual(logic.previewRecallOf({}), { action: 'idle', noticeKey: '' })
+  // 旧调用方残留的 reference 参数被忽略：不再有「保留参考图」分支。
+  assert.deepEqual(logic.previewRecallOf({ reference: { path: 'x' }, dirty: false, patch }), {
+    action: 'recall',
+    noticeKey: 'studio.toast.recalled',
   })
-  const gone = logic.retryRestoreOf(gonePlan, presets)
-  assert.equal(gone.ok, true)
-  assert.equal(gone.preset.id, 'sdxl-lightning', '预设不可用时按能力兜底')
-  assert.equal(gone.patch.prompt, '局部改成红灯笼', '兜底预设也要恢复任务参数')
-  assert.equal(gone.patch.reference.path, 'imagen-output/job-1/07.png')
-
-  // 任务预设是不支持垫图的 flux2：不能把参考图塞给它，同样走兜底。
-  const fluxPlan = logic.retryReferencePlan({
-    ...maskJob,
-    presetId: 'flux2-klein-4b',
-    params: { ...maskJob.params, presetId: 'flux2-klein-4b' },
-  })
-  assert.equal(logic.retryRestoreOf(fluxPlan, presets).preset.id, 'sdxl-lightning')
-
-  // 一个可用垫图预设都没有（旧宿主）：明确失败，由组合层提示，不把参考图塞给不支持的模型。
-  const unsupported = logic.retryRestoreOf(plan, [presets[2]])
-  assert.equal(unsupported.ok, false)
-  assert.equal(unsupported.reason, 'unsupported')
-  assert.equal(logic.retryRestoreOf({ fillReference: null, overrides: {} }, presets).reason, 'no_path')
-
-  // 参数回填的边界钳制与负向词两层结构。
-  const clamped = logic.retryFormPatch({ prompt: '  x  ', width: 99999, steps: 999, count: 99, strength: 5, negativePrompt: 'a' })
-  assert.equal(clamped.prompt, 'x')
-  assert.equal(clamped.steps, LIMITS.steps.max)
-  assert.equal(clamped.count, LIMITS.count.max)
-  assert.equal(clamped.strength, LIMITS.strength.inpaintMax, '带蒙版的重试强度按 inpaintMax 钳制')
-  assert.equal(clamped.negative, 'a')
-  assert.equal(clamped.negativeLayers.user, 'a')
-  assert.equal(clamped.width, LIMITS.width.max)
-})
-
-// 能力预检必须用「有效预设 + 有效参考图」，不能用左栏当前预设误拦重试恢复的任务。
-await check('生成能力预检：有效预设下校验参考图与蒙版', () => {
-  const lightning = { id: 'sdxl-lightning', supportsImg2Img: true, supportsInpaint: true }
-  const flux = { id: 'flux2-klein-4b', supportsImg2Img: false }
-  const native = { id: 'sdxl-inpaint', supportsImg2Img: true, supportsInpaint: true, inpaintOnly: true }
-  const presets = [flux, lightning, native]
-  const reference = { path: 'imagen-output/a.png', strength: 0.6 }
-  const masked = { ...reference, mask: { data: MASK_PNG_B64, coverage: 0.2 } }
-
-  // 不支持垫图的预设 + 参考图 → 拦下并提示切模型。
-  const blocked = logic.generateCapabilityOf({ preset: flux, presets, reference })
-  assert.equal(blocked.ok, false)
-  assert.equal(blocked.reason, 'reference')
-  assert.equal(blocked.noticeKey, 'studio.reference.blocked')
-  // 预设列表还没拿到（启动瞬间 / 旧宿主）不拦截，交给宿主判断。
-  assert.equal(logic.generateCapabilityOf({ preset: flux, presets: [], reference }).ok, true)
-  // 没有参考图时纯文生图一律放行。
-  assert.equal(logic.generateCapabilityOf({ preset: flux, presets, reference: null }).ok, true)
-
-  // inpaintOnly 缺蒙版 → 拦下；带有效蒙版放行。
-  const missingMask = logic.generateCapabilityOf({ preset: native, presets, reference })
-  assert.equal(missingMask.ok, false)
-  assert.equal(missingMask.reason, 'mask')
-  assert.equal(missingMask.noticeKey, 'studio.mask.onlyHint')
-  assert.equal(logic.generateCapabilityOf({ preset: native, presets, reference: masked }).ok, true)
-
-  // 重试恢复的任务按自己的预设判断：表单当前预设不支持垫图也不会误拦。
-  assert.equal(logic.generateCapabilityOf({ preset: lightning, presets, reference: masked }).ok, true)
-  // 蒙版数据不合法（空 / 超限）等同于没有蒙版，专用模型仍拦下。
-  assert.equal(logic.generateCapabilityOf({ preset: native, presets, reference: { ...reference, mask: { data: 'not base64!' } } }).ok, false)
-})
-
-// 胶片条保护优先级：参考图（含蒙版）> 脏草稿 > 干净回填。
-await check('胶片条点击判定：参考图保护优先于脏草稿，干净才回填', () => {
-  const maskedReference = { path: 'imagen-output/a.png', mask: { data: MASK_PNG_B64, coverage: 0.2 } }
-  const plainReference = { path: 'imagen-output/a.png', url: '/imagen-api/file?path=x' }
-  const patch = { prompt: '作品提示词', reference: null }
-
-  const keptMask = logic.previewRecallOf({ reference: maskedReference, dirty: true, patch })
-  assert.equal(keptMask.action, 'reference')
-  assert.equal(keptMask.noticeKey, 'studio.toast.referenceKept', '带蒙版提示保留参考图与蒙版')
-  const keptImage = logic.previewRecallOf({ reference: plainReference, dirty: true, patch })
-  assert.equal(keptImage.action, 'reference')
-  assert.equal(keptImage.noticeKey, 'studio.toast.referenceImageKept', '无蒙版提示只保留参考图')
-  // 参考图保护排在 dirty 判断之前：表单刚提交变干净、但还挂着参考图时同样不回填。
-  assert.equal(logic.previewRecallOf({ reference: plainReference, dirty: false, patch: {} }).action, 'reference')
-
-  assert.deepEqual(logic.previewRecallOf({ reference: null, dirty: true, patch }), { action: 'draft', noticeKey: 'studio.toast.draftKept' })
-  assert.deepEqual(logic.previewRecallOf({ reference: null, dirty: false, patch }), { action: 'recall', noticeKey: 'studio.toast.recalled' })
-  assert.deepEqual(logic.previewRecallOf({ reference: null, dirty: false, patch: {} }), { action: 'idle', noticeKey: '' })
-  // 没有 path 的残缺参考图不算有效参考图，不触发保护。
-  assert.equal(logic.previewRecallOf({ reference: { url: '/x' }, dirty: false, patch }).action, 'recall')
-})
-
-// 强度自动档：初始进入涂抹抬档 → 用户手调退出 → 切预设时自动档才跟随。
-await check('重绘强度自动档：进入涂抹抬档、手调退出、切预设跟随', () => {
-  // 初始（自动档未开启、强度仍是契约默认 0.6）进入涂抹：抬到当前预设的推荐档。
-  assert.deepEqual(
-    logic.maskStrengthPatch(LIMITS.strength.default, { native: false, auto: false }),
-    { strength: logic.MASK_STRENGTH_DEFAULT },
-    '通用模型进入涂抹抬到 0.8',
-  )
-  assert.deepEqual(
-    logic.maskStrengthPatch(LIMITS.strength.default, { native: true, auto: false }),
-    { strength: logic.MASK_STRENGTH_NATIVE },
-    '专用 inpaint 权重进入涂抹抬到 0.9',
-  )
-
-  // 自动档下即使当前值已是上一轮推荐档（≠ 契约默认），也跟随新预设推荐档。
-  assert.deepEqual(
-    logic.maskStrengthPatch(logic.MASK_STRENGTH_DEFAULT, { native: true, auto: true }),
-    { strength: logic.MASK_STRENGTH_NATIVE },
-    '通用 0.8 切到专用模型：跟随到 0.9',
-  )
-  assert.deepEqual(
-    logic.maskStrengthPatch(logic.MASK_STRENGTH_NATIVE, { native: false, auto: true }),
-    { strength: logic.MASK_STRENGTH_DEFAULT },
-    '专用 0.9 切回通用模型：跟随到 0.8',
-  )
-
-  // 用户手调过（auto=false 且强度不等于契约默认值）：进入涂抹不再覆盖。
-  assert.equal(logic.maskStrengthPatch(0.7, { native: false, auto: false }), null)
-  assert.equal(logic.maskStrengthPatch(0.7, { native: true, auto: false }), null)
-  // 旧调用点不传 auto 时保留原有语义（只在契约默认值上抬档）。
-  assert.deepEqual(logic.maskStrengthPatch(LIMITS.strength.default), { strength: logic.MASK_STRENGTH_DEFAULT })
-  assert.equal(logic.maskStrengthPatch(0.7), null)
-
-  // 切预设联动：自动档按新预设推荐档更新，手调过一律不动。
-  assert.deepEqual(logic.maskStrengthPresetPatch(true, { native: true }), { strength: logic.MASK_STRENGTH_NATIVE })
-  assert.deepEqual(logic.maskStrengthPresetPatch(true, { native: false }), { strength: logic.MASK_STRENGTH_DEFAULT })
-  assert.equal(logic.maskStrengthPresetPatch(false, { native: true }), null, '手调过强度：切预设不动')
-  assert.equal(logic.maskStrengthPresetPatch(undefined, { native: true }), null)
-
-  // 推荐档必须落在契约区间内。
-  assert.ok(logic.MASK_STRENGTH_DEFAULT >= LIMITS.strength.min && logic.MASK_STRENGTH_DEFAULT <= LIMITS.strength.max)
-  assert.ok(logic.MASK_STRENGTH_NATIVE >= LIMITS.strength.min && logic.MASK_STRENGTH_NATIVE <= logic.strengthMaxOf(true))
 })
 
 // mask-aware 强度钳制：带蒙版放宽到契约 inpaintMax，img2img 维持 max。
@@ -3027,16 +2754,53 @@ await check('强度 mask-aware 钳制：带蒙版放宽到 inpaintMax，请求�
 })
 
 // 新增状态信号文案由 client-ui 维护字典，这里只锁键名两侧都存在。
-await check('状态流转新增文案键：中英文两侧齐全', () => {
+await check('阶段十二图片工具文案键：中英文两侧齐全', () => {
   for (const key of [
-    'studio.toast.referenceKept',
-    'studio.toast.referenceImageKept',
-    'studio.toast.maskLost',
-    'studio.mask.continueHint',
-    'studio.reference.autoText2Image',
+    'studio.form.autoText2Image',
+    'studio.form.blockedInpaintOnly',
+    'studio.preset.imageToolOnly',
+    'studio.rail.imageToolsHint',
+    'studio.imageTool.title',
+    'studio.imageTool.groupLabel',
+    'studio.imageTool.inpaint',
+    'studio.imageTool.img2img',
+    'studio.imageTool.upscale',
+    'studio.imageTool.outpaint',
+    'studio.imageTool.planned',
+    'studio.imageTool.autoPreset',
+    'studio.imageTool.presetLabel',
+    'studio.imageTool.promptLabel',
+    'studio.imageTool.promptPlaceholder',
+    'studio.imageTool.strengthLabel',
+    'studio.imageTool.submit',
+    'studio.imageTool.exit',
+    'studio.imageTool.resumeDraft',
+    'studio.imageTool.draftStatus',
+    'studio.imageTool.maskEmpty',
+    'studio.imageTool.blockedNoPreset',
+    'studio.imageTool.blockedNoPrompt',
+    'studio.imageTool.blockedTarget',
+    'studio.imageTool.submitted',
+    'studio.imageTool.retryMoved',
+    'studio.mask.onlyHint',
   ]) {
     assert.ok(typeof DICT.zh[key] === 'string' && DICT.zh[key].length > 0, `${key} 缺少中文文案`)
     assert.ok(typeof DICT.en[key] === 'string' && DICT.en[key].length > 0, `${key} 缺少英文文案`)
+  }
+  // 左栏参考图区相关死键必须一起删掉，避免文案继续误导用户。
+  for (const key of [
+    'studio.reference.title',
+    'studio.reference.strength',
+    'studio.reference.autoText2Image',
+    'studio.mask.toggle',
+    'studio.mask.continueFromResult',
+    'studio.toast.referenceKept',
+    'studio.toast.maskLost',
+    'studio.rail.followReference',
+    'studio.chat.formSync.reference',
+  ]) {
+    assert.equal(Object.prototype.hasOwnProperty.call(DICT.zh, key), false, `${key} 应随左栏参考图区一起删除`)
+    assert.equal(Object.prototype.hasOwnProperty.call(DICT.en, key), false, `${key} 应随左栏参考图区一起删除`)
   }
 })
 

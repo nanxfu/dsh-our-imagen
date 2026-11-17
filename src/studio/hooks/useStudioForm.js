@@ -1,5 +1,5 @@
 /**
- * 表单域：提示词 / 负向 / 预设 / 画幅比例 / 参考图与重绘强度 / 润色与英译。
+ * 表单域：提示词 / 负向 / 预设 / 画幅比例 / 润色与英译。
  *
  * 负责表单状态、预设同步 effect 与生成请求体拼装。
  * 依赖入参：{ t, isEn, alive, ui, preset, initialPrompt }；preset 是宿主的预设配置
@@ -7,6 +7,9 @@
  *
  * 0.10.0：删除风格与风格后缀；排除项是否可用统一由 shared/models-guide.js 的
  * `negativePromptActive()` 判定，展示与提交用同一个布尔值。
+ *
+ * 0.13.0：参考图 / 蒙版 / 重绘强度整块迁到舞台图片工具（`useImageTool`），
+ * 这里只剩纯文生图状态；请求体不再产出 reference 字段。
  */
 
 import React from 'react'
@@ -17,29 +20,14 @@ import { negativePromptActive } from '../../../shared/models-guide.js'
 import { enhancePromptRequest } from '../../api/resources.js'
 import { clampInt, clampNumber } from '../../logic/clamp.js'
 import { formSnapshotOf, isFormDirty, newCreationPatch } from '../../logic/form.js'
-import { buildGenerateBody, retryRestoreOf } from '../../logic/generate.js'
-import {
-  clampMaskStrength,
-  maskDigestOf,
-  maskExportVerdict,
-  maskStateOf,
-  maskStrengthPatch,
-  maskStrengthPresetPatch,
-  referenceMaskOf,
-  referenceWithoutMask,
-  strengthMaxOf,
-} from '../../logic/mask.js'
+import { buildGenerateBody } from '../../logic/generate.js'
 import {
   customSizePatch,
   detectCjk,
   hintOf,
-  inpaintOnlyOf,
   presetNeedsEnglish,
   presetSelectPatch,
   ratioIdOf,
-  referencePresetOf,
-  supportsImg2Img,
-  supportsInpaint,
 } from '../../logic/preset.js'
 import {
   applyNegativePatch,
@@ -63,20 +51,6 @@ const EMPTY_FORM = {
   cfg: 0,
   seed: '',
   count: 1,
-  // 图生图：参考图来自画廊「以此图重绘」（{ path, url, width?, height? }），strength 是重绘强度。
-  // 局部重绘的蒙版挂在 `reference.mask`（{ data, coverage, digest }）上，换/移除参考图时一起清掉。
-  reference: null,
-  strength: LIMITS.strength.default,
-}
-
-/** 画廊条目 image → 参考图槽位数据；宽高可缺省（旧记录只有路径）。 */
-function referenceOf(image, path) {
-  const next = { path, url: image && typeof image.url === 'string' ? image.url : '' }
-  const width = Number(image && image.width)
-  const height = Number(image && image.height)
-  if (Number.isFinite(width) && width > 0) next.width = Math.round(width)
-  if (Number.isFinite(height) && height > 0) next.height = Math.round(height)
-  return next
 }
 
 /** 微调来源提示用的一句描述：优先作品提示词，没有提示词时退回文件名。 */
@@ -98,9 +72,6 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const [refineSource, setRefineSource] = React.useState('')
   const [enhancing, setEnhancing] = React.useState(false)
   const [translating, setTranslating] = React.useState(false)
-  // 重绘强度是否处于自动档：进入涂抹时按当前预设套用推荐档，用户手调后退出；
-  // 自动档下切换预设会跟随新预设的推荐档，手调过的值保持不动。
-  const [strengthAuto, setStrengthAuto] = React.useState(false)
   // 干净基准快照：最近一次「生成提交 / 从作品回填 / 新建创作 / 初始预设同步」时的表单，
   // 与当前表单不一致即为 dirty（胶卷点击时据此保护草稿）。
   const [cleanBaseline, setCleanBaseline] = React.useState('')
@@ -121,23 +92,6 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const negativeActive = negativePromptActive(activePreset, form.cfg)
   // 当前预设决定提示词的书写口径；含中文提示时给一条软提示，不拦截生成。
   const englishPromptHint = detectCjk(form.prompt) && presetNeedsEnglish(activePreset)
-
-  // 图生图能力只在有参考图时才起作用：旧宿主缺 supportsImg2Img 按不支持处理，
-  // 但没有参考图时不做任何判断，文生图流程与改造前完全一致。
-  const reference = form.reference || null
-  const referenceSupported = supportsImg2Img(activePreset)
-  // 预设列表还没拿到时不做拦截，交给宿主判断，避免启动瞬间误拦文生图。
-  const referenceBlocked = Boolean(reference && presets.length > 0 && !referenceSupported)
-
-  // 局部重绘能力与蒙版：蒙版挂在参考图上，没有参考图时不可能有蒙版。
-  // 旧宿主 / 非 SDXL 家族缺 supportsInpaint 时按不支持处理，Stage 只显示说明、不显示涂抹入口。
-  const inpaintSupported = supportsInpaint(activePreset)
-  const mask = referenceMaskOf(reference)
-  // 有能力但有蒙版却切到了不支持的模型：保留蒙版不静默丢弃，本次提交按整图重绘处理。
-  const maskBlocked = Boolean(mask && presets.length > 0 && !inpaintSupported)
-  // 专用局部重绘模型（9 通道 inpaint 权重）：只能带蒙版使用，不能文生图 / 纯图生图。
-  const inpaintOnly = inpaintOnlyOf(activePreset)
-  const maskRequiredBlocked = inpaintOnly && !mask
 
   // 预设同步：只在用户没手动改过时套用推荐值（初始预设同样回填负向模型层）。
   React.useEffect(() => {
@@ -166,13 +120,7 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   /** 切换预设：套用推荐尺寸 / 步数 / 引导强度，并按负向能力整层替换模型负向词。 */
   function selectPreset(next) {
     if (!next || !next.id) return
-    setForm((prev) => {
-      const patch = presetSelectPatch(next, prev, presets)
-      // 强度自动档跟随新预设的推荐档；用户手调过的值保持不动。
-      const strengthPatch = maskStrengthPresetPatch(strengthAuto, { native: inpaintOnlyOf(next) })
-      if (strengthPatch) Object.assign(patch, strengthPatch)
-      return applyNegativePatch(prev, patch)
-    })
+    setForm((prev) => applyNegativePatch(prev, presetSelectPatch(next, prev, presets)))
   }
 
   /**
@@ -190,16 +138,12 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   /**
    * 从作品回填（胶卷点击 / 画廊「带回参数」）：套用纯逻辑算好的补丁并记录微调来源。
    *
-   * 回填属于「刚从另一张图加载完」，本身不算手动修改，所以同时更新干净基准；
-   * 补丁里的 `reference: null` 负责清掉上一轮残留的参考图。
+   * 回填属于「刚从另一张图加载完」，本身不算手动修改，所以同时更新干净基准。
+   * 参考图与蒙版不在主表单上，回填不会影响舞台工具域里的草稿。
    */
   function applyRecall(patch, entry) {
     const partial = patch && typeof patch === 'object' ? { ...patch } : {}
     if (Object.keys(partial).length === 0) return false
-    // 回填是整块替换参考图：上一轮涂抹的蒙版不能跟到新作品的参数里。
-    if (Object.prototype.hasOwnProperty.call(partial, 'reference')) {
-      partial.reference = referenceWithoutMask(partial.reference)
-    }
     const next = applyNegativePatch(formRef.current, partial)
     setForm(next)
     setCleanBaseline(formSnapshotOf(next))
@@ -208,7 +152,7 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   }
 
   /**
-   * 新建创作：清空提示词 / 参考图 / 固定种子，负向层回到当前预设默认推荐状态。
+   * 新建创作：清空提示词 / 固定种子，负向层回到当前预设默认推荐状态。
    *
    * 当前模型预设与画幅比例是下一张仍要用的常用设置，保留不动；微调来源与 dirty 一起清掉。
    */
@@ -217,16 +161,14 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     setForm(next)
     setCleanBaseline(formSnapshotOf(next))
     setTuning(null)
-    // 新创作把强度重置回契约默认值：退出自动档，下次涂抹再按预设推荐档抬升。
-    setStrengthAuto(false)
     ui.showToast(t('studio.toast.newCreation'))
   }
 
   /**
-   * 拼装生成请求体。
+   * 拼装生成请求体（纯文生图）。
    *
-   * `options.preset` 指定本次请求的有效预设（重试恢复 / 兜底切换后的预设）：
-   * 负向词门控与蒙版提交都按有效预设重新判断，避免用左栏当前预设误判。
+   * `options.preset` 指定本次请求的有效预设（专用局部重绘预设的兜底切换）：
+   * 预设 id 与负向词门控都按有效预设判断，但左栏表单本身不变。
    */
   function buildBody(overrides, options = {}) {
     const presetOverride = options.preset && typeof options.preset === 'object' ? options.preset : null
@@ -235,14 +177,16 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
       ? overrides.cfg
       : form.cfg
     // 提交值以两层合并结果为准，并按 negativeActive 门控（不可用时置空串）。
-    // 局部重绘同理：有效预设不支持 Inpaint 时不提交蒙版，蒙版本身保留在表单里。
     return buildGenerateBody(
-      { ...form, negative: negativePromptOf(form) },
+      {
+        ...form,
+        presetId: effectivePreset ? effectivePreset.id : form.presetId,
+        negative: negativePromptOf(form),
+      },
       {
         defaultPreset,
         overrides,
         negativeActive: negativePromptActive(effectivePreset, effectiveCfg),
-        maskActive: supportsInpaint(effectivePreset),
       },
     )
   }
@@ -311,128 +255,6 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   /** 自定义宽/高输入：只改对应一边，边界与步长由 customSizePatch 钳制。 */
   function applyCustomSize(partial) {
     patchForm(customSizePatch(partial))
-  }
-
-  /**
-   * 重绘强度：滑块按契约 step 取值，这里再兜一次边界与浮点噪声。
-   * 有蒙版时上限放宽到契约 inpaintMax（缺省回落通用 max），手调即退出自动档。
-   */
-  function applyStrength(value) {
-    setStrengthAuto(false)
-    patchForm({ strength: clampMaskStrength(value, Boolean(mask)) })
-  }
-
-  /**
-   * 进入涂抹模式：把强度抬到局部重绘的推荐档。
-   *
-   * 真机验收结论：4 步极速模型在契约默认 0.6 下蒙版区改动偏弱，0.8 才有可见重写；
-   * 专用 inpaint 权重（9 通道）需要 0.9 才会明显替换。自动档下无条件跟随推荐档，
-   * 用户手调过的强度（且不等于契约默认值）保持不动，避免覆盖明确选择。
-   */
-  function beginMaskEdit() {
-    const patch = maskStrengthPatch(formRef.current.strength, { native: inpaintOnly, auto: strengthAuto })
-    if (!patch) return false
-    setStrengthAuto(true)
-    patchForm(patch)
-    return true
-  }
-
-  /** 移除参考图：后续生成回到纯文生图，当前预设保持用户选择不变。 */
-  function removeReference() {
-    // reference 是整体置空：挂在上面的蒙版也一并清掉，不会残留到下一轮。
-    patchForm({ reference: null })
-  }
-
-  /**
-   * 应用涂抹蒙版：Stage 导出黑底白字 PNG base64 后写进 `reference.mask`。
-   *
-   * 返回值 `{ ok, reason }`：`no_reference` / `unsupported` / `empty` / `too_large` /
-   * `invalid` 由 Stage 转成可见提示，不静默丢数据。
-   * 当前模型不支持局部重绘时不写入：涂抹入口本来就不会出现，这里再兜一层兜底。
-   */
-  function applyMask(input) {
-    const candidate = input && typeof input === 'object' ? input : { data: input }
-    const currentReference = formRef.current.reference
-    if (!currentReference || typeof currentReference !== 'object' || !currentReference.path) {
-      return { ok: false, reason: 'no_reference' }
-    }
-    const currentPreset = presets.find((item) => item && item.id === formRef.current.presetId) || null
-    if (!supportsInpaint(currentPreset)) return { ok: false, reason: 'unsupported' }
-    const verdict = maskExportVerdict(candidate.data, candidate.coverage)
-    if (!verdict.ok) return { ok: false, reason: verdict.reason }
-    patchForm({
-      reference: {
-        ...currentReference,
-        mask: {
-          data: verdict.data,
-          coverage: verdict.coverage,
-          digest: maskDigestOf(verdict.data),
-        },
-      },
-    })
-    return { ok: true }
-  }
-
-  /** 清空蒙版：只去掉 reference.mask，参考图本身保留（本次回到整图重绘）。 */
-  function clearMask() {
-    const currentReference = formRef.current.reference
-    if (!currentReference || typeof currentReference !== 'object' || !currentReference.mask) return false
-    patchForm({ reference: referenceWithoutMask(currentReference) })
-    return true
-  }
-
-  /**
-   * 以此图重绘：把画廊条目设为参考图。
-   *
-   * - 当前预设支持图生图：只写入参考图；
-   * - 不支持：自动切到支持图生图的预设（优先 `sdxl-lightning`）并套用其推荐参数，
-   *   返回 switchedPreset 供组合层 toast；
-   * - 一个支持的预设都没有（旧宿主）：什么都不改，返回失败让组合层明确提示。
-   *
-   * 参考图取 `image.path`（提交用）、`image.url`（缩略图）与 `image.width/height`
-   * （「出图尺寸跟随参考图」读数）；path 缺失时按失败处理。
-   */
-  function applyReference(entry) {
-    const image = entry && entry.image ? entry.image : null
-    const path = image && typeof image.path === 'string' ? image.path.trim() : ''
-    if (!path) return { ok: false, switchedPreset: null, reason: 'no_path' }
-    const referencePatch = referenceOf(image, path)
-    const active = presets.find((item) => item.id === form.presetId) || null
-    if (supportsImg2Img(active)) {
-      patchForm({ reference: referencePatch })
-      return { ok: true, switchedPreset: null, reason: '' }
-    }
-    const target = referencePresetOf(presets)
-    if (!target) return { ok: false, switchedPreset: null, reason: 'unsupported' }
-    // 换预设与写参考图合成一次提交：尺寸 / 步数 / 负向词与参考图同时到位。
-    setForm((prev) => applyNegativePatch(prev, {
-      ...presetSelectPatch(target, prev, presets),
-      reference: referencePatch,
-    }))
-    return { ok: true, switchedPreset: target, reason: '' }
-  }
-
-  /**
-   * 失败重试的「蒙版不可恢复」回填：把失败任务的预设与参数写回表单并放回参考图，等用户重涂。
-   *
-   * 与「以此图重绘」不同，这里的目标是把表单尽量还原成失败任务本身：预设做能力校验
-   * （失败任务原来的预设可用就用它，否则退回兜底预设），提示词 / 尺寸 / 步数 / CFG /
-   * 张数 / 排除项 / 强度按任务冻结值回填——重涂后点生成即等价重试，不会拿左栏里的旧参数
-   * 去跑一个不同任务。不标记干净基准、不提交：表单此时是等待补全蒙版的草稿。
-   *
-   * @param {object} plan `retryReferencePlan()` 的 maskLost 分支
-   * @returns {{ ok: boolean, reason: string, preset: object|null, patch: object }}
-   */
-  function restoreRetryTask(plan) {
-    const restored = retryRestoreOf(plan, presets)
-    if (!restored.ok) return restored
-    setForm((prev) => applyNegativePatch(prev, {
-      ...presetSelectPatch(restored.preset, prev, presets),
-      ...restored.patch,
-    }))
-    // 回填的是任务实际使用的强度：退出自动档，之后切预设不再覆盖它。
-    setStrengthAuto(false)
-    return restored
   }
 
   async function enhance() {
@@ -550,29 +372,6 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     applyCfg,
     resetSeed,
     applyIntent,
-    // 图生图：参考图 / 重绘强度与它们的能力判断、动作。
-    reference,
-    strength: clampMaskStrength(form.strength, Boolean(mask)),
-    // 强度滑块上限：有蒙版时用契约 inpaintMax（局部重绘允许更强替换），否则通用 max。
-    strengthMax: strengthMaxOf(Boolean(mask)),
-    // 强度是否处于自动档：自动档下切预设跟随推荐档，用户手调后为 false。
-    strengthAuto,
-    referenceSupported,
-    referenceBlocked,
-    applyStrength,
-    removeReference,
-    applyReference,
-    // 失败重试的「蒙版不可恢复」回填：恢复任务预设与参数 + 参考图，等用户重新涂抹。
-    restoreRetryTask,
-    // 局部重绘：蒙版挂在参考图上；能力判断、当前蒙版与写入/清空动作。
-    mask,
-    inpaintSupported,
-    inpaintOnly,
-    maskBlocked,
-    maskRequiredBlocked,
-    applyMask,
-    clearMask,
-    beginMaskEdit,
     refineGroups: refineGroups.map((group) => ({
       ...group,
       options: group.options.map((option) => ({ ...option, applied: isRefineApplied(form.prompt, option.text) })),

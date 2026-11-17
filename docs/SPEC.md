@@ -4,7 +4,8 @@
 > 本文档只描述语义、请求/响应形状与使用约束，不重复维护数值。`node test/check-contract.mjs` 会校验
 > 宿主注册的路由、宿主错误码、客户端文案与本文档是否跟随契约。
 >
-> **版本**：0.11.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。
+> **版本**：0.11.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。本文档已包含尚未发版的
+> 0.13.0 改动（ROADMAP 第十二、十三阶段）；版本号与 CHANGELOG 版本段落会在正式发版时统一升级。
 
 ---
 
@@ -165,7 +166,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 
 > **例外**：`GET /imagen-api/file` 返回图片二进制流（`image/png` 等），不是 JSON。
 
-路由总览（23 条方法 / 20 个唯一路径，以 `shared/contract.js` 的 `ROUTES` 为准；同一 path 的 GET/POST 各占一行）：
+路由总览（24 条方法 / 21 个唯一路径，以 `shared/contract.js` 的 `ROUTES` 为准；同一 path 的 GET/POST 各占一行）：
 
 | 方法 | 路径 | 用途 |
 | :--- | :--- | :--- |
@@ -179,6 +180,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | POST | `/imagen-api/job/cancel` | 取消任务（排队/等待会话立即失效；运行中合作式停止） |
 | GET | `/imagen-api/jobs?limit=` | 查询任务列表与队列概况 |
 | GET | `/imagen-api/history?limit=&offset=` | 查询历史产物（分页，带 `hasMore`） |
+| GET | `/imagen-api/history/tree?root=&limit=` | 按根作品返回整棵版本派生树（跨历史分页补齐版本链） |
 | GET | `/imagen-api/file?path=` | 读取产物图片（二进制） |
 | GET | `/imagen-api/library` | 读取收藏 / 删除记录 |
 | POST | `/imagen-api/library/favorite` | 收藏 / 取消收藏 |
@@ -556,7 +558,11 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
   `400 invalid_body`（请求体不是合法 JSON）、`400 invalid_path` / `400 invalid_request`（图生图参考图不合法）。
 
 > **图生图产物**：`meta.json` 在原有字段外记录 `sourceImage`（参考图工作区相对路径；上传来源为 `null`）
-> 与 `strength`（重绘强度），历史条目通过 `params.reference` 读取同一信息。
+> 与 `strength`（重绘强度），历史条目通过 `params.reference` 读取同一信息。0.13.0 起再记录
+> `rootImage`（版本树根作品图片路径，O(1) 归组整棵树）：落盘时读父作品所在目录的 `meta.json`，
+> 有 `rootImage` 直接继承，旧 meta 没有则沿 `sourceImage` 链回溯（最多 8 层，成环/缺失即停），
+> 读不到父 meta 时退回 `sourcePath` 本身；前端动态上传的参考图没有可归组的根，`sourceImage` /
+> `rootImage` 均写 `null`。
 
 #### `GET /imagen-api/job?id=<jobId>`
 
@@ -597,9 +603,27 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
   `items` 保持数组类型（旧客户端只读该字段即可向后兼容）；`hasMore=true` 表示还有更早的记录，
   客户端可在底部继续「加载更多」（前端每次取契约上限 `LIMITS.history.pageSize` = 100 条）。
 
-`HistoryItem`：`{ jobId, dir, createdAt, finishedAt, presetId, params, prompt, images[] }`；
+`HistoryItem`：`{ jobId, dir, createdAt, finishedAt, presetId, params, prompt, images[], sourceImage, rootImage, inpaint, strength }`；
 `params` 是完整的生成参数（用于「带回参数」），`images[]` 每项：
 `{ file, path, absolute, url, width, height, seed, seconds }`（已按文件是否存在过滤，删除过的图不会出现）。
+`sourceImage` / `rootImage` / `inpaint` / `strength` 是 0.13.0 起的版本链字段（语义见 §5.18）：`sourceImage`
+是本次生成所用参考图的工作区相对路径（纯文生图或前端动态上传参考图时为 `null`）；`rootImage` 是整棵
+派生树的根作品路径（无参考图的根作品为 `null`，每张候选图各自为根；旧 `meta.json` 缺该字段时由 Host 按
+`sourceImage` 链回溯，回溯不到时退回 `sourceImage`）；`inpaint` 为局部重绘标记；`strength` 为重绘强度。
+
+#### `GET /imagen-api/history/tree?root=<encodedPath>&limit=<n>`
+
+按根作品返回整棵派生树（0.13.0 新增）。历史列表是分页的，版本链的根节点可能落在更早的页里；
+作品条的版本派生面板按需调用该接口补齐整棵树，避免跨页断链。
+
+- `root`：必填，`imagen-output/` 内作品的工作区相对路径（与 `/imagen-api/file?path=` 同一口径）；
+  必须无路径穿越且落在输出目录内，否则 `400 invalid_request`。
+- `limit`：1~100，默认 `LIMITS.history.pageSize`。
+- **响应**：`{ "root": string, "items": HistoryItem[], "hasMore": boolean }`。`items` 包含根作品本身
+  （`images` 里有 `root` 的那条记录）与全部 `rootImage === root` 的衍生作品，按时间倒序；
+  `hasMore=true` 表示该树记录数超过 `limit`。
+- **错误**：`400 invalid_request`（缺少 `root`、路径非法或越界）。
+- 旧宿主没有该路由时返回 404，客户端降级为「仅使用已加载分页」并在版本面板提示不可用，不阻断浏览。
 
 #### `GET /imagen-api/file?path=<encodedPath>`
 
@@ -1339,3 +1363,75 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
     强度上限、重试恢复与蒙版丢失分支）；`check-client-locale` zh/en 各 477 键同构；`host-e2e` 50 项（+2）、
     `jobs-wait` 26 项（+1）、`test/remote/run.py` 390 项（+19）、`check-contract` 12 项（+1）。
     真机复验结果见 [`docs/ROADMAP.md`](ROADMAP.md) 第十一条与 [`CHANGELOG.md`](../CHANGELOG.md)。
+
+### 5.17 第十三批交互补充（舞台图片处理工具栏与交互解耦，阶段十二）
+
+> 设计依据：[STAGE_IMAGE_TOOLS_PLAN.md](STAGE_IMAGE_TOOLS_PLAN.md)（方案 B）。
+
+1. **左栏主表单回归纯文生图**：参数面板不再承载参考图、蒙版与重绘强度，任何一次面板生成都是纯文生图
+   （请求体不出现 `reference`）；「以此图重绘 / 挂参考图」链路与 `ReferenceSection` 一并删除。
+   `inpaintOnly` 预设（如 `sdxl-inpaint`）不再出现在主表单预设选择器中，只在图片工具内部可选；
+   旧界面态残留该预设时，面板生成自动切到支持文生图的兜底预设并轻提示，不静默失败。
+2. **舞台动作坞**：图片下方的 `.ofs-dock` 分两组——图片处理（`局部涂抹`、`整图重绘`、`高清放大`/`扩图`
+   占位）与创作复用（`带回参数`、`再画一张`）。高清放大 / 扩图在 0.13.0 仍为禁用占位（`title` 说明
+   规划中），交互框架按 `instant / inline / canvas` 三类形态注册，后续接入只补描述符与远端能力。
+   `复制路径` 只保留在图片右上角悬浮按钮里，动作坞不再重复。
+3. **一步直达局部涂抹**：在舞台或大图预览点 `局部涂抹` 即以当前作品为底图打开画布，无需先「设为参考图」。
+   工具内部自动选模：当前预设支持 Inpaint 时沿用，否则优先 `sdxl-inpaint`、再退支持垫图的兜底预设；
+   自动改用只发生在工具内，**不回写左栏**的 `presetId`，并在工具条提示当前使用的模型。工具级预设可在
+   支持的 Inpaint 预设间切换。
+4. **画布 + 内置轻量提交栏**：画布沿用第十一阶段的蒙版能力（画笔 / 橡皮擦 / 清空 / 反选 / 覆盖率、
+   指针与键盘操作、黑底白字 PNG 导出、`LIMITS.mask` 上限与空蒙版拦截）；底部内嵌提交栏提供修改描述、
+   重绘强度、模型胶囊与「重绘选中区域」。修改描述默认留空、placeholder 显示原作品提示词，提交时为空则
+   回退用原提示词；原作品也没有提示词时拦下并提示。强度按工具默认档（通用底座 0.8 / `inpaintOnly` 0.9）
+   自动档与手调退出规则不变，带蒙版上限仍为 `LIMITS.strength.inpaintMax`。
+5. **整图重绘轻量条**：`整图重绘` 不切画布，在舞台下方展开一行 Prompt + 强度（0.2~0.9）+「生成」；
+   当前预设不支持垫图时，仅本次工具请求自动选用支持垫图的兜底预设，左栏表单不变。
+6. **提交与失败恢复**：工具提交与面板生成走同一条队列流水线（`activeJob` / 待执行卡 / 取消语义一致），
+   提示词与编辑状态记入工具的待提交草稿；失败时保留底图、提示词、强度与蒙版，动作坞出现「继续编辑」
+   可原样恢复，不丢弃已涂内容。切换舞台作品只退出编辑态，草稿按作品路径保留（见 §5.18）。
+7. **画廊 / 大图入口**：画廊卡片的「以此图重绘」与大图预览的同一动作改为「选中该作品 + 切回舞台 +
+   打开局部涂抹」，不再改写左栏表单；宿主没有任何支持垫图的预设时 toast 说明不可用。
+8. **状态隔离**：胶卷点击、对话助手、生成变体与左栏回填只服务文生图表单，不读取也不污染图片工具状态；
+   图片工具只以「当前舞台作品」为底图，预览切换不影响已绑定的底图与草稿。
+9. **测试**：新增 `test/image-tool.mjs`（19 项纯逻辑：注册表、自动选模与兜底、强度档位、请求体、蒙版门控、
+   提示词回退、`inpaintOnly` 拦截、作品键）与 `test/image-tool-render.mjs`（6 项 hook / Stage 渲染）；
+   `check-client-render` / `check-client-logic` 的旧参考图 / 涂抹 / 续绘 / 来源策略用例逐条改写为
+   「主表单无 reference、图片工具提交体带 reference + mask、底图绑定不随预览切换」等新交互断言；
+   文案键随左栏参考图区删除而收敛（阶段十二收口时 zh/en 各 470 键，最终键数见 §5.18）。
+
+### 5.18 第十四批交互补充（显式新建绘图、多作品草稿与树状版本管理，阶段十三）
+
+> 设计依据：[WORKSPACE_DRAFTS_AND_VERSIONING_PLAN.md](WORKSPACE_DRAFTS_AND_VERSIONING_PLAN.md)。
+
+1. **显式新建绘图态**：参数面板「新建创作」改为显式进入新建绘图态——舞台切为模糊动态背景 + 取景框
+   （`prefers-reduced-motion` 下退化为静态），底部作品条最左端出现新建草稿卡（画幅比例、预设、
+   「未提交」标记）。提交入队后草稿卡位置交接给排队 / 渲染卡，舞台显示本次任务的取景框与进度；
+   等待期间点任意作品立即切回浏览态，不打断在途任务。任务完成后自动选中新出的作品。
+2. **多作品草稿**：图片工具按作品路径（`workKey`）分别保存未提交的编辑草稿（工具、提示词、强度、
+   预设、蒙版与改动项），切换作品再回来可继续编辑，不丢笔迹。草稿只存会话内存、不落盘；含蒙版的草稿
+   LRU 上限 8，超出淘汰最久未编辑的草稿。缩略图与版本树节点上有草稿圆点，`title` 列出改动项
+   （涂抹区域 / 提示词 / 参数），并支持一键清空该作品草稿。
+3. **同批与树状版本**：一次提交产出的 1~4 张图各自是一棵独立版本树的根（`v1`）；对某张图做局部涂抹 /
+   整图重绘产出的图作为子节点（`v2`），可继续派生（`v3`…）；同一父节点多次派生按创建顺序用 `v2a` /
+   `v2b` 区分。产物 `meta.json` 与新 `/history` 字段记录 `sourceImage` / `rootImage`（§2.2），跨会话
+   仍能还原整棵树；父作品被删除时子版本提升为局部根，版本面板不崩。
+4. **作品条按根折叠**：作品条为每棵版本树保留一张卡，缩略图取该树最新活跃节点，右侧显示 `⎇ N`
+   分支角标（无派生不显示）；避免连改几轮后作品条被 v1/v2/v3 撑满。普通点击仍是切预览 / 回填参数的
+   既有语义。
+5. **版本派生面板**：鼠标在缩略图停留超过 250ms 或点击分支角标时，在作品条上方弹出稳定的树状面板
+   （hover bridge + 延迟收起，点击角标可固定展开，Esc 关闭，键盘可 Tab）；面板按层级展示版本行
+   （`vN`、来源类型「涂抹 / 整图 / 文生」、缩略图），叠加草稿圆点与在途幽灵节点（哪个节点正在排队生成
+   下一版）。点击任意节点把该版本切到舞台，并可基于它继续「局部涂抹 / 整图重绘」。
+6. **跨分页补齐**：版本树的根节点可能不在已加载分页内；打开面板时按需调用 `/history/tree` 拉取整棵树
+   （见 §2.2），旧宿主 404 时降级为仅用已加载分页并提示「宿主版本过低，无法展开完整版本树」。
+7. **在途任务溯源**：提交时记录来源（新建绘图 / 局部涂抹 / 整图重绘 / 生成变体）与父作品路径，
+   排队期间在版本树对应父节点下渲染幽灵节点，出图后自动归位到正确的版本树，即使等待期间用户已切去
+   浏览其它作品。
+8. **状态边界**：版本树与草稿只影响作品条 / 舞台展示，不改变左栏表单的干净基准与回填语义；删除作品后
+   版本链与草稿键同步清理，不残留失效节点。
+9. **测试**：`host-e2e` 54 项（版本树路由、rootImage 两级继承、动态上传、历史透传、旧 meta 回溯、tree 空树与
+   越界、分页）、`jobs-wait` 31 项（rootImage 落盘与旧链回溯上限）；新增 `test/lineage.mjs` 17 项（索引、版本号、
+   面板行、幽灵节点、LRU、草稿摘要）。客户端 `check-client-render` 104 项（含版本条根折叠、面板 hover / 固定 /
+   Esc / 点行、按需拉树、旧宿主 404 降级、父删局部根、新建绘图态与完成切回）、`check-client-logic` 82 项、
+   `check-client-locale` zh/en 各 495 键同构（相对 0.12.0 累计新增 51 键、删除 33 个死键）。

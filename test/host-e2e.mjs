@@ -239,6 +239,7 @@ async function main() {
       '/imagen-api/job/cancel',
       '/imagen-api/jobs',
       '/imagen-api/history',
+      '/imagen-api/history/tree',
       '/imagen-api/file',
       '/imagen-api/library',
       '/imagen-api/library/favorite',
@@ -579,6 +580,11 @@ async function main() {
     assert.equal(item.params.steps, 3)
     assert.equal(item.params.width, 512)
     assert.ok(item.finishedAt, '历史条目应带 finishedAt')
+    // 版本树字段（阶段十三）：纯文生图没有来源图，四个字段恒存在（null / null / false / null）。
+    assert.equal(item.sourceImage, null)
+    assert.equal(item.rootImage, null)
+    assert.equal(item.inpaint, false)
+    assert.equal(item.strength, null)
     // 产物文件名由本地序号生成，不拼接远端返回的 name。
     for (const image of item.images) assert.match(image.file, /^\d{2}\.png$/)
   })
@@ -1639,6 +1645,183 @@ async function main() {
     assert.equal(submitted.status, 200, JSON.stringify(submitted.body))
     assert.equal(submitted.body.status, 'done')
     assert.equal(submitted.body.params.reference.mask, true)
+  })
+
+  // ── 阶段十三：版本链（rootImage 继承 / 历史透传 / 版本树路由）─────────────
+  // 先在「历史透传」用例里播种根作品与旧子作品，后续 tree 用例复用这组夹具。
+  let tree = null
+
+  await check('版本链：二级派生继承 rootImage，/history 透传与旧 meta 回溯', async () => {
+    // 根作品：纯文生图的产物目录（没有 sourceImage / rootImage），播种时间取 2020，保证比真实任务旧。
+    const rootDir = join(workspace, 'imagen-output', '20200102-000000-tree-root')
+    await mkdir(rootDir, { recursive: true })
+    const rootPath = 'imagen-output/20200102-000000-tree-root/01.png'
+    await writeFile(join(rootDir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+    await writeFile(
+      join(rootDir, 'meta.json'),
+      JSON.stringify({
+        version: 1,
+        jobId: 'j_tree_root',
+        presetId: 'sdxl-turbo',
+        createdAt: '2020-01-02T00:00:00.000Z',
+        finishedAt: '2020-01-02T00:00:01.000Z',
+        params: { prompt: '版本树根', negativePrompt: '', width: 512, height: 512, steps: 3, cfg: 1.5, seed: 1, count: 1 },
+        images: [{ file: '01.png', seed: 1, seconds: 0.1, width: 512, height: 512, prompt: '版本树根' }],
+      }),
+      'utf8',
+    )
+    // 旧子作品：只记 sourceImage（0.12 及以前的数据，没有 rootImage），历史接口应回溯到根。
+    const legacyDir = join(workspace, 'imagen-output', '20200102-000001-tree-legacy')
+    await mkdir(legacyDir, { recursive: true })
+    const legacyPath = 'imagen-output/20200102-000001-tree-legacy/01.png'
+    await writeFile(join(legacyDir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+    await writeFile(
+      join(legacyDir, 'meta.json'),
+      JSON.stringify({
+        version: 1,
+        jobId: 'j_tree_legacy',
+        presetId: 'sdxl-lightning',
+        createdAt: '2020-01-02T00:00:02.000Z',
+        finishedAt: '2020-01-02T00:00:03.000Z',
+        params: { prompt: '一级派生', negativePrompt: '', width: 512, height: 512, steps: 3, cfg: 1.5, seed: 2, count: 1 },
+        images: [{ file: '01.png', seed: 2, seconds: 0.1, width: 512, height: 512, prompt: '一级派生' }],
+        sourceImage: rootPath,
+        strength: 0.6,
+        inpaint: true,
+      }),
+      'utf8',
+    )
+
+    // 从旧子作品再派生一次：走真实 /generate 全链路，落盘 meta 应沿旧 meta 的链回溯到根。
+    const submitted = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        prompt: '二级派生',
+        presetId: 'sdxl-lightning',
+        reference: { path: legacyPath, strength: 0.55 },
+        waitSeconds: 15,
+      }),
+    })
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body))
+    const job = submitted.body
+    assert.equal(job.status, 'done', JSON.stringify(job))
+    const meta = JSON.parse(await readFile(join(workspace, job.output.dir, 'meta.json'), 'utf8'))
+    assert.equal(meta.sourceImage, legacyPath)
+    assert.equal(meta.rootImage, rootPath, '二级派生应沿旧 meta 的 sourceImage 链回溯到根')
+    assert.equal(meta.inpaint, undefined, '纯图生图不应写 inpaint 标记')
+
+    // /history 透传：新条目字段与 meta 一致；旧条目 rootImage 由 Host 回溯补齐。
+    const history = await json(host.origin, `/imagen-api/history?limit=${LIMITS.history.maxLimit}`)
+    const derived = history.body.items.find((entry) => entry.jobId === job.id)
+    assert.ok(derived, '历史里应有刚生成的二级派生')
+    assert.equal(derived.sourceImage, legacyPath)
+    assert.equal(derived.rootImage, rootPath)
+    assert.equal(derived.inpaint, false)
+    assert.equal(derived.strength, 0.55)
+
+    const seededRoot = history.body.items.find((entry) => entry.jobId === 'j_tree_root')
+    assert.equal(seededRoot.sourceImage, null, '根作品没有来源图')
+    assert.equal(seededRoot.rootImage, null)
+    assert.equal(seededRoot.inpaint, false)
+    assert.equal(seededRoot.strength, null)
+
+    const seededLegacy = history.body.items.find((entry) => entry.jobId === 'j_tree_legacy')
+    assert.equal(seededLegacy.sourceImage, rootPath)
+    assert.equal(seededLegacy.rootImage, rootPath, '旧 meta 缺 rootImage 时 /history 应回溯补齐')
+    assert.equal(seededLegacy.inpaint, true, '旧 meta 的 inpaint 标记原样透传')
+    assert.equal(seededLegacy.strength, 0.6, '旧 meta 的 strength 原样透传')
+
+    tree = { rootPath, legacyPath, derivedId: job.id }
+  })
+
+  await check('版本树：/history/tree 按根命中整棵树、倒序与 limit 分页', async () => {
+    const url = `/imagen-api/history/tree?root=${encodeURIComponent(tree.rootPath)}`
+    const all = await json(host.origin, url)
+    assert.equal(all.status, 200, JSON.stringify(all.body))
+    assert.equal(all.body.root, tree.rootPath, 'root 原样回显（归一后的相对路径）')
+    assert.deepEqual(
+      all.body.items.map((item) => item.jobId),
+      [tree.derivedId, 'j_tree_legacy', 'j_tree_root'],
+      '树内条目按目录名倒序（新→旧），根节点自身通过图片路径命中',
+    )
+    assert.equal(all.body.hasMore, false)
+    assert.equal(all.body.items[0].rootImage, tree.rootPath)
+
+    // limit 分页：只取最新 2 条，hasMore 指示还有更早的节点。
+    const page = await json(host.origin, `${url}&limit=2`)
+    assert.equal(page.body.items.length, 2)
+    assert.deepEqual(page.body.items.map((item) => item.jobId), [tree.derivedId, 'j_tree_legacy'])
+    assert.equal(page.body.hasMore, true)
+
+    const single = await json(host.origin, `${url}&limit=1`)
+    assert.equal(single.body.items.length, 1)
+    assert.equal(single.body.hasMore, true)
+    assert.equal(single.body.items[0].jobId, tree.derivedId)
+
+    // limit 越界钳到契约上限；非法 limit 回默认（pageSize），都不会报错。
+    const clamped = await json(host.origin, `${url}&limit=9999`)
+    assert.equal(clamped.body.items.length, 3)
+    assert.equal(clamped.body.hasMore, false)
+    const invalidLimit = await json(host.origin, `${url}&limit=abc`)
+    assert.equal(invalidLimit.body.items.length, 3, '非法 limit 按 pageSize 默认值返回')
+  })
+
+  await check('版本树：空树 200、root 缺失/越界 400 invalid_request、方法 405', async () => {
+    // 没有任何条目归组的根（目录甚至不存在）：仍然是 200 空树，不是 404。
+    const missingRoot = 'imagen-output/20300101-000000-no-such-tree/01.png'
+    const empty = await json(host.origin, `/imagen-api/history/tree?root=${encodeURIComponent(missingRoot)}`)
+    assert.equal(empty.status, 200)
+    assert.deepEqual(empty.body, { root: missingRoot, items: [], hasMore: false })
+
+    // 纯文生图的根节点自身也能命中（item.images 任一 path === root）。
+    const selfRoot = firstJob.output.images[0].path
+    const self = await json(host.origin, `/imagen-api/history/tree?root=${encodeURIComponent(selfRoot)}`)
+    assert.equal(self.status, 200)
+    assert.deepEqual(self.body.items.map((item) => item.jobId), [firstJob.id])
+    assert.equal(self.body.items[0].rootImage, null)
+
+    // root 缺失 / 空串 / 越界 / 非产物目录：统一 400 invalid_request。
+    const cases = [
+      '/imagen-api/history/tree',
+      '/imagen-api/history/tree?root=',
+      '/imagen-api/history/tree?root=%20',
+      `/imagen-api/history/tree?root=${encodeURIComponent('../index.js')}`,
+      `/imagen-api/history/tree?root=${encodeURIComponent('docs/assets/hero.png')}`,
+      `/imagen-api/history/tree?root=${encodeURIComponent('/etc/passwd')}`,
+      `/imagen-api/history/tree?root=${encodeURIComponent('imagen-output/../../index.js')}`,
+    ]
+    for (const requestPath of cases) {
+      const bad = await json(host.origin, requestPath)
+      assert.equal(bad.status, 400, `${requestPath} 应返回 400`)
+      assert.equal(bad.body.error.code, 'invalid_request', requestPath)
+    }
+
+    // 非 GET：405（与 /history 等其他只读路由一致）。
+    const treeUrl = `/imagen-api/history/tree?root=${encodeURIComponent(tree.rootPath)}`
+    const notAllowed = await json(host.origin, treeUrl, { method: 'POST' })
+    assert.equal(notAllowed.status, 405)
+  })
+
+  await check('版本链：动态上传参考图（无 sourcePath）rootImage 为 null', async () => {
+    const submitted = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: '上传参考图派生', reference: { image: PNG_B64, strength: 0.5 }, waitSeconds: 15 }),
+    })
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body))
+    const job = submitted.body
+    assert.equal(job.status, 'done', JSON.stringify(job))
+    const meta = JSON.parse(await readFile(join(workspace, job.output.dir, 'meta.json'), 'utf8'))
+    assert.equal(meta.sourceImage, null)
+    assert.equal(meta.rootImage, null, '上传来源没有可归组的根作品')
+
+    const history = await json(host.origin, `/imagen-api/history?limit=${LIMITS.history.maxLimit}`)
+    const item = history.body.items.find((entry) => entry.jobId === job.id)
+    assert.equal(item.sourceImage, null)
+    assert.equal(item.rootImage, null)
+    assert.equal(item.inpaint, false)
+    assert.equal(item.strength, 0.5)
   })
 
   await check('打开产物目录（dryRun 只解析路径）', async () => {

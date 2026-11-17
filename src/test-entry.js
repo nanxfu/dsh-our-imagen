@@ -29,7 +29,16 @@ import { TopBar } from './studio/TopBar.jsx'
 import { LogsDrawer } from './studio/LogsDrawer.jsx'
 import { SettingsDrawer } from './studio/SettingsDrawer.jsx'
 import { ModelCardPicker } from './studio/ModelCardPicker.jsx'
+// 阶段十二舞台图片工具：动作坞、涂抹画布与整图重绘条（Stage 只负责编排）。
+import { ImageDock } from './studio/stage/ImageDock.jsx'
+import { InlineTool } from './studio/stage/InlineTool.jsx'
+import { MaskEditor } from './studio/stage/MaskEditor.jsx'
+import { ToolSubmitBar } from './studio/stage/ToolSubmitBar.jsx'
+// 阶段十三作品条：新建绘图草稿卡与版本派生面板（Filmstrip 接线）。
+import { DraftCard } from './studio/filmstrip/DraftCard.jsx'
+import { VersionPanel } from './studio/filmstrip/VersionPanel.jsx'
 import { useChatThread } from './studio/hooks/useChatThread.js'
+import { useImageTool } from './studio/hooks/useImageTool.js'
 import { useKaggleLogin } from './studio/hooks/useKaggleLogin.js'
 import { useStudioUi } from './studio/hooks/useStudioUi.js'
 import { useStudio } from './studio/useStudio.js'
@@ -45,6 +54,7 @@ export const __test = {
   // 域 hook 直接暴露给渲染测试：用最小 Harness 组件挂载，断言真实状态流转。
   hooks: {
     useChatThread,
+    useImageTool,
     useKaggleLogin,
     useStudioUi,
     useStudio,
@@ -65,5 +75,13 @@ export const __test = {
     LogsDrawer,
     SettingsDrawer,
     ModelCardPicker,
+    // 舞台图片工具子组件（阶段十二）。
+    ImageDock,
+    InlineTool,
+    MaskEditor,
+    ToolSubmitBar,
+    // 作品条版本组件（阶段十三）。
+    DraftCard,
+    VersionPanel,
   },
 }

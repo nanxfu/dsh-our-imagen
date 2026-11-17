@@ -45,6 +45,28 @@ export function fetchLibrary() {
 }
 
 /**
+ * 版本树按需拉取：`GET /history/tree?root=&limit=`（阶段十三）。
+ *
+ * 返回 `{ ok, data: { root, items, hasMore } }`；`items` 与 /history 同形，
+ * 调用方直接并入已加载分页即可。旧宿主没有该路由时返回 HTTP 404
+ * （`status: 404` / `code: 'http_404'`），由调用方降级成「仅用已加载分页」
+ * 并在版本面板提示不可用，这里不做特殊处理。
+ *
+ * root 必须是 Host 归一过的 `imagen-output/<目录>/<文件>` 相对路径；
+ * 空串直接返回失败、不发请求（Host 会回 400，但没必要多跑一趟）。
+ */
+export function fetchHistoryTree(root, limit = LIMITS.history.pageSize) {
+  const value = typeof root === 'string' ? root.trim() : ''
+  if (!value) {
+    return Promise.resolve({ ok: false, status: 0, code: 'invalid_request', message: 'root 不能为空' })
+  }
+  const size = Number.isFinite(Number(limit)) && Number(limit) > 0
+    ? Math.min(LIMITS.history.maxLimit, Math.floor(Number(limit)))
+    : LIMITS.history.pageSize
+  return request(`${routePath('historyTree')}?root=${encodeURIComponent(value)}&limit=${size}`, { method: 'GET' })
+}
+
+/**
  * 启动云端会话。
  *
  * - forceNew=true：跳过接管旧排队，强制推送新 Kernel；

@@ -241,27 +241,40 @@
 
 ---
 
-## 十二、 舞台图片处理工具栏与交互解耦（规划中）
+## 十二、 舞台图片处理工具栏与交互解耦（已完成）
 
-> **状态**：📝 规划中（2026-11-17）。接续第十一阶段完成后启动，完整设计与交互规格见 [STAGE_IMAGE_TOOLS_PLAN.md](STAGE_IMAGE_TOOLS_PLAN.md)。
+> **状态**：✅ 已在 0.13.0 落地（2026-11-17，尚未发版）。完整设计与交互规格见 [STAGE_IMAGE_TOOLS_PLAN.md](STAGE_IMAGE_TOOLS_PLAN.md)，交互规范见 [SPEC.md](SPEC.md) §5.17。
 
 - **背景**：当前把参考图与蒙版挂在左栏全局表单上，导致「选图→挂参考图→点涂抹→回左栏生成」链路过长，且容易与文生图表单、胶片条回填、对话助手产生状态串台；同时缺少统一的舞台图片后处理入口（如未来的高清化、扩图）。
 - **核心设计（方案 B）**：
   1. **状态彻底解耦**：左栏主表单回归纯粹文生图；抽离独立 `useImageTool` 状态域管理舞台图片处理动作，提交不经过/不污染左栏表单。
   2. **舞台动作坞（`.ofs-dock`）**：围绕当前展示作品提供 **`局部涂抹`**、**`整图重绘`** 等一步直达入口，并预留「高清放大 / 扩图」扩展位（统一 `instant / inline / canvas` 三类交互形态）。
   3. **原地闭环**：点「局部涂抹」直接以当前作品为底图打开画布并内置轻量 Prompt / 强度 / 提交栏，复用第十一阶段沉淀的契约与远端推理底座。
+- **实现**（阶段十二三条 Phase 全部落地，纯前端改动、远端推理与 HTTP 契约零改动）：
+  - **Phase 1 状态抽离与动作坞**：新增纯逻辑 `src/logic/imageTool.js`（`IMAGE_TOOLS` 注册表按 `instant / inline / canvas` 三类形态描述，inpaint / img2img 为真实可用工具，upscale / outpaint 为禁用占位；`toolPresetOf` 自动选模、`toolStrengthDefaultOf` / `toolStrengthMaxOf` 强度档位、`buildImageToolBody` 请求体、`imageToolBlockedKeyOf` 提交前拦截）与独立状态域 `src/studio/hooks/useImageTool.js`（底图 / 提示词 / 工具预设 / 强度 / 蒙版，提交不经过左栏表单）。`Stage` 拆出 `src/studio/stage/{ImageDock,MaskEditor,InlineTool,ToolSubmitBar}.jsx`，动作坞按「图片处理 / 创作复用」分组；`ModelCardPicker` 把 `inpaintOnly` 预设移出主表单并标记「仅图片工具可用」。
+  - **Phase 2 舞台内嵌提交栏与表单净化**：涂抹画布与整图重绘条内置轻量提交栏（修改描述 / 重绘强度 / 模型胶囊 / 提交 / 退出）；提示词默认空、placeholder 显示原作品提示词，提交为空回退原提示词（Lead 决策 D2）。删除左栏 `ReferenceSection` 与 `useStudioForm` 的 `reference` / `strength` / `mask` / 来源策略 / 重试恢复逻辑（`generate.js` 缩减 303 行），主表单请求体不再可能携带 `reference`；`inpaintOnly` 预设下主表单生成自动切兜底预设并轻提示。工具任务失败保留底稿，动作坞「继续编辑」恢复。
+  - **Phase 3 统一工具扩展框架**：按 `instant / inline / canvas` 三类交互形态收敛注册表，用 inpaint（canvas）与 img2img（inline）两个真实工具完成端到端验证；高清放大 / 扩图保留禁用占位与 `planned` 提示（远端暂无对应推理能力，Lead 决策 D1，需新权重与真机显存验收后再接入）。
+  - **测试**：新增 `test/image-tool.mjs`（19 项纯逻辑）与 `test/image-tool-render.mjs`（6 项 hook/Stage 渲染）；`check-client-render` 95 项、`check-client-logic` 83 项（旧参考图 / 涂抹 / 续绘 / 来源策略用例逐条改写为新交互断言，清单见 CHANGELOG 与本轮提交说明）、`check-client-locale` zh/en 各 470 键同构。
+  - **遗留**：`src/studio/icons.jsx` 暂无 `frame` 图标（扩图占位在渲染层回退 `expand`）；`stage.css` 两条旧入口死样式由阶段十三随手清理。
 
 ---
 
-## 十三、 显式新建绘图、多作品草稿与树状版本管理（规划中）
+## 十三、 显式新建绘图、多作品草稿与树状版本管理（已完成）
 
-> **状态**：📝 规划中（2026-11-17）。接续第十二阶段（方案 B 舞台工具解耦）完成后启动，完整设计与状态模型见 [WORKSPACE_DRAFTS_AND_VERSIONING_PLAN.md](WORKSPACE_DRAFTS_AND_VERSIONING_PLAN.md)。
+> **状态**：✅ 已在 0.13.0 落地（2026-11-17，尚未发版）。完整设计与状态模型见 [WORKSPACE_DRAFTS_AND_VERSIONING_PLAN.md](WORKSPACE_DRAFTS_AND_VERSIONING_PLAN.md)，交互规范见 [SPEC.md](SPEC.md) §5.18。
 
 - **背景**：将创作体验从「表单为中心」进一步升级为「以作品和草稿为中心」的工作区——明确区分「新建绘图」与「基于已有作品迭代」，支持多图切换保留编辑草稿、同批候选图各自独立派生树状版本。
 - **核心设计**：
   1. **显式新建绘图态**：点击「新建绘图」时舞台切入模糊动态背景与取景框，底部作品条左端插入「新建草稿卡」；提交入队后转成排队卡，等待期间可自由切换浏览与编辑其它作品。
   2. **多作品草稿 + 圆点标记**：按 `workKey` 缓存未提交的涂抹蒙版与重绘微调（带 LRU 上限），作品条缩略图及版本节点以圆点提示改动项，避免切图丢稿。
   3. **批与树状版本管理**：同一批提交的 1~4 张候选图各自作为独立迭代起点（`v1`），记录 `sourceImage` + `rootImage` 形成树状版本链；作品条按根折叠并展示 `⎇ N` 角标，支持延迟 hover / 点击固定展开「版本派生树面板」（含草稿圆点与在途幽灵节点）。
+- **实现**（Phase 1–3 全部落地；远端推理零改动，Host 只补元数据与历史接口）：
+  - **Phase 1 Host 版本链**：`lib/output.js` 新增 `rootImage` 解析（父作品 meta 继承 / 旧 meta 沿 `sourceImage` 链回溯 ≤8 层 / 读不到退回 `sourcePath`；动态上传参考图写 `null`），`/history` 每条 item 透传 `sourceImage / rootImage / inpaint / strength`；新增 `GET /imagen-api/history/tree?root=&limit=`（`ROUTES.historyTree`，越界/空 root 400 `invalid_request`，默认 limit=`LIMITS.history.pageSize`），供版本面板跨分页补齐。旧数据无需迁移。
+  - **Phase 2 显式新建绘图态与多草稿**：`workspaceMode`（`new_draft` / `work`）与 `actions.newDraft()`；Stage 在新建态渲染模糊动态背景 + 按表单画幅的取景框（`prefers-reduced-motion` 静态化），Filmstrip 最左端出现新建草稿卡；提交后保持新建态，任务完成后自动切 `work` 并选中新图（用户中途点作品则立即切 `work`）。`useImageTool` 以加法方式旁路扩展 `workDrafts`：按 `workKey` 缓存未提交编辑（工具 / 提示词 / 强度 / 预设 / 蒙版 / 改动项 / `lastTouchedAt`），LRU 8、仅会话内存；打开工具优先恢复该作品草稿，提交成功清除、失败保留；提供 `clearWorkDraft / workDraftSummary / patchDraft`。
+  - **Phase 3 版本树归并与派生面板**：新增纯逻辑 `src/logic/lineage.js`（`buildLineage`：rootImage/sourceImage 归组、depth 与 `v1/v2a/v2b` 版本号、同父兄弟排序、父图缺失提升局部根 `sourceDeleted`、在途任务幽灵节点；`lineagePanelRows` 前序遍历 + 草稿摘要；`rootOfItem` 旧数据回溯；`lruDrafts` / `workDraftSummary` / `draftKeyOf`）。Filmstrip 按根折叠（一树一卡、缩略图取最新活跃节点、`⎇ N` = 派生 + 在途），复用 `VersionPanel`（悬停 250ms / 点击角标固定 / Esc 收起 / hover bridge、行内版本号 / 来源类型 / 草稿圆点 / 幽灵行），打开时 footer 加 `is-version-open` 放开 `.ofs-roll` 溢出；根不在已加载分页时按需 `fetchHistoryTree`，旧宿主 404 只降级提示一次。
+  - **交互修正**：画廊 / 大图「以此图重绘」补齐「选中该作品 + 切回舞台 + 打开局部涂抹」（`openImageTool` 收 entry 时 `library.selectImage`）；清理阶段十二遗留的 `.ofs-continue-inpaint` / `.ofs-mask-bar` 死样式。
+  - **测试**：`host-e2e` 54 项、`jobs-wait` 31 项、新增 `test/lineage.mjs` 17 项；客户端 `check-client-render` 104 项（+9：根折叠角标、面板悬停/固定/Esc/点行、幽灵行 + 按需拉树、草稿缓存/圆点/清空、旧宿主 404 降级、父删局部根、新建态渲染、新建提交完成切回）、`check-client-logic` 82 项、`check-client-locale` zh/en 各 495 键同构。
+  - **已知取舍**：`workDrafts` 仅存内存（刷新丢失，设计如此）；版本面板的溢出处理目前是 CSS 打开态方案，真机极端溢出时需改 fixed 定位；`/history/tree` 无 offset 游标（`hasMore` 时前端只用首屏 100 条）；同一作品同一时刻只有一份编辑草稿（换工具会覆盖上一工具的草稿，再点开时才按工具 `changed` 判断是否显示圆点）。
 
 ---
 
@@ -283,6 +296,6 @@
 | 阶段 | 主题 | 所属条线 | 前置依赖 | 预计定位 |
 | :--- | :--- | :--- | :--- | :--- |
 | **十一** | 状态流转与局部重绘可用性修复（P0-a ~ P2） | 前端 + 远端收敛 | 0.12.0 基线 | **✅ 已完成（0.12.0）** |
-| **十二** | 舞台图片处理工具栏与交互解耦（方案 B） | 前端交互重构 | 十一完成收口 | 紧接十一后（`0.13.0` 前半段） |
-| **十三** | 显式新建绘图、多作品草稿圆点与树状版本管理 | 前端 + Host 元数据 | 十二（方案 B 底座） | 紧接十二后（`0.13.0` / `0.14.0`） |
+| **十二** | 舞台图片处理工具栏与交互解耦（方案 B） | 前端交互重构 | 十一完成收口 | **✅ 已完成（0.13.0，未发版）** |
+| **十三** | 显式新建绘图、多作品草稿圆点与树状版本管理 | 前端 + Host 元数据 | 十二（方案 B 底座） | **✅ 已完成（0.13.0，未发版）** |
 | **十四** | Google Colab（Colab Pro）后端接入 | Host 算力扩展 + `remote/` 适配 | 十一收口后可与十二/十三并行（需先过 M0 探针） | 独立后端里程碑（与界面解耦） |
