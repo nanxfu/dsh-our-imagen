@@ -937,8 +937,8 @@ def run_task(  # noqa: ANN001
     """
     import torch
 
-    generator_device = "cuda" if torch.cuda.is_available() else "cpu"
-    generator = torch.Generator(device=generator_device).manual_seed(task["seed"])
+    # 具体设备要等 pipeline 选好后再定（device_map 下可能是 cpu），这里先占位。
+    generator = None
     use_reference = reference_image is not None
     use_inpaint = use_reference and mask_image is not None
     if mask_image is not None and reference_image is None:
@@ -994,6 +994,16 @@ def run_task(  # noqa: ANN001
             "height": task["height"],
             "generator": generator,
         }
+    # 随机数生成器必须与 pipeline 实际执行设备一致：device_map 分层装载（Flux.2）时
+    # 执行设备可能是 cpu，用 cuda generator 会报 "Cannot generate a cpu tensor from a generator of type cuda"。
+    try:
+        execution_device = str(target_pipe._execution_device)
+    except Exception:  # noqa: BLE001 - 拿不到就按 cuda 可用性回退
+        execution_device = "cuda" if torch.cuda.is_available() else "cpu"
+    generator_device = execution_device if execution_device.startswith("cuda") else "cpu"
+    generator = torch.Generator(device=generator_device).manual_seed(task["seed"])
+    call_kwargs["generator"] = generator
+
     # 只有底座支持 negative_prompt 且 CFG > 0 时才有意义（Lightning 的 cfg=0 会被忽略）。
     call_kwargs = filter_call_kwargs(
         call_kwargs,
