@@ -34,6 +34,23 @@ const ENVELOPE_HEAD = `window.__ModuleLoader__.load({\n\tid: ${JSON.stringify(PA
 const ENVELOPE_TAIL = `\t\treturn module.exports;\n\t}\n});\n`
 
 /**
+ * 文本资源读取时统一换行。
+ *
+ * 以 text loader 内联进 bundle 的资源会原样保留换行，而 .gitattributes 声明的是
+ * eol=lf：Windows 编辑器把文件写成 CRLF 时，本地构建产物会多出 \r，CI 用 LF 版本
+ * 重建就对不上，`--check` 直接失败。这里在读取阶段归一，消除平台差异。
+ */
+const normalizeNewlines = {
+  name: 'normalize-newlines',
+  setup(build) {
+    build.onLoad({ filter: /\.css$/ }, async ({ path }) => ({
+      contents: (await readFile(path, 'utf8')).replace(/\r\n/g, '\n'),
+      loader: 'text',
+    }))
+  },
+}
+
+/**
  * 打包并返回 bundle 文本。
  * @param {{ test?: boolean }} options
  */
@@ -56,6 +73,7 @@ export async function bundle({ test = false } = {}) {
     // 模型海报（112/96px WebP）在构建期内联为 data URL：运行时零网络请求，单文件分发不裂图。
     loader: { '.css': 'text', '.webp': 'dataurl' },
     resolveExtensions: ['.jsx', '.js', '.json'],
+    plugins: [normalizeNewlines],
   })
 
   const body = result.outputFiles[0].text.replace(/^\s*"use strict";\s*\n/, '')
