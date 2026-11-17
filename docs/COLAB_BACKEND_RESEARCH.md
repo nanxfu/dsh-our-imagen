@@ -179,3 +179,9 @@
 - 恢复：Colab 会话记录带 `provider` 与 `handle`，启动时按 assignment 重新接管；实例已消失则 `unassign` 兜底并清记录。
 - 单卡：Flux.2 在 `device_count === 1` 时不再传 `device_map`；CPU 容器提示改为双平台文案。
 - 真机（设置链路）：L4 + sdxl-lightning，出图 1071 KiB / 18.6s，stop 后 assignments 归零、余额 198.11。
+
+**Flux.2 结论更正（2026-11-18）**
+
+- 此前记录的"Flux.2 1024² 超过 600 秒"并非 L4 性能问题：`Flux2Loader` 在 `device_count == 1` 跳过 `device_map` 后没有把模型搬到 GPU，权重留在 CPU 上推理；`4087ba4` 让 generator 跟随 `_execution_device`（此时是 cpu）只是掩盖了报错。
+- 修正为单卡显式 `pipe.to("cuda")` 后，FLUX.2-klein-4B 在 L4 上 **1024² 出图 1429 KiB / 26.6 秒**，`/health` 设备为 `NVIDIA L4`，日志无 traceback。
+- 同一次实例上完成重启接管验收：模拟 Host 崩溃后新建 `SessionManager.restore()`，状态从 `connecting` 收敛到 `ready`，`providerUsage = { balance: 197.65, rate: 1.94, assignments: 1 }` 可见；`stop()` 后 `assignments` 归零。
