@@ -38,6 +38,18 @@
  *     专用 inpaint 模型不能文生图），report.json 记录耗时 / 输出尺寸 / 前后显存，
  *     并用像素差统计验证内容区保留（内容区平均差应 ≈0、无硬接缝）。
  *     report.json 的新字段 `upscale` / `outpaint`（非该模式为 null）。
+ *   - `--reference`：Phase C1 模型原生参考生图验收（首期仅 `flux2-klein-4b`）。先按同预设
+ *     文生图 1~2 张源图做参考图，再以同一 seed 提交 1 张 / 2 张参考图（job 级
+ *     `referenceImages: [{image_b64}]`），并补一次「1 张参考图 + 1280x720」验证画幅保持；
+ *     连续多轮后再跑一次文生图核对 /health.gpu_memory 无增长。report.json 的 `reference`
+ *     段记录每例参考图数量/尺寸/耗时/前后显存/输出尺寸断言、同 seed 确定性与参考影响度 MAE。
+ *     参数：`--reference-count 1,2`、`--reference-rounds <n>`、`--reference-size WxH`
+ *     （参考生图的目标画幅；缺省用预设 size）。
+ *   - `--accel <on|off|ab>`：推理加速 A/B 验收（同一 Kernel 会话内同 seed/同尺寸/同 prompt
+ *     对照）。默认 `ab` = 先 off 再 on；`sdxl-lightning` 1024² 用
+ *     `channelsLast + fuseQkv + vaeTiling`，`sdxl-inpaint --outpaint` 用 `vaeTiling`。
+ *     report.json 的 `accel` 段记录每档每轮耗时、中位耗时、提速比、前后峰值显存、
+ *     两档输出 MAE（画质差异）与扩图接缝指标。`--accel-rounds <n>` 控制每档轮数（默认 2）。
  *
  * 前置条件：默认走直连，本机有可用的 Kaggle 凭据（`~/.kaggle/credentials.json` 等）即可；
 加 `--cli` 时才要求本机安装并登录 kaggle CLI。账号需启用 GPU 加速器且当天配额充足。
@@ -108,23 +120,43 @@ function printHelp() {
   node test/gpu-live.mjs --preset sdxl-inpaint --inpaint --inpaint-rounds 2
   node test/gpu-live.mjs --preset sdxl-lightning --upscale [--reference-size 768x768]
   node test/gpu-live.mjs --preset sdxl-inpaint --source-preset sdxl-lightning --outpaint
+  node test/gpu-live.mjs --preset flux2-klein-4b --reference [--reference-count 1,2]
+  node test/gpu-live.mjs --preset sdxl-lightning --accel ab
+  node test/gpu-live.mjs --preset sdxl-inpaint --source-preset sdxl-lightning --outpaint --accel ab
+  node test/gpu-live.mjs --c1-acceptance [--accel-rounds 2]
+    ↑ Phase C1 一次性正式验收：1 个 Kernel 内跑完「参考生图 + sdxl-lightning A/B + sdxl-inpaint 扩图 A/B」
 
 选项：
   --preset <id>     单预设模式（默认 sdxl-lightning），出图一张
   --presets a,b,c   单会话内按顺序连续切换模型出图，验证切换模型时的 LRU 缓存清理
   --prompt <text>   提示词（两种模式共用）
+  --c1-acceptance   Phase C1 一次性正式验收：同一 Kernel 会话内依次跑参考生图（flux2-klein-4b）、
+                    sdxl-lightning 1024² 4 步加速 A/B、sdxl-inpaint 1536x864 30 步扩图加速 A/B；
+                    不能与其它验收模式组合，参考生图张数仍可用 --reference-count 调整
   --img2img         M3 图生图验收：文生图后用该图垫图重绘，记录显存对比（仅单预设）
   --inpaint         M3 局部重绘验收：文生图后用程序化蒙版做 Inpaint，记录显存对比（仅单预设）
   --upscale         Phase B1 高清放大验收：文生图后以该图为源发 tool=upscale，断言输出 = 源×2
   --outpaint        Phase B2 扩图验收：构造 1536x864 画布 + 白边蒙版做局部重绘，
                     并用像素差验证内容区保留（仅单预设；配合 --preset sdxl-inpaint 使用）
+  --reference       Phase C1 原生参考生图验收（仅 supportsReference=true 的预设，如 flux2-klein-4b）：
+                    先文生图出源图，再按 1/2 张参考图跑参考生图 + 1280x720 画幅保持，
+                    最后复测文生图核对显存无增长
+  --reference-count <1,2>
+                    仅 --reference：要验收的参考图张数列表（默认 1,2；受 LIMITS.referenceImages.maxCount 约束）
+  --reference-rounds <n>
+                    仅 --reference：每个张数档的出图轮数（默认 1 张跑 2 轮、2 张跑 1 轮）
+  --accel <on|off|ab>
+                    推理加速 A/B 验收（默认 ab = 先 off 再 on）：sdxl-lightning 1024² 用
+                    channelsLast + fuseQkv + vaeTiling；--outpaint 模式 sdxl-inpaint 用 vaeTiling
+  --accel-rounds <n>
+                    仅 --accel：每档轮数（默认 2，取中位耗时）
   --inpaint-prompt <text>
                     局部重绘使用单独的提示词（默认与 --prompt 相同）。给一段与文生图不同的描述，
                     才能肉眼确认白色蒙版区真的按新内容重写
   --reference-size WxH
-                    仅 --inpaint / --upscale：源文生图的宽高（默认跟随 --source-preset 的 size），
-                    用于非正方形验收（如 1024x768）；--upscale 时源图长边不能超过
-                    UPSCALE.maxInputEdge（1280）
+                    仅 --inpaint / --upscale / --reference：--inpaint/--upscale 是源文生图的宽高
+                    （默认跟随 --source-preset 的 size）；--reference 是参考生图的目标画幅
+                    （默认跟随预设 size）。--upscale 时源图长边不能超过 UPSCALE.maxInputEdge（1280）
   --mask-scale <0~1>
                     仅 --inpaint：中心蒙版面积占画布的比例（如 0.05 = 5%）。
                     默认沿用 --mask-size 的旧口径（rect 为边长比例 0.4）
@@ -160,6 +192,8 @@ function printHelp() {
   - inpaint：局部重绘每轮/每档的 result 宽高、参考图与蒙版尺寸、蒙版覆盖率与蒙版内平均差异
   - upscale：--upscale 模式的源图/输出尺寸、加载与推理秒数、PNG 字节与前后显存
   - outpaint：--outpaint 模式的画布/内容区尺寸、新增区覆盖率、内容区像素差与前后显存
+  - reference：--reference 模式每例参考图数量/尺寸/耗时/前后显存/输出尺寸断言、确定性与参考影响度 MAE
+  - accel：--accel 模式每档每轮耗时、中位耗时、提速比、峰值显存差、两档输出 MAE 与扩图接缝指标
   - versions：远端 /health 上报的依赖版本快照（用于维护 LKGR 基线）
   - cacheLogs：远端 [cache] 日志摘要，拉取失败时为 null（不影响验证结论）
 
@@ -213,9 +247,42 @@ function parseOptions() {
   if (upscale && presets.length !== 1) throw new Error('--upscale 只能配合单个预设使用')
   const outpaint = process.argv.includes('--outpaint')
   if (outpaint && presets.length !== 1) throw new Error('--outpaint 只能配合单个预设使用')
-  const modeCount = [img2img, inpaint, upscale, outpaint].filter(Boolean).length
+  // Phase C1：--reference 原生参考生图验收（只有 supportsReference=true 的预设能用）。
+  const reference = process.argv.includes('--reference')
+  if (reference && presets.length !== 1) throw new Error('--reference 只能配合单个预设使用')
+  if (reference) {
+    const target = presetById(presets[0])
+    if (target?.supportsReference !== true) {
+      throw new Error(
+        `--reference 需要支持原生参考生图的预设（当前 ${presets[0]}），首期只有 flux2-klein-4b`,
+      )
+    }
+  }
+  // Phase C1：--accel 推理加速 A/B（默认 ab：先 off 再 on；本轮只对 SDXL 家族做验收）。
+  let accel = null
+  if (process.argv.includes('--accel')) {
+    const raw = String(argOf('accel', 'ab')).trim().toLowerCase()
+    if (!['ab', 'both', 'on', 'off'].includes(raw)) {
+      throw new Error(`--accel 取值应为 on / off / ab，收到 ${raw || '(空)'}`)
+    }
+    if (!['sdxl', 'sdxl-lora'].includes(presetById(presets[0])?.pipeline?.loader)) {
+      throw new Error(`--accel 目前只对 sdxl / sdxl-lora 家族预设做真机 A/B（当前 ${presets[0]}）`)
+    }
+    accel = raw === 'both' ? 'ab' : raw
+  }
+  // Phase C1 一次性正式验收：一个 Kernel 会话内连续跑「参考生图 + 文生图 A/B + 扩图 A/B」。
+  const c1Acceptance = process.argv.includes('--c1-acceptance')
+  if (c1Acceptance && (img2img || inpaint || upscale || outpaint || reference || accel)) {
+    throw new Error('--c1-acceptance 是独立的一次性验收模式，不能与其它验收模式组合')
+  }
+  const modeCount = [img2img, inpaint, upscale, outpaint, reference, c1Acceptance].filter(Boolean).length
   if (modeCount > 1) {
-    throw new Error('--img2img / --inpaint / --upscale / --outpaint 是互相独立的验收模式，请分开运行')
+    throw new Error(
+      '--img2img / --inpaint / --upscale / --outpaint / --reference / --c1-acceptance 是互相独立的验收模式，请分开运行',
+    )
+  }
+  if (accel && (img2img || inpaint || upscale)) {
+    throw new Error('--accel 只能与默认文生图或 --outpaint 组合（本轮验收范围）')
   }
   // 局部重绘 / 扩图的源图预设：专用 inpaint 模型不能文生图，验收时先用普通模型出源图。
   const sourcePresetArg = String(argOf('source-preset', 'sdxl-lightning')).trim()
@@ -254,8 +321,8 @@ function parseOptions() {
   // 非正方形验收：--reference-size WxH 同时决定源文生图宽高（蒙版按参考图同比例生成）。
   let referenceSize = null
   if (process.argv.includes('--reference-size')) {
-    if (!inpaint && !upscale) {
-      throw new Error('--reference-size 只能配合 --inpaint 或 --upscale 使用')
+    if (!inpaint && !upscale && !reference) {
+      throw new Error('--reference-size 只能配合 --inpaint / --upscale / --reference 使用')
     }
     const raw = String(argOf('reference-size', '')).trim()
     const match = raw.match(/^(\d+)\s*[x×]\s*(\d+)$/i)
@@ -328,6 +395,42 @@ function parseOptions() {
   const centerParts = String(argOf('mask-center', '0.5,0.5')).split(',').map((part) => Number(part.trim()))
   const maskCenterX = Number.isFinite(centerParts[0]) ? Math.min(1, Math.max(0, centerParts[0])) : 0.5
   const maskCenterY = Number.isFinite(centerParts[1]) ? Math.min(1, Math.max(0, centerParts[1])) : 0.5
+  // Phase C1 参考生图：验收张数（受契约上限约束）与每档轮数。
+  const maxReferenceCount = Math.max(1, Number(LIMITS.referenceImages?.maxCount) || 1)
+  let referenceCounts = [1, Math.min(2, maxReferenceCount)].filter((value, index, list) => list.indexOf(value) === index)
+  if (process.argv.includes('--reference-count')) {
+    if (!reference && !process.argv.includes('--c1-acceptance')) {
+      throw new Error('--reference-count 只能配合 --reference / --c1-acceptance 使用')
+    }
+    const parts = String(argOf('reference-count', ''))
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+    const counts = []
+    for (const part of parts) {
+      const value = Number(part)
+      if (!Number.isInteger(value) || value < 1 || value > maxReferenceCount) {
+        throw new Error(`--reference-count 取值应为 1~${maxReferenceCount} 的整数，收到 ${part}`)
+      }
+      if (!counts.includes(value)) counts.push(value)
+    }
+    if (!counts.length) throw new Error('--reference-count 至少给一个张数')
+    referenceCounts = counts.sort((left, right) => left - right)
+  }
+  const rawReferenceRounds = Number(argOf('reference-rounds', '0'))
+  const referenceRounds =
+    Number.isFinite(rawReferenceRounds) && rawReferenceRounds > 0
+      ? Math.min(3, Math.round(rawReferenceRounds))
+      : null
+  if (process.argv.includes('--reference-rounds') && !reference && !process.argv.includes('--c1-acceptance')) {
+    throw new Error('--reference-rounds 只能配合 --reference / --c1-acceptance 使用')
+  }
+  const rawAccelRounds = Number(argOf('accel-rounds', '2'))
+  const accelRounds =
+    Number.isFinite(rawAccelRounds) && rawAccelRounds > 0 ? Math.min(5, Math.round(rawAccelRounds)) : 2
+  if (process.argv.includes('--accel-rounds') && !accel && !process.argv.includes('--c1-acceptance')) {
+    throw new Error('--accel-rounds 只能配合 --accel / --c1-acceptance 使用')
+  }
   return {
     presets,
     prompt,
@@ -336,6 +439,12 @@ function parseOptions() {
     inpaint,
     upscale,
     outpaint,
+    reference,
+    c1Acceptance,
+    referenceCounts,
+    referenceRounds,
+    accel,
+    accelRounds,
     strength,
     referenceSize,
     maskScale,
@@ -410,7 +519,7 @@ function fmt(value) {
  * `width` / `height` 可选（默认跟随预设 size）：`--inpaint --reference-size` 用它生成
  * 非正方形源图，后续局部重绘按参考图同比例生成蒙版。
  */
-async function generateOne({ endpoint, token, presetId, prompt, index, total, width, height }) {
+async function generateOne({ endpoint, token, presetId, prompt, index, total, width, height, pipelineSpec = null, seed = 42 }) {
   const preset = presetById(presetId)
   const pipelineKind = preset?.pipeline?.loader ?? null
   const taskWidth = width ?? preset.size
@@ -423,14 +532,14 @@ async function generateOne({ endpoint, token, presetId, prompt, index, total, wi
     endpoint,
     token,
     {
-      pipeline: preset.pipeline,
+      pipeline: pipelineSpec ?? preset.pipeline,
       modelId: preset.repo,
       tasks: [
         {
           name: '01',
           prompt,
           negative_prompt: preset.negativeHint ?? '',
-          seed: 42,
+          seed,
           width: taskWidth,
           height: taskHeight,
           steps: preset.steps,
@@ -452,6 +561,7 @@ async function generateOne({ endpoint, token, presetId, prompt, index, total, wi
       preset: presetId,
       modelId: preset.repo,
       pipelineKind,
+      seed,
       loadSeconds: response.load_seconds ?? null,
       imageSeconds: result.seconds ?? null,
       // 实际出图尺寸（anima 会把宽高向下取整到 16 的倍数，与请求值可能不同）。
@@ -459,6 +569,92 @@ async function generateOne({ endpoint, token, presetId, prompt, index, total, wi
       height: result.height ?? null,
       requestedWidth: taskWidth,
       requestedHeight: taskHeight,
+      wallSeconds,
+      pngBytes: png.length,
+      isPng,
+    },
+  }
+}
+
+/**
+ * Phase C1 原生参考生图单次执行：1~N 张已解码 PNG 以 job 级 `referenceImages` 提交。
+ *
+ * 关键断言（不满足直接抛错，验收失败可见）：
+ *  - 输出尺寸严格等于请求的 width/height（原生参考生图不跟随参考图尺寸）；
+ *  - 远端返回合法 PNG，输出尺寸可由 PNG 头读取。
+ * 关键观察：`load_seconds` 首轮是模型加载时间，后续轮应为 0（同一 pipeline spec 复用）。
+ */
+async function runReference({
+  endpoint,
+  token,
+  presetId,
+  referencePngs,
+  prompt,
+  width,
+  height,
+  seed = 42,
+  pipelineSpec = null,
+}) {
+  const preset = presetById(presetId)
+  const referenceSizes = referencePngs.map((png) => pngSize(png) ?? { width: null, height: null })
+  console.log(
+    `  · [reference] ${presetId} 参考图 ${referencePngs.length} 张（尺寸 ` +
+      `${referenceSizes.map((size) => `${size.width}x${size.height}`).join(' + ')}）→ 目标 ${width}x${height} …`,
+  )
+  const begin = Date.now()
+  const response = await requestGenerate(
+    endpoint,
+    token,
+    {
+      pipeline: pipelineSpec ?? preset.pipeline,
+      modelId: preset.repo,
+      referenceImages: referencePngs.map((png) => ({ image_b64: png.toString('base64') })),
+      tasks: [
+        {
+          name: '01',
+          prompt,
+          negative_prompt: preset.negativeHint ?? '',
+          seed,
+          width,
+          height,
+          steps: preset.steps,
+          cfg: preset.cfg,
+        },
+      ],
+    },
+    { timeoutMs: 600000 },
+  )
+  const wallSeconds = Number(((Date.now() - begin) / 1000).toFixed(1))
+  const result = response.results?.[0]
+  if (!result?.image_b64) throw new Error('reference：远端没有返回图片')
+  const png = Buffer.from(result.image_b64, 'base64')
+  const isPng = png.subarray(0, 8).toString('hex') === '89504e470d0a1a0a'
+  if (!isPng) throw new Error('reference：返回内容不是合法 PNG')
+  const outputSize = pngSize(png)
+  if (!outputSize) throw new Error('reference：无法从 PNG 头读取输出尺寸')
+  if (outputSize.width !== width || outputSize.height !== height) {
+    throw new Error(
+      `reference：输出尺寸不符，期望 ${width}x${height}，收到 ${outputSize.width}x${outputSize.height}`,
+    )
+  }
+  console.log(
+    `  · 参考生图完成：${outputSize.width}x${outputSize.height}，参考图 ${referencePngs.length} 张，加载 ` +
+      `${response.load_seconds ?? '-'}s / 推理 ${result.seconds ?? '-'}s / PNG ${png.length} 字节`,
+  )
+  return {
+    png,
+    entry: {
+      preset: presetId,
+      referenceCount: referencePngs.length,
+      referenceSizes,
+      referenceBytes: referencePngs.reduce((sum, pngItem) => sum + pngItem.length, 0),
+      seed,
+      requestedWidth: width,
+      requestedHeight: height,
+      width: outputSize.width,
+      height: outputSize.height,
+      loadSeconds: response.load_seconds ?? null,
+      imageSeconds: result.seconds ?? null,
       wallSeconds,
       pngBytes: png.length,
       isPng,
@@ -512,6 +708,128 @@ async function readGpuMemory(endpoint, token) {
     return health?.gpu_memory ?? null
   } catch {
     return null
+  }
+}
+
+/** 取中位数（偶数个取中间两个的平均）；空数组返回 null。用于 A/B 的稳态耗时。 */
+function medianOf(values) {
+  const numbers = (values ?? []).filter((value) => Number.isFinite(value)).sort((left, right) => left - right)
+  if (!numbers.length) return null
+  const middle = Math.floor(numbers.length / 2)
+  const value = numbers.length % 2 === 1 ? numbers[middle] : (numbers[middle - 1] + numbers[middle]) / 2
+  return Math.round(value * 100) / 100
+}
+
+/** A/B 提速比：off 中位秒数 / on 中位秒数（>1 表示 on 更快）；缺一档返回 null。 */
+function speedupOf(offConfig, onConfig) {
+  const off = offConfig?.medianSeconds
+  const on = onConfig?.medianSeconds
+  if (!Number.isFinite(off) || !Number.isFinite(on) || on <= 0) return null
+  return Math.round((off / on) * 100) / 100
+}
+
+/** A/B 峰值显存差（on - off，MiB）：负数表示 on 更省显存。 */
+function peakDeltaOf(offConfig, onConfig) {
+  const off = offConfig?.gpuMemoryAfter?.max_allocated_mb
+  const on = onConfig?.gpuMemoryAfter?.max_allocated_mb
+  if (!Number.isFinite(off) || !Number.isFinite(on)) return null
+  return on - off
+}
+
+/**
+ * 两张同尺寸 PNG 的平均绝对差（0~255，逐通道平均）；无法解码或尺寸不一致时返回 null。
+ *
+ * 用途：比较「无参考 vs 有参考」「accel off vs on」的输出差异，作为条件生效/画质变化的定量证据。
+ */
+function meanAbsDiffPng(basePng, otherPng) {
+  const base = decodePng(basePng)
+  const other = decodePng(otherPng)
+  if (!base || !other) return null
+  if (base.width !== other.width || base.height !== other.height) return null
+  const channels = Math.min(base.channels ?? 3, other.channels ?? 3)
+  if (channels < 3) return null
+  let sum = 0
+  for (let index = 0; index < base.width * base.height; index += 1) {
+    for (let channel = 0; channel < 3; channel += 1) {
+      sum += Math.abs(base.pixels[index * base.channels + channel] - other.pixels[index * other.channels + channel])
+    }
+  }
+  return Math.round((sum / (base.width * base.height * 3)) * 100) / 100
+}
+
+/**
+ * Phase C1 推理加速开关：按预设家族返回「开启」档的 accel 配置。
+ *
+ * 真机 A/B 只对 SDXL 家族做：UNet 上 channels_last + fuse_qkv 有可测收益，VAE tiling 主要降峰值显存；
+ * 专用 inpaint（nativeInpaint）只切 vaeTiling。
+ */
+function accelOnConfigOf(preset) {
+  const nativeInpaint = preset?.pipeline?.nativeInpaint === true
+  if (nativeInpaint) return { vaeTiling: true }
+  return { channelsLast: true, fuseQkv: true, vaeTiling: true }
+}
+
+/** 关闭态：显式写全 false（与缺省行为等价，但让报告里的两档配置可直接对比）。 */
+function accelOffConfigOf() {
+  return { vaeSlicing: false, vaeTiling: false, channelsLast: false, fuseQkv: false }
+}
+
+/** 在预设 pipeline spec 上覆盖 accel（其它字段逐字保留）。 */
+function withAccelSpec(pipelineSpec, accelConfig) {
+  return { ...(pipelineSpec ?? {}), accel: { ...accelConfig } }
+}
+
+/**
+ * 扩图接缝指标：内容区左右边界处的横向梯度 vs 内容区内部平均梯度。
+ *
+ * 比值越接近 1 说明新增区与内容区过渡越自然；>2 通常肉眼可见竖直接缝。
+ * PNG 解码失败时返回 null（不影响其它验收项）。
+ */
+function outpaintSeamMetrics(outPng, content = OUTPAINT_CONTENT) {
+  const image = decodePng(outPng)
+  if (!image) return null
+  const channels = image.channels ?? 3
+  if (channels < 3 || image.width < 8 || image.height < 2) return null
+  const { width, height } = image
+  const x0 = Math.max(1, Math.min(width - 2, Math.round(content.x)))
+  const x1 = Math.max(x0 + 1, Math.min(width - 2, Math.round(content.x + content.width)))
+  const gradientAt = (column) => {
+    let sum = 0
+    for (let y = 0; y < height; y += 1) {
+      for (let channel = 0; channel < 3; channel += 1) {
+        const left = image.pixels[(y * width + column) * channels + channel]
+        const right = image.pixels[(y * width + column + 1) * channels + channel]
+        sum += Math.abs(left - right)
+      }
+    }
+    return sum / (height * 3)
+  }
+  const interiorMean = (from, to) => {
+    const start = Math.max(1, Math.min(width - 2, from))
+    const end = Math.max(start + 1, Math.min(width - 1, to))
+    let total = 0
+    let count = 0
+    for (let column = start; column < end; column += 1) {
+      total += gradientAt(column)
+      count += 1
+    }
+    return count > 0 ? total / count : null
+  }
+  const ratio = (jump, interior) =>
+    Number.isFinite(jump) && Number.isFinite(interior) && interior > 0
+      ? Math.round((jump / interior) * 100) / 100
+      : null
+  const leftJump = gradientAt(x0 - 1)
+  const rightJump = gradientAt(x1 - 1)
+  const leftInterior = interiorMean(x0 + 8, x0 + 64)
+  const rightInterior = interiorMean(Math.max(x0 + 8, x1 - 64), x1 - 8)
+  return {
+    leftJump: Math.round(leftJump * 100) / 100,
+    leftInterior: Number.isFinite(leftInterior) ? Math.round(leftInterior * 100) / 100 : null,
+    leftRatio: ratio(leftJump, leftInterior),
+    rightJump: Math.round(rightJump * 100) / 100,
+    rightInterior: Number.isFinite(rightInterior) ? Math.round(rightInterior * 100) / 100 : null,
+    rightRatio: ratio(rightJump, rightInterior),
   }
 }
 
@@ -1039,31 +1357,33 @@ async function runUpscale({ endpoint, token, sourcePng }) {
 }
 
 /**
- * Phase B2 真机验收：构造「1536x864 画布 + 864x864 原图居中 + 白边蒙版」发局部重绘。
+ * Phase B2 / C1：提交一次扩图（给定已构造好的画布与蒙版）。
  *
  * 远端把画布当参考图、把蒙版当重绘区域（白 = 新增区域），strength 固定 1.0（新区域
- * 完全重画）。用内容区像素差验证「原图内容没被改」（≈0 说明 composite 保留生效），
- * margin 16px 避开蒙版羽化过渡带。
+ * 完全重画）。`pipelineSpec` 用于 C1 的 accel A/B：不传时逐字沿用预设 spec。
  */
-async function runOutpaint({ endpoint, token, presetId, sourcePng, prompt }) {
+async function submitOutpaintOnce({
+  endpoint,
+  token,
+  presetId,
+  sourcePng,
+  composed,
+  maskPng,
+  prompt,
+  pipelineSpec = null,
+  seed = 45,
+}) {
   const preset = presetById(presetId)
-  const composed = buildOutpaintCanvas(sourcePng)
-  const mask = buildOutpaintMaskPng()
-  console.log(
-    `  · [outpaint] 画布 ${composed.width}x${composed.height}（内容区 ${composed.content.width}x` +
-      `${composed.content.height} @ ${composed.content.x},${composed.content.y}，新增区域 ` +
-      `${(mask.coverage * 100).toFixed(2)}%，画布 ${composed.png.length} 字节，蒙版 ${mask.png.length} 字节）…`,
-  )
   const begin = Date.now()
   const response = await requestGenerate(
     endpoint,
     token,
     {
-      pipeline: preset.pipeline,
+      pipeline: pipelineSpec ?? preset.pipeline,
       modelId: preset.repo,
       reference: {
         image_b64: composed.png.toString('base64'),
-        mask_b64: mask.png.toString('base64'),
+        mask_b64: maskPng.toString('base64'),
         strength: OUTPAINT.strength,
       },
       tasks: [
@@ -1071,7 +1391,7 @@ async function runOutpaint({ endpoint, token, presetId, sourcePng, prompt }) {
           name: '01',
           prompt,
           negative_prompt: preset.negativeHint ?? '',
-          seed: 45,
+          seed,
           width: composed.width,
           height: composed.height,
           steps: preset.steps,
@@ -1088,10 +1408,7 @@ async function runOutpaint({ endpoint, token, presetId, sourcePng, prompt }) {
   const isPng = png.subarray(0, 8).toString('hex') === '89504e470d0a1a0a'
   if (!isPng) throw new Error('outpaint：返回内容不是合法 PNG')
   const outputSize = pngSize(png)
-  if (
-    outputSize &&
-    (outputSize.width !== composed.width || outputSize.height !== composed.height)
-  ) {
+  if (outputSize && (outputSize.width !== composed.width || outputSize.height !== composed.height)) {
     throw new Error(
       `outpaint：输出尺寸不符，期望 ${composed.width}x${composed.height}，收到 ${outputSize.width}x${outputSize.height}`,
     )
@@ -1106,8 +1423,6 @@ async function runOutpaint({ endpoint, token, presetId, sourcePng, prompt }) {
   )
   return {
     png,
-    canvasPng: composed.png,
-    maskPng: mask.png,
     entry: {
       preset: presetId,
       strength: OUTPAINT.strength,
@@ -1120,7 +1435,7 @@ async function runOutpaint({ endpoint, token, presetId, sourcePng, prompt }) {
       content: composed.content,
       // 画布新增区的填充方式：edge-extend = 四边 1px 边缘像素延拓（FIXES-INTERFACES §B3）。
       canvasFill: composed.fill,
-      coveragePercent: Number((mask.coverage * 100).toFixed(4)),
+      coveragePercent: Number((maskPng.coverage * 100).toFixed(4)),
       loadSeconds: response.load_seconds ?? null,
       imageSeconds: result.seconds ?? null,
       wallSeconds,
@@ -1131,6 +1446,26 @@ async function runOutpaint({ endpoint, token, presetId, sourcePng, prompt }) {
       contentPreserved,
     },
   }
+}
+
+async function runOutpaint({ endpoint, token, presetId, sourcePng, prompt }) {
+  const composed = buildOutpaintCanvas(sourcePng)
+  const mask = buildOutpaintMaskPng()
+  console.log(
+    `  · [outpaint] 画布 ${composed.width}x${composed.height}（内容区 ${composed.content.width}x` +
+      `${composed.content.height} @ ${composed.content.x},${composed.content.y}，新增区域 ` +
+      `${(mask.coverage * 100).toFixed(2)}%，画布 ${composed.png.length} 字节，蒙版 ${mask.png.length} 字节）…`,
+  )
+  const submitted = await submitOutpaintOnce({
+    endpoint,
+    token,
+    presetId,
+    sourcePng,
+    composed,
+    maskPng: mask.png,
+    prompt,
+  })
+  return { png: submitted.png, canvasPng: composed.png, maskPng: mask.png, entry: submitted.entry }
 }
 
 /**
@@ -1312,6 +1647,413 @@ async function runInpaint({ endpoint, token, presetId, sourcePng, prompt, option
   return { runs, report }
 }
 
+/**
+ * Phase C1 参考生图验收（单个 supportsReference 预设）：返回 report / images / models 供 main 汇总。
+ *
+ * 流程：先文生图出 1~N 张源图当参考图 → 按张数跑参考生图（同 seed，1 张跑 2 轮验证确定性）
+ * → 补「1 张参考 + 1280x720」画幅保持 → 连续参考推理后再跑一次文生图核对显存无增长。
+ */
+async function runReferencePhase({ endpoint, token, presetId, prompt, mainSize, referenceCounts, referenceRounds }) {
+  const preset = presetById(presetId)
+  if (preset?.supportsReference !== true) {
+    throw new Error(
+      `预设 ${presetId} 不支持原生参考生图（supportsReference=false），首期只有 flux2-klein-4b`,
+    )
+  }
+  const models = []
+  const images = []
+  const maxSourceCount = Math.max(...referenceCounts)
+  const sources = []
+  for (let index = 0; index < maxSourceCount; index += 1) {
+    const source = await generateOne({
+      endpoint,
+      token,
+      presetId,
+      prompt,
+      index,
+      total: maxSourceCount,
+      seed: 42 + index,
+    })
+    models.push(source.entry)
+    const sourceSize = pngSize(source.png)
+    if (!sourceSize) throw new Error('reference：无法读取参考图源尺寸')
+    images.push({
+      index: `reference-source-${index + 1}`,
+      presetId,
+      png: source.png,
+      name: `01-source-${index + 1}.png`,
+    })
+    console.log(
+      `  · 参考图源 ${index + 1}/${maxSourceCount} 生成：${sourceSize.width}x${sourceSize.height}，` +
+        `出图 ${source.entry.imageSeconds ?? '-'}s（加载 ${source.entry.loadSeconds ?? '-'}s）`,
+    )
+    sources.push(source.png)
+  }
+  const baselinePng = sources[0]
+  const baselineSize = pngSize(baselinePng)
+  const beforeRefs = await readGpuMemory(endpoint, token)
+  const cases = []
+  for (const count of referenceCounts) {
+    const rounds = referenceRounds ?? (count === 1 ? 2 : 1)
+    for (let round = 0; round < rounds; round += 1) {
+      cases.push({
+        label: `${count}ref-${mainSize.width}x${mainSize.height}`,
+        count,
+        round,
+        width: mainSize.width,
+        height: mainSize.height,
+        frame: false,
+      })
+    }
+  }
+  if (!(mainSize.width === 1280 && mainSize.height === 720)) {
+    cases.push({ label: '1ref-1280x720-frame', count: 1, round: 0, width: 1280, height: 720, frame: true })
+  }
+  const referenceRuns = []
+  const referencePngs = new Map()
+  for (const item of cases) {
+    const run = await runReference({
+      endpoint,
+      token,
+      presetId,
+      referencePngs: sources.slice(0, item.count),
+      prompt,
+      width: item.width,
+      height: item.height,
+      seed: 42,
+    })
+    const gpuMemoryAfter = await readGpuMemory(endpoint, token)
+    const suffix = `${item.label}${item.round > 0 ? `-round${item.round + 1}` : ''}`
+    images.push({
+      index: 'reference',
+      presetId: `${presetId}-reference`,
+      png: run.png,
+      name: `02-reference-${suffix}.png`,
+    })
+    const pngKey = item.frame
+      ? 'frame'
+      : item.count === 1
+        ? item.round === 0
+          ? '1'
+          : '2'
+        : `${item.count}refs`
+    if (!referencePngs.has(pngKey)) referencePngs.set(pngKey, run.png)
+    referenceRuns.push({
+      ...run.entry,
+      round: item.round + 1,
+      framePreserved: item.frame ? run.entry.width === 1280 && run.entry.height === 720 : null,
+      gpuMemoryAfter,
+    })
+    console.log(
+      `  · 参考生图 [${item.count} 张 / ${item.width}x${item.height}${item.frame ? ' / 画幅保持' : ''}]：` +
+        `加载 ${run.entry.loadSeconds ?? '-'}s / 推理 ${run.entry.imageSeconds ?? '-'}s / ` +
+        `输出 ${run.entry.width}x${run.entry.height}`,
+    )
+  }
+  const afterRefs = await readGpuMemory(endpoint, token)
+  // 稳定性：连续参考推理后再跑一次纯文生图（同 seed），峰值显存不应增长。
+  const stableMemBefore = await readGpuMemory(endpoint, token)
+  const stable = await generateOne({ endpoint, token, presetId, prompt, index: 0, total: 1, seed: 42 })
+  const stableMemAfter = await readGpuMemory(endpoint, token)
+  models.push(stable.entry)
+  images.push({ index: 'reference-stable', presetId, png: stable.png, name: '03-txt2img-after-refs.png' })
+
+  const singleRefRuns = referenceRuns.filter(
+    (run) => run.referenceCount === 1 && !run.framePreserved && run.width === mainSize.width,
+  )
+  const determinismMae =
+    singleRefRuns.length >= 2 ? meanAbsDiffPng(referencePngs.get('1'), referencePngs.get('2')) : null
+  const referenceEffectMae =
+    baselineSize &&
+    baselineSize.width === mainSize.width &&
+    baselineSize.height === mainSize.height &&
+    referencePngs.has('1')
+      ? meanAbsDiffPng(baselinePng, referencePngs.get('1'))
+      : null
+  const oneVsTwoRefsMae =
+    referencePngs.has('1') && referencePngs.has('2refs')
+      ? meanAbsDiffPng(referencePngs.get('1'), referencePngs.get('2refs'))
+      : null
+  const maxAllocatedDeltaMb =
+    Number.isFinite(beforeRefs?.max_allocated_mb) && Number.isFinite(afterRefs?.max_allocated_mb)
+      ? afterRefs.max_allocated_mb - beforeRefs.max_allocated_mb
+      : null
+  const stableDeltaMb =
+    Number.isFinite(beforeRefs?.max_allocated_mb) && Number.isFinite(stableMemAfter?.max_allocated_mb)
+      ? stableMemAfter.max_allocated_mb - beforeRefs.max_allocated_mb
+      : null
+  const frameRun = referenceRuns.find((run) => run.framePreserved !== null)
+  const report = {
+    preset: presetId,
+    supportsReference: true,
+    mainSize,
+    counts: referenceCounts,
+    sourceCount: maxSourceCount,
+    sources: sources.map((png) => pngSize(png)),
+    roundsPerCount: Object.fromEntries(
+      referenceCounts.map((count) => [count, referenceRounds ?? (count === 1 ? 2 : 1)]),
+    ),
+    cases: referenceRuns.map((run) => ({
+      count: run.referenceCount,
+      referenceSizes: run.referenceSizes,
+      width: run.width,
+      height: run.height,
+      framePreserved: run.framePreserved,
+      loadSeconds: run.loadSeconds,
+      imageSeconds: run.imageSeconds,
+      wallSeconds: run.wallSeconds,
+      referenceBytes: run.referenceBytes,
+      pngBytes: run.pngBytes,
+      gpuMemoryAfter: run.gpuMemoryAfter,
+    })),
+    // 同 seed 同参考图两轮应逐像素一致（0 表示确定性成立），作为「同 seed 可复现」证据。
+    determinismMae,
+    // 同 seed 下「有 1 张参考图 vs 无参考图」的平均绝对差：>0 说明参考图确实参与了条件。
+    referenceEffectMae,
+    // 1 张 vs 2 张参考图的差异：验证多参考图也生效。
+    oneVsTwoRefsMae,
+    // 1280x720 画幅保持：参考生图输出不跟随参考图尺寸。
+    framePreservation: frameRun
+      ? {
+          passed: frameRun.framePreserved === true,
+          requested: { width: 1280, height: 720 },
+          output: { width: frameRun.width, height: frameRun.height },
+        }
+      : null,
+    // 同一 pipeline spec 复用：除首轮加载外，后续参考生图 load_seconds 应为 0。
+    reusedPipeline: referenceRuns.every((run) => (run.loadSeconds ?? 0) === 0),
+    gpuMemoryBefore: beforeRefs,
+    gpuMemoryAfter: afterRefs,
+    maxAllocatedDeltaMb,
+    stability: {
+      before: stableMemBefore,
+      after: stableMemAfter,
+      deltaMb: stableDeltaMb,
+      // 容差 64 MiB：/health 是只读快照，分配器保留块的小幅波动不算增长。
+      noGrowth: stableDeltaMb === null ? null : stableDeltaMb <= 64,
+    },
+  }
+  if (frameRun && frameRun.framePreserved !== true) {
+    throw new Error('reference：1280x720 画幅保持失败，输出没有严格等于请求尺寸')
+  }
+  console.log(
+    `  · [reference] 确定性 MAE ${determinismMae ?? '-'}，参考影响 MAE ${referenceEffectMae ?? '-'}，` +
+      `显存增量 ${maxAllocatedDeltaMb ?? '-'} MB，复测无增长 ${report.stability.noGrowth}`,
+  )
+  return { report, images, models }
+}
+
+/** Phase C1 文生图加速 A/B 验收（off/on 同一会话、同 seed/尺寸/prompt，每档多轮取中位）。 */
+async function runAccelTxt2ImgPhase({ endpoint, token, presetId, prompt, order, rounds }) {
+  const preset = presetById(presetId)
+  const models = []
+  const images = []
+  const configs = []
+  const configPngs = new Map()
+  for (const label of order) {
+    const accelConfig = label === 'off' ? accelOffConfigOf() : accelOnConfigOf(preset)
+    const spec = withAccelSpec(preset.pipeline, accelConfig)
+    const gpuMemoryBefore = await readGpuMemory(endpoint, token)
+    const roundEntries = []
+    const pngs = []
+    for (let round = 0; round < rounds; round += 1) {
+      const run = await generateOne({
+        endpoint,
+        token,
+        presetId,
+        prompt,
+        index: 0,
+        total: 1,
+        pipelineSpec: spec,
+        seed: 42,
+      })
+      roundEntries.push({ round: round + 1, ...run.entry })
+      pngs.push(run.png)
+    }
+    const gpuMemoryAfter = await readGpuMemory(endpoint, token)
+    const reservedDeltaMb =
+      Number.isFinite(gpuMemoryBefore?.reserved_mb) && Number.isFinite(gpuMemoryAfter?.reserved_mb)
+        ? gpuMemoryAfter.reserved_mb - gpuMemoryBefore.reserved_mb
+        : null
+    pngs.forEach((png, roundIndex) => {
+      images.push({
+        index: 'accel',
+        presetId: `${presetId}-accel`,
+        png,
+        name: `02-accel-${label}-round${roundIndex + 1}.png`,
+      })
+    })
+    configPngs.set(label, pngs[pngs.length - 1])
+    configs.push({
+      label,
+      accel: accelConfig,
+      rounds: roundEntries,
+      medianSeconds: medianOf(roundEntries.map((round) => round.imageSeconds)),
+      gpuMemoryBefore,
+      gpuMemoryAfter,
+      reservedDeltaMb,
+    })
+    models.push({ ...roundEntries[0] })
+    console.log(
+      `  · [accel:${label}] 中位出图 ${medianOf(roundEntries.map((round) => round.imageSeconds))}s，峰值显存 ` +
+        `${gpuMemoryAfter?.max_allocated_mb ?? '-'} MB（首轮加载 ${roundEntries[0].loadSeconds ?? '-'}s）`,
+    )
+  }
+  const offConfig = configs.find((config) => config.label === 'off') ?? null
+  const onConfig = configs.find((config) => config.label === 'on') ?? null
+  const maeOffOn = offConfig && onConfig ? meanAbsDiffPng(configPngs.get('off'), configPngs.get('on')) : null
+  const report = {
+    preset: presetId,
+    mode: 'txt2img',
+    family: preset.pipeline?.loader ?? null,
+    width: preset.size,
+    height: preset.size,
+    steps: preset.steps,
+    roundsPerConfig: rounds,
+    order,
+    configs,
+    speedup: speedupOf(offConfig, onConfig),
+    peakMaxAllocatedDeltaMb: peakDeltaOf(offConfig, onConfig),
+    maeOffOn,
+    speedupNote: 'speedup = off 中位推理秒数 / on 中位推理秒数（>1 表示 on 更快）；maeOffOn 越小画质差异越小',
+  }
+  console.log(
+    `  · [accel] 提速比 ${report.speedup ?? '-'}（off ${offConfig?.medianSeconds ?? '-'}s → ` +
+      `on ${onConfig?.medianSeconds ?? '-'}s），峰值显存差 ${report.peakMaxAllocatedDeltaMb ?? '-'} MB，` +
+      `两档输出 MAE ${maeOffOn ?? '-'}`,
+  )
+  return { report, images, models }
+}
+
+/** Phase C1 扩图加速 A/B 验收：源图 864² 固定，画布/蒙版固定，只换 accel 配置。 */
+async function runAccelOutpaintPhase({ endpoint, token, presetId, sourcePresetId, prompt, order, rounds }) {
+  const preset = presetById(presetId)
+  const models = []
+  const images = []
+  const source = await generateOne({
+    endpoint,
+    token,
+    presetId: sourcePresetId,
+    prompt,
+    index: 0,
+    total: 1,
+    width: OUTPAINT_CONTENT.width,
+    height: OUTPAINT_CONTENT.height,
+  })
+  models.push(source.entry)
+  images.push({ index: 0, presetId: sourcePresetId, png: source.png })
+  const sourceSize = pngSize(source.png)
+  if (
+    sourceSize &&
+    (sourceSize.width !== OUTPAINT_CONTENT.width || sourceSize.height !== OUTPAINT_CONTENT.height)
+  ) {
+    throw new Error(
+      `outpaint：源图应为 ${OUTPAINT_CONTENT.width}x${OUTPAINT_CONTENT.height}，` +
+        `收到 ${sourceSize.width}x${sourceSize.height}`,
+    )
+  }
+  console.log(
+    `  · ${sourcePresetId} 文生图完成：加载 ${source.entry.loadSeconds ?? '-'}s / 出图 ` +
+      `${sourceSize?.width ?? '?'}x${sourceSize?.height ?? '?'}`,
+  )
+  const composed = buildOutpaintCanvas(source.png)
+  const mask = buildOutpaintMaskPng()
+  console.log(
+    `  · [outpaint] 画布 ${composed.width}x${composed.height}（内容区 ${composed.content.width}x` +
+      `${composed.content.height} @ ${composed.content.x},${composed.content.y}，新增区域 ` +
+      `${(mask.coverage * 100).toFixed(2)}%，画布 ${composed.png.length} 字节，蒙版 ${mask.png.length} 字节）…`,
+  )
+  images.push(
+    { index: 'outpaint-canvas', presetId: `${presetId}-outpaint`, png: composed.png, name: '02-outpaint-canvas.png' },
+    { index: 'outpaint-mask', presetId: `${presetId}-outpaint`, png: mask.png, name: '02-outpaint-mask.png' },
+  )
+  const configs = []
+  const configPngs = new Map()
+  for (const label of order) {
+    const accelConfig = label === 'off' ? accelOffConfigOf() : accelOnConfigOf(preset)
+    const spec = withAccelSpec(preset.pipeline, accelConfig)
+    const gpuMemoryBefore = await readGpuMemory(endpoint, token)
+    const roundEntries = []
+    const pngs = []
+    for (let round = 0; round < rounds; round += 1) {
+      const submitted = await submitOutpaintOnce({
+        endpoint,
+        token,
+        presetId,
+        sourcePng: source.png,
+        composed,
+        maskPng: mask.png,
+        prompt,
+        pipelineSpec: spec,
+        seed: 45,
+      })
+      roundEntries.push({
+        round: round + 1,
+        ...submitted.entry,
+        seam: outpaintSeamMetrics(submitted.png, composed.content),
+      })
+      pngs.push(submitted.png)
+    }
+    const gpuMemoryAfter = await readGpuMemory(endpoint, token)
+    const reservedDeltaMb =
+      Number.isFinite(gpuMemoryBefore?.reserved_mb) && Number.isFinite(gpuMemoryAfter?.reserved_mb)
+        ? gpuMemoryAfter.reserved_mb - gpuMemoryBefore.reserved_mb
+        : null
+    pngs.forEach((png, roundIndex) => {
+      images.push({
+        index: 'outpaint-accel',
+        presetId: `${presetId}-outpaint`,
+        png,
+        name: `02-outpaint-${label}-round${roundIndex + 1}.png`,
+      })
+    })
+    configPngs.set(label, pngs[pngs.length - 1])
+    configs.push({
+      label,
+      accel: accelConfig,
+      rounds: roundEntries,
+      medianSeconds: medianOf(roundEntries.map((round) => round.imageSeconds)),
+      gpuMemoryBefore,
+      gpuMemoryAfter,
+      reservedDeltaMb,
+    })
+    models.push({ preset: presetId, modelId: preset.repo, pipelineKind: preset.pipeline?.loader ?? null, ...roundEntries[0] })
+    console.log(
+      `  · [accel:outpaint:${label}] 中位推理 ${medianOf(roundEntries.map((round) => round.imageSeconds))}s，` +
+        `峰值显存 ${gpuMemoryAfter?.max_allocated_mb ?? '-'} MB，内容区核心差 ` +
+        `${roundEntries[roundEntries.length - 1].contentCoreMeanDiff ?? '-'}`,
+    )
+  }
+  const offConfig = configs.find((config) => config.label === 'off') ?? null
+  const onConfig = configs.find((config) => config.label === 'on') ?? null
+  const maeOffOn = offConfig && onConfig ? meanAbsDiffPng(configPngs.get('off'), configPngs.get('on')) : null
+  const report = {
+    preset: presetId,
+    mode: 'outpaint',
+    family: preset.pipeline?.loader ?? null,
+    sourcePreset: sourcePresetId,
+    canvas: { width: composed.width, height: composed.height },
+    content: composed.content,
+    coveragePercent: Number((mask.coverage * 100).toFixed(4)),
+    roundsPerConfig: rounds,
+    order,
+    configs,
+    speedup: speedupOf(offConfig, onConfig),
+    peakMaxAllocatedDeltaMb: peakDeltaOf(offConfig, onConfig),
+    maeOffOn,
+    seam: {
+      off: offConfig?.rounds[offConfig.rounds.length - 1]?.seam ?? null,
+      on: onConfig?.rounds[onConfig.rounds.length - 1]?.seam ?? null,
+    },
+    speedupNote: 'speedup = off 中位推理秒数 / on 中位推理秒数（>1 表示 on 更快）',
+  }
+  console.log(
+    `  · [accel:outpaint] 提速比 ${report.speedup ?? '-'}（off ${offConfig?.medianSeconds ?? '-'}s → ` +
+      `on ${onConfig?.medianSeconds ?? '-'}s），两档输出 MAE ${maeOffOn ?? '-'}`,
+  )
+  return { report, images, models }
+}
+
 async function main() {
   const options = parseOptions()
   const single = options.presets.length === 1
@@ -1423,6 +2165,8 @@ async function main() {
     let inpaintReport = null
     let upscaleReport = null
     let outpaintReport = null
+    let referenceReport = null
+    let accelReport = null
     if (options.img2img) {
       // M3 真机验收：先文生图，再用刚生成的图做垫图重绘；对比 /health.gpu_memory。
       if (!single) throw new Error('--img2img 只能配合单个 --preset 使用')
@@ -1649,55 +2393,150 @@ async function main() {
         `  · ${sourcePresetId} 文生图完成：加载 ${txt2img.entry.loadSeconds ?? '-'}s / 出图 ` +
           `${sourceSize?.width ?? '?'}x${sourceSize?.height ?? '?'}`,
       )
-      const before = await readGpuMemory(endpoint, token)
-      const outpaint = await runOutpaint({
+      const composed = buildOutpaintCanvas(txt2img.png)
+      const mask = buildOutpaintMaskPng()
+      console.log(
+        `  · [outpaint] 画布 ${composed.width}x${composed.height}（内容区 ${composed.content.width}x` +
+          `${composed.content.height} @ ${composed.content.x},${composed.content.y}，新增区域 ` +
+          `${(mask.coverage * 100).toFixed(2)}%，画布 ${composed.png.length} 字节，蒙版 ${mask.png.length} 字节）…`,
+      )
+      images.push(
+        { index: 'outpaint-canvas', presetId: `${presetId}-outpaint`, png: composed.png, name: '02-outpaint-canvas.png' },
+        { index: 'outpaint-mask', presetId: `${presetId}-outpaint`, png: mask.png, name: '02-outpaint-mask.png' },
+      )
+
+      if (!options.accel) {
+        // 原有 Phase B2 单次扩图路径：报告形状保持不变。
+        const before = await readGpuMemory(endpoint, token)
+        const outpaint = await runOutpaint({
+          endpoint,
+          token,
+          presetId,
+          sourcePng: txt2img.png,
+          prompt: options.prompt,
+        })
+        const after = await readGpuMemory(endpoint, token)
+        images.push({ index: 'outpaint', presetId: `${presetId}-outpaint`, png: outpaint.png, name: '02-outpaint.png' })
+        console.log(`  · 显存对比（MiB）：文生图后 ${fmt(before)} → 扩图后 ${fmt(after)}`)
+        const reservedDeltaMb =
+          Number.isFinite(before?.reserved_mb) && Number.isFinite(after?.reserved_mb)
+            ? after.reserved_mb - before.reserved_mb
+            : null
+        outpaintReport = {
+          ...outpaint.entry,
+          sourcePreset: sourcePresetId,
+          gpuMemoryBefore: before,
+          gpuMemoryAfter: after,
+          reservedDeltaMb,
+          // 内容区核心像素与源图应几乎一致（composite 保留原图像素）；
+          // 差异过大说明扩图改写了保留区（硬接缝/整图重绘），验收不通过。
+          contentPreserved: outpaint.entry.contentPreserved,
+        }
+        if (!outpaintReport.contentPreserved) {
+          throw new Error(
+            `outpaint：内容区被改动（核心区平均差 ${outpaint.entry.contentCoreMeanDiff}），` +
+              '预期 composite 保留原图像素（≈0）',
+          )
+        }
+      } else {
+        // Phase C1：扩图路径的推理加速 A/B（同源图 / 画布 / 蒙版 / seed，只换 accel 配置）。
+        const accelPhase = await runAccelOutpaintPhase({
+          endpoint,
+          token,
+          presetId,
+          sourcePresetId,
+          prompt: options.prompt,
+          order: options.accel === 'ab' ? ['off', 'on'] : [options.accel],
+          rounds: options.accelRounds,
+        })
+        accelReport = accelPhase.report
+        models.push(...accelPhase.models)
+        images.push(...accelPhase.images)
+      }
+    } else if (options.reference) {
+      // Phase C1：模型原生参考生图验收（源图 → 1/2 张参考图 → 1280x720 画幅保持 → 显存复测）。
+      if (!single) throw new Error('--reference 只能配合单个 --preset 使用')
+      const preset = presetById(options.presets[0])
+      const referencePhase = await runReferencePhase({
         endpoint,
         token,
-        presetId,
-        sourcePng: txt2img.png,
+        presetId: options.presets[0],
         prompt: options.prompt,
+        mainSize: options.referenceSize ?? { width: preset.size, height: preset.size },
+        referenceCounts: options.referenceCounts,
+        referenceRounds: options.referenceRounds,
       })
-      const after = await readGpuMemory(endpoint, token)
-      images.push(
-        {
-          index: 'outpaint',
-          presetId: `${presetId}-outpaint`,
-          png: outpaint.png,
-          name: '02-outpaint.png',
-        },
-        {
-          index: 'outpaint-canvas',
-          presetId: `${presetId}-outpaint`,
-          png: outpaint.canvasPng,
-          name: '02-outpaint-canvas.png',
-        },
-        {
-          index: 'outpaint-mask',
-          presetId: `${presetId}-outpaint`,
-          png: outpaint.maskPng,
-          name: '02-outpaint-mask.png',
-        },
-      )
-      console.log(`  · 显存对比（MiB）：文生图后 ${fmt(before)} → 扩图后 ${fmt(after)}`)
-      const reservedDeltaMb =
-        Number.isFinite(before?.reserved_mb) && Number.isFinite(after?.reserved_mb)
-          ? after.reserved_mb - before.reserved_mb
-          : null
-      outpaintReport = {
-        ...outpaint.entry,
-        sourcePreset: sourcePresetId,
-        gpuMemoryBefore: before,
-        gpuMemoryAfter: after,
-        reservedDeltaMb,
-        // 内容区核心像素与源图应几乎一致（composite 保留原图像素）；
-        // 差异过大说明扩图改写了保留区（硬接缝/整图重绘），验收不通过。
-        contentPreserved: outpaint.entry.contentPreserved,
-      }
-      if (!outpaintReport.contentPreserved) {
-        throw new Error(
-          `outpaint：内容区被改动（核心区平均差 ${outpaint.entry.contentCoreMeanDiff}），` +
-            '预期 composite 保留原图像素（≈0）',
-        )
+      referenceReport = referencePhase.report
+      models.push(...referencePhase.models)
+      images.push(...referencePhase.images)
+    } else if (options.accel) {
+      // Phase C1：文生图路径的推理加速 A/B（同 seed / 尺寸 / prompt，每档多轮取中位）。
+      if (!single) throw new Error('--accel 只能配合单个 --preset 使用')
+      const accelPhase = await runAccelTxt2ImgPhase({
+        endpoint,
+        token,
+        presetId: options.presets[0],
+        prompt: options.prompt,
+        order: options.accel === 'ab' ? ['off', 'on'] : [options.accel],
+        rounds: options.accelRounds,
+      })
+      accelReport = accelPhase.report
+      models.push(...accelPhase.models)
+      images.push(...accelPhase.images)
+    } else if (options.c1Acceptance) {
+      // Phase C1 一次性正式验收：同一个 Kernel 会话内连续跑三段（模型切换由 daemon 缓存管理负责）：
+      //   1) flux2-klein-4b 原生参考生图（1/2 张参考 + 1280x720 画幅保持 + 显存复测）；
+      //   2) sdxl-lightning 1024² 4 步 channelsLast+fuseQkv+vaeTiling 开/关 A/B；
+      //   3) sdxl-inpaint 1536x864 30 步扩图 vaeTiling 开/关 A/B。
+      const referencePreset = PRESETS.find((item) => item.supportsReference === true) ?? null
+      if (!referencePreset) throw new Error('--c1-acceptance：没有 supportsReference=true 的预设')
+      const accelOrder = options.accel === 'on' || options.accel === 'off' ? [options.accel] : ['off', 'on']
+
+      console.log(`[c1] 1/3 参考生图验收（${referencePreset.id}）…`)
+      const referencePhase = await runReferencePhase({
+        endpoint,
+        token,
+        presetId: referencePreset.id,
+        prompt: options.prompt,
+        mainSize: options.referenceSize ?? { width: referencePreset.size, height: referencePreset.size },
+        referenceCounts: options.referenceCounts,
+        referenceRounds: options.referenceRounds,
+      })
+      referenceReport = referencePhase.report
+      models.push(...referencePhase.models)
+      images.push(...referencePhase.images)
+
+      console.log('[c1] 2/3 sdxl-lightning 推理加速 A/B（1024²，4 步）…')
+      const txt2imgPhase = await runAccelTxt2ImgPhase({
+        endpoint,
+        token,
+        presetId: 'sdxl-lightning',
+        prompt: options.prompt,
+        order: accelOrder,
+        rounds: options.accelRounds,
+      })
+      models.push(...txt2imgPhase.models)
+      images.push(...txt2imgPhase.images)
+
+      console.log('[c1] 3/3 sdxl-inpaint 扩图加速 A/B（1536x864，30 步）…')
+      const outpaintPhase = await runAccelOutpaintPhase({
+        endpoint,
+        token,
+        presetId: 'sdxl-inpaint',
+        sourcePresetId: 'sdxl-lightning',
+        prompt: options.prompt,
+        order: accelOrder,
+        rounds: options.accelRounds,
+      })
+      models.push(...outpaintPhase.models)
+      images.push(...outpaintPhase.images)
+
+      accelReport = {
+        mode: 'c1-acceptance',
+        order: accelOrder,
+        roundsPerConfig: options.accelRounds,
+        txt2img: txt2imgPhase.report,
+        outpaint: outpaintPhase.report,
       }
     } else {
       for (const [index, presetId] of options.presets.entries()) {
@@ -1738,7 +2577,7 @@ async function main() {
                 : artifactName(image.index, image.presetId, options.presets.length))
       await writeFile(join(dir, name), image.png)
     }
-    const first = models[0]
+    const first = models[0] ?? {}
     const report = {
       // 单预设兼容字段：与 0.7.0 的报告结构保持一致（多模型模式下取第一个模型）。
       preset: options.presets[0],
@@ -1762,6 +2601,11 @@ async function main() {
       upscale: upscaleReport,
       // Phase B2：--outpaint 模式的画布/内容区、内容区像素差与显存对比（非该模式为 null）。
       outpaint: outpaintReport,
+      // Phase C1：--reference 模式的参考图数量/尺寸/耗时/显存/输出尺寸断言（非该模式为 null）。
+      reference: referenceReport,
+      // Phase C1：--accel 模式的 A/B 数据（单模式为 {mode:'txt2img'|'outpaint',...}，
+      // --c1-acceptance 一次性验收为 {mode:'c1-acceptance', txt2img, outpaint}；非该模式为 null）。
+      accel: accelReport,
       versions: health.versions ?? null,
       finalVersions: finalHealth.versions ?? null,
       cacheLogs,
@@ -1816,10 +2660,18 @@ if (process.env.GPU_LIVE_SKIP_MAIN !== '1') {
 export {
   OUTPAINT_CANVAS,
   OUTPAINT_CONTENT,
+  accelOffConfigOf,
+  accelOnConfigOf,
   buildOutpaintCanvas,
   buildOutpaintMaskPng,
   contentRegionDiff,
   decodePng,
   encodePngRgb,
+  meanAbsDiffPng,
+  medianOf,
+  outpaintSeamMetrics,
   parseOptions,
+  peakDeltaOf,
+  speedupOf,
+  withAccelSpec,
 }

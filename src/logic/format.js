@@ -1,6 +1,32 @@
 /** 时长、任务耗时与计数文案格式化。 */
 
 /**
+ * 覆盖率（0~1）→ 界面百分比读数。
+ *
+ * 不足 10% 时保留一位小数，避免刚涂一点就显示 0%；超过 100% 按 100% 截断。
+ * 涂抹 / 扩图画布与提交栏共用这一个口径，读数不会因组件不同而互相漂移。
+ */
+export function percentOf(coverage) {
+  const value = Number(coverage)
+  if (!Number.isFinite(value) || value <= 0) return 0
+  const percent = Math.min(100, value * 100)
+  return percent >= 10 ? Math.round(percent) : Math.round(percent * 10) / 10
+}
+
+/**
+ * 正数像素值（四舍五入）；缺失 / 非法 / 非正数返回 null。
+ *
+ * 「缺失」按 null 处理而不是回落到某个默认尺寸：调用方用 `??` 串起多个候选来源
+ * （产物像素 → 参数 → 预设推荐值），这里返回 0 会把后续兜底全部短路掉。
+ */
+export function positiveSize(value) {
+  if (value === null || value === undefined || value === '') return null
+  const number = Number(value)
+  if (!Number.isFinite(number) || number <= 0) return null
+  return Math.round(number)
+}
+
+/**
  * 文案占位符替换：字典是纯键值对、没有插值机制，需要计数的文案统一用 `{name}` 占位。
  * 找不到对应值时保留占位符本身，便于测试直接发现字段名拼错。
  */

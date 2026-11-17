@@ -16,6 +16,10 @@
  *  - `draft`：托管的草稿槽 `{ source, form, editing }`（形状见 logic/form.js）；
  *  - parkDraft / openDraft / clearDraft / restoreOriginal 是这条链路仅有的四个动作，
  *    组合层只在「切预览 / 点草稿卡 / 提交成功 / 新建创作 / 还原原图」时调用它们。
+ *
+ * 阶段十五 Phase C2：左栏新增原生参考图槽（`references`，形状见 `logic/reference.js`）。
+ * 槽位属于表单状态：挂载 / 移除 / 换图都算 dirty，会随草稿一起托管；
+ * 回填作品与还原原图清空槽位（展示的是那张作品的干净基准），新建创作同样清空。
  */
 
 import React from 'react'
@@ -34,7 +38,7 @@ import {
   originalPatchOf,
   parkDraftOf,
 } from '../../logic/form.js'
-import { buildGenerateBody } from '../../logic/generate.js'
+import { buildGenerateBody, presetLabelOf } from '../../logic/generate.js'
 import {
   customSizePatch,
   detectCjk,
@@ -50,6 +54,15 @@ import {
   resolveNegativeLayers,
   translateOutcomeOf,
 } from '../../logic/prompt.js'
+import {
+  referenceAdd,
+  referenceHas,
+  referenceMaxCount,
+  nativeReferencePresetOf,
+  referencePurgeOf,
+  referenceRemove,
+  supportsReferenceOf,
+} from '../../logic/reference.js'
 import { isRefineApplied, refineSeparator, toggleRefineTerm } from '../../logic/refine.js'
 import { DEFAULT_RATIOS, ratioToSize } from '../presets.js'
 
@@ -65,6 +78,8 @@ const EMPTY_FORM = {
   cfg: 0,
   seed: '',
   count: 1,
+  // 原生参考图槽（Phase C2）：槽位项 `{ path, url, width, height, name }`，上限见契约。
+  references: [],
 }
 
 export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
@@ -105,6 +120,12 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const negativeActive = negativePromptActive(activePreset, form.cfg)
   // 当前预设决定提示词的书写口径；含中文提示时给一条软提示，不拦截生成。
   const englishPromptHint = detectCjk(form.prompt) && presetNeedsEnglish(activePreset)
+  // 原生参考图能力（Phase C2）：能力位来自当前预设；切换目标取列表里第一个 supportsReference
+  // 的预设（首期只有 FLUX.2 Klein 4B），没有候选时界面只给说明、不静默换模型。
+  const referenceSupported = supportsReferenceOf(activePreset)
+  const referenceSwitchPreset = nativeReferencePresetOf(presets)
+  const referenceSwitchLabel = referenceSwitchPreset ? presetLabelOf(referenceSwitchPreset) : ''
+  const referenceMax = referenceMaxCount()
 
   // 预设同步：只在用户没手动改过时套用推荐值（初始预设同样回填负向模型层）。
   React.useEffect(() => {
@@ -136,6 +157,37 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     setForm((prev) => applyNegativePatch(prev, presetSelectPatch(next, prev, presets)))
   }
 
+  // ---- 原生参考图槽（阶段十五 Phase C2） -----------------------------------
+
+  /**
+   * 往参考图槽追加一张（作品条目 / 槽位项 / 路径都行）。
+   *
+   * 同一事件里可能连续追加多张（一次拖入多个文件），因此同步更新 `formRef`：
+   * 后续追加与脏判定读到的都是最新槽位，不依赖 React 是否已经重渲染。
+   *
+   * @returns {{ok: boolean, reason: 'added'|'duplicate'|'full'|'invalid', list: Array<object>, item: object|null}}
+   */
+  function addReference(value) {
+    const result = referenceAdd(formRef.current.references, value)
+    if (result.ok) {
+      const next = { ...formRef.current, references: result.list }
+      formRef.current = next
+      setForm(next)
+    }
+    return result
+  }
+
+  /** 从参考图槽移除一张（按路径）；不在槽位里时保持原状态，不制造假脏。 */
+  function removeReference(path) {
+    const current = formRef.current.references
+    if (!referenceHas(current, path)) return current
+    const nextList = referenceRemove(current, path)
+    const next = { ...formRef.current, references: nextList }
+    formRef.current = next
+    setForm(next)
+    return nextList
+  }
+
   /**
    * 生成提交成功：把当前表单记为新的干净基准。
    *
@@ -152,11 +204,14 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
    * 从作品回填（胶片条点击 / 画廊打开作品）：套用纯逻辑算好的补丁并记录来源作品。
    *
    * 回填属于「刚从另一张图加载完」，本身不算手动修改，所以同时更新干净基准。
-   * 参考图与蒙版不在主表单上，回填不会影响舞台工具域里的草稿。
+   * 参考图与蒙版不在主表单上，回填不会影响舞台工具域里的草稿；
+   * 左栏参考图槽属于上一段创作输入，回填时清空（未提交的槽位已由调用方先行托管进草稿）。
    */
   function applyRecall(patch, entry) {
     const partial = patch && typeof patch === 'object' ? { ...patch } : {}
     if (Object.keys(partial).length === 0) return false
+    // 清参考图槽与「干净基准」同源：回填后表单就是那张作品的参数，不残留上一张的参考图。
+    partial.references = []
     const next = applyNegativePatch(formRef.current, partial)
     setForm(next)
     setCleanBaseline(formSnapshotOf(next))
@@ -177,6 +232,66 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     setOrigin(null)
     setDraft(null)
     ui.showToast(t('studio.toast.newCreation'))
+  }
+
+  /**
+   * 解除表单与上一张作品的绑定（阶段十五 Phase C0）。
+   *
+   * 裸导入图（没有 PNG `tEXt` 生成元数据）与空白新建画布都不该继承上一张作品的提示词、
+   * 固定种子与「正在微调」来源：按 `newCreationPatch` 级清 prompt / seed，负向层回到当前
+   * 预设推荐档，来源作品置空；模型预设与画幅比例是下一次仍要用的设置，保留不动。
+   *
+   * 草稿槽不在这里清：调用方负责先 `parkDraft()` 托管未提交修改，再调用本动作。
+   */
+  function detachOrigin() {
+    const next = applyNegativePatch(formRef.current, newCreationPatch(formRef.current, activePreset))
+    setForm(next)
+    setCleanBaseline(formSnapshotOf(next))
+    setOrigin(null)
+    // 同步 ref：同一事件里紧随其后的动作（回填 / 托管）要读到「已解除绑定」的最新值。
+    formRef.current = next
+    originRef.current = null
+    return true
+  }
+
+  /**
+   * 删除作品后的引用清理（阶段十五 Phase C0）。
+   *
+   * 来源作品与托管草稿的来源快照都可能指向刚被删掉的图：把它们去掉引用，
+   * 否则「还原原图」会把参数还原到一张已经不存在的作品上。
+   *
+   * @param {Array<string>} paths 被删除的图片路径
+   * @returns {boolean} 是否有引用被清理
+   */
+  function forgetRemovedPaths(paths) {
+    const removed = new Set((Array.isArray(paths) ? paths : []).filter(Boolean))
+    if (removed.size === 0) return false
+    let changed = false
+    const currentOrigin = originRef.current
+    if (currentOrigin && currentOrigin.path && removed.has(currentOrigin.path)) {
+      setOrigin(null)
+      originRef.current = null
+      changed = true
+    }
+    const currentDraft = draftRef.current
+    if (currentDraft && currentDraft.source && removed.has(currentDraft.source.path)) {
+      const next = { ...currentDraft, source: null }
+      setDraft(next)
+      draftRef.current = next
+      changed = true
+    }
+    // 参考图槽里指向已删作品的路径也要摘掉：留着只会让生成请求以 invalid_path 失败。
+    const currentRefs = formRef.current.references
+    if (Array.isArray(currentRefs) && currentRefs.length > 0) {
+      const keptRefs = referencePurgeOf(currentRefs, [...removed])
+      if (keptRefs.length !== currentRefs.length) {
+        const next = { ...formRef.current, references: keptRefs }
+        formRef.current = next
+        setForm(next)
+        changed = true
+      }
+    }
+    return changed
   }
 
   // ---- 草稿托管（阶段十五 Phase A1） ---------------------------------------
@@ -226,6 +341,8 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   /**
    * 还原原图（§6.1.5）：恢复来源作品的原始参数、清掉草稿，回到干净基准。
    *
+   * 参考图槽属于被放弃的那份草稿，一并清空（来源作品的参数里没有槽位）。
+   *
    * 返回来源作品（供组合层切回该作品的预览焦点）；没有可还原的来源时返回 null。
    */
   function restoreOriginal() {
@@ -233,7 +350,7 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     const source = (prev && prev.source) || originRef.current
     const patch = originalPatchOf(source)
     if (!patch) return null
-    const next = applyNegativePatch(formRef.current, patch)
+    const next = applyNegativePatch(formRef.current, { ...patch, references: [] })
     setForm(next)
     setCleanBaseline(formSnapshotOf(next))
     setOrigin(source)
@@ -250,7 +367,10 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   }, [form])
 
   /**
-   * 拼装生成请求体（纯文生图）。
+   * 拼装生成请求体（纯文生图 + 可选原生参考图）。
+   *
+   * 参考图槽非空时 `buildGenerateBody()` 会把有序路径数组写进 `references`
+   * （去重、按契约上限裁剪）；空槽时请求体与纯文生图逐字一致。
    *
    * `options.preset` 指定本次请求的有效预设（专用局部重绘预设的兜底切换）：
    * 预设 id 与负向词门控都按有效预设判断，但左栏表单本身不变。
@@ -441,6 +561,13 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     buildBody,
     ratioId,
     activePreset,
+    // 原生参考图槽（Phase C2）：槽位本体在 form 上，读写动作与能力派生在这里。
+    addReference,
+    removeReference,
+    referenceSupported,
+    referenceSwitchPreset,
+    referenceSwitchLabel,
+    referenceMax,
     // 脏判定：现在只表示「有一次未提交修改，切作品时会被托管进草稿卡」。
     dirty,
     // 来源作品（面板顶部的轻量提示）：保留 tuning 的旧形状给 Rail / 助手面板使用。
@@ -449,6 +576,9 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     markClean,
     applyRecall,
     newCreation,
+    // 阶段十五 Phase C0：解除与上一张作品的绑定、删除作品后的引用清理。
+    detachOrigin,
+    forgetRemovedPaths,
     // 草稿托管（阶段十五 A1）：draftView 是展示用派生状态，四个动作由组合层在切换点调用。
     draft,
     draftView,

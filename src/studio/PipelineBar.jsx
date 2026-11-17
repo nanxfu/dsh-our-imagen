@@ -7,10 +7,17 @@
  *    快速出图不闪条，工作区也不会上下跳动）；
  *  - 只用 role="status" 播报阶段切换；每秒走字的计时放进 aria-hidden 区，不重复朗读。
  *
- * 接收 { t, view }，view 形状见 pipelineViewOf。
+ * 阶段十五 Phase C0：1Hz 读秒从 Studio 顶层下沉到这里。只有流水线自己需要「每秒刷新」
+ * （已等待 / 完成保留期），等待期间不再让整页每秒重渲染。
+ *
+ * 接收与 pipelineViewOf 同名的原始输入：{ t, session, activeJob, focusedJob, pendingCount,
+ * queuePolicy, failureDismissed, transient }。
  */
 
 import React, { Fragment } from 'react'
+
+import { useNow } from '../hooks/useNow.js'
+import { pipelineHoldOf, pipelineViewOf } from '../logic/pipeline.js'
 
 /** 节点类名：状态 + 「比平时久」的琥珀标记。 */
 function nodeClassOf(node) {
@@ -29,7 +36,31 @@ function linkClassOf(previous, node) {
 }
 
 export function PipelineBar(props) {
-  const { view } = props
+  const { t } = props
+  const session = props.session || null
+  const activeJob = props.activeJob || null
+  const focusedJob = props.focusedJob || null
+  const pendingCount = props.pendingCount
+  const queuePolicy = props.queuePolicy || null
+  const failureDismissed = props.failureDismissed === true
+  // 需要读秒的三种情况：会话正在推进 / 有活动任务 / 刚完成还在保留期。
+  // 完成保留期结束后计时自动停止，流水线也就不会继续每秒空转。
+  const ticking = props.transient === true
+    || Boolean(activeJob)
+    || pipelineHoldOf(focusedJob, Date.now())
+  const now = useNow(ticking)
+  const view = React.useMemo(
+    () => pipelineViewOf(t, {
+      session,
+      activeJob,
+      focusedJob,
+      pendingCount,
+      queuePolicy,
+      failureDismissed,
+      now,
+    }),
+    [t, session, activeJob, focusedJob, pendingCount, queuePolicy, failureDismissed, now],
+  )
   const hidden = !view || view.visible !== true
   const mode = hidden ? 'hidden' : view.mode
   const nodes = hidden ? [] : view.nodes || []

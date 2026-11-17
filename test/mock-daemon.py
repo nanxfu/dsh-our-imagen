@@ -35,6 +35,10 @@ shared/contract.js 生成），参数边界与 daemon 注入的 ``config.contrac
 源图宽高，按 limits.upscale.factor 放大后返回纯色 PNG，并在 result 里回带
 upscale / scale / sourceWidth / sourceHeight（与真 daemon 的结果字段同形）。
 
+原生参考生图（supportsReference）与真 daemon 同口径：job 级 referenceImages 数组（逐项只认
+image_b64、loader 白名单只有 flux2、数量/体积/PNG-JPEG/最小长边按 limits.referenceImages），
+与单图 reference 互斥；执行时出图宽高严格取任务请求值、results 不追加 strength 字段。
+
 示例：
   python test/mock-daemon.py --port 17860 --token test-token
   python test/mock-daemon.py --port 17860 --token test-token --delay 1.5
@@ -83,6 +87,11 @@ SUPPORTED_LOADERS = ("sdxl", "sdxl-lora", "flux2", "anima")
 SUPPORTED_IMG2IMG_LOADERS = ("sdxl", "sdxl-lora")
 # 局部重绘白名单：与 remote/inference/registry.py 的 inpaint_names() 同值（首期仅 SDXL 家族）。
 SUPPORTED_INPAINT_LOADERS = ("sdxl", "sdxl-lora")
+# 原生参考生图白名单：与 remote/inference/registry.py 的 reference_names() 同值（首期仅 flux2）。
+SUPPORTED_REFERENCE_LOADERS = ("flux2",)
+# 原生参考图逐项允许的字段（与 remote/inference/reference_codec.py 同值）：
+# 只有 image_b64，没有 strength / 蒙版语义。
+REFERENCE_IMAGE_ITEM_FIELDS = ("image_b64",)
 # 远端 /generate 接受的 tool 取值：与契约 PROTOCOL.daemon.requestTools 同值。
 # outpaint 在远端就是「带蒙版的局部重绘」，不单列。
 PROTOCOL_TOOLS = ("generate", "upscale")
@@ -114,6 +123,13 @@ FALLBACK_CONTRACT = {
         "prompt": {"maxChars": 2000},
         "negativePrompt": {"maxChars": 1000},
         "reference": {"maxBytes": 8 * 1024 * 1024, "maxEdge": 1536, "minEdge": 128},
+        # 原生参考生图（supportsReference）：与 reference 隔离的张数 / 单张字节 / 长边上下限。
+        "referenceImages": {
+            "maxCount": 2,
+            "maxBytes": 4 * 1024 * 1024,
+            "maxEdge": 1024,
+            "minEdge": 128,
+        },
         # strength.max 是纯 img2img 上限；带蒙版局部重绘放宽到 inpaintMax（只放宽这一档）。
         "strength": {"min": 0.2, "max": 0.9, "inpaintMax": 1.0, "step": 0.05, "default": 0.6},
         # 局部重绘蒙版：黑白 PNG（白 = 重绘区域，黑 = 保留区域），尺寸由远端对齐参考图；
@@ -132,6 +148,7 @@ _LIMIT_NUMERIC_KEYS = (
     "maxBytes",
     "maxEdge",
     "minEdge",
+    "maxCount",
     "inpaintMax",
     "minCoverage",
     # 高清放大（tool=upscale）：放大倍数与输入/输出长边上限（与 remote/config.py 同表）。
@@ -243,17 +260,26 @@ def _limit_max_bytes(name: str) -> int:
 
 
 def _request_body_limit() -> int:
-    """请求体字节上限：按「参考图 + 蒙版」边界的 base64 膨胀推导，下限 8MB。
+    """请求体字节上限：按「参考图 + 蒙版」与「原生参考图列表」两种形状的较大者推导，下限 8MB。
 
-    与 remote/config.py 的 `request_body_limit()` 同一条公式：reference / mask 缺失时用兜底
-    契约的同名字段（Batch 3 之前这里直接返回 8MB，真 daemon 却是 11.7MB，两边的拒绝点不同；
-    局部重绘再加一张 ≤2MiB 的蒙版后是约 15MB）。
+    与 remote/config.py 的 `request_body_limit()` 同一条公式：两种形状互斥（reference 单图垫图 /
+    referenceImages 原生参考），取 max 而不是相加。缺省项用兜底契约的同名字段。
     """
     base = 8 * 1024 * 1024
-    max_bytes = _limit_max_bytes("reference") + _limit_max_bytes("mask")
-    if max_bytes <= 0:
+    reference_bytes = _limit_max_bytes("reference") + _limit_max_bytes("mask")
+    images_limits = _limit("referenceImages")
+    image_bytes = 0
+    try:
+        count = int(images_limits.get("maxCount") or 0)
+        per_image = int(images_limits.get("maxBytes") or 0)
+    except (TypeError, ValueError):
+        count, per_image = 0, 0
+    if count > 0 and per_image > 0:
+        image_bytes = count * per_image
+    shape_bytes = max(reference_bytes, image_bytes)
+    if shape_bytes <= 0:
         return base
-    return max(base, 4 * ((int(max_bytes) + 2) // 3) + 1024 * 1024)
+    return max(base, 4 * ((int(shape_bytes) + 2) // 3) + 1024 * 1024)
 
 
 def _max_tasks() -> int:
@@ -552,6 +578,7 @@ def submit_job(  # noqa: ANN001, ANN201
     job_id=None,
     reference=None,
     tool: str = "generate",
+    reference_images=None,
 ):
     with _JOB_LOCK:
         prune_jobs()
@@ -566,6 +593,8 @@ def submit_job(  # noqa: ANN001, ANN201
             "pipeline": dict(pipeline),
             "tasks": list(tasks),
             "reference": dict(reference) if reference is not None else None,
+            # 原生参考图（与 reference 互斥）：只记宽高供 execute 分支判断，不存 base64。
+            "reference_images": dict(reference_images) if reference_images is not None else None,
             "status": "queued",
             "results": [],
             "error": None,
@@ -578,9 +607,15 @@ def submit_job(  # noqa: ANN001, ANN201
         _JOB_QUEUE.append(job)
         queue_len = len(_JOB_QUEUE)
         _JOB_WAKE.set()
+        if job["reference"] is not None:
+            reference_note = "，带参考图"
+        elif job["reference_images"] is not None:
+            reference_note = f"，带原生参考图 {len(job['reference_images'].get('items') or [])} 张"
+        else:
+            reference_note = ""
         log(
             f"[job] 入队 {job['job_id']}（tool={job['tool']}，tasks={len(job['tasks'])}，排队 {queue_len}"
-            f"{'，带参考图' if job['reference'] is not None else ''}）"
+            f"{reference_note}）"
         )
         return job, True
 
@@ -695,6 +730,9 @@ def _execute_job(job: dict) -> None:
         ref_size = None
         ref_strength = None
         ref_mask = None
+        # 原生参考生图（supportsReference）：参考图只作为条件，出图宽高严格取任务请求值，
+        # results 不追加 strength / referenceWidth 等垫图字段（与真 daemon 的 results 同形）。
+        ref_images = (job.get("reference_images") or {}).get("items") or []
         if ref is not None:
             ref_size = _scaled_reference_size(ref["width"], ref["height"])
             ref_strength = _coerce_strength(ref.get("strength"))
@@ -729,7 +767,10 @@ def _execute_job(job: dict) -> None:
                     item["maskWidth"] = int(ref_mask[0])
                     item["maskHeight"] = int(ref_mask[1])
                 results.append(item)
-                scene = "inpaint " if ref_mask is not None else ("img2img " if ref_size is not None else "")
+                if ref_images:
+                    scene = f"reference（参考图 {len(ref_images)} 张）"
+                else:
+                    scene = "inpaint " if ref_mask is not None else ("img2img " if ref_size is not None else "")
                 log(
                     f"[mock] {scene}生成 {task['name']} "
                     f"seed={task['seed']} {out_w}x{out_h} {len(png)} 字节"
@@ -828,9 +869,14 @@ def _probe_image_header_fallback(image_bytes: bytes) -> tuple[str, int, int]:
     raise ValueError("参考图必须是 PNG 或 JPEG 图片")
 
 
-def _probe_reference_image(image_bytes: bytes) -> tuple[str, int, int]:
-    """校验参考图格式（PNG/JPEG）与最小长边，返回 (format, width, height)。"""
-    min_edge = int(_limit("reference").get("minEdge") or 0)
+def _probe_reference_image(image_bytes: bytes, *, min_edge: int | None = None) -> tuple[str, int, int]:
+    """校验参考图格式（PNG/JPEG）与最小长边，返回 (format, width, height)。
+
+    ``min_edge`` 缺省取 ``limits.reference.minEdge``；原生参考图列表传
+    ``limits.referenceImages.minEdge``（两份口径独立，虽然当前同值）。
+    """
+    if min_edge is None:
+        min_edge = int(_limit("reference").get("minEdge") or 0)
     if _HAS_PILLOW:
         from PIL import UnidentifiedImageError
 
@@ -975,6 +1021,58 @@ def parse_reference_spec(raw, pipeline_spec: dict) -> dict | None:  # noqa: ANN0
         spec["mask_width"] = int(mask_width)
         spec["mask_height"] = int(mask_height)
     return spec
+
+
+# ── 原生参考生图（supportsReference，阶段十五 Phase C1）─────────────────────
+
+
+def parse_reference_images(raw, pipeline_spec: dict) -> dict | None:  # noqa: ANN001
+    """与 remote/inference/reference_codec.py 对齐的原生参考图校验，失败抛 ValueError。
+
+    口径：loader 必须在 reference 白名单（首期仅 flux2）、数组 1..maxCount、逐项只认
+    ``image_b64``（无 strength / 蒙版）、PNG/JPEG 头部 + 体积 + 最小长边。只做头部校验，
+    不做像素解码（mock 不需要真的把参考图喂给模型）。
+    """
+    if raw is None:
+        return None
+    loader = str(pipeline_spec.get("loader") or "").strip()
+    if loader not in SUPPORTED_REFERENCE_LOADERS:
+        raise ValueError(f"该模型不支持参考生图（当前 loader={loader or '未知'}）")
+    if not isinstance(raw, list):
+        raise ValueError("referenceImages 必须是数组")
+    if not raw:
+        raise ValueError("referenceImages 不能为空数组")
+    limits = _limit("referenceImages")
+    max_count = int(limits.get("maxCount") or 0)
+    if max_count > 0 and len(raw) > max_count:
+        raise ValueError(f"参考图最多 {max_count} 张（收到 {len(raw)} 张）")
+    max_bytes = int(limits.get("maxBytes") or 0)
+    min_edge = int(limits.get("minEdge") or 0)
+    items = []
+    for index, entry in enumerate(raw):
+        label = f"第 {index + 1} 张参考图"
+        if not isinstance(entry, dict):
+            raise ValueError(f"{label}必须是对象")
+        unknown = sorted(set(entry) - set(REFERENCE_IMAGE_ITEM_FIELDS))
+        if unknown:
+            raise ValueError(
+                f"{label}只支持 image_b64 字段（收到 {', '.join(unknown)}）；"
+                "原生参考生图没有 strength 与蒙版语义"
+            )
+        encoded = entry.get("image_b64")
+        if not isinstance(encoded, str) or not encoded.strip():
+            raise ValueError(f"referenceImages[{index}].image_b64 必须是非空字符串")
+        try:
+            data = base64.b64decode(encoded.strip(), validate=True)
+        except (binascii.Error, ValueError):
+            raise ValueError(f"referenceImages[{index}].image_b64 不是合法 base64") from None
+        if not data:
+            raise ValueError(f"{label}解码后为空")
+        if max_bytes > 0 and len(data) > max_bytes:
+            raise ValueError(f"{label}体积 {len(data)} 字节，超过上限 {max_bytes} 字节")
+        _fmt, width, height = _probe_reference_image(data, min_edge=min_edge)
+        items.append({"width": int(width), "height": int(height)})
+    return {"items": items}
 
 
 # ── 高清放大（tool=upscale，阶段十五 Phase B1）─────────────────────────────
@@ -1282,6 +1380,16 @@ class MockHandler(BaseHTTPRequestHandler):
             spec = self._read_json()
             tool = normalize_tool(spec.get("tool"))
             reference = None
+            reference_images = None
+            # 参考图两条路径互斥（与 remote/transport/validator.py 同口径）：同时出现 400，
+            # referenceImages 只对 tool=generate 生效。
+            if spec.get("referenceImages") is not None and tool != "generate":
+                raise ValueError("referenceImages 只对 tool=generate 生效")
+            if spec.get("reference") is not None and spec.get("referenceImages") is not None:
+                raise ValueError(
+                    "reference 与 referenceImages 不能同时使用："
+                    "单图垫图重绘与原生参考生图是两条互斥路径"
+                )
             if tool == "upscale":
                 # 放大不读 pipeline / tasks：源图尺寸 + limits.upscale.factor 就是全部输入。
                 model_id, tasks, reference = validate_upscale_spec(spec)
@@ -1289,6 +1397,7 @@ class MockHandler(BaseHTTPRequestHandler):
             else:
                 pipeline, model_id, tasks = validate_spec(spec)
                 reference = parse_reference_spec(spec.get("reference"), pipeline)
+                reference_images = parse_reference_images(spec.get("referenceImages"), pipeline)
             job_id = normalize_job_id(spec.get("jobId"))
         except ValueError as exc:
             log(f"[http] 400 /generate 校验失败：{exc}")
@@ -1316,7 +1425,15 @@ class MockHandler(BaseHTTPRequestHandler):
             self._send_error(status, code, message)
             return
 
-        job, created = submit_job(pipeline, model_id, tasks, job_id, reference, tool=tool)
+        job, created = submit_job(
+            pipeline,
+            model_id,
+            tasks,
+            job_id,
+            reference,
+            tool=tool,
+            reference_images=reference_images,
+        )
         if not created:
             log(f"[http] 202 /generate 幂等命中 {job['job_id']}（status={job['status']}）")
         self._send_json(

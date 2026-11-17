@@ -2,7 +2,9 @@
  * 作品库域：生成历史 / 画廊分页 / 选中图 / 收藏 / 删除 / 导出。
  *
  * 负责两处加载 effect、首图提示与任务完成后的历史刷新。
- * 依赖入参：{ t, alive, ui, state }；ui 提供 toast/错误通道与视图切换。
+ * 依赖入参：{ t, alive, ui, state, initialWorkspaceMode, onImagesRemoved }；
+ * ui 提供 toast/错误通道与视图切换；`onImagesRemoved` 由组合层注入，用于按被删路径
+ * 级联清理舞台图片工具的 `workDrafts` 与左栏表单的来源引用（阶段十五 Phase C0）。
  *
  * 分页约定（见 docs/SPEC.md 2.2 的 history 接口）：
  *  - 首屏请求 limit=LIMITS.history.pageSize、offset=0；
@@ -55,8 +57,11 @@ function mergePendingFavorites(serverList, pendingMap) {
   return merged
 }
 
-export function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
+export function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode, onImagesRemoved }) {
   const [selectedPath, setSelectedPath] = React.useState('')
+  // 事件回调里要读最新选中路径（删除后判断「删的是不是当前预览」），不依赖渲染闭包。
+  const selectedPathRef = React.useRef('')
+  selectedPathRef.current = selectedPath
   const [historyItems, setHistoryItems] = React.useState([])
   const [historyHasMoreState, setHistoryHasMoreState] = React.useState(false)
   const [historyLoadingMore, setHistoryLoadingMore] = React.useState(false)
@@ -88,10 +93,14 @@ export function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
   const hasMoreRef = React.useRef(false)
   const loadingMoreRef = React.useRef(false)
 
-  /** 从第 0 页重新加载（首屏 / 任务完成 / 删除后的刷新都走这里）。 */
+  /**
+   * 从第 0 页重新加载（首屏 / 任务完成 / 删除后的刷新都走这里）。
+   *
+   * @returns {Promise<Array<object>|null>} 本次加载到的历史条目；失败或卸载时返回 null
+   */
   const loadHistory = React.useCallback(async () => {
     const result = await alive(fetchHistory(PAGE_SIZE, 0))
-    if (!result) return
+    if (!result) return null
     if (result.ok && result.data && Array.isArray(result.data.items)) {
       const items = result.data.items.filter(Boolean)
       setHistoryItems(items)
@@ -99,12 +108,13 @@ export function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
       const more = historyHasMore(result.data, PAGE_SIZE)
       hasMoreRef.current = more
       setHistoryHasMoreState(more)
-      return
+      return items
     }
     if (!result.ok) {
       // 加载失败走错误/指引通道，且不清空已有列表。
       uiRef.current.fail(result.code, result.message)
     }
+    return null
   }, [alive])
 
   /** 追加下一页；失败只提示不清空已有分页。 */
@@ -377,10 +387,22 @@ export function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
     // 只有被删掉的那张才清空预览选择：删别的图不该把画面上正在看的作品一并收走
     // （selected 会回落到最新一张，看起来像「删 A 却换成了 B」）。
     const removedSet = new Set(removed)
-    setSelectedPath((prev) => (removedSet.has(prev) ? '' : prev))
+    const selectedRemoved = removedSet.has(selectedPathRef.current)
+    if (selectedRemoved) setSelectedPath('')
     // 删除会改变记录可达性：重新从第 0 页加载，避免 offset 错位。
-    await Promise.all([loadHistory(), loadLibrary()])
-    return { removed, failed: Array.isArray(result.data.failed) ? result.data.failed : [] }
+    const [items] = await Promise.all([loadHistory(), loadLibrary()])
+    const failed = Array.isArray(result.data.failed) ? result.data.failed : []
+    // 阶段十五 Phase C0：把「删了哪些图 / 回退到哪张」交给组合层级联清理——
+    // 舞台图片工具的 workDrafts 与左栏来源引用都不属于作品库域，这里只上报事实。
+    if (removed.length > 0 && typeof onImagesRemoved === 'function') {
+      const fallback = flattenHistory(Array.isArray(items) ? items : []).find(
+        (entry) => entry.image && entry.image.path && !removedSet.has(entry.image.path),
+      ) || null
+      // 删掉当前预览作品时明确回退到下一张（而不是让 selected 被宿主返回顺序带着漂）。
+      if (selectedRemoved && fallback) setSelectedPath(fallback.image.path)
+      onImagesRemoved({ removed, failed, fallback, selectedRemoved })
+    }
+    return { removed, failed }
   }
 
   /** 从画廊打开大图：切回创作页并直接进放大层。 */

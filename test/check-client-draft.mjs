@@ -330,4 +330,321 @@ await check('渲染：草稿态草稿卡、左栏状态与舞台取景框', asyn
   }
 })
 
+// ── 阶段十五 Phase C0：焦点与来源同源收口（导入图 / 新建画布 / 助手 / 删除） ──────
+//
+// 这一组覆盖「舞台切了图，左栏却还是上一张作品的参数」这类真实状态漏洞：
+//  1. 裸导入图（无生成元数据）→ 先托管 dirty 草稿，再清 prompt / seed / origin（保留预设画幅）；
+//  2. 带 PNG tEXt 生成元数据的导入图 → 完成导入后回填原生成参数；
+//  3. 空白新建画布 → 不继承上一张浏览作品的提示词 / 固定种子 / 「正在微调」；
+//  4. 助手点结果图（library.openMessage）→ 与胶片条同口径回填；
+//  5. 切换作品 / 还原原图 → 退出画布编辑态且按路径保留 workDrafts；
+//  6. 还原原图时来源作品已不在列表 → 安全收口，不把别的图当成来源；
+//  7. 删除作品 → 级联清理工具草稿与来源引用，回退到下一张时刷新左栏回填。
+
+/** 裸导入图：meta.params 只有文件名与像素尺寸，没有生成元数据。 */
+const bareImportImage = {
+  path: 'imagen-output/import-bare/01.png',
+  file: '01.png',
+  url: '/imagen-api/file?path=imagen-output%2Fimport-bare%2F01.png',
+  width: 800,
+  height: 600,
+}
+const bareImportItem = {
+  jobId: 'import-bare',
+  prompt: 'photo.png',
+  presetId: null,
+  source: 'import',
+  imported: true,
+  images: [bareImportImage],
+  params: { prompt: 'photo.png', width: 800, height: 600, count: 1, source: 'import' },
+}
+const bareImportEntry = { image: bareImportImage, item: bareImportItem, generation: null }
+
+/** 带生成元数据的导入图：params 与 generation 都由 PNG tEXt 回填出来。 */
+const metaImportImage = {
+  path: 'imagen-output/import-meta/01.png',
+  file: '01.png',
+  url: '/imagen-api/file?path=imagen-output%2Fimport-meta%2F01.png',
+  width: 1152,
+  height: 648,
+  seed: null,
+}
+const metaImportItem = {
+  jobId: 'import-meta',
+  prompt: '湖面上的荷花',
+  presetId: 'sdxl-lightning',
+  source: 'import',
+  imported: true,
+  images: [metaImportImage],
+  params: {
+    prompt: '湖面上的荷花',
+    negativePrompt: 'blurry',
+    width: 1152,
+    height: 648,
+    steps: 8,
+    cfg: 2.5,
+    seed: 123,
+    count: 1,
+    source: 'import',
+  },
+}
+const metaImportEntry = {
+  image: metaImportImage,
+  item: metaImportItem,
+  generation: { prompt: '湖面上的荷花', presetId: 'sdxl-lightning', width: 1152, height: 648, steps: 8, cfg: 2.5, seed: 123 },
+}
+
+await check('焦点同源：裸导入图清空上一张作品的参数与来源，dirty 先托管草稿', async () => {
+  const { client, latest } = await mountStudioHarness()
+  try {
+    const form = () => latest.studio.form
+    latest.studio.actions.previewWork(entryA)
+    await client.rerenderRaw()
+    assert.equal(form().form.prompt, 'A 的荷花池塘')
+    assert.equal(form().origin && form().origin.path, workA.images[0].path, '先绑到作品 A')
+
+    // 脏表单切裸导入图：未提交修改先进草稿槽，再解除绑定（来源快照跟着草稿走）。
+    form().patchForm({ prompt: '还没提交的草稿', seed: '42' })
+    await client.rerenderRaw()
+    latest.studio.actions.previewWork(bareImportEntry)
+    await client.rerenderRaw()
+    assert.equal(latest.studio.library.selected.image.path, bareImportImage.path, '预览切到导入图')
+    const parked = form().draft
+    assert.ok(parked && parked.form, '未提交修改先被托管进草稿卡')
+    assert.equal(parked.form.prompt, '还没提交的草稿')
+    assert.equal(parked.source && parked.source.path, workA.images[0].path, '草稿记录来源作品 A')
+    assert.ok(latest.studio.ui.toast.text.includes('已保留当前草稿'), '托管草稿给「已保留当前草稿」提示')
+    assert.equal(form().form.prompt, '', '裸导入图不把文件名当提示词回填')
+    assert.equal(form().form.seed, '', '清空上一张作品的固定种子')
+    assert.equal(form().origin, null, '解除来源作品绑定')
+    assert.equal(form().tuning, null, '面板不再显示「正在微调」')
+    assert.equal(form().form.presetId, 'sdxl-lightning', '保留当前模型预设')
+    assert.equal(form().form.width, 1024, '保留当前画幅')
+    assert.equal(form().form.height, 1024)
+    assert.equal(form().dirty, false, '解除绑定后是干净基准')
+    assert.ok(!latest.studio.ui.toast.text.includes('参数已回填'), '裸导入不宣称「参数已回填」')
+
+    // 已托管草稿保持可见：裸导入不会把草稿卡一起清掉。
+    assert.equal(latest.studio.library.newDraftCard.draft, true, '草稿卡保持可见')
+    assert.equal(latest.studio.library.newDraftCard.draftFrom, 'A 的荷花池塘')
+  } finally {
+    client.unmount()
+  }
+})
+
+await check('焦点同源：带 PNG 生成元数据的导入图完成导入后回填原参数', async () => {
+  const responses = draftResponses()
+  const { client, latest } = await mountStudioHarness(responses)
+  try {
+    const form = () => latest.studio.form
+    latest.studio.actions.previewWork(entryA)
+    await client.rerenderRaw()
+    // Host 落盘后 /history 会包含导入条目：先让 fake host 的下一轮历史带上它。
+    responses['/imagen-api/history'] = { items: [metaImportItem, bareImportItem, workA, workB] }
+    const ok = latest.studio.actions.activateImport(metaImportEntry)
+    await client.settle()
+    await client.rerenderRaw()
+    assert.equal(ok, true)
+    assert.equal(latest.studio.library.selected.image.path, metaImportImage.path, '导入完成后舞台切到导入图')
+    assert.equal(form().form.prompt, '湖面上的荷花', '导入图的生成参数回填左栏')
+    assert.equal(form().form.width, 1152, '尺寸用生成元数据里的像素')
+    assert.equal(form().form.height, 648)
+    assert.equal(form().form.steps, 8)
+    assert.equal(form().form.cfg, 2.5)
+    assert.equal(form().form.seed, '123')
+    assert.equal(form().origin && form().origin.path, metaImportImage.path, '来源作品切到导入图本身')
+    assert.equal(form().dirty, false, '回填后是干净基准')
+    assert.ok(latest.studio.ui.toast.text.includes('已识别生成参数'), '主提示仍是「已识别生成参数」')
+    assert.ok(!latest.studio.ui.toast.text.includes('参数已回填'), '不叠一条「参数已回填」覆盖主提示')
+
+    // 裸导入：完成导入时同样清空上一张作品的参数（导入前的修改先进草稿）。
+    form().patchForm({ prompt: '导入前的草稿' })
+    await client.rerenderRaw()
+    const bareOk = latest.studio.actions.activateImport(bareImportEntry)
+    await client.settle()
+    await client.rerenderRaw()
+    assert.equal(bareOk, true)
+    assert.equal(form().form.prompt, '', '裸导入完成时清空上一张作品的提示词')
+    assert.equal(form().origin, null, '裸导入完成后不绑定来源作品')
+    assert.ok(form().draft && form().draft.form.prompt === '导入前的草稿', '导入前的未提交修改先托管进草稿')
+    assert.ok(latest.studio.ui.toast.text.includes('图片已导入'), '裸导入给「图片已导入」提示')
+  } finally {
+    client.unmount()
+  }
+})
+
+await check('焦点同源：空白新建画布不继承上一张浏览作品的提示词 / 种子 / 来源', async () => {
+  // 16:9 的宽幅作品：用于确认新建画布保留「上一张仍在用的」画幅，而不是回到默认方形。
+  const wideImage = { ...image(13), path: 'imagen-output/job-c/13.png', file: '13.png', width: 1152, height: 648 }
+  const wideWork = {
+    jobId: 'job-c',
+    dir: 'imagen-output/20261109-100000-job-c',
+    prompt: 'C 的宽幅风景',
+    presetId: 'sdxl-lightning',
+    finishedAt: at(-180),
+    images: [wideImage],
+  }
+  const responses = studioResponses(draftState, { items: [workA, workB, wideWork] })
+  const { client, latest } = await mountStudioHarness(responses)
+  try {
+    const form = () => latest.studio.form
+    latest.studio.actions.previewWork({ image: wideImage, item: wideWork })
+    await client.rerenderRaw()
+    assert.equal(form().form.prompt, 'C 的宽幅风景')
+    assert.equal(form().form.width, 1152, '回填作品 C 的宽幅')
+    assert.equal(form().origin && form().origin.path, wideImage.path)
+
+    // 干净、无托管草稿时点「新建草稿卡」：清 prompt / seed / origin，保留预设与画幅。
+    latest.studio.actions.focusNewDraft()
+    await client.rerenderRaw()
+    assert.equal(latest.studio.library.workspaceMode, 'new_draft', '切到新建画布焦点')
+    assert.equal(latest.studio.library.selected, null, '新建画布没有选中作品')
+    assert.equal(form().form.prompt, '', '不把上一张浏览作品的提示词带进新画布')
+    assert.equal(form().form.seed, '', '不把上一张作品的固定种子带进新画布')
+    assert.equal(form().origin, null, '不保留「正在微调」来源')
+    assert.equal(form().tuning, null)
+    assert.equal(form().form.presetId, 'sdxl-lightning', '保留当前模型预设')
+    assert.equal(form().form.width, 1152, '保留当前画幅比例（宽）')
+    assert.equal(form().form.height, 648, '保留当前画幅比例（高）')
+    assert.equal(form().dirty, false)
+    assert.equal(form().draft, null, '没有未提交修改时不产生草稿')
+  } finally {
+    client.unmount()
+  }
+})
+
+await check('焦点同源：助手点结果图走 previewWork 回填，并进行中的草稿先托管', async () => {
+  const { client, latest } = await mountStudioHarness()
+  try {
+    const form = () => latest.studio.form
+    latest.studio.actions.previewWork(entryA)
+    await client.rerenderRaw()
+    form().patchForm({ prompt: '助手点击前的草稿' })
+    await client.rerenderRaw()
+    // 助手结果网格 / 单图聚焦都通过 library.openMessage 打开作品。
+    latest.studio.library.openMessage(workB.images[0].path)
+    await client.rerenderRaw()
+    assert.equal(latest.studio.library.selected.image.path, workB.images[0].path, '舞台切到助手点的图')
+    assert.equal(form().form.prompt, 'B 的山间晨雾', '左栏同步回填被点作品参数（图文同源）')
+    assert.equal(form().origin && form().origin.path, workB.images[0].path, '来源作品跟着切到被点图')
+    assert.equal(form().dirty, false)
+    assert.ok(form().draft && form().draft.form.prompt === '助手点击前的草稿', '点击前的未提交修改先托管进草稿')
+    assert.ok(latest.studio.ui.toast.text.includes('已保留当前草稿'))
+
+    // 路径不在已加载作品库（新任务尚未进历史）：安全收口——只切预览并解除绑定，不残留旧参数。
+    latest.studio.library.openMessage('imagen-output/unknown/99.png')
+    await client.rerenderRaw()
+    assert.equal(form().form.prompt, '', '未知路径不回填任何提示词')
+    assert.equal(form().origin, null, '未知路径解除来源作品绑定')
+  } finally {
+    client.unmount()
+  }
+})
+
+await check('切换作品 / 还原原图退出画布编辑态，按路径保留 workDrafts', async () => {
+  const { client, latest } = await mountStudioHarness()
+  try {
+    const form = () => latest.studio.form
+    latest.studio.actions.previewWork(entryA)
+    await client.rerenderRaw()
+    const opened = latest.studio.actions.openImageTool('inpaint', entryA)
+    await client.rerenderRaw()
+    assert.equal(opened, true, '局部涂抹打开成功')
+    assert.equal(latest.studio.imageTool.editorOpen, true)
+    // 在 A 上留一份工具草稿（涂抹描述），随后切走。
+    latest.studio.imageTool.setPrompt('A 的涂抹草稿')
+    await client.rerenderRaw()
+    await client.settle()
+    await client.rerenderRaw()
+    const draftKeyA = workA.images[0].path
+    assert.equal(latest.studio.imageTool.workDrafts[draftKeyA].prompt, 'A 的涂抹草稿', '作品 A 有未提交工具草稿')
+
+    // 切换作品：只收起画布编辑态，草稿按作品路径保留（SPEC §5.17）。
+    latest.studio.actions.previewWork(entryB)
+    await client.rerenderRaw()
+    assert.equal(latest.studio.imageTool.editorOpen, false, '切作品退出画布编辑态')
+    assert.equal(latest.studio.imageTool.workDrafts[draftKeyA].prompt, 'A 的涂抹草稿', 'workDrafts 按路径保留')
+
+    // 重新打开 A：草稿恢复，继续编辑。
+    latest.studio.actions.openImageTool('inpaint', entryA)
+    await client.rerenderRaw()
+    assert.equal(latest.studio.imageTool.editorOpen, true)
+    assert.equal(latest.studio.imageTool.prompt, 'A 的涂抹草稿', '重新打开恢复未提交草稿')
+
+    // 还原原图同样退出画布编辑态（来源作品仍是 B）。
+    const restored = latest.studio.actions.restoreOriginal()
+    await client.rerenderRaw()
+    assert.equal(restored, true)
+    assert.equal(latest.studio.imageTool.editorOpen, false, '还原原图退出画布编辑态')
+    assert.equal(latest.studio.imageTool.workDrafts[draftKeyA].prompt, 'A 的涂抹草稿', '还原原图不清 workDrafts')
+    assert.equal(form().form.prompt, 'B 的山间晨雾', '还原到来源作品 B 的原始参数')
+  } finally {
+    client.unmount()
+  }
+})
+
+await check('还原原图：来源作品已不在列表时安全收口，不把别的图当成来源', async () => {
+  const responses = draftResponses()
+  const { client, latest } = await mountStudioHarness(responses)
+  try {
+    const form = () => latest.studio.form
+    latest.studio.actions.previewWork(entryA)
+    await client.rerenderRaw()
+    assert.equal(form().origin && form().origin.path, workA.images[0].path)
+    // A 被删除 / 不在已加载分页：下一轮历史只剩 B，但左栏的来源快照仍指向 A。
+    responses['/imagen-api/history'] = { items: [workB] }
+    await latest.studio.library.loadHistory()
+    await client.settle()
+    await client.rerenderRaw()
+    const restored = latest.studio.actions.restoreOriginal()
+    await client.rerenderRaw()
+    assert.equal(restored, true, '有来源快照时参数照常还原')
+    assert.equal(form().form.prompt, 'A 的荷花池塘', '参数按来源快照还原')
+    assert.equal(latest.studio.library.workspaceMode, 'new_draft', '舞台切回新建画布取景框，不停在别的作品上')
+    assert.equal(latest.studio.library.selected, null, '不把别的作品当成来源展示')
+    assert.ok(latest.studio.ui.toast.text.includes('已不在列表'), '给出「来源已不在列表」提示')
+    assert.equal(form().dirty, false)
+  } finally {
+    client.unmount()
+  }
+})
+
+await check('删除作品：级联清理工具草稿与来源引用，回退到下一张时刷新左栏回填', async () => {
+  const responses = draftResponses()
+  responses['/imagen-api/library/delete'] = { ok: true, removed: [workA.images[0].path], failed: [] }
+  const { client, latest } = await mountStudioHarness(responses)
+  try {
+    const form = () => latest.studio.form
+    latest.studio.actions.previewWork(entryA)
+    await client.rerenderRaw()
+    // 在 A 上留一份工具草稿：删除后圆点不能还指向已删作品。
+    latest.studio.actions.openImageTool('inpaint', entryA)
+    await client.rerenderRaw()
+    latest.studio.imageTool.setPrompt('A 的未提交涂抹')
+    await client.rerenderRaw()
+    await client.settle()
+    await client.rerenderRaw()
+    const draftKeyA = workA.images[0].path
+    assert.ok(latest.studio.imageTool.workDrafts[draftKeyA], '删除前存在 A 的工具草稿')
+    // 回到 A 的预览态（退出编辑态，草稿保留），确保 A 是当前预览作品与左栏来源。
+    latest.studio.actions.previewWork(entryA)
+    await client.rerenderRaw()
+    assert.equal(form().origin && form().origin.path, draftKeyA)
+
+    const result = await latest.studio.library.deleteImages([draftKeyA])
+    await client.settle()
+    await client.rerenderRaw()
+    assert.deepEqual(result.removed, [draftKeyA])
+    assert.equal(latest.studio.imageTool.workDrafts[draftKeyA], undefined, '按 removed 路径清掉工具草稿')
+    // 删掉的是当前预览作品：回退到下一张，并同步刷新左栏回填（图文同源）。
+    assert.equal(latest.studio.library.selected.image.path, workB.images[0].path, '删除当前预览作品后回退到下一张')
+    assert.equal(form().origin && form().origin.path, workB.images[0].path, '来源引用跟着回退作品')
+    assert.equal(form().form.prompt, 'B 的山间晨雾', '左栏同步回填回退作品的参数')
+    assert.equal(form().dirty, false)
+    assert.equal(form().tuning && form().tuning.prompt, 'B 的山间晨雾', '「正在微调」来源也切到回退作品')
+  } finally {
+    client.unmount()
+  }
+})
+
 summary()

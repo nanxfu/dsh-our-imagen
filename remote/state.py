@@ -46,6 +46,10 @@ class RuntimeState:
     started_at: float = _START_TS
     pipe: object | None = None
     pipeline_key: str | None = None
+    # 当前底座的 pipeline 描述（含 loader 与可选 accel 开关）：惰性派生 img2img / inpaint
+    # 管线时要拿同一份 spec 重新应用加速开关（from_pipe 共享组件，fuse 需幂等），
+    # 因此必须和 pipe 一起保存、一起清理（见 daemon.ensure_pipeline / release_pipeline）。
+    pipeline_spec: dict | None = None
     sig_params: set = field(default_factory=set)
     # 图生图管线：首次用到时用 AutoPipelineForImage2Image.from_pipe(STATE.pipe) 惰性创建，
     # 与 txt2img 共用组件（不额外加载权重、不额外占显存）；切换/释放底座时一并清空。

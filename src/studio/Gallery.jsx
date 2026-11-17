@@ -64,7 +64,7 @@ export function Gallery(props) {
   const {
     t,
     gallery,
-    now,
+    now: nowInput,
     presets,
     favorites,
     onOpen,
@@ -79,6 +79,8 @@ export function Gallery(props) {
     onLoadMore,
     defaultSelecting,
   } = props
+  // 时间分组只需要「当前日期」这一次读数，不做 1Hz 计时：直接挂载时缺省用当前时间。
+  const now = Number.isFinite(Number(nowInput)) ? Number(nowInput) : Date.now()
   // 阶段十五 A1：主点击与「在工作台打开」同义；旧挂载只给 onOpen 时退化成它。
   const openStudio = typeof onOpenStudio === 'function'
     ? onOpenStudio

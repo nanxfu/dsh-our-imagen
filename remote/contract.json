@@ -28,6 +28,12 @@
       "maxEdge": 1536,
       "minEdge": 128
     },
+    "referenceImages": {
+      "maxBytes": 4194304,
+      "maxCount": 2,
+      "maxEdge": 1024,
+      "minEdge": 128
+    },
     "seed": {
       "max": 2147483647
     },

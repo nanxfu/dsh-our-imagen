@@ -32,11 +32,12 @@ import {
   JobQueue,
   normalizeOutpaintContent,
   normalizeReference,
+  normalizeReferences,
   normalizeStrength,
   normalizeTool,
   normalizeUpscaleRequest,
 } from '../lib/jobs.js'
-import { saveJobOutput, scanHistory } from '../lib/output.js'
+import { readHistoryItem, saveJobOutput, scanHistory } from '../lib/output.js'
 import { submitGenerate, waitForJob } from '../lib/remote.js'
 import { LIMITS, PRESETS, UPSCALE } from '../shared/contract.js'
 import { createCheckRunner } from './helpers/check.mjs'
@@ -1542,6 +1543,239 @@ async function main() {
       queue.dispose()
       await remote.close()
     }
+  })
+
+  // ── 模型原生参考生图（supportsReference，阶段十五 Phase C1）─────────────
+  await check('validator：references 列表归一、数量上限与重复/越界路径', () => {
+    assert.deepEqual(normalizeReferences(undefined), { ok: true, value: null })
+    assert.deepEqual(normalizeReferences(''), { ok: true, value: null })
+    const okay = normalizeReferences([
+      'imagen-output/20260101-000000-ref-a/01.png',
+      'imagen-output/20260101-000000-ref-b\\01.png',
+    ])
+    assert.equal(okay.ok, true, JSON.stringify(okay))
+    assert.deepEqual(okay.value, [
+      'imagen-output/20260101-000000-ref-a/01.png',
+      'imagen-output/20260101-000000-ref-b/01.png',
+    ])
+    const rejections = [
+      [[], 'invalid_request', '不能为空数组'],
+      ['not-an-array', 'invalid_request', '必须是数组'],
+      [42, 'invalid_request', '必须是数组'],
+      [[{ path: 'x' }], 'invalid_request', '必须是工作区相对路径字符串'],
+      [['../escape.png'], 'invalid_path', '不在 imagen-output/'],
+      [['/abs/path.png'], 'invalid_path', '工作区相对路径'],
+      [['docs/hero.png'], 'invalid_path', '只能引用 imagen-output/ 内的作品'],
+      [['imagen-output/a/01.png', 'imagen-output/a/01.png'], 'invalid_request', '重复路径'],
+    ]
+    for (const [value, code, needle] of rejections) {
+      const result = normalizeReferences(value)
+      assert.equal(result.ok, false, JSON.stringify(value))
+      assert.equal(result.code, code, JSON.stringify(value))
+      assert.ok(result.message.includes(needle), `${JSON.stringify(value)} → ${result.message}`)
+    }
+    const tooMany = Array.from(
+      { length: LIMITS.referenceImages.maxCount + 1 },
+      (_, index) => `imagen-output/20260101-000000-many-${index}/01.png`,
+    )
+    const overflow = normalizeReferences(tooMany)
+    assert.equal(overflow.ok, false)
+    assert.ok(overflow.message.includes(`最多 ${LIMITS.referenceImages.maxCount} 张`), overflow.message)
+    // 契约字段确实存在且与模型资产能力位分开：flux2 支持原生参考，sdxl 不支持。
+    assert.equal(LIMITS.referenceImages.maxBytes, 4 * 1024 * 1024)
+    assert.equal(PRESETS.find((preset) => preset.id === 'flux2-klein-4b').supportsReference, true)
+    assert.equal(PRESETS.find((preset) => preset.id === 'sdxl-lightning').supportsReference, false)
+  })
+
+  await check('参考生图：入队校验、远端 referenceImages 载荷、meta 与 /history 溯源', async () => {
+    const remote = await startFlakyRemote()
+    remote.state.onGenerate = (state, count) => {
+      const body = state.generateCalls[count - 1]
+      state.jobs.set(body.jobId, doneJob(body.jobId, 1))
+    }
+    const firstDir = join(workspace, 'imagen-output', '20260101-000000-native-ref-a')
+    const secondDir = join(workspace, 'imagen-output', '20260101-000000-native-ref-b')
+    await mkdir(firstDir, { recursive: true })
+    await mkdir(secondDir, { recursive: true })
+    const firstPath = 'imagen-output/20260101-000000-native-ref-a/01.png'
+    const secondPath = 'imagen-output/20260101-000000-native-ref-b/01.png'
+    await writeFile(join(firstDir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+    await writeFile(join(secondDir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+    const queue = new JobQueue({
+      ctx: makeCtx(),
+      session: makeSession({ connection: () => ({ endpoint: remote.endpoint, token: 'test-token' }) }),
+      defaultPreset: 'flux2-klein-4b',
+      options: { generateTimeoutMs: 5000, pollMs: 20 },
+    })
+    try {
+      const submitted = queue.submit({
+        prompt: '同一主角走进雪山',
+        presetId: 'flux2-klein-4b',
+        width: 1024,
+        height: 768,
+        references: [firstPath, secondPath],
+        count: 2,
+        seed: 7,
+      })
+      assert.equal(submitted.ok, true, JSON.stringify(submitted))
+      // 公开视图只给参考图出处（路径），不含任何二进制；宽高仍是请求值。
+      assert.deepEqual(submitted.job.params.referenceSources, [firstPath, secondPath])
+      assert.equal(submitted.job.params.width, 1024)
+      assert.equal(submitted.job.params.height, 768)
+      assert.ok(!JSON.stringify(submitted.job).includes(PNG_B64), '任务视图不得回传参考图二进制')
+
+      const done = await queue.waitFor(submitted.job.id, 10)
+      assert.equal(done.status, 'done', JSON.stringify(done.error))
+      assert.equal(done.output.images.length, 2)
+
+      const calls = remote.state.generateCalls
+      assert.equal(calls.length, 2, '逐张提交：count=2 → 两个远端 job')
+      calls.forEach((call, index) => {
+        assert.deepEqual(
+          call.referenceImages,
+          [{ image_b64: PNG_B64 }, { image_b64: PNG_B64 }],
+          '远端载荷是 job 级 referenceImages（逐项只含 image_b64）',
+        )
+        assert.equal(call.reference, undefined, '不得混入单图垫图的 reference 字段')
+        assert.equal(call.tasks[0].width, 1024)
+        assert.equal(call.tasks[0].height, 768)
+        assert.equal(call.tasks[0].seed, 7 + index, '同批 seed 按序号递增')
+      })
+
+      const meta = JSON.parse(await readFile(join(workspace, done.output.dir, 'meta.json'), 'utf8'))
+      assert.equal(meta.source, 'ai')
+      assert.deepEqual(meta.referenceSources, [firstPath, secondPath])
+      assert.equal('sourceImage' in meta, false, '原生参考产物不折叠进参考图版本树')
+      assert.equal('rootImage' in meta, false)
+      assert.deepEqual(meta.params.referenceSources, [firstPath, secondPath])
+
+      const { items } = await scanHistory(makeCtx(), { limit: 100 })
+      const item = items.find((entry) => entry.jobId === done.id)
+      assert.ok(item, '历史里应能找到本次产物')
+      assert.deepEqual(item.referenceSources, [firstPath, secondPath], '/history 必须透传 referenceSources')
+      assert.equal(item.rootImage, null, '原生参考产物每张候选图各自为根')
+      assert.equal(item.source, 'ai')
+    } finally {
+      queue.dispose()
+      await remote.close()
+    }
+  })
+
+  await check('参考生图：与 reference 互斥、模型能力位与 tool 限制、执行期路径校验', async () => {
+    const remote = await startFlakyRemote()
+    remote.state.onGenerate = (state, count) => {
+      const body = state.generateCalls[count - 1]
+      state.jobs.set(body.jobId, doneJob(body.jobId, 1))
+    }
+    const seedDir = join(workspace, 'imagen-output', '20260101-000000-native-ref-guard')
+    await mkdir(seedDir, { recursive: true })
+    const seedPath = 'imagen-output/20260101-000000-native-ref-guard/01.png'
+    await writeFile(join(seedDir, '01.png'), Buffer.from(PNG_B64, 'base64'))
+    const queue = new JobQueue({
+      ctx: makeCtx(),
+      session: makeSession({ connection: () => ({ endpoint: remote.endpoint, token: 'test-token' }) }),
+      defaultPreset: 'flux2-klein-4b',
+      options: { generateTimeoutMs: 5000, pollMs: 20 },
+    })
+    try {
+      // 1) 两条参考路径互斥：同时给出必须 400，而不是挑一条静默忽略。
+      const mixed = queue.submit({
+        prompt: '混用参考图',
+        presetId: 'flux2-klein-4b',
+        reference: { path: seedPath },
+        references: [seedPath],
+      })
+      assert.equal(mixed.ok, false)
+      assert.equal(mixed.code, 'invalid_request')
+      assert.ok(mixed.message.includes('不能同时使用'), mixed.message)
+
+      // 2) 模型能力位：不支持 supportsReference 的预设直接拒绝（daemon 侧还有白名单兜底）。
+      const unsupported = queue.submit({
+        prompt: 'SDXL 用原生参考',
+        presetId: 'sdxl-turbo',
+        references: [seedPath],
+      })
+      assert.equal(unsupported.ok, false)
+      assert.equal(unsupported.code, 'invalid_request')
+      assert.ok(unsupported.message.includes('不支持参考生图'), unsupported.message)
+
+      // 3) 只允许 tool=generate。
+      const upscale = queue.submit({
+        tool: 'upscale',
+        presetId: 'flux2-klein-4b',
+        references: [seedPath],
+      })
+      assert.equal(upscale.ok, false)
+      assert.equal(upscale.code, 'invalid_request')
+      assert.ok(upscale.message.includes('只支持普通出图'), upscale.message)
+
+      // 4) 数量超限。
+      const many = Array.from(
+        { length: LIMITS.referenceImages.maxCount + 1 },
+        (_, index) => `imagen-output/20260101-000000-many-${index}/01.png`,
+      )
+      const overflow = queue.submit({
+        prompt: '参考图过多',
+        presetId: 'flux2-klein-4b',
+        references: many,
+      })
+      assert.equal(overflow.ok, false)
+      assert.equal(overflow.code, 'invalid_request')
+
+      assert.equal(remote.state.generateCalls.length, 0, '非法请求不得触发远端提交')
+
+      // 5) 路径形状合法但文件不存在：执行阶段失败 invalid_path（不占远端 GPU）。
+      const missing = queue.submit({
+        prompt: '参考图丢了',
+        presetId: 'flux2-klein-4b',
+        references: ['imagen-output/20260101-000000-native-ref-missing/01.png'],
+      })
+      assert.equal(missing.ok, true)
+      const failed = await queue.waitFor(missing.job.id, 10)
+      assert.equal(failed.status, 'failed')
+      assert.equal(failed.error?.code, 'invalid_path')
+      assert.equal(remote.state.generateCalls.length, 0, '读取参考图失败前不得提交远端');
+
+      // 6) 体积超限 / 非 PNG-JPEG 魔数：入队合法、执行阶段 invalid_request。
+      const bigDir = join(workspace, 'imagen-output', '20260101-000000-native-ref-big')
+      await mkdir(bigDir, { recursive: true })
+      await writeFile(join(bigDir, '01.png'), Buffer.alloc(LIMITS.referenceImages.maxBytes + 1, 1))
+      const big = queue.submit({
+        prompt: '参考图过大',
+        presetId: 'flux2-klein-4b',
+        references: ['imagen-output/20260101-000000-native-ref-big/01.png'],
+      })
+      const bigFailed = await queue.waitFor(big.job.id, 10)
+      assert.equal(bigFailed.status, 'failed')
+      assert.equal(bigFailed.error?.code, 'invalid_request')
+      assert.ok(bigFailed.error.message.includes('MB 上限'), bigFailed.error.message)
+
+      const badDir = join(workspace, 'imagen-output', '20260101-000000-native-ref-bad')
+      await mkdir(badDir, { recursive: true })
+      await writeFile(join(badDir, '01.png'), Buffer.from('not an image at all'))
+      const bad = queue.submit({
+        prompt: '参考图格式非法',
+        presetId: 'flux2-klein-4b',
+        references: ['imagen-output/20260101-000000-native-ref-bad/01.png'],
+      })
+      const badFailed = await queue.waitFor(bad.job.id, 10)
+      assert.equal(badFailed.status, 'failed')
+      assert.equal(badFailed.error?.code, 'invalid_request')
+      assert.ok(badFailed.error.message.includes('PNG / JPEG'), badFailed.error.message)
+    } finally {
+      queue.dispose()
+      await remote.close()
+    }
+  })
+
+  await check('参考生图：旧 meta 没有 referenceSources 时 /history 恒为 null', async () => {
+    // meta 传空对象：seedWork 只有 meta 为真值时才写 meta.json（旧产物同样有 meta、只是没有新字段）。
+    const legacyPath = await seedWork('20260101-000000-legacy-history', { jobId: 'j_legacy_history' })
+    // 直接读单个产物目录（不依赖分页窗口，避免被后续用例生成的大量目录挤出）。
+    const item = await readHistoryItem(makeCtx(), join(workspace, 'imagen-output'), '20260101-000000-legacy-history')
+    assert.ok(item, '应能读取播种的历史作品')
+    assert.equal(item.images[0].path, legacyPath)
+    assert.equal(item.referenceSources, null, '旧产物 / 纯文生图恒为 null，客户端不必判断字段是否存在')
   })
 
   // ── 版本链（阶段十三）：meta.rootImage 落盘与旧数据回溯 ──────────────────

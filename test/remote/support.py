@@ -102,6 +102,8 @@ CONTRACT = {
         "prompt": {"maxChars": 2000},
         # 图生图边界同样从生成物读取：用例一律以契约值为准，不写死数值。
         "reference": CONTRACT_DOC["limits"]["reference"],
+        # 原生参考图（supportsReference）的独立边界：与 reference 隔离的张数 / 字节 / 长边。
+        "referenceImages": CONTRACT_DOC["limits"]["referenceImages"],
         "strength": CONTRACT_DOC["limits"]["strength"],
         # 局部重绘蒙版上限（与参考图一起下发；请求体上限公式也按它推导）。
         "mask": CONTRACT_DOC["limits"]["mask"],

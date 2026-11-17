@@ -28,8 +28,9 @@ import { LIMITS, OUTPAINT } from '../../../shared/contract.js'
 import { negativePromptActive } from '../../../shared/models-guide.js'
 
 import { submitGenerate } from '../../api/resources.js'
-import { formatText } from '../../logic/format.js'
-import { presetLabelOf, referenceUrlOf } from '../../logic/generate.js'
+import { formatText, positiveSize } from '../../logic/format.js'
+import { presetLabelOf } from '../../logic/generate.js'
+import { referenceUrlOf } from '../../logic/reference.js'
 import {
   buildImageToolBody,
   buildOutpaintToolBody,
@@ -77,12 +78,6 @@ function emptyDraft() {
     outpaint: defaultOutpaint(),
     canvas: null,
   }
-}
-
-/** 正数像素；缺失 / 非法返回 null（尺寸交给预设 size 兜底）。 */
-function positiveSize(value) {
-  const number = Number(value)
-  return Number.isFinite(number) && number > 0 ? Math.round(number) : null
 }
 
 /**

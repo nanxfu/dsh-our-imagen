@@ -14,13 +14,15 @@
  * 版本树不完整（还有更早分页）时，面板首次打开会按需 `library.loadTree(root)`；
  * 旧宿主没有该接口（404）时面板显示降级提示，继续只用已加载分页。
  *
- * 接收 { t, ui, compute, library, actions, now }；缩略图点击交回组合层
+ * 接收 { t, ui, compute, library, actions }；缩略图点击交回组合层
  * `actions.previewWork`（换预览 + 表单干净时回填参数），没有该动作时退回纯选图。
+ * 幽灵卡的「已等待」读秒在组件内部用 `useNow` 自持，不再由 Studio 顶层定时驱动。
  */
 
 import React from 'react'
 
 import { Icon } from './icons.jsx'
+import { useNow } from '../hooks/useNow.js'
 import { formatDuration, formatText, jobElapsed } from '../logic/format.js'
 import { isJobCancellable, isJobCancelling, jobCardClass } from '../logic/jobs.js'
 import { buildLineage, lineagePanelRows, workDraftSummary } from '../logic/lineage.js'
@@ -82,9 +84,12 @@ function entryOfNode(node) {
 }
 
 export function Filmstrip(props) {
-  const { t, ui, compute, library, actions, now } = props
+  const { t, ui, compute, library, actions } = props
   const { setView } = ui
   const { pendingJobs, sessionState, startSession, status, cancelJob, cancellingIds } = compute
+  // 1Hz 读秒沉降到作品条自己身上（阶段十五 Phase C0）：只有存在在途任务、幽灵卡需要显示
+  // 「已等待」时才计时，等待期间不再驱动整页每秒重渲染。
+  const now = useNow(pendingJobs.length > 0)
   const stopped = Boolean(status && status.stopped)
   const { selected, selectImage } = library
   const previewWork = actions && typeof actions.previewWork === 'function' ? actions.previewWork : null

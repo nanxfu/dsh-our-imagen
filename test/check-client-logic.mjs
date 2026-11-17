@@ -133,6 +133,35 @@ await check('时长格式化', () => {
   assert.equal(logic.formatSeconds(te, 6.2), '6.2s')
 })
 
+// 阶段十五 Phase C0：涂抹 / 扩图画布与提交栏共用的两个读数工具收进 logic/format.js，
+// 这里直接断言口径，避免四处各存一份副本后互相漂移。
+await check('覆盖率百分比与正数像素读数共用同一口径', () => {
+  // 百分比：不足 10% 保留一位小数，超过 100% 截断；非法值按 0 处理。
+  assert.equal(logic.percentOf(0.004), 0.4, '刚涂一点保留一位小数，不显示 0%')
+  assert.equal(logic.percentOf(0.0432), 4.3)
+  assert.equal(logic.percentOf(0.4375), 44, '10% 以上取整')
+  assert.equal(logic.percentOf(1), 100)
+  assert.equal(logic.percentOf(1.5), 100, '覆盖率异常时按上限截断')
+  assert.equal(logic.percentOf(0), 0)
+  assert.equal(logic.percentOf(-1), 0)
+  assert.equal(logic.percentOf('0.123'), 12, '字符串输入同样按数字处理')
+  assert.equal(logic.percentOf(null), 0)
+  assert.equal(logic.percentOf(undefined), 0)
+  assert.equal(logic.percentOf(NaN), 0)
+  // 正数像素：缺失 / 非法 / 非正数一律 null，交给调用方的 `??` 兜底链。
+  assert.equal(logic.positiveSize(1024), 1024)
+  assert.equal(logic.positiveSize('1152'), 1152)
+  assert.equal(logic.positiveSize(1023.6), 1024, '四舍五入到整数像素')
+  assert.equal(logic.positiveSize(0), null)
+  assert.equal(logic.positiveSize(-5), null)
+  assert.equal(logic.positiveSize(''), null)
+  assert.equal(logic.positiveSize('  '), null)
+  assert.equal(logic.positiveSize(null), null)
+  assert.equal(logic.positiveSize(undefined), null)
+  assert.equal(logic.positiveSize('x'), null)
+  assert.equal(logic.positiveSize(Infinity), null)
+})
+
 await check('任务耗时与活跃任务查询', () => {
   const done = { id: 'a', status: 'done', seconds: 6.2 }
   assert.equal(logic.jobElapsed(done, NOW), 6200)
@@ -1604,7 +1633,7 @@ await check('请求体：有蒙版时输出 reference.mask，无蒙版时保持�
 })
 
 // 0.13.0：参考图 / 蒙版 / 重绘强度迁到舞台图片工具，主表单快照只比较纯文生图字段。
-await check('表单快照只管纯文生图字段：参考图 / 强度不再参与脏判定', () => {
+await check('表单快照：纯文生图字段 + 原生参考图槽指纹（旧 reference / strength 不参与）', () => {
   const base = {
     prompt: 'a',
     negative: '',
@@ -1616,28 +1645,38 @@ await check('表单快照只管纯文生图字段：参考图 / 强度不再参�
     cfg: 0,
     seed: '',
     count: 1,
+    references: [],
   }
+  const refPath = 'imagen-output/job-1/7.png'
   const baseline = logic.formSnapshotOf(base)
   assert.equal(logic.isFormDirty(base, baseline), false)
-  // 旧表单残留的 reference / strength 字段不再写进快照，也不影响脏判定。
+  // 旧表单残留的 reference / strength 字段不写进快照，也不影响脏判定（图片工具域专属字段）。
   assert.equal(
-    logic.isFormDirty({ ...base, reference: { path: 'imagen-output/a.png' }, strength: 0.9 }, baseline),
+    logic.isFormDirty({ ...base, reference: { path: refPath }, strength: 0.9 }, baseline),
     false,
-    '参考图 / 强度不属于主表单，旧字段不参与脏判定',
+    '单图 reference / 强度不属于主表单，旧字段不参与脏判定',
   )
-  assert.ok(!logic.formSnapshotOf(base).includes('reference'), '快照里不应再出现 reference 字段')
+  // 阶段十五 Phase C2：挂载 / 移除参考图都算未提交修改（会进草稿卡），只比较有序路径指纹。
+  const withRef = { ...base, references: [{ path: refPath, url: '/x', width: 1024, height: 1024, name: '7.png' }] }
+  assert.equal(logic.isFormDirty(withRef, baseline), true, '挂载参考图应算脏')
+  assert.equal(logic.isFormDirty({ ...base, references: [] }, baseline), false, '空槽不算脏')
+  assert.equal(logic.isFormDirty({ ...base, references: [refPath] }, baseline), true, '只有路径的旧槽位也算脏')
   assert.equal(logic.isFormDirty({ ...base, count: 2 }, baseline), true, '改张数仍算脏')
+  // 快照里出现的是 references 指纹（而不是旧的 reference 对象字段）。
+  assert.ok(logic.formSnapshotOf(withRef).includes('references'), '快照应包含 references 指纹')
 
-  // 新建创作 / 回填不再产出参考图与强度字段。
+  // 新建创作 / 还原原图会清空参考图槽；回填不写参考图字段（槽位由 hook 显式清空）。
   const created = logic.newCreationPatch({ ...base, prompt: '旧提示词', reference: { path: 'x' }, strength: 0.8 }, null)
-  assert.equal(Object.prototype.hasOwnProperty.call(created, 'reference'), false, '新建创作不再处理参考图')
+  assert.deepEqual(created.references, [], '新建创作清空参考图槽')
+  assert.equal(Object.prototype.hasOwnProperty.call(created, 'reference'), false, '新建创作不再处理单图参考图')
   assert.equal(Object.prototype.hasOwnProperty.call(created, 'strength'), false, '新建创作不再处理重绘强度')
   const recalled = logic.iteratePatch(
     { image: { path: 'imagen-output/job-2/1.png', width: 512, height: 512 }, item: { prompt: '新图' } },
     base,
     [],
   )
-  assert.equal(Object.prototype.hasOwnProperty.call(recalled, 'reference'), false, '回填不再写参考图字段')
+  assert.equal(Object.prototype.hasOwnProperty.call(recalled, 'reference'), false, '回填不再写单图参考图字段')
+  assert.equal(Object.prototype.hasOwnProperty.call(recalled, 'references'), false, '回填不写参考图槽（由 hook 清空）')
 })
 
 await check('负向分层：model → user 两层合并，用户编辑整段接管', () => {
@@ -2298,6 +2337,145 @@ await check('放大产物回填：父作品缺失 / 链式放大 / 普通作品�
   assert.equal(logic.diffusionSourceOf(fixtures.upscaleEntry, []), null)
   const bareParent = { image: { path: 'imagen-output/import/01.png' }, item: { source: 'import', params: {} } }
   assert.equal(logic.diffusionSourceOf(fixtures.upscaleEntry, [bareParent]), null)
+})
+
+// ── 阶段十五 Phase C0：局部重绘 / 扩图产物的 inpaintOnly 预设过滤 ─────────────
+// 专用局部重绘权重（sdxl-inpaint）只在舞台图片工具里可选，不能写进左栏纯文生图表单
+// （否则模型选择器出现空白未选中态）。回填先沿 sourceImage 回溯父作品的扩散参数，
+// 找不到时走降级补丁：保留提示词 / 排除项 / 尺寸，预设与步数 / CFG 换成可文生图的推荐值。
+await check('局部重绘 / 扩图产物回填：inpaintOnly 预设不写进纯文生图表单', () => {
+  const parentPath = 'imagen-output/job-1/01.png'
+  const parentImage = { path: parentPath, width: 1024, height: 1024, seed: 17 }
+  const parentItem = {
+    jobId: 'job-1',
+    prompt: '父作品提示词',
+    presetId: 'sdxl-base',
+    params: { prompt: '父作品提示词', negativePrompt: 'blurry', steps: 25, cfg: 7.5, seed: 17 },
+    images: [parentImage],
+  }
+  const inpaintImage = { path: 'imagen-output/job-2/01.png', width: 1024, height: 1024, seed: 0 }
+  const inpaintItem = {
+    jobId: 'job-2',
+    prompt: '重绘后的提示词',
+    presetId: 'sdxl-inpaint',
+    inpaint: true,
+    sourceImage: parentPath,
+    params: { prompt: '重绘后的提示词', negativePrompt: 'blurry', width: 1024, height: 1024, steps: 30, cfg: 8, seed: 0 },
+    images: [inpaintImage],
+  }
+  const inpaintEntry = { image: inpaintImage, item: inpaintItem }
+  const form = { presetId: 'sdxl-base', steps: 25, cfg: 7.5, seed: '' }
+
+  // 判定：inpaintOnly 预设产物属于「不能直接回填」的记录；预设还没下发时不误判。
+  assert.equal(logic.isNonDiffusionRecallOf(inpaintEntry, NON_DIFFUSION_PRESETS), true, 'inpaintOnly 预设产物不能直接回填')
+  assert.equal(logic.isNonDiffusionRecallOf({ image: {}, item: { presetId: 'sdxl-inpaint' } }, []), false, '预设未加载时不按未知预设误判')
+  assert.equal(logic.isNonDiffusionRecallOf({ image: {}, item: { presetId: 'sdxl-base' } }, NON_DIFFUSION_PRESETS), false, '普通扩散预设不受影响')
+
+  // ① 有父作品：回填结果等于父作品，不出现 sdxl-inpaint / 30 步 / 8 CFG。
+  const items = [inpaintItem, parentItem]
+  const patch = logic.iteratePatch(inpaintEntry, form, NON_DIFFUSION_PRESETS, items)
+  assert.deepEqual(
+    patch,
+    logic.iteratePatch({ image: parentImage, item: parentItem }, form, NON_DIFFUSION_PRESETS, items),
+    '有父作品时回填沿 sourceImage 回溯父作品',
+  )
+  assert.equal(patch.presetId, 'sdxl-base')
+  assert.equal(patch.steps, 25, '步数来自父作品，而不是局部重绘的 30')
+  assert.equal(patch.cfg, 7.5)
+  assert.equal(patch.prompt, '父作品提示词')
+  assert.equal(logic.diffusionSourceOf(inpaintEntry, items, NON_DIFFUSION_PRESETS).item.jobId, 'job-1')
+  assert.equal(JSON.stringify(patch).includes('sdxl-inpaint'), false, '补丁不得出现 inpaintOnly 预设')
+
+  // ② 父作品缺失：降级补丁保留提示词 / 排除项 / 尺寸，预设与步数换成可文生图预设的推荐值。
+  const degraded = logic.iteratePatch(inpaintEntry, form, NON_DIFFUSION_PRESETS, [inpaintItem])
+  assert.equal(degraded.prompt, '重绘后的提示词')
+  assert.equal(degraded.negative, 'blurry')
+  assert.equal(degraded.width, 1024)
+  assert.equal(degraded.height, 1024)
+  assert.equal(degraded.presetId, 'sdxl-base', '降级沿用当前表单预设（合法扩散预设）')
+  assert.equal(degraded.steps, 25, '降级步数用合法预设推荐值，不是 inpaintOnly 的 30')
+  assert.equal(degraded.seed, '', '降级后种子恢复随机')
+  assert.equal(JSON.stringify(degraded).includes('sdxl-inpaint'), false)
+
+  // ③ 当前表单预设本身就是 inpaintOnly：降级选模要跳开它，换成第一个可文生图预设。
+  const fromInpaintForm = logic.iteratePatch(inpaintEntry, { presetId: 'sdxl-inpaint' }, NON_DIFFUSION_PRESETS, [inpaintItem])
+  assert.equal(fromInpaintForm.presetId, 'sdxl-lightning')
+
+  // ④ 扩图产物同理（outpaint 默认用 sdxl-inpaint 9 通道权重）。
+  const outpaintItem = {
+    ...inpaintItem,
+    jobId: 'job-3',
+    outpaint: true,
+    prompt: '扩图后的提示词',
+    sourceImage: '',
+    params: { ...inpaintItem.params, prompt: '扩图后的提示词', width: 1536, height: 864 },
+  }
+  const outpaintPatch = logic.iteratePatch(
+    { image: { ...inpaintImage, width: 1536, height: 864 }, item: outpaintItem },
+    form,
+    NON_DIFFUSION_PRESETS,
+    [outpaintItem],
+  )
+  assert.equal(outpaintPatch.prompt, '扩图后的提示词')
+  assert.equal(outpaintPatch.width, 1536, '降级尺寸取产物像素并钳到契约范围')
+  assert.equal(outpaintPatch.presetId, 'sdxl-base')
+  assert.equal(JSON.stringify(outpaintPatch).includes('sdxl-inpaint'), false)
+
+  // ⑤ 重新生成同样不能把 inpaintOnly 预设写进覆盖项。
+  const overrides = logic.rerollOverrides(inpaintEntry, NON_DIFFUSION_PRESETS, items)
+  assert.equal(overrides.presetId, 'sdxl-base')
+  assert.equal(overrides.steps, 25)
+  assert.equal(overrides.seed, -1)
+  assert.equal(JSON.stringify(overrides).includes('sdxl-inpaint'), false)
+  const degradedReroll = logic.rerollOverrides(inpaintEntry, NON_DIFFUSION_PRESETS, [inpaintItem], { id: 'sdxl-base' })
+  assert.equal(degradedReroll.prompt, '重绘后的提示词')
+  assert.equal(degradedReroll.presetId, 'sdxl-base')
+  assert.equal(degradedReroll.seed, -1)
+})
+
+// 降级补丁的兜底原则：任何情况下都要给出一个可文生图的预设，不能把左栏模型选择器
+// 清成「空白未选中」；已下线的旧模型 id 也不会被当成回填来源。
+await check('回填降级：已下线预设 / 旧版本产物不会清空表单预设', () => {
+  const presets = [
+    { id: 'sdxl-lightning', size: 1024, steps: 4, cfg: 0 },
+    { id: 'sdxl-base', size: 1024, steps: 25, cfg: 7.5 },
+  ]
+  const retired = {
+    image: { path: 'imagen-output/old/01.png', width: 1024, height: 1024, seed: 3 },
+    item: { jobId: 'job-old', prompt: '旧模型画的作品', presetId: 'retired-model', params: { steps: 30, cfg: 5 } },
+  }
+  const form = { presetId: 'sdxl-base', steps: 25, cfg: 7.5, seed: '42' }
+  const patch = logic.iteratePatch(retired, form, presets)
+  assert.equal(patch.presetId, 'sdxl-base', '保留表单当前可用预设，不清空')
+  assert.equal(patch.prompt, '旧模型画的作品')
+  assert.equal(patch.steps, 25, '已下线模型的步数不写进表单')
+  assert.equal(patch.cfg, 7.5)
+  assert.equal(patch.seed, '', '旧产物的固定种子不串到下一张')
+  assert.equal(JSON.stringify(patch).includes('retired-model'), false, '补丁不得出现已下线模型 id')
+  // 表单当前预设也不可用（专用局部重绘权重）→ 换成第一个可文生图预设，仍然不留空。
+  const fromNative = logic.iteratePatch(
+    retired,
+    { presetId: 'sdxl-inpaint' },
+    [...presets, { id: 'sdxl-inpaint', inpaintOnly: true, steps: 30, cfg: 8 }],
+  )
+  assert.equal(fromNative.presetId, 'sdxl-lightning')
+  // 预设列表还没拿到（启动瞬间）：不按「未知预设」误判，保留历史条目的既有语义。
+  assert.equal(logic.iteratePatch(retired, form, []).presetId, 'retired-model')
+  // 旧版本产物带 sourceImage 且父作品已加载：回填沿父作品，预设取父作品的合法预设。
+  const parentImage = { path: 'imagen-output/job-p/01.png', width: 1024, height: 1024, seed: 5 }
+  const parentItem = {
+    jobId: 'job-p',
+    prompt: '父作品提示词',
+    presetId: 'sdxl-base',
+    params: { steps: 25, cfg: 7.5, seed: 5 },
+    images: [parentImage],
+  }
+  const withParent = { image: retired.image, item: { ...retired.item, sourceImage: parentImage.path } }
+  const parentPatch = logic.iteratePatch(withParent, form, presets, [parentItem])
+  assert.equal(parentPatch.presetId, 'sdxl-base')
+  assert.equal(parentPatch.prompt, '父作品提示词')
+  assert.equal(parentPatch.steps, 25)
+  assert.equal(JSON.stringify(parentPatch).includes('retired-model'), false)
 })
 
 await check('重试参数构造', () => {
@@ -3102,8 +3280,9 @@ await check('阶段十二图片工具文案键：中英文两侧齐全', () => {
     assert.ok(typeof DICT.en[key] === 'string' && DICT.en[key].length > 0, `${key} 缺少英文文案`)
   }
   // 左栏参考图区相关死键必须一起删掉，避免文案继续误导用户。
+  // 阶段十五 Phase C2：`studio.reference.title` 已被「原生参考图槽」重新启用（新交互，
+  // 不是旧强度滑块那套），不再属于死键。
   for (const key of [
-    'studio.reference.title',
     'studio.reference.strength',
     'studio.reference.autoText2Image',
     'studio.mask.toggle',
@@ -3131,6 +3310,48 @@ await check('扩图纯逻辑：plan / anchor / coverage / ratio 在聚合出口�
   assert.equal(logic.outpaintCoverageOf(plan), plan.coverage)
   assert.equal(logic.outpaintAnchorOf({ x: 2, y: -1 }).x, 1)
   assert.deepEqual(logic.outpaintRatioOptions().map((option) => option.id), ['source', '16:9', '9:16', '4:3'])
+})
+
+
+// 阶段十五 Phase C2：参考图纯逻辑通过测试聚合出口导出（渲染 / 逻辑测试共用同一份实现）。
+await check('参考图纯逻辑：槽位 / 能力 / 请求体在聚合出口可用', () => {
+  for (const name of [
+    'referenceAdd',
+    'referenceListOf',
+    'referencePathsOf',
+    'referenceCapabilityOf',
+    'supportsReferenceOf',
+    'nativeReferencePresetOf',
+    'referenceFingerprintOf',
+    'referenceFileErrorOf',
+  ]) {
+    assert.equal(typeof logic[name], 'function', `缺少 ${name} 导出`)
+  }
+  const path = 'imagen-output/20261109-120000-job-1/01.png'
+  const added = logic.referenceAdd([], path)
+  assert.equal(added.ok, true)
+  assert.equal(logic.referenceAdd(added.list, path).reason, 'duplicate')
+  assert.equal(logic.referenceAdd(added.list, 'imagen-output/job-2/02.png').list.length, 2)
+  // 契约上限来自 LIMITS.referenceImages：新增入口不自己写数字。
+  assert.equal(logic.referencePathsOf([added.list[0], added.list[0]]).length, 1)
+  assert.equal(logic.referenceLimits().maxCount, LIMITS.referenceImages.maxCount)
+
+  // 请求体：槽位非空才出现 references；空槽保持纯文生图请求体。
+  const base = { prompt: 'p', presetId: 'flux2-klein-4b', width: 1024, height: 1024, steps: 4, cfg: 1, seed: '', count: 1 }
+  assert.equal(Object.prototype.hasOwnProperty.call(logic.buildGenerateBody(base), 'references'), false)
+  const body = logic.buildGenerateBody({ ...base, references: [added.item] })
+  assert.deepEqual(body.references, [path])
+
+  // 能力门控：缺字段按 false；支持参考的预设才能过。
+  assert.equal(logic.supportsReferenceOf({ id: 'sdxl-lightning' }), false)
+  assert.equal(logic.supportsReferenceOf({ id: 'flux2-klein-4b', supportsReference: true }), true)
+  const blocked = logic.generateCapabilityOf({
+    preset: { id: 'sdxl-lightning' },
+    presets: [{ id: 'sdxl-lightning' }, { id: 'flux2-klein-4b', supportsReference: true }],
+    references: [path],
+  })
+  assert.equal(blocked.ok, false)
+  assert.equal(blocked.blockedKey, 'studio.reference.blockedUnsupported')
 })
 
 summary()

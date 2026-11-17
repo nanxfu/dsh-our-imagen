@@ -479,6 +479,38 @@ export const zh = {
   // 左栏不再承载图片处理：告诉用户入口在舞台底部动作坞。
   'studio.rail.imageToolsHint': '图片处理（局部重绘 / 整图重绘）在舞台底部的动作坞里。',
 
+  // ── 原生参考图槽（阶段十五 Phase C2） ────────────────────────
+  // 文案口径：Klein 4B 的参考条件是弱条件（真机实测），不宣称「强一致参考」。
+  'studio.reference.title': '参考图',
+  'studio.reference.empty': '添加参考图（最多 {count} 张）',
+  'studio.reference.emptyHint': '从电脑选择、拖入，或点「从作品选择」',
+  'studio.reference.addMore': '添加参考图（{count}/{max}）',
+  'studio.reference.full': '参考图已满 {max} 张',
+  'studio.reference.remove': '移除参考图',
+  'studio.reference.pickWork': '从作品选择',
+  'studio.reference.pickClose': '收起作品列表',
+  'studio.reference.pickEmpty': '还没有可加入的作品',
+  'studio.reference.qualityHint': '参考图是弱条件：构图仍由提示词与种子主导，参考图越多耗时越长。',
+  'studio.reference.unsupported': '当前模型不支持原生参考生图',
+  'studio.reference.unsupportedHint': '换到支持参考的模型可以直接使用这些参考图；也可以改用整图重绘。',
+  'studio.reference.switchPreset': '切换到 {preset}',
+  'studio.reference.switched': '已切换到 {preset}，参考图保留',
+  'studio.reference.useImg2img': '改用整图重绘',
+  'studio.reference.uploading': '正在导入参考图…',
+  'studio.reference.tooLarge': '参考图超过 {size} MiB',
+  'studio.reference.added': '已加入 {count} 张参考图',
+  'studio.reference.addedToSlot': '已设为参考图',
+  'studio.reference.addedUnsupported': '已加入参考槽，但当前模型不支持原生参考生图',
+  'studio.reference.duplicate': '这张图已在参考图槽里',
+  'studio.reference.limit': '最多 {max} 张参考图，多出的没有加入',
+  'studio.reference.importFailed': '参考图导入失败，请重试',
+  'studio.reference.invalidPath': '只能使用工作区里已落盘的作品作为参考图',
+  'studio.reference.noTarget': '没有可设为参考图的作品，请先在舞台选中一张',
+  'studio.reference.noPreset': '当前没有支持原生参考生图的模型',
+  'studio.reference.emptySlot': '参考图槽还是空的',
+  'studio.reference.blockedUnsupported': '当前模型不支持原生参考生图：请换成支持参考的模型，或先移除参考图。',
+  'studio.reference.setAsReference': '设为参考图',
+
   // ── 舞台图片工具（动作坞 / 轻量提交栏） ───────────────────────
   'studio.imageTool.title': '图片工具',
   'studio.imageTool.groupLabel': '图片处理',
@@ -604,6 +636,8 @@ export const zh = {
   'studio.rail.draftStatus': '正在新草稿中编辑（源自此图）',
   'studio.rail.restoreOriginal': '还原原图',
   'studio.toast.restoredOriginal': '已还原原图参数',
+  // 来源作品已被删除（或不在已加载列表）：参数照常还原，但舞台不再停在别的图上冒充来源。
+  'studio.toast.restoredOriginalMissing': '来源作品已不在列表中，参数已还原',
   'studio.stage.draftFrom': '源自：{prompt}',
   'studio.chat.gridLabel': '本次生成 {count} 张',
   'studio.chat.focus.back': '返回上一层（{label}）',

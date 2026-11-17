@@ -291,15 +291,15 @@
 
 ---
 
-## 十五、 工作台交互语义对齐、双向助手闭环与模型原生参考演进（Phase 0/A/B 已完成，Phase C 待排期）
+## 十五、 工作台交互语义对齐、双向助手闭环与模型原生参考演进（Phase 0~C 已完成）
 
-> **状态**：🟡 Phase 0、Phase A 与 Phase B 已完成（2026-11-18，未发版），Phase C 待排期。完整方案与分期路径见 [STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md)。
+> **状态**：✅ Phase 0、A、B、C 全部完成（2026-11-18，未发版）。Phase C 补齐模型原生参考生图（`supportsReference`）、左栏参考图槽与推理加速真机对照，真机数据见下方各条。完整方案与分期路径见 [STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md)。
 
 - **背景**：0.13.0 收口舞台工具解耦与版本树后，继续解决「外部图片导入与全局可发现性」「文生图原生参考能力缺失」「表单-舞台-助手三向协同」及「后处理闭环」问题；放弃多模态看图过渡方案，直接基于图像模型原生能力演进，避免为 SDXL 堆砌过时外挂技术债。
 - **核心设计**：
   1. **语义、导入与版本树边界**：舞台动作坞「生成变体」改名「重新生成」并下线「带回参数」，画廊卡片收敛至切回工作台统一颗粒度；左栏编辑自动托管进最左端「新建草稿卡」并提供「还原原图」；新增本地图片导入落盘（`/imagen-api/import`），明确「原地改图（`v1 → v2`）」与「左栏参考生新图（`参考槽 → 新 v1`）」的语义边界，并定义新画布与浏览态的按区拖放与编辑态保护规则。
   2. **双向聚焦时间线**：助手支持 1~4 张结果网格、镜像同步舞台图片工具动作、点击单图钻取聚焦与顶部「返回上一层」导航（不污染 `intentHistory`）。
-  3. **四阶段推进（Phase 0 → A → B → C）**：先修复 DSH 宿主 `llm` 注入与流式调用（润色/英译/对话）→ 落地交互收敛、双向聚焦、本地导入、拉帘对比与 PNG 元数据 → 点亮动作坞「高清放大（`upscale`）」与「快捷比例扩图（`outpaint`）」→ 先在 Kaggle `2×T4` 真机实测 `FLUX.2 Klein 4B` 参考推理并抽象 `supportsReference` 能力，再落地左栏多图参考槽与批量分镜（并在 Colab L4/A100 后顺势引入 `FLUX.2 Klein 9B` / `Qwen-Image-Edit`）。
+  3. **四阶段推进（Phase 0 → A → B → C）**：先修复 DSH 宿主 `llm` 注入与流式调用（润色/英译/对话）→ 落地交互收敛、双向聚焦、本地导入、拉帘对比与 PNG 元数据 → 点亮动作坞「高清放大（`upscale`）」与「快捷比例扩图（`outpaint`）」→ 先在 Kaggle `2×T4` 真机实测 `FLUX.2 Klein 4B` 参考推理（并顺带评估 `FLUX.2 Klein 4B + Outpaint LoRA` 替代 `sdxl-inpaint` 扩图的可行性）并抽象 `supportsReference` 能力，再落地左栏多图参考槽与批量分镜（并结合已落地的 Colab L4/A100 后端引入 `FLUX.2 Klein 9B` / `Qwen-Image-Edit` / `FLUX.1-Fill-dev`）。
 - **实现（Phase A 已完成，2026-11-18）**：
   - **A1 动作语义与草稿托管**：`ImageDock` 下线「带回参数」，「生成变体」改名「重新生成」；`GalleryCard` 动作收敛为「在工作台打开 / 重绘编辑 / 查看大图 / 收藏 / 删除」，画廊不再盲发生成。胶片条点击不再被未提交修改拦截：脏修改先托管进最左端草稿卡（「未提交草稿 · 源自此图」），再回填目标作品；左栏出现「正在新草稿中编辑（源自此图）」+「还原原图」，点草稿卡恢复草稿并切新建画布焦点，提交 / 新建创作正确清理。纯逻辑在 `src/logic/form.js`（`draftSourceOf` / `originalPatchOf` / `parkDraftOf` / `draftViewOf`）与 `previewRecallOf` 的新语义。
   - **A2 双向时间线**：助手完成气泡展示任务全部 1~4 张结果图（网格，单张保持原观感）；舞台图片工具提交后向助手线程追加镜像动作记录与任务气泡；点击结果图进入单图聚焦视图（大图 + 参数胶囊 + 对比原图 / 继续涂抹 / 重新生成 / 查看大图），顶部「← 返回上一层（{label}）」逐层回退。镜像 / 同步 / 结果记录均带 `kind`，不进入 `intentHistory`。纯逻辑在 `src/logic/chat.js`。
@@ -315,6 +315,27 @@
     - **高清放大默认档**：`sdxl-lightning` 1024×1024 PNG（1.21 MB）→ 2048×2048 PNG（4.01 MB）；权重下载 2.25s（67,061,725 B，SHA256 校验通过）、推理 1.45s、wall 10.0s（含 5.3 MB base64 回传）；`gpu_memory` 的 `allocated_mb` 7000→7000、`max_allocated_mb` 10233 不变、`reserved_mb` 反降 3746 MB（模型按设计卸载）。质量：输出 Laplacian 方差 59.8 vs 双三次 13.4（4.47×），与双三次平均差 1.89/255，确为超分而非插值。
     - **高清放大上限档**：1280×720 → 2560×1440（= `maxOutputEdge`），加载 1.45s、推理 1.32s；`/job` 响应 base64 4.84 MB 在约 3.2s 内取回，**低于 8s 单次轮询超时、无重试**；显存无残留。
     - **扩图（`sdxl-inpaint` 9 通道）**：864×864 内容 → 1536×864 画布（覆盖率 43.75%、强度 1.0、30 步），单张 35.4s，输出 PNG 1.67 MB；保留区核心像素差 **0.00/255**（含羽化带平均 0.11，最大差 91 只出现在羽化带），边界两侧 8px 亮度跳变 1.18 / 2.82（全图相邻列均值 0.63）→ 无硬像素接缝，右侧轻微明暗过渡属新区域光照差异、羽化带已软化；显存峰值 9715 MB < 14.56 GB，无 OOM。数据详见 [CHANGELOG](../CHANGELOG.md) 的 0.13.0 条目。
+- **实现（Phase C 已完成，2026-11-18）**：收口「模型原生参考生图」、左栏参考图槽与遗留状态同步；推理加速按真机同 Seed 对照数据决定不合入。完整实测见 [INFERENCE_ACCELERATION_RESEARCH.md](INFERENCE_ACCELERATION_RESEARCH.md) §4.3 与 [CHANGELOG](../CHANGELOG.md) 的 0.13.0 条目。
+  - **C0 状态同步与焦点同源收口（纯前端，离线）**：
+    - 新增 `useStudio.recallTarget()`：所有切换作品入口（胶片条 / 画廊 / 助手结果图 / 导入完成 / 删除回退）统一「先按需 `parkDraft()` 托管 dirty 草稿 → 回填参数与 `origin` → 退出舞台画布编辑态（按路径保留 `workDrafts`）」。裸导入图先托管再 `detachOrigin()`（清 prompt / 固定种子 / origin，保留预设与画幅）；导入图自带 PNG `tEXt` 元数据时直接回填原生成参数；空白新建画布同样解除上一张作品的绑定。
+    - 助手结果图改为按路径 `openPath()` → `previewWork` 同口径；`restoreOriginal` 来源不在已加载列表时切回新建取景框并提示（不拿别的作品冒充来源）；`deleteImages` 通过 `onImagesRemoved` 级联清理工具草稿与表单 `origin` / `draft.source`，删当前作品时回退到下一张并刷新左栏回填。
+    - `generate.js` 把 `inpaintOnly`（如 `sdxl-inpaint`）与已下线 / 未知预设统一按非扩散产物处理：沿 `sourceImage` 回溯父作品的真实扩散参数，找不到走降级补丁，绝不把专用 / 失效预设写进纯文生图表单（模型选择器不再出现空白未选中态）。
+    - 渲染卫生：`useNow` 从 `Studio` 顶层下沉到真正读秒的 `PipelineBar` / `Filmstrip` 叶子；画布编辑器与对比拉帘显式 `key`；`percentOf` / `positiveSize` 收敛到 `src/logic/format.js`。
+  - **C1 模型原生参考生图（契约 + 远端 + 加速开关）**：
+    - `shared/contract.js` 新增 `LIMITS.referenceImages`（maxCount 2 / 单张 4 MiB / 长边 1024 / 最短边 128，与单图垫图 `reference` 独立）与 `PROTOCOL.daemon.referenceImages`；10 份模型资产新增必填 `supportsReference`（首期仅 `flux2-klein-4b`），与 `supportsImg2Img` 互斥并生成公开预设。
+    - Host 新增 `references: string[]`（1~2 个 `imagen-output/` 作品路径，与 `reference` 互斥、仅 `tool=generate`）：入队校验路径 / 数量 / 重复，执行期读盘 + 体积 / 魔数 + base64 总量预算前置校验，以 job 级 `referenceImages: [{ image_b64 }]` 下发；产物 `meta.json` 写 `referenceSources`，`/history` 与 `/history/tree` 透传（旧数据恒 `null`），这类产物为独立新根（不写 `sourceImage` / `rootImage`）。
+    - 远端提交期只读图片头（loader 白名单 `reference_names()` 首期仅 `flux2`、数量 / 体积 / PNG-JPEG / 最小长边），执行期整批解码一次转 RGB、长边超限等比缩小；`run_task` 以基础管线 `image=[PIL...]` 条件出图，**宽高严格取请求值**、不吃 `strength`；非支持 loader 收到参考图返回 400 `invalid_request`（不静默丢弃）。
+    - `flux2-klein-4b` 资产修正：`pipeline.variant: null`（仓库已无 `*_fp16` 变体文件）、`allowPatterns` 只取组件目录（跳过仓库根目录 7.75 GB 单文件重复副本）、`downloadGb` 16.0；真机验证白名单预下载 78.6s、首次加载 118.8s、`variant=None` 首次即成功。
+    - 新增 `pipeline.accel` 推理加速开关脚手架（`vaeTiling` / `vaeSlicing` / `channelsLast` / `fuseQkv`，缺省整块省略 = 行为逐字不变；`from_pipe` 派生的 img2img / inpaint 幂等复用、不重复 fuse）。
+  - **C2 左栏参考图槽与参考生图交互（纯客户端）**：
+    - 新增 `src/logic/reference.js` 纯逻辑（槽位增删 / 去重 / 上限 / 路径归一 / 能力门控 / dirty 指纹 / 请求体拼装）与 `src/studio/rail/ReferenceSection.jsx`（提示词之后、画面设置之前）：空态入口、1~2 张缩略图网格与单张移除、满额提示、「从作品选择」、拖入本机图片（预检 → `/import` 落盘为独立 v1 → 路径入槽）、弱参考质量提示。
+    - 当前模型 `supportsReference=false` 且槽内有图时就地提示，并提供「切换到 FLUX.2 Klein 4B」（保留参考图）与「改用整图重绘」；此时点生成被前置拦下（toast、不发请求、不静默丢图），不自动换模型。
+    - 动作坞复用组新增「设为参考图」（去重 / 满额提示 / 必要时自动切到支持参考的预设并切回创作视图）；助手生成经同一 `buildBody` 自动携带参考槽；参考槽计入表单 dirty 指纹（挂载即触发 A1 草稿托管），新建创作 / 还原原图 / 回填其它作品时清理。字典 zh/en 各 616 键同构，SPEC 新增 §5.21。
+  - **测试**：新增 `test/reference.mjs`（17）与 `test/remote/test_reference_images.py`（36）；`host-e2e` 63、`jobs-wait` 40、`check-contract` 14、`test/remote/run.py` 476、`check-client-logic` 90、`check-client-shell` 53、`check-client-draft` 11、`image-tool-render` 14、`check-client-locale` zh/en 各 616；`npm test` 38 步全绿。
+  - **真机验收（Kaggle 2×T4，diffusers 0.43.0 / torch 2.11.0+cu130，1 个 Kernel 完成三段验收、无 OOM、无遗留 Kernel）**：
+    - **参考生图**：白名单预下载 78.6s / 首次加载 118.8s（`variant=None` + `device_map="balanced"`）；1 张参考 20.11 / 20.64s（同 seed 两轮逐像素一致，MAE 0）、2 张 39.94s、1 张参考 + 1280×720 输出严格 1280×720（画幅保持）；参考影响度 7.71/255（弱条件，prompt + seed 主导）；全程 `max_allocated_mb` 7928 不变、复测无增长。
+    - **P0 加速 A/B（不合入）**：`channels_last + fuse_qkv + vae_tiling` 在 `sdxl-lightning` 1024² 4 步上 +3.9%、峰值显存 +1236 MB、同 seed 构图改变（MAE 11.06）→ 不合入；`vae_tiling` 在 `sdxl-inpaint` 1536×864 扩图 0.96×（变慢）、累计峰值口径无法证实收益 → 不合入。模型资产全部保持未启用，`accel` 仅保留为可选开关。
+    - **原生 `Flux2KleinInpaintPipeline` 探针**：可直接加载 4B 权重、1360×768 扩图 22.18s（比 `sdxl-inpaint` 35.42s 快 1.6×），但受 1 MP 画布上限与 4 步接缝质量限制 → 本轮不迁移默认扩图引擎。
 
 ---
 
@@ -326,4 +347,4 @@
 | **十二** | 舞台图片处理工具栏与交互解耦（方案 B） | 前端交互重构 | 十一完成收口 | **✅ 已完成（0.13.0，未发版）** |
 | **十三** | 显式新建绘图、多作品草稿圆点与树状版本管理 | 前端 + Host 元数据 | 十二（方案 B 底座） | **✅ 已完成（0.13.0，未发版）** |
 | **十四** | Google Colab（Colab Pro）后端接入 | Host 算力扩展 + `remote/` 适配 | 十一收口后可与十二/十三并行（需先过 M0 探针） | **✅ 已完成并合入 `main`（2026-11-18）** |
-| **十五** | 交互语义对齐、双向助手闭环与模型原生参考演进（Phase 0~C） | 全链路体验 + 导入 + 后处理与 DiT 原生参考 | 十三（工作区草稿与版本树） | 🟡 Phase 0 / A / B 已完成（未发版，Phase B 已过真机验收）；Phase C 待排期 |
+| **十五** | 交互语义对齐、双向助手闭环与模型原生参考演进（Phase 0~C） | 全链路体验 + 导入 + 后处理与 DiT 原生参考 | 十三（工作区草稿与版本树） | **✅ 已完成（0.13.0，未发版）**：Phase 0 / A / B 此前完成，Phase C（C0 状态收口、C1 原生参考与推理加速真机对照、C2 左栏参考槽）本轮收口 |

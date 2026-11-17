@@ -47,6 +47,10 @@ class Job:
     # job 级参考图（M3 图生图）：提交期校验后归一成
     # ``{image_bytes, strength, width, height}``；None 表示文生图，路径与行为完全不变。
     reference: dict | None = None
+    # job 级原生参考图列表（阶段十五 Phase C1，supportsReference）：提交期只读图片头校验，
+    # 归一成 ``{"items": [{image_bytes, width, height}, ...]}``。与 reference 互斥（同一个
+    # 请求只能走一条参考路径）；None 表示不使用参考图，旧路径行为完全不变。
+    reference_images: dict | None = None
     status: str = JOB_STATUS_QUEUED
     results: list = field(default_factory=list)
     error: dict | None = None

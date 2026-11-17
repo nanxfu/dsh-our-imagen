@@ -71,6 +71,16 @@
     时 fp16，执行结束（含异常）卸载模型并 ``torch.cuda.empty_cache()``，避免和后续扩散
     任务争显存。结果在原有 results 字段上追加 ``upscale`` / ``scale`` / ``sourceWidth`` /
     ``sourceHeight``；``tool=generate`` 的请求与执行行为与改造前逐字不变。
+17. **模型原生参考生图（``referenceImages``，阶段十五 Phase C1）**：``tool=generate`` 可带
+    job 级 ``referenceImages: [{image_b64}, ...]``（数组长度 ≤ ``limits.referenceImages.maxCount``），
+    与单图垫图的 ``reference`` 是两条**互斥**路径（同时出现由 ``validate_generate_spec`` 400）。
+    提交期（``parse_reference_images``）只读图片头：loader 白名单 ``SUPPORTED_REFERENCE_LOADERS``
+    （首期只有 ``flux2``，其它 loader 显式 400，不静默丢弃）、逐项只认 ``image_b64``（没有
+    strength / 蒙版语义）、单张体积 / PNG-JPEG / 最小长边。执行期（``decode_reference_images``）
+    逐张完整解码一次、转 RGB、长边超过 ``maxEdge`` 等比缩小（不写盘）；``run_task`` 走基础管线
+    分支，把 PIL 列表作为 ``image=`` 传入，**宽高严格使用请求值**（不跟随参考图），结果字段与
+    文生图完全一致。原生参考产物不折叠进参考图版本树：Host 在 ``meta.json`` 写
+    ``referenceSources`` 溯源，daemon 不写任何路径。
 
 文件边界（Batch 2 切片⑥f 之后）：本文件只留**配置注入点、ntfy 会合、模型加载的装配与出图
 执行、job 执行、/health 取样、以及三处装配块**（HTTP_API / TUNNEL / APP）。HTTP 传输层在
@@ -641,6 +651,8 @@ LOADERS = default_registry()
 SUPPORTED_LOADERS = LOADERS.names()
 SUPPORTED_IMG2IMG_LOADERS = LOADERS.img2img_names()
 SUPPORTED_INPAINT_LOADERS = LOADERS.inpaint_names()
+# 原生参考生图（supportsReference）的 loader 白名单：首期只有 flux2。
+SUPPORTED_REFERENCE_LOADERS = LOADERS.reference_names()
 
 # 磁盘与缓存的门面：构造一次；config 传活对象（注入契约在启动期原地回填，见 config.py）。
 CACHE = CacheManager(
@@ -678,6 +690,8 @@ def release_pipeline() -> None:
         pipe = STATE.pipe
         STATE.pipe = None
         STATE.pipeline_key = None
+        # 惰性派生 img2img / inpaint 时要按同一份 spec 重新应用 accel，释放时必须一起清。
+        STATE.pipeline_spec = None
         STATE.model_id = None
         STATE.loaded = []
         STATE.sig_params = set()
@@ -739,6 +753,8 @@ def ensure_pipeline(pipeline_spec: dict) -> tuple[object, float]:
     with STATE_LOCK:
         STATE.pipe = pipe
         STATE.pipeline_key = key
+        # 保存一份 pipeline 描述：from_pipe 派生 img2img / inpaint 后要按它重新应用 accel。
+        STATE.pipeline_spec = json.loads(json.dumps(pipeline_spec, default=str))
         STATE.model_id = str(pipeline_spec.get("base"))
         STATE.loaded = [identity]
         STATE.sig_params = sig_params
@@ -746,6 +762,21 @@ def ensure_pipeline(pipeline_spec: dict) -> tuple[object, float]:
     set_phase("ready")
     log(f"[load] 模型就绪，用时 {elapsed}s（{identity}）")
     return pipe, elapsed
+
+
+def _apply_pipeline_accel(pipe):  # noqa: ANN001, ANN201
+    """给 from_pipe 派生的管线应用当前底座的 ``pipeline.accel``（无 spec 时原样返回）。
+
+    惰性派生管线与底座共享 VAE / UNet 组件，但 ``from_pipe`` 返回的是新管线对象：
+    VAE 的 tiling/slicing 要重新 set 一次；UNet 的 channels_last / fuse 由策略内部按
+    「是否已 fuse」幂等处理（共享 UNet 时不会二次 fuse、不会报错）。旧资产没有 accel 时
+    这里直接原样返回，派生管线的行为与改造前逐字一致。
+    """
+    with STATE_LOCK:
+        spec = dict(STATE.pipeline_spec) if isinstance(STATE.pipeline_spec, dict) else None
+    if not spec:
+        return pipe
+    return LOADERS.apply_accel(spec, pipe, log=log)
 
 
 def ensure_img2img_pipeline():
@@ -767,6 +798,9 @@ def ensure_img2img_pipeline():
     log("[load] 首次图生图：从已加载底座复用组件创建 img2img 管线（不额外占显存）")
     try:
         pipe = AutoPipelineForImage2Image.from_pipe(base_pipe)
+        # 派生管线复用同一批底座组件：按同一份 pipeline 描述重新应用 accel
+        # （VAE tiling/slicing 直接生效；UNet 的 fuse 由策略按已 fuse 状态幂等跳过）。
+        pipe = _apply_pipeline_accel(pipe)
     except Exception as exc:
         if _is_oom(exc):
             raise
@@ -809,6 +843,8 @@ def ensure_inpaint_pipeline():
     log("[load] 首次局部重绘：从已加载底座复用组件创建 inpaint 管线（不额外占显存）")
     try:
         pipe = AutoPipelineForInpainting.from_pipe(base_pipe)
+        # 局部重绘派生管线同样带上同一套 accel（不重复 fuse 共享 UNet）。
+        pipe = _apply_pipeline_accel(pipe)
     except Exception as exc:
         if _is_oom(exc):
             raise
@@ -854,7 +890,9 @@ from remote.inference.reference_codec import (  # noqa: E402
     composite_inpaint_image as composite_inpaint_image_impl,
     decode_mask_image as decode_mask_image_impl,
     decode_reference_image as decode_reference_image_impl,
+    decode_reference_images as decode_reference_images_impl,
     feather_mask_image as feather_mask_image_impl,
+    parse_reference_images as parse_reference_images_impl,
     parse_reference_spec as parse_reference_spec_impl,
     parse_upscale_reference as parse_upscale_reference_impl,
 )
@@ -900,6 +938,22 @@ def parse_reference_spec(raw, pipeline_spec: dict) -> dict | None:  # noqa: ANN0
 def decode_reference_image(reference: dict) -> object:
     """执行期完整解码参考图一次：转 RGB，长边超过 ``maxEdge`` 时等比 LANCZOS 缩小。"""
     return decode_reference_image_impl(reference, limits_for=_limit_spec)
+
+
+def parse_reference_images(raw, pipeline_spec: dict):  # noqa: ANN001
+    """提交期校验 job 级原生参考图列表（``referenceImages``，阶段十五 Phase C1）。
+
+    只读图片头：调用方给 loader 白名单，daemon 依此拒绝非支持模型；与 ``reference`` 的
+    互斥在 ``validate_generate_spec`` 里拦截。归一回 ``{"items": [...]}`` 或 None。
+    """
+    return parse_reference_images_impl(
+        raw, pipeline_spec, limits_for=_limit_spec, reference_loaders=SUPPORTED_REFERENCE_LOADERS
+    )
+
+
+def decode_reference_images(reference_images):  # noqa: ANN001, ANN201
+    """执行期把原生参考图列表完整解码一次（逐张转 RGB、长边超 ``maxEdge`` 等比缩小）。"""
+    return decode_reference_images_impl(reference_images, limits_for=_limit_spec)
 
 
 def decode_mask_image(mask: dict, size: tuple[int, int]) -> object:
@@ -979,7 +1033,12 @@ def _sync_cuda() -> None:
 
 
 def run_task(  # noqa: ANN001
-    pipe, task: dict, reference_image=None, reference_strength=None, mask_image=None
+    pipe,
+    task: dict,
+    reference_image=None,
+    reference_strength=None,
+    mask_image=None,
+    reference_images=None,
 ) -> dict:
     """执行单个出图任务，返回与旧 ``/generate`` 完全一致的 results 项。
 
@@ -993,6 +1052,9 @@ def run_task(  # noqa: ANN001
     参数为 ``image`` + ``mask_image`` + ``strength``；宽高显式取参考图实际送入模型的尺寸
     并按 8 对齐（不支持 width/height 的管线由 ``filter_call_kwargs`` 丢弃）。专用 9 通道
     inpaint 模型在非正方形参考图下若按缺省方形推理，出图再被 composite 拉回会畸变。
+    ``reference_images`` 非空时走原生参考生图分支（阶段十五 Phase C1）：直接用已加载的
+    基础管线，把解码后的 PIL 列表作为 ``image=`` 传入，**不使用 from_pipe、不吃 strength、
+    宽高严格取请求值**（模型把参考图当条件而不是画布，出图尺寸由 width/height 决定）。
     """
     import torch
 
@@ -1000,9 +1062,13 @@ def run_task(  # noqa: ANN001
     generator = None
     use_reference = reference_image is not None
     use_inpaint = use_reference and mask_image is not None
+    use_reference_images = reference_images is not None
     if mask_image is not None and reference_image is None:
         # 防御性约束：蒙版脱离参考图无法定位重绘区域；execute_job 不会构造这种组合。
         raise RequestError("局部重绘必须同时提供参考图")
+    if use_reference_images and (use_reference or use_inpaint):
+        # 防御性约束：单图垫图 / 局部重绘与原生参考生图是两条互斥路径（提交期已拦）。
+        raise RequestError("原生参考生图与图生图 / 局部重绘不能同时使用")
     with STATE_LOCK:
         native_inpaint = bool(STATE.native_inpaint)
     if native_inpaint and not use_inpaint:
@@ -1039,6 +1105,21 @@ def run_task(  # noqa: ANN001
             "strength": strength,
             "num_inference_steps": task["steps"],
             "guidance_scale": task["cfg"],
+            "generator": generator,
+        }
+    elif use_reference_images:
+        # 原生参考生图（Phase C1）：基础管线直接接收 image=[PIL...] 条件；
+        # 宽高显式取请求值（任务级 width/height），出图尺寸不跟随参考图。
+        target_pipe = pipe
+        with STATE_LOCK:
+            sig = set(STATE.sig_params)
+        call_kwargs = {
+            "prompt": task["prompt"],
+            "image": list(reference_images),
+            "num_inference_steps": task["steps"],
+            "guidance_scale": task["cfg"],
+            "width": task["width"],
+            "height": task["height"],
             "generator": generator,
         }
     else:
@@ -1100,6 +1181,19 @@ def run_task(  # noqa: ANN001
             f"[gen] img2img 参考图 {source[0]}x{source[1]} → "
             f"{reference_image.size[0]}x{reference_image.size[1]}"
         )
+    elif use_reference_images:
+        # 原生参考生图：参考图只作为图像条件，输出宽高由请求决定（不跟随参考图）。
+        log(
+            f"[gen] reference {task['name']} images={len(reference_images)} seed={task['seed']} "
+            f"{task['width']}x{task['height']} steps={task['steps']} cfg={task['cfg']} "
+            f"kw={','.join(sorted(call_kwargs))}"
+        )
+        for index, reference in enumerate(reference_images, start=1):
+            source = getattr(reference, "_imagen_source_size", reference.size)
+            log(
+                f"[gen] reference 参考图 {index} {source[0]}x{source[1]} → "
+                f"{reference.size[0]}x{reference.size[1]}"
+            )
     else:
         log(
             f"[gen] {task['name']} seed={task['seed']} {task['width']}x{task['height']} "
@@ -1177,17 +1271,20 @@ def run_tasks(
     reference_image=None,  # noqa: ANN001
     reference_strength=None,  # noqa: ANN001
     mask_image=None,  # noqa: ANN001
+    reference_images=None,  # noqa: ANN001
 ) -> list[dict]:
     """串行跑完一批任务；``on_progress`` 拿到「已完成的结果列表」副本，用于刷新 job 进度。
 
     ``reference_image`` 非空时整批任务共用同一张参考图（job 级，execute_job 只解码一次）；
     ``mask_image`` 非空时走局部重绘，同样是整批共用（已对齐到参考图宽高）。
+    ``reference_images`` 非空时是原生参考生图：整批共用一列已解码的 PIL 图（job 级只解码一次），
+    与上面两条路径互斥。
     """
     results: list[dict] = []
     for task in tasks:
         with STATE_LOCK:
             STATE.last_active = time.time()
-        if reference_image is None:
+        if reference_image is None and reference_images is None:
             results.append(run_task(pipe, task))
         else:
             results.append(
@@ -1197,6 +1294,7 @@ def run_tasks(
                     reference_image=reference_image,
                     reference_strength=reference_strength,
                     mask_image=mask_image,
+                    reference_images=reference_images,
                 )
             )
         if on_progress is not None:
@@ -1369,6 +1467,7 @@ def execute_job(job: Job) -> None:
     GEN_LOCK.acquire()
     reference_image = None
     mask_image = None
+    reference_images = None
     try:
         started = time.time()
         if job.tool == "upscale":
@@ -1387,6 +1486,10 @@ def execute_job(job: Job) -> None:
             _finish_job(job, JOB_STATUS_DONE)
             return
         reference_strength = None
+        if job.reference is not None and job.reference_images is not None:
+            # 防御性约束：提交期（validator._validate_reference_shapes）已拦掉同时给出，
+            # 这里兜一层，避免绕过 HTTP 直接构造 job 的调用方得到意外的推理行为。
+            raise RequestError("reference 与 referenceImages 不能同时使用")
         if job.reference is not None:
             # 图生图 / 局部重绘：参考图与蒙版完整解码各只做一次（整批 count 共用），且放在
             # 加载模型之前——图片本身损坏/截断或蒙版为空时不必先下载、加载几十 GB 权重。
@@ -1418,11 +1521,22 @@ def execute_job(job: Job) -> None:
                     log(f"[gen] inpaint 蒙版覆盖率 {coverage:.2%}{suffix}")
             # 解码完成后释放队列里保留的原始字节（job 公开视图不含参考图/蒙版）。
             JOB_STORE.clear_reference(job)
+        elif job.reference_images is not None:
+            # 原生参考生图：整批 count 共用同一列参考图，完整解码只做一次，且放在加载模型
+            # 之前——图片损坏/截断时不必先下载、加载几十 GB 权重。
+            reference_images = decode_reference_images(job.reference_images)
+            JOB_STORE.clear_reference_images(job)
+            for index, reference in enumerate(reference_images, start=1):
+                source = getattr(reference, "_imagen_source_size", reference.size)
+                log(
+                    f"[gen] reference 参考图 {index} 解码完成："
+                    f"{source[0]}x{source[1]} → {reference.size[0]}x{reference.size[1]}"
+                )
         pipe, load_seconds = ensure_pipeline(job.pipeline)
         JOB_STORE.record_loaded(job, load_seconds)
         with STATE_LOCK:
             STATE.last_active = time.time()
-        if reference_image is None:
+        if reference_image is None and reference_images is None:
             results = run_tasks(
                 pipe,
                 job.tasks,
@@ -1436,6 +1550,7 @@ def execute_job(job: Job) -> None:
                 reference_image=reference_image,
                 reference_strength=reference_strength,
                 mask_image=mask_image,
+                reference_images=reference_images,
             )
         JOB_STORE.set_results(job, results)
         with STATE_LOCK:
@@ -1469,6 +1584,14 @@ def execute_job(job: Job) -> None:
                     close_fn()
                 except Exception:
                     pass
+        if reference_images is not None:
+            for reference in reference_images:
+                close_fn = getattr(reference, "close", None)
+                if callable(close_fn):
+                    try:
+                        close_fn()
+                    except Exception:
+                        pass
         try:
             GEN_LOCK.release()
         except RuntimeError:  # pragma: no cover - 理论上不会发生
@@ -1550,6 +1673,7 @@ HTTP_API = HttpApi(
     submit_job=lambda *args, **kwargs: JOB_STORE.submit(*args, **kwargs),
     validate_generate_spec=lambda spec: validate_generate_spec(spec),
     parse_reference_spec=lambda raw, pipeline_spec: parse_reference_spec(raw, pipeline_spec),
+    parse_reference_images=lambda raw, pipeline_spec: parse_reference_images(raw, pipeline_spec),
     parse_upscale_reference=lambda raw: parse_upscale_reference(raw),
     build_upscale_task=lambda width, height: build_upscale_task(width, height),
     normalize_job_id=lambda raw: normalize_job_id(raw),

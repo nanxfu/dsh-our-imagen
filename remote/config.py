@@ -328,6 +328,7 @@ LIMIT_NUMERIC_KEYS = (
     "maxBytes",
     "maxEdge",
     "minEdge",
+    "maxCount",
     "inpaintMax",
     "minCoverage",
     # 高清放大（tool=upscale）：放大倍数与输入/输出长边上限，Host 与 daemon 共用同一份。
@@ -383,17 +384,32 @@ def _limit_max_bytes(name: str) -> int:
 
 
 def request_body_limit() -> int:
-    """请求体字节上限：按「参考图 + 蒙版」边界的 base64 膨胀推导，下限 8MB。
+    """请求体字节上限：按「参考图 + 蒙版」与「原生参考图列表」两种形状的较大者推导，下限 8MB。
 
-    8MiB 参考图 base64 后约 10.7MB；局部重绘还会再带一张 ≤2MiB 的蒙版（base64 后约
-    2.7MB），两者同时顶格约 13.5MB。只按参考图推导会让「参考图 + 蒙版」的合法请求
-    在 `_read_json` 这一层就被体积上限拒掉（表现为 invalid_request / 请求体超过上限）。
-    不下发 ``reference`` 的旧 Host 走内置契约的同一条公式，因此也能通过；文生图请求
-    （结构上远小于 1MB）不受影响。
+    两种形状互斥（``reference`` 单图垫图 / ``referenceImages`` 原生参考，见
+    ``transport/validator.py`` 的 ``_validate_reference_shapes``），因此不用相加：
+
+    - 垫图 + 局部重绘：8MiB 参考图 + ≤2MiB 蒙版，base64 后约 13.5MB；
+    - 原生参考图：≤2 张 × 4MiB = 8MiB，base64 后约 10.7MB。
+
+    取较大者并留 1MB 给 tasks / prompt / jobId 等 JSON 字段。上限**跟着契约走**，
+    不是另一份手写数字：真机收紧 ``referenceImages.maxCount`` / ``maxBytes`` 后这里自动变小。
+    不下发 ``referenceImages`` 的旧 Host 走同一个公式（旧形状的推导结果与改造前逐字一致），
+    文生图请求（结构上远小于 1MB）不受影响。
     """
     base = 8 * 1024 * 1024
-    max_bytes = _limit_max_bytes("reference") + _limit_max_bytes("mask")
-    if max_bytes <= 0:
+    reference_bytes = _limit_max_bytes("reference") + _limit_max_bytes("mask")
+    images_limits = limit_spec("referenceImages")
+    image_bytes = 0
+    try:
+        count = int(images_limits.get("maxCount") or 0)
+        per_image = int(images_limits.get("maxBytes") or 0)
+    except (TypeError, ValueError):
+        count, per_image = 0, 0
+    if count > 0 and per_image > 0:
+        image_bytes = count * per_image
+    shape_bytes = max(reference_bytes, image_bytes)
+    if shape_bytes <= 0:
         return base
     # base64 每 3 字节膨胀成 4 字符；再留 1MB 给 tasks / prompt / jobId 等 JSON 字段。
-    return max(base, 4 * ((int(max_bytes) + 2) // 3) + 1024 * 1024)
+    return max(base, 4 * ((int(shape_bytes) + 2) // 3) + 1024 * 1024)

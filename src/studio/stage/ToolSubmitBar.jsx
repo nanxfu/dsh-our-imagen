@@ -20,21 +20,8 @@ import React from 'react'
 
 import { LIMITS } from '../../../shared/contract.js'
 
-import { formatText } from '../../logic/format.js'
+import { formatText, percentOf } from '../../logic/format.js'
 import { presetLabelOf } from '../../logic/generate.js'
-
-/**
- * 涂抹覆盖率 → 界面百分比读数。
- *
- * 与旧 Stage 的读数保持同一口径：不足 10% 时保留一位小数，
- * 避免刚涂一点就显示 0%。纯逻辑侧只存 6 位小数的覆盖率。
- */
-function percentOf(coverage) {
-  const value = Number(coverage)
-  if (!Number.isFinite(value) || value <= 0) return 0
-  const percent = Math.min(100, value * 100)
-  return percent >= 10 ? Math.round(percent) : Math.round(percent * 10) / 10
-}
 
 export function ToolSubmitBar(props) {
   const {

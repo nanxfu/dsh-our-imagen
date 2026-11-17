@@ -18,6 +18,9 @@
  *
  * 0.13.0 起参考图 / 蒙版 / 重绘强度迁到舞台图片工具（`useImageTool`），
  * 主表单快照只比较提示词与纯文生图参数。
+ *
+ * 阶段十五 Phase C2：左栏新增「原生参考图槽」（`references`）。挂载 / 移除 / 换图都算
+ * 未提交修改，因此参考图路径指纹纳入表单快照；新建创作与还原原图会清空槽位。
  */
 
 import { LIMITS } from '../../shared/contract.js'
@@ -25,6 +28,7 @@ import { negativePromptActive } from '../../shared/models-guide.js'
 
 import { hintOf } from './preset.js'
 import { negativeLayersPatch, normalizeNegativeLayers } from './prompt.js'
+import { referenceFingerprintOf } from './reference.js'
 
 /** 与生成结果相关的字段；展示用的负向层数据由合并文本代表，不单独比较。 */
 const SNAPSHOT_FIELDS = ['prompt', 'negative', 'presetId', 'seed']
@@ -54,6 +58,8 @@ export function formSnapshotOf(form) {
   snapshot.steps = numberish(input.steps)
   snapshot.cfg = numberish(input.cfg)
   snapshot.count = numberish(input.count)
+  // 原生参考图槽（Phase C2）：挂载 / 移除都算未提交修改，只比较有序路径指纹。
+  snapshot.references = referenceFingerprintOf(input.references)
   return JSON.stringify(snapshot)
 }
 
@@ -72,6 +78,9 @@ export function isFormDirty(form, baseline) {
  *
  * 只清掉绑定到上一张具体作品的状态：提示词、固定种子、排除项回落到
  * 当前预设的默认推荐状态。模型预设与画幅比例是用户下一张还要用的常用设置，保留不动。
+ *
+ * 阶段十五 Phase C2：参考图槽也属于「上一张创作」的输入，随新建创作一起清空
+ * （清空不弹窗，但槽位内容会先进草稿槽，见 `parkDraft`）。
  */
 export function newCreationPatch(form, preset) {
   const input = form && typeof form === 'object' ? form : {}
@@ -86,6 +95,7 @@ export function newCreationPatch(form, preset) {
   return {
     prompt: '',
     seed: '',
+    references: [],
     ...negativeLayersPatch(layers),
   }
 }

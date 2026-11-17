@@ -40,6 +40,11 @@ user-invocable: true
 - `supportsInpaint` 默认 `false`。局部重绘要在 `supportsImg2Img` 为 `true` 的基础上再验证
   `AutoPipelineForInpainting.from_pipe` 能复用同一底座（参考图 + 黑白蒙版出图正常）才标 `true`；
   它不能脱离 `supportsImg2Img` 单独为 true，`npm run models:check` 会拦下这种组合；
+- `supportsReference` **必填布尔值**（缺省不允许）。语义是「基础生成管线原生接收
+  `image=[PIL...]` 图像条件，宽高仍由请求决定，没有 strength / 蒙版」；首期只有 `flux2`
+  （`Flux2KleinPipeline`）标 `true`。它与 `supportsImg2Img` **互斥**（两种请求形状不同：
+  `references` 数组 vs `reference` 单图），`npm run models:check` 会拦下同时为 true 的资产；
+  标 `true` 前必须真机验证 1~2 张参考图的耗时 / 显存 / 效果，并确认是「弱参考」定位；
 - 专用 inpaint 权重（9 通道，如 `diffusers/stable-diffusion-xl-1.0-inpainting-0.1`）还要额外标
   `"inpaintOnly": true` 与 `pipeline.nativeInpaint: true`：前者表示只能带蒙版使用（不能文生图 /
   纯图生图），后者让 daemon 用 `AutoPipelineForInpainting.from_pretrained` 加载；两个字段必须成对出现；
@@ -50,6 +55,14 @@ user-invocable: true
 - `negativeHint` 是「模型推荐默认负向词」，与 `supportsNegative` 相互独立：支持负向词但默认不推荐时可以是空串
   （如 `anima-light-lavender`）。「排除项」是否展示由 `shared/models-guide.js` 的 `negativePromptActive(preset, cfg)`
   联合判定，不要按 `negativeHint` 是否为空单独推断能力；
+- `pipeline.variant`：仓库有 `*_fp16` 变体目录时写 `"fp16"`，否则写 `null`（写错会先探测失败再回退，
+  真实链路多一次 15~20s 的长下载探测）；
+- `pipeline.allowPatterns`：预下载白名单（`snapshot_download` 词法），目录里同时有单文件整包副本时
+  用组件目录白名单（`model_index.json` / `scheduler/**` / `text_encoder/**` / `tokenizer/**` /
+  `transformer/**` / `vae/**`）避免重复下载；`null` 表示整仓。收紧后必须真机验证能加载；
+- `pipeline.accel`（可选）：推理加速开关对象，键只允许 `vaeTiling` / `vaeSlicing` / `channelsLast` /
+  `fuseQkv`（布尔，缺省整块省略 = 全部关闭）。没有真机 A/B 数据前不要写，写错键会直接被
+  `npm run models:check` 拒绝；
 - 字段格式见本 skill 末尾模板，完整定义见 `docs/MODEL_ASSET_SPEC.md`。
 
 写完后先自检一遍 JSON 合法性，再进入下一步。
@@ -151,13 +164,14 @@ npm test
   "supportsImg2Img": false,
   "supportsInpaint": false,
   "inpaintOnly": false,
+  "supportsReference": false,
   "supportsNegative": false,
   "pipeline": {
     "loader": "sdxl",
     "base": "<owner/name>",
     "lora": null,
     "scheduler": null,
-    "variant": "fp16",
+    "variant": null,
     "downloadGb": 6.8,
     "allowPatterns": null,
     "deviceMap": null

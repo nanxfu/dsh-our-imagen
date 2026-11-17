@@ -8,7 +8,7 @@
 
 import React from 'react'
 
-import { referenceFileName } from '../../logic/generate.js'
+import { referenceFileName } from '../../logic/reference.js'
 
 import { ToolSubmitBar } from './ToolSubmitBar.jsx'
 

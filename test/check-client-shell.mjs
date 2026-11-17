@@ -376,6 +376,52 @@ await check('渲染：英文界面的生图流水线', async () => {
   assert.ok(text.includes('1 more queued'), '[pipeline] 英文排队数量应本地化')
   assert.ok(!text.includes('另有'), '[pipeline] 英文界面不应出现中文队列文案')
 })
+// 阶段十五 Phase C0：1Hz 读秒从 Studio 顶层下沉到流水线自己——只有它随后一秒重渲染；
+// 空闲（无活动任务 / 非过渡态）时不注册任何定时器，等待期间不驱动整页。
+await check('渲染：流水线读秒下沉到组件内部（等待时自走一秒，空闲时不计时）', async () => {
+  const running = { id: 'job-tick', status: 'running', createdAt: at(-8), startedAt: at(-8), params: { prompt: '读秒中的画面' } }
+  const client = await createTestClient({
+    now: NOW,
+    responses: studioResponses({ ...readyState, jobs: [running] }, { items: [] }),
+    testBuild: true,
+  })
+  const t = client.internals.i18n.fallbackTranslate('zh')
+  const timeTextOf = (tree) => {
+    const node = findNodes(
+      tree,
+      (item) => typeof item.props?.className === 'string' && item.props.className.split(/\s+/).includes('ofs-pl-time'),
+    )[0]
+    return node ? collectText(node).join('') : ''
+  }
+  const mountBar = (props) => client.mountRaw(client.components.PipelineBar, {
+    t,
+    session: { state: 'ready' },
+    activeJob: null,
+    focusedJob: null,
+    pendingCount: 0,
+    queuePolicy: null,
+    failureDismissed: false,
+    transient: false,
+    ...props,
+  })
+  try {
+    // 等待中：组件内部每秒推进「已等待」读数，重新渲染即可见。
+    let tree = await mountBar({ activeJob: running, pendingCount: 1 })
+    assert.ok(timeTextOf(tree).includes('0:08'), `应在组件内渲染已等待 0:08，实际：${timeTextOf(tree)}`)
+    assert.equal(await client.advanceTimers(1000), 1, '等待期间流水线注册了 1Hz 走字定时器')
+    tree = await client.rerenderRaw()
+    assert.ok(timeTextOf(tree).includes('0:09'), `走一秒后应为 0:09，实际：${timeTextOf(tree)}`)
+
+    // 空闲：没有活动任务、也不是过渡会话态 → 不渲染计时，也不再注册定时器。
+    client.unmount()
+    tree = await mountBar({})
+    assert.equal(countByClass(tree, 'ofs-pl-time'), 0, '空闲时不显示「已等待」计时')
+    assert.equal(await client.advanceTimers(3000), 0, '空闲时流水线不注册定时器')
+    await client.rerenderRaw()
+  } finally {
+    client.unmount()
+  }
+})
 await check('渲染：日志抽屉（就绪 / 空态 / 不可用）', async () => {
   const fallbackState = {
     ...readyState,
@@ -1919,5 +1965,54 @@ await check('渲染：没有新版本时不出现红点与更新说明', async (
   const plain = collectText(tree).join('')
   assert.equal(countByClass(tree, 'ofs-update-dot'), 0, '无更新时不应出现红点')
   assert.ok(!plain.includes('查看更新说明'), `无更新时不应出现更新说明：${plain}`)
+})
+// ── 阶段十五 Phase C2：原生参考图槽接入整页工作台 ──────────────────────────
+await check('渲染：参考生图模型下的左栏参考图槽（整页工作台）', async () => {
+  // 首期唯一支持原生参考生图的模型：左栏应在提示词与画面设置之间多出参考图小节。
+  const klein = {
+    ...preset,
+    id: 'flux2-klein-4b',
+    label: 'FLUX.2 Klein 4B',
+    supportsReference: true,
+    supportsImg2Img: false,
+    supportsNegative: false,
+    cfg: 1,
+    negativeHint: '',
+  }
+  const client = await createTestClient({
+    now: NOW,
+    responses: studioResponses(
+      { ...readyState, defaultPreset: klein.id, presets: [klein] },
+      { items: [historyItem] },
+    ),
+    testBuild: true,
+  })
+  try {
+    const tree = await client.mountRaw(client.components.Studio, { workspaceMode: 'work' })
+    assert.equal(countByClass(tree, 'ofs-ref-zone'), 1, '支持参考的模型应渲染参考图小节')
+    const text = collectText(tree).join(' | ')
+    assert.ok(text.includes('添加参考图（最多 2 张）'), `空态入口文案应完整：${text}`)
+    assert.ok(text.includes('参考图是弱条件'), '应说明参考图是弱条件（不宣称强一致）')
+    // 动作坞创作复用组包含「设为参考图」；页脚仍只有一个生成按钮。
+    const dock = findNodes(tree, (node) => node.props && node.props.className === 'ofs-dock')[0]
+    assert.ok(dock, '作品分支应有动作坞')
+    assert.ok(collectText(dock).join(' | ').includes('设为参考图'), '动作坞应有「设为参考图」')
+    assert.equal(countByClass(tree, 'ofs-generate'), 1, '生成按钮仍只有页脚一个')
+  } finally {
+    client.unmount()
+  }
+
+  // 换成不支持参考的模型：同一份工作台状态不出现参考图小节。
+  const plain = await createTestClient({
+    now: NOW,
+    responses: studioResponses(readyState, { items: [historyItem] }),
+    testBuild: true,
+  })
+  try {
+    const tree = await plain.mountRaw(plain.components.Studio, { workspaceMode: 'work' })
+    assert.equal(countByClass(tree, 'ofs-ref-zone'), 0, '不支持参考的模型不渲染参考图小节')
+  } finally {
+    plain.unmount()
+  }
 })
 summary()

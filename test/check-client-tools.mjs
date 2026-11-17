@@ -366,8 +366,9 @@ await check('渲染：局部涂抹画布按底图比例渲染，工具栏可键�
     client.unmount()
   }
 })
-// 编辑中切换胶片条：预览 / 选中变化不改变工具底图；dock 隐藏创作复用组。
-await check('渲染：涂抹中切换胶片条不改变工具底图，dock 只留退出', async () => {
+// 编辑中切换胶片条：先退出画布编辑态（SPEC §5.17），草稿按作品路径保留；
+// 预览与左栏切到被点作品，工具底图仍绑定在打开时确定的那张（阶段十五 Phase C0）。
+await check('渲染：涂抹中切换胶片条退出编辑态，工具底图与草稿按路径保留', async () => {
   const client = await createTestClient({
     now: NOW,
         responses: studioResponses({ ...readyState, presets: [toolPreset], defaultPreset: 'sdxl-lightning' }, { items: [historyItem] }),
@@ -381,20 +382,33 @@ await check('渲染：涂抹中切换胶片条不改变工具底图，dock 只�
     tree = await client.rerenderRaw()
     const photoBefore = nodesByClass(tree, 'ofs-mask-photo')[0]
     assert.equal(photoBefore.props.src, historyItem.images[0].url, '底图是舞台当前作品')
-    // 点另一张缩略图：预览与选中切换，但正在编辑的工具底图不能被悄悄换掉。
+    // 涂抹中写一段未提交的修改描述：切走后这份草稿要按作品路径保留。
+    nodesByClass(tree, 'ofs-tool-prompt-input')[0].props.onChange({ target: { value: '涂抹中的草稿' } })
+    tree = await client.rerenderRaw()
+    // 点另一张缩略图：预览与左栏切到被点作品，正在编辑的画布先退出（草稿保留）。
     const thumbs = nodesByClass(tree, 'ofs-thumb')
     assert.equal(thumbs.length, 2, '历史批次应有 2 张缩略图')
     const target = thumbs.find((node) => node.key !== historyItem.images[0].path) || thumbs[1]
     target.props.onClick()
     tree = await client.rerenderRaw()
+    assert.equal(nodesByClass(tree, 'ofs-mask-editor').length, 0, '切作品退出画布编辑态')
+    assert.equal(nodesByClass(tree, 'ofs-print').length, 1, '舞台回到作品预览')
+    // 工具底图与草稿仍属于打开时那张：dock 给「继续编辑」，恢复后回到原底图与原描述。
+    const resume = nodesByClass(tree, 'ofs-dock-resume')[0]
+    assert.ok(resume, '切走后保留原作品的工具草稿，dock 给「继续编辑」')
+    resume.props.onClick()
+    tree = await client.rerenderRaw()
     const photoAfter = nodesByClass(tree, 'ofs-mask-photo')[0]
-    assert.ok(photoAfter, '切换缩略图后仍应停留在涂抹画布')
+    assert.ok(photoAfter, '继续编辑回到涂抹画布')
     assert.equal(photoAfter.props.src, historyItem.images[0].url, '工具底图绑定在打开时确定，不随预览切换')
-    // 编辑态底部由单行提交条接管：提供唯一退出按钮，不再重复渲染动作坞或创作复用动作。
+    assert.equal(
+      nodesByClass(tree, 'ofs-tool-prompt-input')[0].props.value,
+      '涂抹中的草稿',
+      '草稿按作品路径恢复',
+    )
+    // 编辑态底部由单行提交条接管：提供唯一退出按钮，不重复渲染动作坞。
     assert.equal(nodesByClass(tree, 'ofs-dock').length, 0, '编辑态不重复渲染动作坞')
     assert.equal(nodesByClass(tree, 'ofs-tool-exit').length, 1, '编辑态提供唯一退出按钮')
-    assert.equal(nodesByClass(tree, 'ofs-dock-resume').length, 0, '编辑态不显示继续编辑')
-    assert.ok(!collectText(nodesByClass(tree, 'ofs-tool-bar')[0]).join('').includes('带回参数'), '编辑态不显示复用动作')
   } finally {
     client.unmount()
   }

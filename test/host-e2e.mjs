@@ -1726,6 +1726,96 @@ async function main() {
     assert.equal(invalid.body.error.code, 'invalid_path')
   })
 
+  await check('参考生图：references 走 /generate 全链路，远端 referenceImages、meta 与 /history 溯源', async () => {
+    const firstDir = join(workspace, 'imagen-output', '20260101-000000-native-ref-a')
+    const secondDir = join(workspace, 'imagen-output', '20260101-000000-native-ref-b')
+    await mkdir(firstDir, { recursive: true })
+    await mkdir(secondDir, { recursive: true })
+    const firstPath = 'imagen-output/20260101-000000-native-ref-a/01.png'
+    const secondPath = 'imagen-output/20260101-000000-native-ref-b/01.png'
+    // 用「头部可解析」的 PNG 夹具：Host 只做魔数预检，mock daemon 只读图片头校验格式与长边。
+    await writeFile(join(firstDir, '01.png'), headerOnlyPng(512, 512))
+    await writeFile(join(secondDir, '01.png'), headerOnlyPng(640, 480))
+
+    const submitted = await json(host.origin, '/imagen-api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        prompt: '同一主角走进雪山',
+        presetId: 'flux2-klein-4b',
+        width: 1024,
+        height: 768,
+        references: [firstPath, secondPath],
+        waitSeconds: 15,
+      }),
+    })
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body))
+    const job = submitted.body
+    assert.equal(job.status, 'done', JSON.stringify(job.error))
+    // 公开视图只给参考图出处与请求画幅，不回传任何二进制。
+    assert.deepEqual(job.params.referenceSources, [firstPath, secondPath])
+    assert.equal(job.params.width, 1024)
+    assert.equal(job.params.height, 768)
+    assert.ok(!JSON.stringify(job).includes(PNG_B64), '任务视图不得回传参考图二进制')
+
+    const call = mock.state.lastBody
+    assert.equal(call.referenceImages.length, 2, '远端载荷是 job 级 referenceImages 数组')
+    for (const item of call.referenceImages) {
+      assert.deepEqual(Object.keys(item), ['image_b64'], '逐项只允许 image_b64（无 strength / 蒙版）')
+      assert.equal(typeof item.image_b64, 'string')
+    }
+    assert.equal(call.reference, undefined, '不得混入单图垫图的 reference 字段')
+    // 原生参考不折叠进参考图版本树：out 尺寸取请求画幅，meta 不写 sourceImage / rootImage。
+    assert.equal(job.output.images[0].width, 1024)
+    assert.equal(job.output.images[0].height, 768)
+    const meta = JSON.parse(await readFile(join(workspace, job.output.dir, 'meta.json'), 'utf8'))
+    assert.equal(meta.source, 'ai')
+    assert.deepEqual(meta.referenceSources, [firstPath, secondPath])
+    assert.equal('sourceImage' in meta, false)
+    assert.equal('rootImage' in meta, false)
+
+    const history = await json(host.origin, '/imagen-api/history?limit=100')
+    assert.equal(history.status, 200)
+    const item = history.body.items.find((entry) => entry.jobId === job.id)
+    assert.ok(item, '/history 应包含本次产物')
+    assert.deepEqual(item.referenceSources, [firstPath, secondPath])
+    assert.equal(item.rootImage, null, '原生参考产物每张候选图各自为根')
+    assert.equal(item.source, 'ai')
+
+    // 入队前 400：与 reference 互斥 / 模型不支持 / 数量超限 / 形状非法 / 路径越界。
+    const rejects = [
+      [
+        { reference: { path: firstPath }, references: [firstPath] },
+        'invalid_request',
+        '不能同时使用',
+      ],
+      [{ presetId: 'sdxl-lightning', references: [firstPath] }, 'invalid_request', '不支持参考生图'],
+      [
+        {
+          presetId: 'flux2-klein-4b',
+          references: Array.from(
+            { length: LIMITS.referenceImages.maxCount + 1 },
+            (_, index) => `imagen-output/20260101-000000-many-${index}/01.png`,
+          ),
+        },
+        'invalid_request',
+        '最多',
+      ],
+      [{ presetId: 'flux2-klein-4b', references: firstPath }, 'invalid_request', '必须是数组'],
+      [{ presetId: 'flux2-klein-4b', references: ['../escape.png'] }, 'invalid_path', '不在 imagen-output/'],
+    ]
+    for (const [payload, code, needle] of rejects) {
+      const rejected = await json(host.origin, '/imagen-api/generate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: '非法参考图', ...payload }),
+      })
+      assert.equal(rejected.status, 400, JSON.stringify(payload))
+      assert.equal(rejected.body.error.code, code, JSON.stringify(payload))
+      assert.ok(rejected.body.error.message.includes(needle), rejected.body.error.message)
+    }
+  })
+
   await check('局部重绘：参考图 + 蒙版走 /generate 全链路，请求体带 mask_b64、meta 记 inpaint', async () => {
     const dir = join(workspace, 'imagen-output', '20260101-000000-inpaint')
     await mkdir(dir, { recursive: true })

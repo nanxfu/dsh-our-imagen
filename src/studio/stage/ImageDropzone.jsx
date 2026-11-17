@@ -33,6 +33,8 @@ import {
   importMimeOf,
   importPrecheckOf,
 } from '../../logic/import.js'
+import { filesOf, hasFilePayload } from '../drag.js'
+import { readFileAsDataUrl } from '../imageFile.js'
 import { Icon } from '../icons.jsx'
 
 /** 与契约 `IMPORT.mimeTypes` 对应的 accept 串（浏览器只做文件选择框过滤，真正的校验在逻辑层）。 */
@@ -41,61 +43,6 @@ const ACCEPT = 'image/png,image/jpeg'
 function translateOf(t, key, params) {
   const template = typeof t === 'function' ? t(key) : key
   return formatText(template, params)
-}
-
-/** DataTransfer.types 在不同浏览器里可能是数组或 DOMStringList，统一成字符串数组。 */
-function dataTransferTypesOf(dataTransfer) {
-  const types = dataTransfer && dataTransfer.types
-  if (!types) return []
-  if (typeof types === 'string') return [types]
-  const out = []
-  const length = Number(types.length) || 0
-  for (let index = 0; index < length; index += 1) {
-    const type = types[index]
-    if (typeof type === 'string') out.push(type)
-  }
-  return out
-}
-
-/** 这次拖拽是否携带文件（拖文字 / 拖链接不显示导入层，也不拦默认行为）。 */
-function hasFilePayload(event) {
-  const dataTransfer = event && event.dataTransfer
-  if (!dataTransfer) return false
-  if (dataTransferTypesOf(dataTransfer).includes('Files')) return true
-  const files = dataTransfer.files
-  if (files && Number(files.length) > 0) return true
-  const items = dataTransfer.items
-  if (items) {
-    const length = Number(items.length) || 0
-    for (let index = 0; index < length; index += 1) {
-      if (items[index] && items[index].kind === 'file') return true
-    }
-  }
-  return false
-}
-
-/** 从 DataTransfer 里按顺序取文件：优先 files，其次 items 里的文件项。 */
-function filesOf(dataTransfer) {
-  const out = []
-  const files = dataTransfer && dataTransfer.files
-  if (files) {
-    const length = Number(files.length) || 0
-    for (let index = 0; index < length; index += 1) {
-      if (files[index]) out.push(files[index])
-    }
-  }
-  if (out.length > 0) return out
-  const items = dataTransfer && dataTransfer.items
-  if (items) {
-    const length = Number(items.length) || 0
-    for (let index = 0; index < length; index += 1) {
-      const item = items[index]
-      if (!item || item.kind !== 'file') continue
-      const file = typeof item.getAsFile === 'function' ? item.getAsFile() : null
-      if (file) out.push(file)
-    }
-  }
-  return out
 }
 
 /** 第一张图片文件；没有图片时退回第一个文件，让「只支持 PNG / JPEG」的提示有处可弹。 */
@@ -111,20 +58,6 @@ function isTextEditingTarget(target) {
   const tag = String(target.tagName || '').toUpperCase()
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
   return target.isContentEditable === true
-}
-
-/** File → dataURL（FileReader 只在事件回调里用到，不影响服务端渲染 / 测试挂载）。 */
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    if (typeof FileReader !== 'function') {
-      reject(new Error('FileReader unavailable'))
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
-    reader.onerror = () => reject(reader.error || new Error('read failed'))
-    reader.readAsDataURL(file)
-  })
 }
 
 export function ImageDropzone(props) {

@@ -18,11 +18,14 @@
  *      version + limits（Host/Client 专有的路由、health phase、ntfy 事件、错误码不再下发远端；P10 生成物）
  *   k. models/*.json 与 shared/models.generated.js 同步（模型资产的唯一来源是 models/）
  *   l. 局部重绘契约键（LIMITS.strength.inpaintMax / LIMITS.mask.minCoverage）存在并已下发远端
+ *   m. 原生参考生图契约键（LIMITS.referenceImages）存在、已下发远端，且协议字段名与远端实现同源
+ *   n. 模型能力位 supportsReference 与推理加速开关 pipeline.accel 的资产校验规则
  *
  * 运行：node test/check-contract.mjs
  */
 
-import { readFile, readdir } from 'node:fs/promises'
+import { readFile, readdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -33,9 +36,11 @@ import {
   PRESETS,
   PROTOCOL,
   LIMITS,
+  PIPELINE_ACCEL_KEYS,
   daemonContract,
   hostErrorCodes,
 } from '../shared/contract.js'
+import { PUBLIC_PRESETS } from '../shared/models.generated.js'
 import { loadModels, renderGenerated, readGenerated } from '../tools/build-assets.mjs'
 import { createCheckRunner } from './helpers/check.mjs'
 
@@ -577,6 +582,178 @@ async function checkInpaintContract() {
   )
 }
 
+// ── m. 原生参考生图契约键（referenceImages）──────────────────────────────
+// Phase C1：参考图列表与单图垫图是两条互斥路径，边界、字段名与远端实现必须同源，
+// 否则「Host 放的 / daemon 拒的」会静默漂移（旧 Host 兼容时也按同一份内置 contract.json）。
+async function checkReferenceImagesContract() {
+  const limits = LIMITS.referenceImages
+  const details = []
+  const required = ['maxCount', 'maxBytes', 'maxEdge', 'minEdge']
+  for (const key of required) {
+    if (!limits || typeof limits[key] !== 'number') details.push(`LIMITS.referenceImages.${key} 必须是数字`)
+  }
+  if (limits) {
+    if (!(limits.maxCount >= 1 && limits.maxCount <= 8)) {
+      details.push(`maxCount=${limits.maxCount} 应在 1~8（真机数据回来后只改契约）`)
+    }
+    if (!(limits.maxBytes > 0)) details.push('maxBytes 必须为正数')
+    if (!(limits.maxEdge > limits.minEdge && limits.minEdge > 0)) {
+      details.push(`长边边界非法：maxEdge=${limits.maxEdge} minEdge=${limits.minEdge}`)
+    }
+    // 与单图垫图的独立口径：不能把两个 maxEdge / maxBytes 混为一份（混了就分不清语义）。
+    if (limits.maxBytes === LIMITS.reference.maxBytes && limits.maxEdge === LIMITS.reference.maxEdge) {
+      details.push('referenceImages 与 reference 的边界完全相同：请确认两条路径确实共用同一口径')
+    }
+  }
+
+  // 下发远端：daemonContract() 与生成物 remote/contract.json 都必须带 referenceImages。
+  const sent = daemonContract().limits
+  if (!sent.referenceImages) {
+    details.push('daemonContract().limits 缺 referenceImages')
+  } else if (JSON.stringify(sent.referenceImages) !== JSON.stringify(limits)) {
+    details.push('daemonContract().limits.referenceImages 与 LIMITS.referenceImages 不一致')
+  }
+  try {
+    const remote = JSON.parse(await readText('remote/contract.json'))
+    if (!remote?.limits?.referenceImages) details.push('remote/contract.json 缺 limits.referenceImages')
+  } catch {
+    details.push('remote/contract.json 不可读（先运行 npm run contract:gen）')
+  }
+
+  // 协议字段名与远端实现同源：PROTOCOL.daemon.referenceImages 声明的 job 级字段与逐项字段
+  // 必须真的出现在远端代码里，不能只写在契约注释中。
+  const protocol = PROTOCOL.daemon.referenceImages
+  if (!protocol || protocol.field !== 'referenceImages') {
+    details.push('PROTOCOL.daemon.referenceImages.field 必须是 referenceImages')
+  }
+  const remoteCodec = await readText('remote/inference/reference_codec.py')
+  for (const field of protocol?.itemFields ?? []) {
+    if (!remoteCodec.includes(`"${field}"`)) details.push(`reference_codec.py 未消费逐项字段 ${field}`)
+  }
+  const transport = `${await readText('remote/transport/http_server.py')}\n${await readText('remote/daemon.py')}`
+  if (!transport.includes('"referenceImages"') && !transport.includes("'referenceImages'") && !transport.includes('referenceImages=')) {
+    details.push('远端 HTTP / daemon 未出现 referenceImages 字段')
+  }
+  if (!transport.includes('SUPPORTED_REFERENCE_LOADERS')) {
+    details.push('daemon 未导出 SUPPORTED_REFERENCE_LOADERS（缺少 loader 白名单兜底）')
+  }
+
+  if (details.length) return fail('m', '原生参考生图（referenceImages）契约未闭环', details)
+  pass(
+    'm',
+    '原生参考生图契约键齐备并已下发远端',
+    `maxCount=${limits.maxCount} / maxBytes=${limits.maxBytes} / maxEdge=${limits.maxEdge} / minEdge=${limits.minEdge}`,
+  )
+}
+
+// ── n. 模型能力位 supportsReference 与推理加速开关 accel 的资产规则 ────────
+async function checkModelCapabilityAssets() {
+  const details = []
+  let models = []
+  try {
+    models = await loadModels()
+  } catch (error) {
+    return fail('n', '模型资产读取失败', [String(error?.message ?? error)])
+  }
+  const flux = models.find((model) => model.id === 'flux2-klein-4b')
+  if (!flux) details.push('缺少 flux2-klein-4b 模型资产')
+  else if (flux.supportsReference !== true) details.push('flux2-klein-4b 的 supportsReference 必须为 true')
+  for (const model of models) {
+    if (typeof model.supportsReference !== 'boolean') {
+      details.push(`${model.id} 的 supportsReference 必须是布尔值（必填）`)
+    }
+    if (model.id !== 'flux2-klein-4b' && model.supportsReference === true) {
+      details.push(`${model.id} 标了 supportsReference=true：首期只有 flux2-klein-4b 经过验证`)
+    }
+    if (model.supportsReference === true && model.supportsImg2Img === true) {
+      details.push(`${model.id} 同时标了 supportsReference 与 supportsImg2Img（互斥的请求形状）`)
+    }
+  }
+  // 公开视图（Client / /state）必须带能力位；pipeline 细节不下发客户端。
+  for (const preset of PUBLIC_PRESETS) {
+    if (typeof preset.supportsReference !== 'boolean') {
+      details.push(`PUBLIC_PRESETS.${preset.id} 缺布尔 supportsReference`)
+    }
+    if ('pipeline' in preset) details.push(`PUBLIC_PRESETS.${preset.id} 不应包含 pipeline`)
+  }
+
+  // 资产校验规则：用临时目录构造非法资产，确认 build-assets 真的会拒绝（防止「文档写了、代码没查」）。
+  let dir = null
+  try {
+    dir = await mkdtemp(join(tmpdir(), 'imagen-model-assets-'))
+    const base = JSON.parse(await readText('models/flux2-klein-4b.json'))
+    const cases = [
+      [
+        '缺少 supportsReference',
+        (() => {
+          const copy = structuredClone(base)
+          delete copy.supportsReference
+          return copy
+        })(),
+        'supportsReference',
+      ],
+      [
+        'supportsReference 非布尔',
+        { ...structuredClone(base), supportsReference: 'yes' },
+        'supportsReference',
+      ],
+      [
+        '同时声明两种参考能力',
+        { ...structuredClone(base), supportsImg2Img: true },
+        '互斥',
+      ],
+      [
+        'accel 未知键',
+        (() => {
+          const copy = structuredClone(base)
+          copy.pipeline = { ...copy.pipeline, accel: { unknownFlag: true } }
+          return copy
+        })(),
+        'accel 含未知键',
+      ],
+      [
+        'accel 非布尔值',
+        (() => {
+          const copy = structuredClone(base)
+          copy.pipeline = { ...copy.pipeline, accel: { vaeTiling: 1 } }
+          return copy
+        })(),
+        '必须是布尔值',
+      ],
+    ]
+    for (const [label, model, needle] of cases) {
+      const file = join(dir, `${base.id}.json`)
+      await writeFile(file, `${JSON.stringify(model, null, 2)}\n`, 'utf8')
+      let message = null
+      try {
+        await loadModels(dir)
+      } catch (error) {
+        message = String(error?.message ?? error)
+      }
+      if (!message) details.push(`${label}：应被 build-assets 拒绝却通过了`)
+      else if (!message.includes(needle)) details.push(`${label}：报错信息缺少「${needle}」（${message}）`)
+      await rm(file, { force: true })
+    }
+  } catch (error) {
+    details.push(`资产校验用例本身失败：${String(error?.message ?? error)}`)
+  } finally {
+    if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {})
+  }
+
+  // accel 键名镜像：daemon 无法 import JS，远端 loader 的 ACCEL_FLAGS 必须与契约同名。
+  const loader = await readText('remote/inference/loaders/diffusers.py')
+  for (const key of PIPELINE_ACCEL_KEYS) {
+    if (!loader.includes(`"${key}"`)) details.push(`remote/inference/loaders/diffusers.py 缺加速开关 ${key}`)
+  }
+
+  if (details.length) return fail('n', '模型能力位 / 加速开关的资产规则未闭环', details)
+  pass(
+    'n',
+    '模型能力位与加速开关资产规则齐备',
+    `supportsReference 必填布尔、accel 键 ${PIPELINE_ACCEL_KEYS.join('/')} 已镜像远端`,
+  )
+}
+
 // ── main ──────────────────────────────────────────────────────────────────
 const CHECKS = [
   checkPackageVersion,
@@ -591,6 +768,8 @@ const CHECKS = [
   checkRemoteContract,
   checkModelAssets,
   checkInpaintContract,
+  checkReferenceImagesContract,
+  checkModelCapabilityAssets,
 ]
 
 async function main() {

@@ -12,6 +12,14 @@
  * 最左端草稿卡（`form.parkDraft`），再回填目标作品；点草稿卡走 `form.openDraft` 恢复，
  * 「还原原图」走 `restoreOriginal`（参数恢复 + 清草稿 + 回到来源作品）。
  *
+ * 阶段十五 Phase C0：焦点与来源「同源收口」全部走 `recallTarget()` 这一个口径——
+ * 胶片条 / 画廊 / 助手结果图 / 导入完成 / 删除后的回退都先按需托管草稿、再回填参数与
+ * `origin`，并统一退出舞台画布编辑态；裸导入图与空白新建画布改为解除与上一张作品的绑定。
+ *
+ * 阶段十五 Phase C2：左栏参考图槽的导入（拖入 / 选择文件 → `/import` 落盘）由
+ * `useReferenceSlot` 负责，本层只做「建槽 / 去重 / 满额 / 换模型 / 送到舞台重绘」这些
+ * 跨域动作；生成请求体里是否带 `references` 统一由 `form.buildBody()` 决定。
+ *
  * effect 顺序：宿主轮询 → 卸载边界 → Toast 定时 → 宿主错误消费 → 预设同步 → 线程同步
  * → 历史/收藏加载 → 首图提示 → 任务完成刷新历史。
  */
@@ -27,6 +35,7 @@ import {
   effectivePresetOf,
   formSummaryOf,
   generateCapabilityOf,
+  isBareImportOf,
   iteratePatch,
   presetLabelOf,
   previewRecallOf,
@@ -35,9 +44,11 @@ import {
 } from '../logic/generate.js'
 import { safeResetPatch } from '../../shared/models-guide.js'
 import { accountStatusOf } from '../logic/probe.js'
+import { referenceListOf, referencePathsOf } from '../logic/reference.js'
 import { useChatThread } from './hooks/useChatThread.js'
 import { useImageTool } from './hooks/useImageTool.js'
 import { useColabLogin, useKaggleLogin } from './hooks/useKaggleLogin.js'
+import { useReferenceSlot } from './hooks/useReferenceSlot.js'
 import { useSessionControl } from './hooks/useSessionControl.js'
 import { useStudioForm } from './hooks/useStudioForm.js'
 import { useStudioUi } from './hooks/useStudioUi.js'
@@ -111,7 +122,17 @@ export function useStudio(props) {
   })
   // generate 是函数声明（提升），chat 在事件回调里调用时已完成初始化。
   const chat = useChatThread({ t, isEn, alive, state, form, generate })
-  const library = useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode })
+  const library = useWorkLibrary({
+    t,
+    alive,
+    ui,
+    state,
+    initialWorkspaceMode,
+    // 阶段十五 Phase C0：删除作品后的级联清理（工具草稿 + 左栏来源引用 + 回退图回填）。
+    onImagesRemoved: handleImagesRemoved,
+  })
+  // 左栏参考图槽的导入动作（阶段十五 Phase C2）：拖入 / 选择文件 → /import → 槽位追加。
+  const referenceSlot = useReferenceSlot({ t, alive, ui, form, library })
 
   /**
    * 点击底部新建画布卡：进入新建画布焦点。
@@ -124,7 +145,10 @@ export function useStudio(props) {
    */
   function focusNewDraft() {
     imageTool.closeTool()
-    form.openDraft()
+    const opened = form.openDraft()
+    // 阶段十五 Phase C0：既没有托管草稿也没有未提交修改时，切空白新建画布不能把上一张
+    // 浏览作品的提示词 / 固定种子 / 「正在微调」来源带进来（保留当前预设与画幅）。
+    if (!opened && form.origin) form.detachOrigin()
     library.focusDraft()
     ui.setView('studio')
     ui.setPanelMode('form')
@@ -163,6 +187,9 @@ export function useStudio(props) {
   const draftPrompt = draftSource && typeof draftSource.prompt === 'string' ? draftSource.prompt.trim() : ''
   const libraryView = {
     ...library,
+    // 阶段十五 Phase C0：助手点结果图 / 单图聚焦返回与胶片条同口径——先按需托管 dirty
+    // 草稿，再回填目标图参数与 origin，消除「舞台换了图、左栏还是上一张」的图文不同步。
+    openMessage: openPath,
     newDraftCard: {
       active: library.workspaceMode === 'new_draft',
       explicit: library.newDraftExplicit === true,
@@ -228,18 +255,31 @@ export function useStudio(props) {
   }
 
   /**
-   * 提交生成（纯文生图）。
+   * 提交生成（纯文生图，可带模型原生参考图）。
    *
-   * 主表单 / 助手 / 变体 / 重试都只做文生图：参考图与蒙版由舞台图片工具自己的提交路径
-   * 负责，不再经过这里，也不会从表单或覆盖项里被带出来。
+   * 主表单 / 助手 / 变体 / 重试都只做文生图：蒙版由舞台图片工具自己的提交路径负责，
+   * 不会从这里被带出来；左栏参考图槽非空时，`form.buildBody()` 会把有序路径数组写进
+   * `references`（Phase C2，所有入口共用同一份拼装，助手与重试不会漏带）。
    *
-   * 专用局部重绘预设（`inpaintOnly`）不能文生图：本次请求改用兜底预设并轻提示（决策 D3），
-   * 左栏表单保持用户选择不变。
+   * 两条前置预检（都不发请求）：
+   *  - 参考图槽非空但当前模型不支持原生参考：拦下并提示换模型 / 移除参考图（不静默丢图）；
+   *  - 专用局部重绘预设（`inpaintOnly`）不能文生图：本次请求改用兜底预设并轻提示（决策 D3），
+   *    左栏表单保持用户选择不变。
    */
   async function generate(overrides, options = {}) {
     if (sending) return false
     const effectivePreset = effectivePresetOf(overrides, form.activePreset, presets)
-    const capability = generateCapabilityOf({ preset: effectivePreset, presets })
+    // 覆盖项（重试 / 变体）里的 references 优先：预检与请求体必须看同一组参考图。
+    const requestedReferences = referencePathsOf(
+      overrides && Object.prototype.hasOwnProperty.call(overrides, 'references')
+        ? overrides.references
+        : form.form.references,
+    )
+    const capability = generateCapabilityOf({
+      preset: effectivePreset,
+      presets,
+      references: requestedReferences,
+    })
     if (!capability.ok) {
       ui.showToast(t(capability.blockedKey))
       return false
@@ -316,46 +356,125 @@ export function useStudio(props) {
   }
 
   /**
-   * 胶片条 / 画廊点击作品：始终切换右侧预览，并把该作品的原始参数回填到左侧面板。
+   * 按路径在已加载作品库里找条目 `{ image, item }`（助手结果图 / 单图聚焦 / 还原原图用）。
    *
-   * 阶段十五 Phase A1（§6.1.1/§6.1.3）：不再因为 dirty 拦截回填——未提交修改先被托管进
-   * 最左端草稿卡（已有草稿则覆盖），再回填目标作品的干净基准，并给「已保留当前草稿」提示。
-   * 参考图 / 蒙版已迁到舞台图片工具，不参与这里的判定。
+   * 新完成任务在 /history 刷新前可能还不在 gallery 里，退一步按 items 里的图拼最小条目；
+   * 都找不到时返回 null，调用方按「路径不在当前列表」安全收口。
    */
-  function previewWork(entry) {
-    const target = entry && entry.image ? entry : null
-    if (!target) return
-    // 高清放大等非扩散产物不直接回填：沿 sourceImage 找到父作品的真实扩散参数（找不到走降级补丁）。
+  function entryByPath(path) {
+    const target = typeof path === 'string' ? path.trim() : ''
+    if (!target) return null
+    const gallery = Array.isArray(library.gallery) ? library.gallery : []
+    const found = gallery.find((entry) => entry && entry.image && entry.image.path === target)
+    if (found) return found
+    const items = Array.isArray(library.items) ? library.items : []
+    for (const item of items) {
+      const images = item && Array.isArray(item.images) ? item.images : []
+      const image = images.find((candidate) => candidate && candidate.path === target)
+      if (image) return { image, item }
+    }
+    return null
+  }
+
+  /**
+   * 把作品参数回填进左栏（阶段十五 Phase C0 的「焦点与来源同源收口」）。
+   *
+   * 所有切换作品的入口（胶片条 / 画廊 / 助手结果图 / 导入完成 / 删除后的回退）共用这一份口径：
+   *  - 裸导入图没有生成参数：有未提交修改先托管，再解除表单与上一张作品的绑定（清
+   *    prompt / seed / origin，保留预设与画幅），不残留上一张生图的参数与「正在微调」；
+   *  - 其他作品：`iteratePatch` 算补丁（非扩散产物沿 sourceImage 回溯父作品），
+   *    dirty 时先 `parkDraft()` 再回填，并沿用既有提示键。
+   *
+   * @param {{image: object, item: object}} target 目标作品条目
+   * @param {{notice?: boolean}} [options] notice=false 时不弹「已保留当前草稿 / 参数已回填」
+   *   （导入完成、删除回退这类入口自己有提示语，避免后弹的提示覆盖主提示）
+   */
+  function recallTarget(target, options = {}) {
+    const notice = options.notice !== false
+    if (isBareImportOf(target)) {
+      if (form.dirty || form.draftEditing) {
+        form.parkDraft()
+        if (notice) ui.showToast(t('studio.toast.draftKept'))
+      }
+      form.detachOrigin()
+      return
+    }
+    // 高清放大 / inpaintOnly 等非扩散产物不直接回填：沿 sourceImage 找父作品的真实扩散参数。
     const patch = iteratePatch(target, form.form, presets, library.items)
     const decision = previewRecallOf({
       dirty: form.dirty,
       hasDraft: Boolean(form.draft),
       patch,
     })
-    // 先在原焦点上托管（草稿编辑态切走时同样要留下最新内容），再切换预览与回填。
+    // 先在原焦点上托管（草稿编辑态切走时同样要留下最新内容），再回填目标作品的干净基准。
     if (decision.park || form.draftEditing) form.parkDraft()
-    library.selectImage(target)
-    if (decision.noticeKey) ui.showToast(t(decision.noticeKey))
+    if (notice && decision.noticeKey) ui.showToast(t(decision.noticeKey))
     if (decision.action !== 'recall') return
     form.applyRecall(patch, target)
+  }
+
+  /**
+   * 胶片条 / 画廊 / 助手结果图点击作品：切换右侧预览，并把该作品的原始参数回填到左侧面板。
+   *
+   * 阶段十五 Phase A1（§6.1.1/§6.1.3）：不再因为 dirty 拦截回填——未提交修改先被托管进
+   * 最左端草稿卡（已有草稿则覆盖），再回填目标作品的干净基准，并给「已保留当前草稿」提示。
+   * 阶段十五 Phase C0：先退出舞台画布编辑态（`closeTool()` 只收编辑态、按作品路径保留
+   * `workDrafts`，符合 SPEC §5.17）；裸导入图走 `recallTarget` 的解除绑定分支。
+   */
+  function previewWork(entry) {
+    const target = entry && entry.image ? entry : null
+    if (!target) return
+    imageTool.closeTool()
+    library.selectImage(target)
+    recallTarget(target)
+  }
+
+  /**
+   * 助手结果图 / 单图聚焦按路径打开作品：与胶片条同口径走 `previewWork`
+   * （先按需托管 dirty 草稿、再回填参数与 origin），消除图文不同步。
+   *
+   * 路径不在已加载作品库时按裸作品安全收口：只切预览，并解除表单与上一张作品的绑定。
+   */
+  function openPath(path) {
+    const target = typeof path === 'string' ? path.trim() : ''
+    if (!target) return
+    const entry = entryByPath(target)
+    if (entry) {
+      previewWork(entry)
+      return
+    }
+    imageTool.closeTool()
+    if (form.dirty || form.draftEditing) form.parkDraft()
+    library.openMessage(target)
+    form.detachOrigin()
   }
 
   /**
    * 还原原图（§6.1.5）：放弃当前未提交草稿，恢复来源作品的原始参数并回到该作品。
    *
    * 表单参数与干净基准由 `useStudioForm.restoreOriginal()` 恢复；这里负责清草稿后的
-   * 预览焦点（work 焦点回到来源作品）与提示。
+   * 预览焦点（work 焦点回到来源作品）、退出舞台画布编辑态与提示。
+   *
+   * 阶段十五 Phase C0：来源作品已不在当前已加载列表（被删除 / 不在分页内）时，参数照常还原，
+   * 但舞台切回新建画布取景框并说明情况——不能停在别的作品上冒充来源，避免图文错位。
    *
    * @returns {boolean} 是否真的还原了（没有来源 / 没有可还原字段时为 false）
    */
   function restoreOriginal() {
     const source = form.restoreOriginal()
     if (!source) return false
-    const path = source && typeof source.path === 'string' ? source.path : ''
-    if (path) library.selectImage({ image: { path } })
+    imageTool.closeTool()
+    const path = source && typeof source.path === 'string' ? source.path.trim() : ''
+    const entry = path ? entryByPath(path) : null
     ui.setView('studio')
     ui.setPanelMode('form')
     ui.setZoom(false)
+    if (path && !entry) {
+      library.focusDraft()
+      ui.showToast(t('studio.toast.restoredOriginalMissing'))
+      return true
+    }
+    if (entry) library.selectImage(entry)
     ui.showToast(t('studio.toast.restoredOriginal'))
     return true
   }
@@ -391,18 +510,105 @@ export function useStudio(props) {
   }
 
   /**
-   * 本地导入完成（阶段十五 Phase A3）：把导入作品切到舞台焦点并刷新历史。
+   * 左栏参考图槽（阶段十五 Phase C2）：增删、能力引导与「送到舞台重绘」。
+   *
+   * 槽位本体由 `useStudioForm` 维护（挂载即 dirty、随草稿托管）；这里只做组合层的提示、
+   * 视图切换与工具跳转，避免 UI 组件各自拼一套文案。
+   */
+  function addReference(entry) {
+    const outcome = form.addReference(entry)
+    if (outcome.ok) {
+      ui.showToast(t('studio.reference.addedToSlot'))
+      return true
+    }
+    if (outcome.reason === 'duplicate') ui.showToast(t('studio.reference.duplicate'))
+    else if (outcome.reason === 'full') ui.showToast(formatText(t('studio.reference.full'), { max: form.referenceMax }))
+    else ui.showToast(t('studio.reference.invalidPath'))
+    return false
+  }
+
+  function removeReference(path) {
+    return form.removeReference(path)
+  }
+
+  /** 一键切到第一个支持原生参考生图的预设（参考图保留）；没有候选时给明确提示。 */
+  function switchToReferencePreset() {
+    if (form.referenceSupported) return false
+    const target = form.referenceSwitchPreset
+    if (!target) {
+      ui.showToast(t('studio.reference.noPreset'))
+      return false
+    }
+    form.selectPreset(target)
+    ui.showToast(formatText(t('studio.reference.switched'), { preset: form.referenceSwitchLabel }))
+    return true
+  }
+
+  /**
+   * 动作坞「设为参考图」：把当前选中（或指定）作品 path 加入左栏参考图槽。
+   *
+   * - 去重 / 满额只提示，不改槽位；
+   * - 当前预设不支持原生参考时自动切到第一个 supportsReference 预设（参考图保留）并提示；
+   * - 切回创作视图与参数表单，让槽位可见、接着改提示词。
+   */
+  function useAsReference(entry) {
+    const target = entry || library.selected
+    if (!target || !target.image) {
+      ui.showToast(t('studio.reference.noTarget'))
+      return false
+    }
+    const outcome = form.addReference(target)
+    if (!outcome.ok) {
+      if (outcome.reason === 'duplicate') ui.showToast(t('studio.reference.duplicate'))
+      else if (outcome.reason === 'full') ui.showToast(formatText(t('studio.reference.full'), { max: form.referenceMax }))
+      else ui.showToast(t('studio.reference.invalidPath'))
+      return false
+    }
+    if (form.referenceSupported) {
+      ui.showToast(t('studio.reference.addedToSlot'))
+    } else if (form.referenceSwitchPreset) {
+      // 自动换到支持参考的模型：参考图不丢，用户点生成即可出图（提示由切换动作统一给）。
+      switchToReferencePreset()
+    } else {
+      ui.showToast(t('studio.reference.addedUnsupported'))
+    }
+    ui.setView('studio')
+    ui.setPanelMode('form')
+    ui.setZoom(false)
+    return true
+  }
+
+  /** 「改用整图重绘」：以第一张参考图为底图打开舞台 img2img 工具（不支持参考时的降级引导）。 */
+  function referenceToImg2img() {
+    const first = referenceListOf(form.form.references)[0]
+    if (!first) {
+      ui.showToast(t('studio.reference.emptySlot'))
+      return false
+    }
+    // 优先用已加载的历史条目（带原始 prompt / 预设）；没有时按槽位项拼最小条目即可。
+    const entry = entryByPath(first.path) || {
+      image: { path: first.path, url: first.url, width: first.width, height: first.height },
+      item: null,
+    }
+    return openImageTool('img2img', entry)
+  }
+
+  /**
+   * 本地导入完成（阶段十五 Phase A3 / Phase C0）：切到舞台焦点、回填参数并刷新历史。
    *
    * 图片已由 Host 落盘为独立 v1（见 SPEC §2.3 `/import`），前端不伪造历史条目：只切焦点、
-   * 关闭对比层、给成功提示，再重新拉一次历史，把新目录并入胶片条与版本树。
-   * PNG 内嵌生成元数据时提示「可在胶片条点这张图回填」，参数恢复仍由点作品触发的回填完成。
+   * 退出画布编辑态、关闭对比层，再重新拉一次历史，把新目录并入胶片条与版本树。
+   *  - 带 PNG `tEXt` 生成元数据的导入图：完成导入后直接回填原生成参数（舞台与左栏同源）；
+   *  - 裸导入图（无生成参数）：解除表单与上一张作品的绑定（清 prompt / seed / origin，
+   *    保留预设与画幅），避免左栏继续显示上一张生图作品的参数与「正在微调」。
    */
   function activateImport(entry) {
     const target = entry && entry.image ? entry : null
     if (!target) return false
     imageTool.closeTool()
-    if (form.draftEditing) form.parkDraft()
     library.selectImage(target)
+    // 导入入口自己有「已识别生成参数 / 图片已导入」提示，回填链路不再叠一条「参数已回填」。
+    recallTarget(target, { notice: false })
     ui.setView('studio')
     ui.setPanelMode('form')
     ui.setZoom(false)
@@ -411,6 +617,32 @@ export function useStudio(props) {
     ui.showToast(t(generation ? 'studio.import.metaFound' : 'studio.import.done'))
     if (typeof library.loadHistory === 'function') library.loadHistory()
     return true
+  }
+
+  /**
+   * 删除作品后的级联清理（阶段十五 Phase C0，由 `useWorkLibrary.deleteImages` 回调）。
+   *
+   *  - 按 `removed` 路径清掉舞台图片工具里对应的未提交草稿（圆点不能指向已删作品）；
+   *  - 清掉左栏表单 origin / draft.source 里对已删路径的引用（「还原原图」不能指向不存在的图）；
+   *  - 删掉的正是当前预览作品、或左栏正绑着它时，回退到下一张图并同步刷新左栏回填，
+   *    避免「舞台换了图、左栏还是被删作品的参数」。
+   */
+  function handleImagesRemoved({ removed, fallback, selectedRemoved }) {
+    const list = Array.isArray(removed) ? removed.filter(Boolean) : []
+    if (list.length === 0) return
+    for (const path of list) imageTool.clearWorkDraft(path)
+    const originRemoved = Boolean(form.origin && form.origin.path && list.includes(form.origin.path))
+    form.forgetRemovedPaths(list)
+    // 删的不是当前预览、也没绑着左栏：只需清理引用，不抢用户焦点。
+    if (!(selectedRemoved === true || originRemoved)) return
+    // 删掉的是当前预览作品 → 回退到下一张（作品库已把 selectedPath 指向它）。
+    const next = selectedRemoved === true ? fallback : library.selected
+    if (next) {
+      recallTarget(next, { notice: false })
+      return
+    }
+    // 没有可回退的图：解除绑定，不残留已删作品的提示词 / 固定种子。
+    form.detachOrigin()
   }
 
   /**
@@ -502,6 +734,14 @@ export function useStudio(props) {
       restoreOriginal,
       retryFocusedJob,
       resetToSafe,
+      // 左栏参考图槽（阶段十五 Phase C2）：增删 / 导入 / 换模型 / 送到舞台重绘。
+      addReference,
+      removeReference,
+      useAsReference,
+      switchToReferencePreset,
+      referenceToImg2img,
+      uploadReferenceFiles: referenceSlot.uploadFiles,
+      referenceUploading: referenceSlot.busy,
     },
   }
 }

@@ -63,6 +63,9 @@ class HttpApi:
     submit_job: Callable[..., Any]
     validate_generate_spec: Callable[[Any], Any]
     parse_reference_spec: Callable[[Any, dict], Any]
+    # 原生参考生图（supportsReference）的 job 级图片列表校验：与 reference 互斥，
+    # 只读图片头；完整解码留到执行期（见 remote/inference/reference_codec.py）。
+    parse_reference_images: Callable[[Any, dict], Any]
     # tool=upscale 的源图校验与任务合成：upscale 不读 pipeline、不查 loader 白名单，
     # 任务要等源图头校验拿到宽高后才能拼出来（见 remote/transport/validator.py）。
     parse_upscale_reference: Callable[[Any], Any]
@@ -258,10 +261,16 @@ class DaemonHandler(BaseHTTPRequestHandler):
                 # 合成 1 条；不读 pipeline、不查 loader 白名单（固定 Real-ESRGAN 权重）。
                 reference = api.parse_upscale_reference(spec.get("reference"))
                 tasks = [api.build_upscale_task(reference["width"], reference["height"])]
+                reference_images = None
             else:
                 # 图生图（M3）：参考图提交期只读图片头做校验，失败直接 400；
                 # 没有 reference 时返回 None，文生图路径逐字不变。
                 reference = api.parse_reference_spec(spec.get("reference"), pipeline_spec)
+                # 原生参考生图（Phase C1）：referenceImages 是 job 级图片列表，与 reference
+                # 互斥（validate_generate_spec 已拦同时出现），同样只读图片头。
+                reference_images = api.parse_reference_images(
+                    spec.get("referenceImages"), pipeline_spec
+                )
             job_id = api.normalize_job_id(spec.get("jobId"))
         except RequestError as exc:
             log(f"[gen] 请求非法（tool={spec.get('tool') if isinstance(spec, dict) else '-'}）：{exc}")
@@ -270,7 +279,13 @@ class DaemonHandler(BaseHTTPRequestHandler):
 
         try:
             job, created = api.submit_job(
-                pipeline_spec, model_id, tasks, job_id, reference, tool=tool
+                pipeline_spec,
+                model_id,
+                tasks,
+                job_id,
+                reference,
+                tool=tool,
+                reference_images=reference_images,
             )
         except QueueFullError as exc:
             log(f"[gen] 队列已满：{exc}")

@@ -207,13 +207,16 @@ async function main() {
     const buttons = allButtons.filter(
       (button) => typeof button.props.className === 'string' && button.props.className.split(/\s+/).includes('ofs-dock-button'),
     )
-    assert.equal(buttons.length, 5, '四个图片工具 + 重新生成（「带回参数」已下线）')
+    assert.equal(buttons.length, 6, '四个图片工具 + 重新生成 + 阶段十五 C2 的「设为参考图」')
     // 阶段十五 Phase B：高清放大 / 扩图已开放，不再有禁用占位。
     const disabled = buttons.filter((button) => button.props['aria-disabled'] === 'true')
     assert.equal(disabled.length, 0, '不应再有禁用占位')
     const usable = buttons.filter((button) => button.props['aria-disabled'] !== 'true')
-    assert.deepEqual(usable.map(textOf), ['局部重绘', '整图重绘', '高清放大', '扩图', '重新生成'])
+    assert.deepEqual(usable.map(textOf), ['局部重绘', '整图重绘', '高清放大', '扩图', '重新生成', '设为参考图'])
     for (const tool of usable.slice(0, 4)) assert.equal(typeof tool.props.onClick, 'function', '四个工具都应绑定动作')
+    // 创作复用组的两个动作都要绑定回调（「设为参考图」把当前作品送进左栏参考槽）。
+    assert.equal(typeof usable[4].props.onClick, 'function', '重新生成应绑定动作')
+    assert.equal(typeof usable[5].props.onClick, 'function', '设为参考图应绑定动作')
   })
 
   await check('高清放大：点击即提交（不进入编辑态），toast 专用文案', async () => {
@@ -543,6 +546,60 @@ async function main() {
     const ordinaryBase = byClassOne(next, 'ofs-compare-base')
     assert.equal(ordinaryBase.props.className, 'ofs-compare-base')
     assert.equal(ordinaryBase.props.style, undefined, '无 outpaintContent 时不得写内联定位')
+  })
+
+  // 阶段十五 Phase C0：画布编辑器显式挂 key=target.path——换底图时整块重建，
+  // 内部 useState（画笔粗细 / 底图尺寸）不能沿用上一张图。
+  await check('画布编辑器：换底图按 target.path 重建，画笔与底图尺寸不残留', async () => {
+    const { tree, harness } = await mountStage()
+    buttonByText(tree, '局部重绘').props.onClick()
+    let next = await refresh()
+    assert.equal(byClass(next, 'ofs-mask-editor').length, 1)
+    // 画笔粗细是 MaskEditor 的本地 state：改到 96 后换底图应回到默认 40。
+    const brushValueOf = (node) => {
+      const bold = findNodes(node, (item) => item.type === 'b')[0]
+      return bold ? collectText(bold).join('') : ''
+    }
+    assert.equal(brushValueOf(next), '40', '画笔默认粗细 40')
+    byClassOne(next, 'ofs-mask-range').props.onChange({ target: { value: 96 } })
+    next = await refresh()
+    assert.equal(brushValueOf(next), '96', '改画笔后读数更新')
+    // 换一张底图（同一工具、不同作品）：编辑器应重建，画笔回到默认值。
+    const secondImage = { ...image, path: 'imagen-output/job-2/08.png', file: '08.png', width: 1152, height: 648 }
+    const secondItem = { ...item, jobId: 'job-2', images: [secondImage] }
+    harness.api().openTool('inpaint', { image: secondImage, item: secondItem })
+    next = await refresh()
+    assert.equal(harness.api().target.path, secondImage.path, '底图切到第二张作品')
+    assert.equal(byClass(next, 'ofs-mask-editor').length, 1)
+    assert.equal(brushValueOf(next), '40', '换底图后画笔状态重建，不沿用上一张的 96')
+  })
+
+  await check('扩图编辑器：换底图按 target.path 重建，画布比例取自新底图', async () => {
+    const { tree, harness } = await mountStage()
+    buttonByText(tree, '扩图').props.onClick()
+    let next = await refresh()
+    assert.equal(byClass(next, 'ofs-outpaint-editor').length, 1)
+    const source = harness.api().target
+    const expandPlan = (target) => client.PURE.outpaintPlanOf({
+      sourceWidth: target.width,
+      sourceHeight: target.height,
+      ratioId: client.PURE.OUTPAINT_EXPAND_ID,
+      anchor: { x: 0.5, y: 0.5 },
+    })
+    const ratioOfTree = (node) => {
+      const stage = byClassOne(node, 'ofs-outpaint-stage')
+      return String((stage.props.style || {})['--ofs-outpaint-r'])
+    }
+    const firstPlan = expandPlan(source)
+    assert.equal(ratioOfTree(next), String(firstPlan.width / firstPlan.height), '初始画布比例来自第一张底图')
+    // 换成 16:9 底图：内部 natural 尺寸必须按新底图重建，否则画布比例仍是方形。
+    const wideImage = { ...image, path: 'imagen-output/job-2/09.png', file: '09.png', width: 1152, height: 648 }
+    const wideItem = { ...item, jobId: 'job-2', images: [wideImage] }
+    harness.api().openTool('outpaint', { image: wideImage, item: wideItem })
+    next = await refresh()
+    assert.equal(harness.api().target.path, wideImage.path)
+    const widePlan = expandPlan(harness.api().target)
+    assert.equal(ratioOfTree(next), String(widePlan.width / widePlan.height), '换底图后画布比例取自新底图')
   })
 
   client.unmount()

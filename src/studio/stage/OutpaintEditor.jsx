@@ -14,7 +14,7 @@
 
 import React from 'react'
 
-import { formatText } from '../../logic/format.js'
+import { formatText, percentOf } from '../../logic/format.js'
 import {
   OUTPAINT_EXPAND_ID,
   outpaintAnchorOf,
@@ -29,14 +29,6 @@ const HIT_STYLE = { minHeight: 44, minWidth: 44 }
 
 /** 键盘微调步长（画布像素）：与 8px 对齐口径一致。 */
 const KEY_STEP = 8
-
-/** 覆盖率 → 界面百分比：不足 10% 保留一位小数，避免刚扩一点就显示 0%。 */
-function percentOf(coverage) {
-  const value = Number(coverage)
-  if (!Number.isFinite(value) || value <= 0) return 0
-  const percent = Math.min(100, value * 100)
-  return percent >= 10 ? Math.round(percent) : Math.round(percent * 10) / 10
-}
 
 /** canvas.toDataURL() 的返回值 → 裸 base64（工具域统一再归一一次）。 */
 function stripDataUrl(text) {

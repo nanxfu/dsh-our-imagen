@@ -26,21 +26,29 @@
   "supportsChinese": true,
   "supportsImg2Img": false,
   "supportsInpaint": false,
+  "supportsReference": true,
   "supportsNegative": false,
   "pipeline": {
     "loader": "flux2",
     "base": "black-forest-labs/FLUX.2-klein-4B",
     "lora": null,
     "scheduler": null,
-    "variant": "fp16",
-    "downloadGb": 15.2,
-    "allowPatterns": null,
+    "variant": null,
+    "downloadGb": 16.0,
+    "allowPatterns": [
+      "model_index.json",
+      "scheduler/**",
+      "text_encoder/**",
+      "tokenizer/**",
+      "transformer/**",
+      "vae/**"
+    ],
     "deviceMap": "balanced"
   },
   "measured": {
     "peakVramMb": 7929,
     "loadSeconds": 28.2,
     "steadySeconds": 10.24,
-    "downloadGb": 15.2
+    "downloadGb": null
   }
 }

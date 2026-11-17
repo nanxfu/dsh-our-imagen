@@ -48,6 +48,19 @@ class ModelLoader:
     # 局部重绘（inpaint）能力：首期只对 SDXL 家族开放。它与 supports_img2img 相互独立
     # （能垫图的家族不一定能局部重绘），提交期各查各的白名单，见 reference_codec。
     supports_inpaint = False
+    # 模型原生参考生图能力（阶段十五 Phase C1）：基础管线直接接收 `image=[PIL...]` 条件，
+    # 宽高仍由请求决定，没有 strength / 蒙版语义。与 supports_img2img 是两条不同请求形状，
+    # 提交期白名单见 reference_codec.parse_reference_images。
+    supports_reference = False
+
+    def apply_accel(self, pipe, spec: dict, *, log=print):  # noqa: ANN001, ANN201
+        """应用模型资产 ``pipeline.accel`` 里的推理加速开关；默认无操作。
+
+        只有 diffusers 家族（``DiffusersLoader``）有可切换的 VAE / UNet 组件；
+        其它运行时（anima）保持原样。``accel`` 缺省时实现方必须**不做任何事**，
+        保证旧资产 / 旧请求的代码路径逐字不变。
+        """
+        return pipe
 
     def required_repos(self, spec: dict) -> list[str]:
         """该 spec 依赖的 HF 仓库（切模型 keep_set 用）。

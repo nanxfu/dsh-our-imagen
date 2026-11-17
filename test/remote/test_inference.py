@@ -662,6 +662,7 @@ class ExecuteJobReferenceTest(DaemonUnitTest):
             reference_image=None,
             reference_strength=None,
             mask_image=None,
+            reference_images=None,
         ):
             captured.update(
                 reference_image=reference_image,
@@ -696,6 +697,7 @@ class ExecuteJobReferenceTest(DaemonUnitTest):
             reference_image=None,
             reference_strength=None,
             mask_image=None,
+            reference_images=None,
         ):
             captured["reference_strength"] = reference_strength
             return []
@@ -785,6 +787,7 @@ class ExecuteJobMaskTest(DaemonUnitTest):
             reference_image=None,
             reference_strength=None,
             mask_image=None,
+            reference_images=None,
         ):
             captured.update(
                 reference_image=reference_image,
@@ -843,6 +846,7 @@ class ExecuteJobMaskTest(DaemonUnitTest):
             reference_image=None,
             reference_strength=None,
             mask_image=None,
+            reference_images=None,
         ):
             captured["mask_image"] = mask_image
             return []
@@ -893,6 +897,7 @@ class ExecuteJobMaskTest(DaemonUnitTest):
             reference_image=None,
             reference_strength=None,
             mask_image=None,
+            reference_images=None,
         ):
             captured["reference_strength"] = reference_strength
             return []
@@ -924,6 +929,7 @@ class ExecuteJobMaskTest(DaemonUnitTest):
             reference_image=None,
             reference_strength=None,
             mask_image=None,
+            reference_images=None,
         ):
             captured["mask_image"] = mask_image
             return []

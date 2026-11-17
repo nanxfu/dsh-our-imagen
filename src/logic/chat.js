@@ -11,7 +11,7 @@ import { LIMITS } from '../../shared/contract.js'
 
 import { errorText } from './error.js'
 import { formatSeconds, formatText } from './format.js'
-import { referenceUrlOf } from './generate.js'
+import { referenceUrlOf } from './reference.js'
 
 /** 一次任务最多展示 4 张结果图（契约的生成张数上限）。 */
 const MAX_RESULT_IMAGES = LIMITS.count.max

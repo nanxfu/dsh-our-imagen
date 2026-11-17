@@ -479,6 +479,38 @@ export const en = {
   // The left panel no longer hosts image processing: point at the stage action dock.
   'studio.rail.imageToolsHint': 'Image processing (partial redraw / whole-image redraw) lives in the action dock at the bottom of the stage.',
 
+  // ── Native reference slot (Phase C2) ─────────────────────────
+  // Wording: Klein 4B references are weak conditions (measured), never claim strong consistency.
+  'studio.reference.title': 'References',
+  'studio.reference.empty': 'Add reference images (up to {count})',
+  'studio.reference.emptyHint': 'Choose from your computer, drop here, or pick from works',
+  'studio.reference.addMore': 'Add reference ({count}/{max})',
+  'studio.reference.full': 'Reference slot is full ({max})',
+  'studio.reference.remove': 'Remove reference',
+  'studio.reference.pickWork': 'Pick from works',
+  'studio.reference.pickClose': 'Hide works',
+  'studio.reference.pickEmpty': 'No more works available',
+  'studio.reference.qualityHint': 'References are weak conditions: prompt and seed still lead, and more references take longer.',
+  'studio.reference.unsupported': 'Current model does not support native reference images',
+  'studio.reference.unsupportedHint': 'Switch to a model that supports references, or use full-image redraw instead.',
+  'studio.reference.switchPreset': 'Switch to {preset}',
+  'studio.reference.switched': 'Switched to {preset}, references kept',
+  'studio.reference.useImg2img': 'Use full redraw',
+  'studio.reference.uploading': 'Importing reference…',
+  'studio.reference.tooLarge': 'Reference exceeds {size} MiB',
+  'studio.reference.added': 'Added {count} reference image(s)',
+  'studio.reference.addedToSlot': 'Set as reference',
+  'studio.reference.addedUnsupported': 'Added to the reference slot, but the current model does not support references',
+  'studio.reference.duplicate': 'This image is already in the reference slot',
+  'studio.reference.limit': 'Up to {max} reference images; extra images were skipped',
+  'studio.reference.importFailed': 'Failed to import the reference image, please retry',
+  'studio.reference.invalidPath': 'Only works already saved in the workspace can be references',
+  'studio.reference.noTarget': 'Select a work on the stage first',
+  'studio.reference.noPreset': 'No model supports native reference images right now',
+  'studio.reference.emptySlot': 'The reference slot is empty',
+  'studio.reference.blockedUnsupported': 'This model does not support native reference images: switch models or remove the references.',
+  'studio.reference.setAsReference': 'Set as reference',
+
   // ── Stage image tools (action dock / inline submit bar) ───────
   'studio.imageTool.title': 'Image tools',
   'studio.imageTool.groupLabel': 'Image processing',
@@ -604,6 +636,9 @@ export const en = {
   'studio.rail.draftStatus': 'Editing a new draft from this image',
   'studio.rail.restoreOriginal': 'Restore original',
   'studio.toast.restoredOriginal': 'Original settings restored',
+  // Source work deleted (or not in the loaded list): settings are restored, the stage does not
+  // keep showing another image as if it were the source.
+  'studio.toast.restoredOriginalMissing': 'Source work is no longer listed; settings restored',
   'studio.stage.draftFrom': 'From: {prompt}',
   'studio.chat.gridLabel': '{count} results',
   'studio.chat.focus.back': 'Back ({label})',

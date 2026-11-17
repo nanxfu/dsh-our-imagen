@@ -138,25 +138,33 @@ class ReferenceLimitsTest(DaemonUnitTest):
     def test_request_body_limit_follows_contract_base64_size(self) -> None:
         self.contract_config()
         limits = self.limits()
-        # 局部重绘是「参考图 + 蒙版」两张图片：上限必须按两者之和推导，否则两者同时顶格的
-        # 合法请求会先在 _read_json 的请求体闸门被拒掉。
-        max_bytes = limits["reference"]["maxBytes"] + limits["mask"]["maxBytes"]
-        base64_size = 4 * ((max_bytes + 2) // 3)
+        # 请求体上限按两种互斥形状的较大者推导：局部重绘「参考图 + 蒙版」与
+        # 「原生参考图列表 maxCount × maxBytes」。8MiB + 2MiB 的旧形状 base64 后约 14MB，
+        # 2 × 4MiB 的新形状约 10.7MB：上限必须能同时通过两者。
+        reference_shape = limits["reference"]["maxBytes"] + limits["mask"]["maxBytes"]
+        images_shape = (
+            limits["referenceImages"]["maxCount"] * limits["referenceImages"]["maxBytes"]
+        )
+        base64_size = 4 * ((max(reference_shape, images_shape) + 2) // 3)
         limit = d._request_body_limit()
-        # 8MiB 参考图 + 2MiB 蒙版 base64 后约 14MB：必须能通过。
         self.assertGreater(limit, base64_size)
         self.assertEqual(limit, max(8 * 1024 * 1024, base64_size + 1024 * 1024))
 
     def test_request_body_limit_follows_builtin_reference_without_contract(self) -> None:
         """Batch 3：注入契约没给 reference / mask 时，边界来自内置 contract.json。
 
-        因此请求体上限也按内置 maxBytes 推导（约 14.3MB），不再固定 8MB——否则校验器
-        认了 8MiB 参考图 + 2MiB 蒙版、`_read_json` 却先按 8MB 把请求拒掉。
+        因此请求体上限也按内置 maxBytes 推导（两种形状取较大者，约 14.3MB），不再固定 8MB——
+        否则校验器认了 8MiB 参考图 + 2MiB 蒙版、`_read_json` 却先按 8MB 把请求拒掉。
         """
         d.CONFIG.contract = {"version": CONTRACT_VERSION, "limits": {"prompt": {"maxChars": 2000}}}
         limits = CONTRACT_DOC["limits"]
-        max_bytes = limits["reference"]["maxBytes"] + limits["mask"]["maxBytes"]
-        expected = max(8 * 1024 * 1024, 4 * ((max_bytes + 2) // 3) + 1024 * 1024)
+        reference_shape = limits["reference"]["maxBytes"] + limits["mask"]["maxBytes"]
+        images_shape = (
+            limits["referenceImages"]["maxCount"] * limits["referenceImages"]["maxBytes"]
+        )
+        expected = max(
+            8 * 1024 * 1024, 4 * ((max(reference_shape, images_shape) + 2) // 3) + 1024 * 1024
+        )
         self.assertEqual(d._request_body_limit(), expected)
         self.assertGreater(d._request_body_limit(), 8 * 1024 * 1024)
 

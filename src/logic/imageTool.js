@@ -20,6 +20,7 @@
 import { LIMITS, OUTPAINT, UPSCALE } from '../../shared/contract.js'
 
 import { clampInt, clampNumber, clampSize } from './clamp.js'
+import { positiveSize } from './format.js'
 import {
   MASK_STRENGTH_DEFAULT,
   MASK_STRENGTH_NATIVE,
@@ -216,14 +217,6 @@ export function toolStrengthMaxOf(toolId, hasMask) {
  */
 export function toolPromptFallback(targetPrompt) {
   return String(targetPrompt ?? '').trim().slice(0, LIMITS.prompt.maxChars)
-}
-
-/** 正数像素值；缺失 / 非法返回 null（交给预设 size 兜底）。 */
-function positiveSize(value) {
-  if (value === null || value === undefined || value === '') return null
-  const number = Number(value)
-  if (!Number.isFinite(number) || number <= 0) return null
-  return Math.round(number)
 }
 
 /** 有限数值；缺失 / 非法返回 null（用于 steps / cfg 这类「没填就用预设推荐值」的字段）。 */

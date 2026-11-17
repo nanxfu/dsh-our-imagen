@@ -18,6 +18,8 @@
 
 import { LIMITS, OUTPAINT } from '../../shared/contract.js'
 
+import { positiveSize } from './format.js'
+
 /** 目标画幅胶囊的 id 顺序（不含「四边扩 20%」快捷项）。 */
 export const OUTPAINT_RATIO_IDS = [...OUTPAINT.ratioIds]
 
@@ -47,14 +49,6 @@ const STEP = Number(LIMITS.width.step) > 0 ? Number(LIMITS.width.step) : 8
 
 /** 源图宽高与目标比例恰好相同时的判定容差：小于它就认为「没有留白可加」。 */
 const SAME_RATIO_EPSILON = 0.002
-
-/** 正数像素（四舍五入）；缺失 / 非法返回 null。 */
-function positiveSize(value) {
-  if (value === null || value === undefined || value === '') return null
-  const number = Number(value)
-  if (!Number.isFinite(number) || number <= 0) return null
-  return Math.round(number)
-}
 
 /** 向下取整到 8 的倍数；不足 8 返回 8（真正的下限由 minEdge 校验兜住）。 */
 function alignDown(value) {

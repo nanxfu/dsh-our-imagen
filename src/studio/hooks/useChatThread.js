@@ -209,7 +209,8 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     if (seed !== null) overrides.seed = seed
     const patch = intentFormPatch(message, DEFAULT_RATIOS, { negativeActive })
     if (Object.keys(patch).length > 0) form.patchForm(patch)
-    // 助手确认卡只做纯文生图：source 交给组合层的来源策略，不能带上表单里挂着的参考图。
+    // 助手确认卡同样走组合层 generate → form.buildBody：左栏参考图槽非空时自动带
+    // `references`（Phase C2 的请求链路统一在一个出口，助手不会漏带、也不会另拼一套）。
     const ok = await generate(overrides, { pushUser: false, source: 'assistant' })
     // 确认卡提交成功后表单就是这次生成的内容：补记干净基准，随后点胶卷不会误报「保留草稿」。
     if (ok && typeof form.markClean === 'function') form.markClean()

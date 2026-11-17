@@ -20,6 +20,11 @@ import os
 from pipeline_loader import apply_scheduler, from_pretrained_with_variant_fallback
 from remote.inference.loaders.base import LoadContext, ModelLoader
 
+# 推理加速开关的远端镜像（阶段十五 Phase C1 脚手架）：键名必须与 shared/contract.js 的
+# PIPELINE_ACCEL_KEYS 一致（daemon 无法 import JS，由 test/check-contract.mjs 校验两边同名）。
+# 缺省 / 省略 = 全部关闭，代码路径与改造前逐字一致；只有真机 A/B 数据确认后才写进模型资产。
+ACCEL_FLAGS = ("vaeTiling", "vaeSlicing", "channelsLast", "fuseQkv")
+
 
 class DiffusersLoader(ModelLoader):
     """Diffusers 家族模板：``load`` 负责前置与错误分类，子类只实现 ``construct``。"""
@@ -27,7 +32,7 @@ class DiffusersLoader(ModelLoader):
     def load(self, spec: dict, ctx: LoadContext):  # noqa: ANN201
         source = self.prepare_base(spec, ctx)
         try:
-            return self.construct(
+            pipe = self.construct(
                 spec,
                 source=source,
                 local_lora_weight=self.local_lora_weight(spec, ctx),
@@ -35,12 +40,68 @@ class DiffusersLoader(ModelLoader):
                 error_cls=ctx.error_cls,
                 request_error_cls=ctx.request_error_cls,
             )
+            # construct 成功后应用加速开关（可选、缺省不做任何事）。放在 try 内：
+            # 显式开启的加速项失败要按加载失败上报，而不是留下半套配置静默跑。
+            return self.apply_accel(pipe, spec, log=ctx.log)
         except Exception as exc:  # noqa: BLE001 - 分类后原样上抛，不吞异常
             # 请求非法（缺 lora 配置等）不清显存：它发生在加载之前，清了也没用。
             if isinstance(exc, ctx.request_error_cls):
                 raise
             ctx.release_gpu()
             raise
+
+    def apply_accel(self, pipe, spec: dict, *, log=print):  # noqa: ANN001, ANN201
+        """应用 ``pipeline.accel``：VAE tiling/slicing 全家族通用，channels_last / fuse 只对 UNet。
+
+        幂等设计（关键）：``AutoPipelineForImage2Image.from_pipe`` / ``from_pipe`` 派生管线复用
+        同一个 UNet 对象，若在基础管线已经 fuse 过，这里必须**跳过而不是重复调用**——
+        diffusers 的 ``fuse_qkv_projections()`` 二次调用会覆盖 ``original_attn_processors`` 并
+        重新包装注意力处理器，既浪费也可能报错。判定看 UNet 自身的 ``original_attn_processors``
+        （fuse 成功时 diffusers 会把它从 None 置为处理器映射），不依赖 daemon 的全局状态，
+        因此单测安全重置、切模型、from_pipe 共享组件三种场景都成立。
+        """
+        accel = spec.get("accel")
+        if not isinstance(accel, dict) or not accel:
+            return pipe
+        # 只认真值：资产校验已保证布尔，这里对注入配置被手改的情况做防御。
+        active = [key for key in ACCEL_FLAGS if accel.get(key) is True]
+        if not active:
+            return pipe
+        log(f"[accel] 应用推理加速开关：{', '.join(active)}")
+        vae = getattr(pipe, "vae", None)
+        for key, method_name, label in (
+            ("vaeTiling", "enable_tiling", "VAE tiling"),
+            ("vaeSlicing", "enable_slicing", "VAE slicing"),
+        ):
+            if accel.get(key) is not True:
+                continue
+            method = getattr(vae, method_name, None)
+            if callable(method):
+                method()
+                log(f"[accel] {label} 已开启")
+            else:
+                log(f"[accel] WARN 管线没有 vae.{method_name}()，跳过 {key}")
+        unet = getattr(pipe, "unet", None)
+        if unet is None:
+            if accel.get("channelsLast") is True or accel.get("fuseQkv") is True:
+                log("[accel] WARN 该管线没有 unet，channelsLast / fuseQkv 不适用，已跳过")
+            return pipe
+        if accel.get("channelsLast") is True:
+            import torch
+
+            unet.to(memory_format=torch.channels_last)
+            log("[accel] UNet channels_last 已切换")
+        if accel.get("fuseQkv") is True:
+            if getattr(unet, "original_attn_processors", None) is not None:
+                log("[accel] UNet 已融合 Q/K/V 投影，跳过重复 fuse")
+            else:
+                fuse = getattr(unet, "fuse_qkv_projections", None)
+                if callable(fuse):
+                    fuse()
+                    log("[accel] UNet Q/K/V 投影已融合")
+                else:
+                    log("[accel] WARN 该 UNet 没有 fuse_qkv_projections()，跳过 fuseQkv")
+        return pipe
 
     def local_lora_weight(self, spec: dict, ctx: LoadContext) -> str | None:
         """命中预挂载的 LoRA 权重文件；默认没有外部权重。"""
@@ -167,9 +228,20 @@ class SdxlLoraLoader(DiffusersLoader):
 
 
 class Flux2Loader(DiffusersLoader):
-    """Flux.2：走 ``device_map`` 分层装载，不替换调度器、不做转设备。"""
+    """Flux.2：走 ``device_map`` 分层装载，不替换调度器、不做转设备。
+
+    该家族的基础管线（``Flux2KleinPipeline``）原生接收 ``image=[PIL...]`` 参考条件：
+    daemon 的 ``run_task`` 直接把解码后的参考图列表作为 ``image=`` kwargs 传入，
+    **不需要** ``AutoPipelineForImage2Image.from_pipe``、也没有 strength 语义。
+
+    原生局部重绘（本轮不接入，只留结论）：diffusers 0.43 的 ``AutoPipelineForInpainting``
+    mapping 里没有 flux2-klein，必须按显式类 ``Flux2KleinInpaintPipeline`` 加载；且它的内部
+    1 MP 面积上限会把画布静默缩小（如 1536×864 → 1360×768），出图尺寸与扩图接缝不可控，
+    因此 Phase C1 不把它接进默认扩图路径（详见 docs/SPEC.md §2.2 的「原生局部重绘未接入」）。
+    """
 
     name = "flux2"
+    supports_reference = True
 
     def construct(  # noqa: ANN001, ANN201 - 签名与基类一致，参数不逐个标注
         self,

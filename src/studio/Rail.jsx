@@ -5,15 +5,17 @@
  *
  * 0.13.0 布局（320px 单轨，自上而下）：
  *  1. 提示词：输入框 / 英译与润色 / 空白态灵感示例 / 润色建议。
- *  2. 画面设置：标题栏实时显示当前像素读数；5 个画幅比例 → 「自定义宽高」折叠。
- *  3. 高级设置（折叠）：排除项仅在当前模型/CFG 可用时出现；步数、CFG、随机种子。
- *  4. 页脚：生成张数 1~4 → 立即生成 → 规格摘要。
+ *  2. 参考图（阶段十五 Phase C2，仅当前模型支持原生参考生图或槽位非空时出现）。
+ *  3. 画面设置：标题栏实时显示当前像素读数；5 个画幅比例 → 「自定义宽高」折叠。
+ *  4. 高级设置（折叠）：排除项仅在当前模型/CFG 可用时出现；步数、CFG、随机种子。
+ *  5. 页脚：生成张数 1~4 → 立即生成 → 规格摘要。
  *
  * 阶段十五 Phase A1：面板顶部在有未提交草稿时显示「正在新草稿中编辑（源自此图）」+
  * 「还原原图」，替代原来的「正在微调：{prompt}」行（两者互斥）。
  *
  * 主表单只做纯文生图：参考图 / 蒙版 / 重绘强度随左栏参考图区一起删除，
  * 图片处理入口统一在舞台底部动作坞（见 `studio.rail.imageToolsHint`）。
+ * Phase C2 的参考图槽只提交作品路径（`references`），不传 base64、不吃 strength。
  */
 
 import React from 'react'
@@ -26,9 +28,10 @@ import { PanelModeTabs } from './PanelModeTabs.jsx'
 import { FrameSection } from './rail/FrameSection.jsx'
 import { ParamsSection } from './rail/ParamsSection.jsx'
 import { PromptSection } from './rail/PromptSection.jsx'
+import { ReferenceSection } from './rail/ReferenceSection.jsx'
 
 export function Rail(props) {
-  const { t, ui, form, actions } = props
+  const { t, ui, form, actions, library } = props
   const {
     advancedOpen,
     toggleAdvancedOpen,
@@ -66,6 +69,10 @@ export function Rail(props) {
     tuning,
     newCreation,
     draftView,
+    // 原生参考图槽（阶段十五 Phase C2）：能力位、切换目标名与契约上限。
+    referenceSupported,
+    referenceSwitchLabel,
+    referenceMax,
   } = form
   const { sending, generate, restoreOriginal } = actions
 
@@ -144,6 +151,19 @@ export function Rail(props) {
           refineGroups={refineGroups}
           refineSource={refineSource}
           toggleRefine={toggleRefine}
+        />
+
+        {/* 阶段十五 Phase C2：原生参考图槽（提示词之后、画面设置之前）。
+            当前模型不支持且槽位为空时组件自己隐藏，不占左栏空间。 */}
+        <ReferenceSection
+          t={t}
+          references={fields.references}
+          referenceSupported={referenceSupported === true}
+          referenceSwitchLabel={referenceSwitchLabel || ''}
+          referenceMax={referenceMax}
+          works={library && Array.isArray(library.gallery) ? library.gallery : []}
+          busy={Boolean(actions && actions.referenceUploading)}
+          actions={actions}
         />
 
         <FrameSection

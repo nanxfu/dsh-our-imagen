@@ -12,9 +12,7 @@
 import React from 'react'
 
 import { CSS } from '../styles.js'
-import { useNow } from '../hooks/useNow.js'
 import { guidanceSurfaceOf } from '../logic/guidance.js'
-import { pipelineHoldOf, pipelineViewOf } from '../logic/pipeline.js'
 import { ChatPanel } from './ChatPanel.jsx'
 import { Filmstrip } from './Filmstrip.jsx'
 import { Gallery } from './Gallery.jsx'
@@ -39,29 +37,16 @@ const StudioStyles = React.memo(function StudioStyles() {
 export function Studio(props) {
   const { t, isEn, ui, compute, form, chat, library, imageTool, guidance, actions } = useStudio(props)
   const status = compute.status
-  // 完成态还要保留一会儿：宿主 2 秒轮询一次，任务真正完成的时刻客户端最晚 2 秒后才知道，
-  // 只靠「有活动任务」会停表，完成节点就闪不出来。失败态没有时间变化，不需要额外刷新。
-  const pipelineHold = pipelineHoldOf(compute.focusedJob, Date.now())
-  const now = useNow(Boolean(compute.activeJob) || status.transient || pipelineHold)
+  // 阶段十五 Phase C0：1Hz 读秒下沉到真正读时间的叶子节点（PipelineBar / Filmstrip），
+  // 这里不再持有 useNow —— 等待出图期间不驱动整页每秒重渲染。
   const chatMode = ui.panelMode === 'chat'
   // 日志抽屉只在打开时轮询；完成提醒在页面隐藏期间用标签页标题提示。
   const logs = useStudioLogs(ui.logsOpen)
   useCompletionNotice({ t, ui, job: compute.focusedJob, activeJob: compute.activeJob })
 
-  // 生图流水线：失败态在指引提示被收起时一起收起，同一条错误只占一条位置。
-  const pipeline = pipelineViewOf(t, {
-    session: compute.session,
-    activeJob: compute.activeJob,
-    focusedJob: compute.focusedJob,
-    pendingCount: compute.pendingJobs.length,
-    queuePolicy: compute.queue.policy,
-    failureDismissed: Boolean(guidance.key) && ui.dismissed === guidance.key,
-    now: Date.now(),
-  })
-
   const panel = chatMode
     ? <ChatPanel t={t} ui={ui} form={form} chat={chat} library={library} actions={actions} />
-    : <Rail t={t} ui={ui} form={form} actions={actions} />
+    : <Rail t={t} ui={ui} form={form} actions={actions} library={library} />
 
   // 指引按严重度分流：全局阻塞/环境前置卡走顶部横幅，局部可恢复/一次性提醒走右上角通知。
   const guidanceSurface = guidance && guidance.kind
@@ -80,8 +65,18 @@ export function Studio(props) {
         {/* 状态区：流水线 / 排队卡 / 阻塞指引自上而下堆叠；右上角通知从这条带子的下沿展开，
             不再压住流水线右侧的等待读数。 */}
         <div className="ofs-status-area">
-          {/* 顶部生图流水线：替换原先的一行云端状态条，五节点展示等待流程。 */}
-          <PipelineBar view={pipeline} />
+          {/* 顶部生图流水线：替换原先的一行云端状态条，五节点展示等待流程。
+              原始输入直接交给组件，读秒与可见性判定都在 PipelineBar 内部完成。 */}
+          <PipelineBar
+            t={t}
+            session={compute.session}
+            activeJob={compute.activeJob}
+            focusedJob={compute.focusedJob}
+            pendingCount={compute.pendingJobs.length}
+            queuePolicy={compute.queue.policy}
+            failureDismissed={Boolean(guidance.key) && ui.dismissed === guidance.key}
+            transient={Boolean(status && status.transient)}
+          />
 
           {/* 排队卡住（10 分钟档）是非错误提示：横幅给「换新实例重排」，不阻挡工作区。 */}
           <QueueNotice t={t} notice={compute.queueNotice} />
@@ -101,7 +96,6 @@ export function Studio(props) {
               <Gallery
                 t={t}
                 gallery={library.gallery}
-                now={now}
                 presets={compute.presets}
                 favorites={library.favorites}
                 hasMore={library.hasMore}
@@ -121,13 +115,13 @@ export function Studio(props) {
                 }}
               />
             ) : (
-              <Stage t={t} ui={ui} compute={compute} form={form} library={library} imageTool={imageTool} actions={actions} now={now} />
+              <Stage t={t} ui={ui} compute={compute} form={form} library={library} imageTool={imageTool} actions={actions} />
             )}
           </div>
         </div>
 
         {ui.view === 'studio' ? (
-          <Filmstrip t={t} ui={ui} compute={compute} library={library} actions={actions} now={now} />
+          <Filmstrip t={t} ui={ui} compute={compute} library={library} actions={actions} />
         ) : null}
       </div>
 

@@ -80,6 +80,21 @@ export const LIMITS = {
   // 受 `remoteGenerateMaxBytes`（base64 后体积）约束）；解码后长边超过 maxEdge 由远端
   // 按比例缩小（不超过 minEdge 的图直接拒绝），避免小图放大出噪点、大图占显存。
   reference: { maxBytes: 8 * 1024 * 1024, maxEdge: 1536, minEdge: 128 },
+  // 模型原生参考生图（阶段十五 Phase C1，`supportsReference`）的独立口径：
+  // 与 `reference` 的单图垫图（img2img / 局部重绘，尺寸跟随参考图）完全隔离——
+  // 原生参考走基础管线 `image=[PIL...]` 条件，宽高严格取请求值，没有 strength / mask 语义。
+  //  - maxCount：单次请求的参考图张数上限（真机实测：1 张 1024² 约 21~22s、2 张约 31s、
+  //    3 张约 52s，耗时近似线性而显存几乎不增；参考收益主要来自 1~2 张，因此收紧到 2，
+  //    真机探针数据见 docs/INFERENCE_ACCELERATION_RESEARCH.md 与 CHANGELOG）；
+  //  - maxBytes：单张原始字节上限。模型内部已按约 1 MP 面积缩放，超过 4 MiB 对成片没有
+  //    额外价值；2×4 MiB 的 base64 约 11.2 MB，仍落在 TIMEOUTS.remoteGenerateMaxBytes
+  //    （32 MB）预算内，不需要放宽 Host / daemon 的全局请求体上限（见 lib/jobs/reference-loader.js
+  //    的总体积前置校验与 remote/config.py 的 request_body_limit 推导）。
+  //  - maxEdge：执行期解码后长边上限；模型内部还会按约 1 MP 面积等比缩放，
+  //    因此这里按「长边 ≤ 1024」近似 1 MP 预算，避免把大图原样塞进 CPU 侧预处理；
+  //  - minEdge：长边下限（与 `reference` 语义一致：宽、高都不会小于它才不会被放大成噪点）。
+  // 下发远端：daemonContract().limits.referenceImages（详见 remote/config.py 的 request_body_limit）。
+  referenceImages: { maxCount: 2, maxBytes: 4 * 1024 * 1024, maxEdge: 1024, minEdge: 128 },
   // 重绘强度：越小越贴近原图，越大越放飞；首期只对 SDXL 家族（supportsImg2Img）开放。
   // 上限按场景区分：`max` 是普通垫图（img2img）的保守上限，避免把原图丢得太狠；
   // `inpaintMax` 是带蒙版局部重绘的上限——9 通道 inpaint 模型在全重绘时需要更高替换力度，
@@ -178,6 +193,19 @@ export const OUTPAINT = {
   // 只属于 Host/Client，不经 `daemonContract()` 下发远端。
   content: { fields: ['x', 'y', 'width', 'height'], precision: 4 },
 }
+
+/**
+ * 推理加速开关（阶段十五 Phase C1 脚手架，对应 docs/INFERENCE_ACCELERATION_RESEARCH.md 的 P0 项）。
+ *
+ * 模型资产 `pipeline.accel` 只允许出现下列布尔键；缺省（整块省略）表示全部关闭，
+ * 代码路径必须与改造前逐字一致。开关只在真机 A/B 数据确认后才会写进 models/*.json，
+ * 本常量是 build-assets 校验与远端 loader 的唯一键名清单（远端 Python 无法 import JS，
+ * 由 `remote/inference/loaders/diffusers.py` 的 ACCEL_FLAGS 镜像，check-contract 校验两边同名）：
+ *  - vaeTiling / vaeSlicing：所有 diffusers 家族通用的 VAE 解码省显存（无损）；
+ *  - channelsLast：SDXL UNet 切 NHWC 内存排布（T4 Tensor Core 访存友好，无损）；
+ *  - fuseQkv：SDXL UNet 合批 Q/K/V 投影（无损，只能 fuse 一次，from_pipe 派生管线复用同一 UNet）。
+ */
+export const PIPELINE_ACCEL_KEYS = Object.freeze(['vaeTiling', 'vaeSlicing', 'channelsLast', 'fuseQkv'])
 
 /** `POST /imagen-api/generate` 的 `tool` 取值（宿主接受的三类请求）。 */
 export const REQUEST_TOOLS = Object.freeze(['generate', 'upscale', 'outpaint'])
@@ -492,6 +520,11 @@ export const PROTOCOL = {
     // 远端 `/generate` 接受的 tool 取值：outpaint 在远端就是「带蒙版的局部重绘」，
     // 不单列；Host 请求里的三类 tool 见 REQUEST_TOOLS（outpaint 由 Host 展开成 generate）。
     requestTools: ['generate', 'upscale'],
+    // 原生参考生图（supportsReference）的 job 级载荷形状：Host 以 `referenceImages: [{ image_b64 }]`
+    // 下发（数组长度 ≤ limits.referenceImages.maxCount），逐项只认 image_b64——没有 strength /
+    // mask 语义，与 `reference`（单图垫图）是两条互斥的请求形状。daemon 侧实现在
+    // remote/inference/reference_codec.py 的 parse_reference_images / decode_reference_images。
+    referenceImages: { field: 'referenceImages', itemFields: ['image_b64'] },
   },
 }
 
@@ -543,6 +576,9 @@ export function daemonContract() {
       negativePrompt: LIMITS.negativePrompt,
       // 图生图的参考图边界与重绘强度：daemon 依此校验请求（来源与 Host 同一份契约）。
       reference: LIMITS.reference,
+      // 原生参考生图（supportsReference）的独立边界：张数 / 单张字节 / 长边上下限。
+      // 与 reference 互斥（同一个请求只能走其中一条），daemon 的请求体上限按两者较大形状推导。
+      referenceImages: LIMITS.referenceImages,
       strength: LIMITS.strength,
       // 局部重绘蒙版边界（与参考图一起下发；daemon 请求体上限也按它推导）。
       mask: LIMITS.mask,

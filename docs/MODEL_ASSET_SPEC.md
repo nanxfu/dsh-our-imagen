@@ -84,15 +84,29 @@
 | `runtime` | 运行时底座。当前只允许 `"default"`（统一验证过的环境） |
 | `supportsImg2Img` | 图生图（垫图重绘）能力。可缺省，缺省按 `false`；只有能用 `AutoPipelineForImage2Image.from_pipe` 复用整管的模型才能标 `true`，见 §2.2 |
 | `supportsInpaint` | 局部重绘（涂抹蒙版）能力。可缺省，缺省按 `false`；只有能用 `AutoPipelineForInpainting.from_pipe` 复用同一底座的模型才能标 `true`，且必须同时 `supportsImg2Img = true`，见 §2.2 |
+| `supportsReference` | 模型原生参考生图能力。**必填布尔值**；基础管线原生接收 `image=[PIL...]` 图像条件、宽高仍由请求决定的模型才能标 `true`，见 §2.2.1 |
 | `inpaintOnly` | 专用局部重绘权重：只能带蒙版使用，不能文生图 / 纯图生图。可缺省，缺省按 `false`；标 `true` 时 `supportsInpaint` 必须为 `true` 且 `pipeline.nativeInpaint` 必须为 `true`，见 §2.2 |
 | `supportsNegative` | 负向提示词能力：模型管线是否真的消费 `negative_prompt`。必填布尔值，见 §2.3 |
-| `pipeline` | 下发给远端 Daemon 的加载描述；`downloadGb` 用于下载前磁盘预检 |
+| `pipeline` | 下发给远端 Daemon 的加载描述；`downloadGb` 用于下载前磁盘预检；可选 `accel` 推理加速开关，见 §2.4 |
 | `measured` | 靶场实测指标：峰值显存、加载耗时、稳态耗时、实际下载量。未实测的字段填 `null` |
 
 `runtime` 规则：
 
 - 默认全部使用统一验证过的运行时底座（`"default"`），由 daemon 全局的依赖安装流程负责；
 - 生产侧保持“一次会话一套环境”。未来出现需要特殊运行时的模型时，Host 只提示“切换该模型需要重启远端会话”，不做远端热重装。
+
+`pipeline` 的加载描述字段（细节见 `remote/daemon.py` 顶部说明）：
+
+- `variant`：`from_pretrained` 的权重变体目录后缀（如 `"fp16"`）；**仓库没有 `*_fp16` 变体文件时必须写 `null`**，
+  否则 diffusers 会先按变体探测、失败后再回退，在真实链路里浪费一次 15~20s 的长下载探测。
+  主权重为 BF16 的仓库也写 `null`，加载时由 `torch_dtype=fp16` 现场转换。
+- `allowPatterns`：预下载白名单（与 `snapshot_download` 的 `allow_patterns` 同词法：`model_index.json`、
+  `scheduler/**`、`transformer/**` 这类 glob；`null` 表示整仓下载）。目录里同时存在
+  单文件整包副本（如 `*.safetensors` 7.75GB）与示意图时，用组件目录白名单避免重复下载；
+  白名单必须覆盖 diffusers 需要的全部组件，缺文件会加载失败——真机验证过再收紧。
+- `downloadGb`：按白名单预期下载量的规划值（磁盘预检按它乘 1.15 余量）；`measured.downloadGb`
+  是最近一次真机的实测值，收紧白名单后重测前保持 `null`（build-assets 允许 null，但非 null 时必须与
+  `pipeline.downloadGb` 相等，避免「规划变了、实测没更新」的静默漂移）。
 
 ### 2.1 提示词配方（promptStyle / qualityPrefix）
 
@@ -164,6 +178,44 @@
 
 校验：`tools/build-assets.mjs` 要求两个字段若存在必须是布尔值，且 `supportsInpaint` 不能脱离 `supportsImg2Img`；缺省按 `false` 归一后写入 `shared/models.generated.js`（`npm run models:check` 会一并校验生成物同步）。
 
+### 2.2.1 模型原生参考生图能力（supportsReference）
+
+与 `supportsImg2Img` / `supportsInpaint` 是**三条独立的能力位**，语义不同：
+
+| 字段 | 请求形状 | 远端路径 | 尺寸 / 强度 |
+| :--- | :--- | :--- | :--- |
+| `supportsImg2Img` | `reference`（单图 + `strength`） | `AutoPipelineForImage2Image.from_pipe` 复用底座 | 出图跟随参考图，吃 strength |
+| `supportsInpaint` | `reference` + `mask` | `AutoPipelineForInpainting.from_pipe` 复用底座 | 出图跟随参考图，strength 上限 `inpaintMax` |
+| `supportsReference` | `references`（1~N 张作品路径） | 基础管线直接接收 `image=[PIL...]` 条件 | 宽高取请求值，没有 strength / 蒙版 |
+
+| 取值 | 含义 |
+| :--- | :--- |
+| `true` | 支持模型原生参考生图：客户端可提交 `references` 数组，远端把解码后的 PIL 列表作为 `image=` 传给基础管线（不 from_pipe） |
+| `false` | 不支持：客户端参考槽位不提供「原生参考」入口；Host 入队前拒绝 `references`，远端按 loader 白名单返回 `invalid_request` |
+
+判定标准：
+
+- 模型的基础生成管线 `__call__` 原生接收 `image`（`list[PIL.Image.Image] | PIL.Image.Image`）且仍保留
+  `width` / `height` / `num_inference_steps` / `guidance_scale` / `generator`；
+- 首期（Phase C1）只登记 `flux2`（`Flux2KleinPipeline`）；其它家族需先真机验证再标 `true`；
+- **与 `supportsImg2Img` 互斥**：两种请求形状不同（`references` 数组 vs `reference` 单图），同一预设
+  同时标 `true` 会让 Host / 客户端无法判断走哪条路径，`tools/build-assets.mjs` 会拒绝这种组合。
+  未来若某个模型确实两条都支持，再放开该联合约束并补「优先走哪条」的客户端口径；
+- 标 `true` 前必须在真机验证 1~N 张参考图的耗时 / 显存 / 成片效果，并按契约
+  `LIMITS.referenceImages`（`maxCount` / `maxBytes` / `maxEdge` / `minEdge`）记录安全边界；
+  Klein 4B 的参考条件是**弱参考**（提示词与 seed 仍主导），不要按「强一致参考」宣传。
+
+消费方：
+
+- 客户端：`supportsReference` 随 `publicPresets()` 下发，参考槽位据此决定是否可用与提示文案；
+- Host：`references` 只允许在预设 `supportsReference=true` 且 `tool=generate` 时放行，与 `reference` 互斥，
+  路径形状 / 数量按契约校验，读盘后的体积与魔数校验在执行阶段完成；
+- daemon：`SUPPORTED_REFERENCE_LOADERS`（首期仅 `flux2`）是最后一道兜底，非支持 loader 一律 400，
+  不信任客户端标记。
+
+校验：`supportsReference` 为**必填**布尔值；`npm run models:check` 与 `node test/check-contract.mjs`
+会校验必填、互斥约束、`PUBLIC_PRESETS` 透传与生成物同步。
+
 ### 2.3 负向提示词能力（supportsNegative）
 
 `supportsNegative` 描述**模型管线是否真的消费 `negative_prompt`**，与「CFG 是否大于 0」是两件事：前者是管线能力，后者决定本次请求里的负向词是否生效。
@@ -199,6 +251,24 @@
 - daemon：不读该字段，按「`negative_prompt` 在 `__call__` 签名内」且 `cfg > 0` 双条件兜底，不信任客户端标记。
 
 校验：`npm run models:check` 与 `node test/check-contract.mjs` 会校验生成物与 `models/` 同步。
+
+### 2.4 推理加速开关（pipeline.accel）
+
+阶段十五 Phase C1 引入的**脚手架**：模型资产可在 `pipeline` 下声明可选 `accel` 对象，远端 loader
+在构建管线后按开关启用对应优化。缺省（整块省略）表示全部关闭，代码路径与改造前逐字一致；
+开关只在真机 A/B（同 seed / 同尺寸对照）数据确认后才会写进 `models/*.json`。
+
+| 键 | 类型 | 作用 | 风险 |
+| :--- | :--- | :--- | :--- |
+| `vaeTiling` | boolean | `vae.enable_tiling()`：VAE 解码分块，压低高分辨率瞬间显存峰值 | 无损（需肉眼复核瓦片接缝） |
+| `vaeSlicing` | boolean | `vae.enable_slicing()`：batch > 1 时逐张解码 | 无损 |
+| `channelsLast` | boolean | SDXL `unet.to(memory_format=torch.channels_last)`：NHWC 访存，T4 Tensor Core 友好 | 无损（SDXL UNet 才适用） |
+| `fuseQkv` | boolean | SDXL `unet.fuse_qkv_projections()`：Q/K/V 投影合批 | 无损；只能 fuse 一次，from_pipe 派生管线共享 UNet 时按已 fuse 状态跳过 |
+
+校验：`tools/build-assets.mjs` 对 `pipeline.accel` 做严格校验——必须是对象、键只能来自
+`shared/contract.js` 的 `PIPELINE_ACCEL_KEYS`（`vaeTiling` / `vaeSlicing` / `channelsLast` / `fuseQkv`），
+未知键直接报错（开关名写错会让 A/B 数据失真），值必须是布尔。远端镜像名在
+`remote/inference/loaders/diffusers.py` 的 `ACCEL_FLAGS`，`test/check-contract.mjs` 校验两侧同名。
 
 ## 3. 录入与验证流程
 

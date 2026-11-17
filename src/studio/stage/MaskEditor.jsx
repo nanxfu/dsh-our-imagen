@@ -12,8 +12,8 @@
 
 import React from 'react'
 
-import { formatText } from '../../logic/format.js'
-import { referenceFileName } from '../../logic/generate.js'
+import { formatText, percentOf } from '../../logic/format.js'
+import { referenceFileName } from '../../logic/reference.js'
 import {
   MASK_BRUSH,
   MASK_CANVAS_EDGE,
@@ -50,19 +50,13 @@ function isTextInputTarget(target) {
   return false
 }
 
-/** 涂抹覆盖率 → 界面百分比读数：不足 10% 时保留一位小数，避免刚涂一点就显示 0%。 */
-function percentOf(coverage) {
-  const value = Number(coverage)
-  if (!Number.isFinite(value) || value <= 0) return 0
-  const percent = Math.min(100, value * 100)
-  return percent >= 10 ? Math.round(percent) : Math.round(percent * 10) / 10
-}
+/** 涂抹覆盖率 → 界面百分比读数：与提交栏 / 扩图共用 `logic/format.js` 的同一口径。 */
 
 /**
  * 画布编辑器。
  *
- * props 见 `.tmp/plan/INTERFACES.md` §2.5；`now` 由 Stage 统一透传（渲染测试注入时间），
- * 画布本身不消费它。
+ * props 见 `.tmp/plan/INTERFACES.md` §2.5；画布本身不消费时间读数，
+ * 因此不接收 `now`（阶段十五 Phase C0 起 1Hz 计时只在流水线与作品条内部）。
  */
 export function MaskEditor(props) {
   const {

@@ -1,11 +1,18 @@
 """参考图（垫图重绘）与蒙版（局部重绘）编解码：提交期只读图片头，执行期完整解码一次。
 
+阶段十五 Phase C1 起本模块还负责**模型原生参考图**（``referenceImages``）的编解码：
+提交期 ``parse_reference_images`` 只读图片头（loader 白名单、张数、逐项 ``image_b64``、
+体积 / PNG-JPEG / 最小长边），执行期 ``decode_reference_images`` 逐张完整解码、转 RGB、
+长边超限等比缩小——与 ``reference``（单图垫图，吃 strength、尺寸跟随参考图）是两条互斥
+路径，共用同一套图片解码口径（``_decode_image_payload``）。
+
 为什么从 daemon.py 拆出来：这一组逻辑只依赖 Pillow 与「参考图/蒙版边界」，不碰 HTTP、队列与
 模型状态，拆成模块后可以单独导入与测试（daemon 只保留同名薄包装）。
 
 依赖注入：边界 ``limits_for(name) -> dict`` 与 loader 白名单 ``img2img_loaders`` /
-``inpaint_loaders`` 由调用方传入，本模块不读 daemon 的全局 ``CONFIG``，避免子模块反向依赖
-入口文件。Pillow 仍然是函数内延迟导入：模块加载期不能把 PIL 拉起来（daemon 顶层只允许标准库）。
+``inpaint_loaders`` / ``reference_loaders`` 由调用方传入，本模块不读 daemon 的全局 ``CONFIG``，
+避免子模块反向依赖入口文件。Pillow 仍然是函数内延迟导入：模块加载期不能把 PIL 拉起来
+（daemon 顶层只允许标准库）。
 
 蒙版语义（跨端契约）：客户端导出的黑白 PNG，**白色 = 重绘区域，黑色 = 保留区域**，随参考图
 一起提交（job 级 ``reference.mask_b64``）。提交期只校验 base64 / PNG / 体积 / loader 白名单；
@@ -31,6 +38,11 @@ from remote.errors import RequestError
 
 # 参考图允许的容器格式（PIL ``img.format``）：只接受无损 PNG 与常见照片 JPEG。
 REFERENCE_IMAGE_FORMATS = ("PNG", "JPEG")
+
+# 原生参考生图（``referenceImages``，阶段十五 Phase C1）逐项允许的字段：只有图片本体。
+# 与 ``reference``（单图垫图）刻意隔离——原生参考没有 strength / mask 语义，多传即拒绝，
+# 避免把「重绘强度」这个只对 img2img 有意义的参数误当成模型条件的一部分。
+REFERENCE_IMAGE_ITEM_FIELDS = ("image_b64",)
 
 # 局部重绘蒙版的边界处理：二进制硬边会让 4 通道 inpaint 路径留下可见矩形接缝。
 # 做法是「先按蒙版规模外扩白色区域，再做高斯羽化」，让边界有一段过渡带；
@@ -226,6 +238,64 @@ def parse_reference_spec(  # noqa: ANN001
     return spec
 
 
+def parse_reference_images(raw, pipeline_spec: dict, *, limits_for, reference_loaders):  # noqa: ANN001
+    """提交期校验 job 级原生参考图列表（``referenceImages``），归一成 ``{items: [...]}``。
+
+    口径（阶段十五 Phase C1，与单图垫图的 ``reference`` 完全隔离）：
+
+    - 只允许 ``supports_reference`` 的 loader（当前只有 ``flux2``）——非支持模型收到参考图
+      必须显式 400，不能静默丢弃（否则用户以为用上了参考图，成片却与参考图无关）；
+    - 数组长度 1..``limits.referenceImages.maxCount``；
+    - 逐项只认 ``image_b64``：原生参考走基础管线的 ``image=[PIL...]`` 条件，没有 strength /
+      蒙版语义，多传字段直接拒绝，避免把只对 img2img 有效的参数误当模型条件；
+    - base64 合法、原始字节 <= ``maxBytes``、PNG/JPEG、长边 >= ``minEdge``；
+    - **只读图片头**；完整解码、转 RGB 与长边缩放留到执行期 ``decode_reference_images`` 做一次。
+
+    ``raw`` 为 None 表示文生图（行为与改造前一致）。与 ``reference`` 的互斥在
+    ``remote/transport/validator.py`` 的 ``validate_generate_spec`` 里统一拦截。
+    """
+    if raw is None:
+        return None
+    limits = limits_for("referenceImages")
+    loader = str(pipeline_spec.get("loader") or "").strip()
+    if loader not in reference_loaders:
+        raise RequestError(
+            f"该模型不支持参考生图（首期仅开放原生参考模型，当前 loader={loader or '未知'}）"
+        )
+    if not isinstance(raw, list):
+        raise RequestError("referenceImages 必须是数组")
+    if not raw:
+        raise RequestError("referenceImages 不能为空数组")
+    max_count = int(limits.get("maxCount") or 0)
+    if max_count > 0 and len(raw) > max_count:
+        raise RequestError(f"参考图最多 {max_count} 张（收到 {len(raw)} 张）")
+    max_bytes = int(limits.get("maxBytes") or 0)
+    min_edge = int(limits.get("minEdge") or 0)
+    items = []
+    for index, entry in enumerate(raw):
+        label = f"第 {index + 1} 张参考图"
+        if not isinstance(entry, dict):
+            raise RequestError(f"{label}必须是对象")
+        unknown = sorted(set(entry) - set(REFERENCE_IMAGE_ITEM_FIELDS))
+        if unknown:
+            raise RequestError(
+                f"{label}只支持 image_b64 字段（收到 {', '.join(unknown)}）；"
+                "原生参考生图没有 strength 与蒙版语义"
+            )
+        data = _decode_base64_field(
+            entry.get("image_b64"), f"referenceImages[{index}].image_b64", max_bytes, label=label
+        )
+        image = _open_image_header(
+            bytes(data), formats=REFERENCE_IMAGE_FORMATS, label=label, min_edge=min_edge
+        )
+        try:
+            width, height = image.size
+        finally:
+            _close_quietly(image)
+        items.append({"image_bytes": data, "width": int(width), "height": int(height)})
+    return {"items": items}
+
+
 def parse_upscale_reference(raw, *, limits_for) -> dict:  # noqa: ANN001
     """``tool=upscale`` 的源图提交期校验：只读图片头，归一成 ``{image_bytes, width, height}``。
 
@@ -267,25 +337,22 @@ def parse_upscale_reference(raw, *, limits_for) -> dict:  # noqa: ANN001
     return {"image_bytes": data, "width": width, "height": height}
 
 
-def decode_reference_image(reference: dict, *, limits_for) -> object:  # noqa: ANN001
-    """执行期完整解码参考图一次：转 RGB，长边超过 ``maxEdge`` 时等比 LANCZOS 缩小。
+def _decode_image_payload(data: bytes, *, label: str, max_edge: int, min_edge: int = 0):  # noqa: ANN202
+    """执行期完整解码一张图片一次：转 RGB，长边超过 ``max_edge`` 时等比 LANCZOS 缩小。
 
-    返回可直接喂给图生图 / 局部重绘 / 超分管线的 PIL Image；解码失败抛 ``RequestError``
-    （job 收敛为 invalid_request）。原始尺寸挂在 ``_imagen_source_size`` 上，供 run_task 打日志。
+    参考图（单图垫图）与原生参考图列表共用同一套解码口径：提交期只读过图片头，这里才真正
+    解压像素；截断/损坏图片收敛成 ``RequestError``（job → invalid_request）。不写盘、不缓存。
+    原始尺寸挂在 ``_imagen_source_size`` 上，供 run_task 打「原尺寸 → 送入尺寸」日志。
     """
-    if not isinstance(reference, dict):
-        raise RequestError("reference 必须是对象")
-    data = reference.get("image_bytes")
-    if not isinstance(data, (bytes, bytearray)) or not data:
-        raise RequestError("参考图数据缺失，无法解码")
-    max_edge = int(limits_for("reference").get("maxEdge") or 0)
-    image = _open_reference_image(bytes(data), limits_for=limits_for)
+    image = _open_image_header(
+        bytes(data), formats=REFERENCE_IMAGE_FORMATS, label=label, min_edge=min_edge
+    )
     source_size = image.size
     try:
         try:
             image.load()
         except Exception as exc:  # noqa: BLE001 - 截断/损坏图片按请求非法收敛
-            raise RequestError(f"参考图无法解码：{type(exc).__name__}") from None
+            raise RequestError(f"{label}无法解码：{type(exc).__name__}") from None
         if image.mode != "RGB":
             converted = image.convert("RGB")
             _close_quietly(image)
@@ -313,12 +380,67 @@ def decode_reference_image(reference: dict, *, limits_for) -> object:  # noqa: A
                 pass
         raise
     # 「参考图 WxH → 缩放后 WxH」的日志放在 run_task：原尺寸挂在图像对象上，
-    # 这样 run_tasks / run_task 只需要多收一个 reference_image，不必再加元参数。
+    # 这样 run_tasks / run_task 只需要多收参考图，不必再加元参数。
     try:
         image._imagen_source_size = source_size
     except Exception:  # pragma: no cover - PIL Image 允许挂属性，仅作防御
         pass
     return image
+
+
+def decode_reference_image(reference: dict, *, limits_for) -> object:  # noqa: ANN001
+    """执行期完整解码参考图一次：转 RGB，长边超过 ``maxEdge`` 时等比 LANCZOS 缩小。
+
+    返回可直接喂给图生图 / 局部重绘 / 超分管线的 PIL Image；解码失败抛 ``RequestError``
+    （job 收敛为 invalid_request）。原始尺寸挂在 ``_imagen_source_size`` 上，供 run_task 打日志。
+    """
+    if not isinstance(reference, dict):
+        raise RequestError("reference 必须是对象")
+    data = reference.get("image_bytes")
+    if not isinstance(data, (bytes, bytearray)) or not data:
+        raise RequestError("参考图数据缺失，无法解码")
+    limits = limits_for("reference")
+    return _decode_image_payload(
+        bytes(data),
+        label="参考图",
+        max_edge=int(limits.get("maxEdge") or 0),
+        min_edge=int(limits.get("minEdge") or 0),
+    )
+
+
+def decode_reference_images(reference_images, *, limits_for) -> list:  # noqa: ANN001
+    """执行期把原生参考图列表完整解码一次（整批共用，不写盘）。
+
+    与 :func:`decode_reference_image` 口径一致（PNG/JPEG、``minEdge``、转 RGB、长边超
+    ``referenceImages.maxEdge`` 等比缩小），区别只是逐个解码成一个列表，供 ``run_task``
+    以 ``image=[PIL...]`` 传给基础管线。任一张失败都会先关闭已解码的图片再抛
+    ``RequestError``，不泄漏文件句柄。
+    """
+    if not isinstance(reference_images, dict):
+        raise RequestError("referenceImages 必须是对象")
+    items = reference_images.get("items")
+    if not isinstance(items, list) or not items:
+        raise RequestError("参考图数据缺失，无法解码")
+    limits = limits_for("referenceImages")
+    max_edge = int(limits.get("maxEdge") or 0)
+    min_edge = int(limits.get("minEdge") or 0)
+    images = []
+    try:
+        for index, item in enumerate(items):
+            label = f"第 {index + 1} 张参考图"
+            data = item.get("image_bytes") if isinstance(item, dict) else None
+            if not isinstance(data, (bytes, bytearray)) or not data:
+                raise RequestError(f"{label}数据缺失，无法解码")
+            images.append(
+                _decode_image_payload(
+                    bytes(data), label=label, max_edge=max_edge, min_edge=min_edge
+                )
+            )
+    except Exception:
+        for image in images:
+            _close_quietly(image)
+        raise
+    return images
 
 
 def decode_mask_image(mask: dict, *, size, limits_for) -> object:  # noqa: ANN001

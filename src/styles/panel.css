@@ -907,3 +907,261 @@
     height: 40px;
   }
 }
+
+/* ── 原生参考图槽（阶段十五 Phase C2） ──────────────────────────────
+ * 参考图小节外再包一层 .ofs-ref-zone 作为拖放目标：内层 Fieldset 仍沿用左栏分区的
+ * 标题行与分隔线，拖拽悬停时只给外框一个轻底色。 */
+.ofs-ref-zone .ofs-fieldset {
+  border-top: 1px solid var(--ofs-hairline);
+}
+
+.ofs-ref-zone + .ofs-fieldset {
+  border-top: 1px solid var(--ofs-hairline);
+}
+
+.ofs-ref-zone.is-dragging {
+  border-radius: var(--ofs-r-md);
+  background: var(--ofs-accent-soft);
+}
+
+.ofs-ref-zone.is-dragging .ofs-fieldset {
+  border-top-color: transparent;
+}
+
+.ofs-ref-count {
+  color: var(--ofs-ink-4);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ofs-ref-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ofs-ref-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-sm);
+  overflow: hidden;
+  background: var(--ofs-sunken);
+}
+
+.ofs-ref-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: var(--ofs-sunken);
+}
+
+.ofs-ref-remove {
+  appearance: none;
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--ofs-window-border);
+  border-radius: var(--ofs-r-pill);
+  background: color-mix(in oklab, var(--ofs-card-solid) 84%, transparent);
+  color: var(--ofs-ink-2);
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+/* 触控热区扩到 44px：视觉只占 22px，避免压住缩略图。 */
+.ofs-ref-remove::after {
+  content: '';
+  position: absolute;
+  inset: -11px;
+}
+
+.ofs-ref-remove:hover {
+  color: var(--ofs-error);
+}
+
+.ofs-ref-remove:focus-visible {
+  outline: none;
+  box-shadow: var(--ofs-focus-ring);
+}
+
+.ofs-ref-name {
+  padding: 3px 6px 4px;
+  color: var(--ofs-ink-3);
+  font-size: 10.5px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ofs-ref-add,
+.ofs-ref-more {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px dashed var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-md);
+  background: transparent;
+  color: var(--ofs-ink-2);
+  font-family: var(--ofs-font);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.ofs-ref-add:hover,
+.ofs-ref-more:hover {
+  border-color: var(--ofs-accent-soft-border);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+}
+
+.ofs-ref-add:focus-visible,
+.ofs-ref-more:focus-visible {
+  outline: none;
+  box-shadow: var(--ofs-focus-ring);
+}
+
+.ofs-ref-add:disabled,
+.ofs-ref-more:disabled {
+  color: var(--ofs-ink-4);
+  cursor: default;
+}
+
+.ofs-ref-more {
+  min-height: 32px;
+}
+
+.ofs-ref-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ofs-ref-pick-toggle {
+  align-self: flex-start;
+}
+
+.ofs-ref-works {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.ofs-ref-work {
+  appearance: none;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-sm);
+  overflow: hidden;
+  background: var(--ofs-sunken);
+  cursor: pointer;
+}
+
+.ofs-ref-work img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.ofs-ref-work:hover {
+  border-color: var(--ofs-accent-soft-border);
+}
+
+.ofs-ref-work:focus-visible {
+  outline: none;
+  box-shadow: var(--ofs-focus-ring);
+}
+
+/* 不支持原生参考时的降级引导：琥珀色说明 + 「换模型 / 改用整图重绘」两个动作。 */
+.ofs-ref-warn {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 9px;
+  border: 1px solid color-mix(in oklab, var(--ofs-warn) 30%, transparent);
+  border-radius: var(--ofs-r-md);
+  background: var(--ofs-warn-soft);
+}
+
+.ofs-ref-warn-title {
+  color: var(--ofs-warn);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.ofs-ref-warn .ofs-hint {
+  color: var(--ofs-ink-2);
+}
+
+.ofs-ref-warn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ofs-ref-switch,
+.ofs-ref-fallback {
+  appearance: none;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in oklab, var(--ofs-warn) 32%, transparent);
+  border-radius: var(--ofs-r-pill);
+  background: transparent;
+  color: var(--ofs-warn);
+  font-family: var(--ofs-font);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.ofs-ref-switch:hover,
+.ofs-ref-fallback:hover {
+  border-color: color-mix(in oklab, var(--ofs-warn) 55%, transparent);
+  background: color-mix(in oklab, var(--ofs-warn-soft) 70%, transparent);
+}
+
+.ofs-ref-switch:focus-visible,
+.ofs-ref-fallback:focus-visible {
+  outline: none;
+  box-shadow: var(--ofs-focus-ring);
+}
+
+.ofs-ref-busy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ofs-ref-busy .ofs-shimmer {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.ofs-ref-quality {
+  color: var(--ofs-ink-4);
+}

@@ -16,6 +16,8 @@ import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import { PIPELINE_ACCEL_KEYS } from '../shared/contract.js'
+
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const MODELS_DIR = join(ROOT, 'models')
 
@@ -45,6 +47,7 @@ const REQUIRED_FIELDS = [
   'sizeOptions',
   'runtime',
   'supportsNegative',
+  'supportsReference',
   'pipeline',
   'measured',
 ]
@@ -129,6 +132,25 @@ export async function loadModels(modelsDir = MODELS_DIR) {
     if (typeof model.pipeline.loader !== 'string' || !model.pipeline.loader) {
       fail(`${where} 的 pipeline.loader 必须是非空字符串`)
     }
+    // 推理加速开关（阶段十五 Phase C1 脚手架）：可选对象，只允许契约登记过的布尔键；
+    // 缺省（整块省略）表示全部关闭，远端代码路径必须与改造前逐字一致。
+    // 未知键直接失败而不是静默忽略：开关名写错会让「以为开了、其实没开」的 A/B 数据失真。
+    if (model.pipeline.accel !== undefined) {
+      const accel = model.pipeline.accel
+      if (!accel || typeof accel !== 'object' || Array.isArray(accel)) {
+        fail(`${where} 的 pipeline.accel 必须是对象（允许的键：${PIPELINE_ACCEL_KEYS.join(' / ')}）`)
+      }
+      const unknown = Object.keys(accel).filter((key) => !PIPELINE_ACCEL_KEYS.includes(key))
+      if (unknown.length) {
+        fail(
+          `${where} 的 pipeline.accel 含未知键 ${unknown.join(', ')}` +
+            `（允许的键：${PIPELINE_ACCEL_KEYS.join(' / ')}）`,
+        )
+      }
+      for (const key of Object.keys(accel)) {
+        if (typeof accel[key] !== 'boolean') fail(`${where} 的 pipeline.accel.${key} 必须是布尔值`)
+      }
+    }
     if (!model.measured || typeof model.measured !== 'object' || Array.isArray(model.measured)) {
       fail(`${where} 的 measured 必须是对象（允许指标为 null，表示尚未实测）`)
     }
@@ -168,6 +190,23 @@ export async function loadModels(modelsDir = MODELS_DIR) {
     // 只有整套 diffusers 管线能用 AutoPipelineForImage2Image.from_pipe 复用的模型才能标 true。
     if ('supportsImg2Img' in model && typeof model.supportsImg2Img !== 'boolean') {
       fail(`${where} 的 supportsImg2Img 必须是布尔值（缺省按 false 处理）`)
+    }
+    // 模型原生参考生图能力（阶段十五 Phase C1）：必填布尔值，语义是「基础管线原生接收
+    // image=[PIL...] 参考条件，宽高仍由请求决定，没有 strength / 蒙版」。
+    // 与 supportsImg2Img 是两条不同的请求形状（`references` 数组 vs `reference` 单图），
+    // 同一预设同时标 true 会让 Host / 客户端无法判断该走哪条路径，因此本轮要求互斥；
+    // 未来某个模型两者都支持时，再放开这条联合约束并给客户端补「优先走哪条」的口径。
+    if (typeof model.supportsReference !== 'boolean') {
+      fail(
+        `${where} 的 supportsReference 必须是布尔值（原生参考生图能力；不支持时写 false）`,
+      )
+    }
+    if (model.supportsReference === true && model.supportsImg2Img === true) {
+      fail(
+        `${where} 同时标了 supportsReference 与 supportsImg2Img：两者是互斥的请求形状` +
+          '（原生参考图列表 vs 单图垫图重绘），Host / 客户端无法判断该走哪条路径；' +
+          '本轮要求一个预设只声明一种参考能力',
+      )
     }
     // 中文提示词原生理解能力：可以缺省（缺省按 false 归一），显式给出时必须是布尔值。
     if ('supportsChinese' in model && typeof model.supportsChinese !== 'boolean') {
@@ -251,6 +290,8 @@ function projectPresets(models) {
     supportsChinese: model.supportsChinese === true,
     // 图生图（垫图重绘）能力：客户端据此决定是否允许放参考图；daemon 侧还会按 loader 兜底。
     supportsImg2Img: model.supportsImg2Img === true,
+    // 模型原生参考生图能力：客户端据此开放「1~N 张参考图」槽位；daemon 侧按 loader 白名单兜底。
+    supportsReference: model.supportsReference === true,
     // 局部重绘（Inpaint）能力：客户端据此决定是否开放涂抹蒙版；daemon 侧同样按 loader 兜底。
     supportsInpaint: model.supportsInpaint === true,
     // 专用局部重绘权重：只能带蒙版使用（不做文生图 / 纯图生图），客户端与 daemon 都要拦。

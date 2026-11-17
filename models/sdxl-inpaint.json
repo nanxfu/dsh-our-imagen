@@ -27,6 +27,7 @@
   "supportsImg2Img": true,
   "supportsInpaint": true,
   "inpaintOnly": true,
+  "supportsReference": false,
   "supportsNegative": true,
   "pipeline": {
     "loader": "sdxl",

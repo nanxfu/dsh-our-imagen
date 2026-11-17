@@ -64,6 +64,14 @@ class LoaderRegistry:
         """
         return tuple(name for name, loader in self._loaders.items() if loader.supports_inpaint)
 
+    def reference_names(self) -> tuple[str, ...]:
+        """支持模型原生参考生图（``referenceImages``）的 loader 名。
+
+        与 ``img2img_names`` / ``inpaint_names`` 三条能力各自独立判定：原生参考走基础管线的
+        ``image=[PIL...]`` 条件（不 from_pipe、不吃 strength），首期只登记 ``flux2``。
+        """
+        return tuple(name for name, loader in self._loaders.items() if loader.supports_reference)
+
     def get(self, name, *, error_cls=RequestError) -> ModelLoader:  # noqa: ANN001
         key = str(name or "").strip()
         loader = self._loaders.get(key)
@@ -94,6 +102,18 @@ class LoaderRegistry:
         loader = self.get(spec.get("loader"), error_cls=ctx.request_error_cls)
         pipe = loader.load(spec, ctx)
         return pipe, f"{loader.name}:{spec.get('base')}"
+
+    def apply_accel(self, spec: dict, pipe, *, log=print):  # noqa: ANN001, ANN201
+        """给已构建的管线应用 ``pipeline.accel`` 开关（幂等）。
+
+        惰性派生的 img2img / inpaint 管线复用同一批底座组件，需要在 ``from_pipe`` 之后
+        再调一次：VAE tiling/slicing 直接生效，UNet 的 channels_last / fuse 由策略内部
+        按「是否已 fuse」幂等跳过（共享 UNet 时不会二次 fuse）。未知 loader 原样返回。
+        """
+        loader = self._loaders.get(str(spec.get("loader") or "").strip())
+        if loader is None:
+            return pipe
+        return loader.apply_accel(pipe, spec, log=log)
 
 
 _DEFAULT_REGISTRY: LoaderRegistry | None = None

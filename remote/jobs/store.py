@@ -128,11 +128,15 @@ class JobStore:
         job_id: str | None = None,
         reference: dict | None = None,
         tool: str = "generate",
+        reference_images: dict | None = None,
     ):
         """入队；``job_id`` 命中已有 job 时原样返回（幂等，不重复入队）。
 
         ``reference`` 是提交期校验并归一过的参考图（见 ``parse_reference_spec``），
         文生图请求传 None；``tool`` 是请求工具（缺省 generate，upscale 走超分执行分支）。
+        ``reference_images`` 是原生参考生图（supportsReference）的图片列表（见
+        ``parse_reference_images``），与 ``reference`` 互斥；调用方（HTTP 层）负责先拦掉
+        同时给出的请求，这里只存储，不做第二套语义判断。
         返回 ``(job, created)``：created=False 表示命中了幂等键（同一 jobId 无论 tool 如何，
         命中即返回原 job——幂等键语义不变）。
         """
@@ -152,14 +156,23 @@ class JobStore:
                 tasks=list(tasks),
                 tool=str(tool or "generate"),
                 reference=dict(reference) if reference is not None else None,
+                reference_images=(
+                    dict(reference_images) if reference_images is not None else None
+                ),
             )
             self._jobs[job.job_id] = job
             self._queue.append(job)
             queue_len = len(self._queue)
             self._cond.notify_all()
+            reference_note = ""
+            if job.reference is not None:
+                reference_note = "，带参考图"
+            elif job.reference_images is not None:
+                count = len(job.reference_images.get("items") or [])
+                reference_note = f"，带原生参考图 {count} 张"
             log(
                 f"[job] 入队 {job.job_id}（tool={job.tool}，tasks={job.total}，排队 {queue_len}"
-                f"{'，带参考图' if job.reference is not None else ''}）"
+                f"{reference_note}）"
             )
             return job, True
 
@@ -208,6 +221,11 @@ class JobStore:
         """解码完成后释放队列里保留的原始字节（job 公开视图不含参考图）。"""
         with self._lock:
             job.reference = None
+
+    def clear_reference_images(self, job: Job) -> None:
+        """原生参考图解码完成后释放原始字节（job 公开视图不含参考图）。"""
+        with self._lock:
+            job.reference_images = None
 
     def finish(self, job: Job, status: str, error: dict | None = None) -> float:
         """置终态、记结束时间、进淘汰队列并顺带淘汰；返回收尾时刻（供调用方刷新活动时间）。"""

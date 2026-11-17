@@ -114,6 +114,28 @@ def build_upscale_task(width: int, height: int, *, limits_for) -> dict:  # noqa:
     }
 
 
+def _validate_reference_shapes(spec: dict, tool: str) -> None:
+    """拦截参考图相关字段的互斥关系（阶段十五 Phase C1）。
+
+    同一个请求只能走一条参考路径：
+
+    - ``reference``：单图垫图重绘 / 局部重绘（img2img，尺寸跟随参考图，吃 strength）；
+    - ``referenceImages``：模型原生参考生图（基础管线 ``image=[PIL...]``，宽高取请求值）。
+
+    两者同时出现说明调用方把两种语义混在了一起，必须 400 而不是挑一个静默忽略；
+    ``referenceImages`` 只对 ``tool=generate`` 生效（upscale 的源图走 ``reference``）。
+    """
+    has_reference = spec.get("reference") is not None
+    has_reference_images = spec.get("referenceImages") is not None
+    if has_reference_images and tool != "generate":
+        raise RequestError("referenceImages 只对 tool=generate 生效")
+    if has_reference and has_reference_images:
+        raise RequestError(
+            "reference 与 referenceImages 不能同时使用："
+            "单图垫图重绘与原生参考生图是两条互斥路径"
+        )
+
+
 def validate_generate_spec(  # noqa: ANN001
     spec,
     *,
@@ -133,6 +155,7 @@ def validate_generate_spec(  # noqa: ANN001
         raise RequestError("请求体必须是 JSON 对象")
 
     tool = normalize_tool(spec)
+    _validate_reference_shapes(spec, tool)
     if tool == "upscale":
         _validate_upscale_factor(spec, limits_for=limits_for)
         # 不读请求里的 pipeline：Host 不会下发，客户端硬塞也只会被忽略（超分没有底座概念）。

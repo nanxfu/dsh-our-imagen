@@ -12,33 +12,19 @@
  * 0.13.0 起主表单只做纯文生图：参考图 / 蒙版 / 重绘强度的状态与来源策略迁到
  * `imageTool.js` + `useImageTool`。`buildGenerateBody()` 仍保留 reference / mask 归一，
  * 供 `buildImageToolBody()` 复用同一套请求体构造；表单域不再产出 reference 字段。
+ *
+ * 阶段十五 Phase C2：左栏参考图槽在 `references` 非空时把路径数组写进请求体
+ * （`referencePathsOf` 去重并按契约上限裁剪），与单图 `reference` 互斥；
+ * `generateCapabilityOf()` 同时前置判断「当前预设是否支持原生参考生图」。
  */
 
-import { LIMITS, ROUTES, UPSCALE } from '../../shared/contract.js'
+import { LIMITS, UPSCALE } from '../../shared/contract.js'
 import { clampInt, clampNumber, clampSize, parseSeed } from './clamp.js'
+import { positiveSize } from './format.js'
 import { clampMaskStrength, referenceMaskForSubmit } from './mask.js'
 import { inpaintOnlyOf, ratioIdOf, referencePresetOf } from './preset.js'
 import { negativeForSubmit } from './prompt.js'
-
-/** 参考图的文件名：路径只用于向宿主定位作品，界面只显示文件名。 */
-export function referenceFileName(path) {
-  const value = String(path ?? '').trim()
-  if (!value) return ''
-  const parts = value.split(/[\\/]/)
-  return parts[parts.length - 1] || value
-}
-
-/**
- * 参考图的缩略图地址：与 `lib/output.js` 的 `fileUrl()` 同口径（工作区相对路径做一次 URL 编码）。
- *
- * 图片工具的底图来自历史条目，一般已带 `image.url`；旧记录只有路径时用这里补出来，
- * 与 `/imagen-api/file?path=` 保持同一条口径。
- */
-export function referenceUrlOf(path) {
-  const value = String(path ?? '').trim()
-  if (!value) return ''
-  return `${ROUTES.file.path}?path=${encodeURIComponent(value)}`
-}
+import { referenceCapabilityOf, referencePathsOf } from './reference.js'
 
 /**
  * 表单里的参考图 → 可提交的工作区相对路径。
@@ -88,11 +74,18 @@ export function buildGenerateBody(form, options = {}) {
   const presetId = input.presetId || options.defaultPreset || ''
   if (presetId) body.presetId = presetId
 
+  // 模型原生参考图（Phase C2）：槽位非空时只提交路径数组，与单图 `reference` 互斥。
+  // 覆盖项（重试 / 变体）里的 references 优先，其次才是表单槽位；空槽不写字段，
+  // 请求体与纯文生图逐字一致。
+  const hasOverride = (key) => overrides !== null && Object.prototype.hasOwnProperty.call(overrides, key)
+  const references = referencePathsOf(hasOverride('references') ? overrides.references : input.references)
+  if (references.length > 0) body.references = references
+
   // 图生图字段只可能来自图片工具（主表单已不挂参考图）：有参考图路径才输出 reference，
   // 否则请求体与纯文生图逐字一致。覆盖项也能改这两个字段，走同一套归一规则。
-  const hasOverride = (key) => overrides !== null && Object.prototype.hasOwnProperty.call(overrides, key)
+  // 与 `references` 互斥：同时给出时以原生参考为准，不把两种图片条件混进一个请求。
   const reference = hasOverride('reference') ? overrides.reference : input.reference
-  const referencePath = referencePathOf({ reference })
+  const referencePath = references.length > 0 ? '' : referencePathOf({ reference })
   if (referencePath) {
     const strength = hasOverride('strength') ? overrides.strength : input.strength
     // 局部重绘：参考图上带蒙版且当前模型消费 Inpaint 时才提交 reference.mask。
@@ -106,8 +99,9 @@ export function buildGenerateBody(form, options = {}) {
 
   if (overrides) {
     for (const [key, value] of Object.entries(overrides)) {
-      // prompt 已在上面处理；reference / strength 只经归一后进入 body，避免把 url 带出去。
-      if (key === 'prompt' || key === 'reference' || key === 'strength') continue
+      // prompt 已在上面处理；reference / strength / references 只经归一后进入 body，
+      // 避免把 url / 槽位项这类展示字段带出去。
+      if (key === 'prompt' || key === 'reference' || key === 'strength' || key === 'references') continue
       body[key] = value
     }
   }
@@ -143,20 +137,24 @@ export function effectivePresetOf(overrides, preset, presets) {
 }
 
 /**
- * 主表单本次请求的纯文生图能力预检。
+ * 主表单本次请求的能力预检。
  *
- * 专用局部重绘权重（`inpaintOnly`）只能带蒙版使用，不能文生图：本次请求改用可文生图的
- * 兜底预设并给一条轻提示，**不改左栏表单**（决策 D3）；一个能文生图的预设都没有
- * （旧宿主）时拦下并说明，不能把注定失败的请求交给宿主。
+ * 两条互斥的图片条件在这里分流：
+ *  - `references`（模型原生参考图，Phase C2）非空：当前预设必须 `supportsReference = true`，
+ *    否则拦下并给「换模型 / 移除参考图」的说明——不静默丢图，也不自动换模型；
+ *  - 专用局部重绘权重（`inpaintOnly`）只能带蒙版使用，不能文生图：本次请求改用可文生图的
+ *    兜底预设并给一条轻提示，**不改左栏表单**（决策 D3）；一个能文生图的预设都没有
+ *    （旧宿主）时拦下并说明，不能把注定失败的请求交给宿主。
  *
  * 参考图与蒙版已不经过主表单，这里只判断预设本身。
  *
  * @param {object} options
  * @param {object|null} options.preset 当前（或覆盖项解析出的）有效预设
  * @param {Array<object>} options.presets 宿主下发的预设列表
+ * @param {unknown} [options.references] 本次请求要带的原生参考图（槽位或覆盖项）
  * @returns {{
  *   ok: boolean,
- *   reason: ''|'preset',
+ *   reason: ''|'preset'|'reference',
  *   blockedKey: string,
  *   notice: null|{key: string, params: object},
  *   preset: object|null,
@@ -167,7 +165,16 @@ export function generateCapabilityOf(options = {}) {
   const presets = Array.isArray(options.presets) ? options.presets : []
   const result = { ok: true, reason: '', blockedKey: '', notice: null, preset: null }
   // 预设列表还没拿到（启动瞬间）时不做判断，交给宿主，避免误拦文生图。
-  if (presets.length === 0 || !inpaintOnlyOf(preset)) return result
+  if (presets.length === 0) return result
+  // 原生参考图路径优先：槽位非空时不改模型、不丢图，只拦下并说明原因。
+  const referenceCapability = referenceCapabilityOf(preset, options.references)
+  if (!referenceCapability.ok) {
+    result.ok = false
+    result.reason = 'reference'
+    result.blockedKey = referenceCapability.blockedKey
+    return result
+  }
+  if (!inpaintOnlyOf(preset)) return result
   const fallback = referencePresetOf(presets)
   if (!fallback) {
     result.ok = false
@@ -242,12 +249,6 @@ function finiteNumber(value) {
   return Number.isFinite(number) ? number : null
 }
 
-function positiveSize(value) {
-  const number = finiteNumber(value)
-  if (number === null || number <= 0) return null
-  return Math.round(number)
-}
-
 function presetOf(presets, id) {
   if (!id || !Array.isArray(presets)) return null
   return presets.find((item) => item && item.id === id) || null
@@ -296,12 +297,16 @@ export function isBareImportOf(entry) {
   )
 }
 
-// ---- 非扩散产物（高清放大）的回填路径 ---------------------------------------
+// ---- 非扩散产物（高清放大 / 局部重绘 / 扩图）的回填路径 ---------------------
 //
-// 阶段十五 Phase B1 起 `/history` 里会出现高清放大产物：`item.upscale === true`、
-// `presetId: 'realesrgan-x2plus'`、`params.steps/cfg/seed` 全是占位 0、宽高是放大后的像素
-// （如 2048×2048）。这类记录**没有扩散参数**，直接回填 / 重新生成会把 0 步、超分模型 id
-// 和超限尺寸写进左栏表单，因此先沿 `sourceImage` 找到父作品的真实扩散参数，找不到时走降级补丁。
+// 阶段十五 Phase B1 / Phase C0 起 `/history` 里会出现几类「扩散参数不能直接写进左栏
+// 纯文生图表单」的记录：
+//  - 高清放大产物：`item.upscale === true`、`presetId: 'realesrgan-x2plus'`、params 全是占位 0；
+//  - 专用局部重绘权重（`inpaintOnly`，如 `sdxl-inpaint`）产物：该预设不在文生图选择器里，
+//    写进表单会让模型选择器出现「空白未选中」态；
+//  - `presetId` 不在当前扩散预设列表里的旧记录。
+// 这几类统一先沿 `sourceImage` 回溯父作品的真实扩散参数，找不到时走降级补丁，绝不把不可用
+// 预设 / 占位 0 步 / 放大后尺寸写进表单或发成生成请求。
 
 /** 父链回溯层数上限：与 `logic/lineage.js` 的 rootImage 回溯保持一致，防异常数据成环。 */
 const DIFFUSION_LOOKBACK = 8
@@ -314,10 +319,31 @@ function isUpscaleItem(item) {
 }
 
 /**
- * 是否为「非扩散产物」：高清放大，或 `presetId` 不在当前扩散预设列表里的记录。
+ * 是否为「扩散参数不能直接回填」的记录。
+ *
+ * 高清放大是明确信号，任何时候都认；预设相关信号只在预设列表拿到后才判定，
+ * 避免启动瞬间（presets 还没下发）把正常作品误判成非扩散产物。
+ *
+ * @param {object} item `/history` 的历史条目
+ * @param {Array<object>} [presets] 宿主下发的预设列表
+ */
+function isNonDiffusionItem(item, presets) {
+  if (!item || typeof item !== 'object') return false
+  if (isUpscaleItem(item)) return true
+  const presetId = typeof item.presetId === 'string' ? item.presetId.trim() : ''
+  if (!presetId) return false
+  const list = Array.isArray(presets) ? presets.filter((preset) => preset && preset.id) : []
+  if (list.length === 0) return false
+  const found = presetOf(list, presetId)
+  // 认不出的旧模型 id，或专用局部重绘权重（inpaintOnly）：都不能当纯文生图的回填来源。
+  return !found || found.inpaintOnly === true
+}
+
+/**
+ * 是否为「非扩散产物」：高清放大、inpaintOnly 预设产物，或 `presetId` 不在当前扩散预设列表里。
  *
  * 这类记录不能直接回填参数。预设列表还没拿到（启动瞬间）时不按「未知预设」判定，
- * 只认 `upscale` / 超分模型 id 这两个明确信号，避免把正常作品误判成非扩散产物。
+ * 只认 `upscale` / 超分模型 id 这两个明确信号。
  *
  * @param {object} entry `{ image, item }`
  * @param {Array<object>} [presets] 宿主下发的预设列表
@@ -325,11 +351,7 @@ function isUpscaleItem(item) {
  */
 export function isNonDiffusionRecallOf(entry, presets) {
   const item = entry && typeof entry === 'object' && entry.item ? entry.item : null
-  if (!item) return false
-  if (isUpscaleItem(item)) return true
-  const presetId = typeof item.presetId === 'string' ? item.presetId.trim() : ''
-  const list = Array.isArray(presets) ? presets.filter((preset) => preset && preset.id) : []
-  return Boolean(presetId && list.length > 0 && !presetOf(list, presetId))
+  return isNonDiffusionItem(item, presets)
 }
 
 /** `/history` 已加载条目 → 图片路径索引（同一张图重复出现时保留先到的一份）。 */
@@ -351,19 +373,22 @@ function itemsByImagePathOf(items) {
  * 回填 / 重新生成前的「真实扩散来源」解析。
  *
  *  - 普通作品：返回 entry 自身（调用方据此走既有回填逻辑）；
- *  - 非扩散产物（高清放大等）：沿 `item.sourceImage` 在已加载的 `items` 里向上找父作品
- *    （最多 8 层、防成环；父作品若仍是放大记录继续向上），找到即返回父作品的 `{ image, item }`；
+ *  - 非扩散产物（高清放大 / inpaintOnly 产物等）：沿 `item.sourceImage` 在已加载的 `items` 里
+ *    向上找父作品（最多 8 层、防成环；父作品若仍是非扩散记录继续向上），找到即返回父作品的
+ *    `{ image, item }`；
  *  - 找不到父作品 / 父作品是无生成元数据的导入图：返回 null（调用方走降级补丁）。
  *
  * @param {object} entry `{ image, item }`
  * @param {Array<object>} [items] `/history` 已加载条目（缺省时等同找不到父作品）
+ * @param {Array<object>} [presets] 宿主下发的预设列表（判定 inpaintOnly / 未知预设）
  * @returns {{ image: object, item: object } | null}
  */
-export function diffusionSourceOf(entry, items) {
+export function diffusionSourceOf(entry, items, presets) {
   const holder = entry && typeof entry === 'object' ? entry : null
   if (!holder || !holder.item) return null
+  const list = Array.isArray(presets) ? presets.filter((preset) => preset && preset.id) : []
   // 普通作品：自身就是扩散来源，调用方不需要向上找。
-  if (!isUpscaleItem(holder.item)) return holder
+  if (!isNonDiffusionItem(holder.item, list)) return holder
   const byPath = itemsByImagePathOf(items)
   const seen = new Set()
   let current = holder
@@ -380,7 +405,7 @@ export function diffusionSourceOf(entry, items) {
     }
     // 裸导入父作品没有生成元数据，不能当扩散参数来源。
     if (isBareImportOf(parentEntry)) return null
-    if (!isUpscaleItem(parent.item)) return parentEntry
+    if (!isNonDiffusionItem(parent.item, list)) return parentEntry
     current = parentEntry
   }
   return null
@@ -483,9 +508,10 @@ function degradedRerollOverrides(entry, presets, fallbackPreset) {
  * 没有记录有效 seed 时把种子恢复为随机，避免上一张作品的固定种子串到这张图上。
  * 没有可回填字段时返回空补丁；无生成元数据的导入图直接返回空补丁（见 isBareImportOf）。
  *
- * 阶段十五 Phase B 补修：高清放大等非扩散产物不直接回填——先沿 `sourceImage` 在
- * `items` 里找父作品的真实扩散参数；找不到时走降级补丁（尺寸来自源图 / 钳到契约范围，
- * 步数 / CFG 用合法扩散预设推荐值），绝不把超分 id、0 步或放大后尺寸带进表单。
+ * 阶段十五 Phase B 补修 / Phase C0：高清放大等非扩散产物、以及专用局部重绘权重
+ * （`inpaintOnly`）产物不直接回填——先沿 `sourceImage` 在 `items` 里找父作品的真实扩散参数；
+ * 找不到时走降级补丁（尺寸来自源图 / 钳到契约范围，步数 / CFG 用合法扩散预设推荐值），
+ * 绝不把超分 id、inpaintOnly 预设、0 步或放大后尺寸带进左栏表单。
  *
  * @param {object} entry `{ image, item }`
  * @param {object} form 当前表单（只读 presetId 用于降级选模）
@@ -495,7 +521,7 @@ function degradedRerollOverrides(entry, presets, fallbackPreset) {
 export function iteratePatch(entry, form, presets, items) {
   if (isBareImportOf(entry)) return {}
   if (isNonDiffusionRecallOf(entry, presets)) {
-    const source = diffusionSourceOf(entry, items)
+    const source = diffusionSourceOf(entry, items, presets)
     if (source && source !== entry) return iteratePatch(source, form, presets, items)
     return degradedIteratePatch(entry, form, presets)
   }
@@ -522,8 +548,8 @@ export function iteratePatch(entry, form, presets, items) {
  * 只把 seed 换成随机（-1），并按「再画一张」把张数固定为 1。
  * 没有可用的提示词时返回 null，由调用方给可见提示；裸导入图同样返回 null。
  *
- * 非扩散产物（高清放大等）同样先解析父作品的真实扩散参数；父作品缺失时用降级覆盖项
- * （`fallbackPreset` 通常是左栏当前预设，缺失时取第一个可文生图预设）。
+ * 非扩散产物（高清放大 / inpaintOnly 产物等）同样先解析父作品的真实扩散参数；父作品缺失时
+ * 用降级覆盖项（`fallbackPreset` 通常是左栏当前预设，缺失时取第一个可文生图预设）。
  *
  * @param {object} entry `{ image, item }`
  * @param {Array<object>} [presets] 宿主下发的预设列表
@@ -533,7 +559,7 @@ export function iteratePatch(entry, form, presets, items) {
 export function rerollOverrides(entry, presets, items, fallbackPreset) {
   if (isBareImportOf(entry)) return null
   if (isNonDiffusionRecallOf(entry, presets)) {
-    const source = diffusionSourceOf(entry, items)
+    const source = diffusionSourceOf(entry, items, presets)
     if (source && source !== entry) return rerollOverrides(source, presets, items, fallbackPreset)
     return degradedRerollOverrides(entry, presets, fallbackPreset)
   }
@@ -556,6 +582,10 @@ export function rerollOverrides(entry, presets, items, fallbackPreset) {
  *
  * 只服务主表单的纯文生图重试；图片工具任务失败由 `useImageTool` 自己恢复（决策 D5），
  * 不会走到这里。
+ *
+ * 原生参考图任务（Phase C2）按任务参数里的 `referenceSources`（或上一次提交体里的
+ * `references`）恢复同一组参考图；恢复出来的槽位仍要过生成前置预检，当前模型不支持时
+ * 会被拦下并说明，不会静默丢弃。
  */
 export function retryOverrides(source) {
   const holder = source && typeof source === 'object' ? source : null
@@ -576,6 +606,9 @@ export function retryOverrides(source) {
   if (steps !== null) overrides.steps = steps
   if (cfg !== null) overrides.cfg = cfg
   if (typeof params.negativePrompt === 'string') overrides.negativePrompt = params.negativePrompt
+  // 参考图来源按「任务参数 referenceSources → 提交体 references」的顺序取，空数组不写字段。
+  const references = referencePathsOf(params.referenceSources || params.references)
+  if (references.length > 0) overrides.references = references
   const presetId = holder.presetId || params.presetId || ''
   if (presetId) overrides.presetId = presetId
   return overrides

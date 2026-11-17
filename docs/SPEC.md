@@ -255,6 +255,8 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
       "promptStyle": "concise",
       "qualityPrefix": "",
       "supportsImg2Img": true,
+      "supportsInpaint": true,
+      "supportsReference": false,
       "supportsNegative": true
     }
   ],
@@ -300,8 +302,11 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 ```
 
 > `presets` 是 `publicPresets()` 的结果：不含 `pipeline`（下发远端 daemon 用的加载描述），避免同一份数据在
-> 客户端快照里出现两份；`supportsImg2Img` / `supportsNegative` 等能力字段随公开视图下发，客户端据此决定参考图
-> 槽位与「排除项」是否可用。
+> 客户端快照里出现两份；`supportsImg2Img` / `supportsInpaint` / `supportsReference` / `supportsNegative`
+> 等能力字段随公开视图下发，客户端据此决定参考图槽位（原生参考 / 垫图重绘是两条互斥路径）、涂抹入口与
+> 「排除项」是否可用；旧 Host 缺某个能力字段时客户端一律按 `false` 处理，不影响纯文生图。
+> 阶段十五 Phase C2 的客户端用法：`supportsReference === true` 且 `inpaintOnly !== true` 的预设才显示左栏
+> 原生参考图槽（见 §5.21）；首期只有 `flux2-klein-4b` 为 `true`，且与 `supportsImg2Img` 互斥。
 >
 > `queuePolicy` 是排队分级阈值（毫秒）：客户端据此决定「排队比平时久」提示与「换新实例重排」横幅的出现时机。
 > 旧 Host 不下发该字段时，客户端回落到契约 `TIMEOUTS.queueSlowMs` / `queueStalledMs`。
@@ -459,6 +464,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | `waitSeconds` | integer | 0~600：>0 时该请求最多等待任务结束 N 秒再返回（默认 0，立即返回） |
 | `autoStart` | boolean | 默认 `true`；`false` 时不自动唤醒会话 |
 | `reference` | object | 可选。图生图 / 局部重绘参考图（M3 / 0.12.0）：`{ path?, image?, strength?, mask?, sourcePath?, outpaintContent? }`，`path` 与 `image` 二选一，`mask` 可叠加；`sourcePath` 是 `image` 来源的溯源路径（扩图用），`outpaintContent` 是 `image` 来源的原图内容框（扩图用，见下方「本地画布来源」）；详见下方「图生图参考图」 |
+| `references` | string[] | 可选。模型原生参考图列表（阶段十五 Phase C1，`supportsReference`）：1~`LIMITS.referenceImages.maxCount`（2）个 `imagen-output/` 内作品路径；与 `reference` **互斥**，只允许 `tool=generate`，且所选预设必须 `supportsReference = true`；详见下方「模型原生参考图」 |
 
 **图生图参考图（M3）与局部重绘蒙版（0.12.0）**：
 
@@ -498,6 +504,42 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 - **非正方形参考图**：局部重绘分支给管线显式下传按 8 对齐的参考图宽高（`w // 8 * 8`、`h // 8 * 8`），
   不再依赖管线的缺省方形尺寸；管线不接受该参数时由 `__call__` 签名过滤丢弃，出图尺寸仍跟随参考图，
   像素合成（composite）保留为尺寸不一致时的兜底。日志会打印 `[gen] inpaint ... kw=...,height,...,width,...`。
+
+**模型原生参考图（`references`，阶段十五 Phase C1，`supportsReference`）**：
+
+- 与上面的单图垫图（`reference`）是**两条互斥路径**，同一个请求只能出现其中一个，同时给出时
+  Host 入队前 400 `invalid_request`（不挑一条静默忽略）。`references` 只允许 `tool=generate`
+  （`upscale` / `outpaint` 携带同样 400）。
+- 请求形状：`references: ["imagen-output/<目录>/<文件>", ...]`，1~`LIMITS.referenceImages.maxCount`
+  （2）个 `imagen-output/` 内作品的工作区相对路径（与 `reference.path` 同一套越界校验，
+  拒绝绝对路径 / 盘符 / `..` / 非产物目录），重复路径直接拒绝。
+- 能力门槛：所选预设必须 `supportsReference = true`（首期只有 `flux2-klein-4b`）；Host 入队前拦截，
+  daemon 再按 loader 白名单（`reference_names()`，首期只有 `flux2`）兜底，非支持模型收到参考图返回
+  400 `invalid_request`（**不静默丢弃**）。
+- 边界（`LIMITS.referenceImages`，契约唯一来源）：单张原始字节 ≤ 4 MiB、只接受 PNG / JPEG、
+  长边 ≥ `minEdge`（128）；**每张参考图分别校验，不设 strength / 蒙版语义**（多传其它字段逐项 400）。
+  Host 读盘后按 base64 膨胀估算总量，超过远端请求体预算（`TIMEOUTS.remoteGenerateMaxBytes`）
+  时在执行阶段以 `invalid_request` 失败并给出「参考图总体积过大」的明确文案（不占用 GPU）。
+- 推理语义：参考图只作为模型的图像条件（基础管线 `image=[PIL...]`，不经
+  `AutoPipelineForImage2Image`、不吃 `strength`），**出图宽高严格取请求的 `width`/`height`**，
+  不跟随参考图；执行期逐张完整解码一次、转 RGB、长边超过 `maxEdge`（1024）时等比缩小（不写盘）。
+- 产物与溯源：`meta.json` 写 `referenceSources`（工作区相对路径数组）与 `source: "ai"`；
+  这类产物**不折叠进参考图版本树**（`sourceImage` / `rootImage` 均为 `null`，每张候选图各自为根）。
+  远端 results 不新增字段（图片实际宽高以 PNG 与 results 的 `width`/`height` 为准）。
+- 校验失败：路径 / 文件问题 → `400 invalid_path`；格式、体积、数量、模型能力、互斥关系 →
+  `400 invalid_request`；执行阶段发现的问题让任务以同码失败，不占用 GPU。
+- **质量定位（真机实测，Kaggle 2×T4，Phase C1）**：Klein 4B 的参考条件属于**弱参考**——
+  同 prompt / seed 下「1 张参考 vs 无参考」的输出 MAE 约 7.7/255，把参考图整体染蓝后 MAE
+  约 19.2/255；构图与内容仍由**提示词与 seed 主导**，不是强风格迁移，也不保证主体强一致。
+  产品文案不得写成「强一致参考 / 换脸级锁定」，参考图只作为模型条件参与，不保证成片与参考图一致。
+- 耗时基线（同一批真机数据）：纯文生图 1024² 约 9.1s；1 张参考图约 21~22s；2 张约 31s；
+  3 张约 52s。参考图使耗时近似线性增长而显存几乎不变（17941→17950/17959 MB），
+  因此契约把 `maxCount` 收紧到 2（收益主要来自 1~2 张）。
+- **原生局部重绘未接入（本轮结论）**：diffusers 0.43 的 `AutoPipelineForInpainting` 映射
+  不含 `flux2-klein`；原生 `Flux2KleinInpaintPipeline`（`image` + `mask_image` + 可选
+  `image_reference`）必须按显式类加载，且其内部 1 MP 面积上限会**静默缩放画布**
+  （如 1536×864 → 1360×768），出图尺寸与扩图接缝不可控。本轮不接入默认扩图，只作为后续
+  演进评估项保留（Phase C 规划里的 Outpaint LoRA 路线同理，需真机 A/B 后再决策）。
 
 **高清放大（`tool: "upscale"`，阶段十五 Phase B1）**：
 
@@ -555,7 +597,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | `cancelRequested` | 是否已收到取消请求（running 合作式停止中为 `true`）；终态/未取消为 `false` |
 | `tool` | 本次任务的工具类型：`generate` / `upscale` / `outpaint`（缺省 `generate`）。客户端据此渲染版本树节点类型与助手镜像 |
 | `presetId` | 实际使用的预设 id（`upscale` 为超分模型 id `realesrgan-x2plus`） |
-| `params` | 归一化后的参数：`{ prompt, negativePrompt, width, height, steps, cfg, seed, count }`；图生图 / 局部重绘任务额外带 `reference: { sourcePath, strength }`（不包含参考图二进制，`mask` 只回布尔标记）；高清放大任务额外带 `reference: { sourcePath, upscale: true }` |
+| `params` | 归一化后的参数：`{ prompt, negativePrompt, width, height, steps, cfg, seed, count }`；图生图 / 局部重绘任务额外带 `reference: { sourcePath, strength }`（不包含参考图二进制，`mask` 只回布尔标记）；模型原生参考生图任务额外带 `referenceSources: string[]`（参考图工作区相对路径数组，不含二进制）；高清放大任务额外带 `reference: { sourcePath, upscale: true }` |
 | `createdAt` / `startedAt` / `finishedAt` | ISO 时间；未发生为 `null` |
 | `seconds` | 生成耗时（秒，1 位小数）或 `null` |
 | `sessionState` | 任务执行时最近的会话状态 |
@@ -646,7 +688,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
   `items` 保持数组类型（旧客户端只读该字段即可向后兼容）；`hasMore=true` 表示还有更早的记录，
   客户端可在底部继续「加载更多」（前端每次取契约上限 `LIMITS.history.pageSize` = 100 条）。
 
-`HistoryItem`：`{ jobId, dir, createdAt, finishedAt, presetId, params, prompt, images[], source, sourceImage, rootImage, inpaint, strength, upscale, upscaleScale, outpaint, outpaintContent }`；
+`HistoryItem`：`{ jobId, dir, createdAt, finishedAt, presetId, params, prompt, images[], source, sourceImage, rootImage, inpaint, strength, upscale, upscaleScale, outpaint, outpaintContent, referenceSources }`；
 `params` 是完整的生成参数（用于「带回参数」），`images[]` 每项：
 `{ file, path, absolute, url, width, height, seed, seconds }`（已按文件是否存在过滤，删除过的图不会出现）。
 `source` 是作品来源（阶段十五 Phase A）：`"ai"` 为 AI 生成，`"import"` 为用户本地导入（见 §2.3 `/import`，导入图不参与 AI 生成计数）。
@@ -658,6 +700,9 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 `upscale=true`、`upscaleScale` 为放大倍数（旧产物 `null`）；扩图产物 `outpaint=true`（同时 `inpaint=true`）。
 `outpaintContent` 是扩图产物原图在画布中的归一化内容框 `{ x, y, width, height }`（0~1、4 位小数，
 缺省 `null`），供舞台「对比原图」拉帘把原图放回真实位置；旧产物与其它类型均恒为 `null`。
+`referenceSources` 是模型原生参考生图（Phase C1）的参考图来源数组：字段恒存在，值为
+`imagen-output/` 内工作区相对路径数组；旧产物、纯文生图与其它类型均为 `null`。这类产物
+不参与参考图版本树（`rootImage` 为 `null`），仅用 `referenceSources` 溯源。
 
 #### `GET /imagen-api/history/tree?root=<encodedPath>&limit=<n>`
 
@@ -984,6 +1029,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | `count` | integer | 否 | 张数 1–4，默认 1 |
 | `waitSeconds` | integer | 否 | 最多等待累计秒数 0–600，默认 90；超时后任务仍在后台继续 |
 | `saveTo` | string | 否 | 工作区内的相对交付路径，见下方「saveTo 交付规则」 |
+| `references` | string[] | 否 | 模型原生参考图：1–`LIMITS.referenceImages.maxCount`（2）个 `imagen-output/` 内作品路径；仅 `supportsReference` 模型支持（如 `flux2-klein-4b`），与 `reference` 单图垫图互斥。参考图为**弱条件**（提示词与 seed 仍主导），出图宽高仍由 `width` / `height` 决定 |
 
 **saveTo 交付规则**：
 
@@ -1017,6 +1063,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | `steps` | integer | 否 | 公共采样步数 1–60，默认取预设 |
 | `cfg` | number | 否 | 公共 CFG 0–20，默认取预设 |
 | `waitSeconds` | integer | 否 | **本次调用的总等待预算**（0–600，默认 90），不是每条任务的预算；预算用尽后返回未完成任务 `jobId`，任务仍在后台继续 |
+| `references` | string[] | 否 | 可选：全部条目共用的模型原生参考图（1–`LIMITS.referenceImages.maxCount` 张，`imagen-output/` 内作品路径；仅 `supportsReference` 模型），适合同主角批量分镜；与单图 `reference` 互斥 |
 
 - **行为**：条目数超过上限 → 整批拒绝、一条都不提交；`saveTo` 逐项走同一套交付校验（含软链接逃逸），
   非法或重复的条目只标记该条失败；`queue.submit` 抛异常也只影响该条。所有任务共享一个 deadline，
@@ -1102,7 +1149,8 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 
 `presets` 的公开视图随模型资产下发提示词与能力字段：`negativeHint`（该预设推荐的负向提示词，切换预设或把 CFG 抬到可用时自动回填模型负向层）、
 `promptStyle`（`danbooru` / `natural` / `concise`，决定意图解析与润色时给模型的书写口径）、`qualityPrefix`（质量词前缀，无则为空串）、
-`supportsImg2Img`（是否支持垫图重绘）与 `supportsNegative`（管线是否真的消费 `negative_prompt`）。字段来源是 `models/*.json`。
+`supportsImg2Img`（是否支持垫图重绘）、`supportsReference`（是否支持模型原生参考生图，与 `supportsImg2Img` 互斥、两种请求形状不同）
+与 `supportsNegative`（管线是否真的消费 `negative_prompt`）。字段来源是 `models/*.json`。
 负向词最终是否可用还要看 CFG 与推荐词，判定规则见 [`docs/MODEL_ASSET_SPEC.md`](MODEL_ASSET_SPEC.md) §2.3。
 
 | 预设 ID | 基础模型与权重 | 默认尺寸（可选档位） | 步数 / CFG | 加载 / 单张耗时 | 峰值显存 | 下载量 | 卡数 | 档位 | 负向词 |
@@ -1114,7 +1162,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | **`sdxl-base`** | `stabilityai/stable-diffusion-xl-base-1.0` | 1024（768 / 1024 / 1152） | 25 步 / 7.5 | 5.8s / 27.8s | 9966 MB | 6.78 GB | 1 | usable | 支持 |
 | **`sdxl-inpaint`** *(专用局部重绘)* | `diffusers/stable-diffusion-xl-1.0-inpainting-0.1`（9 通道 UNet，`nativeInpaint`） | 1024（768 / 1024 / 1152） | 30 步 / 8 | 待实测 / 22.4s | 待实测 | 7.0 GB | 1 | quality | 支持 |
 | **`realvis-v5`** | `SG161222/RealVisXL_V5.0` | 1024（768 / 1024） | 25 步 / 5 | 5.2s / 24.53s | 9967 MB | 6.46 GB | 1 | usable | 支持 |
-| **`flux2-klein-4b`** *(实验)* | `black-forest-labs/FLUX.2-klein-4B` | 1024（768 / 1024） | 4 步 / 1.0 | 28.2s / 10.24s | 7929 MB | 15.2 GB | 2 | fast | 不支持 |
+| **`flux2-klein-4b`** *(实验)* | `black-forest-labs/FLUX.2-klein-4B` | 1024（768 / 1024） | 4 步 / 1.0 | 28.2s / 10.24s | 7929 MB | 16.0 GB | 2 | fast | 不支持 |
 | **`animagine-xl-3.1`** | `cagliostrolab/animagine-xl-3.1` | 1024（768 / 1024） | 28 步 / 7 | 4.8s / 26.17s | 9176 MB | 6.46 GB | 1 | usable | 支持 |
 | **`anima-light-lavender`** | `Johnny-Z/Anima-Light-Lavender`（Cosmos-Predict2 2B DiT + Qwen3-0.6B + Qwen-Image VAE，单文件 checkpoint，`anima` loader） | 1024（768 / 1024 / 1152） | 25 步 / 4 | 43.5s / 80.64s | 8470 MB | 5.25 GB | 1 | usable | 支持（默认隐藏） |
 
@@ -1123,6 +1171,12 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 
 > **双卡说明**：`flux2-klein-4b` 的 pipeline 使用 `deviceMap: "balanced"`，Kernel 申请 2×T4 时按 `gpus: 2` 下发；
 > 其余预设单卡即可。
+>
+> **`flux2-klein-4b` 下载口径**：仓库根目录另有一份 7.75 GB 的单文件权重副本与示意图片，组件白名单
+> （`pipeline.allowPatterns`）只取 `model_index.json` 与 `scheduler` / `text_encoder` / `tokenizer` /
+> `transformer` / `vae` 目录，规划下载量 16.0 GB、`measured.downloadGb` 待新版白名单冷启动真机重测后回填。
+> 该模型同时支持模型原生参考生图（`supportsReference`，`references` 1~2 张），耗时与「弱参考」定位见
+> §2.2「模型原生参考图」。
 >
 > **首张生成延迟说明**：远端服务支持在 Kernel 启动时预载模型（`preload`）；但首次推理仍需建立 CUDA Context
 > 与内存池，耗时高于 `steadySeconds`，从第二张开始进入稳定速度。
@@ -1628,3 +1682,54 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
    `check-client-locale` zh/en 各 566 → 586 键同构；Host `host-e2e` 56 → 62、`jobs-wait` 31 → 36、
    `agent-batch` 17 → 18；远端 `test/remote/run.py` 391 → 440（新增 `test_upscale.py` 49 项）。
    `npm test` 38 步全绿。真机验收数据见 [CHANGELOG](../CHANGELOG.md) 的 0.13.0 条目。
+
+### 5.21 第十七批交互补充（左栏原生参考图槽，阶段十五 Phase C2）
+
+> 设计依据：[STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md)
+> §2.2 / §2.3 与 Phase C2；Host 协议（请求体 `references`、产物 `meta.referenceSources`）以 §2.2 为准，
+> 本节只定义客户端交互与状态语义。
+>
+> **质量口径（真机实测，勿改写）**：Klein 4B 的参考图是**弱条件**——同 prompt / seed 下「1 张参考 vs 无参考」
+> 输出 MAE 约 7.7/255，构图与内容仍由**提示词与种子主导**；参考图会让耗时近似线性增长（纯文生图 9.1s →
+> 1 张 21~22s → 2 张 31s），显存几乎不变。因此界面文案只写「参考图是弱条件」，不出现「强一致 / 换脸级锁定」。
+
+1. **入口与位置**：左栏单轨面板新增「参考图」小节，位于**提示词之后、画面设置之前**，复用 `Fieldset` 结构与
+   `ofs-*` 令牌。当前预设 `supportsReference !== true` 且槽位为空时整节隐藏（旧宿主 / SDXL 系不占左栏空间）；
+   槽位非空时无论能力如何都显示（用户不能丢图）。
+2. **来源只有已落盘作品路径**：槽位项固定为 `{ path, url, width, height, name }`，只有 `path` 进请求体。
+   - 从电脑拖入 / 选择文件（PNG / JPEG）：先按 `LIMITS.referenceImages` 做客户端预检（单张 ≤ 4 MiB，
+     小于 `minEdge` / 非 PNG、JPEG 拦下），再走现有 `POST /imagen-api/import` 落盘为独立 `v1`，
+     成功后把 `entry.image.path` 追加进槽；**不传 base64、不占舞台焦点**（浏览中的作品保持不动）。
+   - 「从作品选择」：复用已加载的 `/history` 分页（最多列 8 张、已在槽位里的不重复列出），点一张即入槽，不新造页面。
+   - 动作坞「设为参考图」：把当前选中作品 path 送入槽位；去重 / 满额只提示不改槽位，成功后切回创作视图与参数表单。
+3. **槽位操作与上限**：1~`LIMITS.referenceImages.maxCount`（2）张；未满时可追加，满额后隐藏添加入口并说明
+   「参考图已满 N 张」；每张缩略图右上角可移除（原生 button，键盘可达，触控热区 ≥ 44px）。
+   槽位项按路径去重；进入请求体前按契约上限裁剪。
+4. **状态语义（与 Phase A1 草稿托管一致）**：挂载 / 移除 / 换图都算「未提交修改」——`formSnapshotOf` 纳入
+   references 有序路径指纹，草稿卡随之亮起、切作品时先托管进草稿卡；
+   **点胶片条 / 画廊回填作品时清空槽位**（展示的是那张作品的干净基准，未提交槽位已在草稿卡里）；
+   **新建创作 / 还原原图**清空槽位；点草稿卡恢复草稿时槽位一起回来；删除作品时按 `removed` 路径摘掉槽位里
+   指向已删作品的项（避免生成时以 `invalid_path` 失败）。
+5. **能力不匹配的降级引导**：当前预设不支持原生参考但槽位非空时，小节内显示「当前模型不支持原生参考生图」+
+   两个动作：**「切换到 {支持参考的预设}」**（保留参考图，首期目标 `FLUX.2 Klein 4B`；没有候选时明确说明）与
+   **「改用整图重绘」**（以第一张参考图为底图打开舞台 img2img 工具）。点生成时组合层前置拦下并 toast，
+   **不发请求、不静默丢图、不自动换模型**。
+6. **请求链路统一出口**：主表单、助手确认卡「按此生成」、重新生成 / 重试（按任务参数 `referenceSources`
+   或上一次提交体恢复）全部走 `useStudio.generate → form.buildBody`：槽位非空时请求体写
+   `references: string[]`（有序、去重、按上限裁剪），空槽时请求体与纯文生图逐字一致；
+   `references` 与单图 `reference` 互斥（同时存在时以原生参考为准，不混两种图片条件）。
+   生成前置预检（`generateCapabilityOf`）在有参考图时只判断 `supportsReference`：不支持就拦下，
+   不退回 `inpaintOnly` 的「自动改用文生图预设」策略（那会静默丢图）。
+7. **画幅 / 张数 / 种子不变**：参考图不锁定画幅，画面设置、张数分段与种子行为与纯文生图一致；
+   提交成功后槽位保留，便于同一组参考图连续换提示词 / 画幅抽卡。
+8. **产物归属**：参考生图产物是**独立新根 `v1`**，不折叠进参考图版本树；溯源字段 `meta.referenceSources`
+   由 Host 写入并由 `/history` 透传，客户端不造 `sourceImage` / 版本树字段；版本面板「对比原图」因此不出现。
+9. **无障碍与文案**：中英字典严格同构（`studio.reference.*`）；缩略图移除按钮有 `aria-label`，
+   添加 / 作品选择按钮可键盘触发且热区 ≥ 44px；文案不出现「强一致参考」等承诺。
+10. **测试**：新增 `test/reference.mjs`（17 项：槽位增删 / 去重 / 上限 / 路径归一 / 能力门控 / 请求体拼装 /
+    裁剪与互斥 / dirty 指纹 / 新建创作与删除清理 / 重试恢复 / 4 MiB 文件预检 / Rail 空态与有图态 /
+    满额与作品选择 / 不支持提示与两个动作 / 拖入 `/import` 入槽 / 动作坞「设为参考图」自动换模型 /
+    点生成被拦下 / 主表单与助手路径带 references / 编辑态下仍可挂载）；
+    `check-client-logic` 89 → 90（聚合出口校验，另改写表单快照用例纳入 references 指纹）、
+    `check-client-shell` 52 → 53（整页工作台参考图槽）、`image-tool-render` 14 项（动作坞复用组
+    6 个按钮，含「设为参考图」）；`check-client-locale` zh/en 各 616 键同构。

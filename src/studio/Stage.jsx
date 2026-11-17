@@ -3,8 +3,8 @@
 import React from 'react'
 
 import { INSPIRE_KEYS } from '../constants.js'
-import { formatText, formatSeconds } from '../logic/format.js'
-import { referenceUrlOf } from '../logic/generate.js'
+import { formatText, formatSeconds, percentOf } from '../logic/format.js'
+import { referenceUrlOf } from '../logic/reference.js'
 import { IMAGE_TOOLS } from '../logic/imageTool.js'
 import { normalizeOutpaintContent } from '../logic/outpaint.js'
 import { jobCountText } from '../logic/status.js'
@@ -37,14 +37,6 @@ function ratioOf(width, height) {
   return w / h
 }
 
-/** 涂抹覆盖率 → 界面百分比读数：不足 10% 时保留一位小数，避免刚涂一点就显示 0%。 */
-function percentOf(coverage) {
-  const value = Number(coverage)
-  if (!Number.isFinite(value) || value <= 0) return 0
-  const percent = Math.min(100, value * 100)
-  return percent >= 10 ? Math.round(percent) : Math.round(percent * 10) / 10
-}
-
 /**
  * 舞台：只做编排。
  *
@@ -54,10 +46,12 @@ function percentOf(coverage) {
  *   组件内置，Stage 不再自己拼提交参数。高清放大是即时工具，不会进入编辑态。
  * - 空舞台没有底图，不再出现涂抹入口；动作坞只在有选中作品时渲染。
  *
- * 接收 { t, ui, compute, form, library, imageTool, actions, now } 领域对象。
+ * 接收 { t, ui, compute, form, library, imageTool, actions } 领域对象。
  */
 export function Stage(props) {
-  const { t, ui, compute, form, library, imageTool, actions, now } = props
+  const { t, ui, compute, form, library, imageTool, actions } = props
+  // 显影判定只读一次当前时间、不做 1Hz 计时：舞台不负责读秒，重新渲染跟随宿主轮询即可。
+  const now = Date.now()
   const { zoom, setZoom, copyPath } = ui
   const { activeJob } = compute
   // 舞台胶囊只保留「还在动 + 第 N/M 张」：阶段名与已等待由顶部生图流水线负责，不重复说两遍。
@@ -169,22 +163,25 @@ export function Stage(props) {
 
   const target = imageTool ? imageTool.target : null
   const promptPlaceholder = (target && target.prompt) || t('studio.imageTool.promptPlaceholder')
+  // 画布编辑器内部有底图尺寸 / 加载态 / 画笔等本地状态：显式挂 key，换底图时整块重建，
+  // 避免沿用上一张图的画布尺寸与「已加载」判断（阶段十五 Phase C0）。
+  const editorKey = target && target.path ? target.path : 'none'
 
   const editorNode = editorOpen
     ? (activeTool.form === 'canvas'
       ? (activeTool.id === 'outpaint'
         ? (
           <OutpaintEditor
+            key={editorKey}
             {...submitProps}
             outpaint={imageTool.outpaint}
             coverage={imageTool.coverage}
             onRatioChange={imageTool.setOutpaintRatio}
             onAnchorChange={imageTool.setOutpaintAnchor}
             onCanvasApply={imageTool.applyOutpaintCanvas}
-            now={now}
           />
         )
-        : <MaskEditor {...submitProps} mask={imageTool.mask} coverage={imageTool.coverage} onMaskApply={imageTool.applyMask} onMaskClear={imageTool.clearMask} now={now} />)
+        : <MaskEditor key={editorKey} {...submitProps} mask={imageTool.mask} coverage={imageTool.coverage} onMaskApply={imageTool.applyMask} onMaskClear={imageTool.clearMask} />)
       : <InlineTool {...submitProps} />)
     : null
 
@@ -208,6 +205,7 @@ export function Stage(props) {
       }}
       onClose={() => imageTool.closeTool()}
       onReroll={() => actions.reroll(selected)}
+      onUseReference={() => actions.useAsReference(selected)}
       plannedTitle={t('studio.imageTool.planned')}
     />
   )
@@ -381,6 +379,8 @@ export function Stage(props) {
           <div className="ofs-print-slot">
             {compareOpen && compareUrl ? (
               <CompareSlider
+                // 拉帘内部有分隔线位置等本地状态：换作品时按图路径重建，不沿用上一张的分隔位置。
+                key={imageKey}
                 t={t}
                 beforeUrl={compareUrl}
                 afterUrl={image.url}

@@ -2,7 +2,7 @@
 
 ## 0.13.0 — 未发布（2026-11-18）
 
-> 主题：图像后处理闭环。接通舞台动作坞预留的「高清放大」与「扩图」：前者是独立的轻量超分推理（不加载扩散模型），后者由客户端合成画布、复用已验证的 9 通道局部重绘。两个工具都沿用「产物作为原图派生子版本」的版本树语义，并补齐 Agent 工具、契约、界面与真机验收。对应 ROADMAP 第十五项 Phase B，设计依据见 [docs/STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](docs/STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md) §四。
+> 主题：图像后处理闭环与模型原生参考生图。接通舞台动作坞预留的「高清放大」与「扩图」：前者是独立的轻量超分推理（不加载扩散模型），后者由客户端合成画布、复用已验证的 9 通道局部重绘。随后完成 ROADMAP 第十五项 Phase C：引入 `FLUX.2 Klein 4B` 的原生参考生图能力（`supportsReference`）、左栏参考图槽与真机同 Seed 推理加速对照，并收口工作台焦点 / 来源同步与 `tEXt` 元数据带来的遗留问题。对应 ROADMAP 第十五项 Phase B / Phase C，设计依据见 [docs/STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](docs/STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md) §四、加速数据见 [docs/INFERENCE_ACCELERATION_RESEARCH.md](docs/INFERENCE_ACCELERATION_RESEARCH.md) §4.3。
 
 ### 功能
 
@@ -20,18 +20,34 @@
   - 提交栏：模型默认 `sdxl-inpaint`、修改描述留空回退原作品提示词、强度默认 1.0（带蒙版上限 1.0）；覆盖率读数改为「新增画面 N%」。提交成功后助手线程追加镜像动作与任务气泡，完成后可用「对比原图」拉帘看新增边界；失败保留底图 / 比例 / 锚点 / 提示词，动作坞「继续编辑」按原参数恢复。
 - **版本树与助手**：`LINEAGE_KINDS` 增加 `upscale` / `outpaint`，版本面板显示「高清放大」「扩图」类型（图标 `expand` / 新增 `frame`）；在途任务幽灵节点优先按 `job.tool` 判类型；助手镜像工具白名单扩到四类，镜像 / 结果记录仍带 `kind`、不进入 `intentHistory`。
 - **Agent 工具边界**：`imagen_outpaint` 本轮不提供——扩图画布需要像素级等比缩放 / 居中 / 白边蒙版合成，Host 保持零图像依赖（不引入 sharp / jimp）；评估结论写入 SPEC §3.7。
+- **模型原生参考生图（阶段十五 Phase C，`supportsReference`）**：
+  - **契约与模型能力**：`shared/contract.js` 新增 `LIMITS.referenceImages = { maxCount: 2, maxBytes: 4 MiB, maxEdge: 1024, minEdge: 128 }` 与 `PROTOCOL.daemon.referenceImages`；10 份 `models/*.json` 新增必填布尔 `supportsReference`（首期仅 `flux2-klein-4b` 为 true，与 `supportsImg2Img` 互斥——两者请求形状不同），`tools/build-assets.mjs` 校验并生成到公开预设。
+  - **远端**：`remote/inference/reference_codec.py` 新增参考图列表提交期校验（loader 白名单 `reference_names()`、数量 / 体积 / PNG-JPEG / 最小长边、逐项只认 `image_b64`，无 strength / 蒙版语义）与执行期整批解码（转 RGB、长边超限等比缩小、不写盘）；`run_task` 在基础管线上以 `image=[PIL...]` 走原生参考条件，**出图宽高严格取请求值**；非白名单 loader 收到参考图 → 400 `invalid_request`（不静默丢弃）。
+  - **Host**：`POST /imagen-api/generate` 新增 `references: string[]`（与单图 `reference` 互斥、仅 `tool=generate`、预设须 `supportsReference`；路径限 `imagen-output/` 内作品、去重、1~2 张）；执行期读盘 + 体积 / 魔数 / base64 总量预算校验后以 job 级 `referenceImages` 下发；产物 `meta.json` 写 `referenceSources`（独立新根，不写 `sourceImage` / `rootImage`），`/history` 与 `/history/tree` 透传（旧数据恒 `null`）。`imagen_generate` / `imagen_batch` 同步支持 `references`。
+  - **客户端**：左栏新增「参考图」槽（提示词之后、画面设置之前；1~2 张缩略图网格 / 单张移除 / 满额提示 / 从作品选择 / 拖入本机图片经 `/import` 落盘为独立 v1 后入槽）；当前模型不支持时提示并给「切换到 FLUX.2 Klein 4B」与「改用整图重绘」，生成前拦下（不发请求、不静默丢图）；动作坞复用组新增「设为参考图」；参考槽计入表单 dirty 指纹，助手生成自动携带；字典 zh/en 各 616 键同构，交互规范见 SPEC §5.21。
+  - **质量与成本口径**：Klein 4B 参考条件为**弱参考**（同 prompt / seed 下「1 张参考 vs 无参考」MAE 7.71/255，参考图染蓝后 19.2/255，prompt + seed 主导），产品文案明确不承诺强一致；1 张参考约 20~21s、2 张约 40s（纯文生图稳态 8.6s），显存几乎不增（`max_allocated_mb` 7928 全程不变）。
+  - **推理加速脚手架**：模型资产新增可选 `pipeline.accel`（`vaeTiling` / `vaeSlicing` / `channelsLast` / `fuseQkv`，缺省省略 = 行为逐字不变；`from_pipe` 派生管线幂等复用、不重复 fuse）；本轮真机 A/B 未发现可合入项，10 份资产全部保持未启用（数据见真机验收）。
 
 ### 接口与配置
 
 - `shared/contract.js` 新增 `UPSCALE`（`id: realesrgan-x2plus` / `factor: 2` / `maxInputEdge: 1280` / `maxOutputEdge: 2560`）、`OUTPAINT`（比例 / 扩边比 / 上限 / 默认强度 / 内容框字段与精度）、`REQUEST_TOOLS`（`generate | upscale | outpaint`）；`daemonContract().limits.upscale = UPSCALE` 随注入契约下发远端，`PROTOCOL.daemon.requestTools = ['generate', 'upscale']` 登记远端取值域；`remote/config.py` 的 `LIMIT_NUMERIC_KEYS` 补 `factor` / `maxInputEdge` / `maxOutputEdge`。`OUTPAINT.content` 只在 Host/Client 间消费，不下发远端。
 - `POST /imagen-api/generate` 新增 `tool`（缺省 `generate`）；`upscale` 请求体只带源图与宽高，`outpaint` 为普通局部重绘请求体 + `reference.sourcePath` + 可选 `reference.outpaintContent`（原图在画布中的归一化内容框，0~1、4 位小数；仅 `image` 来源可用，非法或 `path` 来源携带 → 400 `invalid_request`）。Job 公开视图新增 `tool`；`/history` 条目新增 `upscale`（bool）/ `upscaleScale`（number|null）/ `outpaint`（bool）/ `outpaintContent`（object|null），字段恒存在、旧产物无迁移。
 - SPEC 新增 §3.7 `imagen_upscale` 与 §5.20 交互规范，§2.2 补充 `tool`、高清放大 / 扩图、`reference.sourcePath` / `reference.outpaintContent` 与 Job / HistoryItem 字段。
+- **阶段十五 Phase C**：`LIMITS.referenceImages` / `PROTOCOL.daemon.referenceImages` / `pipeline.accel` 进入契约并随 `daemonContract()` 下发远端（`request_body_limit()` 改为按「垫图 + 蒙版」与「2×4 MiB 参考图」两种互斥形状取较大者的契约推导，数值与改造前相同）；`POST /imagen-api/generate` 新增 `references`，Job params 增加 `references`，HistoryItem 增加 `referenceSources`（恒存在，旧数据 / 纯文生图为 `null`）；`models/*.json` 新增必填 `supportsReference`；`flux2-klein-4b` 的 `pipeline.variant` 改为 `null`、`allowPatterns` 改为组件目录白名单、`pipeline.downloadGb` 16.0（`measured.downloadGb` 置 `null` 待冷启动重测）；SPEC 新增 §5.21，§2.2 新增「模型原生参考图」小节（含弱参考定位与原生 inpaint 未接入结论）；中英字典 586 → 616 键。
 
 ### 修复（检阅反馈，第二轮）
 
 - **高清放大产物的回填 / 重新生成参数污染**：放大产物的 `meta.json` 记的是非扩散参数（`presetId: realesrgan-x2plus`、`params.steps/cfg/seed: 0`、放大后像素宽高），此前点胶片条回填或「重新生成」会把这些直接写进左栏表单 / 请求体，宿主回退默认预设后把 `steps` 钳成 1 步，产出废图。现在 `src/logic/generate.js` 新增 `isNonDiffusionRecallOf` / `diffusionSourceOf`：`iteratePatch(entry, form, presets, items)` 与 `rerollOverrides(entry, presets, items, fallbackPreset)` 先沿 `item.sourceImage` 在已加载历史里找父作品的真实扩散参数（最多 8 层、防成环、跳过裸导入父作品）；父作品不在已加载分页或被删除时走降级补丁——保留有效提示词 / 排除项，尺寸取 `upscaleSource`（否则 `clampSize` 钳到契约上限），步数 / CFG 取当前表单或第一个可文生图预设的推荐值，种子恢复随机。**任何情况下都不会把超分模型 id、`steps: 0` 或 >1536px 的尺寸带进表单或发成生成请求。** 组合层 `useStudio` 的 `previewWork` / `reroll` 已接 `library.items`。
 - **扩图画布填充口径统一 + 边缘像素延拓**：前端导出画布此前用纯黑填底、`test/gpu-live.mjs` 用纯白填底，两者不一致且真机从未测过前端路径。现在 `src/logic/outpaint.js` 新增 `outpaintEdgeStripsOf(plan)`（8 条「内容框 1px 边缘 → 新增区」拉伸条带），`OutpaintEditor.exportCanvas()` 取消纯黑填底、按条带把原图边缘像素向新增区拉伸延拓；`test/gpu-live.mjs` 的 `buildOutpaintCanvas()` 用同一算法（逐像素 edge clamp，与条带实现做过全量逐像素比对），`report.outpaint.canvasFill = 'edge-extend'`。语义收益：内容区与新增区边界两侧颜色连续，对「4 通道 inpaint / strength < 1」这类会用到原图 latent 的路径是更合理的起点；对当前 9 通道 + strength 1.0 基线路径，实测填充色几乎不进入条件图（见下方真机复验），因此成片差异在数值噪声级，但前后端口径现已完全一致。
 - **扩图产物「对比原图」拉帘对齐**：此前 `CompareSlider` 把原图与扩图都按 `object-fit: contain` 铺满对比框，扩图产物（如 864×864 原图放进 1536×864 画布）拉帘时原图被放大撑满，位置与比例错位。现在提交时客户端按画布几何写入 `reference.outpaintContent`，Host 原样落盘 `meta.outpaintContent` 并随 `/history` 透传；`Stage` 把归一化内容框传给 `CompareSlider`，底图按该矩形百分比定位（`.ofs-compare-base.is-region`、`object-fit: fill`，框外露出纸面背景），拉帘滑过原图与扩图时像素位置严格对齐。常规整图重绘 / 局部涂抹 / 高清放大产物没有该字段，对比行为保持原样；旧产物 / 脏 meta 读取时归一失败降级为 `null`。
+
+### 修复（检阅反馈，第三轮：阶段十五 Phase C0）
+
+- **焦点与来源同源收口**：所有切换作品入口收口到 `useStudio.recallTarget()`——先按需 `parkDraft()` 托管 dirty 草稿，再回填参数与 `origin`，并退出舞台画布编辑态（按路径保留 `workDrafts`）。裸导入图 / 空白新建画布改为 `detachOrigin()`（清 prompt / 固定种子 / origin，保留预设与画幅），不再把上一张生图的参数与「正在微调」带进新画布；导入图自带 PNG `tEXt` 元数据时完成导入后直接回填原生成参数。
+- **助手结果图与左栏不同步**：助手点结果图 / 单图聚焦改走按路径 `openPath()` → `previewWork` 同口径（先托管、再回填），路径不在已加载列表时安全收口（只切预览并解除绑定），修复「舞台换了图、左栏还是上一张」。
+- **还原原图与删除作品**：`restoreOriginal` 统一退出画布编辑态，来源作品已被删除 / 不在分页内时切回新建取景框并提示（不让别的作品冒充来源）；删除作品通过 `onImagesRemoved` 级联清理 `workDrafts` 与表单 `origin` / `draft.source`，删当前预览作品时回退到下一张并刷新左栏回填。
+- **`inpaintOnly` 预设回填污染**：局部重绘 / 扩图产物回填时，`item.presetId` 为 `inpaintOnly`（如 `sdxl-inpaint`）或已下线预设不再写进纯文生图表单（避免模型选择器出现空白未选中态），改为沿 `sourceImage` 回溯父作品的真实扩散参数，找不到时走降级补丁（保留合法预设与钳制尺寸）。
+- **渲染卫生**：`useNow` 从 `Studio` 顶层下沉到真正读秒的 `PipelineBar` / `Filmstrip` 叶子；画布编辑器与对比拉帘补 `key`（换底图不残留画笔 / 尺寸状态）；`percentOf` / `positiveSize` 去重收敛到 `src/logic/format.js`。
 
 
 ### 测试
@@ -40,6 +56,7 @@
 - 客户端：`image-tool` 19 → 26、`image-tool-render` 6 → 12、`lineage` 17 → 18、`check-client-logic` 83 → 86（放大产物沿父作品回填 / 重生成、父作品缺失降级、链式回溯、普通作品回归），`check-client-locale` zh/en 各 566 → 586 键同构（新增高清放大 / 扩图 / 版本类型 / 扩图画布文案）。
 - Host：`host-e2e` 56 → 62（放大全链路与 meta / history 透传、扩图 sourcePath 版本树归组、非法 tool / 超限源图 / 带蒙版 / 越界 sourcePath 400、`outpaintContent` 透传与非法值 / path 来源 400）、`jobs-wait` 31 → 36（`outpaintContent` 归一化边界与全链路）、`agent-batch` 17 → 18；远端 `test/remote/run.py` 391 → 440。
 - 全量 `npm test` 38 步全绿（含契约 12 项、Python 远端 440 项）；`npm run contract:check`、`npm run models:check`、`npm run package` 通过。
+- **阶段十五 Phase C**：新增 `test/reference.mjs`（17 项：槽位增删 / 去重 / 上限 / 能力门控 / 请求体拼装 / dirty 指纹的纯逻辑 + Rail 渲染 + 组合层集成）与 `test/remote/test_reference_images.py`（36 项：契约 / registry / 提交期校验 / 执行期解码 / run_task / HTTP 分派 / accel）；`test/gpu-live.mjs` 新增 `--reference` / `--accel` / `--c1-acceptance` 三种真机验收模式（含 `--reference-count` / `--reference-rounds` / `--accel-rounds` 参数与纯函数自检 10 项）。当前计数：`check-client-logic` 90、`check-client-shell` 53、`check-client-draft` 11、`image-tool-render` 14、`check-contract` 14、`jobs-wait` 40、`host-e2e` 63、`test/remote/run.py` 476、`check-client-locale` zh/en 各 616 键同构；全量 `npm test` 38 步全绿（含契约 14 项、Python 远端 476 项）。
 
 ### 真机验收（Kaggle 2×Tesla T4，diffusers 0.43.0 / torch 2.11.0）
 
@@ -48,6 +65,10 @@
 - **扩图（`sdxl-inpaint` 9 通道）**：864×864 内容 → 1536×864 画布（内容框 `(336,0)`，覆盖率 43.75%；画布 PNG 1.40 MB、蒙版 7,966 B），强度 1.0 / 30 步，单张 35.4s，输出 PNG 1.67 MB。内容保留：内容区平均差 0.11/255（去掉 16px 边界后核心区 **0.00/255**，最大差 91 只出现在羽化带）；边界两侧 8px 亮度跳变 1.18 / 2.82（全图相邻列均值 0.63），**无硬像素接缝**，右侧轻微明暗过渡属新区域光照差异、羽化带已软化。`gpu_memory` 前 `{7000, 9736, max 9348}` → 后 `{6625, 10306, max 9715}`，峰值 < 14.56 GB，无 OOM。
 - 3 个验收 Kernel 均 `COMPLETE`、脚本 finally 已 `stop`（state=absent），无 `RUNNING` / `QUEUED` 遗留；产物见 `bench-results/gpu-live/2026-11-17T19-35-08/`、`19-44-25/`、`19-49-22/`。
 - **第二轮真机复验（边缘延拓画布）**：新样张 `bench-results/gpu-live/2026-11-17T20-47-57/02-outpaint.png`（`report.outpaint.canvasFill = 'edge-extend'`）。布局与参数同上（864×864 内容 → 1536×864 画布、覆盖率 43.75%、`sdxl-inpaint` 30 步 / strength 1.0）：加载 3.5s、推理 **35.2s**、wall 44.4s，输出 PNG 1.67 MB；内容区核心差 **0.00/255**（全内容区 0.129/255）；显存 `max_allocated` **9715 MB**、无 OOM，Kernel `COMPLETE` 且已 stop、无 `RUNNING` / `QUEUED` 遗留。边界质量（同一指标口径，旧白底 → 新边缘延拓）：右边界两侧 8px 亮度跳变 **2.822 → 2.554**、右边界列间像素差 **3.42 → 2.72**；左边界 1.178 → 1.314、1.77 → 1.45（噪声级）；边界 ±12px 逐列亮度曲线平滑、无台阶、无硬接缝。新旧源图与蒙版字节完全相同，成片整体差异 mean 0.002/255（0.2% 像素非零、最大 3/255）——证实 9 通道 + strength 1.0 路径下填充色几乎不进入条件图；右边界残余约 6.5/255 的色调过渡来自生成新区域与原图内容的光照差异，属模型行为而非 composite 接缝，本轮不改 `reference_codec` 的羽化 / 合成（会波及普通 inpaint）。前端与 `gpu-live` 的扩图画布已做过逐像素一致性比对（3,981,312 字节 0 差异）。
+- **阶段十五 Phase C1 参考生图与推理加速（Kaggle 2×T4，diffusers 0.43.0 / torch 2.11.0+cu130）**：1 个 Kernel 内完成「参考生图 + `sdxl-lightning` 加速 A/B + `sdxl-inpaint` 扩图加速 A/B」三段验收；Kernel `COMPLETE` 后已删除并确认 `missing`，无 `RUNNING` / `QUEUED` 残留；配额 3.90h → 4.10h（消耗 0.20h）。产物见 `bench-results/gpu-live/2026-11-17T23-05-24/`（`report.json` + 18 张 PNG），探针数据见 `2026-11-17T22-02-48-probe/`。
+  - **参考生图（`FLUX.2 Klein 4B`，`supportsReference`）**：白名单预下载真机通过（`[load] 预下载 …（白名单 6 条）… 用时 78.6s`，`variant=None` 首次加载即成功，合计 118.8s）；文生图源图首张 14.54s（含 warmup）、稳态 8.6s；1 张参考图 20.11 / 20.64s（同 seed 两轮逐像素一致，**determinismMae = 0**，后续轮 `load_seconds = 0`），2 张参考图 39.94s，1 张参考 + 1280×720 输出严格 **1280×720**（画幅保持通过）；参考影响度「有参考 vs 无参考」MAE 7.71/255、「1 张 vs 2 张」MAE 1.99（弱参考，prompt + seed 主导）；全程 `/health.gpu_memory.max_allocated_mb` = 7928 不变、复测文生图 `maxAllocatedDeltaMb = 0`、无 OOM。
+  - **P0 加速 A/B（同 Kernel、同 seed、同 prompt、同尺寸，每档 2 轮取中位）**：`sdxl-lightning` 1024² 4 步开 `channels_last + fuse_qkv + vae_tiling`：6.19s → 5.96s（1.04× / +3.9%），峰值显存 10233 → 11469 MB（+1236），同 seed 输出 MAE **11.06/255** 且构图改变（4 步蒸馏对数值扰动敏感）→ **不合入**；`sdxl-inpaint` 1536×864 扩图 30 步开 `vae_tiling`：35.91s → 37.53s（0.96×，慢 4.5%），内容区核心差 0、输出 MAE 3.8/255，但累计峰值口径无法证实降显存收益 → **不合入**。10 份模型资产全部保持未启用 `pipeline.accel`；数据与测量口径限制见 [INFERENCE_ACCELERATION_RESEARCH.md](docs/INFERENCE_ACCELERATION_RESEARCH.md) §4.3。
+  - **原生 `Flux2KleinInpaintPipeline` 探针（备选扩图路线）**：可直接加载 4B 权重并出图，1360×768 扩图 22.18s（比 `sdxl-inpaint` 35.42s 快 1.6~1.83×）、扩图成片自然；但 >1 MP 画布被内部静默缩放到 1360×768，1280×720 画布虽尺寸正确但 4 步接缝肉眼可见 → 本轮不迁移默认扩图引擎，结论记入 SPEC §2.2 与 §4.3.3。
 
 ## 0.12.0 — 2026-11-18
 
