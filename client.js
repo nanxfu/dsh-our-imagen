@@ -658,6 +658,8 @@ var zh = {
   "studio.import.tooLarge": "图片超过 {size} MiB",
   "studio.import.tooSmall": "图片长边至少 {edge} 像素",
   "studio.import.failed": "导入失败，请重试",
+  "studio.import.needPrompt": "导入图没有原始提示词：请先在左栏写描述生成新作品，或用「整图重绘」基于这张图改图。",
+  "studio.stage.importHint": "已导入为作品：用底部「整图重绘」或「局部涂抹」基于这张图改图；左栏生成的是新作品，参考图生新图暂未开放。",
   "studio.compare.toggle": "对比原图",
   "studio.compare.before": "原图",
   "studio.compare.after": "当前",
@@ -1264,6 +1266,8 @@ var en = {
   "studio.import.tooLarge": "Image exceeds {size} MiB",
   "studio.import.tooSmall": "Image edge must be at least {edge} px",
   "studio.import.failed": "Import failed, please retry",
+  "studio.import.needPrompt": 'An imported image has no original prompt: write a description on the left to create a new work, or use "Full redraw" to edit this image.',
+  "studio.stage.importHint": 'Imported as a work: use "Full redraw" or "Inpaint" below to edit it. The left form creates a new work; reference-based generation is not available yet.',
   "studio.compare.toggle": "Compare original",
   "studio.compare.before": "Original",
   "studio.compare.after": "Current",
@@ -1784,7 +1788,7 @@ var PUBLIC_PRESETS = [
 ];
 
 // shared/contract.js
-var VERSION = "0.11.0";
+var VERSION = "0.12.0";
 var ROUTES = {
   state: { method: "GET", path: "/imagen-api/state" },
   probe: { method: "POST", path: "/imagen-api/probe" },
@@ -3815,7 +3819,15 @@ function recallOf(entry, presets) {
   const negative = params && typeof params.negativePrompt === "string" ? params.negativePrompt : null;
   return { image, item, params, presetId, prompt, width, height, steps, cfg, seed, negative };
 }
+function isBareImportOf(entry) {
+  const item = entry && entry.item ? entry.item : null;
+  if (!item || item.source !== "import") return false;
+  const params = item.params && typeof item.params === "object" ? item.params : null;
+  if (!params) return true;
+  return !(typeof params.steps === "number" || typeof params.cfg === "number" || typeof params.seed === "number");
+}
 function iteratePatch(entry, form, presets) {
+  if (isBareImportOf(entry)) return {};
   const recall = recallOf(entry, presets);
   const patch = {};
   const prompt = recall.prompt.trim();
@@ -3833,6 +3845,7 @@ function iteratePatch(entry, form, presets) {
   return patch;
 }
 function rerollOverrides(entry, presets) {
+  if (isBareImportOf(entry)) return null;
   const recall = recallOf(entry, presets);
   const prompt = recall.prompt.trim();
   if (!prompt) return null;

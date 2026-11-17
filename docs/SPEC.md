@@ -4,8 +4,7 @@
 > 本文档只描述语义、请求/响应形状与使用约束，不重复维护数值。`node test/check-contract.mjs` 会校验
 > 宿主注册的路由、宿主错误码、客户端文案与本文档是否跟随契约。
 >
-> **版本**：0.11.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。本文档已包含尚未发版的
-> 0.13.0 改动（ROADMAP 第十二、十三阶段）；版本号与 CHANGELOG 版本段落会在正式发版时统一升级。
+> **版本**：0.12.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。本文档覆盖截至 `0.12.0` 的全部契约与接口。
 
 ---
 

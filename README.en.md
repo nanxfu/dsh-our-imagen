@@ -261,7 +261,7 @@ Replace `web` with your DSH profile name (`desktop` for DSH Desktop):
 
 * **Option C: Release tarball** (useful if GitHub raw access is unstable)
   ```bash
-  dsh plugin --profile web add https://github.com/nanxfu/dsh-our-imagen/releases/download/v0.11.0/dsh-our-imagen-0.11.0.tgz
+  dsh plugin --profile web add https://github.com/nanxfu/dsh-our-imagen/releases/download/v0.12.0/dsh-our-imagen-0.12.0.tgz
   ```
 
 * **Option D: Offline zip + Load Bundle**
