@@ -1135,6 +1135,125 @@ async function main() {
     assert.deepEqual(calls[1].messages, [{ role: 'user', content: [{ type: 'text', text: '单轮提示词' }] }])
   })
 
+  await check('llm 分片与路由：思考分片不进正文，缺省 sessionId 按 purpose 复用', async () => {
+    const calls = []
+    const llmCtx = {
+      get(name) {
+        if (name === 'llm') {
+          return {
+            stream: async function* (options) {
+              calls.push(options)
+              // 新宿主分片：只有 text-delta 是正文，reasoning-delta 是模型思考过程。
+              yield { type: 'block-start', index: 0, blockType: 'reasoning' }
+              yield { type: 'reasoning-delta', index: 0, text: '先想一下中文场景' }
+              yield { type: 'block-end', index: 0, block: { type: 'reasoning', text: '先想一下中文场景' } }
+              yield { type: 'block-start', index: 0, blockType: 'text' }
+              yield { type: 'text-delta', index: 0, text: 'rainy night street' }
+              yield { type: 'block-end', index: 0, block: { type: 'text', text: 'rainy night street' } }
+              yield { type: 'usage', usage: { inputTokens: 1, outputTokens: 1 } }
+              yield { type: 'finish', reason: { kind: 'stop' } }
+            },
+          }
+        }
+        if (name === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'mock-provider', model: 'mock-model' }) }
+        return undefined
+      },
+    }
+    const reply = await invokeLlm(llmCtx, { prompt: '雨夜街景', systemPrompt: 'sys', purpose: 'imagen-prompt-translate' })
+    assert.equal(reply, 'rainy night street', '只收集 text-delta，思考分片不得混进译文')
+    assert.equal(calls[0].sessionId, 'imagen-prompt-translate', '缺省 sessionId 由 purpose 派生（宿主路由需要 x-opencode-session）')
+    assert.equal(calls[0].purpose, 'imagen-prompt-translate')
+
+    // 调用方显式给 sessionId 时优先使用。
+    await invokeLlm(llmCtx, {
+      prompt: '雨夜街景',
+      systemPrompt: 'sys',
+      purpose: 'imagen-prompt-refine',
+      sessionId: 'custom-session',
+    })
+    assert.equal(calls[1].sessionId, 'custom-session', '显式 sessionId 优先')
+
+    // 终止分片是 error（无正文）：返回空串交给调用方兜底，不抛异常。
+    const failingCtx = {
+      get(name) {
+        if (name === 'llm') {
+          return {
+            stream: async function* () {
+              yield { type: 'finish', reason: { kind: 'error', failure: { code: 'INVALID_REQUEST', message: '400: MissingSessionID' } } }
+            },
+          }
+        }
+        if (name === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'mock-provider', model: 'mock-model' }) }
+        return undefined
+      },
+    }
+    assert.equal(await invokeLlm(failingCtx, { prompt: '雨夜街景', systemPrompt: 'sys' }), '', '失败的流没有正文，必须返回空串')
+  })
+
+  await check('llm prepareCall：按模型支持的档位选最低思考档，并沿用同一 sessionId', async () => {
+    const prepared = []
+    const dispatched = []
+    const llmCtx = {
+      get(name) {
+        if (name === 'llm') {
+          return {
+            // 模拟宿主 prepareCall：用 configure 回调让调用方挑控制项，再校验并返回。
+            prepareCall: async (config, _signal, configure) => {
+              const modelInfo = {
+                provider: config.provider,
+                id: config.model,
+                name: 'Mock',
+                reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }] },
+              }
+              const controls = configure ? configure({ maxTokens: config.maxTokens }, modelInfo) : {}
+              const resolved = { reasoningEffort: controls.reasoningEffort, maxTokens: config.maxTokens, provider: config.provider, model: config.model }
+              prepared.push(resolved)
+              return {
+                config: resolved,
+                stream: async function* (options) {
+                  dispatched.push(options)
+                  yield { type: 'text-delta', index: 0, text: 'ok' }
+                  yield { type: 'finish', reason: { kind: 'stop' } }
+                },
+              }
+            },
+          }
+        }
+        if (name === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'mock-provider', model: 'mock-model' }) }
+        return undefined
+      },
+    }
+    const reply = await invokeLlm(llmCtx, { prompt: '雨夜街景', systemPrompt: 'sys', purpose: 'imagen-prompt-refine' })
+    assert.equal(reply, 'ok')
+    assert.equal(prepared[0].reasoningEffort, 'low', '模型只提供 low/high 时选最低可用档')
+    assert.equal(dispatched[0].sessionId, 'imagen-prompt-refine', 'prepareCall 分支同样要带 sessionId')
+
+    // 模型没有思考档位时不擅自指定，避免适配器以 UNSUPPORTED_REASONING_EFFORT 拒绝。
+    let plainEffort = 'unset'
+    const plainLlm = {
+      get(name) {
+        if (name === 'llm') {
+          return {
+            prepareCall: async (config, _signal, configure) => {
+              const controls = configure ? configure({ maxTokens: config.maxTokens }, { provider: 'p', id: 'm', name: 'M' }) : {}
+              plainEffort = controls.reasoningEffort
+              return {
+                config: { ...config, ...controls },
+                stream: async function* () {
+                  yield { type: 'text-delta', index: 0, text: 'ok' }
+                },
+              }
+            },
+          }
+        }
+        if (name === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'mock-provider', model: 'mock-model' }) }
+        return undefined
+      },
+    }
+    assert.equal(await invokeLlm(plainLlm, { prompt: 'x', systemPrompt: 'sys' }), 'ok')
+    assert.equal(plainEffort, undefined, '模型没有思考档位时不传 reasoningEffort')
+  })
+
   await check('对话意图解析（无模型时走本地兜底，v2 形状）', async () => {
     const text = '给我画一张横版的雨夜街景，要写实一点'
     const result = await json(host.origin, '/imagen-api/intent', {

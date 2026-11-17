@@ -343,6 +343,31 @@ daemon 与 Host 出图路由都按 `reference.maxBytes + mask.maxBytes` 推导�
 - **契约与测试**：条数上限进 `LIMITS.batch`；`test/agent-batch.mjs` 用假 `queue` / `ctx.tools` 覆盖
   上限拒绝、失败隔离、总预算、`saveTo` 逐项校验与配方检索过滤，不依赖网络与 GPU。
 
+### 2.23 宿主模型通道的请求约束
+
+润色、转英文、对话意图解析共用 `lib/llm.js` 一条通道，调用宿主 `llm` + `agentDefaultModel` 服务，
+不引入第三方 key。真实环境里这条通道有三条硬约束，缺一条都会表现为「界面没有反应 / 模型不可用」：
+
+1. **会话路由标识（`sessionId`）**：部分宿主模型路由（例如 opencode-go）要求请求带 `x-opencode-session`，
+   宿主适配器只在 `GenerateOptions.sessionId` 存在时才补上；缺失时请求以 400 `MissingSessionID` 失败、
+   流里没有正文，调用方只能退回本地兜底。插件侧调用不属于任何一个 DSH 会话，所以 `lib/llm.js` 按
+   `purpose` 生成固定的合成 id（`imagen-prompt-refine` / `imagen-prompt-translate` / `imagen-chat-intent`），
+   同类调用复用同一条路由；调用方显式传 `sessionId` 时优先使用。
+2. **分片只收正文**：宿主 `StreamChunk` 的 `text-delta` 是用户可见正文，`reasoning-delta` 是模型思考过程，
+   `block-end` / `usage` / `finish` 不是正文。只收 `text-delta`，否则润色结果前会混进大段英文推理、
+   「转英文」会把推理首行当成译文。旧宿主没有 `type` 的分片仍按 `text` / `delta.text` 等字段兜底。
+3. **思考档位取最低可用档**：润色 / 英译是结构化短输出，默认从模型支持的档位里挑最低的
+   （`off` → `minimal` → `low`），降低等待时间并避免推理挤占输出 token；模型没有档位元数据时
+   不传 `reasoningEffort`，避免适配器以 `UNSUPPORTED_REASONING_EFFORT` 拒绝。
+
+失败原因统一以 warn 级别落到 `<workspace>/.imagen/logs/host.log`（每次调用另记一条
+`llm_call provider=… model=… purpose=…`）：llm 服务缺失、默认模型缺失、`prepareCall` 异常、
+空流（带 `finish` 的失败码与消息，例如 `INVALID_REQUEST` / `MISSING_CREDENTIAL`）都能直接对上原因。
+
+联调建议：想在不重启桌面工作台的情况下验证这条通道，可用 `dsh --profile headless --patch <overlay>`
+启动一个独立宿主进程，overlay 里把 `agent-default-model` 指向目标 provider/model、插入一个调试插件，
+直接调用 `enhancePrompt` / `parseIntent` 并打印 `source`；真实 provider 成功时 `source` 为 `model`。
+
 ---
 
 ## 3. 本地脱机调试技巧（不烧 Kaggle 额度）
@@ -374,3 +399,4 @@ daemon 与 Host 出图路由都按 `reference.maxBytes + mask.maxBytes` 推导�
 | **容器直接报错退出** | 运行 `kaggle kernels logs <kernelId>` 查看尾部堆栈，重点检查依赖下载是否超时或磁盘写满。 |
 | **隧道一直连不上** | 检查本地能否访问 `ntfy.sh`；在浏览器中直接打开 `trycloudflare.com` 地址确认是否被本地网络策略阻断。 |
 | **修改插件后 DSH 报 404** | 运行 `node test/verify-loaded.mjs` 确认插件 bundle 是否被 DSH 正确加载，检查注入模块声明。 |
+| **润色 / 转英文提示「模型不可用」** | 先看 `<workspace>/.imagen/logs/host.log` 里的 `llm_empty` / `llm_prepare_failed`：`code=INVALID_REQUEST` + `MissingSessionID` 说明 `sessionId` 没带（见 §2.23）；`MISSING_CREDENTIAL` 说明宿主没给该 provider 配凭据；`UNSUPPORTED_REASONING_EFFORT` 说明档位选择超出了模型能力。确认宿主默认模型：`/state` 不直接下发，但日志的 `llm_call provider=… model=…` 会写出实际路由。 |

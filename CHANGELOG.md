@@ -272,6 +272,16 @@
 
 
 
+### 宿主模型通道（润色 / 转英文 / 意图解析）
+
+> 与排队批次无关的独立修复：工作台「润色」「转为英文」「对话助手」在真实 DSH 环境里静默退回本地兜底（润色显示「模型不可用，以下为通用建议」、转英文没有反应）。根因是插件侧调用宿主模型时没有带会话路由标识，请求被模型路由以 400 拒绝，流里没有正文。
+
+- **修复**：`lib/llm.js` 每次调用都带 `sessionId`——按 `purpose` 固定的合成路由 id（`imagen-prompt-refine` / `imagen-prompt-translate` / `imagen-chat-intent`，调用方可显式覆盖）。部分宿主路由（如 opencode-go）要求 `x-opencode-session` 头，宿主适配器只在 `GenerateOptions.sessionId` 存在时才补上；此前请求以 400 `MissingSessionID` 失败、流里没有正文，润色 / 转英文 / 意图解析只能静默退回本地兜底。
+- **修复**：流式分片只收集 `text-delta` 正文，`reasoning-delta` 思考过程不再混入结果（否则润色 JSON 前会混进英文推理，「转英文」会把推理首行当成译文）；旧宿主没有 `type` 的分片仍按 `text` / `delta.text` 等字段兼容。
+- **改进**：结构化短输出默认选模型支持的最低思考档（`off` → `minimal` → `low`），降低等待时间并避免推理挤占输出 token；模型没有思考档位元数据时不传 `reasoningEffort`。
+- **可观测性**：llm 服务缺失 / 默认模型缺失 / `prepareCall` 异常 / 空流（带 `finish` 的失败码与消息）统一以 warn 级别写入 `<workspace>/.imagen/logs/host.log`，每次调用另记一条 `llm_call provider=… model=… purpose=…`，不再只有容易忽略的 debug 日志。
+- **测试**：`test/host-e2e.mjs` 新增两条用例——思考分片不进正文 + 缺省 / 显式 `sessionId`、`prepareCall` 分支的最低思考档选择；`npm test` 32 步全绿。
+
 ## 0.10.0 — 2026-11-14
 
 > v0.10 首个版本：创作参数面板做减法（去风格预设、按模型真实能力显隐排除项、画面设置与参考图互斥、生成张数提权），AI 助手做加法（模型知识单一来源、意图 JSON v2、多轮上下文、通用澄清、确认卡带入参数面板），并把契约、测试、文档与版本收口到 0.10.0。
