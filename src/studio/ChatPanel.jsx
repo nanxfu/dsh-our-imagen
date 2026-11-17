@@ -342,9 +342,13 @@ export function ChatPanel(props) {
     )
   }
 
+  const startNewCreation = form && typeof form.newCreation === 'function'
+    ? form.newCreation
+    : (actions && typeof actions.newDraft === 'function' ? actions.newDraft : undefined)
+
   return (
     <aside className="ofs-panel ofs-panel--chat">
-      <PanelModeTabs t={t} mode={mode} setMode={setMode} />
+      <PanelModeTabs t={t} mode={mode} setMode={setMode} onNewCreation={startNewCreation} />
 
       <div
         className={messages.length === 0 && !interpreting ? 'ofs-thread is-empty' : 'ofs-thread'}

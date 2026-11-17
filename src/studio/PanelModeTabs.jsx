@@ -7,10 +7,25 @@
 
 import React from 'react'
 
-export function PanelModeTabs({ t, mode, setMode }) {
+import { Icon } from './icons.jsx'
+
+export function PanelModeTabs({ t, mode, setMode, onNewCreation }) {
   return (
     <header className="ofs-panel-head">
-      <h2>{t('studio.rail.title')}</h2>
+      <div className="ofs-panel-head-title">
+        <h2>{t('studio.rail.title')}</h2>
+        {typeof onNewCreation === 'function' ? (
+          <button
+            type="button"
+            className="ofs-chip ofs-head-new"
+            title={t('studio.rail.newCreation')}
+            onClick={onNewCreation}
+          >
+            <Icon name="plus" size={13} />
+            <span>{t('studio.rail.newCreation')}</span>
+          </button>
+        ) : null}
+      </div>
       <div className="ofs-seg" role="tablist" aria-label={t('studio.rail.title')}>
         <button
           type="button"

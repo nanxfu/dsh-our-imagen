@@ -55,14 +55,15 @@ function mergePendingFavorites(serverList, pendingMap) {
   return merged
 }
 
-export function useWorkLibrary({ t, alive, ui, state }) {
+export function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode }) {
   const [selectedPath, setSelectedPath] = React.useState('')
   const [historyItems, setHistoryItems] = React.useState([])
   const [historyHasMoreState, setHistoryHasMoreState] = React.useState(false)
   const [historyLoadingMore, setHistoryLoadingMore] = React.useState(false)
   const [favorites, setFavorites] = React.useState([])
-  // 阶段十三：显式新建绘图态与版本树按需拉取。
-  const [workspaceMode, setWorkspaceMode] = React.useState('work')
+  // 阶段十三：显式新建绘图态与版本树按需拉取（打开工作台默认从新建画布起步）。
+  const [workspaceMode, setWorkspaceMode] = React.useState(() => (initialWorkspaceMode === 'work' ? 'work' : 'new_draft'))
+  const [newDraftExplicit, setNewDraftExplicit] = React.useState(false)
   const [newDraftPending, setNewDraftPending] = React.useState(false)
   const [treeUnavailable, setTreeUnavailable] = React.useState(false)
   const [treeLoadingRoot, setTreeLoadingRoot] = React.useState('')
@@ -238,10 +239,18 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     [historyItems, pendingSignature],
   )
 
+  /** 把焦点切回新建绘图画布（保留表单与在途新画布状态，不重置内容）。 */
+  function focusDraft() {
+    setNewDraftExplicit(true)
+    setWorkspaceMode('new_draft')
+    setSelectedPath('')
+  }
+
   /** 进入显式新建绘图态：清空选中，Stage 切「模糊背景 + 取景框」，作品条出现草稿卡。 */
   function newDraft() {
     pendingNewDraftRef.current = ''
     setNewDraftPending(false)
+    setNewDraftExplicit(true)
     setWorkspaceMode('new_draft')
     setSelectedPath('')
   }
@@ -249,6 +258,7 @@ export function useWorkLibrary({ t, alive, ui, state }) {
   /** 新建绘图提交成功：记下任务 id，等它完成后自动切回 work 并选中新图。 */
   function markNewDraftSubmitted(jobId) {
     pendingNewDraftRef.current = typeof jobId === 'string' ? jobId : ''
+    setNewDraftExplicit(true)
     setNewDraftPending(true)
     setWorkspaceMode('new_draft')
     setSelectedPath('')
@@ -258,6 +268,7 @@ export function useWorkLibrary({ t, alive, ui, state }) {
   function selectImage(entry) {
     pendingNewDraftRef.current = ''
     setNewDraftPending(false)
+    setNewDraftExplicit(false)
     setWorkspaceMode('work')
     setSelectedPath(entry && entry.image ? entry.image.path : '')
   }
@@ -266,6 +277,7 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     if (!path) return
     pendingNewDraftRef.current = ''
     setNewDraftPending(false)
+    setNewDraftExplicit(false)
     setWorkspaceMode('work')
     setSelectedPath(path)
   }
@@ -415,7 +427,9 @@ export function useWorkLibrary({ t, alive, ui, state }) {
     lineage,
     // 工作区焦点：new_draft 时 selected 为 null，作品条显示新建草稿卡。
     workspaceMode,
+    newDraftExplicit,
     newDraftPending,
+    focusDraft,
     newDraft,
     markNewDraftSubmitted,
     // 版本树按需拉取与旧宿主降级状态。

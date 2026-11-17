@@ -262,3 +262,75 @@ export function maskDigestOf(data) {
   }
   return `${hash.toString(16)}-${normalized.length}`
 }
+
+/** 画布视图缩放区间：1×（贴合光桌）到 4×（细节边缘），小步进供滚轮与快捷键共用。 */
+export const MASK_ZOOM = Object.freeze({ min: 1, max: 4, step: 0.15, default: 1 })
+
+/** 蒙版撤销栈上限：单张 1024² ImageData 约 4MB，15 步在实用与内存之间平衡。 */
+export const MASK_UNDO_LIMIT = 15
+
+/** 缩放倍率归一：越界钳制，贴近 1.0 时直接吸附为 1，避免出现 1.01× 还显示复位按钮。 */
+export function clampZoom(value) {
+  const num = Number(value)
+  if (!Number.isFinite(num) || num <= MASK_ZOOM.min + 0.02) return MASK_ZOOM.min
+  if (num >= MASK_ZOOM.max) return MASK_ZOOM.max
+  return Math.round(num * 100) / 100
+}
+
+/**
+ * 画布平移边界钳制：zoom = 1 时强制回中；放大后最多允许把画布中心移到容器半宽/半高加余量处，
+ * 确保任意角度都能拖进视野中心且不会把整张画布拖飞出视口。
+ */
+export function clampPan(pan, options = {}) {
+  const zoom = clampZoom(options.zoom)
+  if (zoom <= MASK_ZOOM.min) return { x: 0, y: 0 }
+  const input = pan && typeof pan === 'object' ? pan : {}
+  const x = Number(input.x)
+  const y = Number(input.y)
+  const stageW = Math.max(0, Number(options.stageWidth) || 0)
+  const stageH = Math.max(0, Number(options.stageHeight) || 0)
+  const viewW = Math.max(0, Number(options.viewWidth) || 0)
+  const viewH = Math.max(0, Number(options.viewHeight) || 0)
+  // 若未提供容器尺寸，不截断（仅取有限数值）；有尺寸时至少保留 20% 画面在光桌内。
+  const maxX = stageW > 0 && viewW > 0 ? Math.max(0, (stageW * zoom + viewW * 0.6) / 2 - viewW * 0.2) : Infinity
+  const maxY = stageH > 0 && viewH > 0 ? Math.max(0, (stageH * zoom + viewH * 0.6) / 2 - viewH * 0.2) : Infinity
+  return {
+    x: Number.isFinite(x) ? Math.round(Math.min(maxX, Math.max(-maxX, x)) * 100) / 100 : 0,
+    y: Number.isFinite(y) ? Math.round(Math.min(maxY, Math.max(-maxY, y)) * 100) / 100 : 0,
+  }
+}
+
+/**
+ * 以指针所在位置为中心缩放画布。
+ *
+ * `anchor` 是指针相对于「未平移时的画布中心」的偏移（px）；缩放前后同一图像点
+ * 仍落在 `anchor` 处：nextPan = anchor - (anchor - pan) * (nextZoom / zoom)。
+ */
+export function zoomAtPoint({ zoom, pan, anchor, nextZoom, bounds }) {
+  const currentZoom = clampZoom(zoom)
+  const targetZoom = clampZoom(nextZoom)
+  if (targetZoom <= MASK_ZOOM.min) {
+    return { zoom: MASK_ZOOM.min, pan: { x: 0, y: 0 } }
+  }
+  const currentPan = pan && typeof pan === 'object' ? pan : { x: 0, y: 0 }
+  const ax = Number(anchor && anchor.x) || 0
+  const ay = Number(anchor && anchor.y) || 0
+  const ratio = targetZoom / currentZoom
+  const rawPan = {
+    x: ax - (ax - (Number(currentPan.x) || 0)) * ratio,
+    y: ay - (ay - (Number(currentPan.y) || 0)) * ratio,
+  }
+  return {
+    zoom: targetZoom,
+    pan: clampPan(rawPan, { ...(bounds || {}), zoom: targetZoom }),
+  }
+}
+
+/** 按步进调整画笔尺寸（delta > 0 放大，< 0 缩小），用于 Shift+滚轮 与 [ / ] 快捷键。 */
+export function stepBrushSize(current, direction) {
+  const size = clampBrushSize(current)
+  const dir = Number(direction)
+  if (!Number.isFinite(dir) || dir === 0) return size
+  const step = dir > 0 ? MASK_BRUSH.step : -MASK_BRUSH.step
+  return clampBrushSize(size + step)
+}

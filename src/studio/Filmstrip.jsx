@@ -200,22 +200,35 @@ export function Filmstrip(props) {
     sourceDeleted: t('studio.filmstrip.sourceDeleted'),
   }
 
-  const hasContent = roots.length > 0 || pendingJobs.length > 0 || workspaceMode === 'new_draft'
+  // 只要已有作品、在途任务或主动进入过新建态，底部新建画布卡始终保留在最左端，
+  // 切换到其它作品查看或重绘时也不消失，方便随时点回新建画布。
+  const showDraftCard = roots.length > 0
+    || pendingJobs.length > 0
+    || newDraftCard.pending === true
+    || newDraftCard.explicit === true
+  const hasContent = roots.length > 0 || pendingJobs.length > 0 || showDraftCard
 
   return (
     <footer className={openRoot ? 'ofs-filmstrip is-version-open' : 'ofs-filmstrip'} ref={stripRef}>
       <div className="ofs-roll" ref={rollRef}>
-        {workspaceMode === 'new_draft' ? (
+        {showDraftCard ? (
           <DraftCard
             labels={draftCardLabels}
             width={newDraftCard.width}
             height={newDraftCard.height}
             presetLabel={newDraftCard.presetLabel}
             prompt={newDraftCard.prompt}
-            active
+            active={workspaceMode === 'new_draft'}
             pending={newDraftCard.pending === true}
             onClick={() => {
-              if (ui && typeof ui.setPanelMode === 'function') ui.setPanelMode('form')
+              if (actions && typeof actions.focusNewDraft === 'function') {
+                actions.focusNewDraft()
+              } else if (typeof library.focusDraft === 'function') {
+                library.focusDraft()
+                if (ui && typeof ui.setPanelMode === 'function') ui.setPanelMode('form')
+              } else if (ui && typeof ui.setPanelMode === 'function') {
+                ui.setPanelMode('form')
+              }
             }}
           />
         ) : null}

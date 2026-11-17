@@ -121,8 +121,8 @@ const scenarios = {
   ready: {
     state: readyState,
     history: { items: [historyItem] },
-    props: {},
-    expect: ['创作设置', '提示词', '1024 × 1024', '画面设置', '高级设置', '立即生成', '带回参数', '云端就绪', '灵感示例', '测试用的荷花池塘', '图片处理（局部涂抹 / 整图重绘）在舞台底部的动作坞里'],
+    props: { workspaceMode: 'work' },
+    expect: ['创作设置', '提示词', '1024 × 1024', '画面设置', '高级设置', '立即生成', '带回参数', '云端就绪', '灵感示例', '测试用的荷花池塘', '图片处理（局部重绘 / 整图重绘）在舞台底部的动作坞里'],
     reject: ['风格预设', '分辨率档位'],
     structure: {
       required: {
@@ -204,7 +204,7 @@ const scenarios = {
   chat: {
     state: readyState,
     history: { items: [historyItem] },
-    props: { panelMode: 'chat' },
+    props: { panelMode: 'chat', workspaceMode: 'work' },
     expect: ['创作助手', '描述你想要的画面', '新建对话'],
     reject: [],
     structure: {
@@ -334,7 +334,7 @@ const scenarios = {
       lastJob: null,
     },
     history: { items: [historyItem] },
-    props: {},
+    props: { workspaceMode: 'work' },
     // 顶部流水线展示五节点，排队节点是当前节点；已等待从这次会话开始时刻算。
     expect: [
       '正在排队等 GPU',
@@ -493,7 +493,7 @@ const scenarios = {
       lastJob: null,
     },
     history: { items: [historyItem] },
-    props: {},
+    props: { workspaceMode: 'work' },
     expect: ['正在生成第 2/4 张', '第 2/4 张', '云端已就绪', '已等待'],
     reject: ['生成中 2/4'],
     structure: {
@@ -2437,7 +2437,7 @@ const buttonByText = (tree, text) => findNodes(
 const generateCalls = (client) => client.requests.filter((item) => item.path === '/imagen-api/generate')
 
 /** useStudio harness：暴露 latest.studio，直接驱动组合层动作并断言真实状态流转。 */
-async function mountToolStudio(responses, failures = {}) {
+async function mountToolStudio(responses, failures = {}, { selectFirst = true } = {}) {
   const client = await loadClient({ now: NOW, responses, failures, testBuild: true })
   const React = client.react
   const h = React.createElement
@@ -2450,6 +2450,10 @@ async function mountToolStudio(responses, failures = {}) {
   await client.mountRaw(Harness, {})
   await client.settle()
   await client.rerenderRaw()
+  if (selectFirst && latest.studio && latest.studio.library.gallery[0]) {
+    latest.studio.library.selectImage(latest.studio.library.gallery[0])
+    await client.rerenderRaw()
+  }
   return { client, latest }
 }
 
@@ -2484,10 +2488,10 @@ await check('渲染：画廊「以此图重绘」一步直达局部涂抹，左�
       forbidden: ['ofs-gallery', 'ofs-reference', 'ofs-print', 'ofs-lightbox'],
     })
     const text = collectText(tree).join(' | ')
-    assert.ok(text.includes('图片处理（局部涂抹 / 整图重绘）在舞台底部的动作坞里'), '左栏应提示图片工具入口在舞台')
-    assert.ok(text.includes('局部重绘'), '应切到局部涂抹画布')
+    assert.ok(text.includes('图片处理（局部重绘 / 整图重绘）在舞台底部的动作坞里'), '左栏应提示图片工具入口在舞台')
+    assert.ok(text.includes('局部重绘'), '应切到局部重绘画布')
     assert.ok(text.includes('修改描述'), '画布内嵌轻量提交栏')
-    assert.ok(text.includes('退出'), '提交栏带退出')
+    assert.ok(text.includes('取消'), '提交栏带取消')
     const photo = nodesByClass(tree, 'ofs-mask-photo')[0]
     assert.ok(photo && photo.props.src === historyItem.images[0].url, '画布底图应是被点作品')
   } finally {
@@ -2520,12 +2524,14 @@ await check('渲染：主表单请求体是纯文生图，图片工具请求体�
     client.unmount()
   }
 
-  // 2) 动作坞「局部涂抹」：工具自己的请求体带底图与回退提示词。
+  // 2) 动作坞「局部重绘」：工具自己的请求体带底图与回退提示词。
   client = await loadClient({ now: NOW, responses, testBuild: true })
   try {
     let tree = await client.mountRaw(client.components.Studio, {})
-    const openButton = buttonByText(tree, '局部涂抹')
-    assert.ok(openButton, '动作坞应有「局部涂抹」入口')
+    nodesByClass(tree, 'ofs-thumb')[0].props.onClick()
+    tree = await client.rerenderRaw()
+    const openButton = buttonByText(tree, '局部重绘')
+    assert.ok(openButton, '动作坞应有「局部重绘」入口')
     openButton.props.onClick()
     tree = await client.rerenderRaw()
     nodesByClass(tree, 'ofs-tool-submit')[0].props.onClick()
@@ -2590,6 +2596,8 @@ await check('渲染：大图预览的「以此图重绘」直接打开局部涂�
   })
   try {
     let tree = await client.mountRaw(client.components.Studio, {})
+    nodesByClass(tree, 'ofs-thumb')[0].props.onClick()
+    tree = await client.rerenderRaw()
     const zoomButton = findNodes(
       tree,
       (node) => node.type === 'button'
@@ -2627,7 +2635,9 @@ await check('渲染：动作坞按图片处理 / 创作复用分组，未开放�
     testBuild: true,
   })
   try {
-    const tree = await client.mountRaw(client.components.Studio, {})
+    let tree = await client.mountRaw(client.components.Studio, {})
+    nodesByClass(tree, 'ofs-thumb')[0].props.onClick()
+    tree = await client.rerenderRaw()
     const dock = nodesByClass(tree, 'ofs-dock')[0]
     assert.ok(dock, '缺少舞台动作坞')
     const groups = nodesByClass(tree, 'ofs-dock-group')
@@ -2635,12 +2645,12 @@ await check('渲染：动作坞按图片处理 / 创作复用分组，未开放�
     assert.deepEqual(groups.map((group) => group.props['data-group']), ['process', 'reuse'])
     assert.equal(groups[0].props['aria-label'], '图片处理', '图片处理组要可读')
 
-    // 图片处理组：局部涂抹 / 整图重绘 / 高清放大 / 扩图（后两个 disabled 占位）。
+    // 图片处理组：局部重绘 / 整图重绘 / 高清放大 / 扩图（后两个 disabled 占位）。
     const processButtons = groups[0].children.filter((child) => child && child.type === 'button')
     const processLabels = processButtons.map((node) => collectText(node).join(''))
-    assert.deepEqual(processLabels, ['局部涂抹', '整图重绘', '高清放大', '扩图'])
+    assert.deepEqual(processLabels, ['局部重绘', '整图重绘', '高清放大', '扩图'])
     const [inpaintButton, img2imgButton, upscaleButton, outpaintButton] = processButtons
-    assert.equal(typeof inpaintButton.props.onClick, 'function', '局部涂抹应可点击')
+    assert.equal(typeof inpaintButton.props.onClick, 'function', '局部重绘应可点击')
     assert.equal(typeof img2imgButton.props.onClick, 'function', '整图重绘应可点击')
     for (const disabled of [upscaleButton, outpaintButton]) {
       assert.equal(disabled.props['aria-disabled'], 'true', '未开放工具标 aria-disabled')
@@ -2680,6 +2690,8 @@ await check('渲染：动作坞「整图重绘」原地展开重绘条，预设�
   })
   try {
     let tree = await client.mountRaw(client.components.Studio, {})
+    nodesByClass(tree, 'ofs-thumb')[0].props.onClick()
+    tree = await client.rerenderRaw()
     buttonByText(tree, '整图重绘').props.onClick()
     tree = await client.rerenderRaw()
     assertStructure('inline-tool', tree, {
@@ -2704,14 +2716,13 @@ await check('渲染：动作坞「整图重绘」原地展开重绘条，预设�
     const optionText = collectText(select).join(' | ')
     assert.ok(!optionText.includes('Klein'), '不支持垫图的模型不得出现在下拉里')
 
-    // 退出编辑态：回到作品预览，dock 出现「继续编辑」。
+    // 取消编辑：回到作品预览并丢弃草稿（不保留继续编辑）。
     nodesByClass(tree, 'ofs-tool-exit')[0].props.onClick()
     tree = await client.rerenderRaw()
     assertStructure('inline-tool-closed', tree, {
-      required: { 'ofs-print': 1, 'ofs-dock-resume': 1 },
-      forbidden: ['ofs-inline-tool'],
+      required: { 'ofs-print': 1, 'ofs-dock': 1 },
+      forbidden: ['ofs-inline-tool', 'ofs-dock-resume'],
     })
-    assert.ok(collectText(tree).join(' | ').includes('继续编辑'), '退出后 dock 提供继续编辑')
   } finally {
     client.unmount()
   }
@@ -2740,7 +2751,9 @@ await check('渲染：局部涂抹画布按底图比例渲染，工具栏可键�
   })
   try {
     let tree = await client.mountRaw(client.components.Studio, {})
-    buttonByText(tree, '局部涂抹').props.onClick()
+    nodesByClass(tree, 'ofs-thumb')[0].props.onClick()
+    tree = await client.rerenderRaw()
+    buttonByText(tree, '局部重绘').props.onClick()
     tree = await client.rerenderRaw()
 
     assertStructure('mask-editor', tree, {
@@ -2776,7 +2789,7 @@ await check('渲染：局部涂抹画布按底图比例渲染，工具栏可键�
     assert.equal(range.props.max, MASK_BRUSH.max)
     assert.equal(range.props.step, MASK_BRUSH.step)
     assert.equal(range.props.value, MASK_BRUSH.default)
-    for (const label of ['橡皮擦', '清空蒙版', '反选区域', '完成涂抹']) {
+    for (const label of ['橡皮擦', '清空蒙版', '反选区域', '暂存涂抹']) {
       const button = buttonByText(tree, label)
       assert.ok(button, `涂抹工具栏缺少「${label}」`)
       assert.ok(Number(button.props.style.minHeight) >= 44, `「${label}」热区高度应不小于 44px`)
@@ -2786,7 +2799,7 @@ await check('渲染：局部涂抹画布按底图比例渲染，工具栏可键�
     assert.ok(text.includes('少步快速模型'), '少步模型要提示换多步模型')
     assert.ok(text.includes('已涂抹 0%'), '覆盖率读数从 0% 起')
 
-    // 完成涂抹：收起画布，草稿仍在 → dock 显示「继续编辑」。
+    // 暂存涂抹：收起画布，草稿仍在 → dock 显示「继续编辑」。
     nodesByClass(tree, 'ofs-mask-close')[0].props.onClick()
     tree = await client.rerenderRaw()
     assertStructure('mask-editor-closed', tree, {
@@ -2819,7 +2832,9 @@ await check('渲染：涂抹中切换胶片条不改变工具底图，dock 只�
   })
   try {
     let tree = await client.mountRaw(client.components.Studio, {})
-    buttonByText(tree, '局部涂抹').props.onClick()
+    nodesByClass(tree, 'ofs-thumb')[0].props.onClick()
+    tree = await client.rerenderRaw()
+    buttonByText(tree, '局部重绘').props.onClick()
     tree = await client.rerenderRaw()
     const photoBefore = nodesByClass(tree, 'ofs-mask-photo')[0]
     assert.equal(photoBefore.props.src, historyItem.images[0].url, '底图是舞台当前作品')
@@ -2834,11 +2849,11 @@ await check('渲染：涂抹中切换胶片条不改变工具底图，dock 只�
     const photoAfter = nodesByClass(tree, 'ofs-mask-photo')[0]
     assert.ok(photoAfter, '切换缩略图后仍应停留在涂抹画布')
     assert.equal(photoAfter.props.src, historyItem.images[0].url, '工具底图绑定在打开时确定，不随预览切换')
-    // 编辑态 dock：只剩图片处理组与退出按钮，不出现创作复用动作。
-    assert.equal(nodesByClass(tree, 'ofs-dock-group').length, 1, '编辑态隐藏创作复用组')
-    assert.equal(nodesByClass(tree, 'ofs-dock-close').length, 1, '编辑态提供退出按钮')
+    // 编辑态底部由单行提交条接管：提供唯一退出按钮，不再重复渲染动作坞或创作复用动作。
+    assert.equal(nodesByClass(tree, 'ofs-dock').length, 0, '编辑态不重复渲染动作坞')
+    assert.equal(nodesByClass(tree, 'ofs-tool-exit').length, 1, '编辑态提供唯一退出按钮')
     assert.equal(nodesByClass(tree, 'ofs-dock-resume').length, 0, '编辑态不显示继续编辑')
-    assert.ok(!collectText(nodesByClass(tree, 'ofs-dock')[0]).join('').includes('带回参数'), '编辑态不显示复用动作')
+    assert.ok(!collectText(nodesByClass(tree, 'ofs-tool-bar')[0]).join('').includes('带回参数'), '编辑态不显示复用动作')
   } finally {
     client.unmount()
   }
@@ -2986,7 +3001,9 @@ await check('渲染：旧宿主没有图片能力字段时文生图不回归，�
     assert.ok(!('reference' in submitted.body), '旧宿主文生图请求体不带 reference')
 
     // 没有 supportsInpaint 的预设：打开工具时明确说明没有可用模型，不进入编辑态。
-    buttonByText(tree, '局部涂抹').props.onClick()
+    nodesByClass(tree, 'ofs-thumb')[0].props.onClick()
+    tree = await client.rerenderRaw()
+    buttonByText(tree, '局部重绘').props.onClick()
     tree = await client.rerenderRaw()
     assert.ok(collectText(tree).join(' | ').includes('没有可用的模型，无法执行图片工具'), '缺少可用模型要说明')
     assert.equal(nodesByClass(tree, 'ofs-mask-editor').length, 0, '不得进入空白编辑态')
@@ -5683,7 +5700,7 @@ await check('渲染：空舞台不出现动作坞与图片工具入口', async (
       forbidden: ['ofs-dock', 'ofs-mask-editor', 'ofs-inline-tool', 'ofs-mask-toggle'],
     })
     const text = collectText(tree).join(' | ')
-    assert.ok(text.includes('图片处理（局部涂抹 / 整图重绘）在舞台底部的动作坞里'), '左栏仍提示入口在动作坞')
+    assert.ok(text.includes('图片处理（局部重绘 / 整图重绘）在舞台底部的动作坞里'), '左栏仍提示入口在动作坞')
   } finally {
     client.unmount()
   }
@@ -5750,7 +5767,7 @@ await check('渲染：动作坞展示工具草稿状态，编辑态只挂载画�
     nodesByClass(tree, 'ofs-dock-resume')[0].props.onClick()
     assert.deepEqual(actions.calls.tools, [{ kind: 'inpaint', path: selected.image.path }], '继续编辑按草稿底图重开工具')
 
-    // 2) 编辑态：画布编辑器顶替预览，dock 只留退出。
+    // 2) 编辑态：画布编辑器顶替预览，下方直接由提交栏接管（不再多挂一条重复退出的 dock）。
     const editingImageTool = { ...baseTool, activeTool: baseTool, editorOpen: true }
     const editing = stagePropsOf(editingImageTool)
     tree = await client.mountRaw(client.components.Stage, { ...editing.props, t })
@@ -5760,9 +5777,9 @@ await check('渲染：动作坞展示工具草稿状态，编辑态只挂载画�
         'ofs-mask-editor': 1,
         'ofs-mask-canvas': 1,
         'ofs-tool-bar': 1,
-        'ofs-dock-close': 1,
+        'ofs-tool-exit': 1,
       },
-      forbidden: ['ofs-inline-tool', 'ofs-dock-resume'],
+      forbidden: ['ofs-inline-tool', 'ofs-dock-resume', 'ofs-dock'],
     })
     const photo = nodesByClass(tree, 'ofs-mask-photo')[0]
     assert.ok(photo && photo.props.src === selected.image.url, '画布底图来自工具 target')
@@ -6035,7 +6052,7 @@ await check('渲染：版本面板——悬停 250ms 展开、v 编号行、点�
     })
     const labels = nodesByClass(tree, 'ofs-version-label').map((node) => collectText(node).join('')).sort()
     assert.deepEqual(labels, ['v1', 'v2'], '面板里是 v1（根）与 v2（派生）')
-    assert.ok(collectText(tree).join(' | ').includes('局部涂抹'), '派生版本行带类型图标与文案')
+    assert.ok(collectText(tree).join(' | ').includes('局部重绘'), '派生版本行带类型图标与文案')
 
     // 点击派生版本行：舞台切到该版本，面板收起。
     const rowButtons = nodesByClass(tree, 'ofs-version-row-main').filter((node) => node.type === 'button')
@@ -6268,11 +6285,13 @@ await check('渲染：父作品被删后子版本提升为局部根不崩', asyn
     testBuild: true,
   })
   try {
-    const tree = await client.mountRaw(client.components.Studio, {})
+    let tree = await client.mountRaw(client.components.Studio, {})
     assert.equal(nodesByClass(tree, 'ofs-batch').length, 1, '父图未加载时子版本以局部根成卡')
     const card = nodesByClass(tree, 'ofs-batch')[0]
     assert.equal(card.props['data-root'], childItem.images[0].path, '局部根的 root 是子版本自己')
     assert.equal(nodesByClass(tree, 'ofs-version-badge').length, 0, '局部根没有派生角标')
+    nodesByClass(tree, 'ofs-thumb')[0].props.onClick()
+    tree = await client.rerenderRaw()
     assert.ok(collectText(tree).join(' | ').includes('派生作品提示词'), '局部根仍能正常展示')
   } finally {
     client.unmount()
@@ -6291,11 +6310,9 @@ await check('渲染：显式新建绘图态——舞台取景框 + 作品条草�
     testBuild: true,
   })
   try {
+    // 0.13.0：打开工作台时默认进入新建创作态（舞台取景框 + 作品条草稿卡 + 灵感示例）。
     let tree = await client.mountRaw(client.components.Studio, {})
-    assert.equal(nodesByClass(tree, 'ofs-draft-card').length, 0, 'work 态不显示新建草稿卡')
-    buttonByText(tree, '新建创作').props.onClick()
-    tree = await client.rerenderRaw()
-    assertStructure('new-draft-stage', tree, {
+    assertStructure('initial-new-draft-stage', tree, {
       required: {
         'ofs-stage--draft': 1,
         'ofs-figure--draft': 1,
@@ -6304,9 +6321,11 @@ await check('渲染：显式新建绘图态——舞台取景框 + 作品条草�
         'ofs-draft-card': 1,
         'ofs-draft-viewfinder': 1,
         'ofs-draft-state': 1,
+        'ofs-head-new': 1,
       },
       forbidden: ['ofs-image', 'ofs-figure--empty'],
     })
+    assert.equal(nodesByClass(tree, 'ofs-tuning').length, 0, '新建态不占用微调来源空白行')
     const text = collectText(tree).join(' | ')
     assert.ok(text.includes('一张还没生成的新画布'), '舞台应说明这是尚未生成的新画布')
     assert.ok(text.includes('正在配置新画布'), '作品条草稿卡应显示未提交态')
@@ -6317,6 +6336,27 @@ await check('渲染：显式新建绘图态——舞台取景框 + 作品条草�
       0,
       '新建态没有选中作品',
     )
+
+    // 点击底部作品卡切回作品预览态：新建草稿卡仍常驻胶卷最左端（取消激活态），舞台显示作品。
+    thumbs[0].props.onClick()
+    tree = await client.rerenderRaw()
+    const cardAfterSwitch = nodesByClass(tree, 'ofs-draft-card')[0]
+    assert.ok(cardAfterSwitch, '切到其它作品时新建画布卡应保持常驻不消失')
+    assert.equal(cardAfterSwitch.props['aria-pressed'], false, 'work 态下新建画布卡取消高亮')
+    assert.equal(nodesByClass(tree, 'ofs-image').length, 1, '选作品后舞台显示图片')
+
+    // 点常驻草稿卡切回新建画布（同时保留未提交表单态）；点顶栏「新建创作」也能回新建态。
+    cardAfterSwitch.props.onClick()
+    tree = await client.rerenderRaw()
+    assert.equal(nodesByClass(tree, 'ofs-draft-card')[0].props['aria-pressed'], true, '点草稿卡回到新建态并重新高亮')
+    assert.equal(nodesByClass(tree, 'ofs-stage--draft').length, 1, '点草稿卡后回到新建取景框')
+
+    thumbs[0].props.onClick()
+    tree = await client.rerenderRaw()
+    buttonByText(tree, '新建创作').props.onClick()
+    tree = await client.rerenderRaw()
+    assert.equal(nodesByClass(tree, 'ofs-draft-card').length, 1, '点新建创作后草稿卡仍保留')
+    assert.equal(nodesByClass(tree, 'ofs-stage--draft').length, 1, '点新建创作后回到新建取景框')
   } finally {
     client.unmount()
   }

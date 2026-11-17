@@ -296,8 +296,8 @@
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  /* 单轨创作面板 + 自适应预览区；视图切换与状态全部收在顶栏。 */
-  grid-template-columns: 320px minmax(0, 1fr);
+  /* 单轨创作面板 + 自适应预览区；放宽左栏以在顶栏稳妥容纳标题、新建创作与模式切换。 */
+  grid-template-columns: 376px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
 }
 

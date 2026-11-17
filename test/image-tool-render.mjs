@@ -234,12 +234,12 @@ async function main() {
     assert.deepEqual(disabled.map(textOf), ['高清放大', '扩图'])
     for (const button of disabled) assert.equal(button.props.title, '规划中，暂未开放')
     const usable = buttons.filter((button) => button.props['aria-disabled'] !== 'true')
-    assert.deepEqual(usable.map(textOf), ['局部涂抹', '整图重绘', '带回参数', '生成变体'])
+    assert.deepEqual(usable.map(textOf), ['局部重绘', '整图重绘', '带回参数', '生成变体'])
   })
 
-  await check('点「局部涂抹」进入画布：画布 / 工具栏 / 提交栏挂载，复用组收起', async () => {
+  await check('点「局部重绘」进入画布：画布 / 工具栏 / 提交栏挂载，复用组收起', async () => {
     const { tree, harness } = await mountStage()
-    buttonByText(tree, '局部涂抹').props.onClick()
+    buttonByText(tree, '局部重绘').props.onClick()
     const next = await refresh()
     const classes = collectClasses(next)
     assert.equal(harness.api().editorOpen, true)
@@ -249,8 +249,8 @@ async function main() {
     assert.equal(classes['ofs-mask-tools'], 1)
     assert.equal(classes['ofs-mask-canvas'], 1)
     assert.equal(classes['ofs-tool-bar'], 1)
-    assert.equal(classes['ofs-dock-group'], 1, '编辑态只保留图片处理组')
-    assert.equal(classes['ofs-dock-close'], 1)
+    assert.equal(classes['ofs-dock'] ?? 0, 0, '编辑态直接由提交栏接管底部，不重复渲染动作坞')
+    assert.equal(classes['ofs-tool-exit'], 1)
     assert.equal(classes['ofs-mask-fast'], 1, '4 步极速模型应给弱提示')
     const canvas = byClassOne(next, 'ofs-mask-canvas')
     assert.equal(canvas.props.role, 'application')
@@ -259,7 +259,7 @@ async function main() {
 
   await check('inpaintOnly + 无蒙版：提交按钮禁用并显示拦截文案；涂抹后恢复可提交', async () => {
     const { tree, harness } = await mountStage()
-    buttonByText(tree, '局部涂抹').props.onClick()
+    buttonByText(tree, '局部重绘').props.onClick()
     let next = await refresh()
     const select = findNodes(next, (node) => node.type === 'select')
     assert.equal(select.length, 1, '多预设时应渲染模型下拉')
@@ -279,13 +279,13 @@ async function main() {
     assert.equal(byClassOne(next, 'ofs-tool-range').props.max, LIMITS.strength.inpaintMax, '带蒙版后强度上限放宽')
   })
 
-  await check('退出画布保留草稿：动作坞出现「继续编辑」，恢复后蒙版与强度上限仍在', async () => {
+  await check('暂存涂抹保留草稿，点「取消」则丢弃草稿并退出', async () => {
     const { tree, harness } = await mountStage()
-    buttonByText(tree, '局部涂抹').props.onClick()
+    buttonByText(tree, '局部重绘').props.onClick()
     await refresh()
     harness.api().applyMask({ data: MASK_DATA, coverage: 0.25 })
     let next = await refresh()
-    buttonByText(next, '退出').props.onClick()
+    buttonByText(next, '暂存涂抹').props.onClick()
     next = await refresh()
     assert.equal(harness.api().editorOpen, false)
     assert.equal(byClass(next, 'ofs-mask-editor').length, 0)
@@ -299,6 +299,13 @@ async function main() {
     assert.equal(byClass(next, 'ofs-mask-editor').length, 1)
     assert.ok(textOf(byClassOne(next, 'ofs-tool-mask')).includes('25%'))
     assert.equal(byClassOne(next, 'ofs-tool-range').props.max, LIMITS.strength.inpaintMax)
+
+    buttonByText(next, '取消').props.onClick()
+    next = await refresh()
+    assert.equal(harness.api().editorOpen, false)
+    assert.equal(harness.api().activeTool, null, '点「取消」应彻底丢弃当前草稿')
+    assert.equal(harness.api().mask, null)
+    assert.equal(byClass(next, 'ofs-dock-resume').length, 0, '取消后不应再出现继续编辑')
   })
 
   await check('整图重绘：展开轻量重绘条（不切画布），切到 inpaintOnly 预设被拒绝', async () => {
@@ -322,7 +329,7 @@ async function main() {
 
   await check('提交工具任务：请求体带底图 / 蒙版 / 强度，成功后收起编辑态并清空草稿', async () => {
     const { tree, harness, ui } = await mountStage()
-    buttonByText(tree, '局部涂抹').props.onClick()
+    buttonByText(tree, '局部重绘').props.onClick()
     await refresh()
     harness.api().applyMask({ data: MASK_DATA, coverage: 0.25 })
     let next = await refresh()

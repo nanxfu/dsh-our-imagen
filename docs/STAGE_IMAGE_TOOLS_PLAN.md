@@ -115,3 +115,5 @@ POST /generate (纯文生图)            buildImageToolBody(toolState) → POST 
    - 清理左栏 `ReferenceSection` 及 `useStudioForm` 中冗余的 `reference` / `mask` 逻辑（同步更新相关测试）。
 3. **Phase 3：统一工具扩展框架（验证新工具接入）**
    - 按 `instant / inline / canvas` 三类描述符收敛工具注册表，接入首个后处理工具（如「高清放大」）完成端到端验证。
+4. **后续体验规划：交互式画布引导浮窗（Photoshop 风格）**
+   - 为局部涂抹与后续扩图等画布工具设计可按需呼出（及首次引导）的轻量悬浮引导卡片：上方展示轻量动效 / 演示动画（如缩放、空格抓手平移、涂抹擦除演示），下方以结构化富文本卡片呈现快捷键表与最佳涂抹技巧，替换简单的文字 Tooltip。

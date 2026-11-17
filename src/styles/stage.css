@@ -536,58 +536,189 @@
 
 /* ── 局部重绘：涂抹蒙版 ─────────────────────────────────────── */
 /*
- * 涂抹态占满整块光桌：上面一行标题与覆盖率读数，中间是参考图与蒙版画布，
- * 下面一排画笔、橡皮擦、清空、反选与完成。
- * 画布外框的比例、光标圆圈的位置与直径都由运行时按参考图像素写进内联样式，
- * 这里只固定静态排版。
+ * 极简光桌布局：
+ *  - 光桌内绝大部分空间留给画布本身（与正常预览 .ofs-print 近乎等大），不因表单挤压缩小；
+ *  - 左上角轻胶囊显示「局部重绘 · 已涂抹 X%」，右上角 `?` 胶囊悬停展开操作提示；
+ *  - 画布正下方紧贴一条紧凑毛玻璃画笔胶囊；提交控件统一落在光桌外下方的 .ofs-tool-bar。
  */
 .ofs-mask-editor {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* 内容超出（矮窗口 / 竖图）时从顶部开始滚动，不被居中的 flex 裁掉上半截。 */
   justify-content: center;
-  justify-content: safe center;
   gap: 10px;
   width: 100%;
   height: 100%;
-  padding: 12px;
-  overflow: auto;
+  padding: 12px 14px 10px;
+  overflow: hidden;
 }
 
 .ofs-mask-head {
-  display: flex;
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  z-index: 5;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: min(100%, 560px);
+  gap: 8px;
+  padding: 5px 11px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: var(--ofs-r-pill);
+  background: color-mix(in oklab, var(--ofs-card) 86%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--ofs-shadow-card);
+  pointer-events: none;
 }
 
 .ofs-mask-title {
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 600;
+  color: var(--ofs-ink);
+}
+
+.ofs-mask-coverage {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ofs-mask-zoom {
+  appearance: none;
+  pointer-events: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--ofs-accent-soft-border);
+  border-radius: var(--ofs-r-pill);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.ofs-mask-zoom:hover {
+  border-color: var(--ofs-accent);
+}
+
+/* 右上角提示胶囊：平时只占一个圆按钮，hover / 键盘聚焦时向下展开说明浮层。 */
+.ofs-mask-help {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 6;
+}
+
+.ofs-mask-help-btn {
+  position: relative;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.ofs-mask-help.is-warn .ofs-mask-help-btn::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ofs-warn, #b45309);
+}
+
+.ofs-mask-tips {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: min(320px, 72vw);
+  padding: 10px 12px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: var(--ofs-r-md);
+  background: color-mix(in oklab, var(--ofs-card-solid) 96%, transparent);
+  box-shadow: var(--ofs-shadow-lift);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.ofs-mask-help:hover .ofs-mask-tips,
+.ofs-mask-help:focus-within .ofs-mask-tips {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.ofs-mask-shortcuts {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--ofs-hairline);
+}
+
+.ofs-mask-shortcuts-title {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ofs-ink-2);
+}
+
+.ofs-mask-shortcuts-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 10.5px;
+  color: var(--ofs-ink-3);
+}
+
+/* 缩放与平移裁切视口：占满工具胶囊之上的全部光桌，防止放大后的画布遮挡底部工具条。 */
+.ofs-mask-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  overflow: hidden;
+  container-type: size;
 }
 
 /*
- * 画布外框：比例来自参考图像素（内联 aspect-ratio 与 --ofs-mask-r）。
- *
- * 宽度同时受容器宽与可用高度约束：与 .ofs-frame / .ofs-print 一样用容器单位算，
- * 竖图或矮窗口下按比例整体缩小，而不是被 max-height 单独压扁。
- * 200px 是上方标题、下方工具栏与两行提示的大致占位；画布保比例优先，必要时编辑器滚动。
+ * 画布外框：按 .ofs-mask-viewport 的宽高自适应到最大尺寸（不再受 560px 限制）。
  */
 .ofs-mask-stage {
   position: relative;
   flex: 0 0 auto;
   width: min(
-    calc(100cqw - 24px),
-    560px,
-    max(120px, calc((100cqh - 200px) * var(--ofs-mask-r, 1)))
+    calc(100cqw - 28px),
+    max(160px, calc((100cqh - 22px) * var(--ofs-mask-r, 1)))
   );
   aspect-ratio: var(--ofs-mask-r, 1);
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
   background: #000;
-  box-shadow: var(--ofs-print-shadow);
+  transform-origin: center center;
+  box-shadow:
+    0 0 0 8px var(--ofs-print-paper),
+    0 0 0 9px var(--ofs-print-edge),
+    var(--ofs-print-shadow);
+}
+
+.ofs-mask-stage.is-panning .ofs-mask-canvas {
+  cursor: grab;
+}
+
+.ofs-mask-stage.is-panning-active .ofs-mask-canvas {
+  cursor: grabbing;
 }
 
 /* 参考图按 fill 铺满画布：导出的蒙版与参考图同比例，这里不能留 contain 的边。 */
@@ -622,49 +753,74 @@
   display: none;
 }
 
+/* 画笔工具条：紧贴画布下方的圆角毛玻璃胶囊，不抢画面；在常见窗口宽度下尽量保持单行。 */
 .ofs-mask-tools {
-  display: flex;
+  flex: 0 0 auto;
+  display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  width: 100%;
+  gap: 2px;
+  max-width: 100%;
+  padding: 2px 6px;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: var(--ofs-r-pill);
+  background: color-mix(in oklab, var(--ofs-card) 92%, transparent);
+  box-shadow: var(--ofs-shadow-card);
 }
 
-/* 画笔大小：滑块与工具栏同高、宽度固定，拖动时不带着整行抖动。 */
+.ofs-mask-tools .ofs-dock-button {
+  padding: 0 9px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ofs-mask-tools .ofs-dock-button:hover {
+  background: var(--ofs-accent-soft);
+}
+
+.ofs-mask-tools .ofs-dock-button.is-on {
+  border-color: var(--ofs-accent-soft-border);
+  background: var(--ofs-accent);
+  color: var(--ofs-accent-ink);
+}
+
+/* 画笔大小：滑块与工具栏同高、宽度紧凑，拖动时不带着整行抖动。 */
 .ofs-mask-brush {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   height: 44px;
-  padding: 0 10px;
+  padding: 0 6px 0 6px;
   font-size: 11.5px;
   color: var(--ofs-ink-2);
 }
 
+.ofs-mask-brush b {
+  min-width: 18px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .ofs-mask-range {
-  width: 120px;
+  width: 64px;
   height: 44px;
+  accent-color: var(--ofs-accent);
 }
 
-/* 说明文字与画布同宽（画布宽度也是 min(100%, 560px)）；字号与颜色沿用 .ofs-hint。 */
-.ofs-mask-hint {
-  width: min(100%, 560px);
-}
-
-/* 涂抹入口行：读数与提示并排，窄屏自动换行。 */
-/* 蒙版读数与能力说明：外边距归零，字号与颜色沿用 .ofs-hint / .ofs-muted。 */
 .ofs-mask-hint,
 .ofs-mask-status,
 .ofs-mask-warn {
   margin: 0;
+  text-align: left;
 }
-/* 涂抹提示：操作要点与少步模型的能力提醒（两行弱提示，不抢视觉）。 */
+
 .ofs-mask-guide,
 .ofs-mask-fast {
-  max-width: min(100%, 560px);
   margin: 0;
   line-height: 1.5;
+  text-align: left;
 }
 
 .ofs-mask-fast {
@@ -672,11 +828,6 @@
 }
 
 /* ── 图片工具：动作坞分组 ─────────────────────────────────────── */
-/*
- * 阶段十二把舞台动作坞收拢成「图片处理 / 创作复用」两组：组内横排，第二组靠右；
- * 窄屏整体换行时每组仍是完整的一排，不会把图片处理与创作复用混在一起。
- * 既有 .ofs-dock / .ofs-dock-button 的尺寸与悬浮反馈保持不变。
- */
 .ofs-dock-group {
   display: flex;
   flex-wrap: wrap;
@@ -703,90 +854,113 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── 图片工具：轻量提交栏 ─────────────────────────────────────── */
+/* ── 图片工具：舞台下方单行紧凑提交条 ──────────────────────────── */
 /*
- * 局部涂抹画布与整图重绘条共用这一条：预设 / 提示词 / 强度 / 主按钮 / 退出。
- * 宽度与涂抹画布对齐（min(100%, 560px)），矮窗口下随 .ofs-mask-editor 一起滚动。
+ * 局部涂抹画布与整图重绘条共用这一条，直接落在光桌下方替代动作坞，
+ * 不占光桌内部高度。主行单行横排，窄屏温和换行；覆盖率 / 拦截状态收在下方细注。
  */
 .ofs-tool-bar {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  width: min(100%, 560px);
-  padding: 10px 12px 11px;
-  border: 1px solid var(--ofs-sunken-border);
+  gap: 5px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--ofs-card-border);
   border-radius: var(--ofs-r-lg);
-  background: color-mix(in oklab, var(--ofs-card) 88%, transparent);
+  background: color-mix(in oklab, var(--ofs-card) 90%, transparent);
   box-shadow: var(--ofs-shadow-card);
 }
 
-.ofs-tool-bar-head {
+.ofs-tool-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 22px;
+  gap: 6px;
+  width: 100%;
+}
+
+.ofs-tool-bar-head {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .ofs-tool-name {
-  font-size: 12.5px;
-  font-weight: 650;
-  color: var(--ofs-ink);
+  display: none;
 }
 
 .ofs-tool-preset {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   font-size: 11px;
   color: var(--ofs-ink-3);
 }
 
+.ofs-tool-preset-label {
+  display: none;
+}
+
 .ofs-tool-preset-name {
-  max-width: 46%;
+  max-width: 150px;
   overflow: hidden;
-  font-size: 11px;
-  color: var(--ofs-ink-3);
+  padding: 0 8px;
+  height: 34px;
+  line-height: 32px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-sm);
+  background: var(--ofs-sunken);
+  font-size: 11.5px;
+  color: var(--ofs-ink-2);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .ofs-tool-select {
-  max-width: 190px;
-  height: 28px;
+  max-width: 138px;
+  height: 34px;
   padding: 0 8px;
   border: 1px solid var(--ofs-sunken-border);
   border-radius: var(--ofs-r-sm);
-  background: var(--ofs-card);
-  color: var(--ofs-ink-2);
-  font-size: 11.5px;
+  background: var(--ofs-sunken);
+  color: var(--ofs-ink);
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .ofs-tool-prompt {
+  flex: 1 1 120px;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  min-width: 0;
 }
 
 .ofs-tool-label {
-  font-size: 10.5px;
-  letter-spacing: 0.05em;
+  flex: 0 0 auto;
+  font-size: 11px;
   color: var(--ofs-ink-3);
 }
 
+.ofs-tool-prompt .ofs-tool-label {
+  display: none;
+}
+
 .ofs-tool-prompt-input {
-  min-height: 52px;
   width: 100%;
-  padding: 8px 10px;
+  height: 34px;
+  min-height: 34px;
+  max-height: 76px;
+  padding: 7px 10px;
   border: 1px solid var(--ofs-sunken-border);
-  border-radius: var(--ofs-r-md);
+  border-radius: var(--ofs-r-sm);
   background: var(--ofs-sunken);
   color: var(--ofs-ink);
   font: inherit;
   font-size: 12.5px;
-  line-height: 1.5;
-  resize: vertical;
+  line-height: 1.4;
+  resize: none;
 }
 
 .ofs-tool-prompt-input::placeholder {
@@ -800,68 +974,91 @@
 }
 
 .ofs-tool-strength {
-  display: flex;
+  flex: 0 0 auto;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
+  padding: 0 7px;
+  height: 34px;
+  border: 1px solid var(--ofs-sunken-border);
+  border-radius: var(--ofs-r-sm);
+  background: var(--ofs-sunken);
   font-size: 11px;
   color: var(--ofs-ink-3);
 }
 
 .ofs-tool-range {
-  flex: 1 1 auto;
-  min-width: 80px;
-  height: 28px;
+  width: 60px;
+  height: 24px;
   accent-color: var(--ofs-accent);
 }
 
 .ofs-tool-readout {
-  min-width: 34px;
-  color: var(--ofs-ink-2);
+  min-width: 30px;
+  color: var(--ofs-ink);
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
-/* 覆盖率读数与拦截说明：沿用 .ofs-hint 的字号与颜色，只把居中对齐改成左对齐。 */
+.ofs-tool-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ofs-tool-submit {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: var(--ofs-r-sm);
+}
+
+.ofs-tool-exit {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--ofs-r-sm);
+  border-color: color-mix(in oklab, var(--ofs-error) 34%, transparent);
+  background: var(--ofs-error-soft);
+  color: var(--ofs-error);
+}
+
+.ofs-tool-exit:hover:not(:disabled) {
+  border-color: var(--ofs-error);
+  background: color-mix(in oklab, var(--ofs-error) 14%, transparent);
+  color: var(--ofs-error);
+}
+
+.ofs-tool-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+
 .ofs-tool-mask,
 .ofs-tool-blocked {
   margin: 0;
   text-align: left;
+  font-size: 11px;
 }
 
 .ofs-tool-blocked {
   color: var(--ofs-warn, #b45309);
 }
 
-.ofs-tool-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ofs-tool-submit {
-  flex: 1 1 auto;
-  height: 34px;
-  border-radius: 11px;
-}
-
-.ofs-tool-exit {
-  flex: 0 0 auto;
-  height: 34px;
-  border-radius: 11px;
-}
-
 /* ── 图片工具：整图重绘条 ─────────────────────────────────────── */
 /*
- * 不切画布：上方是目标作品预览（沿用相纸材质与 .ofs-print 的容器单位尺寸），
- * 下方是同一条轻量提交栏。.ofs-inline-stage 自己就是尺寸容器，cqw / cqh 才能算。
+ * 不切画布：上方沿用光桌质感与 .ofs-print 的容器单位尺寸，
+ * 下方接同一条单行提交栏。
  */
 .ofs-inline-tool {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
   gap: 10px;
   width: 100%;
   min-height: 0;
@@ -875,6 +1072,13 @@
   justify-content: center;
   width: 100%;
   min-height: 0;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: var(--ofs-r-xl);
+  background:
+    radial-gradient(76% 58% at 50% 34%, var(--ofs-mat-lit) 0%, transparent 72%),
+    var(--ofs-mat);
+  box-shadow: var(--ofs-mat-inner);
+  overflow: hidden;
   container-type: size;
 }
 

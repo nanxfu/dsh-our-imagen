@@ -66,7 +66,7 @@ function fillTemplate(template, params) {
 }
 
 function kindLabelOf(labels, kind) {
-  if (kind === 'inpaint') return pickText(labels.kindInpaint, '局部涂抹')
+  if (kind === 'inpaint') return pickText(labels.kindInpaint, '局部重绘')
   if (kind === 'img2img') return pickText(labels.kindImg2img, '整图重绘')
   return pickText(labels.kindText, '文生图')
 }
@@ -159,11 +159,26 @@ export function VersionPanel(props) {
   const hideDelay = delayOf(props.hideDelay, DEFAULT_HIDE_DELAY)
   const [open, setOpen] = React.useState(false)
   const [pinned, setPinned] = React.useState(false)
+  const [panelPos, setPanelPos] = React.useState(null)
+  const anchorRef = React.useRef(null)
   const timersRef = React.useRef({ hover: null, hide: null })
   const openRef = React.useRef(false)
   const pinnedRef = React.useRef(false)
   openRef.current = open
   pinnedRef.current = pinned
+
+  const computePanelPos = () => {
+    const anchor = anchorRef.current
+    if (!anchor || typeof anchor.getBoundingClientRect !== 'function') return null
+    if (typeof window === 'undefined' || !(window.innerWidth > 0) || !(window.innerHeight > 0)) return null
+    const rect = anchor.getBoundingClientRect()
+    if (!rect || (rect.width <= 0 && rect.height <= 0)) return null
+    const width = Math.min(272, Math.max(180, window.innerWidth - 24))
+    const idealLeft = rect.left + rect.width / 2 - width / 2
+    const left = Math.round(Math.max(12, Math.min(window.innerWidth - width - 12, idealLeft)))
+    const bottom = Math.round(Math.max(12, window.innerHeight - rect.top + 10))
+    return { left: `${left}px`, bottom: `${bottom}px`, width: `${width}px` }
+  }
 
   const clearTimer = (kind) => {
     const id = timersRef.current[kind]
@@ -179,6 +194,8 @@ export function VersionPanel(props) {
   }
   const openPanel = () => {
     clearTimers()
+    const pos = computePanelPos()
+    if (pos) setPanelPos(pos)
     if (openRef.current) return
     openRef.current = true
     setOpen(true)
@@ -230,8 +247,28 @@ export function VersionPanel(props) {
       closeRef.current()
     }
     doc.addEventListener('keydown', onKeyDown)
+    const onPointerDown = (event) => {
+      const anchor = anchorRef.current
+      if (!anchor || typeof anchor.contains !== 'function') return
+      if (event && event.target && anchor.contains(event.target)) return
+      closeRef.current()
+    }
+    const syncPosition = () => {
+      const pos = computePanelPos()
+      if (pos) setPanelPos(pos)
+    }
+    syncPosition()
+    doc.addEventListener('pointerdown', onPointerDown)
+    doc.addEventListener('scroll', syncPosition, true)
+    const win = typeof window === 'undefined' ? null : window
+    if (win && typeof win.addEventListener === 'function') win.addEventListener('resize', syncPosition)
     return () => {
-      if (typeof doc.removeEventListener === 'function') doc.removeEventListener('keydown', onKeyDown)
+      if (typeof doc.removeEventListener === 'function') {
+        doc.removeEventListener('keydown', onKeyDown)
+        doc.removeEventListener('pointerdown', onPointerDown)
+        doc.removeEventListener('scroll', syncPosition, true)
+      }
+      if (win && typeof win.removeEventListener === 'function') win.removeEventListener('resize', syncPosition)
     }
   }, [open])
 
@@ -260,6 +297,7 @@ export function VersionPanel(props) {
 
   return (
     <div
+      ref={anchorRef}
       className={anchorClasses.join(' ')}
       data-derivations={badgeCount}
       onMouseEnter={badgeCount > 0 ? scheduleOpen : undefined}
@@ -314,6 +352,7 @@ export function VersionPanel(props) {
       {open ? (
         <div
           className="ofs-version-panel"
+          style={panelPos || undefined}
           role="dialog"
           aria-label={pickText(labels.title, '版本')}
           onMouseEnter={clearTimers}

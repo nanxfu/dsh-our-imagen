@@ -19,14 +19,14 @@
  *   onClick?: () => void,
  * }} props
  *
- * 取景框最大边长 46px，按宽高比收缩到卡片内：竖图更窄、横图更扁，不撑破 62px 的卡位。
+ * 取景框最大边长 34px，按宽高比收缩到卡片内，把底部状态字样留出独立空间不压线。
  */
 
 import React from 'react'
 
 import { Icon } from '../icons.jsx'
 
-const FRAME_BOX = 46
+const FRAME_BOX = 34
 
 function pickText(value, fallback) {
   return typeof value === 'string' && value ? value : fallback

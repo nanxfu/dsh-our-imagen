@@ -64,79 +64,89 @@ export function ToolSubmitBar(props) {
 
   return (
     <div className="ofs-tool-bar">
-      <div className="ofs-tool-bar-head">
-        <span className="ofs-tool-name">{tool ? t(tool.labelKey) : ''}</span>
-        {list.length > 1 ? (
-          <label className="ofs-tool-preset">
-            <span className="ofs-tool-preset-label">{t('studio.imageTool.presetLabel')}</span>
-            <select
-              className="ofs-tool-select"
-              value={presetId || ''}
-              aria-label={t('studio.imageTool.presetLabel')}
-              onChange={(event) => onPresetChange(event.target.value)}
-            >
-              {list.map((item) => (
-                <option key={item.id} value={item.id}>{presetLabelOf(item)}</option>
-              ))}
-            </select>
-          </label>
-        ) : list.length === 1 ? (
-          <span className="ofs-tool-preset-name">{presetLabelOf(list[0])}</span>
-        ) : null}
+      <div className="ofs-tool-row">
+        <div className="ofs-tool-bar-head">
+          <span className="ofs-tool-name">{tool ? t(tool.labelKey) : ''}</span>
+          {list.length > 1 ? (
+            <label className="ofs-tool-preset">
+              <span className="ofs-tool-preset-label">{t('studio.imageTool.presetLabel')}</span>
+              <select
+                className="ofs-tool-select"
+                value={presetId || ''}
+                aria-label={t('studio.imageTool.presetLabel')}
+                onChange={(event) => onPresetChange(event.target.value)}
+              >
+                {list.map((item) => (
+                  <option key={item.id} value={item.id}>{presetLabelOf(item)}</option>
+                ))}
+              </select>
+            </label>
+          ) : list.length === 1 ? (
+            <span className="ofs-tool-preset-name">{presetLabelOf(list[0])}</span>
+          ) : null}
+        </div>
+
+        <label className="ofs-tool-prompt">
+          <span className="ofs-tool-label">{t('studio.imageTool.promptLabel')}</span>
+          <textarea
+            className="ofs-tool-prompt-input"
+            rows={1}
+            value={prompt || ''}
+            placeholder={promptPlaceholder || ''}
+            aria-label={t('studio.imageTool.promptLabel')}
+            onChange={(event) => onPromptChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (!event || event.key !== 'Enter' || event.shiftKey || event.isComposing) return
+              if (typeof event.preventDefault === 'function') event.preventDefault()
+              if (canSubmit === true && !busy && typeof onSubmit === 'function') onSubmit()
+            }}
+          />
+        </label>
+
+        <label className="ofs-tool-strength">
+          <span className="ofs-tool-label">{t('studio.imageTool.strengthLabel')}</span>
+          <input
+            type="range"
+            className="ofs-tool-range"
+            min={LIMITS.strength.min}
+            max={max}
+            step={LIMITS.strength.step}
+            value={value}
+            aria-label={t('studio.imageTool.strengthLabel')}
+            onChange={(event) => onStrengthChange(event.target.value)}
+          />
+          <b className="ofs-tool-readout">{value.toFixed(2)}</b>
+        </label>
+
+        <div className="ofs-tool-actions">
+          <button
+            type="button"
+            className="ofs-btn is-primary ofs-tool-submit"
+            disabled={canSubmit !== true || busy}
+            aria-busy={busy ? 'true' : undefined}
+            onClick={onSubmit}
+          >
+            {t('studio.imageTool.submit')}
+          </button>
+          <button type="button" className="ofs-btn is-danger-quiet ofs-tool-exit" disabled={busy} onClick={onExit}>
+            {t('studio.imageTool.exit')}
+          </button>
+        </div>
       </div>
 
-      <label className="ofs-tool-prompt">
-        <span className="ofs-tool-label">{t('studio.imageTool.promptLabel')}</span>
-        <textarea
-          className="ofs-tool-prompt-input"
-          rows={2}
-          value={prompt || ''}
-          placeholder={promptPlaceholder || ''}
-          aria-label={t('studio.imageTool.promptLabel')}
-          onChange={(event) => onPromptChange(event.target.value)}
-        />
-      </label>
-
-      <label className="ofs-tool-strength">
-        <span className="ofs-tool-label">{t('studio.imageTool.strengthLabel')}</span>
-        <input
-          type="range"
-          className="ofs-tool-range"
-          min={LIMITS.strength.min}
-          max={max}
-          step={LIMITS.strength.step}
-          value={value}
-          aria-label={t('studio.imageTool.strengthLabel')}
-          onChange={(event) => onStrengthChange(event.target.value)}
-        />
-        <b className="ofs-tool-readout">{value.toFixed(2)}</b>
-      </label>
-
-      {showCoverage ? (
-        <p className="ofs-tool-mask ofs-hint">
-          {percent > 0
-            ? formatText(t('studio.mask.coverage'), { percent })
-            : t('studio.imageTool.maskEmpty')}
-        </p>
-      ) : null}
-
-      <div className="ofs-tool-actions">
-        <button
-          type="button"
-          className="ofs-btn is-primary ofs-tool-submit"
-          disabled={canSubmit !== true || busy}
-          aria-busy={busy ? 'true' : undefined}
-          onClick={onSubmit}
-        >
-          {t('studio.imageTool.submit')}
-        </button>
-        <button type="button" className="ofs-btn is-quiet ofs-tool-exit" onClick={onExit}>
-          {t('studio.imageTool.exit')}
-        </button>
-      </div>
-
-      {blocked ? (
-        <p className="ofs-hint ofs-tool-blocked" role="status">{t(blockedKey)}</p>
+      {showCoverage || blocked ? (
+        <div className="ofs-tool-meta">
+          {showCoverage ? (
+            <p className="ofs-tool-mask ofs-hint">
+              {percent > 0
+                ? formatText(t('studio.mask.coverage'), { percent })
+                : t('studio.imageTool.maskEmpty')}
+            </p>
+          ) : null}
+          {blocked ? (
+            <p className="ofs-hint ofs-tool-blocked" role="status">{t(blockedKey)}</p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )

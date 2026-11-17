@@ -660,6 +660,16 @@ async function main() {
     const clampedLimit = await json(host.origin, '/imagen-api/history?limit=9999')
     assert.equal(clampedLimit.body.limit, LIMITS.history.maxLimit)
     assert.equal(clampedLimit.body.offset, 0)
+
+    // 缺省与空串 limit 退回契约默认值（不再把 null 错转成 0 再钳到 1），显式 limit=0 仍按 1 钳制。
+    const defaultLimit = await json(host.origin, '/imagen-api/history')
+    assert.equal(defaultLimit.body.limit, LIMITS.history.defaultLimit)
+    assert.equal(defaultLimit.body.items.length, Math.min(total, LIMITS.history.defaultLimit))
+    const blankLimit = await json(host.origin, '/imagen-api/history?limit=')
+    assert.equal(blankLimit.body.limit, LIMITS.history.defaultLimit)
+    const zeroLimit = await json(host.origin, '/imagen-api/history?limit=0')
+    assert.equal(zeroLimit.body.limit, 1)
+    assert.equal(zeroLimit.body.items.length, 1)
   })
 
   await check('文件路由返回 PNG', async () => {

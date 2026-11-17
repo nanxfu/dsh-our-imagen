@@ -11,6 +11,7 @@ import { useFocusTrap } from './hooks/useFocusTrap.js'
 import { ImageDock } from './stage/ImageDock.jsx'
 import { InlineTool } from './stage/InlineTool.jsx'
 import { MaskEditor } from './stage/MaskEditor.jsx'
+import { ToolSubmitBar } from './stage/ToolSubmitBar.jsx'
 
 /** 出图后一分钟内才算「刚落定」，超过就当历史作品直接陈列。 */
 const FRESH_MS = 60_000
@@ -112,8 +113,13 @@ export function Stage(props) {
     canSubmit: Boolean(imageTool && imageTool.canSubmit),
     blockedKey: imageTool ? imageTool.submitBlockedKey : '',
     onSubmit: imageTool ? imageTool.submit : () => {},
-    onExit: imageTool ? imageTool.closeTool : () => {},
+    // 「暂存涂抹」与 Esc 保留蒙版草稿并收起；底部红色「取消」按钮丢弃草稿并退出。
+    onStash: imageTool ? imageTool.closeTool : () => {},
+    onExit: imageTool ? (imageTool.discardTool || imageTool.closeTool) : () => {},
   }
+
+  const target = imageTool ? imageTool.target : null
+  const promptPlaceholder = (target && target.prompt) || t('studio.imageTool.promptPlaceholder')
 
   const editorNode = editorOpen
     ? (activeTool.form === 'canvas'
@@ -146,12 +152,20 @@ export function Stage(props) {
     />
   )
 
-  // 编辑态：画布放进 .ofs-figure（画布按容器宽高换算），整图重绘条自带预览直接放舞台。
+  // 编辑态：画布放进 .ofs-figure（画布按容器宽高换算，不挤小），提交条原地落到舞台下方替代动作坞，
+  // 整图重绘自带预览与提交条。不再多挂一行重复的「退出」dock。
   if (editorOpen) {
     return (
       <section className="ofs-stage">
         {activeTool.form === 'canvas' ? (
-          <figure className="ofs-figure">{editorNode}</figure>
+          <>
+            <figure className="ofs-figure">{editorNode}</figure>
+            <ToolSubmitBar
+              {...submitProps}
+              promptPlaceholder={promptPlaceholder}
+              maskCoverage={imageTool ? imageTool.coverage : 0}
+            />
+          </>
         ) : (
           editorNode
         )}
@@ -161,17 +175,22 @@ export function Stage(props) {
             <span className="ofs-progress-label">{progressText}</span>
           </div>
         ) : null}
-        {dock}
       </section>
     )
   }
 
-  // 显式新建绘图态（阶段十三）：模糊动态背景 + 按当前表单画幅的取景框，
-  // 明确告诉用户「这是一张还没生成的新画布」，而不是上一张旧作品。
-  if (library.workspaceMode === 'new_draft') {
+  // 显式新建绘图态（阶段十三）：打开工作台默认新建画布；已有历史或显式点过「新建创作」时
+  // 显示模糊动态背景 + 取景框，没有历史且未手动点新建时继续展示新手引导（灵感示例 + 云端提示）。
+  const hasGallery = Array.isArray(library.gallery) && library.gallery.length > 0
+  const draftCard = library.newDraftCard && typeof library.newDraftCard === 'object' ? library.newDraftCard : {}
+  const showNewDraft = library.workspaceMode === 'new_draft'
+    && (hasGallery || draftCard.pending === true || Boolean(activeJob) || draftCard.explicit === true)
+  if (showNewDraft) {
+    const stopped = Boolean(compute.status && compute.status.stopped)
     const fields = (form && form.form) || {}
     const frameRatio = ratioOf(fields.width, fields.height)
-    const draftCard = library.newDraftCard && typeof library.newDraftCard === 'object' ? library.newDraftCard : {}
+    const preset = (compute.presets || []).find((option) => option && option.id === fields.presetId) || null
+    const steady = preset && Number.isFinite(Number(preset.steadySeconds)) ? Number(preset.steadySeconds) : null
     return (
       <section className="ofs-stage ofs-stage--draft">
         <div className="ofs-figure ofs-figure--draft">
@@ -191,8 +210,27 @@ export function Stage(props) {
               <div className="ofs-empty-card ofs-draft-blank">
                 <p className="ofs-empty-title">{t('studio.stage.newDraftTitle')}</p>
                 <p className="ofs-muted">
-                  {draftCard.pending ? t('studio.stage.newDraftPending') : t('studio.stage.newDraftHint')}
+                  {draftCard.pending
+                    ? t('studio.stage.newDraftPending')
+                    : (stopped ? t('studio.stage.stoppedHint') : t('studio.stage.newDraftHint'))}
                 </p>
+                {!draftCard.pending && !activeJob && !draftCard.prompt ? (
+                  <div className="ofs-examples">
+                    <span className="ofs-examples-label">{t('studio.stage.examples')}</span>
+                    {INSPIRE_KEYS.map((key) => (
+                      <button type="button" key={key} className="ofs-example" onClick={() => useInspiration(t(key))} title={t(key)}>
+                        {t(`${key}.label`)}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {!draftCard.pending && steady !== null ? (
+                  <p className="ofs-exposure">
+                    <span className="ofs-exposure-rule" aria-hidden="true" />
+                    {t('studio.stage.steady')} {formatSeconds(t, steady)}
+                    <span className="ofs-exposure-rule" aria-hidden="true" />
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>

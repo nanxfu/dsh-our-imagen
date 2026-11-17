@@ -276,9 +276,20 @@ export function useImageTool({ t, isEn, alive, ui, presets, defaultPreset, onSub
     return true
   }
 
-  /** 退出编辑态：草稿保留在内存，dock 显示「继续编辑」。 */
+  /** 暂存并收起编辑态：草稿保留在内存，dock 显示「继续编辑」。 */
   function closeTool() {
     setEditorOpen(false)
+  }
+
+  /** 取消本次编辑：丢弃当前作品的未提交草稿（蒙版 / 修改描述 / 参数），并退出编辑态。 */
+  function discardTool() {
+    if (inFlightRef.current) return false
+    const current = draftRef.current
+    const key = draftKeyOf(current.target)
+    if (key) removeWorkDraft(key)
+    setDraft(emptyDraft())
+    setEditorOpen(false)
+    return true
   }
 
   /**
@@ -476,6 +487,7 @@ export function useImageTool({ t, isEn, alive, ui, presets, defaultPreset, onSub
     editorOpen,
     openTool,
     closeTool,
+    discardTool,
     canSubmit,
     submitBlockedKey: blockedKey,
     submitting,

@@ -96,17 +96,14 @@ export function Rail(props) {
 
   return (
     <aside className="ofs-panel ofs-panel--form">
-      <PanelModeTabs t={t} mode={mode} setMode={setMode} />
+      <PanelModeTabs t={t} mode={mode} setMode={setMode} onNewCreation={startNewCreation} />
 
-      {/* 版本微调与新建创作的边界：有微调来源时说明基于哪张作品，右侧随时可开新创作。 */}
-      <div className={tuning ? 'ofs-tuning' : 'ofs-tuning is-idle'}>
-        {tuning ? (
+      {/* 版本微调来源：仅在基于某张旧作品微调时轻量提示，不额外占空白行。 */}
+      {tuning ? (
+        <div className="ofs-tuning">
           <p className="ofs-tuning-source" title={tuningPrompt || undefined}>{tuningText}</p>
-        ) : null}
-        <button type="button" className="ofs-chip ofs-tuning-new" onClick={startNewCreation}>
-          {t('studio.rail.newCreation')}
-        </button>
-      </div>
+        </div>
+      ) : null}
 
       <div className="ofs-panel-scroll">
         <PromptSection

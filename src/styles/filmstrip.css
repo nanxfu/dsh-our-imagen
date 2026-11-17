@@ -3,19 +3,33 @@
  */
 
 .ofs-filmstrip {
+  position: relative;
+  z-index: 10;
+  isolation: isolate;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 12px;
   margin: 0 14px 14px;
-  padding: 10px 12px;
+  padding: 4px 12px 10px;
   min-height: 92px;
   border: 1px solid var(--ofs-card-border);
   border-radius: var(--ofs-r-lg);
-  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);
   box-shadow: var(--ofs-shadow-card);
+}
+
+/* 毛玻璃背景放进 ::before 伪元素：避免 .ofs-filmstrip 自身带有 backdrop-filter
+   创建新的 containing block，从而让内部版本面板的 position: fixed 严格按视口定位。 */
+.ofs-filmstrip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: color-mix(in oklab, var(--ofs-card) 78%, transparent);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
+  pointer-events: none;
 }
 
 .ofs-roll {
@@ -26,7 +40,8 @@
   gap: 16px;
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 2px;
+  /* 预留上/左内边距，保证 top: -6px 的版本角标与草稿圆点不被滚动容器边缘裁剪。 */
+  padding: 8px 6px 2px;
 }
 
 .ofs-batch {
@@ -345,14 +360,12 @@
   background: var(--ofs-warn);
 }
 
-/* 派生面板：默认贴在缩略图上方；面板下方留一条透明的 hover bridge，
-   指针穿过 10px 间隙时仍算在容器内。 */
+/* 派生面板：fixed 脱离 .ofs-roll 横向裁剪，具体 left / bottom / width 由锚点实时算好并钳在视口内；
+   面板下方留一条透明 hover bridge，指针穿过 10px 间隙时仍算在容器内。 */
 .ofs-version-panel {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  left: 50%;
-  z-index: 40;
-  width: 272px;
+  position: fixed;
+  z-index: 120;
+  width: min(272px, calc(100vw - 24px));
   max-height: min(58vh, 360px);
   padding: 8px;
   overflow-y: auto;
@@ -360,7 +373,6 @@
   border-radius: var(--ofs-r-md);
   background: color-mix(in oklab, var(--ofs-card-solid) 96%, transparent);
   box-shadow: var(--ofs-shadow-lift);
-  transform: translateX(-50%);
   animation: ofs-version-rise 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -369,18 +381,18 @@
   position: absolute;
   left: 0;
   right: 0;
-  bottom: -12px;
-  height: 12px;
+  bottom: -14px;
+  height: 14px;
 }
 
 @keyframes ofs-version-rise {
   0% {
     opacity: 0;
-    transform: translateX(-50%) translateY(4px);
+    transform: translateY(4px);
   }
   100% {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
   }
 }
 
@@ -584,10 +596,13 @@
 
 .ofs-draft-frame {
   position: relative;
-  display: grid;
-  place-items: center;
-  width: 62px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  width: 74px;
   height: 62px;
+  padding: 5px 4px 4px;
   border: 1px dashed var(--ofs-sunken-border);
   border-radius: 12px;
   background: color-mix(in oklab, var(--ofs-card) 60%, transparent);
@@ -608,6 +623,7 @@
 }
 
 .ofs-draft-viewfinder {
+  margin: auto 0;
   display: grid;
   place-items: center;
   border: 1px dashed color-mix(in oklab, var(--ofs-accent) 32%, transparent);
@@ -623,13 +639,11 @@
 }
 
 .ofs-draft-state {
-  position: absolute;
-  right: 3px;
-  bottom: 2px;
-  left: 3px;
+  flex: 0 0 auto;
+  width: 100%;
   overflow: hidden;
   color: var(--ofs-ink-4);
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1.2;
   text-align: center;
   text-overflow: ellipsis;
@@ -670,20 +684,7 @@
 /* 窄屏：面板贴住作品条左缘，避免浮到窗口外。 */
 @media (max-width: 720px) {
   .ofs-version-panel {
-    left: 0;
     width: min(260px, 72vw);
-    transform: none;
-  }
-
-  @keyframes ofs-version-rise {
-    0% {
-      opacity: 0;
-      transform: translateY(4px);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(0);
-    }
   }
 }
 
@@ -720,10 +721,4 @@
 .ofs-thumb-dot:hover {
   transform: scale(1.25);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-warn) 26%, transparent);
-}
-
-/* 版本面板向上浮出，需要脱离作品条的横向滚动裁剪。
-   只在有面板打开时放开 overflow，关闭立刻恢复——正常浏览仍是可滚动、可裁剪的。 */
-.ofs-filmstrip.is-version-open .ofs-roll {
-  overflow: visible;
 }

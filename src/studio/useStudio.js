@@ -68,6 +68,7 @@ export function useStudio(props) {
   const initialPrompt = props && typeof props.initialPrompt === 'string' ? props.initialPrompt : ''
   const initialView = props && props.view === 'gallery' ? 'gallery' : 'studio'
   const initialPanelMode = props && props.panelMode === 'chat' ? 'chat' : 'form'
+  const initialWorkspaceMode = props && props.workspaceMode === 'work' ? 'work' : 'new_draft'
 
   // 宿主下发的预设配置：表单同步与顶栏展示共用同一份。
   const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : []
@@ -99,7 +100,15 @@ export function useStudio(props) {
   })
   // generate 是函数声明（提升），chat 在事件回调里调用时已完成初始化。
   const chat = useChatThread({ t, isEn, alive, state, form, generate })
-  const library = useWorkLibrary({ t, alive, ui, state })
+  const library = useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode })
+
+  /** 点击底部新建画布卡：把焦点切回新建画布（保留当前表单中已输入的内容），同时收起图片工具编辑态。 */
+  function focusNewDraft() {
+    imageTool.closeTool()
+    library.focusDraft()
+    ui.setView('studio')
+    ui.setPanelMode('form')
+  }
 
   /**
    * 显式新建绘图（阶段十三）：重置表单 + 进入 new_draft 焦点。
@@ -127,6 +136,7 @@ export function useStudio(props) {
     ...library,
     newDraftCard: {
       active: library.workspaceMode === 'new_draft',
+      explicit: library.newDraftExplicit === true,
       pending: library.newDraftPending === true,
       width: form.form.width,
       height: form.form.height,
@@ -395,6 +405,6 @@ export function useStudio(props) {
     library: libraryView,
     imageTool,
     guidance: { kind: guidanceKind, code: guidanceCode, surface: guidanceSurface, detail: guidanceDetail, key: guidanceKey, dismiss: dismissGuidance },
-    actions: { sending, generate, newDraft, previewWork, reroll, iterate, openImageTool, retryFocusedJob, resetToSafe },
+    actions: { sending, generate, newDraft, focusNewDraft, previewWork, reroll, iterate, openImageTool, retryFocusedJob, resetToSafe },
   }
 }

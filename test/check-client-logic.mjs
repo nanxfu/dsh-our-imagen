@@ -1446,6 +1446,29 @@ await check('局部涂抹：画笔尺寸与涂抹状态归一', () => {
   assert.equal(logic.maskCoverageOf(2000, 1000), 1, '覆盖率不超过 1')
   assert.equal(logic.maskCoverageOf('x', 100), 0)
   assert.equal(logic.maskCoverageOf(10, 0), 0)
+
+  // 画布缩放 / 平移 / 快捷步进画笔。
+  assert.equal(logic.clampZoom(0.5), 1)
+  assert.equal(logic.clampZoom(1.01), 1, '贴近 1.0 时自动吸附回 1')
+  assert.equal(logic.clampZoom(9), logic.MASK_ZOOM.max)
+  assert.deepEqual(logic.clampPan({ x: 50, y: -30 }, { zoom: 1 }), { x: 0, y: 0 }, '1× 下强制居中')
+  const zoomed = logic.zoomAtPoint({
+    zoom: 1,
+    pan: { x: 0, y: 0 },
+    anchor: { x: 100, y: -50 },
+    nextZoom: 2,
+    bounds: { stageWidth: 500, stageHeight: 400, viewWidth: 600, viewHeight: 500 },
+  })
+  assert.equal(zoomed.zoom, 2)
+  assert.deepEqual(zoomed.pan, { x: -100, y: 50 }, '围绕指针位置放大后，同一图像点仍留在指针下')
+  assert.deepEqual(
+    logic.zoomAtPoint({ zoom: 2, pan: zoomed.pan, anchor: { x: 100, y: -50 }, nextZoom: 1 }),
+    { zoom: 1, pan: { x: 0, y: 0 } },
+  )
+  assert.equal(logic.stepBrushSize(40, 1), 44)
+  assert.equal(logic.stepBrushSize(40, -1), 36)
+  assert.equal(logic.stepBrushSize(logic.MASK_BRUSH.min, -1), logic.MASK_BRUSH.min)
+  assert.equal(logic.stepBrushSize(logic.MASK_BRUSH.max, 1), logic.MASK_BRUSH.max)
 })
 
 await check('局部涂抹：推荐强度常量与契约区间一致', () => {
