@@ -37,6 +37,8 @@ export const ROUTES = {
   // 旧宿主没有该路由时客户端按 404 降级为「仅用已加载分页」。
   historyTree: { method: 'GET', path: '/imagen-api/history/tree' },
   file: { method: 'GET', path: '/imagen-api/file' },
+  // 本地图片导入（阶段十五 Phase A）：用户选择的 PNG / JPEG 落盘到产物目录并登记为导入作品。
+  importFile: { method: 'POST', path: '/imagen-api/import' },
   library: { method: 'GET', path: '/imagen-api/library' },
   libraryFavorite: { method: 'POST', path: '/imagen-api/library/favorite' },
   libraryDelete: { method: 'POST', path: '/imagen-api/library/delete' },
@@ -105,6 +107,24 @@ export const LIMITS = {
   // 对话多轮上下文：客户端只回传最近若干条消息，Host 路由再裁剪一次，
   // 避免把整段聊天记录塞进模型（也约束请求体大小）。
   intentHistory: { maxMessages: 12, maxMessageChars: 2000 },
+}
+
+/**
+ * 本地图片导入（`POST /imagen-api/import`，阶段十五 Phase A）的共享口径。
+ *
+ * 导入图后续要作为局部重绘 / 整图重绘的底图，因此沿用参考图那套体积与长边边界，
+ * 不再单独定义第二份数值；字段与格式只在这里登记一次，Host 与 Client 都从这里取。
+ */
+export const IMPORT = {
+  // 只接受这两种位图：PNG 无损失、JPEG 是相机/截图最常见的格式。
+  mimeTypes: ['image/png', 'image/jpeg'],
+  // 解码后的原始字节上限（与图生图参考图一致，Host 同时受请求体上限约束）。
+  maxBytes: LIMITS.reference.maxBytes,
+  // 长边上限 / 短边下限（宽、高都要 >= minEdge，避免把小图放大成噪点）。
+  maxEdge: LIMITS.reference.maxEdge,
+  minEdge: LIMITS.reference.minEdge,
+  // 展示名上限：只用于 meta.prompt 与列表标题，不参与落盘路径。
+  maxNameChars: 120,
 }
 
 /** 宿主与远端之间共享的超时（毫秒）。远端层不再各自保留默认值。 */

@@ -1,6 +1,6 @@
 # 工作台交互语义对齐、双向助手闭环与模型原生参考规划
 
-> **状态**：📝 已完成需求与方案对齐，待分期实施（2026-11-17）。  
+> **状态**：🟡 Phase 0 与 Phase A 已完成（2026-11-18，未发版）；Phase B（后处理闭环）/ Phase C（模型原生参考）待排期。  
 > **前置基线**：0.13.0（已完成阶段十二「舞台图片处理工具栏解耦」与阶段十三「显式新建绘图、多作品草稿与树状版本管理」）。  
 > **核心原则**：UI 保持克制、减少用户参数决策；表单—舞台—助手三向闭环；**不做多模态看图过渡方案**，直接基于图像模型原生能力补齐“参考图与编辑统一体验”；不给 SDXL 堆砌过时外挂技术债。
 
@@ -125,7 +125,14 @@
   - 失败原因（服务缺失 / 无默认模型 / `prepareCall` 异常 / 空流 + `finish` 失败码）以 warn 写入宿主日志，每次调用记 `llm_call provider=… model=… purpose=…`；
   - 用独立宿主进程（`dsh --profile headless|web --patch`）在真实 provider 上复验 `enhancePrompt` / `parseIntent` 均返回 `source=model`，离线测试新增两条 `llm` 用例。
 
-### Phase A：交互语义收敛、本地导入与双向时间线
+### Phase A：交互语义收敛、本地导入与双向时间线 —— ✅ 已完成（2026-11-18）
+
+> **实现说明**（与下方原始分期一致，三条线同批落地；交互规范见 [SPEC.md](SPEC.md) §5.19，变更明细见 [CHANGELOG](../CHANGELOG.md)）。
+>
+> - **A1 动作语义与草稿托管**：`ImageDock` 下线「带回参数」，「生成变体」改名「重新生成」；`GalleryCard` 收敛为「在工作台打开 / 重绘编辑 / 查看大图 / 收藏 / 删除」并移除盲发生成。胶片条点击不再被未提交修改拦截：脏修改先托管进最左端草稿卡（「未提交草稿 · 源自此图」），再回填目标作品；左栏显示「正在新草稿中编辑（源自此图）」+「还原原图」；点草稿卡恢复草稿并切新建画布焦点；提交 / 新建创作正确清理。纯逻辑落在 `src/logic/form.js`（`draftSourceOf` / `originalPatchOf` / `parkDraftOf` / `draftViewOf`）与 `previewRecallOf`。
+> - **A2 双向时间线**：`bubblePatch` 接收全部 1~4 张结果图，`ChatPanel` 以缩略图网格渲染（单张保持原观感）；`useImageTool` 提交成功后由组合层调用 `chat.mirrorTool` 追加镜像动作记录与任务气泡；点击结果图进入单图聚焦视图（大图 + 参数胶囊 + 对比原图 / 继续涂抹 / 重新生成 / 查看大图），顶部「← 返回上一层（{label}）」逐层出栈。镜像 / 同步 / 结果记录都带 `kind`，不进入 `intentHistory`。纯逻辑在 `src/logic/chat.js`。
+> - **A3 本地导入与对比**：新增 `POST /imagen-api/import`（`shared/contract.js` 的 `ROUTES.importFile` / `IMPORT`），PNG / JPEG 校验后原样落盘为独立 `v1`，`HistoryItem.source` 区分 `ai` / `import`，作品条与画廊显示「导入」角标；舞台支持拖入 / 粘贴 / 选择图片，新画布提示「写提示词，或把图片拖入取景框」，编辑态拒绝导入；新增 `lib/image-meta.js` 写入 PNG `tEXt` 生成元数据（失败退回原字节），导入自带元数据的 PNG 时恢复原生成参数。带 `sourceImage` 的派生作品提供可拖动「对比原图」拉帘（`useStudioUi.compareOpen`）。
+> - **测试**：新增 `check-client-draft`（4）、`chat-timeline`（5）、`import-client`（18）、`import-host`（17）；`check-client-chat` 19、`check-client-shell` 51、`check-client-logic` 83、`check-client-tools` 27、`image-tool-render` 6、`host-e2e` 56、`jobs-wait` 31、`check-contract` 12；`npm test` 36 步全绿。
 
 * **目标**：理顺“草稿/原图/重新生成/画廊”语义，打通本地图片导入与表单—舞台—助手三向协同。
 * **Phase A1（语义对齐与草稿闭环）**：

@@ -1,13 +1,20 @@
 /**
- * 创作面板表单的纯逻辑：脏判定与「新建创作」重置补丁。
+ * 创作面板表单的纯逻辑：脏判定、「新建创作」重置补丁与草稿托管的来源快照。
  *
  * 「脏」的语义是「表单里有还没提交生成、也没从作品回填过的手动修改」：
- *  - 刚打开、刚生成完、刚从胶卷或画廊回填完 → 干净，点击胶卷可以放心覆盖；
- *  - 用户改过提示词 / 参数但还没点生成 → 脏，点击胶卷只换预览、保留草稿。
+ *  - 刚打开、刚生成完、刚从胶卷或画廊回填完 → 干净；
+ *  - 用户改过提示词 / 参数但还没点生成 → 脏。
  *
  * 判定方式是与「干净基准快照」逐字段比较，而不是一改就置脏：
  * 用户把值改回原样后仍然是干净的，不会因为点过一下输入框就永久失去自动回填。
- * 回填与重置只在这里算补丁，hook 负责落状态、维护基准与微调来源。
+ * 回填与重置只在这里算补丁，hook 负责落状态、维护基准与来源。
+ *
+ * 阶段十五 Phase A1 起：脏不再拦截胶片条回填（见 docs/STUDIO_UX_POLISH…§2.4），
+ * 未提交修改被托管进最左端「新建草稿卡」。托管槽的形状与来源作品快照由这里定义：
+ *  - 草稿槽 `{ source, form, editing }`：source 是来源作品（patch 是回填时的原始参数
+ *    补丁，「还原原图」直接用它），form 是托管时的完整表单，editing 表示当前表单正在
+ *    编辑这份草稿；
+ *  - 来源作品 `{ path, prompt, patch }` 只保留展示与还原需要的字段，不依赖历史分页是否还在。
  *
  * 0.13.0 起参考图 / 蒙版 / 重绘强度迁到舞台图片工具（`useImageTool`），
  * 主表单快照只比较提示词与纯文生图参数。
@@ -80,5 +87,82 @@ export function newCreationPatch(form, preset) {
     prompt: '',
     seed: '',
     ...negativeLayersPatch(layers),
+  }
+}
+
+// ---- 草稿托管（阶段十五 Phase A1） -----------------------------------------
+
+/**
+ * 来源作品快照：当前表单的参数是从哪张图回填来的。
+ *
+ * `patch` 是 `iteratePatch()` 算出的原始参数补丁，直接留着给「还原原图」用：
+ * 之后历史分页刷新、作品被删都不影响还原。条目形状与真实 Host 的 history 条目一致
+ * （只保证有 prompt / images，params 可能不存在）。
+ *
+ * @param {{image?: object, item?: object}} entry 胶卷 / 画廊条目
+ * @param {object} patch 该作品回填到表单的参数补丁
+ * @returns {{path: string, prompt: string, patch: object}}
+ */
+export function draftSourceOf(entry, patch) {
+  const image = (entry && entry.image) || {}
+  const item = (entry && entry.item) || {}
+  const params = (item && item.params) || {}
+  const path = typeof image.path === 'string' && image.path
+    ? image.path
+    : (typeof image.file === 'string' ? image.file : '')
+  const prompt = (typeof item.prompt === 'string' && item.prompt)
+    || (typeof params.prompt === 'string' && params.prompt)
+    || (typeof image.file === 'string' ? image.file : '')
+  const cleanPatch = patch && typeof patch === 'object' ? { ...patch } : {}
+  return { path, prompt, patch: cleanPatch }
+}
+
+/**
+ * 「还原原图」补丁：来源作品回填时的原始参数。
+ *
+ * 没有来源或没有可还原字段时返回 null，调用方据此不展示 / 不执行还原入口。
+ */
+export function originalPatchOf(source) {
+  const patch = source && source.patch && typeof source.patch === 'object' ? source.patch : null
+  if (!patch || Object.keys(patch).length === 0) return null
+  return { ...patch }
+}
+
+/**
+ * 托管一次未提交编辑：返回新的草稿槽。
+ *
+ * 已有草稿时用当前表单覆盖内容（§6.1.3：脏状态下点其他作品，先把当前编辑托管进草稿卡，
+ * 若已有草稿则覆盖），来源沿用调用方传入的来源（没有就保留草稿原来的来源）。
+ * 没有表单时保持原草稿不变。
+ */
+export function parkDraftOf(draft, source, form) {
+  const prev = draft && typeof draft === 'object' && draft.form ? draft : null
+  const shape = form && typeof form === 'object' ? form : null
+  if (!shape) return prev
+  const nextSource = source && typeof source === 'object'
+    ? source
+    : (prev && prev.source) || null
+  return { source: nextSource, form: shape, editing: false }
+}
+
+/**
+ * 草稿的展示摘要：草稿卡与 Rail 顶部状态行共用同一份派生结果，避免两处各判一次。
+ *
+ * - `active`：是否有未提交草稿（已托管的草稿，或当前脏修改会被托管）；
+ * - `source`：来源作品（可能没有，例如在全新画布上手改出来的草稿）；
+ * - `editing`：当前表单是否正在编辑这份草稿。
+ *
+ * @param {{draft?: object|null, dirty?: boolean, origin?: object|null}} state
+ */
+export function draftViewOf(state = {}) {
+  const draft = state.draft && typeof state.draft === 'object' && state.draft.form ? state.draft : null
+  const origin = state.origin && typeof state.origin === 'object' ? state.origin : null
+  const source = draft ? (draft.source || null) : origin
+  return {
+    active: Boolean(draft) || state.dirty === true,
+    parked: Boolean(draft),
+    editing: Boolean(draft && draft.editing === true),
+    source,
+    form: draft ? draft.form : null,
   }
 }

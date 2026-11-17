@@ -1,0 +1,260 @@
+/*
+ * 阶段十五 Phase A：本地图片导入拖放层与「对比原图」拉帘。
+ *
+ * 落点：ImageDropzone（舞台拖放 / 拖入提示 / 新画布选择图片）与 CompareSlider
+ * （派生作品的原图对照）。类名以 .ofs-import- / .ofs-compare- 开头，避免与 stage.css 撞名。
+ *
+ * 尺寸口径跟随舞台：相纸与对比层都按 .ofs-figure（container-type: size）的 cqw / cqh 算，
+ * 这样窗口缩放、16:9 与 9:16 都能同比例收进光桌，不会比普通预览小一圈。
+ */
+
+/* ── 拖放层：包住整个舞台 ───────────────────────────────────── */
+.ofs-import-zone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Stage 的 <section> 仍是舞台本体的 flex 子项，包裹层只负责尺寸透传。 */
+.ofs-import-zone > .ofs-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 拖入时的提示层：不拦截指针，drop 仍落在包裹层上。 */
+.ofs-import-overlay {
+  position: absolute;
+  inset: 6px;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--ofs-accent-soft-border);
+  border-radius: var(--ofs-r-xl);
+  background: color-mix(in oklab, var(--ofs-card-solid) 66%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: none;
+  animation: ofs-fade-in 140ms ease;
+}
+
+.ofs-import-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 18px;
+  border: 1px solid var(--ofs-window-border);
+  border-radius: var(--ofs-r-pill);
+  background: var(--ofs-card-solid);
+  box-shadow: var(--ofs-shadow-lift);
+  color: var(--ofs-ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ofs-import-hint.is-blocked {
+  border-color: var(--ofs-error-soft);
+  color: var(--ofs-error);
+}
+
+/* 导入中：轻量状态胶囊，说明这次上传还在路上。 */
+.ofs-import-status {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 41;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 13px;
+  border: 1px solid var(--ofs-window-border);
+  border-radius: var(--ofs-r-pill);
+  background: color-mix(in oklab, var(--ofs-card-solid) 78%, transparent);
+  box-shadow: var(--ofs-shadow-card);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transform: translateX(-50%);
+  color: var(--ofs-ink-2);
+  font-size: 11.5px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* 新画布取景框下方的「选择图片」：轻描边胶囊，不与主生成按钮抢注意力。 */
+.ofs-import-choose {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 16px;
+  border: 1px dashed var(--ofs-accent-soft-border);
+  border-radius: var(--ofs-r-pill);
+  background: var(--ofs-card);
+  box-shadow: var(--ofs-shadow-card);
+  color: var(--ofs-ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transform: translateX(-50%);
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease,
+    transform 150ms ease;
+}
+
+.ofs-import-choose:hover {
+  border-color: var(--ofs-accent-soft-border);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+}
+
+.ofs-import-choose:active {
+  transform: translateX(-50%) scale(0.97);
+}
+
+.ofs-import-choose:focus-visible {
+  outline: none;
+  box-shadow: var(--ofs-focus-ring);
+}
+
+.ofs-import-choose:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ofs-import-input {
+  display: none;
+}
+
+/* ── 拉帘对比：原图 / 当前图 ───────────────────────────────────── */
+.ofs-compare {
+  position: relative;
+  display: block;
+  width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-compare-r, 1)));
+  aspect-ratio: var(--ofs-compare-r, 1);
+  max-width: 100%;
+  border-radius: 3px;
+  background: var(--ofs-print-paper);
+  box-shadow:
+    0 0 0 11px var(--ofs-print-paper),
+    0 0 0 12px var(--ofs-print-edge),
+    var(--ofs-print-shadow);
+  overflow: hidden;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ofs-compare:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 11px var(--ofs-print-paper),
+    0 0 0 14px var(--ofs-accent),
+    var(--ofs-print-shadow);
+}
+
+.ofs-compare-base,
+.ofs-compare-image {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--ofs-print-paper);
+  pointer-events: none;
+}
+
+.ofs-compare-overlay {
+  position: absolute;
+  inset: 0;
+  will-change: clip-path;
+}
+
+/* 分隔线：一条细白线 + 纸面阴影，中间是抓手。 */
+.ofs-compare-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: rgb(255 255 255 / 88%);
+  box-shadow: 0 0 0 1px rgb(16 16 20 / 22%), 0 0 14px rgb(16 16 20 / 34%);
+  pointer-events: none;
+}
+
+.ofs-compare-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 38px;
+  height: 38px;
+  margin: -19px 0 0 -19px;
+  border: 1px solid rgb(255 255 255 / 40%);
+  border-radius: 50%;
+  background: rgb(20 20 22 / 62%);
+  box-shadow: 0 6px 18px -6px rgb(0 0 0 / 60%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.ofs-compare.is-dragging .ofs-compare-handle {
+  background: rgb(20 20 22 / 78%);
+}
+
+/* 两侧标签：原图在左上、当前图在右上，跟着分隔线所在的半区走。 */
+.ofs-compare-tag {
+  position: absolute;
+  top: 10px;
+  z-index: 2;
+  padding: 4px 9px;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: var(--ofs-r-pill);
+  background: rgb(20 20 22 / 56%);
+  color: #fff;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.ofs-compare-tag--before {
+  left: 10px;
+}
+
+.ofs-compare-tag--after {
+  right: 10px;
+}
+
+/* 键盘聚焦时给一条不遮挡画面的提示线。 */
+.ofs-compare:focus-visible .ofs-compare-divider {
+  background: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ofs-import-overlay {
+    animation: none;
+  }
+
+  .ofs-import-choose {
+    transition: none;
+  }
+}

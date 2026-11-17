@@ -638,6 +638,32 @@
   color: var(--ofs-warn);
 }
 
+/* 阶段十五 A1：未提交草稿托管态。卡片多一行「源自此图」，取景框按内容自动长高。 */
+.ofs-draft-card.has-draft .ofs-draft-frame {
+  height: auto;
+  min-height: 70px;
+  border-style: solid;
+  border-color: color-mix(in oklab, var(--ofs-warn) 30%, var(--ofs-sunken-border));
+}
+
+.ofs-draft-card.has-draft .ofs-draft-viewfinder {
+  margin: 2px 0 0;
+  border-color: color-mix(in oklab, var(--ofs-warn) 32%, transparent);
+  color: var(--ofs-warn);
+}
+
+.ofs-draft-from {
+  flex: 0 0 auto;
+  width: 100%;
+  overflow: hidden;
+  color: var(--ofs-warn);
+  font-size: 8.5px;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ofs-draft-state {
   flex: 0 0 auto;
   width: 100%;
@@ -648,6 +674,10 @@
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ofs-draft-card.has-draft .ofs-draft-state {
+  color: var(--ofs-warn);
 }
 
 .ofs-draft-card.is-pending .ofs-draft-state {

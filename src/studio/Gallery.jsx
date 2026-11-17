@@ -68,18 +68,21 @@ export function Gallery(props) {
     presets,
     favorites,
     onOpen,
+    onOpenStudio,
+    onRedraw,
     onZoom,
     onDelete,
     onExport,
-    onRecall,
-    onVariant,
-    onReference,
     onToggleFavorite,
     hasMore,
     loadingMore,
     onLoadMore,
     defaultSelecting,
   } = props
+  // 阶段十五 A1：主点击与「在工作台打开」同义；旧挂载只给 onOpen 时退化成它。
+  const openStudio = typeof onOpenStudio === 'function'
+    ? onOpenStudio
+    : (typeof onOpen === 'function' ? onOpen : () => {})
   const [presetFilter, setPresetFilter] = React.useState('')
   const [favoriteOnly, setFavoriteOnly] = React.useState(false)
   // defaultSelecting 只给渲染测试直达批量选择态，正式界面从关闭开始。
@@ -294,12 +297,10 @@ export function Gallery(props) {
                             favorite={favoriteSet.has(cardKey)}
                             confirming={confirmKey === cardKey}
                             onTogglePick={togglePick}
-                            onOpen={onOpen}
-                            onToggleFavorite={toggleFavorite}
-                            onRecall={onRecall}
-                            onVariant={onVariant}
-                            onReference={onReference}
+                            onOpenStudio={openStudio}
+                            onRedraw={onRedraw}
                             onZoom={onZoom}
+                            onToggleFavorite={toggleFavorite}
                             onAskDelete={askDelete}
                             onCancelDelete={cancelDelete}
                             onDelete={deleteEntry}

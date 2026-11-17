@@ -4,6 +4,12 @@
  * 键盘焦点只落到主图片按钮（`.ofs-gallery-media`）和独立操作按钮，
  * 底部文案区使用点击容器而非重复相邻 button，避免同一张卡占两个 Tab 焦点位。
  *
+ * 阶段十五 Phase A1（§2.3 / §6.1.9）动作收敛：画廊不直接盲发后台生图请求。
+ *  - 主点击 / 「在工作台打开」：切回工作台并打开这张作品（`onOpenStudio`，与主点击同义）；
+ *  - 「重绘编辑」：一步进入局部重绘（`onRedraw`，组合层调 `openImageTool('inpaint')`）；
+ *  - 「查看大图」：`onZoom`；收藏是图片上方的独立星标；删除仍走二次确认。
+ * 原来的「带回参数」「生成变体」已下线（回填由点胶片条 / 打开作品完成，重新生成在舞台动作坞）。
+ *
  * 删除是破坏性动作：第一次点击只把按钮切成「确认删除」，再点一次才真删；
  * 移出卡片或点「取消」都会收起确认态。确认按钮沿用同一个 key，键盘焦点不会丢。
  */
@@ -22,19 +28,17 @@ export function GalleryCard({
   favorite,
   confirming,
   onTogglePick,
-  onOpen,
-  onToggleFavorite,
-  onRecall,
-  onVariant,
-  onReference,
+  onOpenStudio,
+  onRedraw,
   onZoom,
+  onToggleFavorite,
   onAskDelete,
   onCancelDelete,
   onDelete,
 }) {
   const prompt = entry.item.prompt || ''
   const favoriteLabel = favorite ? t('studio.action.favorited') : t('studio.action.favorite')
-  const openOrPick = () => (selecting ? onTogglePick(cardKey) : onOpen(entry))
+  const openOrPick = () => (selecting ? onTogglePick(cardKey) : onOpenStudio(entry))
   const deleteLabel = confirming ? t('studio.gallery.confirmDelete') : t('studio.gallery.delete')
 
   // 确认态是「临时武装」：指针离开卡片就自动收起，避免下次滑过时误删。
@@ -82,18 +86,15 @@ export function GalleryCard({
           <div className={confirming ? 'ofs-gallery-hover is-confirming' : 'ofs-gallery-hover'}>
             {confirming ? null : (
               <>
-                <button key="iterate" type="button" className="ofs-gallery-action" onClick={() => onRecall(entry)}>
+                {/* 在工作台打开与主点击同义：统一颗粒度，后续创作都在工作台里进行。 */}
+                <button key="open" type="button" className="ofs-gallery-action" onClick={() => onOpenStudio(entry)}>
                   <Icon name="focus" size={12} />
-                  {t('studio.action.iterate')}
+                  {t('studio.action.openStudio')}
                 </button>
-                <button key="variant" type="button" className="ofs-gallery-action" onClick={() => onVariant(entry)}>
-                  <Icon name="reroll" size={12} />
-                  {t('studio.action.reroll')}
-                </button>
-                {/* 以此图重绘：把这张作品设为参考图，动作由组合层负责切视图与能力判断。 */}
-                <button key="reference" type="button" className="ofs-gallery-action" onClick={() => onReference(entry)}>
+                {/* 重绘编辑：把这张作品设为底图，一步进入局部涂抹。 */}
+                <button key="redraw" type="button" className="ofs-gallery-action" onClick={() => onRedraw(entry)}>
                   <Icon name="image" size={12} />
-                  {t('studio.action.reference')}
+                  {t('studio.action.redraw')}
                 </button>
                 <button key="zoom" type="button" className="ofs-gallery-action" onClick={() => onZoom(entry)}>
                   <Icon name="expand" size={12} />

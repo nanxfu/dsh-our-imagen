@@ -68,8 +68,8 @@ async function mountToolStudio(responses, failures = {}, { selectFirst = true } 
   }
   return { client, latest }
 }
-// 画廊「以此图重绘」不再先挂参考图：一步直达局部涂抹画布，左栏保持纯文生图。
-await check('渲染：画廊「以此图重绘」一步直达局部涂抹，左栏无参考图区', async () => {
+// 画廊「重绘编辑」不再先挂参考图：一步直达局部涂抹画布，左栏保持纯文生图。
+await check('渲染：画廊「重绘编辑」一步直达局部涂抹，左栏无参考图区', async () => {
   const client = await createTestClient({
     now: NOW,
         responses: studioResponses({ ...readyState, presets: [toolPreset], defaultPreset: 'sdxl-lightning' }, { items: [historyItem] }),
@@ -77,8 +77,8 @@ await check('渲染：画廊「以此图重绘」一步直达局部涂抹，左�
   })
   try {
     let tree = await client.mountRaw(client.components.Studio, { view: 'gallery', initialPrompt: '雨夜街景' })
-    const trigger = buttonByText(tree, '以此图重绘')
-    assert.ok(trigger, '画廊卡片应提供「以此图重绘」')
+    const trigger = buttonByText(tree, '重绘编辑')
+    assert.ok(trigger, '画廊卡片应提供「重绘编辑」')
     trigger.props.onClick()
     tree = await client.rerenderRaw()
     assertStructure('tool-open', tree, {
@@ -235,10 +235,10 @@ await check('渲染：动作坞按图片处理 / 创作复用分组，未开放�
       assert.equal(disabled.props.onClick, undefined, '禁用工具不绑动作')
       assert.equal(disabled.props.title, '规划中，暂未开放', '禁用工具说明「规划中」')
     }
-    // 创作复用组：带回参数 / 生成变体。
+    // 创作复用组：阶段十五 Phase A1 起只剩「重新生成」（「带回参数」已下线）。
     const reuseText = collectText(groups[1]).join(' | ')
-    assert.ok(reuseText.includes('带回参数'), '创作复用组保留「带回参数」')
-    assert.ok(reuseText.includes('生成变体'), '创作复用组保留「生成变体」')
+    assert.ok(!reuseText.includes('带回参数'), '「带回参数」已从动作坞下线')
+    assert.ok(reuseText.includes('重新生成'), '创作复用组保留「重新生成」')
     // 旧动作已删除：dock 不再有复制路径与「以此结果继续重绘」。
     const dockText = collectText(dock).join(' | ')
     assert.ok(!dockText.includes('复制文件路径'), 'dock 里的复制路径已移除（右上角悬浮按钮保留）')
@@ -904,7 +904,7 @@ await check('渲染：专用局部重绘预设下画廊入口进入工具并拦�
   })
   try {
     let tree = await client.mountRaw(client.components.Studio, { view: 'gallery' })
-    buttonByText(tree, '以此图重绘').props.onClick()
+    buttonByText(tree, '重绘编辑').props.onClick()
     tree = await client.rerenderRaw()
     assertStructure('native-tool-open', tree, {
       required: { 'ofs-mask-editor': 1, 'ofs-mask-canvas': 1, 'ofs-tool-bar': 1 },

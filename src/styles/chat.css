@@ -421,13 +421,24 @@
   gap: 6px;
 }
 
-/* 结果缩略图：整宽图片卡，元信息压在右下角。 */
-.ofs-msg-thumb {
+/* 结果缩略图网格（阶段十五 Phase A2）：一个任务 1~4 张全部展示。
+ * 单张保持整宽单图的观感；多张用 2 列网格，序号与张数标签压在角落。 */
+.ofs-msg-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 1px;
+}
+
+.ofs-msg-grid.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ofs-msg-grid-item {
   appearance: none;
   position: relative;
   display: block;
   width: 100%;
-  margin-top: 1px;
   padding: 0;
   border: 1px solid var(--ofs-card-border);
   border-radius: 12px;
@@ -440,36 +451,235 @@
     border-color 180ms ease;
 }
 
-.ofs-msg-thumb img {
+.ofs-msg-grid-item img {
   display: block;
   width: 100%;
-  height: 132px;
+  height: 88px;
   object-fit: cover;
 }
 
-.ofs-msg-thumb:hover {
+/* 只有一张时回到单图观感：整宽 + 更高的缩略图。 */
+.ofs-msg-grid.is-single .ofs-msg-grid-item img {
+  height: 132px;
+}
+
+.ofs-msg-grid-item:hover {
   transform: translateY(-1px);
   border-color: var(--ofs-accent-soft-border);
   box-shadow: var(--ofs-shadow-lift);
 }
 
-.ofs-msg-thumb:active {
+.ofs-msg-grid-item:active {
   transform: translateY(0) scale(0.995);
 }
 
-.ofs-msg-thumb-meta {
+.ofs-msg-grid-item:focus-visible {
+  outline: none;
+  border-color: var(--ofs-accent-soft-border);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-accent) 14%, transparent);
+}
+
+/* 多图网格的序号角标：1~4，提示「这里还有别的结果」。 */
+.ofs-msg-grid-index {
   position: absolute;
-  right: 7px;
-  bottom: 7px;
-  padding: 2px 8px;
+  top: 6px;
+  left: 6px;
+  display: grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
   border-radius: var(--ofs-r-pill);
   background: rgb(17 17 20 / 52%);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   color: rgb(255 255 255 / 93%);
   font-size: 10px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
+}
+
+/* 张数标签占满一行，紧贴在网格下方。 */
+.ofs-msg-grid-label {
+  grid-column: 1 / -1;
+  color: var(--ofs-ink-3);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+/* 舞台图片工具动作镜像卡（kind='tool'）：底图缩略图 + 动作说明 + 可选强度胶囊。 */
+.ofs-panel--chat .ofs-tool-sync {
+  align-self: stretch;
+}
+
+.ofs-tool-sync-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+}
+
+.ofs-tool-sync-thumb {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--ofs-card-border);
+  border-radius: 9px;
+  background: var(--ofs-sunken);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.ofs-tool-sync-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ofs-tool-sync-thumb:hover {
+  border-color: var(--ofs-accent-soft-border);
+  box-shadow: var(--ofs-shadow-card);
+}
+
+.ofs-tool-sync-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ofs-tool-sync-title {
+  color: var(--ofs-ink);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.ofs-tool-sync-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ofs-panel--chat .ofs-tool-sync-chip {
+  height: 20px;
+  padding: 0 8px;
+  font-size: 10px;
+  color: var(--ofs-ink-3);
+  cursor: default;
+}
+
+/* ── 单图聚焦视图（阶段十五 Phase A2） ───────────────────────── */
+
+/* 消息流顶部的轻量面包屑：返回上一层（{label}）。 */
+.ofs-panel--chat .ofs-chat-breadcrumb {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  padding: 2px 0 4px;
+  background: linear-gradient(180deg, var(--ofs-card-solid) 78%, transparent);
+}
+
+.ofs-panel--chat .ofs-chat-back {
+  height: 26px;
+  max-width: 100%;
+  padding: 0 11px;
+  font-size: 11px;
+  color: var(--ofs-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ofs-panel--chat .ofs-chat-back:hover {
+  border-color: var(--ofs-accent-soft-border);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
+}
+
+.ofs-chat-focus {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  animation: ofs-fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ofs-chat-focus-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.ofs-chat-focus-title {
+  color: var(--ofs-ink-3);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.ofs-panel--chat .ofs-chat-focus-batch {
+  height: 20px;
+  padding: 0 8px;
+  font-size: 10px;
+  color: var(--ofs-ink-3);
+  cursor: default;
+}
+
+/* 大图：圆角白卡内的整宽预览，点「查看大图」进放大层。 */
+.ofs-chat-focus-figure {
+  border: 1px solid var(--ofs-card-border);
+  border-radius: 12px;
+  background: var(--ofs-sunken);
+  overflow: hidden;
+  box-shadow: var(--ofs-shadow-card);
+}
+
+.ofs-chat-focus-figure img {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  background: var(--ofs-sunken);
+}
+
+.ofs-chat-focus-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ofs-panel--chat .ofs-chat-focus-chip {
+  height: 22px;
+  padding: 0 9px;
+  font-size: 10.5px;
+  color: var(--ofs-ink-3);
+  cursor: default;
+}
+
+/* 快捷动作胶囊：对比原图 / 继续涂抹 / 重新生成 / 查看大图。 */
+.ofs-chat-focus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ofs-panel--chat .ofs-chat-focus-action {
+  height: 26px;
+  padding: 0 11px;
+  font-size: 11px;
+  color: var(--ofs-ink-2);
+}
+
+.ofs-panel--chat .ofs-chat-focus-action:hover {
+  border-color: var(--ofs-accent-soft-border);
+  background: var(--ofs-accent-soft);
+  color: var(--ofs-accent);
 }
 
 /* ── 底部：建议 / 动作 / 输入 ────────────────────────────────── */
@@ -595,7 +805,7 @@
     padding: 8px 13px 12px;
   }
 
-  .ofs-msg-thumb img {
+  .ofs-msg-grid.is-single .ofs-msg-grid-item img {
     height: 112px;
   }
 }

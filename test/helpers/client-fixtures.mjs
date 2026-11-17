@@ -100,7 +100,7 @@ export const scenarios = {
     state: readyState,
     history: { items: [historyItem] },
     props: { workspaceMode: 'work' },
-    expect: ['创作设置', '提示词', '1024 × 1024', '画面设置', '高级设置', '立即生成', '带回参数', '云端就绪', '灵感示例', '测试用的荷花池塘'],
+    expect: ['创作设置', '提示词', '1024 × 1024', '画面设置', '高级设置', '立即生成', '重新生成', '云端就绪', '灵感示例', '测试用的荷花池塘'],
     reject: ['风格预设', '分辨率档位'],
     structure: {
       required: {
@@ -234,7 +234,7 @@ export const scenarios = {
     history: { items: [historyItem] },
     props: {},
     view: 'gallery',
-    expect: ['作品画廊', '全部模型', '测试用的荷花池塘', '今天', '已加载全部作品', '以此图重绘'],
+    expect: ['作品画廊', '全部模型', '测试用的荷花池塘', '今天', '已加载全部作品', '在工作台打开', '重绘编辑'],
     reject: [],
     structure: {
       required: {

@@ -184,21 +184,26 @@ export function generateCapabilityOf(options = {}) {
 }
 
 /**
- * 胶片条点击的纯判定：预览始终切换（由调用方执行），这里只决定要不要回填表单。
+ * 胶片条点击的纯判定：预览始终切换（由调用方执行），这里只决定要不要回填表单与如何提示。
  *
- * 优先级：脏草稿 > 干净回填。参考图与蒙版已迁到舞台图片工具，不再属于左栏表单，
- * 因此不再参与这里的分支；未提交的工具草稿由 `useImageTool` 自己保护。
+ * 阶段十五 Phase A1 起不再拦 dirty（见 docs/STUDIO_UX_POLISH…§2.4）：未提交修改先被
+ * 托管进最左端「新建草稿卡」，再回填被点作品的原始参数，因此「看原图设置」随时可用。
+ * 参考图与蒙版已迁到舞台图片工具，不再属于左栏表单，也不参与这里的分支。
  *
  * @param {object} options
- * @param {boolean} [options.dirty] 表单是否有未提交修改
+ * @param {boolean} [options.dirty] 表单是否有未提交修改（有则先托管）
+ * @param {boolean} [options.hasDraft] 草稿槽里是否已有托管草稿（保留并提示）
  * @param {object} [options.patch] `iteratePatch()` 的结果
- * @returns {{ action: 'draft'|'recall'|'idle', noticeKey: string }}
+ * @returns {{ action: 'recall'|'idle', park: boolean, noticeKey: string }}
  */
 export function previewRecallOf(options = {}) {
-  if (options.dirty === true) return { action: 'draft', noticeKey: 'studio.toast.draftKept' }
   const patch = options.patch && typeof options.patch === 'object' ? options.patch : {}
-  if (Object.keys(patch).length === 0) return { action: 'idle', noticeKey: '' }
-  return { action: 'recall', noticeKey: 'studio.toast.recalled' }
+  if (Object.keys(patch).length === 0) return { action: 'idle', park: false, noticeKey: '' }
+  // 当前编辑还没托管：先落进草稿卡，再回填目标作品。
+  if (options.dirty === true) return { action: 'recall', park: true, noticeKey: 'studio.toast.draftKept' }
+  // 草稿卡里已有内容：回填不影响它，同样提示「草稿已保留」。
+  if (options.hasDraft === true) return { action: 'recall', park: false, noticeKey: 'studio.toast.draftKept' }
+  return { action: 'recall', park: false, noticeKey: 'studio.toast.recalled' }
 }
 
 /**

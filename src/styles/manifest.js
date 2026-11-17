@@ -18,5 +18,6 @@ export const STYLE_FILES = [
   'filmstrip.css',
   'gallery.css',
   'chat.css',
+  'import.css',
   'responsive.css',
 ]

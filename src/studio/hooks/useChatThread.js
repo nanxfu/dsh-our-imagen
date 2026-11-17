@@ -2,6 +2,11 @@
  * 对话线程域：消息列表、意图解析、通用澄清卡与助手气泡同步。
  *
  * 一条助手气泡只反映真实任务进度；意图只进确认卡，用户点「按此生成」或「带入参数面板」前不动表单。
+ * 阶段十五 Phase A2 起新增两块协作能力：
+ *  - 结果网格与单图聚焦返回栈：气泡收全部 1~4 张结果图，点击某张图进入单图聚焦，
+ *    面包屑「返回上一层」逐层回退；聚焦只影响视图，**不改 messages**；
+ *  - 舞台图片工具动作镜像：工具提交成功后追加 `kind='tool'` + `kind='job'` 两条记录，
+ *    两类记录都带 kind，不会进入 `intentHistory()`。
  * 依赖入参：{ t, isEn, alive, state, form, generate }。form 是表单域对象，
  * generate 由组合层提供（函数声明提升，本 hook 在事件回调里调用时已完成初始化）。
  */
@@ -10,8 +15,18 @@ import React from 'react'
 
 import { parseIntentRequest } from '../../api/resources.js'
 import { stateJobs } from '../../logic/jobs.js'
-import { formatSeconds } from '../../logic/format.js'
 import { errorText } from '../../logic/error.js'
+import {
+  bubblePatch,
+  bubbleUnchanged,
+  currentFocusOf,
+  focusBackLabelOf,
+  focusEntryOf,
+  gridImagesOf,
+  mirrorToolEntries,
+  popFocus,
+  pushFocus,
+} from '../../logic/chat.js'
 import {
   INTENT_EDITABLE_FIELDS,
   intentClarify,
@@ -29,42 +44,21 @@ import {
 } from '../../logic/intent.js'
 import { DEFAULT_RATIOS } from '../presets.js'
 
-/**
- * 任务快照 → 气泡补丁。只映射真实状态，未知状态返回 null（保持原样）。
- * 图片与耗时只在完成态给出；调用方按 stage/text/image 比对，相同内容不会重复写入。
- */
-function bubblePatch(t, job, current) {
-  if (job.status === 'waiting-session') return { stage: 'queued', text: t('studio.chat.waitingSession') }
-  if (job.status === 'queued') return { stage: 'queued', text: t('studio.chat.queued') }
-  if (job.status === 'running') return { stage: 'running', text: t('studio.chat.running') }
-  if (job.status === 'done') {
-    const images = Array.isArray(job.output && job.output.images) ? job.output.images : []
-    const first = images[0] || null
-    return {
-      stage: 'done',
-      text: t('studio.chat.done'),
-      image: first ? first.url : current.image,
-      imagePath: first ? first.path : current.imagePath,
-      meta: first
-        ? `${formatSeconds(t, first.seconds)} · ${t('studio.meta.seed')} ${first.seed ?? '—'}`
-        : current.meta,
-    }
-  }
-  if (job.status === 'failed') {
-    return { stage: 'failed', text: errorText(t, job.error || { code: '', message: '' }) }
-  }
-  return null
-}
-
 export function useChatThread({ t, isEn, alive, state, form, generate }) {
   const [messages, setMessages] = React.useState([])
   const [interpreting, setInterpreting] = React.useState(false)
+  // 单图聚焦返回栈：栈顶就是当前聚焦的图，空栈表示普通线程视图。
+  const [focusStack, setFocusStack] = React.useState([])
   const messageSeq = React.useRef(0)
   // 同一 tick 内连按两次回车时，用 ref 挡住第二次解析请求。
   const interpretingRef = React.useRef(false)
   // 线程代次：每次「新建对话」自增。解析请求发出时记下代次，返回时对不上就整条丢弃，
   // 保证旧请求永远不会写进新线程（否则新上下文会凭空多出一张旧确认卡）。
   const threadSeq = React.useRef(0)
+  // 聚焦栈在事件回调用 ref 读最新值：同一个 tick 内连续聚焦 / 返回时 state 还没提交。
+  const focusRef = React.useRef(focusStack)
+  focusRef.current = focusStack
+  const focus = currentFocusOf(focusStack)
 
   // 助手气泡跟着任务状态走，只反映真实进度。
   // 队列串行执行但可能同时有多个待执行任务：每个气泡按自己的任务更新，
@@ -82,7 +76,8 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
         const current = (next === prev ? prev : next)[index]
         const patch = bubblePatch(t, job, current)
         if (!patch) continue
-        if (current.stage === patch.stage && current.text === patch.text && current.image === patch.image) continue
+        // 阶段 / 文案 / 首图 / 全部结果图相同就跳过，避免每轮轮询都重写消息数组。
+        if (bubbleUnchanged(current, patch)) continue
         if (next === prev) next = prev.slice()
         next[index] = { ...current, ...patch }
       }
@@ -104,6 +99,8 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
   async function interpret(text) {
     const value = String(text ?? '').trim()
     if (!value || interpreting || interpretingRef.current) return
+    // 在单图聚焦视图里发起新一轮对话：先回到普通线程，新的确认卡 / 任务气泡仍按消息流展示。
+    clearFocus()
     interpretingRef.current = true
     // 多轮上下文与旧字段都取「这条消息之前」的对话：history 给新宿主，
     // previousPrompt 留给不认 history 的旧宿主。
@@ -236,7 +233,67 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
   }
 
   /**
-   * 新建对话：清空当前线程、开启新的对话上下文。
+   * 点击助手结果网格里的某张图：进入单图聚焦视图（舞台切换由 ChatPanel 调 library.openMessage）。
+   *
+   * 只改聚焦栈、不改 messages；已在聚焦视图里再次聚焦会压入更深的层级，
+   * 面包屑「返回上一层」据此逐层回退。
+   *
+   * @param {object} message 网格所在的消息（取 id 与本批张数）
+   * @param {object} image 被点的结果图（气泡图项或宿主产物图）
+   * @param {number} index 该图在本批结果里的序号
+   * @returns {boolean} 是否有合法图片可聚焦
+   */
+  function focusImage(message, image, index) {
+    const entry = focusEntryOf({
+      messageId: message && message.id,
+      image,
+      index,
+      count: gridImagesOf(message).length,
+    })
+    if (!entry) return false
+    const next = pushFocus(focusRef.current, entry)
+    focusRef.current = next
+    setFocusStack(next)
+    return true
+  }
+
+  /**
+   * 返回上一层：出栈并返回新的栈顶（栈空返回 null）。
+   * ChatPanel 据返回值把舞台切回对应节点，全程不动 messages。
+   */
+  function focusBack() {
+    const next = popFocus(focusRef.current)
+    focusRef.current = next
+    setFocusStack(next)
+    return currentFocusOf(next)
+  }
+
+  /** 清空聚焦栈、回到普通线程视图（新建对话 / 发起新一轮对话时用）。 */
+  function clearFocus() {
+    if (focusRef.current.length === 0) return
+    focusRef.current = []
+    setFocusStack([])
+  }
+
+  /**
+   * 舞台图片工具动作镜像（组合层在 `useImageTool.onSubmitted` 里调用）。
+   *
+   * 追加两条带 `kind` 的记录：用户侧的 `kind='tool'`（底图缩略图 + 工具文案 + 可选强度）
+   * 与助手侧的 `kind='job'` 任务气泡；请求失败不会走到这里，因此不需要额外分支。
+   *
+   * @param {{tool?: 'inpaint'|'img2img', job?: object, target?: object, body?: object}} input
+   *   job 是提交响应（取 id）；target 是底图 `{ path, url }`；body 用于读重绘强度。
+   * @returns {boolean} 是否追加（参数不全时返回 false，不产生半条记录）
+   */
+  function mirrorTool(input) {
+    const entries = mirrorToolEntries(t, input)
+    if (entries.length === 0) return false
+    pushMessages(entries)
+    return true
+  }
+
+  /**
+   * 新建对话：清空当前线程、聚焦栈与对话上下文。
    *
    * 解析中点击时同样安全：代次自增让在途请求的返回作废，并把解析中状态就地复位，
    * 用户不必等旧请求回来才能继续输入。
@@ -246,6 +303,7 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     interpretingRef.current = false
     setInterpreting(false)
     setMessages([])
+    clearFocus()
   }
 
   return {
@@ -260,6 +318,14 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     toggleIntentLockSeed,
     // 上一张图没有可复用种子时，确认卡上的锁种开关置灰。
     canLockSeed: lastSeedOf(state && state.lastJob) !== null,
+    // 阶段十五 Phase A2：结果网格钻取与单图聚焦返回栈。
+    focus,
+    focusDepth: focusStack.length,
+    focusBackLabel: focusBackLabelOf(t, focusStack),
+    focusImage,
+    focusBack,
+    // 舞台图片工具动作镜像：追加 kind='tool' + kind='job' 两条记录。
+    mirrorTool,
     newChat,
     pushMessages,
   }

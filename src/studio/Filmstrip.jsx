@@ -9,6 +9,8 @@
  *
  * 数据来源：`library.lineage`（useWorkLibrary 用已加载历史 + 在途任务建立的索引）、
  * `library.workDrafts`（工具域未提交草稿）、`library.newDraftCard`（新建草稿卡数据）。
+ * 阶段十五 A1 起 `newDraftCard` 还带 `draft` / `draftFrom`：左栏未提交修改被托管进最左端
+ * 草稿卡（「未提交草稿 · 源自此图」），点它恢复草稿并切到新建画布焦点（§6.1.2、§6.1.4）。
  * 版本树不完整（还有更早分页）时，面板首次打开会按需 `library.loadTree(root)`；
  * 旧宿主没有该接口（404）时面板显示降级提示，继续只用已加载分页。
  *
@@ -178,6 +180,10 @@ export function Filmstrip(props) {
     active: t('studio.filmstrip.draftActive'),
     pending: t('studio.filmstrip.draftPending'),
     ratio: '{width} × {height}',
+    // 阶段十五 A1：未提交草稿托管态（§6.1.2）。
+    unsaved: t('studio.filmstrip.draftUnsaved'),
+    from: t('studio.filmstrip.draftFrom'),
+    fromPrompt: t('studio.filmstrip.draftFromPrompt'),
   }
   const panelLabels = {
     title: t('studio.filmstrip.versionPanelTitle'),
@@ -200,12 +206,13 @@ export function Filmstrip(props) {
     sourceDeleted: t('studio.filmstrip.sourceDeleted'),
   }
 
-  // 只要已有作品、在途任务或主动进入过新建态，底部新建画布卡始终保留在最左端，
-  // 切换到其它作品查看或重绘时也不消失，方便随时点回新建画布。
+  // 只要已有作品、在途任务、主动进入过新建态或有未提交草稿，底部新建画布卡始终保留在最左端，
+  // 切换到其它作品查看或重绘时也不消失，方便随时点回新建画布 / 草稿。
   const showDraftCard = roots.length > 0
     || pendingJobs.length > 0
     || newDraftCard.pending === true
     || newDraftCard.explicit === true
+    || newDraftCard.draft === true
   const hasContent = roots.length > 0 || pendingJobs.length > 0 || showDraftCard
 
   return (
@@ -220,6 +227,9 @@ export function Filmstrip(props) {
             prompt={newDraftCard.prompt}
             active={workspaceMode === 'new_draft'}
             pending={newDraftCard.pending === true}
+            draft={newDraftCard.draft === true}
+            draftFrom={newDraftCard.draftFrom}
+            draftFromSource={newDraftCard.draftFromSource === true}
             onClick={() => {
               if (actions && typeof actions.focusNewDraft === 'function') {
                 actions.focusNewDraft()

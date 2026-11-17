@@ -328,7 +328,7 @@
   object-fit: cover;
 }
 
-/* 悬停操作：带回参数 / 生成变体 / 以此图重绘 / 查看大图 / 删除 */
+/* 悬停操作：在工作台打开 / 重绘编辑 / 查看大图 / 删除（阶段十五 A1 收敛） */
 .ofs-gallery-hover {
   position: absolute;
   right: 6px;
@@ -396,7 +396,7 @@
   background: #b23434;
 }
 
-/* 触屏设备没有 hover：操作条常显，否则手机上无法「带回参数 / 生成变体」。 */
+/* 触屏设备没有 hover：操作条常显，否则手机上无法打开作品或进入重绘。 */
 @media (hover: none) {
   .ofs-gallery-hover {
     opacity: 1;

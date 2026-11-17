@@ -29,6 +29,7 @@ const hostGroup = [
   'agent-batch.mjs',
   'net-fallback.mjs',
   'host-e2e.mjs',
+  'import-host.mjs',
   'settings-host.mjs',
   'ui-state-host.mjs',
   'kaggle-direct.mjs',
@@ -51,7 +52,7 @@ const hostGroup = [
 const contractGroup = ['check-contract.mjs', 'agent-batch.mjs']
 
 /** client 组里非 check-client-* 的固定条目（顺序与旧 test:client 一致）。 */
-const clientTail = ['image-tool.mjs', 'image-tool-render.mjs', 'render-harness.mjs', 'lineage.mjs', 'logs-diagnostics.mjs']
+const clientTail = ['image-tool.mjs', 'image-tool-render.mjs', 'chat-timeline.mjs', 'import-client.mjs', 'render-harness.mjs', 'lineage.mjs', 'logs-diagnostics.mjs']
 
 /**
  * 自动发现 client 组的 check-client-*.mjs（含已拆分的 shell / chat / tools / kaggle）。

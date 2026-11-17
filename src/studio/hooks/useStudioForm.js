@@ -1,7 +1,7 @@
 /**
  * 表单域：提示词 / 负向 / 预设 / 画幅比例 / 润色与英译。
  *
- * 负责表单状态、预设同步 effect 与生成请求体拼装。
+ * 负责表单状态、预设同步 effect、草稿托管状态机与生成请求体拼装。
  * 依赖入参：{ t, isEn, alive, ui, preset, initialPrompt }；preset 是宿主的预设配置
  * { presets, defaultPreset }，由组合层从宿主状态解析后传入。
  *
@@ -10,6 +10,12 @@
  *
  * 0.13.0：参考图 / 蒙版 / 重绘强度整块迁到舞台图片工具（`useImageTool`），
  * 这里只剩纯文生图状态；请求体不再产出 reference 字段。
+ *
+ * 阶段十五 Phase A1：左栏未提交修改不再拦胶片条回填，而是「托管」进最左端草稿卡：
+ *  - `origin`：当前表单参数的来源作品 `{ path, prompt, patch }`；
+ *  - `draft`：托管的草稿槽 `{ source, form, editing }`（形状见 logic/form.js）；
+ *  - parkDraft / openDraft / clearDraft / restoreOriginal 是这条链路仅有的四个动作，
+ *    组合层只在「切预览 / 点草稿卡 / 提交成功 / 新建创作 / 还原原图」时调用它们。
  */
 
 import React from 'react'
@@ -19,7 +25,15 @@ import { negativePromptActive } from '../../../shared/models-guide.js'
 
 import { enhancePromptRequest } from '../../api/resources.js'
 import { clampInt, clampNumber } from '../../logic/clamp.js'
-import { formSnapshotOf, isFormDirty, newCreationPatch } from '../../logic/form.js'
+import {
+  draftSourceOf,
+  draftViewOf,
+  formSnapshotOf,
+  isFormDirty,
+  newCreationPatch,
+  originalPatchOf,
+  parkDraftOf,
+} from '../../logic/form.js'
 import { buildGenerateBody } from '../../logic/generate.js'
 import {
   customSizePatch,
@@ -53,15 +67,6 @@ const EMPTY_FORM = {
   count: 1,
 }
 
-/** 微调来源提示用的一句描述：优先作品提示词，没有提示词时退回文件名。 */
-function tuningSourceOf(entry, prompt) {
-  const text = typeof prompt === 'string' ? prompt.trim() : ''
-  if (text) return { prompt: text }
-  const image = entry && entry.image ? entry.image : null
-  const file = image && typeof image.file === 'string' ? image.file.trim() : ''
-  return { prompt: file }
-}
-
 export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const { presets, defaultPreset } = preset
   const [form, setForm] = React.useState(() => ({
@@ -73,14 +78,22 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   const [enhancing, setEnhancing] = React.useState(false)
   const [translating, setTranslating] = React.useState(false)
   // 干净基准快照：最近一次「生成提交 / 从作品回填 / 新建创作 / 初始预设同步」时的表单，
-  // 与当前表单不一致即为 dirty（胶卷点击时据此保护草稿）。
+  // 与当前表单不一致即为 dirty（dirty 现在意味着「有一次要被托管的未提交修改」）。
   const [cleanBaseline, setCleanBaseline] = React.useState('')
-  // 微调来源：当前表单是哪张作品回填来的；新建创作时清空。只用于面板的轻量提示。
-  const [tuning, setTuning] = React.useState(null)
+  // 参数来源作品：当前表单是哪张作品的原始参数；同时充当「还原原图」的还原目标。
+  const [origin, setOrigin] = React.useState(null)
+  // 草稿槽：已托管的未提交编辑（见 logic/form.js 的 draftViewOf 说明）。
+  const [draft, setDraft] = React.useState(null)
   // 事件回调里要读最新表单（不依赖渲染闭包），异步动作与快照计算都用它。
   const formRef = React.useRef(form)
   formRef.current = form
+  const originRef = React.useRef(origin)
+  originRef.current = origin
+  const draftRef = React.useRef(draft)
+  draftRef.current = draft
   const dirty = isFormDirty(form, cleanBaseline)
+  // 草稿派生状态：draftCard / Rail 顶部状态行与「还原原图」共用同一份判定。
+  const draftView = draftViewOf({ draft, dirty, origin })
 
   // 比例由当前尺寸反推（按约分后的长宽比，而不是像素精确相等）：
   // 768×768 与 1024×1024 都算 1:1，800×600 算 4:3；切换预设改变宽高时也不会停在旧值上。
@@ -136,7 +149,7 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   }
 
   /**
-   * 从作品回填（胶卷点击 / 画廊「带回参数」）：套用纯逻辑算好的补丁并记录微调来源。
+   * 从作品回填（胶片条点击 / 画廊打开作品）：套用纯逻辑算好的补丁并记录来源作品。
    *
    * 回填属于「刚从另一张图加载完」，本身不算手动修改，所以同时更新干净基准。
    * 参考图与蒙版不在主表单上，回填不会影响舞台工具域里的草稿。
@@ -147,22 +160,94 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     const next = applyNegativePatch(formRef.current, partial)
     setForm(next)
     setCleanBaseline(formSnapshotOf(next))
-    setTuning(tuningSourceOf(entry, next.prompt))
+    setOrigin(draftSourceOf(entry, partial))
     return true
   }
 
   /**
    * 新建创作：清空提示词 / 固定种子，负向层回到当前预设默认推荐状态。
    *
-   * 当前模型预设与画幅比例是下一张仍要用的常用设置，保留不动；微调来源与 dirty 一起清掉。
+   * 当前模型预设与画幅比例是下一张仍要用的常用设置，保留不动；
+   * 来源作品、托管草稿与 dirty 一起清掉（§6.1.7）。
    */
   function newCreation() {
     const next = applyNegativePatch(formRef.current, newCreationPatch(formRef.current, activePreset))
     setForm(next)
     setCleanBaseline(formSnapshotOf(next))
-    setTuning(null)
+    setOrigin(null)
+    setDraft(null)
     ui.showToast(t('studio.toast.newCreation'))
   }
+
+  // ---- 草稿托管（阶段十五 Phase A1） ---------------------------------------
+
+  /**
+   * 把当前未提交修改托管进草稿槽（§6.1.3）。
+   *
+   * 已有草稿时用当前编辑覆盖内容（来源沿用当前表单的来源作品）；没有可托管内容
+   * （不脏、也不在草稿编辑态）时保持原样。返回托管后的草稿或 null。
+   */
+  function parkDraft() {
+    const prev = draftRef.current
+    const parked = prev && prev.editing === true
+    if (!dirty && !parked) return prev
+    const next = parkDraftOf(prev, originRef.current, formRef.current)
+    if (next !== prev) setDraft(next)
+    return next
+  }
+
+  /**
+   * 点草稿卡（§6.1.4）：恢复草稿内容并进入草稿编辑态。
+   *
+   * 没有已托管草稿但有未提交修改时，当前表单本身就是草稿：先托管再进入编辑态。
+   * 两者都没有时返回 false，调用方按「切到新建画布」处理。
+   */
+  function openDraft() {
+    const prev = draftRef.current
+    if (prev && prev.form) {
+      setForm(prev.form)
+      setCleanBaseline(formSnapshotOf(prev.form))
+      if (prev.source) setOrigin(prev.source)
+      setDraft({ ...prev, editing: true })
+      return true
+    }
+    if (!dirty) return false
+    const next = parkDraftOf(null, originRef.current, formRef.current)
+    setDraft({ ...next, editing: true })
+    setCleanBaseline(formSnapshotOf(formRef.current))
+    return true
+  }
+
+  /** 清空草稿槽（提交成功 / 新建创作 / 还原原图）。 */
+  function clearDraft() {
+    if (draftRef.current) setDraft(null)
+  }
+
+  /**
+   * 还原原图（§6.1.5）：恢复来源作品的原始参数、清掉草稿，回到干净基准。
+   *
+   * 返回来源作品（供组合层切回该作品的预览焦点）；没有可还原的来源时返回 null。
+   */
+  function restoreOriginal() {
+    const prev = draftRef.current
+    const source = (prev && prev.source) || originRef.current
+    const patch = originalPatchOf(source)
+    if (!patch) return null
+    const next = applyNegativePatch(formRef.current, patch)
+    setForm(next)
+    setCleanBaseline(formSnapshotOf(next))
+    setOrigin(source)
+    setDraft(null)
+    return source
+  }
+
+  // 草稿编辑态的实时托管：打开草稿卡后继续改表单，改动同步写回草稿槽。
+  // 这样中途点别的作品 / 打开图片工具时，草稿卡里始终是最新内容（不依赖每个出口都记得托管）。
+  React.useEffect(() => {
+    const current = draftRef.current
+    if (!current || current.editing !== true || current.form === form) return
+    setDraft({ ...current, form })
+  }, [form])
 
   /**
    * 拼装生成请求体（纯文生图）。
@@ -356,12 +441,21 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     buildBody,
     ratioId,
     activePreset,
-    // 草稿保护与微调来源：dirty 决定胶卷点击能否覆盖；tuning 给面板的来源提示。
+    // 脏判定：现在只表示「有一次未提交修改，切作品时会被托管进草稿卡」。
     dirty,
-    tuning,
+    // 来源作品（面板顶部的轻量提示）：保留 tuning 的旧形状给 Rail / 助手面板使用。
+    tuning: origin ? { prompt: origin.prompt, path: origin.path } : null,
+    origin,
     markClean,
     applyRecall,
     newCreation,
+    // 草稿托管（阶段十五 A1）：draftView 是展示用派生状态，四个动作由组合层在切换点调用。
+    draft,
+    draftView,
+    parkDraft,
+    openDraft,
+    clearDraft,
+    restoreOriginal,
     // 排除项：是否可用 / 模型推荐词（供显隐、占位与配置抬升时自动补词）。
     negativeActive,
     negativeHint,

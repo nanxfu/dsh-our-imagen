@@ -17,6 +17,7 @@ import { createLogger, installFileLog } from './lib/log.js'
 import { DEFAULT_PRESET, presetById, publicPresets } from './lib/presets.js'
 import { registerRoutes, toInt } from './lib/route-kit.js'
 import { createFileRoutes } from './lib/routes/files.js'
+import { createImportRoutes } from './lib/routes/import.js'
 import { createJobRoutes } from './lib/routes/jobs.js'
 import { createKaggleRoutes } from './lib/routes/kaggle.js'
 import { createLibraryRoutes } from './lib/routes/library.js'
@@ -193,6 +194,8 @@ export function apply(ctx, config = {}) {
     }),
     ...createJobRoutes({ ctx, queue, log }),
     ...createFileRoutes({ ctx, log }),
+    // 本地图片导入：拖入 / 选择 / 粘贴的 PNG、JPEG 落盘成与生成产物同构的「导入作品」。
+    ...createImportRoutes({ ctx, log }),
     ...createLibraryRoutes({ ctx, log }),
     ...createPromptRoutes({ ctx, log }),
     // 运行设置：GET 读脱敏视图 / POST 保存覆盖项（hfToken 只回布尔与来源）。

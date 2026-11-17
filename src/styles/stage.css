@@ -1187,6 +1187,19 @@
   color: var(--ofs-ink-3);
 }
 
+/* 阶段十五 A1：点草稿卡恢复后，取景框注明这份草稿的来源作品。 */
+.ofs-draft-source {
+  margin: 0;
+  max-width: 30ch;
+  overflow: hidden;
+  color: var(--ofs-warn);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ofs-draft-backdrop span {
     animation: none;

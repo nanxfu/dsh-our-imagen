@@ -2,9 +2,10 @@
  * 对话面板渲染测试（不需要浏览器）。
  *
  * 覆盖：确认卡 v2 / 排除项门控 / 通用澄清 / 意图 v2 状态流 / 表单同步与带入参数面板 /
- * 胶片条回填与草稿保护 / 提示词辅助（英文软提示、润色标签）。
+ * 胶卷回填与草稿托管 / 提示词辅助（英文软提示、润色标签）/
+ * 阶段十五 Phase A2（助手 1~4 格结果网格、舞台工具镜像卡、单图聚焦面包屑与快捷胶囊）。
  *
- * 运行：node test/check-client-chat.mjs
+ * 运行：$env:OFS_TEST_BUNDLE=".tmp/phase-a/build/timeline.js"; node test/check-client-chat.mjs
  */
 
 import assert from 'node:assert/strict'
@@ -37,6 +38,14 @@ async function mountChatPanel(options = {}) {
     applied: [],
     interpreted: [],
     cleared: [],
+    // 阶段十五 Phase A2：结果网格钻取 / 单图聚焦快捷胶囊的调用记录。
+    focused: [],
+    opens: [],
+    zooms: [],
+    compares: [],
+    rerolls: [],
+    imageTools: [],
+    backs: [],
   }
   const chat = {
     messages: options.messages ?? [],
@@ -53,6 +62,19 @@ async function mountChatPanel(options = {}) {
     canLockSeed: options.canLockSeed !== false,
     resolveClarify: (id, option) => calls.resolved.push({ id, option }),
     newChat: () => calls.cleared.push(true),
+    // 单图聚焦返回栈（缺省不聚焦）：渲染用例只关心视图与回调，栈语义在 chat-timeline 里测。
+    focus: options.focus ?? null,
+    focusDepth: options.focus ? 1 : 0,
+    focusBackLabel: options.focusBackLabel ?? '',
+    focusImage: (message, image, index) => calls.focused.push({
+      messageId: message && message.id,
+      path: image && image.path,
+      index,
+    }),
+    focusBack: () => {
+      calls.backs.push(true)
+      return options.focusBackNext ?? null
+    },
   }
   const t = client.internals.i18n.fallbackTranslate(options.locale ?? 'zh')
   try {
@@ -62,6 +84,9 @@ async function mountChatPanel(options = {}) {
         panelMode: 'chat',
         setPanelMode: (mode) => calls.modes.push(mode),
         showToast: (text) => calls.toasts.push(text),
+        compareOpen: options.compareOpen === true,
+        setCompareOpen: (value) => calls.compares.push(value),
+        setZoom: (value) => calls.zooms.push(value),
       },
       form: {
         patchForm: (patch) => calls.patches.push(patch),
@@ -69,8 +94,16 @@ async function mountChatPanel(options = {}) {
         ...(options.form ?? {}),
       },
       chat,
-      library: { openMessage: () => {} },
-      actions: { sending: Boolean(options.sending) },
+      library: {
+        openMessage: (path) => calls.opens.push(path),
+        gallery: options.gallery ?? [],
+        items: options.items ?? [],
+      },
+      actions: {
+        sending: Boolean(options.sending),
+        reroll: (entry) => calls.rerolls.push(entry),
+        openImageTool: (tool, entry) => calls.imageTools.push({ tool, entry }),
+      },
     })
     return { client, tree, calls, t }
   } catch (error) {
@@ -311,6 +344,231 @@ await check('渲染：新建对话清空线程与输入草稿', async () => {
     empty.client.unmount()
   }
 })
+// 阶段十五 Phase A2：助手完成气泡用 1~4 格缩略图网格展示全部结果图（不再只取首图）。
+await check('渲染：助手完成气泡按 1~4 张渲染结果网格', async () => {
+  const result = (name, seed) => ({
+    path: `imagen-output/job-1/${name}`,
+    file: name,
+    url: `/imagen-api/file?path=imagen-output%2Fjob-1%2F${name}`,
+    width: 1024,
+    height: 1024,
+    seed,
+    seconds: 6.2,
+  })
+  const images = [result('01.png', 7), result('02.png', 8), result('03.png', 9), result('04.png', 10)]
+  const done = {
+    id: 10,
+    role: 'assistant',
+    kind: 'job',
+    jobId: 'job-grid',
+    stage: 'done',
+    text: '已生成，点击缩略图放大。',
+    images,
+    image: images[0].url,
+    imagePath: images[0].path,
+    meta: '6.2 秒 · 种子 7',
+  }
+  const mounted = await mountChatPanel({ messages: [done] })
+  try {
+    const { tree, calls } = mounted
+    // 4 张全部进网格：一个任务一张卡，不再截断成首图。
+    assertStructure('result-grid-4', tree, {
+      required: { 'ofs-msg-grid': 1, 'ofs-msg-grid-item': 4, 'ofs-msg-grid-label': 1 },
+      forbidden: ['ofs-msg-thumb'],
+    })
+    const text = collectText(tree).join(' | ')
+    assert.ok(text.includes('本次生成 4 张'), '[grid] 多图网格应标注本批张数')
+    assert.equal(findNodes(tree, (node) => node.type === 'img').length, 4, '[grid] 4 张结果图都应渲染缩略图')
+    // 点第 3 张：舞台切到该图（library.openMessage），并把聚焦意图交给 useChatThread。
+    findClass(tree, 'ofs-msg-grid-item')[2].props.onClick()
+    assert.deepEqual(calls.opens, [images[2].path], '[grid] 点网格图应调用 library.openMessage 切舞台')
+    assert.deepEqual(calls.focused, [{ messageId: 10, path: images[2].path, index: 2 }], '[grid] 应把消息 / 图 / 序号交给单图聚焦')
+  } finally {
+    mounted.client.unmount()
+  }
+  // 单张：保持整宽单图观感（is-single），不显示张数标签。
+  const single = await mountChatPanel({
+    messages: [{ ...done, id: 11, images: [images[0]], image: images[0].url, imagePath: images[0].path }],
+  })
+  try {
+    assertStructure('result-grid-1', single.tree, {
+      required: { 'ofs-msg-grid': 1, 'ofs-msg-grid-item': 1 },
+      forbidden: ['ofs-msg-grid-label'],
+    })
+    assert.ok(findClass(single.tree, 'ofs-msg-grid')[0].props.className.includes('is-single'), '[grid] 单张应带 is-single')
+    single.tree && findClass(single.tree, 'ofs-msg-grid-item')[0].props.onClick()
+    assert.deepEqual(single.calls.focused, [{ messageId: 11, path: images[0].path, index: 0 }])
+  } finally {
+    single.client.unmount()
+  }
+  // 0.13 及以前的记录只有首图 image / imagePath：升级后仍要显示成一张网格。
+  const legacy = await mountChatPanel({
+    messages: [{
+      id: 12,
+      role: 'assistant',
+      kind: 'job',
+      stage: 'done',
+      text: '已生成，点击缩略图放大。',
+      image: images[0].url,
+      imagePath: images[0].path,
+      meta: '6.2 秒 · 种子 7',
+    }],
+  })
+  try {
+    assertStructure('result-grid-legacy', legacy.tree, {
+      required: { 'ofs-msg-grid': 1, 'ofs-msg-grid-item': 1 },
+      forbidden: [],
+    })
+    const img = findNodes(legacy.tree, (node) => node.type === 'img')[0]
+    assert.equal(img.props.src, images[0].url, '[grid] 旧记录应回退用 image 地址渲染')
+  } finally {
+    legacy.client.unmount()
+  }
+})
+
+// 阶段十五 Phase A2：舞台图片工具动作镜像成一条独立卡片（底图缩略图 + 文案 + 可选强度）。
+await check('渲染：舞台工具动作镜像记录卡', async () => {
+  const toolMessage = {
+    id: 20,
+    role: 'user',
+    kind: 'tool',
+    tool: 'inpaint',
+    text: '对当前图发起了局部涂抹',
+    image: '/imagen-api/file?path=imagen-output%2Fbase%2F01.png',
+    imagePath: 'imagen-output/base/01.png',
+    width: 1024,
+    height: 1024,
+    strength: 0.8,
+  }
+  const mounted = await mountChatPanel({ messages: [toolMessage] })
+  try {
+    const { tree, calls } = mounted
+    assertStructure('tool-sync', tree, {
+      required: { 'ofs-tool-sync': 1, 'ofs-tool-sync-card': 1, 'ofs-tool-sync-title': 1, 'ofs-tool-sync-thumb': 1, 'ofs-tool-sync-chip': 1 },
+      forbidden: ['ofs-msg--user', 'ofs-form-sync'],
+    })
+    const text = collectText(tree).join(' | ')
+    assert.ok(text.includes('对当前图发起了局部涂抹'), '[tool] 应展示工具文案')
+    assert.ok(text.includes('重绘强度 0.8'), '[tool] 有强度时应展示强度胶囊')
+    findClass(tree, 'ofs-tool-sync-thumb')[0].props.onClick()
+    assert.deepEqual(calls.opens, ['imagen-output/base/01.png'], '[tool] 点底图缩略图应切到该图')
+  } finally {
+    mounted.client.unmount()
+  }
+  // 整图重绘没有强度胶囊（body 缺 reference.strength 的镜像记录）。
+  const img2img = await mountChatPanel({
+    messages: [{ ...toolMessage, id: 21, tool: 'img2img', text: '对当前图发起了整图重绘', strength: undefined }],
+  })
+  try {
+    assertStructure('tool-sync-img2img', img2img.tree, {
+      required: { 'ofs-tool-sync': 1, 'ofs-tool-sync-title': 1 },
+      forbidden: ['ofs-tool-sync-chip'],
+    })
+    assert.ok(collectText(img2img.tree).join(' | ').includes('对当前图发起了整图重绘'), '[tool] 整图重绘文案')
+  } finally {
+    img2img.client.unmount()
+  }
+})
+
+// 阶段十五 Phase A2：单图聚焦视图 = 面包屑返回 + 大图 + 参数胶囊 + 快捷动作胶囊。
+await check('渲染：单图聚焦的面包屑与快捷动作胶囊', async () => {
+  const focusedImage = {
+    path: 'imagen-output/job-1/02.png',
+    file: '02.png',
+    url: '/imagen-api/file?path=imagen-output%2Fjob-1%2F02.png',
+    width: 1024,
+    height: 1024,
+    seed: 8,
+    seconds: 6.2,
+  }
+  const parentImage = {
+    path: 'imagen-output/base/01.png',
+    file: '01.png',
+    url: '/imagen-api/file?path=imagen-output%2Fbase%2F01.png',
+    width: 1024,
+    height: 1024,
+  }
+  const item = { jobId: 'job-1', prompt: '测试用的荷花池塘', sourceImage: parentImage.path, images: [focusedImage] }
+  const focus = { messageId: 10, index: 1, count: 4, ...focusedImage }
+  const mounted = await mountChatPanel({
+    messages: [{ id: 10, role: 'assistant', kind: 'job', stage: 'done', text: '已生成，点击缩略图放大。', images: [focusedImage] }],
+    focus,
+    focusBackLabel: '4 张生成结果',
+    gallery: [{ image: focusedImage, item }],
+  })
+  try {
+    const { tree, calls } = mounted
+    const text = collectText(tree).join(' | ')
+    assert.ok(text.includes('← 返回上一层（4 张生成结果）'), '[focus] 面包屑应展示上一层（本批张数）')
+    assert.ok(text.includes('单图聚焦'), '[focus] 应展示聚焦视图标题')
+    assert.ok(!text.includes('已生成，点击缩略图放大。'), '[focus] 聚焦时不再渲染普通消息流')
+    assertStructure('focus-view', tree, {
+      required: {
+        'ofs-chat-breadcrumb': 1,
+        'ofs-chat-back': 1,
+        'ofs-chat-focus': 1,
+        'ofs-chat-focus-title': 1,
+        'ofs-chat-focus-figure': 1,
+        'ofs-chat-focus-meta': 1,
+        'ofs-chat-focus-chip': 1,
+        'ofs-chat-focus-actions': 1,
+        'ofs-chat-focus-action': 4,
+      },
+      forbidden: ['ofs-msg-grid'],
+    })
+    const actions = findClass(tree, 'ofs-chat-focus-action')
+    assert.deepEqual(actions.map((node) => collectText(node).join('')), ['对比原图', '继续涂抹', '重新生成', '查看大图'])
+    // 对比原图：有 sourceImage 的派生版本才能开拉帘对比。
+    actions[0].props.onClick()
+    assert.deepEqual(calls.compares, [true], '[focus] 对比原图应打开舞台对比层')
+    // 继续涂抹：以该图条目为底图打开图片工具。
+    actions[1].props.onClick()
+    assert.equal(calls.imageTools.length, 1, '[focus] 继续涂抹应调用 openImageTool')
+    assert.equal(calls.imageTools[0].tool, 'inpaint')
+    assert.equal(calls.imageTools[0].entry.image.path, focusedImage.path)
+    assert.equal(calls.imageTools[0].entry.item.sourceImage, parentImage.path, '[focus] 应带完整条目（含 sourceImage）')
+    // 重新生成：沿用该作品参数交给组合层 reroll。
+    actions[2].props.onClick()
+    assert.equal(calls.rerolls.length, 1, '[focus] 重新生成应调用 reroll')
+    assert.equal(calls.rerolls[0].image.path, focusedImage.path)
+    // 查看大图：确保舞台停在该图并打开放大层。
+    actions[3].props.onClick()
+    assert.deepEqual(calls.zooms, [true], '[focus] 查看大图应打开放大层')
+    assert.equal(calls.opens.at(-1), focusedImage.path, '[focus] 查看大图前应把舞台切到该图')
+  } finally {
+    mounted.client.unmount()
+  }
+  // 返回上一层：逐层出栈由 useChatThread 负责；ChatPanel 把舞台切回上一层节点。
+  const back = await mountChatPanel({
+    focus,
+    focusBackLabel: '4 张生成结果',
+    gallery: [{ image: focusedImage, item }],
+    focusBackNext: { ...parentImage, messageId: 9, index: 0, count: 2 },
+  })
+  try {
+    findClass(back.tree, 'ofs-chat-back')[0].props.onClick()
+    assert.deepEqual(back.calls.backs, [true], '[focus] 点面包屑应调用 focusBack')
+    assert.equal(back.calls.opens.at(-1), parentImage.path, '[focus] 返回后舞台应切回上一层节点')
+  } finally {
+    back.client.unmount()
+  }
+  // 没有 sourceImage 的根图：不出现「对比原图」胶囊，其余动作仍在。
+  const root = await mountChatPanel({
+    focus,
+    focusBackLabel: '4 张生成结果',
+    gallery: [{ image: focusedImage, item: { ...item, sourceImage: null } }],
+  })
+  try {
+    assertStructure('focus-view-root', root.tree, {
+      required: { 'ofs-chat-focus-action': 3 },
+      forbidden: [],
+    })
+    assert.ok(!collectText(root.tree).join(' | ').includes('对比原图'), '[focus] 根图不应提供对比原图')
+  } finally {
+    root.client.unmount()
+  }
+})
+
 // 意图 v2 的真实状态流转：直接挂载 useChatThread，断言请求参数、消息字段、
 // 张数钳制、负向词门控、多轮 history、通用澄清与带入参数面板。
 await check('渲染：意图 v2 状态流（cfg / history / 张数 / 负向词门控 / 澄清 / 带入面板）', async () => {
@@ -738,10 +996,11 @@ await check('渲染：生成等待期间的手动修改仍算脏', async () => {
     client.unmount()
   }
 })
-// 胶卷点击的双向同步：干净表单自动回填（含原图 seed），脏表单只换预览；
+// 胶卷点击的双向同步（阶段十五 Phase A1）：干净表单直接回填（含原图 seed）；
+// 脏表单先托管进草稿卡再回填被点作品，并提示「已保留当前草稿」；
 // 新建创作清掉绑定上一张作品的状态，但保留当前模型预设与画幅比例。
 // 0.13.0：参考图 / 蒙版已迁到舞台图片工具，这里只验证纯文生图字段与草稿保护。
-await check('渲染：胶卷点击回填参数、草稿保护与新建创作边界', async () => {
+await check('渲染：胶卷点击回填参数、草稿托管与新建创作边界', async () => {
   const state = {
     defaultPreset: 'sdxl-lightning',
     presets: [toolPreset],
@@ -771,17 +1030,21 @@ await check('渲染：胶卷点击回填参数、草稿保护与新建创作边�
     form().patchForm({ prompt: '我自己的草稿' })
     await client.rerenderRaw()
     assert.equal(form().dirty, true, '手动修改后应标记为脏')
-    // 脏时点胶卷：预览照常切换，草稿保留，并给轻提示。
+    // 脏时点胶卷：预览照常切换；未提交修改先托管进草稿卡，再回填被点作品（§6.1.3）。
     latest.studio.actions.previewWork(thumbB)
     await client.rerenderRaw()
     assert.equal(latest.studio.library.selected.image.path, thumbB.image.path, '预览应切到被点的图')
-    assert.equal(form().form.prompt, '我自己的草稿', '脏表单不得被覆盖')
-    assert.ok(latest.studio.ui.toast && latest.studio.ui.toast.text.includes('已保留当前草稿'), '脏草稿应提示「已保留当前草稿」')
-    // 生成提交成功后表单回到干净状态（干净基准更新到刚提交的内容）。
+    assert.equal(form().form.prompt, '测试用的荷花池塘', '脏表单先托管草稿，再回填被点作品的参数')
+    assert.equal(form().dirty, false, '回填后表单是干净基准')
+    assert.ok(form().draft && form().draft.form.prompt === '我自己的草稿', '未提交修改应被托管进草稿卡')
+    assert.equal(form().draftView && form().draftView.parked, true, '草稿卡应显示已托管草稿')
+    assert.ok(latest.studio.ui.toast && latest.studio.ui.toast.text.includes('已保留当前草稿'), '托管草稿应提示「已保留当前草稿」')
+    // 生成提交成功后表单回到干净状态（干净基准更新到刚提交的内容），草稿随提交清空。
     await latest.studio.actions.generate()
     await client.settle()
     await client.rerenderRaw()
     assert.equal(form().dirty, false, '刚生成完应回到干净状态')
+    assert.equal(form().draft, null, '提交成功后草稿卡应清空')
     // 干净时再点胶卷：完整回填该作品参数，保留原图 seed。
     latest.studio.actions.previewWork(thumbB)
     await client.rerenderRaw()

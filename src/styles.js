@@ -16,6 +16,7 @@ import stage from './styles/stage.css'
 import filmstrip from './styles/filmstrip.css'
 import gallery from './styles/gallery.css'
 import chat from './styles/chat.css'
+import importStyles from './styles/import.css'
 import responsive from './styles/responsive.css'
 
 export const CSS = [
@@ -31,5 +32,6 @@ export const CSS = [
   filmstrip,
   gallery,
   chat,
+  importStyles,
   responsive,
 ].join('\n')

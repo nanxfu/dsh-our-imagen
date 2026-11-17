@@ -379,7 +379,9 @@ export function serializeTree(node) {
  * }} options
  */
 export async function loadClient(options = {}) {
-  const artifact = options.artifact ?? TEST_ARTIFACT
+  // `OFS_TEST_BUNDLE`（相对仓库根）供并行开发时使用独立构建产物，避免写冲突。
+  const envArtifact = process.env.OFS_TEST_BUNDLE ? join(ROOT, process.env.OFS_TEST_BUNDLE) : null
+  const artifact = options.artifact ?? envArtifact ?? TEST_ARTIFACT
   const locale = options.locale ?? 'zh-CN'
   const responses = options.responses ?? {}
   // 路径 → 异常消息：模拟网络层失败（浏览器里就是 TypeError: Failed to fetch）。

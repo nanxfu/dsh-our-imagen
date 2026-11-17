@@ -2713,18 +2713,87 @@ await check('失败重试参数：只重放纯文生图字段', () => {
   assert.equal(logic.referenceUrlOf(' imagen-output/a b.png '), `/imagen-api/file?path=${encodeURIComponent('imagen-output/a b.png')}`)
 })
 
-// 胶片条点击：只保护脏草稿；参考图 / 蒙版已不属于主表单，不再参与判定。
-await check('胶片条点击判定：脏草稿保护优先，干净才回填', () => {
+// 胶片条点击（阶段十五 A1）：脏不再拦截回填——先把当前编辑托管进草稿卡，再回填目标作品。
+await check('胶片条点击判定：脏修改先托管再回填，草稿保留不丢', () => {
   const patch = { prompt: '作品提示词' }
-  assert.deepEqual(logic.previewRecallOf({ dirty: true, patch }), { action: 'draft', noticeKey: 'studio.toast.draftKept' })
-  assert.deepEqual(logic.previewRecallOf({ dirty: false, patch }), { action: 'recall', noticeKey: 'studio.toast.recalled' })
-  assert.deepEqual(logic.previewRecallOf({ dirty: false, patch: {} }), { action: 'idle', noticeKey: '' })
-  assert.deepEqual(logic.previewRecallOf({}), { action: 'idle', noticeKey: '' })
+  // 脏：先托管（park=true）再回填，提示「已保留当前草稿」。
+  assert.deepEqual(logic.previewRecallOf({ dirty: true, patch }), {
+    action: 'recall',
+    park: true,
+    noticeKey: 'studio.toast.draftKept',
+  })
+  // 干净但草稿卡里已有托管草稿：回填不影响草稿，同样提示草稿保留。
+  assert.deepEqual(logic.previewRecallOf({ dirty: false, hasDraft: true, patch }), {
+    action: 'recall',
+    park: false,
+    noticeKey: 'studio.toast.draftKept',
+  })
+  // 干净且没有草稿：普通回填。
+  assert.deepEqual(logic.previewRecallOf({ dirty: false, patch }), {
+    action: 'recall',
+    park: false,
+    noticeKey: 'studio.toast.recalled',
+  })
+  assert.deepEqual(logic.previewRecallOf({ dirty: false, patch: {} }), { action: 'idle', park: false, noticeKey: '' })
+  assert.deepEqual(logic.previewRecallOf({}), { action: 'idle', park: false, noticeKey: '' })
   // 旧调用方残留的 reference 参数被忽略：不再有「保留参考图」分支。
   assert.deepEqual(logic.previewRecallOf({ reference: { path: 'x' }, dirty: false, patch }), {
     action: 'recall',
+    park: false,
     noticeKey: 'studio.toast.recalled',
   })
+})
+
+// 草稿托管的纯逻辑：来源作品快照 / 原始参数补丁 / 托管与展示摘要。
+await check('草稿托管：来源快照、还原补丁与草稿卡展示状态', () => {
+  const entry = {
+    image: { path: 'imagen-output/a/01.png', file: '01.png', seed: 7, width: 1024, height: 1024 },
+    item: { jobId: 'job-1', prompt: '荷花池塘', presetId: 'sdxl-lightning' },
+  }
+  const patch = { prompt: '荷花池塘', width: 1024, height: 1024, seed: '7' }
+  const source = logic.draftSourceOf(entry, patch)
+  assert.deepEqual(source, { path: 'imagen-output/a/01.png', prompt: '荷花池塘', patch }, '来源快照保留路径 / 提示词 / 原始参数补丁')
+  // 补丁是拷贝：之后改表单不会污染草稿里留着的原始参数。
+  patch.width = 1280
+  assert.equal(source.patch.width, 1024)
+  // 旧条目没有 prompt 时退回参数里的提示词，再退回文件名。
+  const fromParams = logic.draftSourceOf({ image: { path: 'p' }, item: { params: { prompt: '参数里的提示词' } } }, { prompt: 'x' })
+  assert.equal(fromParams.prompt, '参数里的提示词')
+  const fromFile = logic.draftSourceOf({ image: { file: '02.png' }, item: {} }, {})
+  assert.deepEqual(fromFile, { path: '02.png', prompt: '02.png', patch: {} })
+  assert.deepEqual(logic.draftSourceOf(null, null), { path: '', prompt: '', patch: {} }, '空条目也返回可序列化的空来源')
+
+  // 「还原原图」只用来源里留下的原始补丁；没有补丁时返回 null（不展示还原入口）。
+  assert.deepEqual(logic.originalPatchOf(source), { prompt: '荷花池塘', width: 1024, height: 1024, seed: '7' })
+  assert.equal(logic.originalPatchOf({ path: 'p', prompt: 'x', patch: {} }), null)
+  assert.equal(logic.originalPatchOf(null), null)
+  assert.equal(logic.originalPatchOf({ patch: null }), null)
+  // 返回拷贝：还原不影响草稿里留着的来源。
+  const restored = logic.originalPatchOf(source)
+  restored.prompt = '被改坏'
+  assert.equal(source.patch.prompt, '荷花池塘')
+
+  // 托管：没有草稿时建立草稿；已有草稿时用当前编辑覆盖内容、保留来源。
+  const first = logic.parkDraftOf(null, source, { prompt: '改到一半' })
+  assert.deepEqual(first, { source, form: { prompt: '改到一半' }, editing: false })
+  const overwritten = logic.parkDraftOf(first, null, { prompt: '又改了一版' })
+  assert.deepEqual(overwritten.form, { prompt: '又改了一版' }, '已有草稿时用当前编辑覆盖内容')
+  assert.equal(overwritten.source, source, '没有新来源时沿用草稿原来的来源')
+  assert.equal(overwritten.editing, false, '托管后不在草稿编辑态')
+  assert.equal(logic.parkDraftOf(first, null, null), first, '没有表单时不覆盖草稿')
+
+  // 展示摘要：脏 + 有来源 = 草稿卡亮起；托管草稿优先于当前脏状态。
+  assert.deepEqual(logic.draftViewOf({ draft: null, dirty: true, origin: source }), {
+    active: true,
+    parked: false,
+    editing: false,
+    source,
+    form: null,
+  })
+  assert.equal(logic.draftViewOf({ draft: null, dirty: false, origin: source }).active, false, '干净时没有草稿')
+  assert.equal(logic.draftViewOf({ draft: null, dirty: true, origin: null }).active, true, '没有来源的脏修改同样是未提交草稿')
+  const parkedView = logic.draftViewOf({ draft: { ...first, editing: true }, dirty: false, origin: source })
+  assert.deepEqual(parkedView, { active: true, parked: true, editing: true, source, form: { prompt: '改到一半' } })
 })
 
 // mask-aware 强度钳制：带蒙版放宽到契约 inpaintMax，img2img 维持 max。

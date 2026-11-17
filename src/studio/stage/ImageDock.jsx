@@ -4,12 +4,15 @@
  * 结构约定（渲染测试按类名断言，勿改）：
  *   .ofs-dock
  *     ├─ .ofs-dock-group[data-group="process"] > button.ofs-dock-button × N
- *     └─ .ofs-dock-group[data-group="reuse"]   > button.ofs-dock-button × 2（编辑态隐藏）
+ *     └─ .ofs-dock-group[data-group="reuse"]   > button.ofs-dock-button × 1（编辑态隐藏）
  *
  * 图片处理组由桌面注册表 `IMAGE_TOOLS` 驱动：`tools` 的每一项由 Stage 补好
  * `label`（翻译后的按钮文案）、`enabled`（能力是否可用）与可选 `hint`（悬停说明）。
  * 未开放的工具（高清放大 / 扩图）保持禁用但可见，`title` 显示规划中说明；
  * 编辑态下只保留「退出」按钮，创作复用组隐藏，避免误操作打断正在涂抹的草稿。
+ *
+ * 阶段十五 Phase A1：「带回参数」下线（点胶片条已自动回填，§2.3），复用组只剩
+ * 「重新生成」——按当前作品提示词与参数、换随机种子再抽一张纯文生图。
  */
 
 import React from 'react'
@@ -33,7 +36,6 @@ export function ImageDock(props) {
     onOpen,
     onResume,
     onClose,
-    onIterate,
     onReroll,
     plannedTitle,
   } = props
@@ -83,10 +85,6 @@ export function ImageDock(props) {
 
       {!editing ? (
         <div className="ofs-dock-group" data-group="reuse">
-          <button type="button" className="ofs-dock-button" onClick={onIterate}>
-            <Icon name="focus" size={15} />
-            {t('studio.action.iterate')}
-          </button>
           <button type="button" className="ofs-dock-button" onClick={onReroll}>
             <Icon name="reroll" size={15} />
             {t('studio.action.reroll')}

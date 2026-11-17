@@ -29,6 +29,8 @@ export function useStudioUi({ t, initialView, initialPanelMode }) {
   const [toast, setToast] = React.useState(null)
   const [panelMode, setPanelMode] = React.useState(initialPanelMode)
   const [zoom, setZoom] = React.useState(false)
+  // 派生作品的「对比原图」拉帘开关（阶段十五 Phase A）：由舞台按钮与助手结果卡胶囊共同控制。
+  const [compareOpen, setCompareOpen] = React.useState(false)
   const [logsOpen, setLogsOpen] = React.useState(false)
   // 打开日志抽屉前的焦点位置：关闭后还回去（通常是顶栏算力按钮）。
   const logsReturnRef = React.useRef(null)
@@ -144,6 +146,8 @@ export function useStudioUi({ t, initialView, initialPanelMode }) {
     setView,
     zoom,
     setZoom,
+    compareOpen,
+    setCompareOpen,
     panelMode,
     setPanelMode,
     advancedOpen,

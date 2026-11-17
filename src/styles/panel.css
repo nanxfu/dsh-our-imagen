@@ -99,6 +99,41 @@
   white-space: nowrap;
 }
 
+/* 阶段十五 A1：有未提交草稿时，状态行换成琥珀色的草稿提示 + 「还原原图」轻量按钮。 */
+.ofs-tuning.is-draft .ofs-tuning-source {
+  color: var(--ofs-warn);
+}
+
+.ofs-tuning-restore {
+  appearance: none;
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in oklab, var(--ofs-warn) 34%, transparent);
+  border-radius: var(--ofs-r-pill);
+  background: transparent;
+  color: var(--ofs-warn);
+  font-family: var(--ofs-font);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.ofs-tuning-restore:hover {
+  border-color: color-mix(in oklab, var(--ofs-warn) 58%, transparent);
+  background: var(--ofs-warn-soft);
+}
+
+.ofs-tuning-restore:focus-visible {
+  outline: none;
+  box-shadow: var(--ofs-focus-ring);
+}
+
 /* ── 分区 ───────────────────────────────────────────────────── */
 .ofs-fieldset {
   display: flex;

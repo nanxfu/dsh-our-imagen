@@ -4,7 +4,13 @@
  * 用户用一句话描述想画什么，宿主模型把它整理成生成参数，面板给出确认卡：
  * 中文摘要优先、英文提示词可编辑、张数可选，可以「按此生成」或「带入参数面板」。
  * 信息不足时先给通用澄清卡（问题 + 选项），不让用户重打一遍。
- * 气泡只有两类：参数确认 / 澄清与任务状态、结果。
+ * 气泡有这几类：参数确认 / 澄清 / 任务状态与结果 / 表单提交同步 / 舞台工具动作镜像。
+ *
+ * 阶段十五 Phase A2：
+ *  - 完成气泡用 1~4 格缩略图网格展示全部结果图（1 张保持单图观感）；
+ *  - 点击网格中任一图 → 舞台切到该图（library.openMessage）+ 助手进入单图聚焦视图，
+ *    顶部面包屑「← 返回上一层（{label}）」逐层回退；聚焦只切换视图，不改 messages；
+ *  - 聚焦视图给出快捷胶囊：对比原图（有 sourceImage 时）/ 继续涂抹 / 重新生成 / 查看大图。
  *
  * 外框、头部与分段控件来自 panel.css，消息流与确认卡样式在 chat.css。
  * 接收 { t, ui, form, chat, library, actions } 领域对象。
@@ -15,6 +21,7 @@ import React from 'react'
 import { LIMITS, publicPresets } from '../../shared/contract.js'
 
 import { COUNT_OPTIONS, INSPIRE_KEYS } from '../constants.js'
+import { gridImagesOf, gridLabelOf, imageMetaOf, strengthLabelOf } from '../logic/chat.js'
 import { formatText } from '../logic/format.js'
 import { intentCount } from '../logic/intent.js'
 import { Icon } from './icons.jsx'
@@ -103,6 +110,11 @@ export function ChatPanel(props) {
     canLockSeed,
     resolveClarify,
     newChat,
+    // 阶段十五 Phase A2：单图聚焦返回栈（旧宿主 / 测试替身可以只给部分字段）。
+    focus,
+    focusBack,
+    focusBackLabel,
+    focusImage,
   } = chat
   const { openMessage: openImage } = library
   const { sending } = actions
@@ -133,9 +145,84 @@ export function ChatPanel(props) {
     setDraft('')
   }
 
-  function openMessage(message) {
-    if (message.onOpen) message.onOpen()
-    else if (message.imagePath) openImage(message.imagePath)
+  /** 打开某个图片路径；没有 openMessage 的测试替身 / 旧宿主下静默跳过。 */
+  function openPath(path) {
+    const target = typeof path === 'string' ? path.trim() : ''
+    if (target && typeof openImage === 'function') openImage(target)
+  }
+
+  /**
+   * 从作品库里按路径找回条目 `{ image, item }`：单图聚焦的快捷动作需要 item
+   * （判断 sourceImage 是否可对比原图、交给图片工具当底图、重新生成沿用作品参数）。
+   * 新完成任务在 /history 刷新前还不在 gallery 里，退一步按 items 里的图拼最小条目。
+   */
+  function libraryEntryOf(path) {
+    const target = typeof path === 'string' ? path.trim() : ''
+    if (!target) return null
+    const gallery = Array.isArray(library && library.gallery) ? library.gallery : []
+    const found = gallery.find((entry) => entry && entry.image && entry.image.path === target)
+    if (found) return found
+    const items = Array.isArray(library && library.items) ? library.items : []
+    for (const item of items) {
+      const images = item && Array.isArray(item.images) ? item.images : []
+      const image = images.find((candidate) => candidate && candidate.path === target)
+      if (image) return { image, item }
+    }
+    return null
+  }
+
+  /**
+   * 点击结果网格里的某张图：舞台切到该图 + 进入单图聚焦视图。
+   * 顺序上先切舞台再进聚焦：聚焦失败（图片非法）时舞台仍停在被点的图。
+   */
+  function openGridImage(message, image, index) {
+    const path = image && typeof image.path === 'string' ? image.path : ''
+    if (path) openPath(path)
+    if (typeof focusImage === 'function') focusImage(message, image, index)
+  }
+
+  /** 面包屑返回：逐层出栈；还有上一层时把舞台切回那一层对应的节点，全程不改 messages。 */
+  function backFromFocus() {
+    if (typeof focusBack !== 'function') return
+    const next = focusBack()
+    const path = next && typeof next.path === 'string' ? next.path : ''
+    if (path) openPath(path)
+  }
+
+  /** 聚焦视图的当前条目：优先从作品库拿完整 `{ image, item }`，拿不到时用栈项兜底。 */
+  function focusEntryOfPath() {
+    if (!focus) return null
+    const found = libraryEntryOf(focus.path)
+    if (found) return found
+    return {
+      image: { path: focus.path, url: focus.url, width: focus.width, height: focus.height },
+      item: null,
+    }
+  }
+
+  /** 对比原图：只对有 sourceImage 的派生版本出现，开关交给舞台的对比层。 */
+  function compareFocus(entry) {
+    if (!entry || !entry.item || !entry.item.sourceImage) return
+    if (!ui || typeof ui.setCompareOpen !== 'function') return
+    ui.setCompareOpen(!ui.compareOpen)
+  }
+
+  /** 继续涂抹：以这张图为底图打开舞台图片工具（与画廊「重绘编辑」同一入口）。 */
+  function continueFocus(entry) {
+    if (!entry || !actions || typeof actions.openImageTool !== 'function') return
+    actions.openImageTool('inpaint', entry)
+  }
+
+  /** 重新生成：沿用这张作品的提示词与参数再抽一张（组合层的 reroll）。 */
+  function regenerateFocus(entry) {
+    if (!entry || !actions || typeof actions.reroll !== 'function') return
+    actions.reroll(entry)
+  }
+
+  /** 查看大图：确保舞台停在这张图，再打开放大层。 */
+  function zoomFocus() {
+    if (focus && focus.path) openPath(focus.path)
+    if (ui && typeof ui.setZoom === 'function') ui.setZoom(true)
   }
 
   /** 带入参数面板：写表单 → 切回表单模式 → 轻提示；失败时不切换。 */
@@ -147,9 +234,44 @@ export function ChatPanel(props) {
   }
 
   /**
-   * 表单提交同步记录：与普通用户气泡区分——白卡 + 标题 + 参数胶囊。
-   * 记录只用于回看这次提交是怎么发出去的，不进入意图上下文（见 logic/intent.js）。
+   * 舞台图片工具动作镜像记录（`kind='tool'`）：
+   * 底图缩略图 + 动作说明（`studio.chat.tool.inpaint|img2img`）+ 可选重绘强度胶囊。
+   * 只是界面回放，不进入意图上下文（带 kind 的用户记录会被 intentHistory 跳过）。
    */
+  function renderToolSync(message) {
+    const tool = message.tool === 'img2img' ? 'img2img' : (message.tool === 'inpaint' ? 'inpaint' : '')
+    const title = tool ? t(`studio.chat.tool.${tool}`) : (typeof message.text === 'string' ? message.text : '')
+    const strength = tool && message.strength !== undefined && message.strength !== null
+      ? strengthLabelOf(t, message.strength)
+      : ''
+    const path = typeof message.imagePath === 'string' ? message.imagePath : ''
+    return (
+      <div className="ofs-msg ofs-tool-sync" key={message.id}>
+        <div className="ofs-msg-card ofs-tool-sync-card">
+          {message.image ? (
+            <button
+              type="button"
+              className="ofs-tool-sync-thumb"
+              onClick={() => openPath(path)}
+              title={title}
+              aria-label={title}
+            >
+              <img src={message.image} alt="" loading="lazy" />
+            </button>
+          ) : null}
+          <div className="ofs-tool-sync-body">
+            <span className="ofs-tool-sync-title">{title}</span>
+            {strength ? (
+              <div className="ofs-tool-sync-chips">
+                <span className="ofs-chip ofs-tool-sync-chip">{strength}</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   function renderFormSync(message) {
     const chips = formSyncChips(t, message)
     const prompt = typeof message.text === 'string' ? message.text : ''
@@ -314,6 +436,38 @@ export function ChatPanel(props) {
     )
   }
 
+  /**
+   * 完成气泡的结果图网格：1~4 张全部展示，不再截断成首图。
+   * 单张保持整宽单图的观感；多张用 2 列网格，点击任意一张进入单图聚焦。
+   */
+  function renderResultGrid(message) {
+    const images = gridImagesOf(message)
+    if (images.length === 0) return null
+    const single = images.length === 1
+    return (
+      <div
+        className={single ? 'ofs-msg-grid is-single' : 'ofs-msg-grid'}
+        role="group"
+        aria-label={gridLabelOf(t, images.length)}
+      >
+        {images.map((image, index) => (
+          <button
+            type="button"
+            // key 用图路径：同一任务内不会重复，状态更新后网格也不会整块重挂。
+            key={image.path || image.url || index}
+            className="ofs-msg-grid-item"
+            onClick={() => openGridImage(message, image, index)}
+            title={imageMetaOf(t, image) || undefined}
+          >
+            <img src={image.url} alt="" loading="lazy" />
+            {single ? null : <span className="ofs-msg-grid-index" aria-hidden="true">{index + 1}</span>}
+          </button>
+        ))}
+        {single ? null : <span className="ofs-msg-grid-label">{gridLabelOf(t, images.length)}</span>}
+      </div>
+    )
+  }
+
   function renderAssistant(message) {
     if (message.kind === 'intent') return renderIntent(message)
     if (message.kind === 'error') {
@@ -327,17 +481,69 @@ export function ChatPanel(props) {
       <div className="ofs-msg-card" key={message.id}>
         <p>{message.text}</p>
         {isWorking(message.stage) ? <span className="ofs-chat-shimmer" aria-hidden="true" /> : null}
-        {message.image ? (
-          <button
-            type="button"
-            className="ofs-msg-thumb"
-            onClick={() => openMessage(message)}
-            title={message.meta || undefined}
-          >
-            <img src={message.image} alt="" loading="lazy" />
-            {message.meta ? <span className="ofs-msg-thumb-meta">{message.meta}</span> : null}
-          </button>
+        {renderResultGrid(message)}
+      </div>
+    )
+  }
+
+  /** 面包屑：单图聚焦时显示在消息流顶部，点击逐层回退（栈空回到普通线程）。 */
+  function renderBreadcrumb() {
+    if (!focus) return null
+    const label = typeof focusBackLabel === 'string' ? focusBackLabel : ''
+    const text = label ? formatText(t('studio.chat.focus.back'), { label }) : t('studio.chat.focus.empty')
+    return (
+      <div className="ofs-chat-breadcrumb">
+        <button type="button" className="ofs-chip ofs-chat-back" onClick={backFromFocus}>
+          {`← ${text}`}
+        </button>
+      </div>
+    )
+  }
+
+  /**
+   * 单图聚焦视图：大图 + 参数胶囊 + 快捷动作。
+   * 对比原图只在作品带 sourceImage（派生版本）时出现；其它动作统一交给既有领域动作。
+   */
+  function renderFocus() {
+    if (!focus) return null
+    const entry = focusEntryOfPath()
+    const image = entry && entry.image ? entry.image : focus
+    const src = image && typeof image.url === 'string' && image.url ? image.url : focus.url
+    const meta = imageMetaOf(t, {
+      seconds: focus.seconds,
+      seed: focus.seed,
+    })
+    const canCompare = Boolean(entry && entry.item && entry.item.sourceImage)
+    return (
+      <div className="ofs-chat-focus">
+        <div className="ofs-chat-focus-head">
+          <span className="ofs-chat-focus-title">{t('studio.chat.focus.title')}</span>
+          {focus.count > 1 ? <span className="ofs-chip ofs-chat-focus-batch">{gridLabelOf(t, focus.count)}</span> : null}
+        </div>
+        <div className="ofs-chat-focus-figure">
+          <img src={src} alt="" />
+        </div>
+        {meta ? (
+          <div className="ofs-chat-focus-meta">
+            <span className="ofs-chip ofs-chat-focus-chip">{meta}</span>
+          </div>
         ) : null}
+        <div className="ofs-chat-focus-actions">
+          {canCompare ? (
+            <button type="button" className="ofs-chip ofs-chat-focus-action" onClick={() => compareFocus(entry)}>
+              {t('studio.chat.actions.compare')}
+            </button>
+          ) : null}
+          <button type="button" className="ofs-chip ofs-chat-focus-action" onClick={() => continueFocus(entry)}>
+            {t('studio.chat.actions.continueInpaint')}
+          </button>
+          <button type="button" className="ofs-chip ofs-chat-focus-action" onClick={() => regenerateFocus(entry)}>
+            {t('studio.chat.actions.regenerate')}
+          </button>
+          <button type="button" className="ofs-chip ofs-chat-focus-action" onClick={zoomFocus}>
+            {t('studio.chat.actions.zoom')}
+          </button>
+        </div>
       </div>
     )
   }
@@ -376,37 +582,47 @@ export function ChatPanel(props) {
           </div>
         ) : null}
 
-        {messages.map((message) => {
-          if (message.role === 'user') {
-            // 表单提交同步记录走独立卡片，与自然语言用户气泡区分开。
-            if (message.kind === 'form') return renderFormSync(message)
-            return (
-              <div className="ofs-msg ofs-msg--user" key={message.id}>
-                <p>{message.text}</p>
-              </div>
-            )
-          }
-          return (
-            <div className="ofs-msg ofs-msg--assistant" key={message.id}>
-              {message.kind === 'intent' || message.kind === 'error' ? null : (
-                <div className="ofs-chat-author">
-                  <span className={dotClass(message.stage)} aria-hidden="true" />
-                  <span className="ofs-chat-author-name">{t('studio.chat.assistant')}</span>
+        {focus ? (
+          <>
+            {renderBreadcrumb()}
+            {renderFocus()}
+          </>
+        ) : (
+          <>
+            {messages.map((message) => {
+              if (message.role === 'user') {
+                // 表单提交 / 舞台工具镜像走独立卡片，与自然语言用户气泡区分开。
+                if (message.kind === 'form') return renderFormSync(message)
+                if (message.kind === 'tool') return renderToolSync(message)
+                return (
+                  <div className="ofs-msg ofs-msg--user" key={message.id}>
+                    <p>{message.text}</p>
+                  </div>
+                )
+              }
+              return (
+                <div className="ofs-msg ofs-msg--assistant" key={message.id}>
+                  {message.kind === 'intent' || message.kind === 'error' ? null : (
+                    <div className="ofs-chat-author">
+                      <span className={dotClass(message.stage)} aria-hidden="true" />
+                      <span className="ofs-chat-author-name">{t('studio.chat.assistant')}</span>
+                    </div>
+                  )}
+                  {renderAssistant(message)}
                 </div>
-              )}
-              {renderAssistant(message)}
-            </div>
-          )
-        })}
+              )
+            })}
 
-        {interpreting ? (
-          <div className="ofs-msg ofs-msg--assistant">
-            <div className="ofs-msg-card is-working">
-              <p>{t('studio.chat.parsing')}</p>
-              <span className="ofs-chat-shimmer" aria-hidden="true" />
-            </div>
-          </div>
-        ) : null}
+            {interpreting ? (
+              <div className="ofs-msg ofs-msg--assistant">
+                <div className="ofs-msg-card is-working">
+                  <p>{t('studio.chat.parsing')}</p>
+                  <span className="ofs-chat-shimmer" aria-hidden="true" />
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
 
       <div className="ofs-chat-dock">

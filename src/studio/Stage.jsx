@@ -4,11 +4,14 @@ import React from 'react'
 
 import { INSPIRE_KEYS } from '../constants.js'
 import { formatText, formatSeconds } from '../logic/format.js'
+import { referenceUrlOf } from '../logic/generate.js'
 import { IMAGE_TOOLS } from '../logic/imageTool.js'
 import { jobCountText } from '../logic/status.js'
 import { Icon } from './icons.jsx'
 import { useFocusTrap } from './hooks/useFocusTrap.js'
+import { CompareSlider } from './stage/CompareSlider.jsx'
 import { ImageDock } from './stage/ImageDock.jsx'
+import { ImageDropzone } from './stage/ImageDropzone.jsx'
 import { InlineTool } from './stage/InlineTool.jsx'
 import { MaskEditor } from './stage/MaskEditor.jsx'
 import { ToolSubmitBar } from './stage/ToolSubmitBar.jsx'
@@ -81,6 +84,39 @@ export function Stage(props) {
   // 并把动作坞需要的工具描述符补上本地化文案与可用状态。
   const activeTool = imageTool && imageTool.activeTool ? imageTool.activeTool : null
   const editorOpen = Boolean(imageTool && imageTool.editorOpen && activeTool && imageTool.target)
+
+  // ── 本地导入与拉帘对比（阶段十五 Phase A3）────────────────────
+  //
+  // 导入入口包住整个舞台（含编辑态）：编辑态拖入时由 ImageDropzone 提示并拒绝，
+  // 不覆盖正在涂抹的草稿。对比层只对带 sourceImage 的派生作品开放。
+  const dropzoneRef = React.useRef(null)
+  const compareOpen = Boolean(ui && ui.compareOpen)
+  const setCompareOpen = ui && typeof ui.setCompareOpen === 'function' ? ui.setCompareOpen : null
+  const imageKey = image ? (image.path || image.file || image.url || '') : ''
+  // 真实 Host 的派生条目直接带 sourceImage；旧记录可能只写在 params 里。
+  const sourceImage = (item && typeof item.sourceImage === 'string' && item.sourceImage)
+    || (params && typeof params.sourceImage === 'string' && params.sourceImage)
+    || ''
+  const compareUrl = sourceImage ? referenceUrlOf(sourceImage) : ''
+  // 切图时收起对比：拉帘不能停在上一张作品的原图上。
+  // 用「上一张图的键」而不是首次挂载就关，避免助手胶囊先置 compareOpen=true 再挂载舞台时被立刻关掉。
+  const compareKeyRef = React.useRef(imageKey)
+  React.useEffect(() => {
+    if (compareKeyRef.current === imageKey) return
+    compareKeyRef.current = imageKey
+    if (setCompareOpen) setCompareOpen(false)
+  }, [imageKey, setCompareOpen])
+  // 进入图片工具编辑态时同样收起：编辑分支不展示拉帘。
+  React.useEffect(() => {
+    if (editorOpen && setCompareOpen) setCompareOpen(false)
+  }, [editorOpen, setCompareOpen])
+  // 新画布与空舞台才给「选择图片」入口；有作品时舞台留给作品与动作坞。
+  const hasGallery = Array.isArray(library.gallery) && library.gallery.length > 0
+  const draftCard = library.newDraftCard && typeof library.newDraftCard === 'object' ? library.newDraftCard : {}
+  const showNewDraft = library.workspaceMode === 'new_draft'
+    && (hasGallery || draftCard.pending === true || Boolean(activeJob) || draftCard.explicit === true)
+  const showChoose = !editorOpen && !activeJob && (showNewDraft || !image)
+
   const toolItems = IMAGE_TOOLS.map((tool) => ({
     ...tool,
     label: t(tool.labelKey),
@@ -146,7 +182,6 @@ export function Stage(props) {
         actions.openImageTool(activeTool.id, entry)
       }}
       onClose={() => imageTool.closeTool()}
-      onIterate={() => actions.iterate(selected)}
       onReroll={() => actions.reroll(selected)}
       plannedTitle={t('studio.imageTool.planned')}
     />
@@ -154,8 +189,9 @@ export function Stage(props) {
 
   // 编辑态：画布放进 .ofs-figure（画布按容器宽高换算，不挤小），提交条原地落到舞台下方替代动作坞，
   // 整图重绘自带预览与提交条。不再多挂一行重复的「退出」dock。
+  let content = null
   if (editorOpen) {
-    return (
+    content = (
       <section className="ofs-stage">
         {activeTool.form === 'canvas' ? (
           <>
@@ -177,21 +213,15 @@ export function Stage(props) {
         ) : null}
       </section>
     )
-  }
-
-  // 显式新建绘图态（阶段十三）：打开工作台默认新建画布；已有历史或显式点过「新建创作」时
-  // 显示模糊动态背景 + 取景框，没有历史且未手动点新建时继续展示新手引导（灵感示例 + 云端提示）。
-  const hasGallery = Array.isArray(library.gallery) && library.gallery.length > 0
-  const draftCard = library.newDraftCard && typeof library.newDraftCard === 'object' ? library.newDraftCard : {}
-  const showNewDraft = library.workspaceMode === 'new_draft'
-    && (hasGallery || draftCard.pending === true || Boolean(activeJob) || draftCard.explicit === true)
-  if (showNewDraft) {
+  } else if (showNewDraft) {
+    // 显式新建绘图态（阶段十三）：打开工作台默认新建画布；已有历史或显式点过「新建创作」时
+    // 显示模糊动态背景 + 取景框，没有历史且未手动点新建时继续展示新手引导（灵感示例 + 云端提示）。
     const stopped = Boolean(compute.status && compute.status.stopped)
     const fields = (form && form.form) || {}
     const frameRatio = ratioOf(fields.width, fields.height)
     const preset = (compute.presets || []).find((option) => option && option.id === fields.presetId) || null
     const steady = preset && Number.isFinite(Number(preset.steadySeconds)) ? Number(preset.steadySeconds) : null
-    return (
+    content = (
       <section className="ofs-stage ofs-stage--draft">
         <div className="ofs-figure ofs-figure--draft">
           <div className="ofs-draft-backdrop" aria-hidden="true">
@@ -214,6 +244,12 @@ export function Stage(props) {
                     ? t('studio.stage.newDraftPending')
                     : (stopped ? t('studio.stage.stoppedHint') : t('studio.stage.newDraftHint'))}
                 </p>
+                {/* 阶段十五 A1：点草稿卡恢复后，取景框注明草稿的来源作品（§6.1.4）。 */}
+                {draftCard.draft === true && draftCard.draftFrom ? (
+                  <p className="ofs-draft-source">
+                    {formatText(t('studio.stage.draftFrom'), { prompt: draftCard.draftFrom })}
+                  </p>
+                ) : null}
                 {!draftCard.pending && !activeJob && !draftCard.prompt ? (
                   <div className="ofs-examples">
                     <span className="ofs-examples-label">{t('studio.stage.examples')}</span>
@@ -245,9 +281,7 @@ export function Stage(props) {
         </div>
       </section>
     )
-  }
-
-  if (!image) {
+  } else if (!image) {
     // 手动关闭云端后不能再说「点击生成即可出图」：生成会被宿主拒绝，先提示唤醒。
     const stopped = Boolean(compute.status && compute.status.stopped)
     // 等待出图时取景框按这次任务的尺寸画；空闲时按当前表单比例画。
@@ -257,7 +291,7 @@ export function Stage(props) {
     // 曝光单：这台机器在这个预设上大概多久出一张，先给个准话再让人点生成。
     const preset = (compute.presets || []).find((option) => option && option.id === fields.presetId) || null
     const steady = preset && Number.isFinite(Number(preset.steadySeconds)) ? Number(preset.steadySeconds) : null
-    return (
+    content = (
       <section className="ofs-stage">
         <div className="ofs-figure ofs-figure--empty">
           <div className="ofs-frame" style={{ '--ofs-frame-r': String(frameRatio) }}>
@@ -304,112 +338,154 @@ export function Stage(props) {
     )
   }
 
-  const favorite = isFavorite(image.path || image.file)
-  // 「复制文件路径」要给绝对路径：历史条目里带 absolute，老记录退回相对路径。
-  const copyTarget = image.absolute || image.path || image.file
-  const imageKey = image.path || image.file || image.url
-  const printRatio = ratioOf(image.width, image.height)
-  // 刚落定的图才播一次显影；翻历史作品直接陈列。
-  const developing = isFreshItem(item, now)
+  // 作品分支：相纸 + 玻璃按钮 + 动作坞。带 sourceImage 的派生作品可切「对比原图」拉帘，
+  // 打开时用 CompareSlider 原位替代相纸（放大 / 收藏 / 复制路径按钮保持可用）。
+  if (!content) {
+    const favorite = isFavorite(image.path || image.file)
+    // 「复制文件路径」要给绝对路径：历史条目里带 absolute，老记录退回相对路径。
+    const copyTarget = image.absolute || image.path || image.file
+    const printRatio = ratioOf(image.width, image.height)
+    // 刚落定的图才播一次显影；翻历史作品直接陈列。
+    const developing = isFreshItem(item, now)
 
-  return (
-    <section className="ofs-stage">
-      <figure className="ofs-figure">
-        <div className="ofs-print-slot">
-          <button
-            type="button"
-            key={imageKey}
-            className={developing ? 'ofs-print is-developing' : 'ofs-print'}
-            style={{ '--ofs-print-r': String(printRatio) }}
-            onClick={openZoom}
-            title={t('studio.stage.zoom')}
+    content = (
+      <section className="ofs-stage">
+        <figure className="ofs-figure">
+          <div className="ofs-print-slot">
+            {compareOpen && compareUrl ? (
+              <CompareSlider
+                t={t}
+                beforeUrl={compareUrl}
+                afterUrl={image.url}
+                beforeLabel={t('studio.compare.before')}
+                afterLabel={t('studio.compare.after')}
+                ratio={printRatio}
+              />
+            ) : (
+              <button
+                type="button"
+                key={imageKey}
+                className={developing ? 'ofs-print is-developing' : 'ofs-print'}
+                style={{ '--ofs-print-r': String(printRatio) }}
+                onClick={openZoom}
+                title={t('studio.stage.zoom')}
+              >
+                <img src={image.url} alt={prompt || image.file || t('studio.image.alt')} className="ofs-image" />
+              </button>
+            )}
+
+            <div className="ofs-figure-tools">
+              {compareUrl && setCompareOpen ? (
+                <button
+                  type="button"
+                  className={compareOpen ? 'ofs-glass-btn is-on' : 'ofs-glass-btn'}
+                  onClick={() => setCompareOpen(!compareOpen)}
+                  title={t('studio.compare.toggle')}
+                  aria-label={t('studio.compare.toggle')}
+                  aria-pressed={compareOpen}
+                >
+                  <Icon name="images" size={16} />
+                </button>
+              ) : null}
+              <button type="button" className="ofs-glass-btn" onClick={openZoom} title={t('studio.stage.zoom')} aria-label={t('studio.stage.zoom')}>
+                <Icon name="expand" size={16} />
+              </button>
+              <button type="button" className="ofs-glass-btn" onClick={() => copyPath(copyTarget)} title={t('studio.action.copyPath')} aria-label={t('studio.action.copyPath')}>
+                <Icon name="copy" size={16} />
+              </button>
+              <button
+                type="button"
+                className={favorite ? 'ofs-glass-btn is-on' : 'ofs-glass-btn'}
+                onClick={() => toggleFavorite(image.path || image.file)}
+                title={favorite ? t('studio.action.favorited') : t('studio.action.favorite')}
+                aria-label={favorite ? t('studio.action.favorited') : t('studio.action.favorite')}
+                aria-pressed={favorite}
+              >
+                <Icon name={favorite ? 'starFilled' : 'star'} size={16} />
+              </button>
+            </div>
+          </div>
+
+          {activeJob ? (
+            <div className="ofs-stage-progress" aria-hidden="true">
+              <span className="ofs-shimmer" aria-hidden="true" />
+              <span className="ofs-progress-label">{progressText}</span>
+            </div>
+          ) : null}
+        </figure>
+
+        <div className="ofs-stage-foot">
+          <p className="ofs-stage-prompt" title={prompt || undefined}>{prompt}</p>
+          <div className="ofs-stage-meta">
+            <span>
+              {image.width || '—'} × {image.height || '—'}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>{formatSeconds(t, image.seconds)}</span>
+            <span aria-hidden="true">·</span>
+            <span>
+              {t('studio.meta.seed')} {image.seed ?? '—'}
+            </span>
+          </div>
+        </div>
+
+        {dock}
+
+        {zoom ? (
+          <div
+            className="ofs-lightbox"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('studio.stage.zoom')}
+            ref={lightboxRef}
+            onClick={() => setZoom(false)}
           >
-            <img src={image.url} alt={prompt || image.file || t('studio.image.alt')} className="ofs-image" />
-          </button>
-
-          <div className="ofs-figure-tools">
-            <button type="button" className="ofs-glass-btn" onClick={openZoom} title={t('studio.stage.zoom')} aria-label={t('studio.stage.zoom')}>
-              <Icon name="expand" size={16} />
+            <img
+              src={image.url}
+              alt={prompt || image.file || t('studio.image.alt')}
+              onClick={(event) => event.stopPropagation()}
+            />
+            <button
+              ref={closeRef}
+              type="button"
+              className="ofs-lightbox-close"
+              onClick={() => setZoom(false)}
+              aria-label={t('studio.stage.close')}
+            >
+              <Icon name="close" size={16} />
             </button>
-            <button type="button" className="ofs-glass-btn" onClick={() => copyPath(copyTarget)} title={t('studio.action.copyPath')} aria-label={t('studio.action.copyPath')}>
-              <Icon name="copy" size={16} />
-            </button>
+            {/* 大图预览里的「以此图重绘」：一步直达局部涂抹（决策 D4）。 */}
             <button
               type="button"
-              className={favorite ? 'ofs-glass-btn is-on' : 'ofs-glass-btn'}
-              onClick={() => toggleFavorite(image.path || image.file)}
-              title={favorite ? t('studio.action.favorited') : t('studio.action.favorite')}
-              aria-label={favorite ? t('studio.action.favorited') : t('studio.action.favorite')}
-              aria-pressed={favorite}
+              className="ofs-lightbox-action"
+              onClick={(event) => {
+                // 放大层本身点任意位置都会关闭，这个按钮单独处理，避免先关层再弹提示。
+                if (event && typeof event.stopPropagation === 'function') event.stopPropagation()
+                actions.openImageTool('inpaint', selected)
+              }}
             >
-              <Icon name={favorite ? 'starFilled' : 'star'} size={16} />
+              <Icon name="image" size={15} />
+              {t('studio.action.reference')}
             </button>
           </div>
-        </div>
-
-        {activeJob ? (
-          <div className="ofs-stage-progress" aria-hidden="true">
-            <span className="ofs-shimmer" aria-hidden="true" />
-            <span className="ofs-progress-label">{progressText}</span>
-          </div>
         ) : null}
-      </figure>
+      </section>
+    )
+  }
 
-      <div className="ofs-stage-foot">
-        <p className="ofs-stage-prompt" title={prompt || undefined}>{prompt}</p>
-        <div className="ofs-stage-meta">
-          <span>
-            {image.width || '—'} × {image.height || '—'}
-          </span>
-          <span aria-hidden="true">·</span>
-          <span>{formatSeconds(t, image.seconds)}</span>
-          <span aria-hidden="true">·</span>
-          <span>
-            {t('studio.meta.seed')} {image.seed ?? '—'}
-          </span>
-        </div>
-      </div>
-
-      {dock}
-
-      {zoom ? (
-        <div
-          className="ofs-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t('studio.stage.zoom')}
-          ref={lightboxRef}
-          onClick={() => setZoom(false)}
-        >
-          <img
-            src={image.url}
-            alt={prompt || image.file || t('studio.image.alt')}
-            onClick={(event) => event.stopPropagation()}
-          />
-          <button
-            ref={closeRef}
-            type="button"
-            className="ofs-lightbox-close"
-            onClick={() => setZoom(false)}
-            aria-label={t('studio.stage.close')}
-          >
-            <Icon name="close" size={16} />
-          </button>
-          {/* 大图预览里的「以此图重绘」：一步直达局部涂抹（决策 D4）。 */}
-          <button
-            type="button"
-            className="ofs-lightbox-action"
-            onClick={(event) => {
-              // 放大层本身点任意位置都会关闭，这个按钮单独处理，避免先关层再弹提示。
-              if (event && typeof event.stopPropagation === 'function') event.stopPropagation()
-              actions.openImageTool('inpaint', selected)
-            }}
-          >
-            <Icon name="image" size={15} />
-            {t('studio.action.reference')}
-          </button>
-        </div>
-      ) : null}
-    </section>
+  // 拖放 / 粘贴 / 选择图片包住整个舞台（含编辑态，编辑态拖入由 ImageDropzone 提示并拒绝）。
+  // onImported 缺接线时留给组件回退 toast，不伪造焦点切换。
+  const onImported = actions && typeof actions.activateImport === 'function' ? actions.activateImport : undefined
+  return (
+    <ImageDropzone
+      t={t}
+      ui={ui}
+      editorOpen={editorOpen}
+      showChoose={showChoose}
+      triggerRef={dropzoneRef}
+      onImported={onImported}
+    >
+      {content}
+    </ImageDropzone>
   )
 }

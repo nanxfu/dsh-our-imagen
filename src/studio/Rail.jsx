@@ -9,6 +9,9 @@
  *  3. 高级设置（折叠）：排除项仅在当前模型/CFG 可用时出现；步数、CFG、随机种子。
  *  4. 页脚：生成张数 1~4 → 立即生成 → 规格摘要。
  *
+ * 阶段十五 Phase A1：面板顶部在有未提交草稿时显示「正在新草稿中编辑（源自此图）」+
+ * 「还原原图」，替代原来的「正在微调：{prompt}」行（两者互斥）。
+ *
  * 主表单只做纯文生图：参考图 / 蒙版 / 重绘强度随左栏参考图区一起删除，
  * 图片处理入口统一在舞台底部动作坞（见 `studio.rail.imageToolsHint`）。
  */
@@ -59,11 +62,12 @@ export function Rail(props) {
     translate,
     toggleRefine,
     englishPromptHint,
-    // 微调来源（从胶卷 / 画廊回填而来）与「新建创作」重置入口。
+    // 微调来源（从胶卷 / 画廊回填而来）、未提交草稿状态与「新建创作」重置入口。
     tuning,
     newCreation,
+    draftView,
   } = form
-  const { sending, generate } = actions
+  const { sending, generate, restoreOriginal } = actions
 
   const hasPrompt = fields.prompt.trim().length > 0
   const currentWidth = clampSize(fields.width)
@@ -77,6 +81,11 @@ export function Rail(props) {
   const tuningText = formatText(t('studio.rail.tuning'), {
     prompt: tuningPrompt || t('studio.rail.tuningUnknown'),
   })
+  // 未提交草稿（阶段十五 A1）：左栏顶部换成「正在新草稿中编辑（源自此图）」+「还原原图」。
+  // 只有确实有来源作品时才给还原入口（来源已丢失时只保留状态文案）。
+  const draftSource = draftView && draftView.active && draftView.source ? draftView.source : null
+  const draftActive = Boolean(draftView && draftView.active && draftView.source)
+  const canRestore = Boolean(draftSource) && typeof restoreOriginal === 'function'
   const startNewCreation = typeof newCreation === 'function' ? newCreation : () => {}
 
   // 排除项：只有当前模型 + CFG 真的消费负向词时才出现（Host 与 Client 共用同一判定）。
@@ -97,8 +106,25 @@ export function Rail(props) {
     <aside className="ofs-panel ofs-panel--form">
       <PanelModeTabs t={t} mode={mode} setMode={setMode} onNewCreation={startNewCreation} />
 
-      {/* 版本微调来源：仅在基于某张旧作品微调时轻量提示，不额外占空白行。 */}
-      {tuning ? (
+      {/* 阶段十五 A1：有未提交草稿时顶部换成草稿状态 + 「还原原图」；
+          否则保留原有的「正在微调：某张作品」轻量提示行。 */}
+      {draftActive ? (
+        <div className="ofs-tuning is-draft">
+          <p className="ofs-tuning-source" title={draftSource && draftSource.prompt ? draftSource.prompt : undefined}>
+            {t('studio.rail.draftStatus')}
+          </p>
+          {canRestore ? (
+            <button
+              type="button"
+              className="ofs-tuning-restore"
+              onClick={() => restoreOriginal()}
+              title={t('studio.rail.restoreOriginal')}
+            >
+              {t('studio.rail.restoreOriginal')}
+            </button>
+          ) : null}
+        </div>
+      ) : tuning ? (
         <div className="ofs-tuning">
           <p className="ofs-tuning-source" title={tuningPrompt || undefined}>{tuningText}</p>
         </div>

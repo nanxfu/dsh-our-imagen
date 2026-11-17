@@ -8,10 +8,10 @@
 
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { bundle } from '../../build.mjs'
-import { loadClient, TEST_ARTIFACT } from '../load-client.mjs'
+import { ROOT, loadClient, TEST_ARTIFACT } from '../load-client.mjs'
 
 /** 收集整棵树里的文本节点（数字转字符串；布尔子节点按空处理）。 */
 export const collectText = (node, out = []) => {
@@ -138,11 +138,18 @@ export const textareaOfClass = (tree, className) => findNodes(
 
 /** 构建测试产物：同一个进程内只构建一次，供多次 loadClient 复用。 */
 let testBuildPromise = null
+/**
+ * 并行开发时用 `OFS_TEST_BUNDLE`（相对仓库根）指定独立构建产物，
+ * 避免多个测试进程同时写 `test/.build/client.test.js`；不设置时行为不变。
+ */
+const BUNDLE_ARTIFACT = process.env.OFS_TEST_BUNDLE
+  ? join(ROOT, process.env.OFS_TEST_BUNDLE)
+  : TEST_ARTIFACT
 const ensureTestBuild = () => {
   if (!testBuildPromise) {
     testBuildPromise = (async () => {
-      await mkdir(dirname(TEST_ARTIFACT), { recursive: true })
-      await writeFile(TEST_ARTIFACT, await bundle({ test: true }), 'utf8')
+      await mkdir(dirname(BUNDLE_ARTIFACT), { recursive: true })
+      await writeFile(BUNDLE_ARTIFACT, await bundle({ test: true }), 'utf8')
     })()
   }
   return testBuildPromise
@@ -156,6 +163,9 @@ const ensureTestBuild = () => {
  *   显式传入 artifact（如发布产物 client.js）时跳过测试产物构建。
  */
 export async function createTestClient(options = {}) {
-  if (!options.artifact) await ensureTestBuild()
+  if (!options.artifact) {
+    await ensureTestBuild()
+    return loadClient({ ...options, artifact: BUNDLE_ARTIFACT })
+  }
   return loadClient(options)
 }

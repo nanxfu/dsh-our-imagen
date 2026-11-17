@@ -182,6 +182,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | GET | `/imagen-api/history?limit=&offset=` | 查询历史产物（分页，带 `hasMore`） |
 | GET | `/imagen-api/history/tree?root=&limit=` | 按根作品返回整棵版本派生树（跨历史分页补齐版本链） |
 | GET | `/imagen-api/file?path=` | 读取产物图片（二进制） |
+| POST | `/imagen-api/import` | 本地图片导入：校验后落盘为「导入作品」（阶段十五 Phase A） |
 | GET | `/imagen-api/library` | 读取收藏 / 删除记录 |
 | POST | `/imagen-api/library/favorite` | 收藏 / 取消收藏 |
 | POST | `/imagen-api/library/delete` | 删除产物 |
@@ -603,9 +604,10 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
   `items` 保持数组类型（旧客户端只读该字段即可向后兼容）；`hasMore=true` 表示还有更早的记录，
   客户端可在底部继续「加载更多」（前端每次取契约上限 `LIMITS.history.pageSize` = 100 条）。
 
-`HistoryItem`：`{ jobId, dir, createdAt, finishedAt, presetId, params, prompt, images[], sourceImage, rootImage, inpaint, strength }`；
+`HistoryItem`：`{ jobId, dir, createdAt, finishedAt, presetId, params, prompt, images[], source, sourceImage, rootImage, inpaint, strength }`；
 `params` 是完整的生成参数（用于「带回参数」），`images[]` 每项：
 `{ file, path, absolute, url, width, height, seed, seconds }`（已按文件是否存在过滤，删除过的图不会出现）。
+`source` 是作品来源（阶段十五 Phase A）：`"ai"` 为 AI 生成，`"import"` 为用户本地导入（见 §2.3 `/import`，导入图不参与 AI 生成计数）。
 `sourceImage` / `rootImage` / `inpaint` / `strength` 是 0.13.0 起的版本链字段（语义见 §5.18）：`sourceImage`
 是本次生成所用参考图的工作区相对路径（纯文生图或前端动态上传参考图时为 `null`）；`rootImage` 是整棵
 派生树的根作品路径（无参考图的根作品为 `null`，每张候选图各自为根；旧 `meta.json` 缺该字段时由 Host 按
@@ -634,6 +636,20 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 - **错误**：`404 not_found`（路径非法、文件不存在或读取失败）。
 
 ### 2.3 收藏、文案与本地动作
+
+#### `POST /imagen-api/import`
+
+把用户选择的本地图片（PNG / JPEG）落盘为「导入作品」（阶段十五 Phase A）。
+
+- **请求体**：`{ "data": "data:image/png;base64,…", "name": "photo.png" }`
+  - `data`：dataURL 或裸 base64；解码后不超过 `IMPORT.maxBytes`（8 MiB）。
+  - `name`：仅用于展示，清理控制字符后截断到 `IMPORT.maxNameChars`（120 字符），不参与落盘路径。
+- **校验**：PNG / JPEG 魔数、解析宽高、宽高均不小于 `IMPORT.minEdge`（128 像素）；按原长边落盘，不缩放（上限 `IMPORT.maxEdge` 只用于提示）。
+- **落盘**：`imagen-output/<YYYYMMDD-HHmmss>-import-<6 位随机>/`，文件名为 `01.png` / `01.jpg`，`meta.json` 与生成产物同构并追加 `source: "import"`、`imported: true`；若 PNG 内含本插件写入的 tEXt 生成元数据（keyword `our-imagen`），解析后写入 `generation` 并用它覆盖 `params`（胶片条点该图可回填原生成参数）。
+- **响应**：`{ "ok": true, "entry": { "image": { "file", "path", "url", "width", "height", "absolute" }, "item": <与 /history 条目同形>, "generation": object|null } }`
+  （`generation` 只在 PNG 内嵌本插件生成元数据时非空；客户端据此提示「已识别生成参数」）
+- **错误**：`400 invalid_body`（字段缺失 / 非法 JSON）、`400 invalid_request`（超体积、不是 PNG/JPEG、尺寸过小）。
+- 导入作品与生成作品一样出现在 `/history` 与 `/history/tree`（`item.source === "import"`，独立根 `v1`），画廊与胶片条显示「导入」角标，不计入 AI 生成数量。
 
 #### `GET /imagen-api/library`
 
@@ -1435,3 +1451,43 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
    面板行、幽灵节点、LRU、草稿摘要）。客户端 `check-client-render` 104 项（含版本条根折叠、面板 hover / 固定 /
    Esc / 点行、按需拉树、旧宿主 404 降级、父删局部根、新建绘图态与完成切回）、`check-client-logic` 82 项、
    `check-client-locale` zh/en 各 495 键同构（相对 0.12.0 累计新增 51 键、删除 33 个死键）。
+
+### 5.19 第十五批交互补充（交互语义对齐、双向助手闭环与本地导入，阶段十五 Phase A）
+
+> 设计依据：[STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md) §四 Phase A。
+
+1. **动作语义收敛**：舞台动作坞下线「带回参数」（胶片条点击已自动回填），「生成变体」统一改名
+   **「重新生成」**（按当前作品提示词与参数、换随机种子重抽 1 张纯文生图，产生新根 `v1`）。
+   画廊卡片动作收敛为「在工作台打开（主点击同义）/ 重绘编辑 / 查看大图 / 收藏 / 删除」，
+   不再在画廊原地盲发后台生图请求：所有创作与编辑动作都先切回工作台。
+2. **左栏草稿托管**：点击胶片条作品 = 切预览 + 回填该作品原始参数（**不再因未提交修改被拦截**）。
+   回填后修改任意表单字段即产生「未提交草稿」：作品条最左端草稿卡实时显示「未提交草稿 · 源自此图」，
+   左栏顶部显示「正在新草稿中编辑（源自此图）」与常驻「还原原图」；舞台保持展示来源作品，不闪成空取景框。
+   切到其他作品时先把当前编辑托管进草稿卡（已有草稿则覆盖）再回填，并提示「已保留当前草稿」；
+   点草稿卡切到新建画布焦点并恢复草稿内容与来源（取景框注明「源自：{prompt}」）；
+   「还原原图」恢复来源作品参数、清空草稿并回到该作品；草稿提交成功后清空并沿用「新建绘图」的出图切换，
+   「新建创作」清空表单与草稿来源。全新画布上手改的内容仍按「正在配置新画布」展示，不抢占新建态。
+3. **助手结果网格**：一次任务 1~4 张结果图在助手完成气泡中以缩略图网格完整展示（单张保持单图观感），
+   点击任一图把舞台切到该图并进入**单图聚焦**：对话流替换为聚焦视图（大图 + 参数胶囊 + 快捷动作
+   「对比原图 / 继续涂抹 / 重新生成 / 查看大图」），顶部出现「← 返回上一层（{label}）」面包屑；
+   返回逐层出栈回到上级结果网格。聚焦与返回只改本地视图栈，不写 `messages`。
+4. **舞台工具动作镜像**：在舞台发起「局部涂抹 / 整图重绘」并提交成功后，助手线程追加一条镜像记录
+   （底图缩略图 + 动作说明 + 可选重绘强度胶囊）与一条任务反馈气泡；完成后气泡展示新版本图。
+   镜像记录、表单同步卡与结果卡都带独立 `kind`，不进入 `intentHistory`，不污染意图模型的多轮上下文。
+5. **本地图片导入**：舞台支持拖入、粘贴与「选择图片」入口导入 PNG / JPEG（`POST /imagen-api/import`，见 §2.3）：
+   导入图原样落盘为独立 `v1`，切到舞台焦点并可立即使用动作坞；新画布与空舞台的取景框提示
+   「写提示词，或把图片拖入取景框」。图片工具编辑态拒绝导入并提示（不覆盖涂抹草稿）。
+   画廊 / 胶片条对 `item.source === "import"` 的作品显示「导入」角标。
+6. **拉帘对比原图**：带 `sourceImage` 的派生作品（重绘 / 涂抹 / 扩图产物，含导入后加工）在舞台玻璃工具区
+   出现「对比原图」开关；打开后在相纸位置以可拖动分隔线对比原图与当前版本（指针拖动、双击回 50%、
+   ←/→ 4% 步进、Home/End；`role="slider"` + `aria-valuenow`）。切图或进入编辑态自动关闭对比。
+7. **PNG 生成元数据**：Host 在生成产物 PNG 中写入 `tEXt` 元数据（keyword `our-imagen`，含提示词 / 排除项 /
+   预设 / 尺寸 / 步数 / CFG / 种子 / 任务号）；再次导入这张 PNG 时解出元数据写进 `meta.json` 的
+   `generation` 并回填参数，胶片条点该图即可还原原生成参数，并在导入成功时提示「已识别生成参数」。
+   元数据写入失败不影响出图（退回原始字节）；JPEG 没有等价容器，导入时按「无元数据」处理。
+8. **测试**：新增 `test/check-client-draft.mjs`（4 项，草稿托管状态流转与整页呈现）、
+   `test/chat-timeline.mjs`（5 项，结果网格 / 聚焦栈 / 镜像记录与上下文隔离）、
+   `test/import-client.mjs`（18 项，导入纯逻辑 + Stage 渲染集成）、`test/import-host.mjs`（17 项，导入路由 /
+   PNG tEXt / 历史收录）；`check-client-chat` 19 项、`check-client-shell` 51 项、`check-client-logic` 83 项、
+   `check-client-tools` 27 项、`image-tool-render` 6 项、`host-e2e` 56 项、`jobs-wait` 31 项，
+   `check-client-locale` zh/en 各 539 键同构；`npm test` 36 步全绿。

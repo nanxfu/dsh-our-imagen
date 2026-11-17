@@ -242,3 +242,19 @@ export function cancelKaggleLogin() {
 export function submitKaggleLoginCode(code) {
   return kaggleLoginAction('submit-code', code)
 }
+
+/**
+ * 本地图片导入（阶段十五 Phase A）：把 dataURL / 裸 base64 交给宿主落盘。
+ *
+ * 请求体 `{ data, name }`：name 只用于展示，宿主会清理控制字符并截断；
+ * 成功返回 `{ ok, entry: { image, item } }`，entry 与 /history 条目同形，可直接选中。
+ */
+export function importImageFile({ data, name } = {}) {
+  const body = { data: typeof data === 'string' ? data : '' }
+  const label = typeof name === 'string' ? name.trim() : ''
+  if (label) body.name = label
+  return request(routePath('importFile'), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}

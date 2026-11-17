@@ -293,13 +293,19 @@
 
 ## 十五、 工作台交互语义对齐、双向助手闭环与模型原生参考演进（规划中）
 
-> **状态**：📝 已完成需求与方案对齐，待分期实施（2026-11-17）。完整方案与分期路径见 [STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md)。
+> **状态**：🟡 Phase 0 与 Phase A 已完成（2026-11-18，未发版），Phase B / C 待排期。完整方案与分期路径见 [STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md)。
 
 - **背景**：0.13.0 收口舞台工具解耦与版本树后，继续解决「外部图片导入与全局可发现性」「文生图原生参考能力缺失」「表单-舞台-助手三向协同」及「后处理闭环」问题；放弃多模态看图过渡方案，直接基于图像模型原生能力演进，避免为 SDXL 堆砌过时外挂技术债。
 - **核心设计**：
   1. **语义、导入与版本树边界**：舞台动作坞「生成变体」改名「重新生成」并下线「带回参数」，画廊卡片收敛至切回工作台统一颗粒度；左栏编辑自动托管进最左端「新建草稿卡」并提供「还原原图」；新增本地图片导入落盘（`/imagen-api/import`），明确「原地改图（`v1 → v2`）」与「左栏参考生新图（`参考槽 → 新 v1`）」的语义边界，并定义新画布与浏览态的按区拖放与编辑态保护规则。
   2. **双向聚焦时间线**：助手支持 1~4 张结果网格、镜像同步舞台图片工具动作、点击单图钻取聚焦与顶部「返回上一层」导航（不污染 `intentHistory`）。
   3. **四阶段推进（Phase 0 → A → B → C）**：先修复 DSH 宿主 `llm` 注入与流式调用（润色/英译/对话）→ 落地交互收敛、双向聚焦、本地导入、拉帘对比与 PNG 元数据 → 点亮动作坞「高清放大（`upscale`）」与「快捷比例扩图（`outpaint`）」→ 先在 Kaggle `2×T4` 真机实测 `FLUX.2 Klein 4B` 参考推理并抽象 `supportsReference` 能力，再落地左栏多图参考槽与批量分镜（并在 Colab L4/A100 后顺势引入 `FLUX.2 Klein 9B` / `Qwen-Image-Edit`）。
+- **实现（Phase A 已完成，2026-11-18）**：
+  - **A1 动作语义与草稿托管**：`ImageDock` 下线「带回参数」，「生成变体」改名「重新生成」；`GalleryCard` 动作收敛为「在工作台打开 / 重绘编辑 / 查看大图 / 收藏 / 删除」，画廊不再盲发生成。胶片条点击不再被未提交修改拦截：脏修改先托管进最左端草稿卡（「未提交草稿 · 源自此图」），再回填目标作品；左栏出现「正在新草稿中编辑（源自此图）」+「还原原图」，点草稿卡恢复草稿并切新建画布焦点，提交 / 新建创作正确清理。纯逻辑在 `src/logic/form.js`（`draftSourceOf` / `originalPatchOf` / `parkDraftOf` / `draftViewOf`）与 `previewRecallOf` 的新语义。
+  - **A2 双向时间线**：助手完成气泡展示任务全部 1~4 张结果图（网格，单张保持原观感）；舞台图片工具提交后向助手线程追加镜像动作记录与任务气泡；点击结果图进入单图聚焦视图（大图 + 参数胶囊 + 对比原图 / 继续涂抹 / 重新生成 / 查看大图），顶部「← 返回上一层（{label}）」逐层回退。镜像 / 同步 / 结果记录均带 `kind`，不进入 `intentHistory`。纯逻辑在 `src/logic/chat.js`。
+  - **A3 本地导入与对比**：新增 `POST /imagen-api/import`（PNG / JPEG 魔数、8 MiB、最小边 128 校验后原样落盘为独立 `v1`，写同构 `meta.json` 并标 `source: "import"`），导入图自动进入 `/history` 与 `/history/tree`，作品条 / 画廊显示「导入」角标；舞台支持拖入、粘贴与「选择图片」，新画布提示「写提示词，或把图片拖入取景框」，编辑态拒绝导入；带 `sourceImage` 的派生作品提供可拖动「对比原图」拉帘。新增 `lib/image-meta.js` 在生成 PNG 写入 `tEXt` 生成元数据（失败退回原字节），导入自带元数据的 PNG 时回填 `generation` 并恢复原生成参数。
+  - **契约与字典**：`ROUTES.importFile` + `IMPORT` 进入 `shared/contract.js`，`HistoryItem` 增加 `source`；`useStudioUi` 新增 `compareOpen`；中英字典各 539 键同构。
+  - **测试**：新增 `check-client-draft`（4）、`chat-timeline`（5）、`import-client`（18）、`import-host`（17）；`check-client-chat` 19、`check-client-shell` 51、`check-client-logic` 83、`check-client-tools` 27、`image-tool-render` 6、`host-e2e` 56、`jobs-wait` 31、`check-contract` 12，`npm test` 36 步全绿。变更明细见 [CHANGELOG](../CHANGELOG.md) 的对应条目。
 
 ---
 
@@ -311,4 +317,4 @@
 | **十二** | 舞台图片处理工具栏与交互解耦（方案 B） | 前端交互重构 | 十一完成收口 | **✅ 已完成（0.13.0，未发版）** |
 | **十三** | 显式新建绘图、多作品草稿圆点与树状版本管理 | 前端 + Host 元数据 | 十二（方案 B 底座） | **✅ 已完成（0.13.0，未发版）** |
 | **十四** | Google Colab（Colab Pro）后端接入 | Host 算力扩展 + `remote/` 适配 | 十一收口后可与十二/十三并行（需先过 M0 探针） | 独立后端里程碑（与界面解耦） |
-| **十五** | 交互语义对齐、双向助手闭环与模型原生参考演进（Phase 0~C） | 全链路体验 + 导入 + 后处理与 DiT 原生参考 | 十三（工作区草稿与版本树） | 📝 规划中（分 Phase 0/A/B/C 推进） |
+| **十五** | 交互语义对齐、双向助手闭环与模型原生参考演进（Phase 0~C） | 全链路体验 + 导入 + 后处理与 DiT 原生参考 | 十三（工作区草稿与版本树） | 🟡 Phase 0 / Phase A 已完成（未发版）；Phase B / C 待排期 |

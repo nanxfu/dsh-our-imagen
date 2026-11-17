@@ -282,6 +282,45 @@
 - **可观测性**：llm 服务缺失 / 默认模型缺失 / `prepareCall` 异常 / 空流（带 `finish` 的失败码与消息）统一以 warn 级别写入 `<workspace>/.imagen/logs/host.log`，每次调用另记一条 `llm_call provider=… model=… purpose=…`，不再只有容易忽略的 debug 日志。
 - **测试**：`test/host-e2e.mjs` 新增两条用例——思考分片不进正文 + 缺省 / 显式 `sessionId`、`prepareCall` 分支的最低思考档选择；`npm test` 32 步全绿。
 
+### 阶段十五 Phase A：交互语义收敛、双向助手闭环与本地图片导入
+
+> 对应 ROADMAP 第十五条 Phase A，设计依据见 [docs/STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](docs/STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md) §四。三条线（A1 语义与草稿、A2 双向时间线、A3 导入与对比）同批落地。
+
+**A1 动作语义与左栏草稿托管**
+
+- **动作坞**：下线「带回参数」（点胶片条已自动回填），「生成变体」改名「重新生成」——按当前作品提示词与参数、换随机种子重抽 1 张纯文生图（产生新根 `v1`）。
+- **画廊动作收敛**：卡片动作改为「在工作台打开（主点击同义）/ 重绘编辑 / 查看大图 / 收藏 / 删除」，删除「带回参数」「生成变体」与画廊原地盲发请求；所有创作 / 编辑动作统一先切回工作台。
+- **左栏编辑自动托管草稿**：点胶片条作品不再因未提交修改被拦截——先托管当前编辑再回填目标作品参数。作品条最左端草稿卡实时显示「未提交草稿 · 源自此图」，左栏顶部显示「正在新草稿中编辑（源自此图）」+「还原原图」；舞台保持展示来源作品不闪空。点草稿卡切新建画布焦点并恢复草稿（取景框注明「源自：{prompt}」）；「还原原图」恢复来源参数、清草稿并回到该作品；提交成功清草稿并沿用新建绘图的出图切换。
+- **纯逻辑**：`src/logic/form.js` 新增 `draftSourceOf` / `originalPatchOf` / `parkDraftOf` / `draftViewOf`；`previewRecallOf` 改为「需要时托管、始终回填」的新语义。
+
+**A2 助手结果网格、舞台工具镜像与单图聚焦**
+
+- **1~4 张结果网格**：任务完成气泡接收全部结果图渲染缩略图网格（单张保持原观感），修复此前只取 `images[0]` 的截断。
+- **舞台动作镜像**：局部涂抹 / 整图重绘提交成功后，助手线程追加一条镜像记录（底图缩略图 + 动作说明 + 可选强度胶囊）与一条任务反馈气泡，完成后展示新版本图。
+- **单图聚焦 + 返回栈**：点击助手结果网格任一张图切舞台并进入聚焦视图（大图 + 参数胶囊 + 对比原图 / 继续涂抹 / 重新生成 / 查看大图），顶部「← 返回上一层（{label}）」逐层出栈回退。
+- **上下文隔离**：镜像记录、表单同步卡与结果均带独立 `kind`，不进入 `intentHistory`；新建对话清空聚焦栈。
+- **纯逻辑**：新增 `src/logic/chat.js`（结果图归一、气泡补丁、聚焦栈、镜像记录），hook 与渲染分离便于单测。
+
+**A3 本地图片导入、拉帘对比与 PNG 元数据**
+
+- **`POST /imagen-api/import`**：接收 dataURL / 裸 base64 的 PNG / JPEG，校验体积（8 MiB）、魔数、最小边（128），原样落盘到 `imagen-output/<stamp>-import-<rand>/` 并写同构 `meta.json`（`source: "import"`、`imported: true`、`generation`）；响应 `{ ok, entry: { image, item, generation } }`。导入图与生成图同层，自动出现在 `/history` 与 `/history/tree`，作为独立根 `v1`；作品条 / 画廊显示「导入」角标。
+- **PNG 生成元数据**：新增 `lib/image-meta.js`（PNG/JPEG 宽高解析、PNG `tEXt` 读写与 CRC32、`our-imagen` 生成元数据编解码）。生成产物落盘时写入提示词 / 排除项 / 预设 / 尺寸 / 步数 / CFG / 种子 / 任务号；元数据写入失败退回原始字节，不影响出图。导入自带元数据的 PNG 时回填 `generation` 与生成参数，胶片条点该图即可还原，并提示「已识别生成参数」。
+- **导入交互**：舞台整体支持拖入、粘贴与「选择图片」；新画布 / 空舞台提示「写提示词，或把图片拖入取景框」；图片工具编辑态拒绝导入并提示，避免覆盖涂抹草稿。成功后切到该作品、刷新历史（`actions.activateImport`）。
+- **拉帘对比原图**：带 `sourceImage` 的派生作品出现「对比原图」开关，打开后用可拖动分隔线对比原图与当前版本（指针拖动、双击回 50%、键盘 ←/→、Home/End，`role="slider"` + `aria-valuenow`）；切图 / 进入编辑态自动关闭。
+- **契约**：`shared/contract.js` 新增 `ROUTES.importFile` 与 `IMPORT`（mime / 体积 / 长边 / 展示名上限）；`HistoryItem` 新增 `source`（`ai` / `import`）。`lib/output.js` 的 `readHistoryItem` 导出以便导入路由复用同一归一逻辑。
+
+**接口与文案**
+
+- 新增 `src/api/resources.js` 的 `importImageFile({ data, name })`；`useStudioUi` 新增 `compareOpen` / `setCompareOpen`。
+- 中英字典新增 36 键（动作语义、草稿卡、助手网格 / 聚焦 / 镜像、导入与对比）、删除 1 个死键（`studio.action.iterate`），zh/en 各 539 键严格同构；`studio.action.reroll` 值改为「重新生成」。
+- 文档：SPEC 新增 §2.3 导入接口说明、§5.19 交互规范，`HistoryItem` 字段补 `source`；ROADMAP 与规划文档标记 Phase A 完成。
+
+**测试**
+
+- 新增 `test/check-client-draft.mjs`（4 项，草稿托管状态流转 + 整页呈现）、`test/chat-timeline.mjs`（5 项，结果网格 / 聚焦栈 / 镜像记录 / 上下文隔离）、`test/import-client.mjs`（18 项，导入纯逻辑 + Stage 渲染集成）、`test/import-host.mjs`（17 项，导入路由 / PNG tEXt / 历史收录）。
+- `check-client-chat` 19 项、`check-client-shell` 51 项、`check-client-logic` 83 项、`check-client-tools` 27 项、`image-tool-render` 6 项、`host-e2e` 56 项、`jobs-wait` 31 项、`check-contract` 12 项；`npm test` 36 步全绿。
+- 测试基础设施：`test/helpers/render.mjs` / `test/load-client.mjs` 支持 `OFS_TEST_BUNDLE` 指定独立构建产物，便于并行开发时避免写冲突（不设置时行为不变）。
+
 ## 0.10.0 — 2026-11-14
 
 > v0.10 首个版本：创作参数面板做减法（去风格预设、按模型真实能力显隐排除项、画面设置与参考图互斥、生成张数提权），AI 助手做加法（模型知识单一来源、意图 JSON v2、多轮上下文、通用澄清、确认卡带入参数面板），并把契约、测试、文档与版本收口到 0.10.0。

@@ -123,8 +123,7 @@ for (const [name, scenario] of Object.entries(scenarios)) {
           onDelete: () => {},
           onExport: () => {},
           onOpen: () => {},
-          onRecall: () => {},
-          onVariant: () => {},
+          onRedraw: () => {},
           onZoom: () => {},
         })
       : await client.mountRaw(client.components.Studio, scenario.props ?? {})
@@ -135,9 +134,9 @@ for (const [name, scenario] of Object.entries(scenarios)) {
     assertStructure(name, tree, scenario.structure)
   })
 }
-await check('画廊悬停动作把完整作品条目交给回调', async () => {
+await check('画廊悬停动作把完整作品条目交给回调（阶段十五 A1 收敛）', async () => {
   const client = await createTestClient({ now: NOW, responses: studioResponses(readyState, { items: [historyItem] }), testBuild: true })
-  const received = { recall: null, variant: null, zoom: null, reference: null }
+  const received = { open: [], redraw: [], zoom: [] }
   const entry = { image: historyItem.images[0], item: historyItem }
   const tree = await client.mountRaw(client.components.Gallery, {
     t: client.internals.i18n.fallbackTranslate('zh'),
@@ -147,11 +146,9 @@ await check('画廊悬停动作把完整作品条目交给回调', async () => {
     favorites: [],
     onDelete: () => {},
     onExport: () => {},
-    onOpen: () => {},
-    onRecall: (value) => { received.recall = value },
-    onVariant: (value) => { received.variant = value },
-    onReference: (value) => { received.reference = value },
-    onZoom: (value) => { received.zoom = value },
+    onOpenStudio: (value) => { received.open.push(value) },
+    onRedraw: (value) => { received.redraw.push(value) },
+    onZoom: (value) => { received.zoom.push(value) },
   })
   client.unmount()
   const actions = findNodes(
@@ -160,14 +157,21 @@ await check('画廊悬停动作把完整作品条目交给回调', async () => {
       && typeof node.props?.className === 'string'
       && node.props.className.split(' ').includes('ofs-gallery-action'),
   )
-  assert.equal(actions.length, 5, '每张作品应有带回参数 / 生成变体 / 以此图重绘 / 查看大图 / 删除五个动作')
+  // 动作收敛：在工作台打开 / 重绘编辑 / 查看大图 / 删除；带回参数与生成变体已下线。
+  assert.equal(actions.length, 4, '每张作品应有在工作台打开 / 重绘编辑 / 查看大图 / 删除四个动作')
   for (const node of actions) node.props.onClick()
-  // 回归：曾经把 entry.item 直接传给动作，导致 iteratePatch 拿不到图片而静默失败。
-  assert.equal(received.recall && received.recall.item, historyItem, '带回参数应收到 { image, item } 形状的条目')
-  assert.equal(received.recall && received.recall.image, historyItem.images[0], '条目里应带图片信息')
-  assert.equal(received.variant && received.variant.item, historyItem, '生成变体应收到完整条目')
-  assert.equal(received.reference && received.reference.image, historyItem.images[0], '以此图重绘应收到完整条目')
-  assert.equal(received.zoom && received.zoom.item, historyItem, '查看大图应收到完整条目')
+  assert.deepEqual(received.open, [entry], '「在工作台打开」应收到完整 { image, item } 条目')
+  assert.deepEqual(received.redraw, [entry], '「重绘编辑」应收到完整条目')
+  assert.deepEqual(received.zoom, [entry], '「查看大图」应收到完整条目')
+  // 主点击与「在工作台打开」同义（不是切到画廊之外的另一套动作）。
+  const media = findNodes(tree, (node) => node.type === 'button' && node.props?.className === 'ofs-gallery-media')[0]
+  media.props.onClick()
+  assert.deepEqual(received.open, [entry, entry], '点卡片图片与「在工作台打开」同义')
+  // 画廊不再盲发请求：条目里只有作品数据，动作全部交给组合层。
+  const cardText = collectText(tree).join(' | ')
+  assert.ok(!cardText.includes('带回参数'), '画廊不应再出现「带回参数」')
+  assert.ok(!cardText.includes('生成变体'), '画廊不应再出现「生成变体」')
+  assert.ok(cardText.includes('在工作台打开') && cardText.includes('重绘编辑'), '新动作文案来自字典键')
 })
 // 画廊列分配：行优先，第一行从左到右就是最新顺序；列内部保留自然高度。
 await check('渲染：画廊按行优先分列，最新作品在第一行最左', async () => {
@@ -183,8 +187,6 @@ await check('渲染：画廊按行优先分列，最新作品在第一行最左'
     onDelete: () => {},
     onExport: () => {},
     onOpen: () => {},
-    onRecall: () => {},
-    onVariant: () => {},
     onZoom: () => {},
     onToggleFavorite: () => {},
   })
@@ -213,8 +215,7 @@ await check('渲染：画廊卡片星标切换收藏，不影响打开大图', a
     onDelete: () => {},
     onExport: () => {},
     onOpen: (entry) => opened.push(entry),
-    onRecall: () => {},
-    onVariant: () => {},
+    onRedraw: () => {},
     onZoom: () => {},
     onToggleFavorite: (path) => favoriteCalls.push(path),
     ...extra,
@@ -289,9 +290,7 @@ await check('渲染：画廊卡片单张删除需二次确认', async () => {
     },
     onExport: () => {},
     onOpen: () => {},
-    onRecall: () => {},
-    onVariant: () => {},
-    onReference: () => {},
+    onRedraw: () => {},
     onZoom: () => {},
     onToggleFavorite: () => {},
   })
@@ -1298,7 +1297,8 @@ await check('渲染：大图预览 dialog 与图片 alt', async () => {
       isFavorite: () => false,
       toggleFavorite: () => {},
     },
-    actions: { iterate: () => {}, reroll: () => {} },
+    // 舞台动作坞现在只有「重新生成」；放大层里的重绘入口走 openImageTool。
+    actions: { reroll: () => {}, openImageTool: () => {} },
   })
   client.unmount()
   const dialog = findNodes(tree, (node) => node.props && node.props.role === 'dialog')[0]
@@ -1327,8 +1327,7 @@ await check('渲染：画廊分页底部（加载更多 / 已加载全部）', a
       onDelete: () => {},
       onExport: () => {},
       onOpen: () => {},
-      onRecall: () => {},
-      onVariant: () => {},
+      onRedraw: () => {},
       onZoom: () => {},
       ...extra,
     })

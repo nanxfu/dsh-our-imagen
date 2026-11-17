@@ -1,12 +1,16 @@
 /**
  * 生图工作台的数据编排（组合层）。
  *
- * 域 hook 各管一块状态，这里只做宿主状态桥接、跨域动作粘合（生成、变体、回填、重试、
- * 指引计算）与领域对象组装。对外返回按领域分组：
+ * 域 hook 各管一块状态，这里只做宿主状态桥接、跨域动作粘合（生成、重新生成、回填与草稿托管、
+ * 重试、指引计算）与领域对象组装。对外返回按领域分组：
  *   { t, ui, compute, form, chat, library, imageTool, guidance, actions }
  *
  * 0.13.0 起主表单只做纯文生图；针对舞台作品的图片处理（局部涂抹 / 整图重绘）
  * 由独立的 `imageTool` 域承载，组合层只负责动作入口与视图切换。
+ *
+ * 阶段十五 Phase A1：胶片条点击不再被 dirty 拦截——`previewWork` 先把未提交修改托管进
+ * 最左端草稿卡（`form.parkDraft`），再回填目标作品；点草稿卡走 `form.openDraft` 恢复，
+ * 「还原原图」走 `restoreOriginal`（参数恢复 + 清草稿 + 回到来源作品）。
  *
  * effect 顺序：宿主轮询 → 卸载边界 → Toast 定时 → 宿主错误消费 → 预设同步 → 线程同步
  * → 历史/收藏加载 → 首图提示 → 任务完成刷新历史。
@@ -95,15 +99,30 @@ export function useStudio(props) {
     defaultPreset,
     // 工具优先沿用左栏当前模型（支持对应能力时），但不回写左栏。
     currentPresetId: form.form.presetId,
-    onSubmitted: () => host.refresh(),
+    // 阶段十五 A2：舞台图片工具提交成功后，把动作镜像进助手线程（kind 记录不进 intentHistory）。
+    onSubmitted: (job, meta) => {
+      if (meta && typeof meta === 'object') {
+        chat.mirrorTool({ job, tool: meta.tool, target: meta.target, body: meta.body })
+      }
+      host.refresh()
+    },
   })
   // generate 是函数声明（提升），chat 在事件回调里调用时已完成初始化。
   const chat = useChatThread({ t, isEn, alive, state, form, generate })
   const library = useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode })
 
-  /** 点击底部新建画布卡：把焦点切回新建画布（保留当前表单中已输入的内容），同时收起图片工具编辑态。 */
+  /**
+   * 点击底部新建画布卡：进入新建画布焦点。
+   *
+   * 阶段十五 Phase A1 起这里也是「草稿卡」的入口（§6.1.4）：
+   *  - 草稿槽里有托管草稿 → 恢复草稿内容并进入草稿编辑态，舞台取景框提示「源自：…」；
+   *  - 只有未提交修改 → 当前表单就是草稿，先托管再进入编辑态；
+   *  - 两者都没有 → 与原来一致，切到新建画布（保留当前表单内容）。
+   * 同时收起图片工具编辑态。
+   */
   function focusNewDraft() {
     imageTool.closeTool()
+    form.openDraft()
     library.focusDraft()
     ui.setView('studio')
     ui.setPanelMode('form')
@@ -117,7 +136,8 @@ export function useStudio(props) {
    * 表单域本身不感知工作区焦点，避免 hook 之间互相依赖。
    */
   function newDraft() {
-    // 新建画布与「正在编辑某张作品」互斥：先退出工具编辑态（未提交草稿仍保存在 workDrafts）。
+    // 新建画布与「正在编辑某张作品」互斥：先退出工具编辑态（未提交草稿仍保存在 workDrafts）；
+    // 表单侧的来源作品与托管草稿由 form.newCreation() 一并清掉（§6.1.7）。
     imageTool.closeTool()
     form.newCreation()
     library.newDraft()
@@ -127,10 +147,18 @@ export function useStudio(props) {
   const formView = { ...form, newCreation: newDraft }
 
   /**
-   * 组件层拿到的作品库视图（阶段十三）：
+   * 组件层拿到的作品库视图（阶段十三/十五）：
    * 在 useWorkLibrary 领域对象上补 Filmstrip 需要的草稿表与新建草稿卡数据，
    * 这样 Gallery / Stage / Filmstrip 仍共用同一个 library props，Studio.jsx 不需要改动。
+   *
+   * 阶段十五 A1：`draft` 相关字段描述「未提交草稿」托管态（§6.1.2~§6.1.4）：
+   *  - `draft`：是否有未提交草稿（草稿槽已托管，或当前工作区的脏修改会进草稿卡）；
+   *  - `draftFrom`：来源作品的提示词（有来源时才展示「源自此图」）；
+   *  - `draftEditing`：当前表单是否正在编辑草稿（点草稿卡恢复后）。
    */
+  const draftView = form.draftView
+  const draftSource = draftView && draftView.source ? draftView.source : null
+  const draftPrompt = draftSource && typeof draftSource.prompt === 'string' ? draftSource.prompt.trim() : ''
   const libraryView = {
     ...library,
     newDraftCard: {
@@ -141,6 +169,12 @@ export function useStudio(props) {
       height: form.form.height,
       presetLabel: form.activePreset ? presetLabelOf(form.activePreset) : '',
       prompt: form.form.prompt,
+      // 草稿托管态：dirty 时草稿卡实时出现；已托管的草稿点了就恢复。
+      // 舞台保持展示来源作品（work 焦点）时不闪空，只有点草稿卡才切到 new_draft 取景框。
+      draft: Boolean(draftView && draftView.active) && (Boolean(draftView.parked) || library.workspaceMode === 'work'),
+      draftFrom: draftPrompt,
+      draftFromSource: Boolean(draftSource),
+      draftEditing: Boolean(draftView && draftView.editing),
     },
     // 工具域的未提交编辑草稿：缩略图圆点 / 版本面板圆点与清空都用这一份。
     workDrafts: imageTool.workDrafts,
@@ -242,7 +276,10 @@ export function useStudio(props) {
         chat.pushMessages(entries)
         // 刚提交的内容就是当前的干净版本：之后手动改动才算 dirty。
         // 等 chat 确认卡提交（pushUser=false）由 generateIntent 在表单补丁落地后再标记。
-        if (options.pushUser !== false) form.markClean(submittedForm)
+        if (options.pushUser !== false && form.markClean(submittedForm)) {
+          // 草稿已经随这次提交发布出去：清掉草稿卡（§6.1.6），后续任务完成自动切新图。
+          form.clearDraft()
+        }
         // 显式新建绘图：保持 new_draft 直到该任务完成，完成后再切 work 并选中新图。
         if (library.workspaceMode === 'new_draft') library.markNewDraftSubmitted(jobId)
         host.refresh()
@@ -261,7 +298,7 @@ export function useStudio(props) {
     return false
   }
 
-  /** 生成变体：基于当前选中的作品，而不是左侧表单。 */
+  /** 重新生成：按当前选中作品的提示词与参数、换随机种子再抽一张纯文生图（产生新 v1）。 */
   function reroll(entry) {
     const target = entry || library.selected
     const overrides = rerollOverrides(target, presets)
@@ -273,35 +310,47 @@ export function useStudio(props) {
   }
 
   /**
-   * 带回参数：提示词与尺寸来自作品本身，steps/cfg 才用 params 或预设推荐值。
-   * 回填同时把表单标记为「正在微调这张作品」。
-   */
-  function iterate(entry) {
-    const target = entry || library.selected
-    const patch = iteratePatch(target, form.form, presets)
-    if (Object.keys(patch).length === 0) return
-    form.applyRecall(patch, target)
-    ui.setView('studio')
-    ui.setPanelMode('form')
-    ui.showToast(t('studio.toast.recalled'))
-  }
-
-  /**
-   * 创作区胶卷点击：始终切换右侧预览；表单干净时把该作品参数回填到左侧面板。
+   * 胶片条 / 画廊点击作品：始终切换右侧预览，并把该作品的原始参数回填到左侧面板。
    *
-   * 回填由纯逻辑按优先级判定（见 `previewRecallOf()`）：未提交的手动修改（dirty）保护草稿，
-   * 否则回填。参考图 / 蒙版已迁到舞台图片工具，不再参与这里的判定。
-   * 画廊视图不接这个动作，保持纯浏览。
+   * 阶段十五 Phase A1（§6.1.1/§6.1.3）：不再因为 dirty 拦截回填——未提交修改先被托管进
+   * 最左端草稿卡（已有草稿则覆盖），再回填目标作品的干净基准，并给「已保留当前草稿」提示。
+   * 参考图 / 蒙版已迁到舞台图片工具，不参与这里的判定。
    */
   function previewWork(entry) {
     const target = entry && entry.image ? entry : null
     if (!target) return
-    library.selectImage(target)
     const patch = iteratePatch(target, form.form, presets)
-    const decision = previewRecallOf({ dirty: form.dirty, patch })
+    const decision = previewRecallOf({
+      dirty: form.dirty,
+      hasDraft: Boolean(form.draft),
+      patch,
+    })
+    // 先在原焦点上托管（草稿编辑态切走时同样要留下最新内容），再切换预览与回填。
+    if (decision.park || form.draftEditing) form.parkDraft()
+    library.selectImage(target)
     if (decision.noticeKey) ui.showToast(t(decision.noticeKey))
     if (decision.action !== 'recall') return
     form.applyRecall(patch, target)
+  }
+
+  /**
+   * 还原原图（§6.1.5）：放弃当前未提交草稿，恢复来源作品的原始参数并回到该作品。
+   *
+   * 表单参数与干净基准由 `useStudioForm.restoreOriginal()` 恢复；这里负责清草稿后的
+   * 预览焦点（work 焦点回到来源作品）与提示。
+   *
+   * @returns {boolean} 是否真的还原了（没有来源 / 没有可还原字段时为 false）
+   */
+  function restoreOriginal() {
+    const source = form.restoreOriginal()
+    if (!source) return false
+    const path = source && typeof source.path === 'string' ? source.path : ''
+    if (path) library.selectImage({ image: { path } })
+    ui.setView('studio')
+    ui.setPanelMode('form')
+    ui.setZoom(false)
+    ui.showToast(t('studio.toast.restoredOriginal'))
+    return true
   }
 
   /**
@@ -321,6 +370,8 @@ export function useStudio(props) {
       ui.showToast(t('studio.imageTool.blockedTarget'))
       return false
     }
+    // 离开草稿编辑焦点：先把最新修改托管进草稿槽（§6.1.3 的同一套托管语义）。
+    if (form.draftEditing) form.parkDraft()
     // D4：「选中该作品 + 切回舞台 + 打开工具」三步语义一致——退出工具后舞台停在该作品上。
     // 传裸 image 对象时包成条目；selectImage 同时会把工作区焦点从 new_draft 切回 work。
     library.selectImage(target.image ? target : { image: target })
@@ -328,6 +379,29 @@ export function useStudio(props) {
     ui.setView('studio')
     ui.setPanelMode('form')
     ui.setZoom(false)
+    return true
+  }
+
+  /**
+   * 本地导入完成（阶段十五 Phase A3）：把导入作品切到舞台焦点并刷新历史。
+   *
+   * 图片已由 Host 落盘为独立 v1（见 SPEC §2.3 `/import`），前端不伪造历史条目：只切焦点、
+   * 关闭对比层、给成功提示，再重新拉一次历史，把新目录并入胶片条与版本树。
+   * PNG 内嵌生成元数据时提示「可在胶片条点这张图回填」，参数恢复仍由点作品触发的回填完成。
+   */
+  function activateImport(entry) {
+    const target = entry && entry.image ? entry : null
+    if (!target) return false
+    imageTool.closeTool()
+    if (form.draftEditing) form.parkDraft()
+    library.selectImage(target)
+    ui.setView('studio')
+    ui.setPanelMode('form')
+    ui.setZoom(false)
+    ui.setCompareOpen(false)
+    const generation = entry.generation && typeof entry.generation === 'object' ? entry.generation : null
+    ui.showToast(t(generation ? 'studio.import.metaFound' : 'studio.import.done'))
+    if (typeof library.loadHistory === 'function') library.loadHistory()
     return true
   }
 
@@ -404,6 +478,17 @@ export function useStudio(props) {
     library: libraryView,
     imageTool,
     guidance: { kind: guidanceKind, code: guidanceCode, surface: guidanceSurface, detail: guidanceDetail, key: guidanceKey, dismiss: dismissGuidance },
-    actions: { sending, generate, newDraft, focusNewDraft, previewWork, reroll, iterate, openImageTool, retryFocusedJob, resetToSafe },
+    actions: {
+      sending,
+      generate,
+      newDraft,
+      focusNewDraft,
+      previewWork,
+      reroll,
+      openImageTool,
+      restoreOriginal,
+      retryFocusedJob,
+      resetToSafe,
+    },
   }
 }

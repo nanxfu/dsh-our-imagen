@@ -186,12 +186,12 @@ async function main() {
     const buttons = allButtons.filter(
       (button) => typeof button.props.className === 'string' && button.props.className.split(/\s+/).includes('ofs-dock-button'),
     )
-    assert.equal(buttons.length, 6, '四个图片工具 + 带回参数 + 再画一张')
+    assert.equal(buttons.length, 5, '四个图片工具 + 重新生成（「带回参数」已下线）')
     const disabled = buttons.filter((button) => button.props['aria-disabled'] === 'true')
     assert.deepEqual(disabled.map(textOf), ['高清放大', '扩图'])
     for (const button of disabled) assert.equal(button.props.title, '规划中，暂未开放')
     const usable = buttons.filter((button) => button.props['aria-disabled'] !== 'true')
-    assert.deepEqual(usable.map(textOf), ['局部重绘', '整图重绘', '带回参数', '生成变体'])
+    assert.deepEqual(usable.map(textOf), ['局部重绘', '整图重绘', '重新生成'])
   })
 
   await check('点「局部重绘」进入画布：画布 / 工具栏 / 提交栏挂载，复用组收起', async () => {
