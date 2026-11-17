@@ -217,6 +217,13 @@ export const SETTINGS = {
   // 切换在下次操作/唤醒时生效，不需要重载插件。数组顺序即设置抽屉里的选项顺序。
   kaggleTransports: ['direct', 'cli'],
   defaultKaggleTransport: 'direct',
+  // 远端算力来源：kaggle 默认；colab 需要先完成一次 Google 授权（tools/colab/probe-auth.mjs），
+  // 且只在 Colab Pro 账号下有意义（免费档申请不到 L4/A100）。切换在下次唤醒/启动时生效。
+  providers: ['kaggle', 'colab'],
+  defaultProvider: 'kaggle',
+  // Colab 可用加速器：必须在 assign 接口接受的白名单内；H100 等按账号权益可能被后端 400。
+  colabGpus: ['T4', 'L4', 'A100', 'G4'],
+  defaultColabGpu: 'L4',
 }
 
 /**

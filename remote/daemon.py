@@ -410,6 +410,30 @@ def ntfy_publish(payload: dict, label: str) -> bool:
     return False
 
 
+def write_endpoint_file(payload: dict) -> bool:
+    """Colab 会合：把 ready/error 事件原子写入 Host 指定文件，不依赖 ntfy。
+
+    ntfy 在 Colab 场景不适用（topic 为空），Host 通过 Jupyter Contents 读这个文件
+    拿到 cloudflared 地址；写入失败只记日志，不影响 daemon 正常服务。
+    """
+    path = CONFIG.endpoint_file
+    if not path:
+        return False
+    try:
+        directory = os.path.dirname(path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        temp = f"{path}.tmp"
+        with open(temp, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False)
+        os.replace(temp, path)
+        log(f"[endpoint] 已写入 {path}")
+        return True
+    except Exception as exc:  # noqa: BLE001 - 落盘失败不能拖垮启动
+        log(f"[endpoint] 写入失败：{type(exc).__name__}: {exc}")
+        return False
+
+
 def publish_ready() -> None:
     with BOOT_LOCK:
         endpoint = BOOT.tunnel_url
@@ -425,11 +449,13 @@ def publish_ready() -> None:
         "model_id": model_id,
         "device": device,
     }
+    write_endpoint_file(payload)
     ntfy_publish(payload, "ready")
 
 
 def publish_error(code: str, message: str) -> None:
     payload = {"type": "error", "code": code, "message": message[:800]}
+    write_endpoint_file(payload)
     ntfy_publish(payload, f"error({code})")
 
 
@@ -911,8 +937,8 @@ def run_task(  # noqa: ANN001
     """
     import torch
 
-    generator_device = "cuda" if torch.cuda.is_available() else "cpu"
-    generator = torch.Generator(device=generator_device).manual_seed(task["seed"])
+    # 具体设备要等 pipeline 选好后再定（device_map 下可能是 cpu），这里先占位。
+    generator = None
     use_reference = reference_image is not None
     use_inpaint = use_reference and mask_image is not None
     if mask_image is not None and reference_image is None:
@@ -968,6 +994,16 @@ def run_task(  # noqa: ANN001
             "height": task["height"],
             "generator": generator,
         }
+    # 随机数生成器必须与 pipeline 实际执行设备一致：device_map 分层装载（Flux.2）时
+    # 执行设备可能是 cpu，用 cuda generator 会报 "Cannot generate a cpu tensor from a generator of type cuda"。
+    try:
+        execution_device = str(target_pipe._execution_device)
+    except Exception:  # noqa: BLE001 - 拿不到就按 cuda 可用性回退
+        execution_device = "cuda" if torch.cuda.is_available() else "cpu"
+    generator_device = execution_device if execution_device.startswith("cuda") else "cpu"
+    generator = torch.Generator(device=generator_device).manual_seed(task["seed"])
+    call_kwargs["generator"] = generator
+
     # 只有底座支持 negative_prompt 且 CFG > 0 时才有意义（Lightning 的 cfg=0 会被忽略）。
     call_kwargs = filter_call_kwargs(
         call_kwargs,

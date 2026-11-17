@@ -186,8 +186,24 @@ class Flux2Loader(DiffusersLoader):
 
         kwargs = self._base_kwargs(spec)
         balanced = str(spec.get("deviceMap") or "balanced")
-        kwargs["device_map"] = balanced
-        log(f"[load] flux2 使用 device_map={balanced}")
-        return from_pretrained_with_variant_fallback(
+        # 单卡（Colab L4 / 单 T4）没有分片对象：传 balanced 只会让 accelerate 多一层包装。
+        # device_count 未知（CPU 环境 / 测试替身）时仍按显式配置走，避免改变既有行为。
+        try:
+            import torch
+            device_count = torch.cuda.device_count()
+        except Exception:  # noqa: BLE001 - 没有 torch 时按未知处理
+            device_count = 0
+        if device_count == 1:
+            log("[load] flux2 单卡（device_count=1），跳过 device_map 分片")
+        else:
+            kwargs["device_map"] = balanced
+            log(f"[load] flux2 使用 device_map={balanced}（device_count={device_count}）")
+        pipe = from_pretrained_with_variant_fallback(
             AutoPipelineForText2Image, source, kwargs, self.name, log=log, error_cls=error_cls
         )
+        # 单卡不走 device_map 时必须显式搬上 GPU：否则 from_pretrained 会把权重留在 CPU，
+        # 表现为"能加载、能出图，但 1024² 要十几分钟"（实测在 CPU 上跑满 600s 超时）。
+        if device_count == 1:
+            pipe = pipe.to("cuda")
+            log(f"[load] flux2 单卡已移至 cuda（execution_device={getattr(pipe, '_execution_device', 'cuda')}）")
+        return pipe

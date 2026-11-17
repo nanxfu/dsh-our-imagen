@@ -335,6 +335,17 @@ var zh = {
   "studio.settings.idle.label": "空闲自动关机",
   "studio.settings.idle.quick": "{minutes} 分钟",
   "studio.settings.idle.custom": "自定义分钟（{min}–{max}）",
+  "studio.compute.ccu": "CCU {balance}",
+  "studio.settings.provider.label": "算力来源",
+  "studio.settings.provider.kaggle": "Kaggle（免费 GPU）",
+  "studio.settings.provider.colab": "Colab Pro（需授权）",
+  "studio.settings.colabGpu.label": "Colab GPU",
+  "studio.settings.colabGpu.T4": "T4 16GB",
+  "studio.settings.colabGpu.L4": "L4 24GB（推荐）",
+  "studio.settings.colabGpu.A100": "A100 40GB",
+  "studio.settings.colabGpu.G4": "G4 24GB",
+  "studio.settings.colabHighRam.label": "高内存机型",
+  "studio.settings.colabHighRam.hint": "仅对 T4 / A100 / G4 生效；L4 只有高内存机型，勾选会被忽略。",
   "studio.settings.accelerator.label": "GPU 加速器",
   "studio.settings.accelerator.NvidiaTeslaT4": "2× Tesla T4（默认推荐）",
   "studio.settings.accelerator.NvidiaTeslaP100": "Tesla P100",
@@ -916,6 +927,17 @@ var en = {
   "studio.settings.idle.label": "Auto-shutdown when idle",
   "studio.settings.idle.quick": "{minutes} min",
   "studio.settings.idle.custom": "Custom minutes ({min}–{max})",
+  "studio.compute.ccu": "CCU {balance}",
+  "studio.settings.provider.label": "Compute source",
+  "studio.settings.provider.kaggle": "Kaggle (free GPU)",
+  "studio.settings.provider.colab": "Colab Pro (authorization required)",
+  "studio.settings.colabGpu.label": "Colab GPU",
+  "studio.settings.colabGpu.T4": "T4 16GB",
+  "studio.settings.colabGpu.L4": "L4 24GB (recommended)",
+  "studio.settings.colabGpu.A100": "A100 40GB",
+  "studio.settings.colabGpu.G4": "G4 24GB",
+  "studio.settings.colabHighRam.label": "High-RAM machine",
+  "studio.settings.colabHighRam.hint": "Applies to T4 / A100 / G4 only; L4 is high-RAM by default, so this flag is ignored.",
   "studio.settings.accelerator.label": "GPU accelerator",
   "studio.settings.accelerator.NvidiaTeslaT4": "2× Tesla T4 (recommended)",
   "studio.settings.accelerator.NvidiaTeslaP100": "Tesla P100",
@@ -1909,7 +1931,14 @@ var SETTINGS = {
   // kaggle CLI）；cli = 调用本机 `kaggle` CLI（兼容退路，排障或直连不可用时手动切回）。
   // 切换在下次操作/唤醒时生效，不需要重载插件。数组顺序即设置抽屉里的选项顺序。
   kaggleTransports: ["direct", "cli"],
-  defaultKaggleTransport: "direct"
+  defaultKaggleTransport: "direct",
+  // 远端算力来源：kaggle 默认；colab 需要先完成一次 Google 授权（tools/colab/probe-auth.mjs），
+  // 且只在 Colab Pro 账号下有意义（免费档申请不到 L4/A100）。切换在下次唤醒/启动时生效。
+  providers: ["kaggle", "colab"],
+  defaultProvider: "kaggle",
+  // Colab 可用加速器：必须在 assign 接口接受的白名单内；H100 等按账号权益可能被后端 400。
+  colabGpus: ["T4", "L4", "A100", "G4"],
+  defaultColabGpu: "L4"
 };
 var KAGGLE_LOGIN = {
   actions: ["start", "cancel", "submit-code"],
@@ -8104,9 +8133,14 @@ function formatLocalModels(localModels) {
 function formFromSettings(view) {
   const source = view && typeof view === "object" ? view : {};
   const accelerator = SETTINGS.accelerators.includes(source.accelerator) ? source.accelerator : SETTINGS.defaultAccelerator;
+  const provider = SETTINGS.providers.includes(source.provider) ? source.provider : SETTINGS.defaultProvider;
+  const colabGpu = SETTINGS.colabGpus.includes(source.colabGpu) ? source.colabGpu : SETTINGS.defaultColabGpu;
   return {
     idleMinutes: String(idleMinutesOf(source.idleTimeoutSec)),
     accelerator,
+    provider,
+    colabGpu,
+    colabHighRam: source.colabHighRam === true,
     // 旧宿主缺 kaggleTransport 时按 cli 处理（不是契约默认的 direct）。
     kaggleTransport: transportOf(source),
     hfToken: "",
@@ -8139,6 +8173,15 @@ function buildSettingsPayload(form, view) {
   const accelerator = SETTINGS.accelerators.includes(source.accelerator) ? source.accelerator : SETTINGS.defaultAccelerator;
   const baseAccelerator = SETTINGS.accelerators.includes(base.accelerator) ? base.accelerator : SETTINGS.defaultAccelerator;
   if (accelerator !== baseAccelerator) payload.accelerator = accelerator;
+  const provider = SETTINGS.providers.includes(source.provider) ? source.provider : SETTINGS.defaultProvider;
+  const baseProvider = SETTINGS.providers.includes(base.provider) ? base.provider : SETTINGS.defaultProvider;
+  if (provider !== baseProvider) payload.provider = provider;
+  const colabGpu = SETTINGS.colabGpus.includes(source.colabGpu) ? source.colabGpu : SETTINGS.defaultColabGpu;
+  const baseColabGpu = SETTINGS.colabGpus.includes(base.colabGpu) ? base.colabGpu : SETTINGS.defaultColabGpu;
+  if (colabGpu !== baseColabGpu) payload.colabGpu = colabGpu;
+  if (source.colabHighRam === true !== (base.colabHighRam === true)) {
+    payload.colabHighRam = source.colabHighRam === true;
+  }
   const transport = normalizeKaggleTransport(source.kaggleTransport);
   if (transport !== transportOf(base)) payload.kaggleTransport = transport;
   const token2 = typeof source.hfToken === "string" ? source.hfToken.trim() : "";
@@ -8337,6 +8380,52 @@ function SettingsForm({
           }
         )
       ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.provider.label") }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { className: "ofs-settings-options", role: "radiogroup", "aria-label": t("studio.settings.provider.label"), children: SETTINGS.providers.map((id) => /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("label", { className: `ofs-settings-option${form.provider === id ? " is-on" : ""}`, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+            "input",
+            {
+              type: "radio",
+              name: "ofs-provider",
+              value: id,
+              checked: form.provider === id,
+              onChange: () => patchForm({ provider: id })
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { children: t(`studio.settings.provider.${id}`) })
+        ] }, id)) })
+      ] }),
+      form.provider === "colab" ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(import_jsx_runtime22.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.colabGpu.label") }),
+          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { className: "ofs-settings-options", role: "radiogroup", "aria-label": t("studio.settings.colabGpu.label"), children: SETTINGS.colabGpus.map((id) => /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("label", { className: `ofs-settings-option${form.colabGpu === id ? " is-on" : ""}`, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+              "input",
+              {
+                type: "radio",
+                name: "ofs-colab-gpu",
+                value: id,
+                checked: form.colabGpu === id,
+                onChange: () => patchForm({ colabGpu: id })
+              }
+            ),
+            /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { children: t(`studio.settings.colabGpu.${id}`) })
+          ] }, id)) })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("label", { className: "ofs-settings-inline", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+            "input",
+            {
+              type: "checkbox",
+              checked: form.colabHighRam === true,
+              onChange: (event) => patchForm({ colabHighRam: event.target.checked })
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.colabHighRam.label") })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "ofs-settings-muted", children: t("studio.settings.colabHighRam.hint") })
+      ] }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-row", children: [
         /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.accelerator.label") }),
         /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { className: "ofs-settings-options", role: "radiogroup", "aria-label": t("studio.settings.accelerator.label"), children: SETTINGS.accelerators.map((id) => /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
@@ -10966,6 +11055,7 @@ function TopBar(props) {
   }, [open]);
   const idleMinutes = session && session.idleTimeoutSec ? Math.round(session.idleTimeoutSec / 60) : 0;
   const idleShutdown = idleShutdownOf(session);
+  const providerUsage = session && session.provider === "colab" ? session.providerUsage : null;
   const quotaUsed = quota && Number.isFinite(quota.usedHours) ? quota.usedHours : null;
   const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null;
   const loadedPreset = presets.find((item) => item.id === (session && session.presetId)) || presets.find((item) => item.id === fields.presetId) || null;
@@ -11045,6 +11135,7 @@ function TopBar(props) {
               " ",
               t("unit.hour")
             ] }) : null,
+            providerUsage && Number.isFinite(providerUsage.balance) ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("em", { children: formatText(t("studio.compute.ccu"), { balance: providerUsage.balance.toFixed(1) }) }) : null,
             update ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
               "span",
               {

@@ -58,6 +58,8 @@ function postBody(origin, value) {
 function assertViewShape(view) {
   assert.deepEqual(Object.keys(view).sort(), [
     'accelerator',
+    'colabGpu',
+    'colabHighRam',
     'datasetSources',
     'effectiveOnNextSession',
     'hasHfToken',
@@ -66,6 +68,8 @@ function assertViewShape(view) {
     'kaggleTransport',
     'localModels',
     'pipConstraints',
+
+    'provider',
   ])
   assert.ok(SETTINGS.hfTokenSources.includes(view.hfTokenSource), `非法 hfTokenSource：${view.hfTokenSource}`)
   // 安全红线：任何视图都不能带 Token 的任何形状。
@@ -81,6 +85,10 @@ async function scenarioPureFunctions() {
     const result = normalizeSettingsPatch({
       idleTimeoutSec: 1234.6,
       accelerator: ' NvidiaTeslaP100 ',
+
+      provider: 'kaggle',
+      colabGpu: 'L4',
+      colabHighRam: false,
       kaggleTransport: ' direct ',
       hfToken: '  hf_abc  ',
       datasetSources: ['owner/a', ' owner/a ', '', '   ', 'owner/b'],
@@ -151,6 +159,10 @@ async function scenarioPureFunctions() {
       {
         idleTimeoutSec: 1500,
         accelerator: 'NvidiaTeslaP100',
+
+        provider: 'kaggle',
+        colabGpu: 'L4',
+        colabHighRam: false,
         kaggleTransport: 'direct',
         hfToken: 'hf_config',
         datasetSources: ['owner/cfg'],
@@ -159,6 +171,10 @@ async function scenarioPureFunctions() {
       {
         idleTimeoutSec: 900,
         accelerator: 'NvidiaTeslaT4',
+
+        provider: 'kaggle',
+        colabGpu: 'L4',
+        colabHighRam: false,
         kaggleTransport: 'cli',
         hfToken: 'hf_settings',
         datasetSources: ['owner/set', 'owner/set'],
@@ -195,6 +211,10 @@ async function scenarioPureFunctions() {
     const base = {
       idleTimeoutSec: 900,
       accelerator: 'NvidiaTeslaT4',
+
+      provider: 'kaggle',
+      colabGpu: 'L4',
+      colabHighRam: false,
       kaggleTransport: 'direct',
       datasetSources: [],
       localModels: {},
@@ -258,6 +278,10 @@ async function scenarioStoreAndRoutes(workspace) {
       const saved = {
         idleTimeoutSec: 900,
         accelerator: 'NvidiaTeslaP100',
+
+        provider: 'kaggle',
+        colabGpu: 'L4',
+        colabHighRam: false,
         kaggleTransport: 'direct',
         datasetSources: ['owner/ds-a', ' owner/ds-b ', 'owner/ds-a', ''],
         pipConstraints: ['diffusers==0.31.0'],
@@ -277,6 +301,10 @@ async function scenarioStoreAndRoutes(workspace) {
         schema: 2,
         idleTimeoutSec: 900,
         accelerator: 'NvidiaTeslaP100',
+
+        provider: 'kaggle',
+        colabGpu: 'L4',
+        colabHighRam: false,
         kaggleTransport: 'direct',
         datasetSources: ['owner/ds-a', 'owner/ds-b'],
         pipConstraints: ['diffusers==0.31.0'],
@@ -583,6 +611,10 @@ async function scenarioSessionIntegration(workspace, ctx, config) {
       },
       options: {
         accelerator: 'NvidiaTeslaT4',
+
+        provider: 'kaggle',
+        colabGpu: 'L4',
+        colabHighRam: false,
         idleTimeoutSec: 1800,
         ntfyBase: 'http://127.0.0.1:9',
         tickMs: 60 * 1000,
@@ -668,6 +700,10 @@ async function scenarioIndexAssembly() {
       const saved = await postBody(host.origin, {
         idleTimeoutSec: 600,
         accelerator: 'NvidiaTeslaP100',
+
+        provider: 'kaggle',
+        colabGpu: 'L4',
+        colabHighRam: false,
         hfToken: FAKE_TOKEN,
       })
       assert.equal(saved.status, 200, JSON.stringify(saved.body))

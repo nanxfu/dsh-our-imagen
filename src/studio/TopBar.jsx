@@ -67,6 +67,8 @@ export function TopBar(props) {
   const idleMinutes = session && session.idleTimeoutSec ? Math.round(session.idleTimeoutSec / 60) : 0
   // 空闲倒计时只认宿主快照里的真实读数：idleSeconds 缺失时退回「休眠阈值」一行，不编造余量。
   const idleShutdown = idleShutdownOf(session)
+  // Colab 没有每周配额，改用 CCU 余额/速率（provider 保活时刷新）。
+  const providerUsage = session && session.provider === 'colab' ? session.providerUsage : null
   const quotaUsed = quota && Number.isFinite(quota.usedHours) ? quota.usedHours : null
   const quotaTotal = quota && Number.isFinite(quota.totalHours) ? quota.totalHours : null
   // 速度只讲实测值，且优先讲云端已加载的模型；没有测量数据的预设不编时间。
@@ -167,6 +169,11 @@ export function TopBar(props) {
           {quotaUsed !== null && quotaTotal !== null ? (
             <em>
               {quotaUsed} / {quotaTotal} {t('unit.hour')}
+            </em>
+          ) : null}
+          {providerUsage && Number.isFinite(providerUsage.balance) ? (
+            <em>
+              {formatText(t('studio.compute.ccu'), { balance: providerUsage.balance.toFixed(1) })}
             </em>
           ) : null}
           {/* 插件自身有新版本：只在胶囊上点一个红点，详情在弹层里（不打断出图）。 */}

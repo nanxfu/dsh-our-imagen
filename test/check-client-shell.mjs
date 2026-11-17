@@ -562,6 +562,31 @@ await check('渲染：算力弹层配额回退、隧道通道与日志入口', a
     required: { 'ofs-popover': 1, 'ofs-popover-fallback': 1, 'ofs-popover-link': 1 },
     forbidden: [],
   })
+  // Colab 会话：顶栏应展示 CCU 余额（providerUsage 由保活时刷新）。
+  const ccuTree = await client.mountRaw(client.components.TopBar, {
+    t,
+    ui: { view: "studio", setView: () => {}, openLogs: () => {} },
+    compute: {
+      sessionState: "ready",
+      session: { ...fallbackState.session, provider: "colab", providerUsage: { balance: 198.1, rate: 1.83, assignments: 1 } },
+      quota: null,
+      presets: [preset],
+      busy: "",
+      probing: false,
+      probe: null,
+      probeReport: null,
+      startSession: () => {},
+      stopSession: () => {},
+      runProbe: () => {},
+      openFolder: () => {},
+    },
+    form: { form: { presetId: "sdxl-lightning", width: 1024, height: 1024, steps: 4, cfg: 0 }, patchForm: () => {}, selectPreset: () => {} },
+    library: { loadHistory: () => {} },
+    defaultOpen: false,
+  })
+  client.unmount()
+  assert.ok(collectText(ccuTree).join(" ").includes("CCU 198.1"), "[compute] Colab 会话应展示 CCU 余额")
+
   const link = findNodes(
     tree,
     (node) => node.type === 'a' && node.props && node.props.className === 'ofs-popover-link',
@@ -707,7 +732,7 @@ await check('渲染：设置抽屉分区、生效提示与 Token 状态', async 
         'ofs-settings-section': 3,
         'ofs-settings-section-title': 2,
         'ofs-settings-quick-item': 4,
-        'ofs-settings-option': 2,
+        'ofs-settings-option': 4,
         'ofs-settings-clear': 1,
         'ofs-settings-save': 1,
       },
@@ -743,7 +768,7 @@ await check('渲染：设置抽屉分区、生效提示与 Token 状态', async 
       (node) => node.type === 'button' && String(node.props?.className).includes('ofs-settings-quick-item'),
     )
     assert.deepEqual(quickItems.map((node) => node.props['aria-pressed']), [false, true, false, false])
-    const radios = findNodes(mounted.tree, (node) => node.type === 'input' && node.props && node.props.type === 'radio')
+    const radios = findNodes(mounted.tree, (node) => node.type === 'input' && node.props && node.props.type === 'radio' && node.props.name === 'ofs-accelerator')
     assert.deepEqual(radios.map((node) => node.props.value), ['NvidiaTeslaT4', 'NvidiaTeslaP100'])
     assert.deepEqual(radios.map((node) => node.props.checked), [true, false])
   } finally {
@@ -825,7 +850,7 @@ await check('渲染：设置抽屉保存流程（只提交改动字段）', asyn
       (node) => node.type === 'button' && String(node.props?.className).includes('ofs-settings-quick-item'),
     )
     assert.deepEqual(quickItems.map((node) => node.props['aria-pressed']), [false, false, true, false], '60 分钟档应高亮')
-    const radios = findNodes(mounted.tree, (node) => node.type === 'input' && node.props && node.props.type === 'radio')
+    const radios = findNodes(mounted.tree, (node) => node.type === 'input' && node.props && node.props.type === 'radio' && node.props.name === 'ofs-accelerator')
     assert.deepEqual(radios.map((node) => node.props.checked), [false, true], 'P100 应选中')
     const saveButton = findNodes(
       mounted.tree,

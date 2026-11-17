@@ -334,6 +334,42 @@ class LoaderFamilyBuildTest(DaemonUnitTest):
         self.assertTrue(prefetch.called, "未命中预挂载时要按 allowPatterns 预下载")
         self.assertIsNone(pipe.device, "flux2 由 device_map 分层装载，不该再 .to('cuda')")
 
+    def test_flux2_single_gpu_moves_pipe_to_cuda(self) -> None:
+        seen: dict = {}
+
+        class FakePipe:
+            def __init__(self) -> None:
+                self.device = None
+
+            def to(self, device: str):
+                self.device = device
+                return self
+
+        class FakeFactory:
+            @staticmethod
+            def from_pretrained(source, **kwargs):  # noqa: ANN001
+                seen["kwargs"] = kwargs
+                return FakePipe()
+
+        fake_torch = types.ModuleType("torch")
+        fake_torch.float16 = "float16"
+        fake_torch.cuda = types.SimpleNamespace(device_count=lambda: 1)
+        fake_diffusers = types.ModuleType("diffusers")
+        fake_diffusers.AutoPipelineForText2Image = FakeFactory
+
+        with (
+            mock.patch.dict(sys.modules, {"torch": fake_torch, "diffusers": fake_diffusers}),
+            mock.patch.object(d.CACHE, "resolve_local_model", return_value=None),
+            mock.patch.object(d.CACHE, "ensure_disk_capacity"),
+            mock.patch.object(d.CACHE, "prefetch_weights"),
+        ):
+            pipe, _loaded = d.build_pipeline(
+                {"loader": "flux2", "base": "black-forest-labs/FLUX.2-klein-4B", "variant": "fp16"}
+            )
+
+        self.assertNotIn("device_map", seen["kwargs"], "单卡不该走 device_map 分片")
+        self.assertEqual(pipe.device, "cuda", "单卡必须显式搬到 cuda，否则会留在 CPU 上跑")
+
     def test_anima_dit_mount_skips_disk_capacity(self) -> None:
         with (
             mock.patch.object(d.CACHE, "anima_local_assets", return_value={"dit": "/mnt/anima.safetensors"}),
