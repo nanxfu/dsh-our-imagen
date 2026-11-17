@@ -9,6 +9,7 @@
  */
 
 import { TIMEOUTS, VERSION } from './shared/contract.js'
+import { createColabLogin } from './lib/colab/oauth.js'
 import { JobQueue } from './lib/jobs.js'
 import { createKaggleLogin } from './lib/kaggle-oauth.js'
 import { buildDiagnosticEnv } from './lib/diagnostics.js'
@@ -16,6 +17,7 @@ import { createKaggleTransport } from './lib/kaggle-transport.js'
 import { createLogger, installFileLog } from './lib/log.js'
 import { DEFAULT_PRESET, presetById, publicPresets } from './lib/presets.js'
 import { registerRoutes, toInt } from './lib/route-kit.js'
+import { createColabRoutes } from './lib/routes/colab.js'
 import { createFileRoutes } from './lib/routes/files.js'
 import { createImportRoutes } from './lib/routes/import.js'
 import { createJobRoutes } from './lib/routes/jobs.js'
@@ -60,6 +62,11 @@ export function apply(ctx, config = {}) {
   // 内置 OAuth 登录（直连模式用）：单实例，成功凭据写入 ~/.kaggle/credentials.json（与 CLI 同格式）。
   // 与传输方式解耦：CLI 模式下也能调用（两者写同一份凭据文件）。
   const kaggleLogin = createKaggleLogin({ ctx, log })
+
+  // 内置 Colab Google OAuth 登录：单实例，成功凭据写入 ~/.imagen/colab-credentials.json（0600）。
+  // 启动时异步读一次本地授权摘要（不联网、不暴露令牌）供顶栏与设置抽屉展示。
+  const colabLogin = createColabLogin({ ctx, log })
+  void colabLogin.refreshAuth()
 
   // 插件自身版本检查（只读 npm 注册表，结果缓存在 .imagen/update-check.json）：
   // 只做「有新版本」提示，不下载、不安装、不影响出图链路。
@@ -150,6 +157,9 @@ export function apply(ctx, config = {}) {
     devMode: Boolean(devEndpoint),
     // 当前生效的 Kaggle 访问方式（客户端据此把「CLI」字样切为「直连」、决定指引卡主操作）。
     kaggleTransport: kaggleTransport.id(),
+    // 当前配置的算力来源与 Colab 本地授权摘要（只含 authorized / email，不含任何令牌）。
+    provider: settings.current().provider,
+    colabAuth: colabLogin.authSummary(),
   })
 
   const probes = {
@@ -207,6 +217,8 @@ export function apply(ctx, config = {}) {
     ...createUiStateRoutes({ ctx, log }),
     // Kaggle 直连登录（试验特性）：GET 读登录态 / POST 发起、取消或提交授权码（同一 path、method 分发）。
     ...createKaggleRoutes({ login: kaggleLogin, log }),
+    // Colab Google OAuth 登录：GET 读登录态与授权摘要 / POST 发起、取消或提交回调（同一 path、method 分发）。
+    ...createColabRoutes({ login: colabLogin, log }),
   ])
 
   registerTools(ctx, { queue, session, defaultPreset })
@@ -235,6 +247,7 @@ export function apply(ctx, config = {}) {
       updateChecker.dispose()
       // 登录管理器可能正在等待浏览器回调：卸载时取消并释放回环端口（不阻塞卸载）。
       void kaggleLogin.dispose()
+      void colabLogin.dispose()
       // 卸载尽力 flush 后关闭文件日志；不阻塞插件卸载，异常在 dispose 内部吞掉。
       void fileLog.dispose()
     },

@@ -65,11 +65,27 @@ export function GuidanceCard(props) {
   const { resetToSafe, retryFocusedJob } = actions
   const { startSession, requeueSession, runProbe, retryHost } = compute
   const { copyInstallCommand, copyText, openLogs } = ui
-  // 直连模式的登录会话由组合层的 useKaggleLogin 管理，卡片只负责展示与转发动作。
+  // 直连模式的登录会话由组合层的 useKaggleLogin / useColabLogin 管理，卡片只负责展示与转发动作。
   const directMode = compute && compute.kaggleTransport === 'direct'
   const login = compute && compute.kaggleLogin ? compute.kaggleLogin : null
+  const colabProvider = compute && ((compute.session && compute.session.provider === 'colab') || compute.provider === 'colab')
+  const colabLogin = compute && compute.colabLogin ? compute.colabLogin : null
   const isQueueTimeout = kind === 'session' && errorCode === 'queue_timeout'
   if (!kind) return null
+  if (colabProvider && colabLogin && kind === 'auth') {
+    return (
+      <DirectLoginCard
+        t={t}
+        provider="colab"
+        login={colabLogin}
+        onRetry={startSession}
+        copyText={copyText}
+        openLogs={openLogs}
+        dismiss={dismiss}
+        detail={detail}
+      />
+    )
+  }
   if (directMode && login && (kind === 'auth' || kind === 'cli')) {
     return (
       <DirectLoginCard

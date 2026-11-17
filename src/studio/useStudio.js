@@ -37,7 +37,7 @@ import { safeResetPatch } from '../../shared/models-guide.js'
 import { accountStatusOf } from '../logic/probe.js'
 import { useChatThread } from './hooks/useChatThread.js'
 import { useImageTool } from './hooks/useImageTool.js'
-import { useKaggleLogin } from './hooks/useKaggleLogin.js'
+import { useColabLogin, useKaggleLogin } from './hooks/useKaggleLogin.js'
 import { useSessionControl } from './hooks/useSessionControl.js'
 import { useStudioForm } from './hooks/useStudioForm.js'
 import { useStudioUi } from './hooks/useStudioUi.js'
@@ -89,6 +89,8 @@ export function useStudio(props) {
   // 直连登录会话：成功（done）后重跑一次 probe，把账号与配额状态刷成最新。
   // CLI 模式下 hook 不会发起任何请求（指引卡使用原有「复制登录命令」动作）。
   const kaggleLogin = useKaggleLogin({ t, ui, onDone: () => control.runProbe() })
+  // Colab Google OAuth 登录会话：成功后刷新一次 /state 同步 colabAuth 摘要。
+  const colabLogin = useColabLogin({ t, ui, onDone: () => host.refresh() })
   const form = useStudioForm({ t, isEn, alive, ui, preset: { presets, defaultPreset }, initialPrompt })
   // 舞台图片工具域：底图 / 提示词 / 强度 / 蒙版 / 工具预设全部独立于左栏表单。
   const imageTool = useImageTool({
@@ -220,6 +222,9 @@ export function useStudio(props) {
     queueNotice,
     retryHost,
     kaggleLogin,
+    provider: (state && state.provider) || (control.session && control.session.provider) || 'kaggle',
+    colabAuth: (state && state.colabAuth) || null,
+    colabLogin,
   }
 
   /**
@@ -456,7 +461,11 @@ export function useStudio(props) {
     ''
   // 账号已被证明确实可用（探测通过或会话能跑）时，不再因旧快照里的 auth_required / cli_missing
   // 弹登录卡——直连模式下刚登录成功、旧会话错误还没被覆盖时最容易出现这种自相矛盾的提示。
-  const authProven = accountStatusOf(control.probe, control.sessionState) === 'ok'
+  // Colab 只能由 colabAuth / 会话就绪自证，不能被 Kaggle 的 probe 误压制。
+  const isColabActive = (state && state.provider === 'colab') || (control.session && control.session.provider === 'colab')
+  const authProven = isColabActive
+    ? Boolean((state && state.colabAuth && state.colabAuth.authorized === true) || control.sessionState === 'ready')
+    : accountStatusOf(control.probe, control.sessionState) === 'ok'
   const suppressAuth = authProven && (rawGuidanceCode === 'auth_required' || rawGuidanceCode === 'cli_missing')
   const guidanceCode = suppressAuth ? '' : rawGuidanceCode
   // 网络层错误不展示浏览器原文（"Failed to fetch" 对用户没有信息量），

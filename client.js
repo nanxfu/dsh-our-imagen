@@ -346,6 +346,12 @@ var zh = {
   "studio.settings.colabGpu.G4": "G4 24GB",
   "studio.settings.colabHighRam.label": "高内存机型",
   "studio.settings.colabHighRam.hint": "仅对 T4 / A100 / G4 生效；L4 只有高内存机型，勾选会被忽略。",
+  "studio.settings.colabAuth.label": "Google / Colab 授权",
+  "studio.settings.colabAuth.ready": "已授权（{email}）",
+  "studio.settings.colabAuth.readyAnon": "已授权（本地凭据有效）",
+  "studio.settings.colabAuth.missing": "尚未完成 Google / Colab 授权",
+  "studio.settings.colabAuth.login": "在浏览器中授权",
+  "studio.settings.colabAuth.relogin": "重新授权",
   "studio.settings.accelerator.label": "GPU 加速器",
   "studio.settings.accelerator.NvidiaTeslaT4": "2× Tesla T4（默认推荐）",
   "studio.settings.accelerator.NvidiaTeslaP100": "Tesla P100",
@@ -425,6 +431,14 @@ var zh = {
   "studio.guidance.auth.directTitle": "Kaggle 账号未登录或凭据不可用",
   "studio.guidance.auth.directHint": "直接访问 Kaggle 不需要安装 kaggle CLI；登录成功后凭据写入 {path}，可随时重新发起。",
   "studio.guidance.auth.loginAction": "在浏览器中登录 Kaggle",
+  "studio.guidance.auth.colabTitle": "Google / Colab 账号未授权或凭据已失效",
+  "studio.guidance.auth.colabHint": "点击下方按钮完成 Google OAuth 授权，凭据保存在本地 {path}。",
+  "studio.guidance.auth.colabAction": "在浏览器中登录 Google / Colab",
+  "studio.guidance.auth.colabWaitingManual": "浏览器没有自动打开？复制下面的授权链接在浏览器完成授权，然后把跳转后的 http://localhost:... 完整地址或授权码粘贴到下方。",
+  "studio.guidance.auth.colabCodePlaceholder": "粘贴回调地址（http://localhost:...）或授权码",
+  "studio.guidance.auth.colabRetryWake": "重新唤醒云端",
+  "studio.guidance.auth.colabDone": "Google / Colab 授权成功",
+  "studio.guidance.auth.colabDoneWithUser": "Google / Colab 授权成功：{username}",
   "studio.guidance.auth.retry": "重新发起登录",
   "studio.guidance.auth.waiting": "正在等待浏览器完成授权…",
   "studio.guidance.auth.waitingManual": "浏览器没有自动打开？复制下面的授权链接，在浏览器中完成授权后把授权码粘贴到下面。",
@@ -938,6 +952,12 @@ var en = {
   "studio.settings.colabGpu.G4": "G4 24GB",
   "studio.settings.colabHighRam.label": "High-RAM machine",
   "studio.settings.colabHighRam.hint": "Applies to T4 / A100 / G4 only; L4 is high-RAM by default, so this flag is ignored.",
+  "studio.settings.colabAuth.label": "Google / Colab auth",
+  "studio.settings.colabAuth.ready": "Authorized ({email})",
+  "studio.settings.colabAuth.readyAnon": "Authorized (local credentials saved)",
+  "studio.settings.colabAuth.missing": "Google / Colab authorization required",
+  "studio.settings.colabAuth.login": "Authorize in browser",
+  "studio.settings.colabAuth.relogin": "Re-authorize",
   "studio.settings.accelerator.label": "GPU accelerator",
   "studio.settings.accelerator.NvidiaTeslaT4": "2× Tesla T4 (recommended)",
   "studio.settings.accelerator.NvidiaTeslaP100": "Tesla P100",
@@ -1017,6 +1037,14 @@ var en = {
   "studio.guidance.auth.directTitle": "The Kaggle account is not signed in or its credentials are unusable",
   "studio.guidance.auth.directHint": "Direct Kaggle access does not require the kaggle CLI. After sign-in the credentials are written to {path}; you can start again at any time.",
   "studio.guidance.auth.loginAction": "Sign in to Kaggle in the browser",
+  "studio.guidance.auth.colabTitle": "Google / Colab is not authorized or its credentials expired",
+  "studio.guidance.auth.colabHint": "Sign in with Google to authorize Colab; credentials are saved locally to {path}.",
+  "studio.guidance.auth.colabAction": "Sign in to Google / Colab in browser",
+  "studio.guidance.auth.colabWaitingManual": "Browser did not open automatically? Copy the link below, finish Google sign-in, then paste the redirected http://localhost:... URL or code below.",
+  "studio.guidance.auth.colabCodePlaceholder": "Paste redirected URL (http://localhost:...) or code",
+  "studio.guidance.auth.colabRetryWake": "Wake cloud again",
+  "studio.guidance.auth.colabDone": "Google / Colab authorized",
+  "studio.guidance.auth.colabDoneWithUser": "Google / Colab authorized: {username}",
   "studio.guidance.auth.retry": "Start sign-in again",
   "studio.guidance.auth.waiting": "Waiting for the browser to finish authorization…",
   "studio.guidance.auth.waitingManual": "Browser did not open automatically? Copy the authorization link below, finish authorization in the browser, then paste the code here.",
@@ -1791,7 +1819,10 @@ var ROUTES = {
   uiStateSave: { method: "POST", path: "/imagen-api/ui-state" },
   // Kaggle 直连登录（试验特性）：GET 读登录态，POST 按 action 发起 / 取消 / 提交授权码。
   kaggleLogin: { method: "GET", path: "/imagen-api/kaggle/login" },
-  kaggleLoginAction: { method: "POST", path: "/imagen-api/kaggle/login" }
+  kaggleLoginAction: { method: "POST", path: "/imagen-api/kaggle/login" },
+  // Colab Google OAuth 登录：GET 读登录态与授权摘要，POST 按 action 发起 / 取消 / 提交回调或授权码。
+  colabLogin: { method: "GET", path: "/imagen-api/colab/login" },
+  colabLoginAction: { method: "POST", path: "/imagen-api/colab/login" }
 };
 function clientPath(route) {
   return route.path.replace(/^\//, "");
@@ -2390,6 +2421,16 @@ function loginUsernameOf(view) {
 function cleanLoginCode(raw) {
   let text = typeof raw === "string" ? raw.trim() : "";
   if (!text) return "";
+  const urlMatch = text.match(/(?:^|[?&])code=([^&\s#]+)/i);
+  if (urlMatch) {
+    text = urlMatch[1];
+    if (text.includes("%")) {
+      try {
+        text = decodeURIComponent(text);
+      } catch {
+      }
+    }
+  }
   text = text.replace(/^code\s*=\s*/i, "").trim();
   const quoted = text.match(/^["'`<]([\s\S]+)[>"'`]$/);
   if (quoted) text = quoted[1];
@@ -2541,18 +2582,21 @@ function saveUiState(patch) {
     body: JSON.stringify(patch && typeof patch === "object" ? patch : {})
   });
 }
-function fetchKaggleLogin() {
-  return request(routePath("kaggleLogin"), { method: "GET" });
-}
-function kaggleLoginAction(action, code) {
+function postLoginAction(routeName, action, code) {
   const body = loginActionBody(action, code);
   if (!body) {
     return Promise.resolve({ ok: false, status: 0, code: "invalid_request", message: `未知的登录动作：${action}` });
   }
-  return request(routePath("kaggleLoginAction"), {
+  return request(routePath(routeName), {
     method: "POST",
     body: JSON.stringify(body)
   });
+}
+function fetchKaggleLogin() {
+  return request(routePath("kaggleLogin"), { method: "GET" });
+}
+function kaggleLoginAction(action, code) {
+  return postLoginAction("kaggleLoginAction", action, code);
 }
 function startKaggleLogin() {
   return kaggleLoginAction("start");
@@ -2562,6 +2606,21 @@ function cancelKaggleLogin() {
 }
 function submitKaggleLoginCode(code) {
   return kaggleLoginAction("submit-code", code);
+}
+function fetchColabLogin() {
+  return request(routePath("colabLogin"), { method: "GET" });
+}
+function colabLoginAction(action, code) {
+  return postLoginAction("colabLoginAction", action, code);
+}
+function startColabLogin() {
+  return colabLoginAction("start");
+}
+function cancelColabLogin() {
+  return colabLoginAction("cancel");
+}
+function submitColabLoginCode(code) {
+  return colabLoginAction("submit-code", code);
 }
 function importImageFile({ data, name } = {}) {
   const body = { data: typeof data === "string" ? data : "" };
@@ -2770,6 +2829,7 @@ var KAGGLE_LOGIN_COMMAND = "kaggle auth login";
 var KAGGLE_CREDENTIAL_PATH = "%USERPROFILE%\\.kaggle\\credentials.json";
 var KAGGLE_ACCESS_TOKEN_PATH = "%USERPROFILE%\\.kaggle\\access_token";
 var KAGGLE_LEGACY_CREDENTIAL_PATH = "%USERPROFILE%\\.kaggle\\kaggle.json";
+var COLAB_CREDENTIAL_PATH = "%USERPROFILE%\\.imagen\\colab-credentials.json";
 var SESSION_CODES = /* @__PURE__ */ new Set([
   "push_failed",
   "queue_timeout",
@@ -6656,9 +6716,12 @@ function buildDiagnostics(t, input = {}) {
 // src/studio/guidance/DirectLoginCard.jsx
 var import_react10 = __toESM(require("react"), 1);
 var import_jsx_runtime10 = require("react/jsx-runtime");
-function statusNotesOf({ t, state, pending, manual, login }) {
+function statusNotesOf({ t, state, pending, manual, login, provider }) {
   if (pending) {
-    return manual ? [t("studio.guidance.auth.waiting"), t("studio.guidance.auth.waitingManual")] : [t("studio.guidance.auth.waiting")];
+    return manual ? [
+      t("studio.guidance.auth.waiting"),
+      t(provider === "colab" ? "studio.guidance.auth.colabWaitingManual" : "studio.guidance.auth.waitingManual")
+    ] : [t("studio.guidance.auth.waiting")];
   }
   if (state === "failed") {
     return [formatText(t("studio.guidance.auth.failed"), {
@@ -6668,20 +6731,79 @@ function statusNotesOf({ t, state, pending, manual, login }) {
   if (state === "cancelled") return [t("studio.guidance.auth.cancelled")];
   if (state === "done") {
     const username = loginUsernameOf(login.login);
+    if (provider === "colab") {
+      return [username ? formatText(t("studio.guidance.auth.colabDoneWithUser"), { username }) : t("studio.guidance.auth.colabDone")];
+    }
     return [username ? formatText(t("studio.guidance.auth.loginDoneWithUser"), { username }) : t("studio.guidance.auth.loginDone")];
   }
   return [];
 }
-function DirectLoginCard({ t, login, runProbe: runProbe2, copyText, openLogs, dismiss, detail }) {
+function OAuthManualPanel({ t, login, copyText, provider = "kaggle" }) {
   const [code, setCode] = import_react10.default.useState("");
-  const view = login.login && typeof login.login === "object" ? login.login : {};
+  const view = login && login.login && typeof login.login === "object" ? login.login : {};
   const state = typeof view.state === "string" ? view.state : "idle";
   const pending = state === "pending";
   const manual = view.mode === "manual";
   const url = typeof view.url === "string" ? view.url : "";
-  const title = t("studio.guidance.auth.directTitle");
-  const note = formatText(t("studio.guidance.auth.directHint"), { path: KAGGLE_CREDENTIAL_PATH });
-  const notes = statusNotesOf({ t, state, pending, manual, login });
+  const notes = statusNotesOf({ t, state, pending, manual, login, provider });
+  const placeholder = t(
+    provider === "colab" ? "studio.guidance.auth.colabCodePlaceholder" : "studio.guidance.auth.codePlaceholder"
+  );
+  return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(import_jsx_runtime10.Fragment, { children: [
+    pending && manual && url ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance-manual", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance-url", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("code", { className: "ofs-guidance-command", children: url }),
+        typeof copyText === "function" ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+          "button",
+          {
+            type: "button",
+            className: "ofs-chip",
+            onClick: () => copyText(url, "studio.guidance.auth.urlCopied"),
+            children: t("studio.guidance.auth.copyUrl")
+          }
+        ) : null
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance-code", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+          "input",
+          {
+            className: "ofs-settings-input ofs-guidance-code-input",
+            type: "text",
+            autoComplete: "off",
+            spellCheck: false,
+            value: code,
+            "aria-label": t("studio.guidance.auth.codeLabel"),
+            placeholder,
+            onChange: (event) => setCode(event.target.value)
+          }
+        ),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+          "button",
+          {
+            type: "button",
+            className: "ofs-chip",
+            disabled: !loginCodeCanSubmit(code) || Boolean(login.busy),
+            onClick: () => login.submit(code),
+            children: t("studio.guidance.auth.codeSubmit")
+          }
+        )
+      ] }),
+      login.codeErrorKey ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-guidance-code-error", role: "alert", children: t(login.codeErrorKey) }) : null
+    ] }) : null,
+    notes.map((text) => /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-guidance-note", children: text }, text))
+  ] });
+}
+function DirectLoginCard({ t, login, runProbe: runProbe2, onRetry, copyText, openLogs, dismiss, detail, provider = "kaggle" }) {
+  const view = login.login && typeof login.login === "object" ? login.login : {};
+  const state = typeof view.state === "string" ? view.state : "idle";
+  const pending = state === "pending";
+  const isColab = provider === "colab";
+  const title = t(isColab ? "studio.guidance.auth.colabTitle" : "studio.guidance.auth.directTitle");
+  const note = formatText(
+    t(isColab ? "studio.guidance.auth.colabHint" : "studio.guidance.auth.directHint"),
+    { path: isColab ? COLAB_CREDENTIAL_PATH : KAGGLE_CREDENTIAL_PATH }
+  );
+  const actionLabel = t(isColab ? "studio.guidance.auth.colabAction" : "studio.guidance.auth.loginAction");
   function viewLogs(event) {
     if (typeof openLogs !== "function") return;
     openLogs(event && event.currentTarget ? event.currentTarget : null);
@@ -6691,47 +6813,7 @@ function DirectLoginCard({ t, login, runProbe: runProbe2, copyText, openLogs, di
     /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance-body", children: [
       /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-guidance-title", children: title }),
       detail ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-guidance-detail", title: detail, children: detail }) : null,
-      pending && manual && url ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance-manual", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance-url", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("code", { className: "ofs-guidance-command", children: url }),
-          typeof copyText === "function" ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
-            "button",
-            {
-              type: "button",
-              className: "ofs-chip",
-              onClick: () => copyText(url, "studio.guidance.auth.urlCopied"),
-              children: t("studio.guidance.auth.copyUrl")
-            }
-          ) : null
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance-code", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
-            "input",
-            {
-              className: "ofs-settings-input ofs-guidance-code-input",
-              type: "text",
-              autoComplete: "off",
-              spellCheck: false,
-              value: code,
-              "aria-label": t("studio.guidance.auth.codeLabel"),
-              placeholder: t("studio.guidance.auth.codePlaceholder"),
-              onChange: (event) => setCode(event.target.value)
-            }
-          ),
-          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
-            "button",
-            {
-              type: "button",
-              className: "ofs-chip",
-              disabled: !loginCodeCanSubmit(code) || Boolean(login.busy),
-              onClick: () => login.submit(code),
-              children: t("studio.guidance.auth.codeSubmit")
-            }
-          )
-        ] }),
-        login.codeErrorKey ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-guidance-code-error", role: "alert", children: t(login.codeErrorKey) }) : null
-      ] }) : null,
-      notes.map((text) => /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-guidance-note", children: text }, text)),
+      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(OAuthManualPanel, { t, login, copyText, provider }),
       !pending ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("p", { className: "ofs-guidance-note", children: note }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "ofs-guidance-actions", children: [
         pending ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
@@ -6750,10 +6832,10 @@ function DirectLoginCard({ t, login, runProbe: runProbe2, copyText, openLogs, di
             className: "ofs-chip is-on",
             disabled: Boolean(login.pending),
             onClick: login.start,
-            children: state === "failed" ? t("studio.guidance.auth.retry") : t("studio.guidance.auth.loginAction")
+            children: state === "failed" ? t("studio.guidance.auth.retry") : actionLabel
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", className: "ofs-chip", onClick: runProbe2, children: t("studio.guidance.cli.action") }),
+        isColab ? typeof onRetry === "function" ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", className: "ofs-chip", onClick: onRetry, children: t("studio.guidance.auth.colabRetryWake") }) : null : /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", className: "ofs-chip", onClick: runProbe2, children: t("studio.guidance.cli.action") }),
         /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("button", { type: "button", className: "ofs-chip", onClick: viewLogs, children: t("studio.guidance.viewLogs") }),
         dismiss ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
           "button",
@@ -6793,8 +6875,25 @@ function GuidanceCard(props) {
   const { copyInstallCommand, copyText, openLogs } = ui;
   const directMode = compute && compute.kaggleTransport === "direct";
   const login = compute && compute.kaggleLogin ? compute.kaggleLogin : null;
+  const colabProvider = compute && (compute.session && compute.session.provider === "colab" || compute.provider === "colab");
+  const colabLogin = compute && compute.colabLogin ? compute.colabLogin : null;
   const isQueueTimeout = kind === "session" && errorCode === "queue_timeout";
   if (!kind) return null;
+  if (colabProvider && colabLogin && kind === "auth") {
+    return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+      DirectLoginCard,
+      {
+        t,
+        provider: "colab",
+        login: colabLogin,
+        onRetry: startSession2,
+        copyText,
+        openLogs,
+        dismiss,
+        detail
+      }
+    );
+  }
   if (directMode && login && (kind === "auth" || kind === "cli")) {
     return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
       DirectLoginCard,
@@ -8330,6 +8429,41 @@ function SettingsAdvancedSection({
 
 // src/studio/settings/SettingsForm.jsx
 var import_jsx_runtime22 = require("react/jsx-runtime");
+function ColabAuthRow({ t, colabAuth, colabLogin, copyText }) {
+  if (!colabLogin) return null;
+  const loginView = colabLogin.login && typeof colabLogin.login === "object" ? colabLogin.login : {};
+  const state = typeof loginView.state === "string" ? loginView.state : "idle";
+  const pending = state === "pending" || Boolean(colabLogin.pending);
+  const authorized = Boolean(colabAuth && colabAuth.authorized === true || state === "done");
+  const email = typeof loginView.username === "string" && loginView.username || colabAuth && typeof colabAuth.email === "string" && colabAuth.email || "";
+  const statusText = authorized ? email ? formatText(t("studio.settings.colabAuth.ready"), { email }) : t("studio.settings.colabAuth.readyAnon") : t("studio.settings.colabAuth.missing");
+  return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-row ofs-settings-colab-auth", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.colabAuth.label") }),
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-inline", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-muted", children: statusText }),
+      pending ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+        "button",
+        {
+          type: "button",
+          className: "ofs-chip is-on",
+          disabled: Boolean(colabLogin.busy),
+          onClick: colabLogin.cancel,
+          children: t("studio.guidance.auth.cancel")
+        }
+      ) : /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+        "button",
+        {
+          type: "button",
+          className: authorized ? "ofs-chip" : "ofs-chip is-on",
+          disabled: Boolean(colabLogin.busy),
+          onClick: colabLogin.start,
+          children: t(authorized ? "studio.settings.colabAuth.relogin" : "studio.settings.colabAuth.login")
+        }
+      )
+    ] }),
+    state !== "idle" ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(OAuthManualPanel, { t, login: colabLogin, copyText, provider: "colab" }) : null
+  ] });
+}
 function SettingsForm({
   t,
   view,
@@ -8342,6 +8476,9 @@ function SettingsForm({
   saveError,
   saving,
   canSave,
+  colabAuth,
+  colabLogin,
+  copyText,
   onCancel,
   onSubmit
 }) {
@@ -8424,7 +8561,8 @@ function SettingsForm({
           ),
           /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.colabHighRam.label") })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "ofs-settings-muted", children: t("studio.settings.colabHighRam.hint") })
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "ofs-settings-muted", children: t("studio.settings.colabHighRam.hint") }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(ColabAuthRow, { t, colabAuth, colabLogin, copyText })
       ] }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-settings-row", children: [
         /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "ofs-settings-label", children: t("studio.settings.accelerator.label") }),
@@ -8513,7 +8651,7 @@ function SettingsForm({
 // src/studio/SettingsDrawer.jsx
 var import_jsx_runtime23 = require("react/jsx-runtime");
 function SettingsDrawer(props) {
-  const { t, ui, onClose } = props;
+  const { t, ui, colabAuth = null, colabLogin = null, copyText = null, onClose } = props;
   const { defaultAdvancedOpen, defaultDraft } = props;
   const panelRef = import_react25.default.useRef(null);
   const closeRef = import_react25.default.useRef(null);
@@ -8624,6 +8762,9 @@ function SettingsDrawer(props) {
               saveError,
               saving,
               canSave,
+              colabAuth,
+              colabLogin,
+              copyText: copyText || ui && ui.copyText || null,
               onCancel: () => onCloseRef.current && onCloseRef.current(),
               onSubmit: submit
             }
@@ -12138,7 +12279,19 @@ var NETWORK_ERROR_KEY = "studio.guidance.auth.reason.network";
 var REQUEST_ERROR_KEY = "studio.guidance.auth.reason.request";
 var UNAVAILABLE_ERROR_KEY = "studio.guidance.auth.reason.unavailable";
 var TIMEOUT_ERROR_KEY = "studio.guidance.auth.reason.timeout";
-function useKaggleLogin({ t, ui, onDone } = {}) {
+var KAGGLE_API = {
+  fetch: fetchKaggleLogin,
+  start: startKaggleLogin,
+  cancel: cancelKaggleLogin,
+  submitCode: submitKaggleLoginCode
+};
+var COLAB_API = {
+  fetch: fetchColabLogin,
+  start: startColabLogin,
+  cancel: cancelColabLogin,
+  submitCode: submitColabLoginCode
+};
+function useOAuthLogin({ t, ui, onDone, api = KAGGLE_API } = {}) {
   const translate = typeof t === "function" ? t : (key) => key;
   const [login, setLogin] = import_react40.default.useState(emptyLoginView);
   const [busy, setBusy] = import_react40.default.useState(false);
@@ -12152,6 +12305,8 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
   const viewRef = import_react40.default.useRef(emptyLoginView());
   const onDoneRef = import_react40.default.useRef(onDone);
   onDoneRef.current = onDone;
+  const apiRef = import_react40.default.useRef(api);
+  apiRef.current = api;
   function toast(key) {
     if (ui && typeof ui.showToast === "function") ui.showToast(translate(key));
   }
@@ -12216,7 +12371,7 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
       failOnce(TIMEOUT_ERROR_KEY, token2);
       return;
     }
-    const result = await fetchKaggleLogin();
+    const result = await apiRef.current.fetch();
     if (!aliveRef.current || sessionRef.current !== token2) return;
     const view = loginViewOf(result);
     if (!view) {
@@ -12233,7 +12388,7 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
     markBusy(true);
     setErrorKey("");
     setCodeErrorKey("");
-    const result = await startKaggleLogin();
+    const result = await apiRef.current.start();
     if (!aliveRef.current || sessionRef.current !== token2) return;
     markBusy(false);
     const view = loginViewOf(result);
@@ -12256,7 +12411,7 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
     sessionRef.current = token2;
     stopPolling();
     markBusy(true);
-    const result = await cancelKaggleLogin();
+    const result = await apiRef.current.cancel();
     if (!aliveRef.current || sessionRef.current !== token2) return;
     markBusy(false);
     const view = loginViewOf(result);
@@ -12283,7 +12438,7 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
     if (busyRef.current) return false;
     const token2 = sessionRef.current;
     markBusy(true);
-    const result = await submitKaggleLoginCode(check.code);
+    const result = await apiRef.current.submitCode(check.code);
     if (!aliveRef.current || sessionRef.current !== token2) return false;
     markBusy(false);
     const view = loginViewOf(result);
@@ -12331,6 +12486,12 @@ function useKaggleLogin({ t, ui, onDone } = {}) {
     submit,
     reset
   };
+}
+function useKaggleLogin(options = {}) {
+  return useOAuthLogin({ ...options, api: KAGGLE_API });
+}
+function useColabLogin(options = {}) {
+  return useOAuthLogin({ ...options, api: COLAB_API });
 }
 
 // src/studio/hooks/useSessionControl.js
@@ -13346,6 +13507,7 @@ function useStudio(props) {
   const control = useSessionControl({ t, host, ui, alive });
   const [dismissedQueueKey, setDismissedQueueKey] = import_react44.default.useState("");
   const kaggleLogin = useKaggleLogin({ t, ui, onDone: () => control.runProbe() });
+  const colabLogin = useColabLogin({ t, ui, onDone: () => host.refresh() });
   const form = useStudioForm({ t, isEn, alive, ui, preset: { presets, defaultPreset }, initialPrompt });
   const imageTool = useImageTool({
     t,
@@ -13428,7 +13590,10 @@ function useStudio(props) {
     requeueSession,
     queueNotice,
     retryHost,
-    kaggleLogin
+    kaggleLogin,
+    provider: state && state.provider || control.session && control.session.provider || "kaggle",
+    colabAuth: state && state.colabAuth || null,
+    colabLogin
   };
   async function generate(overrides, options = {}) {
     if (sending) return false;
@@ -13579,7 +13744,8 @@ function useStudio(props) {
     ui.dismissGuidance(guidanceKey);
   }
   const rawGuidanceCode = ui.error && ui.error.code || control.session && control.session.error && control.session.error.code || control.focusedJob && control.focusedJob.status === "failed" && control.focusedJob.error && control.focusedJob.error.code || "";
-  const authProven = accountStatusOf(control.probe, control.sessionState) === "ok";
+  const isColabActive = state && state.provider === "colab" || control.session && control.session.provider === "colab";
+  const authProven = isColabActive ? Boolean(state && state.colabAuth && state.colabAuth.authorized === true || control.sessionState === "ready") : accountStatusOf(control.probe, control.sessionState) === "ok";
   const suppressAuth = authProven && (rawGuidanceCode === "auth_required" || rawGuidanceCode === "cli_missing");
   const guidanceCode = suppressAuth ? "" : rawGuidanceCode;
   const guidanceDetail = isConnectionCode(guidanceCode) ? t("error.network") : guidanceDetailOf({ error: ui.error, session: control.session, job: control.focusedJob });
@@ -13677,7 +13843,17 @@ function Studio(props) {
       ui.view === "studio" ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Filmstrip, { t, ui, compute, library, actions, now }) : null
     ] }),
     ui.logsOpen ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(LogsDrawer, { t, ui, compute, logs, onClose: ui.closeLogs }) : null,
-    ui.settingsOpen ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(SettingsDrawer, { t, ui, onClose: ui.closeSettings }) : null
+    ui.settingsOpen ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
+      SettingsDrawer,
+      {
+        t,
+        ui,
+        colabAuth: compute.colabAuth,
+        colabLogin: compute.colabLogin,
+        copyText: ui.copyText,
+        onClose: ui.closeSettings
+      }
+    ) : null
   ] });
 }
 

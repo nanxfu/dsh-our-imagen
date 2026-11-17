@@ -204,6 +204,17 @@ export function saveUiState(patch) {
   })
 }
 
+function postLoginAction(routeName, action, code) {
+  const body = loginActionBody(action, code)
+  if (!body) {
+    return Promise.resolve({ ok: false, status: 0, code: 'invalid_request', message: `未知的登录动作：${action}` })
+  }
+  return request(routePath(routeName), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 /**
  * Kaggle 直连登录态：GET 返回 `{ ok, login }`（LoginView，字段见契约 KAGGLE_LOGIN）。
  * 旧宿主没有该路由时回 404，由调用方按「接口不可用」处理，不抛异常。
@@ -213,34 +224,51 @@ export function fetchKaggleLogin() {
 }
 
 /**
- * 发送一次登录动作；请求体严格按契约 `KAGGLE_LOGIN.actions` 的形状：
+ * 发送一次 Kaggle 登录动作；请求体严格按契约 `KAGGLE_LOGIN.actions` 的形状：
  * `{ action: 'start' }` / `{ action: 'cancel' }` / `{ action: 'submit-code', code }`。
- * 非法 action 直接返回 rejected 语义的失败结果（不发请求），避免把脏 body 发给宿主。
  */
 export function kaggleLoginAction(action, code) {
-  const body = loginActionBody(action, code)
-  if (!body) {
-    return Promise.resolve({ ok: false, status: 0, code: 'invalid_request', message: `未知的登录动作：${action}` })
-  }
-  return request(routePath('kaggleLoginAction'), {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
+  return postLoginAction('kaggleLoginAction', action, code)
 }
 
-/** 发起浏览器授权（本地回环回调收码）。 */
+/** 发起 Kaggle 浏览器授权（本地回环回调收码）。 */
 export function startKaggleLogin() {
   return kaggleLoginAction('start')
 }
 
-/** 取消正在等待的登录。 */
+/** 取消正在等待的 Kaggle 登录。 */
 export function cancelKaggleLogin() {
   return kaggleLoginAction('cancel')
 }
 
-/** manual 模式提交粘贴的授权码。 */
+/** manual 模式提交粘贴的 Kaggle 授权码。 */
 export function submitKaggleLoginCode(code) {
   return kaggleLoginAction('submit-code', code)
+}
+
+/** Colab Google OAuth 登录态：GET 返回 `{ ok, login, auth }`。 */
+export function fetchColabLogin() {
+  return request(routePath('colabLogin'), { method: 'GET' })
+}
+
+/** 发送一次 Colab 登录动作：start / cancel / submit-code。 */
+export function colabLoginAction(action, code) {
+  return postLoginAction('colabLoginAction', action, code)
+}
+
+/** 发起 Colab Google OAuth 浏览器授权。 */
+export function startColabLogin() {
+  return colabLoginAction('start')
+}
+
+/** 取消正在等待的 Colab 登录。 */
+export function cancelColabLogin() {
+  return colabLoginAction('cancel')
+}
+
+/** manual 模式提交粘贴的 Colab 回调 URL 或授权码。 */
+export function submitColabLoginCode(code) {
+  return colabLoginAction('submit-code', code)
 }
 
 /**

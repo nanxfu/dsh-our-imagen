@@ -321,6 +321,16 @@
 - `check-client-chat` 19 项、`check-client-shell` 51 项、`check-client-logic` 83 项、`check-client-tools` 27 项、`image-tool-render` 6 项、`host-e2e` 56 项、`jobs-wait` 31 项、`check-contract` 12 项；`npm test` 36 步全绿。
 - 测试基础设施：`test/helpers/render.mjs` / `test/load-client.mjs` 支持 `OFS_TEST_BUNDLE` 指定独立构建产物，便于并行开发时避免写冲突（不设置时行为不变）。
 
+### 阶段十四：Google Colab（Colab Pro）后端接入与工作台内置 OAuth 登录
+
+> 对应 ROADMAP 第十四条，设计依据见 [docs/COLAB_BACKEND_RESEARCH.md](docs/COLAB_BACKEND_RESEARCH.md)。
+
+- **Provider 抽象与 Colab 后端**：`lib/providers/` 抽出 `ComputeProvider` 契约与 `KaggleProvider`；新增 `lib/colab/client.js` 与 `lib/colab/provider.js`，支持 `assign(T4/L4/A100/G4)`、Jupyter Contents 上传与 Kernel WebSocket 30s 心跳保活、代理令牌刷新、CCU 余额/速率上报，以及启动恢复与失败释放；`remote/` 适配 `/content`、单卡 `Flux2Loader` 显式 `.to("cuda")` 与 `_execution_device` 随机生成器。
+- **工作台内置 Google OAuth 登录**：
+  - 契约与路由：`shared/contract.js` 新增 `ROUTES.colabLogin` / `ROUTES.colabLoginAction`（`/imagen-api/colab/login`）与 `COLAB_LOGIN`；`lib/colab/oauth.js` 实现基于本地回环 `http://localhost:<port>` 的 Google OAuth 登录（`browser` 自动回调 + `manual` 模式复制授权链接 / 粘贴回调 URL 或授权码兜底），原子写入 `~/.imagen/colab-credentials.json`（0600），与 `lib/routes/kaggle.js` 共用 `lib/routes/oauth-login.js`。
+  - 前端接线：`SettingsForm.jsx` 切到 Colab 时直接展示授权状态（邮箱）与「在浏览器中授权 / 重新授权」入口；`GuidanceCard.jsx` 在 Colab 触发 `auth_required` 时弹出同款一键授权指引卡；`useStudio.js` 修复旧逻辑用 Kaggle 探测结果误压制 Colab `auth_required` 的边界。
+- **测试**：新增 `test/colab-oauth.mjs`（6 项），`check-client-kaggle` 扩至 11 项覆盖 Colab 指引卡与设置抽屉登录流。
+
 ## 0.10.0 — 2026-11-14
 
 > v0.10 首个版本：创作参数面板做减法（去风格预设、按模型真实能力显隐排除项、画面设置与参考图互斥、生成张数提权），AI 助手做加法（模型知识单一来源、意图 JSON v2、多轮上下文、通用澄清、确认卡带入参数面板），并把契约、测试、文档与版本收口到 0.10.0。

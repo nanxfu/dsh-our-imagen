@@ -571,4 +571,136 @@ await check('渲染：CLI 模式与旧宿主保持原有指引卡行为', async 
   }
 })
 
+await check('渲染：Colab auth_required 指引卡走 Colab OAuth 登录并在 done 后刷新状态', async () => {
+  const COLAB_LOGIN_PATH = '/imagen-api/colab/login'
+  const colabErrorState = {
+    ...readyState,
+    provider: 'colab',
+    colabAuth: { authorized: false, email: null },
+    session: { state: 'error', provider: 'colab', error: { code: 'auth_required', message: 'Colab 尚未授权' } },
+  }
+  const colabReadyState = {
+    ...colabErrorState,
+    colabAuth: { authorized: true, email: 'pro@example.com' },
+    session: { ...readyState.session, provider: 'colab' },
+  }
+  const colabManualUrl = 'https://accounts.google.com/o/oauth2/auth?redirect_uri=http%3A%2F%2Flocalhost%3A8765'
+  const responses = {
+    '/imagen-api/state': colabErrorState,
+    '/imagen-api/history': { items: [] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    [COLAB_LOGIN_PATH]: {
+      ok: true,
+      login: loginView({ state: 'pending', mode: 'manual', url: colabManualUrl }),
+      auth: { authorized: false, email: null },
+    },
+  }
+  const client = await createTestClient({ now: NOW, responses, testBuild: true })
+  try {
+    let tree = await client.mountRaw(client.components.Studio, {})
+    let text = collectText(tree).join(' | ')
+    assert.ok(text.includes('在浏览器中登录 Google / Colab'), `[studio-colab] 应渲染 Colab 登录主操作：${text}`)
+    const loginButton = findNodes(
+      tree,
+      (node) => node.type === 'button' && collectText(node).join('').includes('在浏览器中登录 Google / Colab'),
+    )[0]
+    assert.ok(loginButton)
+    loginButton.props.onClick()
+    await client.settle()
+    tree = await client.rerenderRaw()
+    text = collectText(tree).join(' | ')
+    assert.ok(text.includes(colabManualUrl), '[studio-colab] manual 模式应展示授权链接')
+    assert.deepEqual(
+      client.requests.filter((item) => item.path === COLAB_LOGIN_PATH && item.method === 'POST').map((item) => item.body),
+      [{ action: 'start' }],
+    )
+    responses[COLAB_LOGIN_PATH] = {
+      ok: true,
+      login: loginView({ state: 'done', username: 'pro@example.com' }),
+      auth: { authorized: true, email: 'pro@example.com' },
+    }
+    responses['/imagen-api/state'] = colabReadyState
+    await client.advanceTimers(KAGGLE_LOGIN.pollMs)
+    await client.settle()
+    await client.settle()
+    tree = await client.rerenderRaw()
+    text = collectText(tree).join(' | ')
+    assert.ok(!text.includes('在浏览器中登录 Google / Colab'), '[studio-colab] 授权完成后撤掉错误指引卡')
+  } finally {
+    client.unmount()
+  }
+})
+
+await check('渲染：设置抽屉切到 Colab 显示授权状态与「在浏览器中授权」入口', async () => {
+  const COLAB_LOGIN_PATH = '/imagen-api/colab/login'
+  const responses = {
+    '/imagen-api/state': {
+      ...readyState,
+      provider: 'colab',
+      colabAuth: { authorized: true, email: 'settings@example.com' },
+      session: { ...readyState.session, provider: 'colab' },
+    },
+    '/imagen-api/history': { items: [] },
+    '/imagen-api/library': { favorites: [], deleted: [] },
+    '/imagen-api/settings': {
+      ok: true,
+      settings: {
+        idleTimeoutSec: 1800,
+        accelerator: 'NvidiaTeslaT4',
+        provider: 'colab',
+        colabGpu: 'L4',
+        colabHighRam: false,
+        kaggleTransport: 'direct',
+        hasHfToken: false,
+        hfTokenSource: 'none',
+        datasetSources: [],
+        localModels: {},
+        pipConstraints: [],
+        effectiveOnNextSession: false,
+      },
+    },
+    [COLAB_LOGIN_PATH]: {
+      ok: true,
+      login: loginView({ state: 'pending', mode: 'browser' }),
+      auth: { authorized: true, email: 'settings@example.com' },
+    },
+  }
+  const client = await createTestClient({ now: NOW, responses, testBuild: true })
+  try {
+    await client.mountRaw(client.components.Studio, {})
+    await client.settle()
+    let tree = await client.rerenderRaw()
+    const computePill = findNodes(
+      tree,
+      (node) => node.type === 'button' && node.props && typeof node.props.className === 'string' && node.props.className.includes('ofs-compute'),
+    )[0]
+    assert.ok(computePill, '顶栏应有算力胶囊按钮')
+    computePill.props.onClick()
+    await client.settle()
+    tree = await client.rerenderRaw()
+    const settingsBtn = findNodes(
+      tree,
+      (node) => node.type === 'button' && collectText(node).join('').includes('运行设置'),
+    )[0]
+    assert.ok(settingsBtn, '算力菜单内应有运行设置入口')
+    settingsBtn.props.onClick()
+    await client.settle()
+    tree = await client.rerenderRaw()
+    let text = collectText(tree).join(' | ')
+    assert.ok(text.includes('已授权（settings@example.com）'), `[settings-colab] 应显示已授权邮箱：${text}`)
+    const reauthBtn = findNodes(
+      tree,
+      (node) => node.type === 'button' && collectText(node).join('').includes('重新授权'),
+    )[0]
+    assert.ok(reauthBtn, '应有重新授权按钮')
+    reauthBtn.props.onClick()
+    await client.settle()
+    tree = await client.rerenderRaw()
+    text = collectText(tree).join(' | ')
+    assert.ok(text.includes('正在等待浏览器完成授权…'), `[settings-colab] 点击后应进入等待授权：${text}`)
+  } finally {
+    client.unmount()
+  }
+})
+
 summary()

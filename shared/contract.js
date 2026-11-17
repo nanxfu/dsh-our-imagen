@@ -54,6 +54,9 @@ export const ROUTES = {
   // Kaggle 直连登录（试验特性）：GET 读登录态，POST 按 action 发起 / 取消 / 提交授权码。
   kaggleLogin: { method: 'GET', path: '/imagen-api/kaggle/login' },
   kaggleLoginAction: { method: 'POST', path: '/imagen-api/kaggle/login' },
+  // Colab Google OAuth 登录：GET 读登录态与授权摘要，POST 按 action 发起 / 取消 / 提交回调或授权码。
+  colabLogin: { method: 'GET', path: '/imagen-api/colab/login' },
+  colabLoginAction: { method: 'POST', path: '/imagen-api/colab/login' },
 }
 
 /** 客户端请求用的相对路径（与改造前 `request('imagen-api/state')` 完全同形）。 */
@@ -244,6 +247,9 @@ export const KAGGLE_LOGIN = {
   pollMs: 1500,
   timeoutMs: 5 * 60 * 1000,
 }
+
+/** Colab Google OAuth 登录与 Kaggle 直连登录共用同一套状态机契约。 */
+export const COLAB_LOGIN = KAGGLE_LOGIN
 
 /**
  * 工作台界面状态的持久化口径（`<workspace>/.imagen/ui-state.json`）。

@@ -133,7 +133,16 @@ export function Studio(props) {
 
       {ui.logsOpen ? <LogsDrawer t={t} ui={ui} compute={compute} logs={logs} onClose={ui.closeLogs} /> : null}
 
-      {ui.settingsOpen ? <SettingsDrawer t={t} ui={ui} onClose={ui.closeSettings} /> : null}
+      {ui.settingsOpen ? (
+        <SettingsDrawer
+          t={t}
+          ui={ui}
+          colabAuth={compute.colabAuth}
+          colabLogin={compute.colabLogin}
+          copyText={ui.copyText}
+          onClose={ui.closeSettings}
+        />
+      ) : null}
     </div>
   )
 }

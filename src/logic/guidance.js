@@ -28,6 +28,8 @@ export const KAGGLE_LOGIN_COMMAND = 'kaggle auth login'
 export const KAGGLE_CREDENTIAL_PATH = '%USERPROFILE%\\.kaggle\\credentials.json'
 export const KAGGLE_ACCESS_TOKEN_PATH = '%USERPROFILE%\\.kaggle\\access_token'
 export const KAGGLE_LEGACY_CREDENTIAL_PATH = '%USERPROFILE%\\.kaggle\\kaggle.json'
+/** Colab OAuth 凭据默认落盘位置。 */
+export const COLAB_CREDENTIAL_PATH = '%USERPROFILE%\\.imagen\\colab-credentials.json'
 
 /** 会话级错误：可以「重新唤醒」。 */
 const SESSION_CODES = new Set([

@@ -287,7 +287,7 @@
   1. **M0 — 真机探针验证（前置门禁，编码前必做）**：运行 3 个独立最小 Node.js 探针脚本，依次验证 ① OAuth `localhost` 回调与 `ccu-info` / `assign(L4)` / `unassign` 控制面返回；② Jupyter Contents 上传 + Kernel WebSocket 启动与 **30s 心跳防回收（过 35 分钟验证）** + `cloudflared` URL 回传；③ 探索 Colab Runtime Proxy 能否替代 `cloudflared`（不阻塞主线）。
   2. **M1 — 算力 Provider 抽象抽离**：将 `lib/session.js` 中与 Kaggle 耦合的生命周期抽为 `ComputeProvider` 契约（`authenticate` / `probe` / `provision` / `pollEndpoint` / `keepAlive` / `teardown`），现有逻辑收敛为 `KaggleProvider`，回归全套 `session-*` 测试零退化。
   3. **M2 — `ColabProvider` 与 `remote/` 容器适配**：实现 `lib/colab/{oauth,client,jupyter}.js`（OAuth 原子存盘、XSSI 剥离、30s Kernel WS 心跳 + 60s TFE ping + Proxy Token 刷新）；消除 `remote/` 中 `/kaggle/working`、`/kaggle/input` 与双卡 `device_map="balanced"` 等硬编码假设，适配 `/content` 与单卡大显存。
-  4. **M3 — 契约、UI 接线与真机验收**：`shared/contract.js` 扩展 `provider: 'kaggle' | 'colab'`、GPU 型号（`T4/L4/A100`）与 `highRam` 设置项；状态栏展示 Colab CCU 余额与消耗速率、空闲关机可靠触发 `unassign`；完成 Colab Pro 真机开机出图 + 35 分钟保活 + 关机释放验收。
+  4. **M3 — 契约、UI 接线与真机验收**：`shared/contract.js` 扩展 `provider: 'kaggle' | 'colab'`、GPU 型号（`T4/L4/A100`）与 `highRam` 设置项；状态栏展示 Colab CCU 余额与消耗速率、空闲关机可靠触发 `unassign`；完成 Colab Pro 真机开机出图 + 35 分钟保活 + 关机释放验收，并补齐工作台设置抽屉与 `auth_required` 指引卡内置 Google OAuth 登录流。
 
 ---
 

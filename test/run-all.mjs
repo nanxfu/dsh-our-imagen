@@ -34,6 +34,7 @@ const hostGroup = [
   'ui-state-host.mjs',
   'kaggle-direct.mjs',
   'kaggle-oauth.mjs',
+  'colab-oauth.mjs',
   'host-log.mjs',
   'host-log-events.mjs',
   { command: PYTHON, args: ['test/remote/run.py'], name: 'test/remote/run.py' },

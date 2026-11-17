@@ -20,9 +20,13 @@ import React from 'react'
 import { KAGGLE_LOGIN } from '../../../shared/contract.js'
 
 import {
+  cancelColabLogin,
   cancelKaggleLogin,
+  fetchColabLogin,
   fetchKaggleLogin,
+  startColabLogin,
   startKaggleLogin,
+  submitColabLoginCode,
   submitKaggleLoginCode,
 } from '../../api/resources.js'
 import {
@@ -40,7 +44,21 @@ const REQUEST_ERROR_KEY = 'studio.guidance.auth.reason.request'
 const UNAVAILABLE_ERROR_KEY = 'studio.guidance.auth.reason.unavailable'
 const TIMEOUT_ERROR_KEY = 'studio.guidance.auth.reason.timeout'
 
-export function useKaggleLogin({ t, ui, onDone } = {}) {
+const KAGGLE_API = {
+  fetch: fetchKaggleLogin,
+  start: startKaggleLogin,
+  cancel: cancelKaggleLogin,
+  submitCode: submitKaggleLoginCode,
+}
+
+const COLAB_API = {
+  fetch: fetchColabLogin,
+  start: startColabLogin,
+  cancel: cancelColabLogin,
+  submitCode: submitColabLoginCode,
+}
+
+export function useOAuthLogin({ t, ui, onDone, api = KAGGLE_API } = {}) {
   const translate = typeof t === 'function' ? t : (key) => key
   const [login, setLogin] = React.useState(emptyLoginView)
   const [busy, setBusy] = React.useState(false)
@@ -60,6 +78,8 @@ export function useKaggleLogin({ t, ui, onDone } = {}) {
   const viewRef = React.useRef(emptyLoginView())
   const onDoneRef = React.useRef(onDone)
   onDoneRef.current = onDone
+  const apiRef = React.useRef(api)
+  apiRef.current = api
 
   function toast(key) {
     if (ui && typeof ui.showToast === 'function') ui.showToast(translate(key))
@@ -136,7 +156,7 @@ export function useKaggleLogin({ t, ui, onDone } = {}) {
       failOnce(TIMEOUT_ERROR_KEY, token)
       return
     }
-    const result = await fetchKaggleLogin()
+    const result = await apiRef.current.fetch()
     if (!aliveRef.current || sessionRef.current !== token) return
     const view = loginViewOf(result)
     if (!view) {
@@ -155,7 +175,7 @@ export function useKaggleLogin({ t, ui, onDone } = {}) {
     markBusy(true)
     setErrorKey('')
     setCodeErrorKey('')
-    const result = await startKaggleLogin()
+    const result = await apiRef.current.start()
     if (!aliveRef.current || sessionRef.current !== token) return
     markBusy(false)
     const view = loginViewOf(result)
@@ -180,7 +200,7 @@ export function useKaggleLogin({ t, ui, onDone } = {}) {
     sessionRef.current = token
     stopPolling()
     markBusy(true)
-    const result = await cancelKaggleLogin()
+    const result = await apiRef.current.cancel()
     if (!aliveRef.current || sessionRef.current !== token) return
     markBusy(false)
     const view = loginViewOf(result)
@@ -209,7 +229,7 @@ export function useKaggleLogin({ t, ui, onDone } = {}) {
     if (busyRef.current) return false
     const token = sessionRef.current
     markBusy(true)
-    const result = await submitKaggleLoginCode(check.code)
+    const result = await apiRef.current.submitCode(check.code)
     if (!aliveRef.current || sessionRef.current !== token) return false
     markBusy(false)
     const view = loginViewOf(result)
@@ -262,4 +282,12 @@ export function useKaggleLogin({ t, ui, onDone } = {}) {
     submit,
     reset,
   }
+}
+
+export function useKaggleLogin(options = {}) {
+  return useOAuthLogin({ ...options, api: KAGGLE_API })
+}
+
+export function useColabLogin(options = {}) {
+  return useOAuthLogin({ ...options, api: COLAB_API })
 }

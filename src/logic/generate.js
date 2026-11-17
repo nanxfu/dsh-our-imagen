@@ -276,14 +276,36 @@ function recallOf(entry, presets) {
 }
 
 /**
+ * 是否为「无生成元数据的导入图」。
+ *
+ * 本地导入图没有原始生成参数：`meta.json` 的 params 只有展示名与像素尺寸（`source: 'import'`）。
+ * 这类作品点胶片条只切预览、不回填任何参数，避免把文件名（如 `photo.png`）写进左栏提示词，
+ * 也避免「重新生成」用文件名当提示词出图。带 PNG `tEXt` 生成元数据的导入图会回填
+ * prompts / steps / cfg / seed，属于正常回填。
+ */
+export function isBareImportOf(entry) {
+  const item = entry && entry.item ? entry.item : null
+  if (!item || item.source !== 'import') return false
+  const params = item.params && typeof item.params === 'object' ? item.params : null
+  if (!params) return true
+  // 生成元数据回填时会补 steps / cfg / seed；三者都没有就是「只有文件名」的裸导入。
+  return !(
+    typeof params.steps === 'number'
+    || typeof params.cfg === 'number'
+    || typeof params.seed === 'number'
+  )
+}
+
+/**
  * 「带回参数」→ 表单补丁。
  * prompt 用作品自己的提示词；尺寸用产物像素（不再用最近任务兜底）；
  * steps/cfg 优先作品 params，其次预设推荐值。
  *
  * 没有记录有效 seed 时把种子恢复为随机，避免上一张作品的固定种子串到这张图上。
- * 没有可回填字段时返回空补丁。
+ * 没有可回填字段时返回空补丁；无生成元数据的导入图直接返回空补丁（见 isBareImportOf）。
  */
 export function iteratePatch(entry, form, presets) {
+  if (isBareImportOf(entry)) return {}
   const recall = recallOf(entry, presets)
   const patch = {}
 
@@ -303,11 +325,12 @@ export function iteratePatch(entry, form, presets) {
 }
 
 /**
- * 「生成变体」→ 生成参数覆盖项：保持该图的 prompt / 尺寸 / steps / cfg / 预设，
+ * 「重新生成」→ 生成参数覆盖项：保持该图的 prompt / 尺寸 / steps / cfg / 预设，
  * 只把 seed 换成随机（-1），并按「再画一张」把张数固定为 1。
- * 没有可用的提示词时返回 null，由调用方给可见提示。
+ * 没有可用的提示词时返回 null，由调用方给可见提示；裸导入图同样返回 null。
  */
 export function rerollOverrides(entry, presets) {
+  if (isBareImportOf(entry)) return null
   const recall = recallOf(entry, presets)
   const prompt = recall.prompt.trim()
   if (!prompt) return null

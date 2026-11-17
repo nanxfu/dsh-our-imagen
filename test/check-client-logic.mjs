@@ -1075,6 +1075,8 @@ await check('Kaggle 直连登录：manual 授权码清洗与校验', () => {
   assert.equal(valid.ok, true)
   assert.equal(valid.code, 'ab_cd-EF.123~45/6=')
   assert.equal(valid.message, '')
+  const colabUrl = logic.validateLoginCode('http://localhost:8765/?state=s1&code=4%2F0AanRRtestCode1234&scope=openid')
+  assert.deepEqual(colabUrl, { ok: true, code: '4/0AanRRtestCode1234', message: '' })
   assert.equal(logic.loginCodeCanSubmit('abc'), false)
   assert.equal(logic.loginCodeCanSubmit(valid.code), true)
   for (const key of [

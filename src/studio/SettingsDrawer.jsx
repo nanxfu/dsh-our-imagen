@@ -27,7 +27,7 @@ import {
 } from '../logic/settings.js'
 
 export function SettingsDrawer(props) {
-  const { t, ui, onClose } = props
+  const { t, ui, colabAuth = null, colabLogin = null, copyText = null, onClose } = props
   // 预览 / 渲染测试用：预展开高级区、预填一份未保存的草稿（正式界面不传）。
   const { defaultAdvancedOpen, defaultDraft } = props
   const panelRef = React.useRef(null)
@@ -153,6 +153,9 @@ export function SettingsDrawer(props) {
               saveError={saveError}
               saving={saving}
               canSave={canSave}
+              colabAuth={colabAuth}
+              colabLogin={colabLogin}
+              copyText={copyText || (ui && ui.copyText) || null}
               onCancel={() => onCloseRef.current && onCloseRef.current()}
               onSubmit={submit}
             />

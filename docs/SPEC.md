@@ -891,12 +891,21 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | `mode` | `browser` / `manual`（契约 `KAGGLE_LOGIN.modes`） |
 | `url` | 需要用户手动打开的授权链接；`manual` 模式必填，其它情况为 `null` |
 | `message` | 失败原因（可读、已脱敏）；非失败态为 `null` |
-| `username` | 成功后回填的 Kaggle 用户名 |
+| `username` | 成功后回填的 Kaggle 用户名（Colab 登录回填 Google 邮箱） |
 | `startedAt` / `finishedAt` | ISO 时间（未开始 / 未结束为 `null`） |
 
 客户端按契约 `KAGGLE_LOGIN.pollMs` 轮询 GET 直到进入终态；超过 `KAGGLE_LOGIN.timeoutMs` 由宿主收敛为
 `failed`。登录接口与传输方式解耦：CLI 模式下也能调用（`kaggle auth login` 与直连写同一份凭据文件），
 界面只在直连模式下把 `cli_missing` / `auth_required` 指引卡的主操作切为「在浏览器中登录 Kaggle」。
+
+#### `GET /imagen-api/colab/login` 与 `POST /imagen-api/colab/login`
+
+- **用途**：Colab Google OAuth 2.0 登录状态机，动作与 `LoginView` 形状复用 `COLAB_LOGIN`（同 `KAGGLE_LOGIN`）。
+- **GET 响应**：`{ "ok": true, "login": LoginView, "auth": { "authorized": boolean, "email": string | null } }`
+- **POST 请求体**：`{ "action": "start" | "cancel" | "submit-code", "code"?: string }`
+  - `start` 发起 Google OAuth 授权（`browser` 与 `manual` 均使用 `http://localhost:<port>` 本地回环回调，Google 已拒绝远程粘贴页）；
+  - `submit-code` 支持粘贴完整回跳 URL（`http://localhost:.../?code=...`）或授权码正文；
+  - 成功后原子写入 `~/.imagen/colab-credentials.json`（权限 `0600`），仅返回脱敏状态与邮箱，绝不回传或打印任何令牌。
 
 ---
 

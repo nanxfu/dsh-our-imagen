@@ -128,12 +128,21 @@ export function loginUsernameOf(view) {
 /**
  * 清洗 manual 模式粘贴的授权码。
  *
- * 常见误粘贴：首尾空白、换行、包裹的引号 / 尖括号、`code=` 前缀（复制自命令行或
- * 授权页的提示文本）。授权码本身不含空白字符，所以内部空白一并去掉。
+ * 常见误粘贴：首尾空白、换行、包裹的引号 / 尖括号、`code=` 前缀，或整条回跳 URL
+ * （如 Colab 浏览器跳到 `http://localhost:8765/?state=...&code=...` 后直接整段复制）。
  */
 export function cleanLoginCode(raw) {
   let text = typeof raw === 'string' ? raw.trim() : ''
   if (!text) return ''
+  const urlMatch = text.match(/(?:^|[?&])code=([^&\s#]+)/i)
+  if (urlMatch) {
+    text = urlMatch[1]
+    if (text.includes('%')) {
+      try {
+        text = decodeURIComponent(text)
+      } catch {}
+    }
+  }
   text = text.replace(/^code\s*=\s*/i, '').trim()
   const quoted = text.match(/^["'`<]([\s\S]+)[>"'`]$/)
   if (quoted) text = quoted[1]

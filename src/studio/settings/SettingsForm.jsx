@@ -13,7 +13,53 @@ import {
   quickIdleMinutes,
   settingsErrorText,
 } from '../../logic/settings.js'
+import { OAuthManualPanel } from '../guidance/DirectLoginCard.jsx'
 import { SettingsAdvancedSection } from './SettingsAdvancedSection.jsx'
+
+function ColabAuthRow({ t, colabAuth, colabLogin, copyText }) {
+  if (!colabLogin) return null
+  const loginView = colabLogin.login && typeof colabLogin.login === 'object' ? colabLogin.login : {}
+  const state = typeof loginView.state === 'string' ? loginView.state : 'idle'
+  const pending = state === 'pending' || Boolean(colabLogin.pending)
+  const authorized = Boolean((colabAuth && colabAuth.authorized === true) || state === 'done')
+  const email = (typeof loginView.username === 'string' && loginView.username)
+    || (colabAuth && typeof colabAuth.email === 'string' && colabAuth.email)
+    || ''
+  const statusText = authorized
+    ? (email ? formatText(t('studio.settings.colabAuth.ready'), { email }) : t('studio.settings.colabAuth.readyAnon'))
+    : t('studio.settings.colabAuth.missing')
+
+  return (
+    <div className="ofs-settings-row ofs-settings-colab-auth">
+      <span className="ofs-settings-label">{t('studio.settings.colabAuth.label')}</span>
+      <div className="ofs-settings-inline">
+        <span className="ofs-settings-muted">{statusText}</span>
+        {pending ? (
+          <button
+            type="button"
+            className="ofs-chip is-on"
+            disabled={Boolean(colabLogin.busy)}
+            onClick={colabLogin.cancel}
+          >
+            {t('studio.guidance.auth.cancel')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={authorized ? 'ofs-chip' : 'ofs-chip is-on'}
+            disabled={Boolean(colabLogin.busy)}
+            onClick={colabLogin.start}
+          >
+            {t(authorized ? 'studio.settings.colabAuth.relogin' : 'studio.settings.colabAuth.login')}
+          </button>
+        )}
+      </div>
+      {state !== 'idle' ? (
+        <OAuthManualPanel t={t} login={colabLogin} copyText={copyText} provider="colab" />
+      ) : null}
+    </div>
+  )
+}
 
 export function SettingsForm({
   t,
@@ -27,6 +73,9 @@ export function SettingsForm({
   saveError,
   saving,
   canSave,
+  colabAuth,
+  colabLogin,
+  copyText,
   onCancel,
   onSubmit,
 }) {
@@ -120,6 +169,7 @@ export function SettingsForm({
               <span className="ofs-settings-label">{t('studio.settings.colabHighRam.label')}</span>
             </label>
             <p className="ofs-settings-muted">{t('studio.settings.colabHighRam.hint')}</p>
+            <ColabAuthRow t={t} colabAuth={colabAuth} colabLogin={colabLogin} copyText={copyText} />
           </>
         ) : null}
 
