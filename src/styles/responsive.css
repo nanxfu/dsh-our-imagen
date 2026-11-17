@@ -89,7 +89,7 @@
   }
 }
 
-/* 窄窗：面板在上、画面预览在下 */
+/* 窄窗：画布在上、面板在下；面板不再用固定高度窗口装表单，整页纵向滚动。 */
 @media (max-width: 820px) {
   .ofs-root {
     padding: 8px;
@@ -124,7 +124,6 @@
   .ofs-body.is-gallery {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
   }
 
   .ofs-body > .ofs-main {
@@ -138,6 +137,10 @@
     margin: 8px;
   }
 
+  .ofs-body.is-gallery {
+    overflow: hidden;
+  }
+
   .ofs-body.is-gallery .ofs-main {
     flex: 1 1 auto;
     height: auto;
@@ -148,6 +151,38 @@
     min-height: 0;
     margin: 0 8px 8px;
     max-height: none;
+  }
+
+  /* 创作视图改为文档式滚动：外卡自身滚动，表单按内容展开到自然高度。
+     原先面板里只有一个 170~240px 高的内滚动窗口，表单大半不可见，切口落在行中间。 */
+  .ofs-app {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .ofs-body:not(.is-gallery) {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .ofs-body:not(.is-gallery) > .ofs-main {
+    width: 100%;
+    max-width: 560px;
+    margin: 8px auto;
+  }
+
+  .ofs-body:not(.is-gallery) > .ofs-panel {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto 8px;
+  }
+
+  .ofs-body:not(.is-gallery) .ofs-panel-scroll,
+  .ofs-body:not(.is-gallery) .ofs-thread {
+    flex: 0 0 auto;
+    overflow: visible;
+    scrollbar-gutter: auto;
   }
 
   /* 生图流水线：窄屏只保留当前节点的文字，其余收成圆点；排队数并入右侧。 */
@@ -270,8 +305,9 @@
   }
 
   .ofs-dock {
-    flex: 1 1 100%;
+    flex: 0 0 auto;
     flex-wrap: wrap;
+    gap: 4px;
   }
 
   .ofs-composer-input {

@@ -6,8 +6,7 @@
  * 蒙版改变时强度上限的联动，以及一次真实的工具提交请求体。
  *
  * 注意：
- *  - 本文件自包含树遍历 helper，不 import `test/check-client-render.mjs` 的内部函数
- *    （那个文件由 stage-integration 独占）；
+ *  - 树遍历 helper 与其它渲染测试共用 `test/helpers/render.mjs`；
  *  - 需要测试产物：运行时先 `bundle({ test: true })` 写到 `test/.build/client.test.js`；
  *  - 跑法（构建与渲染测试共用锁）：
  *      node tools/run-locked.mjs -- node test/image-tool-render.mjs
@@ -21,6 +20,7 @@ import { bundle } from '../build.mjs'
 import { LIMITS } from '../shared/contract.js'
 import { loadClient, TEST_ARTIFACT } from './load-client.mjs'
 import { createCheckRunner } from './helpers/check.mjs'
+import { collectClasses, collectText, findNodes } from './helpers/render.mjs'
 
 const NOW = Date.parse('2026-11-09T05:05:00.000Z')
 
@@ -74,50 +74,7 @@ const item = {
   images: [image],
 }
 
-/** 树遍历：收集文本 / 类名 / 节点（与 check-client-render 的断言口径一致，但自包含）。 */
-const collectText = (node, out = []) => {
-  if (node === null || node === undefined || node === false) return out
-  if (typeof node === 'string' || typeof node === 'number') {
-    out.push(String(node))
-    return out
-  }
-  if (Array.isArray(node)) {
-    for (const child of node) collectText(child, out)
-    return out
-  }
-  if (typeof node.type === 'function') return collectText(node.type({ ...node.props, children: node.children }), out)
-  collectText(node.children, out)
-  return out
-}
-
 const textOf = (node) => collectText(node).join('').replace(/\s+/g, '')
-
-const findNodes = (node, predicate, out = []) => {
-  if (node === null || node === undefined || typeof node === 'boolean') return out
-  if (Array.isArray(node)) {
-    for (const child of node) findNodes(child, predicate, out)
-    return out
-  }
-  if (typeof node.type === 'function') return findNodes(node.type({ ...node.props, children: node.children }), predicate, out)
-  if (predicate(node)) out.push(node)
-  findNodes(node.children, predicate, out)
-  return out
-}
-
-const collectClasses = (node, out = {}) => {
-  if (node === null || node === undefined || typeof node === 'boolean') return out
-  if (Array.isArray(node)) {
-    for (const child of node) collectClasses(child, out)
-    return out
-  }
-  if (typeof node.type === 'function') return collectClasses(node.type({ ...node.props, children: node.children }), out)
-  const className = node.props && node.props.className
-  if (typeof className === 'string') {
-    for (const token of className.split(/\s+/).filter(Boolean)) out[token] = (out[token] ?? 0) + 1
-  }
-  collectClasses(node.children, out)
-  return out
-}
 
 const byClass = (tree, className) => findNodes(
   tree,

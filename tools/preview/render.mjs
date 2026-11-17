@@ -145,7 +145,7 @@ export function toHtml(node) {
 
 const FONT = `font-family: -apple-system, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;`
 
-export function pageOf(body, options = {}) {
+function pageOf(body, options = {}) {
   const themeStyle = options.dark ? `<style>${DARK_TOKENS}</style>` : ''
   const cssStyle = options.injectCss ? `<style>${CSS}</style>` : ''
   const extraStyle = options.extraCss ? `<style>${options.extraCss}</style>` : ''

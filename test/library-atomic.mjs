@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { probeKaggle, runCli } from '../lib/kaggle.js'
 import { readLibrary, recordDeleted, setFavorite } from '../lib/library.js'
 import { saveJobOutput, stamp } from '../lib/output.js'
+import { createCheckRunner } from './helpers/check.mjs'
 
 const tempDirs = []
 
@@ -136,17 +137,7 @@ async function withFastTimers(fn) {
 
 // ---- 测试驱动 -----------------------------------------------------------
 
-const results = []
-async function check(name, fn) {
-  try {
-    await fn()
-    results.push({ name, ok: true })
-    console.log(`PASS ${name}`)
-  } catch (error) {
-    results.push({ name, ok: false, error })
-    console.log(`FAIL ${name}\n  ${error?.message ?? error}`)
-  }
-}
+const { check, summary } = createCheckRunner()
 
 async function main() {
   // ================= library =================
@@ -443,7 +434,5 @@ try {
   await main()
 } finally {
   await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true }).catch(() => {})))
-  const failed = results.filter((item) => !item.ok)
-  console.log(`\n${results.length - failed.length}/${results.length} 通过`)
-  if (failed.length > 0) process.exitCode = 1
+  summary()
 }

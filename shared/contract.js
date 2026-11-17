@@ -329,14 +329,6 @@ export function hostErrorCodes() {
 }
 
 /**
- * 任务状态（`Job.status`）的完整取值域。
- *
- * `cancelled` 是终态：queued / waiting-session 立即出队失效；running 在当张出完后
- * 中止批内剩余张数，已完成的图片仍保留在 `output` 里。
- */
-export const JOB_STATUS = ['queued', 'waiting-session', 'running', 'done', 'failed', 'cancelled']
-
-/**
  * 取消语义（`POST /imagen-api/job/cancel`，请求体 `{ id }`）。
  *
  * 响应始终带 `job` 与 `disposition`：

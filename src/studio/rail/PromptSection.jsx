@@ -1,12 +1,14 @@
 /**
- * 左栏第 1 节：提示词输入、英译/润色、空白态灵感示例与可收起的润色建议芯片。
+ * 左栏第 1 节：提示词输入、英译/润色与可收起的润色建议芯片。
+ *
+ * 开场的灵感示例只放在舞台空白画布上（同一屏不重复同一组动作）；
+ * 这里只保留属于「这句提示词本身」的改写动作。
  */
 
 import React from 'react'
 
 import { LIMITS } from '../../../shared/contract.js'
 
-import { INSPIRE_KEYS } from '../../constants.js'
 import { Tooltip } from '../../components/Tooltip.jsx'
 import { Icon } from '../icons.jsx'
 import { Fieldset } from './Fieldset.jsx'
@@ -23,7 +25,6 @@ export function PromptSection({
   enhancing,
   enhance,
   englishPromptHint,
-  useInspiration,
   refineGroups,
   refineSource,
   toggleRefine,
@@ -31,7 +32,6 @@ export function PromptSection({
   // 润色建议默认展开，头部可收起。
   const [refineOpen, setRefineOpen] = React.useState(true)
   const promptLength = prompt.length
-  const hasPrompt = prompt.trim().length > 0
 
   return (
     <Fieldset
@@ -79,26 +79,8 @@ export function PromptSection({
         <p className="ofs-hint ofs-prompt-lang-hint">{t('studio.prompt.englishHint')}</p>
       ) : null}
 
-      {/* 灵感示例只在提示词为空时出现，不长期占据首屏高度。 */}
-      {hasPrompt ? null : (
-        <div className="ofs-inspire">
-          <span className="ofs-inspire-label">{t('studio.inspire.title')}</span>
-          <div className="ofs-suggestions">
-            {INSPIRE_KEYS.map((key) => (
-              <button
-                type="button"
-                key={key}
-                className="ofs-suggestion"
-                onClick={() => useInspiration(t(key))}
-                title={t(key)}
-              >
-                {t(`${key}.label`)}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
+      {/* 灵感示例只在舞台的空白画布上出现一次：同一屏不再重复同一组动作。
+          表单里保留「润色建议」，它属于提示词本身的改写，和开场示例不是同一件事。 */}
       {refineGroups.length > 0 ? (
         <div className="ofs-refine">
           <div className="ofs-refine-head">

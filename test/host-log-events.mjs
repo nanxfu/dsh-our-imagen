@@ -21,21 +21,10 @@ import { join } from 'node:path'
 import { JobQueue } from '../lib/jobs.js'
 import { flushHostLog, hostLogPath, installFileLog, readHostLogTail } from '../lib/log.js'
 import { LIMITS } from '../shared/contract.js'
+import { createCheckRunner } from './helpers/check.mjs'
 
 const PRESET = 'sdxl-turbo'
-const failures = []
-let passed = 0
-
-async function check(name, fn) {
-  try {
-    await fn()
-    passed += 1
-    console.log(`  ✓ ${name}`)
-  } catch (error) {
-    failures.push(name)
-    console.log(`  ✗ ${name}：${error?.message ?? error}`)
-  }
-}
+const { check, results } = createCheckRunner()
 
 let workspace = null
 let fileLog = null
@@ -205,11 +194,12 @@ async function main() {
 
   clearTimeout(watchdog)
   console.log('')
-  if (failures.length) {
-    console.log(`结果：${failures.length} 项失败，${passed} 项通过`)
+  const failed = results.filter((item) => !item.ok).length
+  if (failed) {
+    console.log(`结果：${failed} 项失败，${results.length - failed} 项通过`)
     process.exitCode = 1
   } else {
-    console.log(`结果：${passed} 项全部通过`)
+    console.log(`结果：${results.length} 项全部通过`)
   }
 }
 

@@ -13,7 +13,8 @@ import { zh } from '../src/dict/zh.js'
 import { en } from '../src/dict/en.js'
 import { DICT } from '../src/dict/index.js'
 import { fallbackTranslate, localized } from '../src/i18n.js'
-import * as logic from '../src/logic/index.js'
+import * as logic from './helpers/logic.mjs'
+import { createCheckRunner } from './helpers/check.mjs'
 import {
   DIAG_HOST_LOG_TAIL,
   HOST_LOG_LINE_LIMIT,
@@ -41,17 +42,7 @@ const te = fallbackTranslate('en')
 const NOW = Date.parse('2026-11-09T05:05:00.000Z')
 const at = (offsetSec) => new Date(NOW + offsetSec * 1000).toISOString()
 
-const results = []
-async function check(name, fn) {
-  try {
-    await fn()
-    results.push({ name, ok: true })
-    console.log(`PASS ${name}`)
-  } catch (error) {
-    results.push({ name, ok: false, error })
-    console.log(`FAIL ${name}\n  ${error?.message ?? error}`)
-  }
-}
+const { check, summary } = createCheckRunner()
 
 await check('参数钳制符合 SPEC 第 2 节硬性约束', () => {
   assert.equal(logic.clampSize(99999), 1536)
@@ -2827,6 +2818,4 @@ await check('阶段十二图片工具文案键：中英文两侧齐全', () => {
   }
 })
 
-const failed = results.filter((item) => !item.ok)
-console.log(`\n${results.length - failed.length}/${results.length} 通过`)
-if (failed.length > 0) process.exitCode = 1
+summary()

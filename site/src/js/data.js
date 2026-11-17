@@ -4,7 +4,7 @@
  */
 const dataEl = document.getElementById('site-data');
 
-export const SITE_DATA = dataEl ? JSON.parse(dataEl.textContent || '{}') : {};
+const SITE_DATA = dataEl ? JSON.parse(dataEl.textContent || '{}') : {};
 
 export const models = Array.isArray(SITE_DATA.models) ? SITE_DATA.models : [];
 

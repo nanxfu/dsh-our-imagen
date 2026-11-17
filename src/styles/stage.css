@@ -19,10 +19,13 @@
   gap: 10px;
 }
 
+/* figure 是浏览器默认带 1em 40px 外边距的元素；舞台的尺寸完全由容器单位算，
+   这条外边距会让「出图后」的相纸比「空态取景框」小一圈，必须归零。 */
 .ofs-figure {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
+  margin: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -121,10 +124,18 @@
 }
 
 /* ── 浮动工具 ───────────────────────────────────────────────── */
+/* 工具组贴住相纸自身的右上角（而不是光桌角）：任何画幅下都不会骑在纸边上下不来。 */
+.ofs-print-slot {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
 .ofs-figure-tools {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 10px;
+  right: 10px;
   z-index: 2;
   display: flex;
   gap: 6px;
@@ -282,6 +293,13 @@
   transform: translate(-50%, 50%);
 }
 
+/* 取景框里已有引导文案时，胶囊排进文案流里（标题 → 说明 → 进度），不再浮层压字。 */
+.ofs-stage-progress.is-flow {
+  position: static;
+  margin-top: 3px;
+  transform: none;
+}
+
 .ofs-shimmer {
   display: block;
   width: 54px;
@@ -324,7 +342,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.07em;
   color: var(--ofs-ink-3);
@@ -406,7 +424,7 @@
 
 .ofs-examples-label {
   width: 100%;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--ofs-ink-3);
 }
 
@@ -431,16 +449,19 @@
   color: var(--ofs-accent);
 }
 
-/* 曝光单：这条桌子上的机器大概多久出一张，先给个准话 */
+/* 曝光单：这条桌子上的机器大概多久出一张，先给个准话。
+   它落在纸面下沿的留白里（像印相纸边的标注），不再和居中引导文案挤成一团。 */
 .ofs-exposure {
+  position: absolute;
+  left: 44px;
+  right: 44px;
+  bottom: 34px;
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
-  max-width: 260px;
-  margin-top: 6px;
+  margin: 0;
   color: var(--ofs-ink-3);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
@@ -459,12 +480,6 @@
 .ofs-frame .ofs-examples-label,
 .ofs-frame .ofs-exposure {
   color: color-mix(in oklab, var(--ofs-ink) 62%, var(--ofs-print-paper));
-}
-
-/* ── 窄屏排队胶囊 ───────────────────────────────────────────── */
-/* 默认不占位：宽屏由胶片条展示队列，≤820px 时 responsive.css 打开这里。 */
-.ofs-queue-pill {
-  display: none;
 }
 
 /* ── 放大层 ─────────────────────────────────────────────────── */
@@ -810,7 +825,6 @@
 }
 
 .ofs-mask-hint,
-.ofs-mask-status,
 .ofs-mask-warn {
   margin: 0;
   text-align: left;

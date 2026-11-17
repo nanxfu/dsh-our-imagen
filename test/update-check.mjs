@@ -22,18 +22,9 @@ import {
   createUpdateChecker,
   releaseUrlOf,
 } from '../lib/update-check.js'
+import { createCheckRunner } from './helpers/check.mjs'
 
-const results = []
-async function check(name, fn) {
-  try {
-    await fn()
-    results.push(true)
-    console.log(`  ✓ ${name}`)
-  } catch (error) {
-    results.push(false)
-    console.log(`  ✗ ${name}：${error?.message ?? error}`)
-  }
-}
+const { check, summary } = createCheckRunner()
 
 const dir = await mkdtemp(join(tmpdir(), 'imagen-update-test-'))
 
@@ -248,6 +239,4 @@ try {
   await rm(dir, { recursive: true, force: true })
 }
 
-const failed = results.filter((ok) => !ok).length
-console.log(`\n${results.length - failed}/${results.length} 通过`)
-if (failed > 0) process.exitCode = 1
+summary()

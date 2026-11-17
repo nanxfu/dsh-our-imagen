@@ -47,25 +47,26 @@
   text-align: center;
 }
 
+/* 空态示例：五枚可换行的胶囊，读起来是「可以这样问」，而不是五行待填的表单字段。 */
 .ofs-chat-examples {
   display: flex;
-  flex-direction: column;
-  gap: 7px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
 }
 
 .ofs-panel--chat .ofs-chat-example {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  height: auto;
-  min-height: 30px;
-  padding: 7px 12px;
-  border-radius: var(--ofs-r-md);
+  height: 26px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--ofs-r-pill);
   background: var(--ofs-card);
   color: var(--ofs-ink-2);
-  font-size: 11.5px;
-  line-height: 1.5;
-  text-align: left;
-  white-space: normal;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .ofs-panel--chat .ofs-chat-example:hover {

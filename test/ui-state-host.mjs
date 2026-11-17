@@ -30,6 +30,7 @@ import {
   writeUiState,
 } from '../lib/ui-state.js'
 import { createCheckRunner } from './helpers/check.mjs'
+import { assertMode } from './helpers/fs-mode.mjs'
 import { closeServer, createFakeContext, json, startHost, workspaceContext } from './helpers/fake-context.mjs'
 
 const UI_STATE_ROUTE = '/imagen-api/ui-state'
@@ -187,12 +188,7 @@ async function scenarioReadWrite() {
     const workspace = await makeWorkspace()
     const ctx = workspaceContext(workspace)
     await writeUiState(ctx, { advancedOpen: true })
-    if (process.platform !== 'win32') {
-      const dirMode = (await stat(join(workspace, '.imagen'))).mode & 0o777
-      const fileMode = (await stat(uiStatePath(ctx))).mode & 0o777
-      assert.equal(dirMode, 0o700, `目录权限 ${dirMode.toString(8)}`)
-      assert.equal(fileMode, 0o600, `文件权限 ${fileMode.toString(8)}`)
-    }
+    await assertMode(join(workspace, '.imagen'), uiStatePath(ctx))
   })
 
   await check('原子写前清理上次中断留下的临时文件', async () => {

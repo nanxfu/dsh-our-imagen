@@ -9,7 +9,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -21,6 +21,9 @@ import {
   readHostLogTail,
   redactLogText,
 } from '../lib/log.js'
+import { createCheckRunner } from './helpers/check.mjs'
+import { assertMode } from './helpers/fs-mode.mjs'
+import { assertNoToken } from './helpers/log-scan.mjs'
 
 const tempDirs = []
 
@@ -79,17 +82,7 @@ async function withFileLog(ctx, options, fn) {
 
 // ---- 测试驱动 -----------------------------------------------------------
 
-const results = []
-async function check(name, fn) {
-  try {
-    await fn()
-    results.push({ name, ok: true })
-    console.log(`PASS ${name}`)
-  } catch (error) {
-    results.push({ name, ok: false, error })
-    console.log(`FAIL ${name}\n  ${error?.message ?? error}`)
-  }
-}
+const { check, summary } = createCheckRunner()
 
 async function main() {
   // ================= 控制台行为回归 =================
@@ -145,12 +138,7 @@ async function main() {
       assert.ok(text.includes('[info] [host-log-test] 多行第二段'), '多行消息的第二行也应带前缀')
 
       // POSIX 下校验目录 0700 / 文件 0600（Windows 忽略 mode 差异）。
-      if (process.platform !== 'win32') {
-        const dirMode = (await stat(join(workspace, '.imagen', 'logs'))).mode & 0o777
-        const fileMode = (await stat(filePath)).mode & 0o777
-        assert.equal(dirMode, 0o700, `日志目录权限应为 0700，实际 ${dirMode.toString(8)}`)
-        assert.equal(fileMode, 0o600, `日志文件权限应为 0600，实际 ${fileMode.toString(8)}`)
-      }
+      await assertMode(join(workspace, '.imagen', 'logs'), filePath)
     })
   })
 
@@ -256,7 +244,7 @@ async function main() {
       const text = (await readTextFile(hostLogFile(workspace))) ?? ''
       assert.ok(text.length > 0, '日志应已落盘')
       for (const sentinel of sentinels) {
-        assert.ok(!text.includes(sentinel), `敏感串不应落盘：${sentinel}`)
+        assertNoToken(text, sentinel, 'Host 日志文件')
       }
       assert.ok(text.includes('[REDACTED]'), '应出现掩码占位符')
       assert.ok(text.includes(`"promptLen":${prompt.length}`), `应记录 prompt 长度：${prompt.length}`)
@@ -420,7 +408,5 @@ try {
 } finally {
   await flushHostLog()
   await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true }).catch(() => {})))
-  const failed = results.filter((item) => !item.ok)
-  console.log(`\n${results.length - failed.length}/${results.length} 通过`)
-  if (failed.length > 0) process.exitCode = 1
+  summary()
 }

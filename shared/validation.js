@@ -27,6 +27,20 @@ function invalid(message) {
   return { ok: false, code: 'invalid_request', message }
 }
 
+// ---- 通用数值钳制（Host 的 jobs 归一与 Client 的表单归一共用）---------------
+
+export function clampInt(value, min, max, fallback) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return fallback
+  return Math.min(max, Math.max(min, Math.round(number)))
+}
+
+export function clampNumber(value, min, max, fallback) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return fallback
+  return Math.min(max, Math.max(min, number))
+}
+
 // ---- 运行设置（localModels / kaggleTransport / idleTimeoutSec）-------------
 
 /** 判断字符串是否为合法 HuggingFace 仓库 id（`org/name`）。 */

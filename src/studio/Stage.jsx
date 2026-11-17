@@ -210,7 +210,7 @@ export function Stage(props) {
               <div className="ofs-empty-card ofs-draft-blank">
                 <p className="ofs-empty-title">{t('studio.stage.newDraftTitle')}</p>
                 <p className="ofs-muted">
-                  {draftCard.pending
+                  {draftCard.pending || activeJob
                     ? t('studio.stage.newDraftPending')
                     : (stopped ? t('studio.stage.stoppedHint') : t('studio.stage.newDraftHint'))}
                 </p>
@@ -224,23 +224,24 @@ export function Stage(props) {
                     ))}
                   </div>
                 ) : null}
-                {!draftCard.pending && steady !== null ? (
+                {!draftCard.pending && !activeJob && steady !== null ? (
                   <p className="ofs-exposure">
                     <span className="ofs-exposure-rule" aria-hidden="true" />
                     {t('studio.stage.steady')} {formatSeconds(t, steady)}
                     <span className="ofs-exposure-rule" aria-hidden="true" />
                   </p>
                 ) : null}
+
+                {/* 进行中：进度胶囊排进引导文案下方（而不是浮在正中压住句子）。 */}
+                {activeJob ? (
+                  <div className="ofs-stage-progress is-flow" aria-hidden="true">
+                    <span className="ofs-shimmer" aria-hidden="true" />
+                    <span className="ofs-progress-label">{progressText}</span>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
-
-          {activeJob ? (
-            <div className="ofs-stage-progress is-inside" aria-hidden="true">
-              <span className="ofs-shimmer" aria-hidden="true" />
-              <span className="ofs-progress-label">{progressText}</span>
-            </div>
-          ) : null}
         </div>
       </section>
     )
@@ -314,34 +315,36 @@ export function Stage(props) {
   return (
     <section className="ofs-stage">
       <figure className="ofs-figure">
-        <button
-          type="button"
-          key={imageKey}
-          className={developing ? 'ofs-print is-developing' : 'ofs-print'}
-          style={{ '--ofs-print-r': String(printRatio) }}
-          onClick={openZoom}
-          title={t('studio.stage.zoom')}
-        >
-          <img src={image.url} alt={prompt || image.file || t('studio.image.alt')} className="ofs-image" />
-        </button>
-
-        <div className="ofs-figure-tools">
-          <button type="button" className="ofs-glass-btn" onClick={openZoom} title={t('studio.stage.zoom')} aria-label={t('studio.stage.zoom')}>
-            <Icon name="expand" size={16} />
-          </button>
-          <button type="button" className="ofs-glass-btn" onClick={() => copyPath(copyTarget)} title={t('studio.action.copyPath')} aria-label={t('studio.action.copyPath')}>
-            <Icon name="copy" size={16} />
-          </button>
+        <div className="ofs-print-slot">
           <button
             type="button"
-            className={favorite ? 'ofs-glass-btn is-on' : 'ofs-glass-btn'}
-            onClick={() => toggleFavorite(image.path || image.file)}
-            title={favorite ? t('studio.action.favorited') : t('studio.action.favorite')}
-            aria-label={favorite ? t('studio.action.favorited') : t('studio.action.favorite')}
-            aria-pressed={favorite}
+            key={imageKey}
+            className={developing ? 'ofs-print is-developing' : 'ofs-print'}
+            style={{ '--ofs-print-r': String(printRatio) }}
+            onClick={openZoom}
+            title={t('studio.stage.zoom')}
           >
-            <Icon name={favorite ? 'starFilled' : 'star'} size={16} />
+            <img src={image.url} alt={prompt || image.file || t('studio.image.alt')} className="ofs-image" />
           </button>
+
+          <div className="ofs-figure-tools">
+            <button type="button" className="ofs-glass-btn" onClick={openZoom} title={t('studio.stage.zoom')} aria-label={t('studio.stage.zoom')}>
+              <Icon name="expand" size={16} />
+            </button>
+            <button type="button" className="ofs-glass-btn" onClick={() => copyPath(copyTarget)} title={t('studio.action.copyPath')} aria-label={t('studio.action.copyPath')}>
+              <Icon name="copy" size={16} />
+            </button>
+            <button
+              type="button"
+              className={favorite ? 'ofs-glass-btn is-on' : 'ofs-glass-btn'}
+              onClick={() => toggleFavorite(image.path || image.file)}
+              title={favorite ? t('studio.action.favorited') : t('studio.action.favorite')}
+              aria-label={favorite ? t('studio.action.favorited') : t('studio.action.favorite')}
+              aria-pressed={favorite}
+            >
+              <Icon name={favorite ? 'starFilled' : 'star'} size={16} />
+            </button>
+          </div>
         </div>
 
         {activeJob ? (

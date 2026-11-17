@@ -39,6 +39,8 @@ import {
   writeSessionRecord,
 } from '../lib/session/persistence.js'
 import { emptySession } from '../lib/session/state.js'
+import { modeUnsupported, verifyMode } from './helpers/fs-mode.mjs'
+import { logLeaksToken } from './helpers/log-scan.mjs'
 
 const PRESET = 'sdxl-lightning'
 // 远端 Bearer Token：只应出现在 session.json 里，绝不能出现在日志或快照里。
@@ -299,10 +301,9 @@ async function scenarioPersistenceRoundtrip() {
         Boolean(loaded?.savedAt),
     )
 
-    if (process.platform !== 'win32') {
-      const dirMode = (await stat(join(workspace, '.imagen'))).mode & 0o777
-      const fileMode = (await stat(path)).mode & 0o777
-      check('目录 0700、文件 0600', dirMode === 0o700 && fileMode === 0o600, `${dirMode.toString(8)}/${fileMode.toString(8)}`)
+    if (!modeUnsupported) {
+      const mode = await verifyMode(join(workspace, '.imagen'), path)
+      check('目录 0700、文件 0600', mode.ok, mode.detail)
     }
 
     await clearSessionRecord(ctx)
@@ -501,7 +502,7 @@ async function scenarioKernelEndedCleanup() {
       check('状态保持 absent', session.snapshot().state === 'absent')
       check('没有残留定时器', session.timers.size === 0)
       check('清理文案可读', /清理/.test(session.snapshot().detail ?? ''))
-      check('远端 token 未进日志', !logLines.some((line) => line.includes(TOKEN)))
+      check('远端 token 未进日志', !logLeaksToken(logLines, TOKEN))
     } finally {
       session.dispose()
     }
@@ -751,7 +752,7 @@ async function main() {
   await scenario('F2 restore 与 start 竞态', scenarioRestoreStartRace)
 
   console.log('\n── G token 只落盘')
-  check('所有日志都不含远端 token', !logLines.some((line) => line.includes(TOKEN)))
+  check('所有日志都不含远端 token', !logLeaksToken(logLines, TOKEN))
 
   console.log('')
   if (failures.length) {

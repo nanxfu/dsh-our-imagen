@@ -20,18 +20,9 @@ import { readFileSync } from 'node:fs'
 import { Writable } from 'node:stream'
 
 import { httpText } from '../lib/net.js'
+import { createCheckRunner } from './helpers/check.mjs'
 
-const results = []
-async function check(name, fn) {
-  try {
-    await fn()
-    results.push({ name, ok: true })
-    console.log(`PASS ${name}`)
-  } catch (error) {
-    results.push({ name, ok: false, error })
-    console.log(`FAIL ${name}\n  ${error?.message ?? error}`)
-  }
-}
+const { check, summary } = createCheckRunner()
 
 /**
  * 伪造 DSH subprocess：按 subprocess-local 的真实校验规则拒绝非法请求。
@@ -211,9 +202,7 @@ async function main() {
     await assert.rejects(() => httpText({}, 'https://example.test/health'), (error) => error === fetchError)
   })
 
-  const failed = results.filter((item) => !item.ok)
-  console.log(`\n${results.length - failed.length}/${results.length} 通过`)
-  if (failed.length > 0) process.exitCode = 1
+  summary()
 }
 
 try {

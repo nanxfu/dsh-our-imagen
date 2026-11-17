@@ -73,7 +73,7 @@ function usage() {
   ].join('\n')
 }
 
-export function parseArgs(argv) {
+function parseArgs(argv) {
   const options = { config: null, write: false, dryRun: false, timeoutMin: DEFAULT_TIMEOUT_MIN }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
@@ -105,7 +105,7 @@ export function parseArgs(argv) {
 // ── 配置校验 ──────────────────────────────────────────────────────────────
 
 /** 读取并校验模型配置。草稿允许没有 measured；正式数据由 build-assets 另行校验。 */
-export async function loadModelConfig(relativePath) {
+async function loadModelConfig(relativePath) {
   const absolute = resolve(process.cwd(), relativePath)
   let text
   try {

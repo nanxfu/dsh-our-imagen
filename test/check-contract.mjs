@@ -445,7 +445,7 @@ async function checkPresetsMoved() {
 // ── j. remote/contract.json 与 daemonContract() 一致 ──────────────────────
 
 /** 深比较两个 JSON 值，把差异路径收集到 `out`（键顺序不计）。 */
-export function collectContractDiff(expected, actual, out = [], path = '') {
+function collectContractDiff(expected, actual, out = [], path = '') {
   const kind = (value) => (Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value)
   const expectedKind = kind(expected)
   const actualKind = kind(actual)

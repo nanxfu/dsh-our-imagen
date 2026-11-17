@@ -45,20 +45,9 @@ import {
   snapshotOf,
   writeFailure,
 } from '../lib/session/state.js'
+import { createCheckRunner } from './helpers/check.mjs'
 
-const failures = []
-let passed = 0
-
-async function check(name, fn) {
-  try {
-    await fn()
-    passed += 1
-    console.log(`  ✓ ${name}`)
-  } catch (error) {
-    failures.push(name)
-    console.log(`  ✗ ${name}：${error?.message ?? error}`)
-  }
-}
+const { check, results } = createCheckRunner()
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -632,11 +621,12 @@ async function main() {
   await scenarioRemotePort()
 
   console.log('')
-  if (failures.length) {
-    console.log(`结果：${failures.length} 项失败，${passed} 项通过`)
+  const failed = results.filter((item) => !item.ok).length
+  if (failed) {
+    console.log(`结果：${failed} 项失败，${results.length - failed} 项通过`)
     process.exitCode = 1
   } else {
-    console.log(`结果：${passed} 项全部通过`)
+    console.log(`结果：${results.length} 项全部通过`)
   }
 }
 

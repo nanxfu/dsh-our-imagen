@@ -24,7 +24,7 @@ export function normalizeVersion(value) {
 }
 
 /** 取主版本号三段（缺省的段落补 0）；不可解析返回 null。 */
-export function parseVersionCore(value) {
+function parseVersionCore(value) {
   const text = normalizeVersion(value)
   if (!text) return null
   const core = text.split(/[-+]/, 1)[0]

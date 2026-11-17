@@ -16,6 +16,30 @@
   color: var(--ofs-ink);
 }
 
+/* 浏览器表面：滚动条也属于设计系统。宿主的默认滚动条会破坏黑白灰的观感；
+   这里统一成细的墨灰滚动条，轨道透明，不抢内容。 */
+.ofs-root * {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--ofs-ink-4) 62%, transparent) transparent;
+}
+
+.ofs-root ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.ofs-root ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--ofs-r-pill);
+  background: color-mix(in oklab, var(--ofs-ink-4) 62%, transparent);
+  background-clip: padding-box;
+}
+
+.ofs-root ::-webkit-scrollbar-track,
+.ofs-root ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .ofs-root :focus-visible {
   outline: none;
   box-shadow: var(--ofs-focus-ring);

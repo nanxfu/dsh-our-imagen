@@ -42,6 +42,8 @@ import {
   writeSessionRecord,
 } from '../lib/session/persistence.js'
 import { emptySession } from '../lib/session/state.js'
+import { modeUnsupported, verifyMode } from './helpers/fs-mode.mjs'
+import { logLeaksToken } from './helpers/log-scan.mjs'
 
 const PRESET = 'sdxl-lightning'
 // 远端 Bearer Token：只应出现在 0600 的落盘文件里，绝不能进入日志。
@@ -349,16 +351,15 @@ async function scenarioDisposeFailure() {
       check('关机失败 → 会话记录被删除（避免下次 restore 接手/长等会合）', !(await exists(sessionRecordPath(ctx))))
       check('关机失败 → 待清理记录保留', await exists(pendingPath))
 
-      if (process.platform !== 'win32') {
-        const dirMode = (await stat(join(workspace, '.imagen'))).mode & 0o777
-        const fileMode = (await stat(pendingPath)).mode & 0o777
-        check('记录目录 0700、文件 0600', dirMode === 0o700 && fileMode === 0o600, `${dirMode.toString(8)}/${fileMode.toString(8)}`)
+      if (!modeUnsupported) {
+        const mode = await verifyMode(join(workspace, '.imagen'), pendingPath)
+        check('记录目录 0700、文件 0600', mode.ok, mode.detail)
       }
       check(
         '不残留临时文件',
         !(await readdir(join(workspace, '.imagen'))).some((name) => name.includes('.tmp-')),
       )
-      check('日志不含 token', !logLines.some((line) => line.includes(TOKEN)))
+      check('日志不含 token', !logLeaksToken(logLines, TOKEN))
     } finally {
       session?.dispose()
       await clearPendingCleanup(ctx)
@@ -429,7 +430,7 @@ async function scenarioStartupCleanupSuccess() {
       check('随后 restore() 返回 null（不接手已补发关机的会话）', restored === null)
       check('随后 restore() 不挂定时器且状态保持 absent', session.timers.size === 0 && session.snapshot().state === 'absent')
       check('日志记录 pending_cleanup_done', logLines.some((line) => line.includes('pending_cleanup_done')))
-      check('日志不含 token', !logLines.some((line) => line.includes(TOKEN)))
+      check('日志不含 token', !logLeaksToken(logLines, TOKEN))
     } finally {
       session.dispose()
       await clearPendingCleanup(ctx)
@@ -464,7 +465,7 @@ async function scenarioStartupCleanupRetry() {
       check('恢复后补发成功返回 true', (await session.cleanupPendingSession()) === true)
       check('补发成功后记录被删除', !(await exists(pendingCleanupPath(ctx))))
       check('日志记录 pending_cleanup_done', logLines.some((line) => line.includes('pending_cleanup_done')))
-      check('日志不含 token', !logLines.some((line) => line.includes(TOKEN)))
+      check('日志不含 token', !logLeaksToken(logLines, TOKEN))
     } finally {
       session.dispose()
       await clearPendingCleanup(ctx)
@@ -617,7 +618,7 @@ async function main() {
   await scenario('D 读取校验', scenarioReadValidation)
 
   console.log('\n── E token 只落盘')
-  check('所有日志都不含远端 token', !logLines.some((line) => line.includes(TOKEN)))
+  check('所有日志都不含远端 token', !logLeaksToken(logLines, TOKEN))
 
   console.log('')
   if (failures.length) {

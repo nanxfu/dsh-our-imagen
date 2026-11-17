@@ -77,15 +77,21 @@ export function Studio(props) {
       <div className="ofs-app">
         <TopBar t={t} isEn={isEn} ui={ui} compute={compute} form={form} library={library} defaultModelOpen={props.defaultModelOpen} />
 
-        {/* 顶部生图流水线：替换原先的一行云端状态条，五节点展示等待流程。 */}
-        <PipelineBar view={pipeline} />
+        {/* 状态区：流水线 / 排队卡 / 阻塞指引自上而下堆叠；右上角通知从这条带子的下沿展开，
+            不再压住流水线右侧的等待读数。 */}
+        <div className="ofs-status-area">
+          {/* 顶部生图流水线：替换原先的一行云端状态条，五节点展示等待流程。 */}
+          <PipelineBar view={pipeline} />
 
-        {/* 排队卡住（10 分钟档）是非错误提示：横幅给「换新实例重排」，不阻挡工作区。 */}
-        <QueueNotice t={t} notice={compute.queueNotice} />
+          {/* 排队卡住（10 分钟档）是非错误提示：横幅给「换新实例重排」，不阻挡工作区。 */}
+          <QueueNotice t={t} notice={compute.queueNotice} />
 
-        {bannerGuidance ? (
-          <GuidanceCard t={t} guidance={bannerGuidance} compute={compute} actions={actions} ui={ui} />
-        ) : null}
+          {bannerGuidance ? (
+            <GuidanceCard t={t} guidance={bannerGuidance} compute={compute} actions={actions} ui={ui} />
+          ) : null}
+
+          <Toast t={t} toast={ui.toast} guidance={noticeGuidance} compute={compute} actions={actions} ui={ui} />
+        </div>
 
         <div className={`ofs-body${ui.view === 'gallery' ? ' is-gallery' : ''}`}>
           {ui.view === 'studio' ? panel : null}
@@ -127,8 +133,6 @@ export function Studio(props) {
       {ui.logsOpen ? <LogsDrawer t={t} ui={ui} compute={compute} logs={logs} onClose={ui.closeLogs} /> : null}
 
       {ui.settingsOpen ? <SettingsDrawer t={t} ui={ui} onClose={ui.closeSettings} /> : null}
-
-      <Toast t={t} toast={ui.toast} guidance={noticeGuidance} compute={compute} actions={actions} ui={ui} />
     </div>
   )
 }

@@ -1,18 +1,9 @@
 /** 参数钳制：边界值来自 shared/contract.js 的 LIMITS（与 docs/SPEC.md 第 2 节一致）。 */
 
 import { LIMITS } from '../../shared/contract.js'
+import { clampInt, clampNumber } from '../../shared/validation.js'
 
-export function clampInt(value, min, max, fallback) {
-  const number = Number(value)
-  if (!Number.isFinite(number)) return fallback
-  return Math.min(max, Math.max(min, Math.round(number)))
-}
-
-export function clampNumber(value, min, max, fallback) {
-  const number = Number(value)
-  if (!Number.isFinite(number)) return fallback
-  return Math.min(max, Math.max(min, number))
-}
+export { clampInt, clampNumber }
 
 /**
  * 画面尺寸：合法输入按契约边界钳制，并对齐到 `LIMITS.width.step`。

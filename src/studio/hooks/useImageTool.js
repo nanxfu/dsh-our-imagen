@@ -105,7 +105,6 @@ function presetsForTool(list, tool) {
  *
  * @param {object} input
  * @param {Function} input.t 翻译函数
- * @param {boolean} [input.isEn] 界面语言（保留给后续提示词增强，与提交无关）
  * @param {Function} input.alive 卸载边界：`await alive(request)` 卸载后返回 null
  * @param {object} input.ui 界面态域（showToast / fail / setError）
  * @param {Array<object>} input.presets 宿主下发的预设列表
@@ -113,7 +112,7 @@ function presetsForTool(list, tool) {
  * @param {Function} [input.onSubmitted] 提交成功回调，收到响应里的 job 对象
  * @param {string} [input.currentPresetId] 左栏当前预设 id（可选）：工具优先沿用它
  */
-export function useImageTool({ t, isEn, alive, ui, presets, defaultPreset, onSubmitted, currentPresetId }) {
+export function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, currentPresetId }) {
   const list = Array.isArray(presets) ? presets.filter((item) => item && item.id) : []
   const [draft, setDraft] = React.useState(() => emptyDraft())
   const [editorOpen, setEditorOpen] = React.useState(false)

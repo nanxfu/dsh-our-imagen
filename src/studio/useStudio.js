@@ -89,7 +89,6 @@ export function useStudio(props) {
   // 舞台图片工具域：底图 / 提示词 / 强度 / 蒙版 / 工具预设全部独立于左栏表单。
   const imageTool = useImageTool({
     t,
-    isEn,
     alive,
     ui,
     presets,

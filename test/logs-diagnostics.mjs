@@ -31,21 +31,12 @@ import {
   readDiagnosticEnv,
   readLogsPayload,
 } from '../src/logic/logs.js'
+import { createCheckRunner } from './helpers/check.mjs'
 
 const t = fallbackTranslate('zh')
 const NOW = Date.parse('2026-11-11T00:09:00.000Z')
 
-const results = []
-async function check(name, fn) {
-  try {
-    await fn()
-    results.push({ name, ok: true })
-    console.log(`PASS ${name}`)
-  } catch (error) {
-    results.push({ name, ok: false, error })
-    console.log(`FAIL ${name}\n  ${error?.message ?? error}`)
-  }
-}
+const { check, results } = createCheckRunner()
 
 function readSource(relativePath) {
   return readFile(new URL(relativePath, import.meta.url), 'utf8')

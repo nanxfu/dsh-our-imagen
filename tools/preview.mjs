@@ -114,6 +114,8 @@ async function main() {
       '--disable-gpu',
       '--hide-scrollbars',
       '--force-device-scale-factor=1',
+      // iframe 包裹的窄屏页需要等内层文档渲染完再截，否则会拍到空画布。
+      '--virtual-time-budget=2500',
       `--window-size=${shot.width},${shot.height}`,
       `--screenshot=${shotPath}`,
       `file:///${htmlPath.replace(/\\/g, '/')}`,

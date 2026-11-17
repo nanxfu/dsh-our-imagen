@@ -19,7 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const MODELS_DIR = join(ROOT, 'models')
 
-export const GENERATED_REL = 'shared/models.generated.js'
+const GENERATED_REL = 'shared/models.generated.js'
 
 /** 每个模型文件必须存在的顶层字段。只做存在性检查，不搞字段白名单。 */
 const REQUIRED_FIELDS = [
@@ -56,7 +56,7 @@ const MEASURED_FIELDS = ['peakVramMb', 'loadSeconds', 'steadySeconds', 'download
  * 提示词配方：模型按什么口径理解提示词。`danbooru` 逗号标签、`natural` 自然语言段落、
  * `concise` 简短短语；`lib/intent.js` 据此动态约束宿主模型整理出的英文提示词。
  */
-export const PROMPT_STYLES = ['danbooru', 'natural', 'concise']
+const PROMPT_STYLES = ['danbooru', 'natural', 'concise']
 
 function fail(message) {
   throw new Error(message)
@@ -287,7 +287,7 @@ export async function readGenerated() {
 }
 
 /** 生成或校验；返回 { ok, models, wrote }，失败抛错。 */
-export async function buildAssets({ check = false } = {}) {
+async function buildAssets({ check = false } = {}) {
   const models = await loadModels()
   const expected = renderGenerated(models)
   if (check) {

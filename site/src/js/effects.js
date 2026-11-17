@@ -28,25 +28,3 @@ export function developFrame(frame, { duration = 1.15 } = {}) {
     )
   );
 }
-
-/** 非成片类图像（界面截图）的快速交叉淡化，比显影短得多。 */
-export function swapImage(image, src, alt) {
-  if (!image) return;
-  const apply = () => {
-    if (image.getAttribute('src') !== src) image.src = src;
-    image.alt = alt || '';
-  };
-  if (!isMotionEnabled() || image.getAttribute('src') === src) {
-    apply();
-    return;
-  }
-
-  fxTween(() => {
-    const timeline = gsap.timeline();
-    timeline
-      .to(image, { opacity: 0, duration: 0.16, ease: 'power1.in' })
-      .call(apply)
-      .to(image, { opacity: 1, duration: 0.3, ease: 'power2.out', clearProps: 'opacity' });
-    return timeline;
-  });
-}

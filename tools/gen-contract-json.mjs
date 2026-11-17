@@ -20,7 +20,7 @@ import { daemonContract } from '../shared/contract.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 
-export const CONTRACT_PATH = join(ROOT, 'remote', 'contract.json')
+const CONTRACT_PATH = join(ROOT, 'remote', 'contract.json')
 
 /** 递归按 key 字典序排序，保证生成物逐字节稳定。 */
 function sortKeysDeep(value) {
@@ -37,12 +37,12 @@ function sortKeysDeep(value) {
  * 生成 daemon 契约对象（与 daemonContract() 结构完全一致，递归排序键序）。
  * @returns {object}
  */
-export function buildDaemonContractJson() {
+function buildDaemonContractJson() {
   return sortKeysDeep(daemonContract())
 }
 
 /** 生成物全文（含末尾换行）。mock 与 check 都按这个文本比较。 */
-export function contractJsonText() {
+function contractJsonText() {
   return `${JSON.stringify(buildDaemonContractJson(), null, 2)}\n`
 }
 

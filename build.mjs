@@ -22,8 +22,8 @@ import { build } from 'esbuild'
 
 const ROOT = dirname(fileURLToPath(import.meta.url))
 
-export const PACKAGE_ID = 'dsh-our-imagen'
-export const ARTIFACT = join(ROOT, 'client.js')
+const PACKAGE_ID = 'dsh-our-imagen'
+const ARTIFACT = join(ROOT, 'client.js')
 export const TEST_ARTIFACT = join(ROOT, 'test/.build/client.test.js')
 
 /** 平台共享模块表里的模块：必须保持 external，由宿主 require 注入。 */
@@ -78,12 +78,6 @@ export async function bundle({ test = false } = {}) {
 
   const body = result.outputFiles[0].text.replace(/^\s*"use strict";\s*\n/, '')
   return `${ENVELOPE_HEAD}${body}\n${ENVELOPE_TAIL}`
-}
-
-/** 生成发布产物与测试产物，返回两者文本。 */
-export async function buildAll() {
-  const [prod, test] = await Promise.all([bundle(), bundle({ test: true })])
-  return { prod, test }
 }
 
 async function readIfExists(path) {

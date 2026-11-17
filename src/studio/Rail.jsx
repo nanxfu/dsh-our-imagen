@@ -58,7 +58,6 @@ export function Rail(props) {
     translating,
     translate,
     toggleRefine,
-    useInspiration,
     englishPromptHint,
     // 微调来源（从胶卷 / 画廊回填而来）与「新建创作」重置入口。
     tuning,
@@ -116,7 +115,6 @@ export function Rail(props) {
           enhancing={enhancing}
           enhance={enhance}
           englishPromptHint={englishPromptHint}
-          useInspiration={useInspiration}
           refineGroups={refineGroups}
           refineSource={refineSource}
           toggleRefine={toggleRefine}
@@ -146,9 +144,6 @@ export function Rail(props) {
           advancedOpen={advancedOpen}
           toggleAdvanced={toggleAdvanced}
         />
-
-        {/* 图片处理入口不在左栏：明确告诉用户去舞台底部动作坞。 */}
-        <p className="ofs-hint ofs-rail-note ofs-rail-tools-hint">{t('studio.rail.imageToolsHint')}</p>
       </div>
 
       <div className="ofs-panel-foot">

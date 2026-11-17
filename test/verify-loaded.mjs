@@ -8,24 +8,14 @@
  */
 
 import { VERSION } from '../shared/contract.js'
+import { createCheckRunner } from './helpers/check.mjs'
 
 const args = process.argv.slice(2)
 const portIndex = args.indexOf('--port')
 const port = portIndex >= 0 ? args[portIndex + 1] : '52629'
 const base = `http://127.0.0.1:${port}`
 
-const results = []
-
-async function check(name, fn) {
-  try {
-    await fn()
-    results.push({ name, ok: true })
-    console.log(`PASS ${name}`)
-  } catch (error) {
-    results.push({ name, ok: false, error })
-    console.log(`FAIL ${name}\n  ${error?.message ?? error}`)
-  }
-}
+const { check, summary } = createCheckRunner()
 
 async function getJson(path) {
   const res = await fetch(new URL(path, base), {
@@ -81,9 +71,7 @@ async function main() {
     if (body?.error?.code !== 'invalid_prompt') throw new Error(`error.code=${body?.error?.code}`)
   })
 
-  const failed = results.filter((item) => !item.ok)
-  console.log(`\n${results.length - failed.length}/${results.length} 通过`)
-  if (failed.length > 0) process.exitCode = 1
+  summary()
 }
 
 main()

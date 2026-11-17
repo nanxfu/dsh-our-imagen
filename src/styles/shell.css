@@ -314,11 +314,22 @@
   margin: 14px;
 }
 
+/* ── 状态区：流水线 / 排队卡 / 阻塞指引的堆叠容器 ─────────────────── */
+/* 单独成层，右上角通知才能挂在这条带子的下沿展开，而不是压住流水线的计时。 */
+.ofs-status-area {
+  position: relative;
+  z-index: 5;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
 /* ── 右上角轻量通知区（瞬时反馈 + 非全局阻塞的可恢复异常） ──────────── */
+/* 无流水线时贴着顶栏下沿；有流水线或横幅时自动让到状态区下方。 */
 .ofs-toast-stack {
   position: absolute;
-  top: 66px;
-  right: 16px;
+  top: calc(100% + 8px);
+  right: 14px;
   z-index: 60;
   display: flex;
   flex-direction: column;

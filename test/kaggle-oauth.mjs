@@ -32,18 +32,9 @@ import {
   extractAuthorizationCode,
   quotePlus,
 } from '../lib/kaggle-oauth.js'
+import { createCheckRunner } from './helpers/check.mjs'
 
-const results = []
-async function check(name, fn) {
-  try {
-    await fn()
-    results.push({ name, ok: true })
-    console.log(`PASS ${name}`)
-  } catch (error) {
-    results.push({ name, ok: false })
-    console.log(`FAIL ${name}\n     ${error?.stack ?? error}`)
-  }
-}
+const { check, summary } = createCheckRunner()
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -541,10 +532,9 @@ async function main() {
   await checkBrowserMode()
   await checkFailures()
 
-  const failed = results.filter((item) => !item.ok)
-  console.log(`\n${results.length - failed.length}/${results.length} 通过`)
   // 某些失败分支可能留下未关闭的回环服务/定时器句柄；测试进程显式退出，避免挂住 CI。
-  process.exit(failed.length > 0 ? 1 : 0)
+  const { failed } = summary()
+  process.exit(failed > 0 ? 1 : 0)
 }
 
 main().catch((error) => {

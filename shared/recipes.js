@@ -195,11 +195,6 @@ export function categoryLabelOf(id) {
   return RECIPE_CATEGORIES.find((item) => item.id === id)?.label ?? String(id ?? '')
 }
 
-/** 按 id 取配方；未知 id 返回 null。 */
-export function recipeById(id) {
-  return RECIPES.find((recipe) => recipe.id === id) ?? null
-}
-
 /** 预设 id → 契约预设对象；未知 id 返回 null。 */
 function presetOf(id) {
   return PRESETS.find((preset) => preset.id === id) ?? null
@@ -279,7 +274,7 @@ function normalizeLimit(value) {
 }
 
 /** 空结果提示：告诉 Agent 下一步能怎么查，而不是只回一句「没有」。 */
-export function emptySearchHint() {
+function emptySearchHint() {
   return (
     `没有匹配的配方。可以换更宽泛的关键词（如 日系、写实、霓虹、海报），` +
     `或省略过滤条件查看全部 ${RECIPES.length} 条配方；` +

@@ -32,25 +32,14 @@ import { JobQueue, normalizeReference, normalizeStrength } from '../lib/jobs.js'
 import { saveJobOutput } from '../lib/output.js'
 import { submitGenerate, waitForJob } from '../lib/remote.js'
 import { LIMITS, PRESETS } from '../shared/contract.js'
+import { createCheckRunner } from './helpers/check.mjs'
 
 const PRESET = 'sdxl-turbo'
 // 1×1 透明 PNG：走真实的 saveJobOutput 落盘路径。
 const PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
 
-const failures = []
-let passed = 0
-
-async function check(name, fn) {
-  try {
-    await fn()
-    passed += 1
-    console.log(`  ✓ ${name}`)
-  } catch (error) {
-    failures.push(name)
-    console.log(`  ✗ ${name}：${error?.message ?? error}`)
-  }
-}
+const { check, results } = createCheckRunner()
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -1219,11 +1208,12 @@ async function main() {
 
   clearTimeout(watchdog)
   console.log('')
-  if (failures.length) {
-    console.log(`结果：${failures.length} 项失败，${passed} 项通过`)
+  const failed = results.filter((item) => !item.ok).length
+  if (failed) {
+    console.log(`结果：${failed} 项失败，${results.length - failed} 项通过`)
     process.exitCode = 1
   } else {
-    console.log(`结果：${passed} 项全部通过`)
+    console.log(`结果：${results.length} 项全部通过`)
   }
 }
 

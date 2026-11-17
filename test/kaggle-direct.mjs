@@ -36,18 +36,9 @@ import {
   readCredentialsFile,
   simplifyKernelLog,
 } from '../lib/kaggle-direct.js'
+import { createCheckRunner } from './helpers/check.mjs'
 
-const results = []
-async function check(name, fn) {
-  try {
-    await fn()
-    results.push({ name, ok: true })
-    console.log(`PASS ${name}`)
-  } catch (error) {
-    results.push({ name, ok: false })
-    console.log(`FAIL ${name}\n     ${error?.stack ?? error}`)
-  }
-}
+const { check, summary } = createCheckRunner()
 
 /** 安装假 fetch：handler(call) 返回 { status, body } 或抛错；同时记录全部请求。 */
 function installFetch(handler) {
@@ -606,9 +597,7 @@ async function main() {
   await checkPureFunctions()
   await checkRequestsAndAuth()
 
-  const failed = results.filter((item) => !item.ok)
-  console.log(`\n${results.length - failed.length}/${results.length} 通过`)
-  if (failed.length > 0) process.exitCode = 1
+  summary()
 }
 
 main().catch((error) => {

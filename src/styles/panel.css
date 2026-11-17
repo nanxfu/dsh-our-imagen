@@ -67,6 +67,11 @@
   flex-direction: column;
   gap: 0;
   scroll-behavior: smooth;
+  /* 内容偶尔超出时（等待流水线、错误横幅），用一条常驻细滚动条说明还有内容，
+     而不是把某一行硬切在页脚上沿。gutter 稳定，状态切换时文字不会左右跳。 */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--ofs-ink-4) 72%, transparent) transparent;
+  scrollbar-gutter: stable;
 }
 
 /* ── 微调来源与新建创作 ────────────────────────────────────── */
@@ -92,13 +97,6 @@
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.ofs-tuning-new {
-  flex: 0 0 auto;
-  height: 25px;
-  padding: 0 10px;
-  font-size: 11px;
 }
 
 /* ── 分区 ───────────────────────────────────────────────────── */
@@ -209,6 +207,7 @@
 }
 
 /* ── 建议 chips ─────────────────────────────────────────────── */
+/* 5 个灵感示例要在 330px 里排成一行：只用缩小内边距与间距换行，不缩小字号。 */
 .ofs-suggestions {
   display: flex;
   flex-wrap: wrap;
@@ -251,15 +250,7 @@
   color: var(--ofs-accent-ink);
 }
 
-/* ── 灵感与润色 ─────────────────────────────────────────────── */
-.ofs-inspire {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding-top: 2px;
-}
-
-.ofs-inspire-label,
+/* ── 润色建议 ───────────────────────────────────────────────── */
 .ofs-refine-head,
 .ofs-refine-dim {
   font-size: 11px;
@@ -647,7 +638,7 @@
   padding: 10px 15px 12px;
   border-top: 1px solid var(--ofs-hairline);
   background: var(--ofs-card);
-  box-shadow: 0 -16px 20px -18px rgb(16 16 20 / 20%);
+  box-shadow: 0 -10px 16px -16px rgb(16 16 20 / 16%);
 }
 
 .ofs-generate {
@@ -720,7 +711,7 @@
   color: var(--ofs-accent);
 }
 
-/* ── 画面设置：画幅比例 / 1:1 推荐尺寸 / 自定义宽高 三段同构 ───── */
+/* ── 画面设置：画幅比例 / 自定义宽高两段同构 ───────────────────── */
 .ofs-frame-group {
   display: flex;
   flex-direction: column;
@@ -827,24 +818,6 @@
   text-underline-offset: 3px;
 }
 
-/* 左栏工具提示与旧专用模型说明共用：图片处理入口已迁到舞台动作坞。 */
-.ofs-rail-note {
-  margin: 0 0 10px;
-  padding: 8px 10px;
-  border-radius: var(--ofs-r-sm, 8px);
-  background: var(--ofs-warn-soft, #f7f0e4);
-  color: var(--ofs-warn, #a96a18);
-  line-height: 1.5;
-}
-
-/* 左栏底部「图片工具在舞台动作坞」提示：不需要告警底色，读起来更轻。 */
-.ofs-rail-tools-hint {
-  margin: 4px 0 0;
-  padding: 0;
-  background: transparent;
-  color: var(--ofs-ink-4);
-}
-
 /* 主表单模型卡：专用局部重绘预设标记为「仅图片工具」且不可选（决策 D3）。
  * 样式放在面板样式表里，不占 model-picker.css（主表单容器随面板一起加载）。 */
 .ofs-model-option[aria-disabled='true'] {
@@ -860,4 +833,42 @@
   border-color: var(--ofs-warn-border, #e6c9a8);
   background: var(--ofs-warn-soft, #f7f0e4);
   color: var(--ofs-warn, #a96a18);
+}
+
+/* ── 矮窗口（≤ 860px 高）─────────────────────────────────────────
+ * 面板高度被压缩时按一档收紧内部留白与控件高度，让「高级设置」这一行仍然完整落在
+ * 可视区（1440×800 / 1280×800 等笔记本窗口）。只改高度相关的间距，不改字号。 */
+@media (max-height: 860px) {
+  .ofs-panel-head {
+    padding: 9px 14px 6px;
+  }
+
+  .ofs-fieldset {
+    padding: 5px 0;
+  }
+
+  .ofs-composer-input {
+    min-height: 48px;
+  }
+
+  .ofs-ratio {
+    padding: 5px 0 4px;
+  }
+
+  .ofs-panel-scroll {
+    padding-bottom: 8px;
+  }
+
+  .ofs-qty-option {
+    height: 26px;
+  }
+
+  .ofs-panel-foot {
+    gap: 3px;
+    padding: 7px 15px 8px;
+  }
+
+  .ofs-generate {
+    height: 40px;
+  }
 }
