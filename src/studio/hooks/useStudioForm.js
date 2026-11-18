@@ -322,7 +322,10 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     if (prev && prev.form) {
       setForm(prev.form)
       setCleanBaseline(formSnapshotOf(prev.form))
-      if (prev.source) setOrigin(prev.source)
+      // 托管草稿可能源自空白新建画布（prev.source === null），切回时必须同步覆盖旧 origin。
+      const nextOrigin = prev.source || null
+      setOrigin(nextOrigin)
+      originRef.current = nextOrigin
       setDraft({ ...prev, editing: true })
       return true
     }

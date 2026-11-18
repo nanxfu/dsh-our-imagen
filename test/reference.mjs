@@ -16,7 +16,12 @@
 
 import assert from 'node:assert/strict'
 
-import { buildGenerateBody, generateCapabilityOf, retryOverrides } from '../src/logic/generate.js'
+import {
+  buildGenerateBody,
+  generateCapabilityOf,
+  rerollOverrides,
+  retryOverrides,
+} from '../src/logic/generate.js'
 import { formSnapshotOf, isFormDirty, newCreationPatch } from '../src/logic/form.js'
 import {
   nativeReferencePresetOf,
@@ -267,6 +272,23 @@ await check('参考图脏指纹与清理：新建创作清空 / 删除作品摘�
   assert.deepEqual(retryFromBody.references, [REF_B], '没有任务参数时退回上一次提交体')
   assert.equal('references' in retryOverrides({ params: { prompt: 'p' } }), false, '纯文生图重试不写 references')
   assert.equal(retryOverrides({ params: { prompt: '' } }), null)
+
+  const refEntry = {
+    image: { path: 'imagen-output/job-r/01.png', width: 1024, height: 1024, seed: 42 },
+    item: { prompt: '主角新场景', presetId: klein.id, referenceSources: [REF_A, REF_B], images: [] },
+  }
+  const refReroll = rerollOverrides(refEntry, [preset, klein])
+  assert.deepEqual(refReroll.references, [REF_A, REF_B], '参考生图作品重新生成保留自身 referenceSources')
+
+  const plainEntry = {
+    image: { path: 'imagen-output/job-p/01.png', width: 1024, height: 1024, seed: 7 },
+    item: { prompt: '纯文生图', presetId: preset.id, images: [] },
+  }
+  const plainReroll = rerollOverrides(plainEntry, [preset, klein])
+  assert.deepEqual(plainReroll.references, [], '纯文生图重新生成显式清空 references 避免串入左栏槽位')
+  const rerollBody = buildGenerateBody({ ...baseForm, references: [refItem(REF_A)] }, { overrides: plainReroll })
+  assert.equal('references' in rerollBody, false, '左栏挂着参考图时重绘普通作品不得带出左栏参考图')
+  assert.equal(generateCapabilityOf({ preset, presets: [preset, klein], references: plainReroll.references }).ok, true)
 })
 
 await check('参考图文件预检：4 MiB 上限与类型', () => {

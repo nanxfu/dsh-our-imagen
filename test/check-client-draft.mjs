@@ -647,4 +647,32 @@ await check('删除作品：级联清理工具草稿与来源引用，回退到�
   }
 })
 
+await check('草稿托管：空画布手写草稿经作品切换后再点回草稿卡，不残留上一张作品 origin', async () => {
+  const { client, latest } = await mountStudioHarness()
+  try {
+    const form = () => latest.studio.form
+    assert.equal(form().origin, null)
+    // 1) 从全新空白画布起草（origin 为 null），写入未提交修改。
+    form().patchForm({ prompt: '空白画布草稿' })
+    await client.rerenderRaw()
+    assert.equal(form().dirty, true)
+
+    // 2) 点作品 A：空白草稿被托管（draft.source === null），左栏回填 A（origin 变成 A）。
+    latest.studio.actions.previewWork(entryA)
+    await client.rerenderRaw()
+    assert.equal(form().origin && form().origin.path, workA.images[0].path)
+    assert.equal(form().draft && form().draft.source, null)
+
+    // 3) 点回草稿卡：恢复空画布草稿，origin / tuning 同步清回 null（不残留 A）。
+    latest.studio.actions.focusNewDraft()
+    await client.rerenderRaw()
+    assert.equal(form().form.prompt, '空白画布草稿')
+    assert.equal(form().draftView.editing, true)
+    assert.equal(form().origin, null, '空画布托管草稿恢复后 origin 必须清零')
+    assert.equal(form().tuning, null, 'tuning 不得残留上一张作品 A')
+  } finally {
+    client.unmount()
+  }
+})
+
 summary()

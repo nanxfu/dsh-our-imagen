@@ -10650,7 +10650,7 @@ function degradedRerollOverrides(entry, presets, fallbackPreset) {
   if (!item) return null;
   const prompt = typeof item.prompt === "string" ? item.prompt.trim().slice(0, LIMITS.prompt.maxChars) : "";
   if (!prompt) return null;
-  const overrides = { prompt, seed: -1, count: 1 };
+  const overrides = { prompt, seed: -1, count: 1, references: [] };
   const params = item.params && typeof item.params === "object" ? item.params : null;
   if (params && typeof params.negativePrompt === "string") overrides.negativePrompt = params.negativePrompt;
   const size = fallbackSizeOf(entry);
@@ -10692,7 +10692,10 @@ function rerollOverrides(entry, presets, items, fallbackPreset) {
   const recall = recallOf(entry, presets);
   const prompt = recall.prompt.trim();
   if (!prompt) return null;
-  const overrides = { prompt, seed: -1, count: 1 };
+  const item = entry && typeof entry === "object" && entry.item && typeof entry.item === "object" ? entry.item : null;
+  const itemParams = item && item.params && typeof item.params === "object" ? item.params : null;
+  const references = referencePathsOf(item && item.referenceSources || itemParams && itemParams.referenceSources);
+  const overrides = { prompt, seed: -1, count: 1, references };
   if (recall.negative !== null) overrides.negativePrompt = recall.negative;
   if (recall.width !== null) overrides.width = recall.width;
   if (recall.height !== null) overrides.height = recall.height;
@@ -14701,7 +14704,9 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     if (prev && prev.form) {
       setForm(prev.form);
       setCleanBaseline(formSnapshotOf(prev.form));
-      if (prev.source) setOrigin(prev.source);
+      const nextOrigin = prev.source || null;
+      setOrigin(nextOrigin);
+      originRef.current = nextOrigin;
       setDraft({ ...prev, editing: true });
       return true;
     }

@@ -490,7 +490,8 @@ function degradedRerollOverrides(entry, presets, fallbackPreset) {
   if (!item) return null
   const prompt = typeof item.prompt === 'string' ? item.prompt.trim().slice(0, LIMITS.prompt.maxChars) : ''
   if (!prompt) return null
-  const overrides = { prompt, seed: -1, count: 1 }
+  // 降级重绘不继承左栏当前的参考图槽，显式置空 references 避免意外混入无关参考图。
+  const overrides = { prompt, seed: -1, count: 1, references: [] }
   const params = item.params && typeof item.params === 'object' ? item.params : null
   if (params && typeof params.negativePrompt === 'string') overrides.negativePrompt = params.negativePrompt
   const size = fallbackSizeOf(entry)
@@ -566,7 +567,14 @@ export function rerollOverrides(entry, presets, items, fallbackPreset) {
   const recall = recallOf(entry, presets)
   const prompt = recall.prompt.trim()
   if (!prompt) return null
-  const overrides = { prompt, seed: -1, count: 1 }
+  const item = entry && typeof entry === 'object' && entry.item && typeof entry.item === 'object'
+    ? entry.item
+    : null
+  const itemParams = item && item.params && typeof item.params === 'object' ? item.params : null
+  // 明确按作品自身是否带 referenceSources 写入 references（纯文生图作品写 []），
+  // 防止左栏当前挂着的参考图槽在点击任意旧作品「重新生成」时串入请求或误触发模型拦截。
+  const references = referencePathsOf((item && item.referenceSources) || (itemParams && itemParams.referenceSources))
+  const overrides = { prompt, seed: -1, count: 1, references }
   if (recall.negative !== null) overrides.negativePrompt = recall.negative
   if (recall.width !== null) overrides.width = recall.width
   if (recall.height !== null) overrides.height = recall.height

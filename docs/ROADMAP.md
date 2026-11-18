@@ -331,7 +331,7 @@
     - 新增 `src/logic/reference.js` 纯逻辑（槽位增删 / 去重 / 上限 / 路径归一 / 能力门控 / dirty 指纹 / 请求体拼装）与 `src/studio/rail/ReferenceSection.jsx`（提示词之后、画面设置之前）：空态入口、1~2 张缩略图网格与单张移除、满额提示、「从作品选择」、拖入本机图片（预检 → `/import` 落盘为独立 v1 → 路径入槽）、弱参考质量提示。
     - 当前模型 `supportsReference=false` 且槽内有图时就地提示，并提供「切换到 FLUX.2 Klein 4B」（保留参考图）与「改用整图重绘」；此时点生成被前置拦下（toast、不发请求、不静默丢图），不自动换模型。
     - 动作坞复用组新增「设为参考图」（去重 / 满额提示 / 必要时自动切到支持参考的预设并切回创作视图）；助手生成经同一 `buildBody` 自动携带参考槽；参考槽计入表单 dirty 指纹（挂载即触发 A1 草稿托管），新建创作 / 还原原图 / 回填其它作品时清理。字典 zh/en 各 616 键同构，SPEC 新增 §5.21。
-  - **测试**：新增 `test/reference.mjs`（17）与 `test/remote/test_reference_images.py`（36）；`host-e2e` 63、`jobs-wait` 40、`check-contract` 14、`test/remote/run.py` 476、`check-client-logic` 90、`check-client-shell` 53、`check-client-draft` 11、`image-tool-render` 14、`check-client-locale` zh/en 各 616；`npm test` 38 步全绿。
+  - **测试**：新增 `test/reference.mjs`（17）与 `test/remote/test_reference_images.py`（36）；`host-e2e` 63、`jobs-wait` 40、`check-contract` 14、`test/remote/run.py` 476、`check-client-logic` 90、`check-client-shell` 53、`check-client-draft` 11、`image-tool-render` 14、`check-client-locale` zh/en 各 616；`npm test` 39 步全绿。
   - **真机验收（Kaggle 2×T4，diffusers 0.43.0 / torch 2.11.0+cu130，1 个 Kernel 完成三段验收、无 OOM、无遗留 Kernel）**：
     - **参考生图**：白名单预下载 78.6s / 首次加载 118.8s（`variant=None` + `device_map="balanced"`）；1 张参考 20.11 / 20.64s（同 seed 两轮逐像素一致，MAE 0）、2 张 39.94s、1 张参考 + 1280×720 输出严格 1280×720（画幅保持）；参考影响度 7.71/255（弱条件，prompt + seed 主导）；全程 `max_allocated_mb` 7928 不变、复测无增长。
     - **P0 加速 A/B（不合入）**：`channels_last + fuse_qkv + vae_tiling` 在 `sdxl-lightning` 1024² 4 步上 +3.9%、峰值显存 +1236 MB、同 seed 构图改变（MAE 11.06）→ 不合入；`vae_tiling` 在 `sdxl-inpaint` 1536×864 扩图 0.96×（变慢）、累计峰值口径无法证实收益 → 不合入。模型资产全部保持未启用，`accel` 仅保留为可选开关。
