@@ -8,8 +8,17 @@
  * 0.10.0 起不再有静态风格预设：这里不处理风格层与风格后缀。
  */
 
-import { DEFAULT_PRESET, LIMITS, RATIO_IDS, SETTINGS } from '../../shared/contract.js'
-import { negativePromptActive } from '../../shared/models-guide.js'
+import { DEFAULT_PRESET, LIMITS, RATIO_IDS } from '../../shared/contract.js'
+import { negativePromptActive, providerIdOf } from '../../shared/models-guide.js'
+
+// 算力来源能力位（providers）的判定口径在 `shared/models-guide.js`（Host 意图模型推荐
+// 与 Client 界面共用同一份）：这里只做薄 re-export，本文件不再维护第二套实现。
+export {
+  presetAvailableForProvider,
+  presetProviderRestrictionOf,
+  presetProvidersOf,
+  providerIdOf,
+} from '../../shared/models-guide.js'
 
 import { clampInt, clampNumber, clampSize } from './clamp.js'
 import { negativeLayersPatch, resolveNegativeLayers } from './prompt.js'
@@ -126,58 +135,11 @@ export function referencePresetOf(presets) {
 
 // ---- 算力来源能力位（providers） ----------------------------------------
 //
-// 模型资产的可选字段 `providers` 声明「这个模型能在哪些远端后端上跑」：
-//  - 缺省 / 空数组：两种来源都支持（历史资产与旧宿主预设保持既有语义，不误伤）；
-//  - 显式声明：只保留契约 `SETTINGS.providers` 里的取值，未知取值忽略；
-//    过滤后为空同样按「全可用」处理——脏数据不该把模型从界面里抹掉，真正的资产错误
-//    已由 `tools/build-assets.mjs` 在构建期拒绝。
-// 渲染层（模型卡置灰）与生成前预检（`generateCapabilityOf`）共用这一份口径。
-
-/** 归一算力来源 id：非法值回退契约默认来源（当前是 kaggle），与宿主设置归一一致。 */
-export function providerIdOf(provider) {
-  return SETTINGS.providers.includes(provider) ? provider : SETTINGS.defaultProvider
-}
-
-/**
- * 预设可用的算力来源（始终非空，返回值是新数组）。
- *
- * @param {object} preset 宿主下发的预设
- * @returns {Array<string>} 契约 `SETTINGS.providers` 取值域内的来源 id
- */
-export function presetProvidersOf(preset) {
-  const raw = preset && Array.isArray(preset.providers) ? preset.providers : []
-  const allowed = []
-  for (const id of raw) {
-    if (SETTINGS.providers.includes(id) && !allowed.includes(id)) allowed.push(id)
-  }
-  return allowed.length > 0 ? allowed : [...SETTINGS.providers]
-}
-
-/**
- * 当前算力来源能否运行该预设。
- *
- * `provider` 非法（旧宿主 / 拼写错误 / 设置未就绪）时按契约默认来源判断，
- * 与 `settings.js` 的 provider 归一方向一致，不会因为一个脏值把模型全部判成不可用。
- *
- * @param {object} preset 宿主下发的预设
- * @param {string} provider 当前算力来源 id
- * @returns {boolean}
- */
-export function presetAvailableForProvider(preset, provider) {
-  return presetProvidersOf(preset).includes(providerIdOf(provider))
-}
-
-/**
- * 预设的算力来源限制：只支持一种来源时返回该来源 id（界面据此显示「仅 Colab」），
- * 缺省 / 两种都支持时返回空串。
- *
- * @param {object} preset 宿主下发的预设
- * @returns {''|'kaggle'|'colab'}
- */
-export function presetProviderRestrictionOf(preset) {
-  const list = presetProvidersOf(preset)
-  return list.length === 1 ? list[0] : ''
-}
+// 判定语义（见 shared/models-guide.js 的唯一口径）：
+//  - 资产未声明 `providers`（或声明值全部非法）时视为两种来源都支持；
+//  - 显式声明：只保留契约 `SETTINGS.providers` 白名单内的取值；
+//  - 当前来源非法 / 缺失时按契约默认来源（kaggle）判断，不因脏值把模型全判不可用。
+// 渲染层（模型卡置灰）与生成前预检（`generateCapabilityOf`）从这里取判定。
 
 /** 算力来源展示名的字典键（模型卡角标 / 生成前预检提示共用）。 */
 export function providerNameKeyOf(provider) {

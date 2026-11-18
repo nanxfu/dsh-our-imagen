@@ -346,7 +346,7 @@ function isUpscaleItem(item) {
  */
 function isNonDiffusionItem(item, presets) {
   if (!item || typeof item !== 'object') return false
-  if (isUpscaleItem(item)) return true
+  if (isUpscaleItem(item) || item.outpaint === true) return true
   const presetId = typeof item.presetId === 'string' ? item.presetId.trim() : ''
   if (!presetId) return false
   const list = Array.isArray(presets) ? presets.filter((preset) => preset && preset.id) : []

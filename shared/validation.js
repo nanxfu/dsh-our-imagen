@@ -7,6 +7,7 @@
  */
 
 import { INTENT, LIMITS, SETTINGS, UI_STATE, publicPresets } from './contract.js'
+import { presetAvailableForProvider } from './models-guide.js'
 
 /** HF 仓库 id 形状：`org/name`，两段只含字母数字与 `._-` 且以字母数字开头。 */
 export const HF_REPO_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/
@@ -192,12 +193,18 @@ export function normalizeClarify(value) {
 
 /**
  * 模型建议归一：`presetId` 必须在公开预设清单中且不等于当前预设。
+ *
+ * 目标还必须是主表单真能切换过去的文生图模型：`inpaintOnly` 专用局部重绘权重
+ * （不能文生图、主表单不可选）一律丢弃；传 `options.provider`（当前算力来源 id，
+ * Host 意图路由 / Client 二次归一都给）时，该来源跑不了的模型（资产 `providers`
+ * 能力位，如仅 Colab）也丢弃——推荐一个用户选不了的模型只会给出无法执行的建议。
+ *
  * 默认要求 `reason` 非空（Client 语义）；传 `fallbackToDescription: true` 时（Host 语义）
  * 在理由为空时回退到目标预设对应语言的定位描述。
  *
  * @param {unknown} value
  * @param {string | { id?: string } | null | undefined} currentPresetOrId
- * @param {{ locale?: 'zh' | 'en', fallbackToDescription?: boolean, presets?: Array<object> }} [options]
+ * @param {{ locale?: 'zh' | 'en', fallbackToDescription?: boolean, presets?: Array<object>, provider?: string }} [options]
  * @returns {{ presetId: string, reason: string } | null}
  */
 export function normalizeModelHint(value, currentPresetOrId, options = {}) {
@@ -212,6 +219,8 @@ export function normalizeModelHint(value, currentPresetOrId, options = {}) {
   const presets = Array.isArray(options.presets) ? options.presets : publicPresets()
   const target = presets.find((preset) => preset && preset.id === presetId)
   if (!target) return null
+  if (target.inpaintOnly === true) return null
+  if (typeof options.provider === 'string' && !presetAvailableForProvider(target, options.provider)) return null
   let reason = textOf(value.reason)
   if (!reason && options.fallbackToDescription === true) {
     const description = isPlainObject(target.description) ? target.description : {}

@@ -4,7 +4,7 @@
 > 本文档只描述语义、请求/响应形状与使用约束，不重复维护数值。`node test/check-contract.mjs` 会校验
 > 宿主注册的路由、宿主错误码、客户端文案与本文档是否跟随契约。
 >
-> **版本**：0.12.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。本文档覆盖截至 `0.12.0` 的全部契约与接口。
+> **版本**：0.13.0（与 `package.json`、`shared/contract.js` 的 `VERSION` 一致）。本文档覆盖截至 `0.13.0` 的全部契约与接口。
 
 ---
 
@@ -857,7 +857,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 - `negative`：仅在 `negativePromptActive(preset, cfg)` 为 true 时可能非空，否则**必须为空串**（避免把无效参数带进表单）；长度受 `LIMITS.negativePrompt.maxChars` 限制。
 - `summary`：给用户确认用的本轮画面概述（UI 语言），只进界面、不发给生图模型；截断到 `INTENT.summaryMaxChars`。
 - `clarify`：`null` 或 `{ "question": string, "options": string[] }`。`question` ≤ `INTENT.clarifyQuestionMaxChars`；`options` 去重后 2~4 条、每条 ≤ `INTENT.clarifyOptionMaxChars`，不足 2 条时整条丢弃。澄清轮仍必须给出草稿 `prompt`，不再要求空提示词。
-- `modelHint`：`null` 或 `{ "presetId": string, "reason": string }`。`presetId` 必须存在于契约 `PRESETS` 且不能等于当前预设；`reason` 是 UI 语言短理由（≤ `INTENT.modelHintReasonMaxChars`），模型没给理由时用该预设的定位描述兜底。模型建议只是弱提示，不改变本次生成使用的预设。
+- `modelHint`：`null` 或 `{ "presetId": string, "reason": string }`。`presetId` 必须存在于契约 `PRESETS`、不能等于当前预设，且必须是主表单可选的文生图模型——`inpaintOnly` 专用重绘权重（主表单不可选、不能文生图）一律丢弃；Host 侧还会按当前算力来源（运行设置的 `provider`，非法 / 缺失按契约默认来源归一）过滤：`providers` 能力位与当前来源不符的模型（如仅 Colab）不进 system prompt 的模型目录、也不可作为建议目标。`reason` 是 UI 语言短理由（≤ `INTENT.modelHintReasonMaxChars`），模型没给理由时用该预设的定位描述兜底。模型建议只是弱提示，不改变本次生成使用的预设。
 - 无可用模型或输出不可解析时 `source` 为 `local`：`prompt` 与 `summary` 都是用户原话，`ratioId` / `negative` 为空串，`clarify` / `modelHint` 为 `null`；界面会明确提示这是本地兜底结果。
 
 #### `POST /imagen-api/reveal`
@@ -1014,14 +1014,15 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
   等待超时不影响任务继续执行：返回里的 `jobId`（形如 `j_1a2b3c4d`）可配合 `imagen_cancel` 取消，或用
   `imagen_history` 轮询结果；传 `saveTo` 可把图片直接交付到工作区路径。
   描述末尾注入**模型库概要**：每个预设一行（名称 / 家族 / 步数 / 实测耗时 / 提示词写法 / 默认 CFG 与负向词能力 /
-  是否支持垫图 / 定位），让 Agent 能按专长选模型，而不是只看到 id 枚举。
+  是否支持垫图 / 定位），让 Agent 能按专长选模型，而不是只看到 id 枚举。目录与 `presetId` 枚举同口径：
+  都已剔除 `inpaintOnly` 专用重绘权重（它只能带蒙版提交，宿主入队会拒，schema 源头不给这个选项）。
 - **输入参数**（`additionalProperties: false`）：
 
 | 参数 | 类型 | 必填 | 说明 |
 | :--- | :--- | :---: | :--- |
 | `prompt` | string | 是 | 画面描述，建议英文，不超过 2000 字符 |
 | `negativePrompt` | string | 否 | 排除项（反向提示词）。只在所选模型真的消费负向词且 `CFG > 0` 时生效；`CFG=0` 的极速模型或不支持负向词的模型会忽略它，需要排除内容时改用正面描述 |
-| `presetId` | string | 否 | 预设 id（枚举来自契约 `PRESETS`），默认 `sdxl-lightning`；具体写法与专长见工具描述里的模型库 |
+| `presetId` | string | 否 | 预设 id（枚举来自契约 `PRESETS` 剔除 `inpaintOnly` 专用重绘权重），默认 `sdxl-lightning`；具体写法与专长见工具描述里的模型库 |
 | `width` | integer | 否 | 宽度 256–1536，默认取预设 |
 | `height` | integer | 否 | 高度 256–1536，默认取预设 |
 | `steps` | integer | 否 | 采样步数 1–60，默认取预设 |
@@ -1059,7 +1060,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 | 参数 | 类型 | 必填 | 说明 |
 | :--- | :--- | :---: | :--- |
 | `items` | array | 是 | 任务列表，1–`LIMITS.batch.maxItems`（8）条；每项 `{ prompt(必填), negativePrompt?, seed?, saveTo? }`，`additionalProperties: false` |
-| `presetId` | string | 否 | 公共预设 id（枚举来自契约 `PRESETS`），默认 `sdxl-lightning` |
+| `presetId` | string | 否 | 公共预设 id（枚举来自契约 `PRESETS` 剔除 `inpaintOnly` 专用重绘权重），默认 `sdxl-lightning` |
 | `width` / `height` | integer | 否 | 公共宽高 256–1536，默认取预设 |
 | `steps` | integer | 否 | 公共采样步数 1–60，默认取预设 |
 | `cfg` | number | 否 | 公共 CFG 0–20，默认取预设 |
@@ -1600,6 +1601,10 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
    点击任一图把舞台切到该图并进入**单图聚焦**：对话流替换为聚焦视图（大图 + 参数胶囊 + 快捷动作
    「对比原图 / 继续涂抹 / 重新生成 / 查看大图」），顶部出现「← 返回上一层（{label}）」面包屑；
    返回逐层出栈回到上级结果网格。聚焦与返回只改本地视图栈，不写 `messages`。
+   **聚焦条目按需回填（第四轮补修）**：聚焦图不在已加载分页时（`/history` 尚未刷新完成，或该图在
+   已加载分页之外），聚焦视图按图片路径向作品库请求 `/history/tree` 条目并并入已加载列表——回填落地后
+   「对比原图」照常出现、「重新生成」能取到作品提示词与参数；旧宿主没有该路由（404）时只降级一次，
+   回到栈项兜底（对比按钮不出现、重新生成提示缺提示词）。
 4. **舞台工具动作镜像**：在舞台发起「局部涂抹 / 整图重绘」并提交成功后，助手线程追加一条镜像记录
    （底图缩略图 + 动作说明 + 可选重绘强度胶囊）与一条任务反馈气泡；完成后气泡展示新版本图。
    镜像记录、表单同步卡与结果卡都带独立 `kind`，不进入 `intentHistory`，不污染意图模型的多轮上下文。
@@ -1755,16 +1760,22 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
    不匹配时返回 `invalid_request` 与同口径说明，任务不占队列、不触发远端提交。
 4. **来源归一**：判定只在组合层做一次——`compute.provider`（`state.provider → session.provider → kaggle`）
    传给模型卡与预检；`providerIdOf()` 对非法值回退契约 `SETTINGS.defaultProvider`（`kaggle`），避免旧宿主
-   缺字段时把模型全部判成不可用。
-5. **大显存资产口径（草稿，未发布）**：`flux2-klein-9b` 为 9.08B distilled（4 步 / CFG 1.0）、
+   缺字段时把模型全部判成不可用。判定函数的唯一实现随第四轮补修上移到 `shared/models-guide.js`
+   （`src/logic/preset.js` 改为薄 re-export），Host 与 Client 不再各持一份。
+5. **意图模型推荐同口径过滤（第四轮补修）**：`POST /imagen-api/intent` 的 system prompt 模型目录与
+   `modelHint` 归一都按当前算力来源过滤（`normalizeModelHint` 丢弃 `providers` 不含当前来源的目标、
+   无条件丢弃 `inpaintOnly` 目标），客户端 `intentModelHint` 二次归一带上 `state.provider` 给旧宿主兜底；
+   算力来源取运行设置的实时读数，切换来源后下一次解析即生效。当前发布资产均未声明 `providers`，
+   该过滤为后续仅 Colab 模型（如 9B）就位。
+6. **大显存资产口径（草稿，未发布）**：`flux2-klein-9b` 为 9.08B distilled（4 步 / CFG 1.0）、
    `supportsReference=true`、组件权重 ~32.3 GiB（transformer 17.3 GiB + 8B Qwen3 文本编码器 15.3 GiB）、
    HF 受限仓库（需 HF Token，FLUX 非商用许可）；Kaggle 2×T4（双卡合计 29.1 GiB）必然 OOM，故预期声明
    `providers: ["colab"]`。Colab 侧 A100 需高内存机型（`colabHighRam`；普通 A100 档位 503），G4 当前不可用。
    草稿与验证脚本见 `.tmp/models/flux2-klein-9b.verified-pending.json` 与 `tools/colab/smoke-provider.mjs
    --gpu A100 --high-ram`。
-6. **文案与无障碍**：中英字典新增 5 键严格同构（来源展示名、仅 X 角标、阻断说明、×2 语言）；
+7. **文案与无障碍**：中英字典新增 5 键严格同构（来源展示名、仅 X 角标、阻断说明、×2 语言）；
    角标与置灰态不影响触控热区（选项本身 ≥44px）。
-7. **测试**：新增 `test/check-client-provider.mjs`（5 项：置灰 + 角标、双向 / 英文、缺省与非法回退、
+8. **测试**：新增 `test/check-client-provider.mjs`（5 项：置灰 + 角标、双向 / 英文、缺省与非法回退、
    不可用时点生成 0 请求且 toast 含模型名与来源、匹配时正常提交）；`check-client-logic` 90 → 93
    （能力位纯函数与预检阻断 / 放行）、`check-client-shell` 53（不受影响）、`check-client-locale` 616 → 621；
    `jobs-wait` 40 → 41（`providerGateOf` 纯函数 + `submit` 接线：被拒不占队列、切 colab 放行）；

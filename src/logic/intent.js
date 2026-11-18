@@ -92,10 +92,12 @@ export function intentClarify(value) {
 
 /**
  * 模型建议归一：委托 shared/validation.js 的 normalizeModelHint。
- * 预设必须真实存在、不等于当前预设且理由非空；不满足就整条丢弃。
+ * 预设必须真实存在、不等于当前预设且理由非空；目标还必须是主表单可选的文生图模型
+ * （inpaintOnly 专用重绘权重一律丢弃），传 `options.provider`（当前算力来源）时
+ * 来源跑不了的模型也丢弃——Host 已按同口径过滤，这里给旧宿主兜第二道。
  */
-export function intentModelHint(value, currentPresetId) {
-  return normalizeModelHint(value, currentPresetId)
+export function intentModelHint(value, currentPresetId, options = {}) {
+  return normalizeModelHint(value, currentPresetId, options)
 }
 
 /** 比例归一：只接受契约里的比例 id，其余按「自动」处理。 */

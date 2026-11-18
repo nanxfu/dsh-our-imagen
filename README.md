@@ -307,7 +307,7 @@ kaggle auth login
 
 * **方式 C：Release tarball（适合 GitHub 直连不稳定的网络）**
   ```bash
-  dsh plugin --profile web add https://github.com/nanxfu/dsh-our-imagen/releases/download/v0.12.0/dsh-our-imagen-0.12.0.tgz
+  dsh plugin --profile web add https://github.com/nanxfu/dsh-our-imagen/releases/download/v0.13.0/dsh-our-imagen-0.13.0.tgz
   ```
 
 * **方式 D：离线 zip + 本地加载（Load Bundle）**

@@ -212,7 +212,9 @@ export function apply(ctx, config = {}) {
     // 本地图片导入：拖入 / 选择 / 粘贴的 PNG、JPEG 落盘成与生成产物同构的「导入作品」。
     ...createImportRoutes({ ctx, log }),
     ...createLibraryRoutes({ ctx, log }),
-    ...createPromptRoutes({ ctx, log }),
+    // 提示词路由（润色 / 意图解析）：意图的模型推荐按当前算力来源过滤，
+    // 与 JobQueue 的 getProvider 同一份设置读数，切换来源后下一次解析即生效。
+    ...createPromptRoutes({ ctx, log, getProvider: () => settings.current().provider }),
     // 运行设置：GET 读脱敏视图 / POST 保存覆盖项（hfToken 只回布尔与来源）。
     ...createSettingsRoutes({ settings, session, log }),
     // 工作台界面状态：GET 读归一化视图 / POST 合并白名单字段（同一 path、method 分发）。

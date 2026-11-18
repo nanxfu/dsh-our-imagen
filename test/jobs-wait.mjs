@@ -1540,6 +1540,47 @@ async function main() {
       const legacyItems = (await scanHistory(makeCtx(), { limit: LIMITS.history.maxLimit })).items
       const legacyItem = legacyItems.find((item) => item.jobId === legacy.job.id)
       assert.equal(legacyItem.outpaintContent, null, '旧产物 / 无内容框的历史条目恒为 null')
+
+      // 现代扩图（FLUX.2 Klein 4B + Outpaint LoRA，无蒙版绿边画布）：
+      // Host 自动注入 pipeline.lora，把画布放入 referenceImages，并在留空时发触发词、填写时拼接追加。
+      const modern = queue.submit({
+        tool: 'outpaint',
+        presetId: 'flux2-klein-4b',
+        prompt: '',
+        width: 1536,
+        height: 864,
+        reference: { image: PNG_B64, sourcePath, outpaintContent: content },
+      })
+      assert.equal(modern.ok, true, JSON.stringify(modern))
+      assert.equal(modern.job.params.prompt, '', '公开视图 / meta 不污染英文 LoRA 触发词')
+      assert.deepEqual(modern.job.params.reference, { sourcePath, outpaintContent: content })
+      const modernDone = await queue.waitFor(modern.job.id, 10)
+      assert.equal(modernDone.status, 'done', JSON.stringify(modernDone.error))
+      const modernCall = remote.state.generateCalls.at(-1)
+      assert.equal(modernCall.reference, undefined, '现代扩图不走单图 reference')
+      assert.deepEqual(modernCall.referenceImages, [{ image_b64: PNG_B64 }])
+      assert.equal(modernCall.pipeline.lora.repo, 'fal/flux-2-klein-4B-outpaint-lora')
+      assert.equal(modernCall.pipeline.lora.weight, 'flux-outpaint-lora.safetensors')
+      assert.equal(modernCall.pipeline.lora.scale, 1.1)
+      assert.equal(modernCall.tasks[0].prompt, 'Fill the green spaces according to the image')
+      assert.equal(modernCall.tasks[0].width, 1536)
+      assert.equal(modernCall.tasks[0].height, 864)
+
+      const modernTyped = queue.submit({
+        tool: 'outpaint',
+        presetId: 'flux2-klein-4b',
+        prompt: 'misty pine trees',
+        width: 1536,
+        height: 864,
+        reference: { image: PNG_B64, sourcePath, outpaintContent: content },
+      })
+      assert.equal(modernTyped.ok, true, JSON.stringify(modernTyped))
+      const modernTypedDone = await queue.waitFor(modernTyped.job.id, 10)
+      assert.equal(modernTypedDone.status, 'done', JSON.stringify(modernTypedDone.error))
+      assert.equal(
+        remote.state.generateCalls.at(-1).tasks[0].prompt,
+        'Fill the green spaces according to the image, misty pine trees',
+      )
     } finally {
       queue.dispose()
       await remote.close()

@@ -28,6 +28,8 @@ import {
 import { createCheckRunner } from './helpers/check.mjs'
 
 const PRESET_IDS = PRESETS.map((preset) => preset.id)
+// 文生图（imagen_generate / imagen_batch）的 presetId 取值域：剔除 inpaintOnly 专用重绘权重。
+const TEXT_TO_IMAGE_PRESET_IDS = PRESETS.filter((preset) => preset.inpaintOnly !== true).map((preset) => preset.id)
 const TOOL_NAMES = [
   'imagen_batch',
   'imagen_cancel',
@@ -206,7 +208,7 @@ async function main() {
     )
     assert.ok(properties.waitSeconds.description.includes(`${LIMITS.waitSeconds.min}-${LIMITS.waitSeconds.max}`))
     assert.ok(properties.waitSeconds.description.includes(`默认 ${LIMITS.waitSeconds.default}`))
-    assert.deepEqual(properties.presetId.enum, PRESET_IDS, 'presetId 枚举必须来自契约 PRESETS')
+    assert.deepEqual(properties.presetId.enum, TEXT_TO_IMAGE_PRESET_IDS, 'presetId 枚举必须剔除 inpaintOnly 专用重绘权重（宿主入队会拒，schema 源头不给这个选项）')
 
     const item = properties.items.items
     assert.equal(item.type, 'object')
@@ -214,6 +216,24 @@ async function main() {
     assert.deepEqual(item.required, ['prompt'])
     assert.deepEqual(Object.keys(item.properties).sort(), ['negativePrompt', 'prompt', 'saveTo', 'seed'])
     assert.ok(item.properties.prompt.description.includes(`${LIMITS.prompt.maxChars}`), 'prompt 上限应引用契约')
+  })
+
+  await check('imagen_generate presetId 枚举与描述模型库同口径剔除 inpaintOnly', () => {
+    const { tool } = createTools(workspace)
+    const properties = tool('imagen_generate').parameters.properties
+
+    // 文生图 schema 源头剔除专用重绘权重：此前依赖宿主入队时运行时拒绝。
+    assert.deepEqual(properties.presetId.enum, TEXT_TO_IMAGE_PRESET_IDS)
+    assert.ok(!properties.presetId.enum.includes('sdxl-inpaint'), '文生图 schema 不得出现 sdxl-inpaint')
+    assert.ok(properties.presetId.enum.includes('sdxl-lightning'), '可文生图预设照常可选')
+    assert.equal(properties.presetId.enum.length, PRESET_IDS.length - 1, '当前资产只有一个 inpaintOnly 预设')
+    // 描述里的模型库与枚举保持同一份口径：不把枚举外的模型介绍给 Agent。
+    const description = tool('imagen_generate').description
+    assert.ok(description.includes('sdxl-lightning'), '模型库应包含默认模型')
+    assert.ok(!description.includes('sdxl-inpaint'), '模型库不得描述 inpaintOnly 预设')
+    // 会话预载可指向任意模型（舞台图片工具要用的专用权重允许先加载）；配方检索是只读过滤。
+    assert.deepEqual(tool('imagen_session').parameters.properties.presetId.enum, PRESET_IDS, '会话预载保留全部预设')
+    assert.deepEqual(tool('imagen_recipes').parameters.properties.presetId.enum, PRESET_IDS, '配方检索保留全部预设')
   })
 
   await check('imagen_recipes 参数 schema 引用配方分类与契约预设', () => {

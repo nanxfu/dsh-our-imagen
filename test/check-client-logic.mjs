@@ -28,7 +28,16 @@ import {
   sanitizeSession,
 } from '../src/logic/logs.js'
 import { NOTICE_TITLE_PREFIX, completionNotice, isCompletion, stripNoticePrefix } from '../src/logic/notice.js'
-import { negativePromptActive, safeResetPatch, stepModeOf, stepTierOf } from '../shared/models-guide.js'
+import {
+  modelCatalogText,
+  negativePromptActive,
+  presetAvailableForProvider,
+  providerIdOf,
+  safeResetPatch,
+  stepModeOf,
+  stepTierOf,
+} from '../shared/models-guide.js'
+import { normalizeModelHint } from '../shared/validation.js'
 import * as contract from '../shared/contract.js'
 import { PUBLIC_PRESETS } from '../shared/models.generated.js'
 import * as studioPresets from '../src/studio/presets.js'
@@ -3100,6 +3109,71 @@ await check('算力来源能力位：缺省全可用 / 单来源限制 / 非法 
   assert.equal(logic.presetProviderRestrictionOf(both), '')
   assert.equal(logic.providerNameKeyOf('colab'), 'studio.preset.providerName.colab')
   assert.equal(logic.providerNameKeyOf('nope'), 'studio.preset.providerName.kaggle')
+})
+
+// 模型目录与 modelHint 的能力位过滤（shared 唯一口径）：inpaintOnly 不可作文生图目标，
+// providers 声明与当前算力来源不符的模型不进目录、不做推荐。
+await check('模型目录与 modelHint：inpaintOnly / 算力来源过滤同一份口径', () => {
+  const both = {
+    id: 'sdxl-lightning', label: 'SDXL Lightning', steps: 4, cfg: 0,
+    inpaintOnly: false, description: { zh: '极速模型' },
+  }
+  const colabOnly = {
+    id: 'flux2-klein-9b', label: 'FLUX.2 Klein 9B', steps: 4, cfg: 1,
+    inpaintOnly: false, providers: ['colab'], description: { zh: '大显存模型' },
+  }
+  const inpaint = { id: 'sdxl-inpaint', label: 'SDXL Inpaint', steps: 30, cfg: 8, inpaintOnly: true }
+
+  // 薄 re-export：客户端判定与 shared 是同一个函数，不存在第二套口径。
+  assert.equal(logic.providerIdOf, providerIdOf, 'src/logic/preset.js 应 re-export shared 的 providerIdOf')
+  assert.equal(logic.presetAvailableForProvider, presetAvailableForProvider)
+
+  // 模型目录：缺省不过滤（行为与改造前一致）；textToImageOnly 剔除 inpaintOnly；
+  // provider 剔除当前算力来源跑不了的模型。
+  const presets = [both, colabOnly, inpaint]
+  assert.ok(modelCatalogText({ presets }).includes('sdxl-inpaint'), '缺省目录不过滤')
+  assert.ok(!modelCatalogText({ presets, textToImageOnly: true }).includes('sdxl-inpaint'))
+  assert.ok(modelCatalogText({ presets, textToImageOnly: true }).includes('sdxl-lightning'))
+  assert.ok(
+    !modelCatalogText({ presets, textToImageOnly: true, provider: 'kaggle' }).includes('flux2-klein-9b'),
+    'kaggle 来源不得列出仅 Colab 模型',
+  )
+  assert.ok(
+    modelCatalogText({ presets, textToImageOnly: true, provider: 'colab' }).includes('flux2-klein-9b'),
+    'colab 来源照常列出',
+  )
+  // 真实公开目录：sdxl-inpaint 是当前唯一 inpaintOnly 资产，textToImageOnly 后不再出现。
+  assert.ok(modelCatalogText().includes('SDXL Inpaint'), '真实目录默认仍含专用重绘权重（缺省不过滤）')
+  assert.ok(!modelCatalogText({ textToImageOnly: true }).includes('sdxl-inpaint'))
+  assert.ok(modelCatalogText({ textToImageOnly: true }).includes('sdxl-lightning'))
+
+  // modelHint 目标判定：专用重绘权重主表单不可选、不能文生图，一律不是合法目标。
+  assert.equal(
+    normalizeModelHint({ presetId: 'sdxl-inpaint', reason: '局部重绘专用' }, 'sdxl-lightning'),
+    null,
+    'inpaintOnly 预设不得作为 modelHint 目标',
+  )
+  // providers 能力位：当前算力来源跑不了的模型不推荐；匹配来源照常放行。
+  const candidates = [both, colabOnly]
+  assert.equal(
+    normalizeModelHint({ presetId: 'flux2-klein-9b', reason: '大显存' }, 'sdxl-lightning', { presets: candidates, provider: 'kaggle' }),
+    null,
+    'kaggle 来源下不得推荐仅 Colab 模型',
+  )
+  assert.deepEqual(
+    normalizeModelHint({ presetId: 'flux2-klein-9b', reason: '大显存' }, 'sdxl-lightning', { presets: candidates, provider: 'colab' }),
+    { presetId: 'flux2-klein-9b', reason: '大显存' },
+  )
+  // 不给 provider 时不做来源过滤（旧客户端语义保持，Host 侧已按同口径过滤）。
+  assert.deepEqual(
+    normalizeModelHint({ presetId: 'flux2-klein-9b', reason: '大显存' }, 'sdxl-lightning', { presets: candidates }),
+    { presetId: 'flux2-klein-9b', reason: '大显存' },
+  )
+  // inpaintOnly 即使在注入的 presets 里也拦（防御宿主侧目录漏过滤时客户端兜底）。
+  assert.equal(
+    normalizeModelHint({ presetId: 'sdxl-inpaint', reason: 'x' }, 'sdxl-lightning', { presets: [inpaint] }),
+    null,
+  )
 })
 
 // 生成前预检：当前算力来源跑不了有效预设时拦下（含模型名与来源），不放行、不自动换模型。

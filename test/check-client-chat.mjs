@@ -46,6 +46,7 @@ async function mountChatPanel(options = {}) {
     rerolls: [],
     imageTools: [],
     backs: [],
+    treeLoads: [],
   }
   const chat = {
     messages: options.messages ?? [],
@@ -99,6 +100,8 @@ async function mountChatPanel(options = {}) {
         gallery: options.gallery ?? [],
         items: options.items ?? [],
         selected: options.selected ?? null,
+        // 版本树按需回填（测试默认只记录调用）；传 loadTree: null 可模拟旧宿主替身缺该函数。
+        ...(options.loadTree === null ? {} : { loadTree: (root) => calls.treeLoads.push(root) }),
       },
       actions: {
         sending: Boolean(options.sending),
@@ -597,6 +600,67 @@ await check('渲染：单图聚焦的面包屑与快捷动作胶囊', async () =
     assert.ok(!collectText(root.tree).join(' | ').includes('对比原图'), '[focus] 根图不应提供对比原图')
   } finally {
     root.client.unmount()
+  }
+})
+
+// 聚焦图不在已加载分页（/history 未刷新完成或超出分页）时：ChatPanel 按路径向作品库
+// 请求版本树条目回填，避免「对比原图」消失、「重新生成」因缺提示词失败。
+await check('渲染：聚焦图不在已加载分页时按需回填版本树条目', async () => {
+  const focusedImage = {
+    path: 'imagen-output/20261109-122000-job-late/01.png',
+    url: '/imagen-api/file?path=late-01',
+    width: 1024,
+    height: 1024,
+    seed: 21,
+    seconds: 6.2,
+  }
+  const focus = { messageId: 20, index: 0, count: 1, ...focusedImage }
+
+  // 1) 路径不在 gallery / items：挂载后按聚焦路径触发一次 loadTree。
+  const missing = await mountChatPanel({
+    focus,
+    focusBackLabel: '1 张生成结果',
+    gallery: [],
+    items: [],
+  })
+  try {
+    assert.deepEqual(missing.calls.treeLoads, [focusedImage.path], '[backfill] 应按聚焦路径请求版本树条目')
+    // 条目仍缺失期间（回填在途）：快捷动作照常渲染，对比按钮按无 sourceImage 处理。
+    assertStructure('focus-backfill-pending', missing.tree, {
+      required: { 'ofs-chat-focus-action': 3 },
+      forbidden: [],
+    })
+  } finally {
+    missing.client.unmount()
+  }
+
+  // 2) 条目已在已加载分页：不再请求版本树。
+  const item = { jobId: 'job-late', prompt: '新完成的任务', sourceImage: null, images: [focusedImage] }
+  const found = await mountChatPanel({
+    focus,
+    focusBackLabel: '1 张生成结果',
+    gallery: [{ image: focusedImage, item }],
+    items: [item],
+  })
+  try {
+    assert.deepEqual(found.calls.treeLoads, [], '[backfill] 条目已在已加载分页时不再请求')
+  } finally {
+    found.client.unmount()
+  }
+
+  // 3) 旧宿主替身没有 loadTree：安全降级，不抛错（回到栈项兜底行为）。
+  const legacy = await mountChatPanel({
+    focus,
+    focusBackLabel: '1 张生成结果',
+    gallery: [],
+    items: [],
+    loadTree: null,
+  })
+  try {
+    assert.deepEqual(legacy.calls.treeLoads, [])
+    assert.ok(collectText(legacy.tree).join(' | ').includes('单图聚焦'), '[backfill] 旧宿主下聚焦视图照常渲染')
+  } finally {
+    legacy.client.unmount()
   }
 })
 

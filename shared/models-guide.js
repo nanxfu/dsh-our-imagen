@@ -7,11 +7,14 @@
  *  - Client（`src/logic/preset.js` 等）：决定「排除项」是否展示、提交时是否携带；
  *  - 测试：直接断言规则本身，不必重复抄一份模型事实。
  *
+ * 算力来源能力位（`providers`）的判定也收敛在这里（见文件末尾），Host 的意图模型推荐
+ * 与 Client 的模型卡 / 生成预检共用同一份口径。
+ *
  * 本文件只允许纯数据与纯函数，不得 import `node:*`，也不在这里写死模型清单
  * （唯一来源是 `models/*.json`）。
  */
 
-import { LIMITS, publicPresets } from './contract.js'
+import { LIMITS, SETTINGS, publicPresets } from './contract.js'
 
 const PROMPT_STYLE_NAMES = {
   danbooru: 'Danbooru 标签',
@@ -136,9 +139,82 @@ export function modelUsageLine(preset) {
   return `- ${parts.join(' · ')}`
 }
 
-/** 全部模型的一行摘要（每行一个，供 system prompt / 工具描述直接拼接）。 */
-export function modelCatalogText() {
-  return publicPresets().map(modelUsageLine).filter(Boolean).join('\n')
+/**
+ * 全部模型的一行摘要（每行一个，供 system prompt / 工具描述直接拼接）。
+ *
+ * options 缺省时不过滤（行为与改造前逐字一致）；两个过滤开关互相独立：
+ *  - `textToImageOnly`：剔除 `inpaintOnly` 专用局部重绘权重——它只能带蒙版提交，
+ *    主表单也不可选，出现在文生图目录里只会诱导模型选一个注定失败的目标；
+ *  - `provider`：当前算力来源 id，剔除该来源跑不了的模型（资产 `providers` 能力位，
+ *    如仅 Colab 的大显存模型）；非法 / 缺失值按契约默认来源归一后再判定。
+ *  - `presets`：仅测试注入用；缺省取 `publicPresets()`（唯一数据来源）。
+ *
+ * @param {{ textToImageOnly?: boolean, provider?: string, presets?: Array<object> }} [options]
+ */
+export function modelCatalogText(options = {}) {
+  const source = Array.isArray(options.presets) ? options.presets : publicPresets()
+  const provider = options.provider === undefined ? null : providerIdOf(options.provider)
+  return source
+    .filter((preset) => !(options.textToImageOnly === true && preset.inpaintOnly === true))
+    .filter((preset) => provider === null || presetAvailableForProvider(preset, provider))
+    .map(modelUsageLine)
+    .filter(Boolean)
+    .join('\n')
+}
+
+// ---- 算力来源能力位（providers，shared 唯一判定口径） ----------------------
+//
+// 模型资产的可选字段 `providers` 声明「这个模型能在哪些远端后端上跑」：
+//  - 缺省 / 空数组 / 声明值全部在契约白名单外：两种来源都支持（历史资产与旧宿主
+//    预设保持既有语义，不误伤；真正的资产错误由 `tools/build-assets.mjs` 构建期拒绝）；
+//  - 显式声明：只保留契约 `SETTINGS.providers` 里的取值。
+// Host（意图模型推荐）与 Client（模型卡置灰、生成预检）共用这一份判定；
+// `src/logic/preset.js` 只做薄 re-export，不再维护第二套实现。
+
+/** 归一算力来源 id：非法 / 缺失回退契约默认来源（当前是 kaggle）。 */
+export function providerIdOf(provider) {
+  return SETTINGS.providers.includes(provider) ? provider : SETTINGS.defaultProvider
+}
+
+/**
+ * 预设可用的算力来源（始终非空，返回值是新数组）。
+ *
+ * @param {object} preset 预设（可含 `providers`）
+ * @returns {Array<string>} 契约 `SETTINGS.providers` 取值域内的来源 id
+ */
+export function presetProvidersOf(preset) {
+  const raw = preset && Array.isArray(preset.providers) ? preset.providers : []
+  const allowed = []
+  for (const id of raw) {
+    if (SETTINGS.providers.includes(id) && !allowed.includes(id)) allowed.push(id)
+  }
+  return allowed.length > 0 ? allowed : [...SETTINGS.providers]
+}
+
+/**
+ * 当前算力来源能否运行该预设。
+ *
+ * `provider` 非法（旧宿主 / 拼写错误 / 设置未就绪）时按契约默认来源判断，
+ * 不会因为一个脏值把模型全部判成不可用。
+ *
+ * @param {object} preset 预设
+ * @param {unknown} provider 当前算力来源 id
+ * @returns {boolean}
+ */
+export function presetAvailableForProvider(preset, provider) {
+  return presetProvidersOf(preset).includes(providerIdOf(provider))
+}
+
+/**
+ * 预设的算力来源限制：只支持一种来源时返回该来源 id（界面据此显示「仅 Colab」），
+ * 缺省 / 两种都支持时返回空串。
+ *
+ * @param {object} preset 预设
+ * @returns {''|'kaggle'|'colab'}
+ */
+export function presetProviderRestrictionOf(preset) {
+  const list = presetProvidersOf(preset)
+  return list.length === 1 ? list[0] : ''
 }
 
 /**

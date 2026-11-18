@@ -16,7 +16,7 @@
 
 import assert from 'node:assert/strict'
 
-import { PRESETS, LIMITS, OUTPAINT, UPSCALE } from '../shared/contract.js'
+import { PRESETS, LIMITS, OUTPAINT, OUTPAINT_ENGINE, UPSCALE } from '../shared/contract.js'
 import {
   IMAGE_TOOL_FORMS,
   IMAGE_TOOL_GROUPS,
@@ -158,23 +158,30 @@ async function main() {
     assert.equal(toolPresetOf([lightning], 'sdxl-lightning', 'nope').preset, null)
   })
 
-  await check('toolPresetOf：outpaint 优先专用 sdxl-inpaint，其次当前支持 Inpaint 的模型', () => {
-    // 当前是通用模型：扩图优先切到 9 通道专用权重。
+  await check('toolPresetOf：outpaint 优先现代 FLUX 扩图引擎，缺失时回退 SDXL Inpaint', () => {
+    // 现代扩图：只要列表里有 flux2-klein-4b 就切到它（无论左栏当前选的是哪款）。
+    const modern = toolPresetOf([lightning, inpaintPreset, flux2], 'sdxl-lightning', 'outpaint')
+    assert.equal(modern.preset.id, OUTPAINT_ENGINE.presetId)
+    assert.equal(modern.switched, true)
+    assert.equal(modern.fallback, false)
+    // 左栏原本就选中 flux2-klein-4b 时不报切换。
+    const keepModern = toolPresetOf([lightning, flux2], OUTPAINT_ENGINE.presetId, 'outpaint')
+    assert.equal(keepModern.preset.id, OUTPAINT_ENGINE.presetId)
+    assert.equal(keepModern.switched, false)
+    // 列表里缺少现代引擎（老旧测试替身）：依次回退专用 sdxl-inpaint / 当前支持 Inpaint 模型 / 垫图兜底。
     const fromLightning = toolPresetOf([lightning, inpaintPreset], 'sdxl-lightning', 'outpaint')
     assert.equal(fromLightning.preset.id, 'sdxl-inpaint')
     assert.equal(fromLightning.switched, true)
     assert.equal(fromLightning.fallback, false)
-    // 没有专用权重时沿用当前支持 Inpaint 的通用模型。
-    const noNative = toolPresetOf([lightning, flux2], 'sdxl-lightning', 'outpaint')
+    const noNative = toolPresetOf([lightning], 'sdxl-lightning', 'outpaint')
     assert.equal(noNative.preset.id, 'sdxl-lightning')
     assert.equal(noNative.switched, false)
     assert.equal(noNative.fallback, false)
-    // 当前模型不支持 Inpaint：退回通用垫图兜底（referencePresetOf 跳过 inpaintOnly）。
-    const fallback = toolPresetOf([flux2, animagine], 'flux2-klein-4b', 'outpaint')
+    const fallback = toolPresetOf([animagine], 'sdxl-lightning', 'outpaint')
     assert.equal(fallback.preset.id, 'animagine-xl-3.1')
     assert.equal(fallback.switched, true)
     assert.equal(fallback.fallback, true)
-    assert.equal(toolPresetOf([flux2], 'flux2-klein-4b', 'outpaint').preset, null)
+    assert.equal(toolPresetOf([], '', 'outpaint').preset, null)
   })
 
   await check('toolStrengthDefaultOf：inpaint 0.8 / 专用权重 0.9 / outpaint 1.0 / img2img 契约默认', () => {
@@ -427,12 +434,39 @@ async function main() {
     assert.equal(buildOutpaintToolBody({ ...base, preset: null }), null)
     assert.equal(buildOutpaintToolBody({ ...base, canvas: null }), null)
     const fallbackOutpaint = buildOutpaintToolBody({ ...base, prompt: '', targetPrompt: '' })
-    assert.ok(fallbackOutpaint, '扩图底图无原提示词且留空时应自动回退中性延展提示词')
+    assert.ok(fallbackOutpaint, '旧式扩图兜底预设留空时应回退中性延展提示词')
     assert.equal(fallbackOutpaint.prompt, OUTPAINT_DEFAULT_PROMPT)
+    // 现代扩图（FLUX.2 Klein 4B + 无蒙版绿边画布）：留空传空串（由 Host 拼指令），不发 mask / strength，不带无关负向词。
+    const greenCanvas = { image: CANVAS_IMAGE, width: 1536, height: 864, content: { x: 336, y: 0, width: 864, height: 864 } }
+    const modernOutpaint = buildOutpaintToolBody({
+      targetPath: 'imagen-output/a/01.png',
+      targetPrompt: '一只荷花',
+      preset: flux2,
+      presets: [flux2],
+      prompt: '',
+      canvas: greenCanvas,
+      negativeActive: true,
+    })
+    assert.ok(modernOutpaint)
+    assert.equal(modernOutpaint.presetId, OUTPAINT_ENGINE.presetId)
+    assert.equal(modernOutpaint.prompt, '', '现代扩图留空不沿用旧图提示词，由 Host 拼 LoRA 触发词')
+    assert.equal(modernOutpaint.negativePrompt, '')
+    assert.deepEqual(Object.keys(modernOutpaint.reference).sort(), ['image', 'outpaintContent', 'sourcePath'])
+    const modernTyped = buildOutpaintToolBody({
+      targetPath: 'imagen-output/a/01.png',
+      targetPrompt: '',
+      preset: flux2,
+      prompt: 'misty pine trees',
+      canvas: greenCanvas,
+    })
+    assert.equal(modernTyped.prompt, 'misty pine trees', '用户输入额外延展描述时保留给 Host 追加')
     assert.equal(buildOutpaintToolBody(null), null)
     // 输入框占位文案按工具与是否有原提示词区分，避免提示矛盾。
     const fakeT = (key) => key
-    assert.equal(toolPromptPlaceholderOf({ t: fakeT, toolId: 'outpaint', targetPrompt: '一只荷花' }), '一只荷花')
+    assert.equal(
+      toolPromptPlaceholderOf({ t: fakeT, toolId: 'outpaint', targetPrompt: '一只荷花' }),
+      'studio.outpaint.promptPlaceholderNoTarget',
+    )
     assert.equal(
       toolPromptPlaceholderOf({ t: fakeT, toolId: 'outpaint', targetPrompt: '' }),
       'studio.outpaint.promptPlaceholderNoTarget',
@@ -452,11 +486,19 @@ async function main() {
     assert.equal(canvas.height, 1232)
     assert.deepEqual(canvas.content, { x: 104, y: 104, width: 1024, height: 1024 })
     assert.ok(Math.abs(canvas.coverage - 0.309158) < 0.000001)
+    // 现代扩图画布不传 mask 也可通过（此时图片上限收紧为 referenceImages.maxBytes = 4 MiB）。
+    const greenOnly = normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, mask: '' })
+    assert.ok(greenOnly)
+    assert.equal(greenOnly.mask, '')
     // 非法 base64 / 缺字段。
     assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, image: 'not base64!!' }), null)
-    assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, mask: '' }), null)
     assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, width: null }), null)
     assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, content: null }), null)
+    assert.equal(normalizeOutpaintCanvas({
+      ...OUTPAINT_CANVAS,
+      mask: '',
+      image: 'A'.repeat(2 * (LIMITS.referenceImages.maxBytes + 10)),
+    }), null)
     // 宽高必须 8 对齐且落在契约边界内。
     assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, width: 1230, height: 1230, content: { x: 0, y: 0, width: 100, height: 100 } }), null)
     assert.equal(normalizeOutpaintCanvas({ ...OUTPAINT_CANVAS, width: OUTPAINT.maxEdge + 8 }), null)

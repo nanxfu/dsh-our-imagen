@@ -1939,7 +1939,7 @@ var PUBLIC_PRESETS = [
 ];
 
 // shared/contract.js
-var VERSION = "0.12.0";
+var VERSION = "0.13.0";
 var ROUTES = {
   state: { method: "GET", path: "/imagen-api/state" },
   probe: { method: "POST", path: "/imagen-api/probe" },
@@ -2078,6 +2078,17 @@ var OUTPAINT = {
   // 只属于 Host/Client，不经 `daemonContract()` 下发远端。
   content: { fields: ["x", "y", "width", "height"], precision: 4 }
 };
+var OUTPAINT_ENGINE = Object.freeze({
+  presetId: "flux2-klein-4b",
+  lora: Object.freeze({
+    repo: "fal/flux-2-klein-4B-outpaint-lora",
+    weight: "flux-outpaint-lora.safetensors",
+    scale: 1.1
+  }),
+  prompt: "Fill the green spaces according to the image",
+  green: "#00FF00",
+  referenceMaxEdge: LIMITS.referenceImages.maxEdge
+});
 var PIPELINE_ACCEL_KEYS = Object.freeze(["vaeTiling", "vaeSlicing", "channelsLast", "fuseQkv"]);
 var REQUEST_TOOLS = Object.freeze(["generate", "upscale", "outpaint"]);
 var TIMEOUTS = {
@@ -3589,6 +3600,69 @@ function mirrorToolEntries(t, input) {
   ];
 }
 
+// shared/models-guide.js
+function effectiveCfgOf(preset, cfg) {
+  const value = Number(cfg);
+  if (Number.isFinite(value)) return value;
+  const recommended = Number(preset && preset.cfg);
+  return Number.isFinite(recommended) ? recommended : 0;
+}
+function negativePromptActive(preset, cfg) {
+  const effective = effectiveCfgOf(preset, cfg);
+  if (!preset || typeof preset !== "object") return effective > 0;
+  const capable = typeof preset.supportsNegative === "boolean" ? preset.supportsNegative : typeof preset.negativeHint === "string" && preset.negativeHint.trim() !== "";
+  if (!capable || effective <= 0) return false;
+  const hint = typeof preset.negativeHint === "string" ? preset.negativeHint.trim() : "";
+  if (hint) return true;
+  const recommended = Number(preset.cfg);
+  return Number.isFinite(recommended) && effective > recommended;
+}
+function providerIdOf(provider) {
+  return SETTINGS.providers.includes(provider) ? provider : SETTINGS.defaultProvider;
+}
+function presetProvidersOf(preset) {
+  const raw = preset && Array.isArray(preset.providers) ? preset.providers : [];
+  const allowed = [];
+  for (const id of raw) {
+    if (SETTINGS.providers.includes(id) && !allowed.includes(id)) allowed.push(id);
+  }
+  return allowed.length > 0 ? allowed : [...SETTINGS.providers];
+}
+function presetAvailableForProvider(preset, provider) {
+  return presetProvidersOf(preset).includes(providerIdOf(provider));
+}
+function presetProviderRestrictionOf(preset) {
+  const list = presetProvidersOf(preset);
+  return list.length === 1 ? list[0] : "";
+}
+function stepModeOf(preset) {
+  const r = preset && typeof preset === "object" ? preset.stepRange : null;
+  if (preset && preset.tier === "usable" && r && typeof r === "object" && Number.isFinite(Number(r.min)) && Number.isFinite(Number(r.max)) && Number.isFinite(Number(r.fast)) && Number.isFinite(Number(r.balanced)) && Number.isFinite(Number(r.fine)) && Number(r.min) < Number(r.max)) {
+    return "range";
+  }
+  return "fixed";
+}
+function stepTierOf(preset, steps) {
+  if (stepModeOf(preset) !== "range") return "fixed";
+  const r = preset.stepRange;
+  const val = Number(steps);
+  if (!Number.isFinite(val)) return "balanced";
+  const fastMid = (Number(r.fast) + Number(r.balanced)) / 2;
+  const fineMid = (Number(r.balanced) + Number(r.fine)) / 2;
+  if (val < fastMid) return "fast";
+  if (val <= fineMid) return "balanced";
+  return "fine";
+}
+function safeResetPatch(preset) {
+  const rawSize = Number(preset?.size);
+  const size = Number.isFinite(rawSize) && rawSize > 0 ? Math.min(Math.max(Math.round(rawSize / LIMITS.width.step) * LIMITS.width.step, LIMITS.width.min), LIMITS.width.max) : 1024;
+  const rawSteps = Number(preset?.steps);
+  const steps = Number.isFinite(rawSteps) ? Math.min(Math.max(Math.round(rawSteps), LIMITS.steps.min), LIMITS.steps.max) : 4;
+  const rawCfg = Number(preset?.cfg);
+  const cfg = Number.isFinite(rawCfg) ? Math.min(Math.max(rawCfg, LIMITS.cfg.min), LIMITS.cfg.max) : 1;
+  return { width: size, height: size, steps, cfg };
+}
+
 // shared/validation.js
 var HF_REPO_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
 function isPlainObject(value) {
@@ -3657,6 +3731,8 @@ function normalizeModelHint(value, currentPresetOrId, options = {}) {
   const presets = Array.isArray(options.presets) ? options.presets : publicPresets();
   const target = presets.find((preset) => preset && preset.id === presetId);
   if (!target) return null;
+  if (target.inpaintOnly === true) return null;
+  if (typeof options.provider === "string" && !presetAvailableForProvider(target, options.provider)) return null;
   let reason = textOf2(value.reason);
   if (!reason && options.fallbackToDescription === true) {
     const description = isPlainObject(target.description) ? target.description : {};
@@ -3736,8 +3812,8 @@ function intentCount(value) {
 function intentClarify(value) {
   return normalizeClarify(value);
 }
-function intentModelHint(value, currentPresetId) {
-  return normalizeModelHint(value, currentPresetId);
+function intentModelHint(value, currentPresetId, options = {}) {
+  return normalizeModelHint(value, currentPresetId, options);
 }
 function intentRatio(value) {
   return typeof value === "string" && RATIO_IDS.includes(value) ? value : "";
@@ -4127,6 +4203,12 @@ function ChatPanel(props) {
       item: null
     };
   }
+  import_react3.default.useEffect(() => {
+    if (!focus) return;
+    const path = typeof focus.path === "string" ? focus.path : "";
+    if (!path || libraryEntryOf(path)) return;
+    if (library && typeof library.loadTree === "function") void library.loadTree(path);
+  }, [focus, library.items]);
   function compareFocus(entry) {
     if (!entry || !entry.item || !entry.item.sourceImage) return;
     if (!ui || typeof ui.setCompareOpen !== "function") return;
@@ -7528,51 +7610,6 @@ function FrameSection({
 // src/studio/rail/ParamsSection.jsx
 var import_react20 = __toESM(require("react"), 1);
 
-// shared/models-guide.js
-function effectiveCfgOf(preset, cfg) {
-  const value = Number(cfg);
-  if (Number.isFinite(value)) return value;
-  const recommended = Number(preset && preset.cfg);
-  return Number.isFinite(recommended) ? recommended : 0;
-}
-function negativePromptActive(preset, cfg) {
-  const effective = effectiveCfgOf(preset, cfg);
-  if (!preset || typeof preset !== "object") return effective > 0;
-  const capable = typeof preset.supportsNegative === "boolean" ? preset.supportsNegative : typeof preset.negativeHint === "string" && preset.negativeHint.trim() !== "";
-  if (!capable || effective <= 0) return false;
-  const hint = typeof preset.negativeHint === "string" ? preset.negativeHint.trim() : "";
-  if (hint) return true;
-  const recommended = Number(preset.cfg);
-  return Number.isFinite(recommended) && effective > recommended;
-}
-function stepModeOf(preset) {
-  const r = preset && typeof preset === "object" ? preset.stepRange : null;
-  if (preset && preset.tier === "usable" && r && typeof r === "object" && Number.isFinite(Number(r.min)) && Number.isFinite(Number(r.max)) && Number.isFinite(Number(r.fast)) && Number.isFinite(Number(r.balanced)) && Number.isFinite(Number(r.fine)) && Number(r.min) < Number(r.max)) {
-    return "range";
-  }
-  return "fixed";
-}
-function stepTierOf(preset, steps) {
-  if (stepModeOf(preset) !== "range") return "fixed";
-  const r = preset.stepRange;
-  const val = Number(steps);
-  if (!Number.isFinite(val)) return "balanced";
-  const fastMid = (Number(r.fast) + Number(r.balanced)) / 2;
-  const fineMid = (Number(r.balanced) + Number(r.fine)) / 2;
-  if (val < fastMid) return "fast";
-  if (val <= fineMid) return "balanced";
-  return "fine";
-}
-function safeResetPatch(preset) {
-  const rawSize = Number(preset?.size);
-  const size = Number.isFinite(rawSize) && rawSize > 0 ? Math.min(Math.max(Math.round(rawSize / LIMITS.width.step) * LIMITS.width.step, LIMITS.width.min), LIMITS.width.max) : 1024;
-  const rawSteps = Number(preset?.steps);
-  const steps = Number.isFinite(rawSteps) ? Math.min(Math.max(Math.round(rawSteps), LIMITS.steps.min), LIMITS.steps.max) : 4;
-  const rawCfg = Number(preset?.cfg);
-  const cfg = Number.isFinite(rawCfg) ? Math.min(Math.max(rawCfg, LIMITS.cfg.min), LIMITS.cfg.max) : 1;
-  return { width: size, height: size, steps, cfg };
-}
-
 // src/components/Tooltip.jsx
 var import_react19 = __toESM(require("react"), 1);
 
@@ -9362,24 +9399,6 @@ function referencePresetOf(presets) {
   if (preferred && supportsImg2Img(preferred)) return preferred;
   return list.find(supportsImg2Img) || null;
 }
-function providerIdOf(provider) {
-  return SETTINGS.providers.includes(provider) ? provider : SETTINGS.defaultProvider;
-}
-function presetProvidersOf(preset) {
-  const raw = preset && Array.isArray(preset.providers) ? preset.providers : [];
-  const allowed = [];
-  for (const id of raw) {
-    if (SETTINGS.providers.includes(id) && !allowed.includes(id)) allowed.push(id);
-  }
-  return allowed.length > 0 ? allowed : [...SETTINGS.providers];
-}
-function presetAvailableForProvider(preset, provider) {
-  return presetProvidersOf(preset).includes(providerIdOf(provider));
-}
-function presetProviderRestrictionOf(preset) {
-  const list = presetProvidersOf(preset);
-  return list.length === 1 ? list[0] : "";
-}
 function providerNameKeyOf(provider) {
   const id = providerIdOf(provider);
   return `studio.preset.providerName.${id}`;
@@ -9612,41 +9631,6 @@ function outpaintPlanOf(input) {
   if (ratioId === OUTPAINT.expandId) return expandPlanOf(sourceWidth, sourceHeight, anchor);
   return ratioPlanOf(sourceWidth, sourceHeight, ratioId, anchor);
 }
-function outpaintEdgeStripsOf(plan) {
-  const source = plan && typeof plan === "object" && plan.ok === true ? plan : null;
-  if (!source) return [];
-  const width = Number(source.width);
-  const height = Number(source.height);
-  const content = source.content && typeof source.content === "object" ? source.content : null;
-  if (!content || !(width > 0) || !(height > 0)) return [];
-  const contentWidth = Number(content.width);
-  const contentHeight = Number(content.height);
-  if (!(contentWidth > 0) || !(contentHeight > 0)) return [];
-  const left = Number(content.x);
-  const top = Number(content.y);
-  if (!Number.isFinite(left) || !Number.isFinite(top)) return [];
-  const right = width - contentWidth - left;
-  const bottom = height - contentHeight - top;
-  if (!(right >= 0) || !(bottom >= 0)) return [];
-  if (left <= 0 && right <= 0 && top <= 0 && bottom <= 0) return [];
-  const strips = [];
-  const push = (sx, sy, sw, sh, tx, ty, tw, th) => {
-    if (!(tw > 0) || !(th > 0)) return;
-    strips.push({
-      source: { x: sx, y: sy, width: sw, height: sh },
-      target: { x: tx, y: ty, width: tw, height: th }
-    });
-  };
-  push(0, 0, 1, 1, 0, 0, left, top);
-  push(contentWidth - 1, 0, 1, 1, left + contentWidth, 0, right, top);
-  push(0, contentHeight - 1, 1, 1, 0, top + contentHeight, left, bottom);
-  push(contentWidth - 1, contentHeight - 1, 1, 1, left + contentWidth, top + contentHeight, right, bottom);
-  push(0, 0, 1, contentHeight, 0, top, left, contentHeight);
-  push(contentWidth - 1, 0, 1, contentHeight, left + contentWidth, top, right, contentHeight);
-  push(0, 0, contentWidth, 1, left, 0, contentWidth, top);
-  push(0, contentHeight - 1, contentWidth, 1, left, top + contentHeight, contentWidth, bottom);
-  return strips;
-}
 var CONTENT_FIELDS = Array.isArray(OUTPAINT.content && OUTPAINT.content.fields) ? OUTPAINT.content.fields : ["x", "y", "width", "height"];
 var CONTENT_PRECISION = Number.isFinite(Number(OUTPAINT.content && OUTPAINT.content.precision)) ? Math.max(0, Math.min(8, Math.floor(Number(OUTPAINT.content.precision)))) : 4;
 var CONTENT_TOLERANCE = 1e-3;
@@ -9743,7 +9727,7 @@ var IMAGE_TOOLS = Object.freeze([
     form: "canvas",
     group: "process",
     icon: "frame",
-    capability: "supportsInpaint",
+    capability: "supportsReference",
     labelKey: "studio.imageTool.outpaint",
     ready: true
   })
@@ -9778,6 +9762,10 @@ function toolPresetOf(presets, currentId, toolId) {
     return { preset: null, switched: false, fallback: true };
   }
   if (tool.id === "outpaint") {
+    const modern = list.find((item) => item.id === OUTPAINT_ENGINE.presetId) || null;
+    if (modern) {
+      return { preset: modern, switched: !current || modern.id !== current.id, fallback: false };
+    }
     const native = list.find((item) => item.id === INPAINT_PRESET_ID && supportsInpaint(item)) || null;
     if (native) {
       return { preset: native, switched: !current || native.id !== current.id, fallback: false };
@@ -9820,10 +9808,13 @@ function toolPromptFallback(targetPrompt) {
   return String(targetPrompt ?? "").trim().slice(0, LIMITS.prompt.maxChars);
 }
 function toolPromptPlaceholderOf({ t, toolId, targetPrompt }) {
+  if (toolId === "outpaint") {
+    return typeof t === "function" ? t("studio.outpaint.promptPlaceholderNoTarget") : "";
+  }
   const own = toolPromptFallback(targetPrompt);
   if (own) return own;
   if (typeof t !== "function") return "";
-  return toolId === "outpaint" ? t("studio.outpaint.promptPlaceholderNoTarget") : t("studio.imageTool.promptPlaceholderNoTarget");
+  return t("studio.imageTool.promptPlaceholderNoTarget");
 }
 function finiteNumber(value) {
   if (value === null || value === void 0 || value === "") return null;
@@ -9920,7 +9911,8 @@ function buildOutpaintToolBody(input) {
   const canvas = normalizeOutpaintCanvas(source.canvas);
   if (!canvas) return null;
   const typed = typeof source.prompt === "string" ? source.prompt.trim() : "";
-  const prompt = (typed || toolPromptFallback(source.targetPrompt) || OUTPAINT_DEFAULT_PROMPT).slice(0, LIMITS.prompt.maxChars);
+  const modernEngine = preset.id === OUTPAINT_ENGINE.presetId && !canvas.mask;
+  const prompt = modernEngine ? typed.slice(0, LIMITS.prompt.maxChars) : (typed || toolPromptFallback(source.targetPrompt) || OUTPAINT_DEFAULT_PROMPT).slice(0, LIMITS.prompt.maxChars);
   const rawStrength = finiteNumber(source.strength);
   const strength = clampMaskStrength(rawStrength === null ? Number(OUTPAINT.strength) : rawStrength, true);
   const outpaintContent = buildOutpaintContentBody(canvas);
@@ -9928,7 +9920,7 @@ function buildOutpaintToolBody(input) {
     tool: "outpaint",
     presetId: preset.id,
     prompt,
-    negativePrompt: source.negativeActive === true ? hintOf(preset) : "",
+    negativePrompt: !modernEngine && source.negativeActive === true ? hintOf(preset) : "",
     width: canvas.width,
     height: canvas.height,
     steps: presetSteps(preset),
@@ -9939,9 +9931,8 @@ function buildOutpaintToolBody(input) {
     autoStart: true,
     reference: {
       image: canvas.image,
-      mask: canvas.mask,
+      ...canvas.mask ? { mask: canvas.mask, strength } : !modernEngine ? { strength } : {},
       sourcePath: targetPath,
-      strength,
       ...outpaintContent ? { outpaintContent } : {}
     }
   };
@@ -9956,9 +9947,10 @@ function normalizeOutpaintCanvas(input) {
   const source = input && typeof input === "object" ? input : {};
   const image = normalizeMaskData(source.image);
   const mask = normalizeMaskData(source.mask);
-  if (!image || !mask) return null;
-  if (base64BytesOf(image) > Number(LIMITS.reference.maxBytes)) return null;
-  if (base64BytesOf(mask) > Number(LIMITS.mask.maxBytes)) return null;
+  if (!image) return null;
+  const imageMaxBytes = mask ? Number(LIMITS.reference.maxBytes) : Number(LIMITS.referenceImages.maxBytes);
+  if (base64BytesOf(image) > imageMaxBytes) return null;
+  if (mask && base64BytesOf(mask) > Number(LIMITS.mask.maxBytes)) return null;
   const step = Number(LIMITS.width.step) > 0 ? Number(LIMITS.width.step) : 8;
   const maxEdge = Number(OUTPAINT.maxEdge);
   const maxPixels = Number(OUTPAINT.maxPixels);
@@ -10606,7 +10598,7 @@ function isUpscaleItem(item) {
 }
 function isNonDiffusionItem(item, presets) {
   if (!item || typeof item !== "object") return false;
-  if (isUpscaleItem(item)) return true;
+  if (isUpscaleItem(item) || item.outpaint === true) return true;
   const presetId = typeof item.presetId === "string" ? item.presetId.trim() : "";
   if (!presetId) return false;
   const list = Array.isArray(presets) ? presets.filter((preset) => preset && preset.id) : [];
@@ -10860,7 +10852,7 @@ function ToolSubmitBar(props) {
           }
         )
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("label", { className: "ofs-tool-strength", children: [
+      tool && tool.id !== "outpaint" ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("label", { className: "ofs-tool-strength", children: [
         /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "ofs-tool-label", children: t("studio.imageTool.strengthLabel") }),
         /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
           "input",
@@ -10876,7 +10868,7 @@ function ToolSubmitBar(props) {
           }
         ),
         /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("b", { className: "ofs-tool-readout", children: value.toFixed(2) })
-      ] }),
+      ] }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "ofs-tool-actions", children: [
         /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
           "button",
@@ -11678,40 +11670,28 @@ function percentOfSize(value, total) {
   if (!(Number(total) > 0)) return "0%";
   return `${Number(value) / Number(total) * 100}%`;
 }
-function renderOutpaintDataUrls(doc, drawable, plan, sourceWidth, sourceHeight) {
+function renderOutpaintDataUrls(doc, drawable, plan) {
   const imageCanvas = doc.createElement("canvas");
-  imageCanvas.width = plan.width;
-  imageCanvas.height = plan.height;
-  const maskCanvas = doc.createElement("canvas");
-  maskCanvas.width = plan.width;
-  maskCanvas.height = plan.height;
+  const longEdge = Math.max(plan.width, plan.height);
+  const maxRefEdge = Number(OUTPAINT_ENGINE.referenceMaxEdge) || 1024;
+  const exportScale = longEdge > maxRefEdge ? maxRefEdge / longEdge : 1;
+  const exportWidth = Math.max(1, Math.round(plan.width * exportScale));
+  const exportHeight = Math.max(1, Math.round(plan.height * exportScale));
+  imageCanvas.width = exportWidth;
+  imageCanvas.height = exportHeight;
   const imageCtx = typeof imageCanvas.getContext === "function" ? imageCanvas.getContext("2d") : null;
-  const maskCtx = typeof maskCanvas.getContext === "function" ? maskCanvas.getContext("2d") : null;
-  if (!imageCtx || !maskCtx) return null;
-  if (typeof imageCanvas.toDataURL !== "function" || typeof maskCanvas.toDataURL !== "function") return null;
-  const scaleX = sourceWidth / plan.content.width;
-  const scaleY = sourceHeight / plan.content.height;
-  imageCtx.drawImage(drawable, plan.content.x, plan.content.y, plan.content.width, plan.content.height);
-  for (const strip of outpaintEdgeStripsOf(plan)) {
-    imageCtx.drawImage(
-      drawable,
-      strip.source.x * scaleX,
-      strip.source.y * scaleY,
-      strip.source.width * scaleX,
-      strip.source.height * scaleY,
-      strip.target.x,
-      strip.target.y,
-      strip.target.width,
-      strip.target.height
-    );
-  }
-  maskCtx.fillStyle = "#ffffff";
-  maskCtx.fillRect(0, 0, plan.width, plan.height);
-  maskCtx.fillStyle = "#000000";
-  maskCtx.fillRect(plan.content.x, plan.content.y, plan.content.width, plan.content.height);
+  if (!imageCtx || typeof imageCanvas.toDataURL !== "function") return null;
+  imageCtx.fillStyle = OUTPAINT_ENGINE.green;
+  imageCtx.fillRect(0, 0, exportWidth, exportHeight);
+  imageCtx.drawImage(
+    drawable,
+    Math.round(plan.content.x * exportScale),
+    Math.round(plan.content.y * exportScale),
+    Math.max(1, Math.round(plan.content.width * exportScale)),
+    Math.max(1, Math.round(plan.content.height * exportScale))
+  );
   return {
     image: stripDataUrl(imageCanvas.toDataURL("image/png")),
-    mask: stripDataUrl(maskCanvas.toDataURL("image/png")),
     width: plan.width,
     height: plan.height,
     content: plan.content
@@ -11827,11 +11807,9 @@ function OutpaintEditor(props) {
     if (!doc || typeof doc.createElement !== "function") return;
     const sourceImage = imageRef.current;
     if (!sourceImage || sourceImage.complete === false) return;
-    const sourceWidth = natural.width > 0 ? natural.width : plan.content.width;
-    const sourceHeight = natural.height > 0 ? natural.height : plan.content.height;
     const seq = ++exportSeqRef.current;
     try {
-      const exported = renderOutpaintDataUrls(doc, sourceImage, plan, sourceWidth, sourceHeight);
+      const exported = renderOutpaintDataUrls(doc, sourceImage, plan);
       if (exported) commitExport(exported);
       return;
     } catch {
@@ -11851,9 +11829,7 @@ function OutpaintEditor(props) {
         return;
       }
       try {
-        const w = clean.width > 0 ? clean.width : sourceWidth;
-        const h2 = clean.height > 0 ? clean.height : sourceHeight;
-        const exported = renderOutpaintDataUrls(doc, clean.drawable, plan, w, h2);
+        const exported = renderOutpaintDataUrls(doc, clean.drawable, plan);
         if (exported) commitExport(exported);
       } catch {
         if (mountedRef.current && seq === exportSeqRef.current) setNotice(t("studio.outpaint.invalidCanvas"));
@@ -13477,7 +13453,10 @@ function useChatThread({ t, isEn, alive, state, form, generate }) {
         count: intentCount(data.count),
         lockSeed: false,
         clarify: intentClarify(data.clarify),
-        modelHint: intentModelHint(data.modelHint, form.form.presetId),
+        // 二次归一带上当前算力来源：旧宿主没过滤 provider 时，客户端按同一份口径再拦一道。
+        modelHint: intentModelHint(data.modelHint, form.form.presetId, {
+          provider: state && typeof state.provider === "string" ? state.provider : void 0
+        }),
         source: data.source === "model" ? "model" : "local"
       }]);
       return;
@@ -13648,7 +13627,11 @@ function targetOf(entry) {
 }
 function presetsForTool(list, tool) {
   if (!tool || !tool.capability) return [];
-  if (tool.id === "inpaint" || tool.id === "outpaint") {
+  if (tool.id === "outpaint") {
+    const modern = list.find((item) => item.id === OUTPAINT_ENGINE.presetId);
+    return modern ? [modern] : list.filter((item) => item.supportsInpaint === true);
+  }
+  if (tool.id === "inpaint") {
     return list.filter((item) => item.supportsInpaint === true);
   }
   if (tool.id === "img2img") {
@@ -13941,9 +13924,10 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, curre
     if (!canvas) {
       const image = normalizeMaskData(candidate.image);
       const mask = normalizeMaskData(candidate.mask);
-      if (!image || !mask) return { ok: false, reason: "invalid" };
-      if (base64BytesOf(image) > Number(LIMITS.reference.maxBytes)) return { ok: false, reason: "too_large" };
-      if (base64BytesOf(mask) > Number(LIMITS.mask.maxBytes)) return { ok: false, reason: "too_large" };
+      if (!image) return { ok: false, reason: "invalid" };
+      const maxImageBytes = mask ? Number(LIMITS.reference.maxBytes) : Number(LIMITS.referenceImages.maxBytes);
+      if (base64BytesOf(image) > maxImageBytes) return { ok: false, reason: "too_large" };
+      if (mask && base64BytesOf(mask) > Number(LIMITS.mask.maxBytes)) return { ok: false, reason: "too_large" };
       return { ok: false, reason: "invalid" };
     }
     setDraft((prev) => ({ ...prev, canvas }));

@@ -14,13 +14,14 @@
 
 import React from 'react'
 
+import { OUTPAINT_ENGINE } from '../../../shared/contract.js'
+
 import { apiUrl } from '../../api.js'
 import { formatText, percentOf } from '../../logic/format.js'
 import {
   OUTPAINT_EXPAND_ID,
   outpaintAnchorOf,
   outpaintAnchorShift,
-  outpaintEdgeStripsOf,
   outpaintPlanOf,
   outpaintRatioOptions,
 } from '../../logic/outpaint.js'
@@ -47,47 +48,36 @@ function percentOfSize(value, total) {
 }
 
 /**
- * 把可读的图像源（HTMLImageElement / ImageBitmap）合成为扩图画布与蒙版 base64。
+ * 把可读的图像源（HTMLImageElement / ImageBitmap）合成为现代扩图引擎所需的纯绿留白画布 base64。
  *
- * 内容区先画、边缘延拓条带后画，两者互不重叠；`toDataURL` 放在同一个函数里，
- * 遇到跨域画布污染（`SecurityError`）时会一起抛出给调用方走同源 fetch 兜底。
+ * 长边按 `OUTPAINT_ENGINE.referenceMaxEdge`（1024）等比缩小后，铺 `#00FF00` 纯绿底并在
+ * 内容框位置绘入原图；输出宽高 `width/height` 仍保留 `plan` 的完整目标尺寸（最高 1536），
+ * `toDataURL` 遇跨域画布污染（`SecurityError`）时抛出给调用方走同源 fetch 兜底。
  */
-function renderOutpaintDataUrls(doc, drawable, plan, sourceWidth, sourceHeight) {
+function renderOutpaintDataUrls(doc, drawable, plan) {
   const imageCanvas = doc.createElement('canvas')
-  imageCanvas.width = plan.width
-  imageCanvas.height = plan.height
-  const maskCanvas = doc.createElement('canvas')
-  maskCanvas.width = plan.width
-  maskCanvas.height = plan.height
+  const longEdge = Math.max(plan.width, plan.height)
+  const maxRefEdge = Number(OUTPAINT_ENGINE.referenceMaxEdge) || 1024
+  const exportScale = longEdge > maxRefEdge ? maxRefEdge / longEdge : 1
+  const exportWidth = Math.max(1, Math.round(plan.width * exportScale))
+  const exportHeight = Math.max(1, Math.round(plan.height * exportScale))
+  imageCanvas.width = exportWidth
+  imageCanvas.height = exportHeight
   const imageCtx = typeof imageCanvas.getContext === 'function' ? imageCanvas.getContext('2d') : null
-  const maskCtx = typeof maskCanvas.getContext === 'function' ? maskCanvas.getContext('2d') : null
-  if (!imageCtx || !maskCtx) return null
-  if (typeof imageCanvas.toDataURL !== 'function' || typeof maskCanvas.toDataURL !== 'function') return null
+  if (!imageCtx || typeof imageCanvas.toDataURL !== 'function') return null
 
-  const scaleX = sourceWidth / plan.content.width
-  const scaleY = sourceHeight / plan.content.height
-  imageCtx.drawImage(drawable, plan.content.x, plan.content.y, plan.content.width, plan.content.height)
-  for (const strip of outpaintEdgeStripsOf(plan)) {
-    imageCtx.drawImage(
-      drawable,
-      strip.source.x * scaleX,
-      strip.source.y * scaleY,
-      strip.source.width * scaleX,
-      strip.source.height * scaleY,
-      strip.target.x,
-      strip.target.y,
-      strip.target.width,
-      strip.target.height,
-    )
-  }
-  maskCtx.fillStyle = '#ffffff'
-  maskCtx.fillRect(0, 0, plan.width, plan.height)
-  maskCtx.fillStyle = '#000000'
-  maskCtx.fillRect(plan.content.x, plan.content.y, plan.content.width, plan.content.height)
+  imageCtx.fillStyle = OUTPAINT_ENGINE.green
+  imageCtx.fillRect(0, 0, exportWidth, exportHeight)
+  imageCtx.drawImage(
+    drawable,
+    Math.round(plan.content.x * exportScale),
+    Math.round(plan.content.y * exportScale),
+    Math.max(1, Math.round(plan.content.width * exportScale)),
+    Math.max(1, Math.round(plan.content.height * exportScale)),
+  )
 
   return {
     image: stripDataUrl(imageCanvas.toDataURL('image/png')),
-    mask: stripDataUrl(maskCanvas.toDataURL('image/png')),
     width: plan.width,
     height: plan.height,
     content: plan.content,
@@ -227,11 +217,9 @@ export function OutpaintEditor(props) {
     const sourceImage = imageRef.current
     if (!sourceImage || sourceImage.complete === false) return
 
-    const sourceWidth = natural.width > 0 ? natural.width : plan.content.width
-    const sourceHeight = natural.height > 0 ? natural.height : plan.content.height
     const seq = ++exportSeqRef.current
     try {
-      const exported = renderOutpaintDataUrls(doc, sourceImage, plan, sourceWidth, sourceHeight)
+      const exported = renderOutpaintDataUrls(doc, sourceImage, plan)
       if (exported) commitExport(exported)
       return
     } catch {
@@ -254,9 +242,7 @@ export function OutpaintEditor(props) {
         return
       }
       try {
-        const w = clean.width > 0 ? clean.width : sourceWidth
-        const h = clean.height > 0 ? clean.height : sourceHeight
-        const exported = renderOutpaintDataUrls(doc, clean.drawable, plan, w, h)
+        const exported = renderOutpaintDataUrls(doc, clean.drawable, plan)
         if (exported) commitExport(exported)
       } catch {
         if (mountedRef.current && seq === exportSeqRef.current) setNotice(t('studio.outpaint.invalidCanvas'))

@@ -292,7 +292,8 @@ daemon 与 Host 出图路由都按 `reference.maxBytes + mask.maxBytes` 推导�
 | `promptStyleRule(preset)` | 当前模型的英文提示词书写规则（中文句，直接进 system prompt） |
 | `negativePromptActive(preset, cfg)` | 当前配置下负向词是否生效，Host 与 Client 共用 |
 | `negativeGuidance(preset, cfg)` | 给大模型的负向词一句话指导（无能力时要求用正面描述表达排除意图） |
-| `modelUsageLine(preset)` / `modelCatalogText()` | 单模型 / 全库用法摘要（写法、步数、CFG、负向词、垫图、耗时、定位） |
+| `modelUsageLine(preset)` / `modelCatalogText(options?)` | 单模型 / 全库用法摘要（写法、步数、CFG、负向词、垫图、耗时、定位）；目录可按 `textToImageOnly`（剔除 `inpaintOnly`）与 `provider`（算力来源能力位）过滤 |
+| `providerIdOf` / `presetProvidersOf` / `presetAvailableForProvider` / `presetProviderRestrictionOf` | 资产 `providers` 能力位的唯一判定（缺省 = 全可用、非法来源回退契约默认）；`src/logic/preset.js` 只做薄 re-export，Host 意图推荐与 Client 模型卡 / 预检共用 |
 
 消费方：
 
@@ -306,7 +307,9 @@ daemon 与 Host 出图路由都按 `reference.maxBytes + mask.maxBytes` 推导�
 助手层（`lib/intent.js`）的系统提示词按三段组织，模型事实与沟通策略分离：
 
 1. **身份与使命**：面向新手创作者的图像生成导演 / 提示词顾问，用最小沟通成本把中文想法变成高出图质量的英文提示词；
-2. **模型手册**：当前模型 + 全库概要（来自 `models-guide.js`），写明提示词写法、质量词、负向词能力、垫图能力、速度与专长；明显更合适时允许给模型建议，但不硬拦；
+2. **模型手册**：当前模型 + 模型目录概要（来自 `models-guide.js`，已按当前算力来源剔除跑不了的模型、
+   剔除 `inpaintOnly` 专用重绘权重——modelHint 只推荐主表单真能切换过去的文生图模型），写明提示词写法、
+   质量词、负向词能力、垫图能力、速度与专长；明显更合适时允许给模型建议，但不硬拦；
 3. **组织与沟通策略**（软性引导，不做硬分支）：主体、场景、光线、视角、材质拆解得具体可感；区分「延续上一轮修改」与「全新主题」；无负向能力时用正面描述表达排除意图（不要把 `no xxx` 写进正向提示词）；信息不足时给轻度澄清，足够明确时直接给参数。
 
 意图接口 `POST /imagen-api/intent` 的 JSON 同步升级到 v2（字段与边界以 `shared/contract.js` 的 `INTENT` 与 `docs/SPEC.md` 为准）：

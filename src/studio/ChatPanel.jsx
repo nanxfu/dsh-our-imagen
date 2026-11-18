@@ -192,7 +192,10 @@ export function ChatPanel(props) {
     if (path) openPath(path)
   }
 
-  /** 聚焦视图的当前条目：优先从作品库拿完整 `{ image, item }`，拿不到时用栈项兜底。 */
+  /**
+   * 聚焦视图的当前条目：优先从作品库拿完整 `{ image, item }`，拿不到时用栈项兜底
+   * （「对比原图 / 重新生成」会因缺 item 降级，由下面的按需回填 effect 补救）。
+   */
   function focusEntryOfPath() {
     if (!focus) return null
     const found = libraryEntryOf(focus.path)
@@ -202,6 +205,21 @@ export function ChatPanel(props) {
       item: null,
     }
   }
+
+  /**
+   * 聚焦图不在已加载分页时按需回填：/history 尚未刷新完成（新完成任务）或该图在
+   * 已加载分页之外，`libraryEntryOf` 都拿不到 item，聚焦卡的「对比原图」不出现、
+   * 「重新生成」因缺提示词失败。这里用版本树接口按图片路径把所属条目并入
+   * `library.items`（与版本面板同一通道），合并后的重渲染就能拿到完整 `{ image, item }`；
+   * 旧宿主没有该路由（404）时 `loadTree` 只降级一次，回到栈项兜底的行为。
+   */
+  React.useEffect(() => {
+    if (!focus) return
+    const path = typeof focus.path === 'string' ? focus.path : ''
+    if (!path || libraryEntryOf(path)) return
+    if (library && typeof library.loadTree === 'function') void library.loadTree(path)
+    // library.items 变化（历史刷新 / 树回填落地）后复查一次；gallery 由 items 派生，不单列依赖。
+  }, [focus, library.items])
 
   /** 对比原图：只对有 sourceImage 的派生版本出现，先确保舞台停在这张图，再开关对比层。 */
   function compareFocus(entry) {

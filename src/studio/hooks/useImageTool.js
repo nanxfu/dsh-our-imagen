@@ -24,7 +24,7 @@
 
 import React from 'react'
 
-import { LIMITS, OUTPAINT } from '../../../shared/contract.js'
+import { LIMITS, OUTPAINT, OUTPAINT_ENGINE } from '../../../shared/contract.js'
 import { negativePromptActive } from '../../../shared/models-guide.js'
 
 import { submitGenerate } from '../../api/resources.js'
@@ -113,8 +113,11 @@ function targetOf(entry) {
 /** 工具当前可选的预设：只保留支持该工具能力的模型（inpaintOnly 不进整图重绘）。 */
 function presetsForTool(list, tool) {
   if (!tool || !tool.capability) return []
-  // 局部重绘与扩图都提交蒙版，可选模型口径一致（都要求 supportsInpaint）。
-  if (tool.id === 'inpaint' || tool.id === 'outpaint') {
+  if (tool.id === 'outpaint') {
+    const modern = list.find((item) => item.id === OUTPAINT_ENGINE.presetId)
+    return modern ? [modern] : list.filter((item) => item.supportsInpaint === true)
+  }
+  if (tool.id === 'inpaint') {
     return list.filter((item) => item.supportsInpaint === true)
   }
   if (tool.id === 'img2img') {
@@ -528,9 +531,10 @@ export function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted
     if (!canvas) {
       const image = normalizeMaskData(candidate.image)
       const mask = normalizeMaskData(candidate.mask)
-      if (!image || !mask) return { ok: false, reason: 'invalid' }
-      if (base64BytesOf(image) > Number(LIMITS.reference.maxBytes)) return { ok: false, reason: 'too_large' }
-      if (base64BytesOf(mask) > Number(LIMITS.mask.maxBytes)) return { ok: false, reason: 'too_large' }
+      if (!image) return { ok: false, reason: 'invalid' }
+      const maxImageBytes = mask ? Number(LIMITS.reference.maxBytes) : Number(LIMITS.referenceImages.maxBytes)
+      if (base64BytesOf(image) > maxImageBytes) return { ok: false, reason: 'too_large' }
+      if (mask && base64BytesOf(mask) > Number(LIMITS.mask.maxBytes)) return { ok: false, reason: 'too_large' }
       return { ok: false, reason: 'invalid' }
     }
     setDraft((prev) => ({ ...prev, canvas }))

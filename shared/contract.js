@@ -12,7 +12,7 @@
  *    随注入配置下发（见 `remote/daemon.py` 的 config 解析）。
  */
 
-export const VERSION = '0.12.0'
+export const VERSION = '0.13.0'
 
 /**
  * Host HTTP 路由表（index.js 注册时必须逐一对应）。
@@ -193,6 +193,25 @@ export const OUTPAINT = {
   // 只属于 Host/Client，不经 `daemonContract()` 下发远端。
   content: { fields: ['x', 'y', 'width', 'height'], precision: 4 },
 }
+
+/**
+ * 现代扩图引擎配置（阶段十六真机验证通过：FLUX.2 Klein 4B + fal Outpaint LoRA，绿边画布法）。
+ *
+ * Client 导出 `#00FF00` 纯绿留白画布（长边缩至 `referenceMaxEdge` 以内），Host 按 `presetId`
+ * 将 `lora` 与 `referenceImages` 组装进远端请求；用户未填补充描述时发送固定指令 `prompt`，
+ * 填写了则拼接追加（不会污染 `meta.params.prompt`）。
+ */
+export const OUTPAINT_ENGINE = Object.freeze({
+  presetId: 'flux2-klein-4b',
+  lora: Object.freeze({
+    repo: 'fal/flux-2-klein-4B-outpaint-lora',
+    weight: 'flux-outpaint-lora.safetensors',
+    scale: 1.1,
+  }),
+  prompt: 'Fill the green spaces according to the image',
+  green: '#00FF00',
+  referenceMaxEdge: LIMITS.referenceImages.maxEdge,
+})
 
 /**
  * 推理加速开关（阶段十五 Phase C1 脚手架，对应 docs/INFERENCE_ACCELERATION_RESEARCH.md 的 P0 项）。

@@ -98,20 +98,22 @@ export function ToolSubmitBar(props) {
           />
         </label>
 
-        <label className="ofs-tool-strength">
-          <span className="ofs-tool-label">{t('studio.imageTool.strengthLabel')}</span>
-          <input
-            type="range"
-            className="ofs-tool-range"
-            min={LIMITS.strength.min}
-            max={max}
-            step={LIMITS.strength.step}
-            value={value}
-            aria-label={t('studio.imageTool.strengthLabel')}
-            onChange={(event) => onStrengthChange(event.target.value)}
-          />
-          <b className="ofs-tool-readout">{value.toFixed(2)}</b>
-        </label>
+        {tool && tool.id !== 'outpaint' ? (
+          <label className="ofs-tool-strength">
+            <span className="ofs-tool-label">{t('studio.imageTool.strengthLabel')}</span>
+            <input
+              type="range"
+              className="ofs-tool-range"
+              min={LIMITS.strength.min}
+              max={max}
+              step={LIMITS.strength.step}
+              value={value}
+              aria-label={t('studio.imageTool.strengthLabel')}
+              onChange={(event) => onStrengthChange(event.target.value)}
+            />
+            <b className="ofs-tool-readout">{value.toFixed(2)}</b>
+          </label>
+        ) : null}
 
         <div className="ofs-tool-actions">
           <button

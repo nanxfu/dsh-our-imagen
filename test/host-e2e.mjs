@@ -1451,6 +1451,9 @@ async function main() {
       assert.ok(call.system.includes('【组织与沟通策略】'), 'system prompt 应有组织与沟通策略段')
       assert.ok(call.system.includes('Animagine XL 3.1'), '模型手册应带当前模型画像')
       assert.ok(call.system.includes('RealVisXL V5.0'), '模型手册应带全库模型')
+      // 模型目录按当前算力来源与主表单可选项过滤：inpaintOnly 专用重绘权重不进目录。
+      assert.ok(call.system.includes('当前算力来源 kaggle'), '模型手册应说明目录已按算力来源过滤')
+      assert.ok(!call.system.includes('sdxl-inpaint'), '模型目录不得包含 inpaintOnly 专用权重（文生图选不了）')
       assert.ok(call.system.includes('Danbooru'), 'danbooru 预设应要求标签流')
       assert.ok(call.system.includes('masterpiece, best quality, highres'), '质量词前缀应写进 system prompt')
       assert.ok(call.system.includes('summary'), 'system prompt 应约定 summary 字段')
@@ -1599,6 +1602,22 @@ async function main() {
       })
       assert.equal(dropped.body.clarify, null, '有效选项不足 2 条时丢弃澄清')
       assert.equal(dropped.body.modelHint, null, '不存在的模型 id 应丢弃')
+
+      // 模型编造目录外的目标也要拦：inpaintOnly 专用重绘权重主表单不可选，不作为建议透传。
+      fake.setLlm(createFakeLlm(JSON.stringify({
+        prompt: 'x',
+        summary: 'y',
+        ratio: '',
+        negative: '',
+        clarify: null,
+        modelHint: { presetId: 'sdxl-inpaint', reason: '局部重绘更自然' },
+      })))
+      const inpaintHint = await json(host.origin, '/imagen-api/intent', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: '画个雨夜街道', presetId: 'sdxl-lightning' }),
+      })
+      assert.equal(inpaintHint.body.modelHint, null, 'inpaintOnly 预设不得作为 modelHint 目标')
 
       // 模型仍返回旧字段（style / clarify.field）时不崩、按 v2 归一。
       fake.setLlm(createFakeLlm(JSON.stringify({

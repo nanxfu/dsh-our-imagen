@@ -27,12 +27,10 @@ const NOW = Date.parse('2026-11-09T05:05:00.000Z')
 
 /** 合法蒙版 base64（逻辑层只校验 base64 形状，不解码 PNG）。 */
 const MASK_DATA = Buffer.from('fake-inpaint-mask').toString('base64')
-/** 扩图合成画布（1024² 四边扩 20% 的版面）。 */
+/** 扩图合成画布（1024² 四边扩 20% 的版面；现代引擎只导出纯绿留白图，不传 mask）。 */
 const CANVAS_IMAGE = Buffer.from('fake-outpaint-image').toString('base64')
-const CANVAS_MASK = Buffer.from('fake-outpaint-mask').toString('base64')
 const OUTPAINT_CANVAS = {
   image: CANVAS_IMAGE,
-  mask: CANVAS_MASK,
   width: 1232,
   height: 1232,
   content: { x: 104, y: 104, width: 1024, height: 1024 },
@@ -284,17 +282,16 @@ async function main() {
     assert.equal(ratios.length, 4)
     assert.deepEqual(ratios.map(textOf), ['四边扩20%', '16:9', '9:16', '4:3'])
     assert.equal(ratios[0].props['aria-pressed'], 'true')
-    // 默认选中 9 通道专用权重，强度 1.0、上限 inpaintMax。
-    assert.equal(harness.api().presetId, 'sdxl-inpaint')
-    assert.equal(harness.api().strength, 1.0)
-    assert.equal(byClassOne(next, 'ofs-tool-range').props.max, LIMITS.strength.inpaintMax)
+    // 默认选中现代 FLUX.2 Klein 4B 扩图引擎，不渲染无意义的强度滑块。
+    assert.equal(harness.api().presetId, 'flux2-klein-4b')
+    assert.equal(byClass(next, 'ofs-tool-range').length, 0, '现代扩图不走 strength 参数，应隐藏强度滑块')
     // 画布还没导出：提交禁用并提示 blockedCanvas。
     assert.equal(byClassOne(next, 'ofs-tool-submit').props.disabled, true)
     assert.ok(textOf(byClassOne(next, 'ofs-tool-blocked')).includes('扩图画布尚未生成'))
-    assert.ok(ui.toasts.some((text) => text.includes('已自动改用')), '切到专用权重时给一次自动换模提示')
+    assert.ok(ui.toasts.some((text) => text.includes('已自动改用')), '切到现代扩图引擎时给一次自动换模提示')
   })
 
-  await check('扩图：切比例后导出画布可提交，请求体带合成图 / 蒙版 / 来源路径', async () => {
+  await check('扩图：切比例后导出画布可提交，请求体带纯绿合成画布 / 来源路径', async () => {
     const { tree, harness } = await mountStage()
     buttonByText(tree, '扩图').props.onClick()
     let next = await refresh()
@@ -311,7 +308,7 @@ async function main() {
     const meta = textOf(byClassOne(next, 'ofs-tool-mask'))
     assert.ok(meta.includes('新增画面'), `覆盖率读数为「新增画面 x%」，实际：${meta}`)
     assert.ok(Math.abs(harness.api().coverage - 0.309158) < 0.000001, `覆盖率应约 30.9%，实际：${harness.api().coverage}`)
-    // 提交：请求体走 outpaint 分支。
+    // 提交：请求体走 outpaint 分支（现代 FLUX 引擎）。
     byClassOne(next, 'ofs-tool-submit').props.onClick()
     await client.settle()
     next = await refresh()
@@ -319,14 +316,14 @@ async function main() {
     assert.ok(request, '应发出 POST /imagen-api/generate')
     const body = request.body
     assert.equal(body.tool, 'outpaint')
-    assert.equal(body.presetId, 'sdxl-inpaint')
-    assert.equal(body.prompt, '测试用的荷花池塘', '工具提示词为空时回退目标作品原提示词')
+    assert.equal(body.presetId, 'flux2-klein-4b')
+    assert.equal(body.prompt, '', '现代扩图留空不沿用旧图提示词，由 Host 拼 LoRA 触发词')
     assert.equal(body.width, 1232)
     assert.equal(body.height, 1232)
     assert.equal(body.reference.image, CANVAS_IMAGE)
-    assert.equal(body.reference.mask, CANVAS_MASK)
+    assert.equal(body.reference.mask, undefined)
+    assert.equal(body.reference.strength, undefined)
     assert.equal(body.reference.sourcePath, image.path)
-    assert.equal(body.reference.strength, 1.0)
     assert.equal(harness.api().editorOpen, false)
     assert.equal(byClass(next, 'ofs-outpaint-editor').length, 0)
     assert.equal(harness.api().pendingTool.sourceMode, 'outpaint')
@@ -648,6 +645,8 @@ async function main() {
         ok: true,
         blob: async () => ({}),
       })
+      let filledStyle = ''
+      let drawnArgs = null
       globalThis.document.createElement = (tag) => {
         if (tag !== 'canvas') return {}
         let hasTaint = false
@@ -655,10 +654,16 @@ async function main() {
           width: 0,
           height: 0,
           getContext: () => ({
-            fillStyle: '',
+            set fillStyle(val) {
+              filledStyle = val
+            },
+            get fillStyle() {
+              return filledStyle
+            },
             fillRect() {},
-            drawImage(source) {
+            drawImage(source, dx, dy, dw, dh) {
               if (source && source.tainted) hasTaint = true
+              else drawnArgs = { dx, dy, dw, dh }
             },
           }),
           toDataURL() {
@@ -688,7 +693,9 @@ async function main() {
       const applied = appliedList[appliedList.length - 1] || null
       assert.ok(applied, '缓存命中 + SecurityError 跨源兜底后仍应成功导出画布')
       assert.equal(applied.image, 'AAAA')
-      assert.equal(applied.mask, 'AAAA')
+      assert.equal(applied.mask, undefined, '现代绿边扩图画布不再导出多余蒙版')
+      assert.equal(filledStyle, '#00FF00', '现代扩图画布应以 #00FF00 纯绿底导出')
+      assert.ok(drawnArgs && drawnArgs.dw <= 1024 && drawnArgs.dh <= 1024, '导出的参考图长边应缩放到 1024 以内')
       assert.equal(applied.width, 1232)
       assert.equal(applied.height, 928)
     } finally {

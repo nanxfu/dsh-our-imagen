@@ -137,7 +137,10 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
         count: intentCount(data.count),
         lockSeed: false,
         clarify: intentClarify(data.clarify),
-        modelHint: intentModelHint(data.modelHint, form.form.presetId),
+        // 二次归一带上当前算力来源：旧宿主没过滤 provider 时，客户端按同一份口径再拦一道。
+        modelHint: intentModelHint(data.modelHint, form.form.presetId, {
+          provider: state && typeof state.provider === 'string' ? state.provider : undefined,
+        }),
         source: data.source === 'model' ? 'model' : 'local',
       }])
       return

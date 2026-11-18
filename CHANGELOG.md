@@ -1,6 +1,6 @@
 # 变更记录
 
-## 0.13.0 — 未发布（2026-11-18）
+## 0.13.0 — 2026-11-18
 
 > 主题：图像后处理闭环与模型原生参考生图。接通舞台动作坞预留的「高清放大」与「扩图」：前者是独立的轻量超分推理（不加载扩散模型），后者由客户端合成画布、复用已验证的 9 通道局部重绘。随后完成 ROADMAP 第十五项 Phase C：引入 `FLUX.2 Klein 4B` 的原生参考生图能力（`supportsReference`）、左栏参考图槽与真机同 Seed 推理加速对照，并收口工作台焦点 / 来源同步与 `tEXt` 元数据带来的遗留问题。对应 ROADMAP 第十五项 Phase B / Phase C，设计依据见 [docs/STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](docs/STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md) §四、加速数据见 [docs/INFERENCE_ACCELERATION_RESEARCH.md](docs/INFERENCE_ACCELERATION_RESEARCH.md) §4.3。
 
@@ -103,6 +103,21 @@
 - **现代扩图引擎（`--outpaint-lora`，`bench-results/gpu-live/2026-11-18T08-00-07/`）**：源图 `sdxl-lightning` 864²（加载 44.6s / 出图 15.82s）→ 绿边画布 1536×864（绿区 43.75%，PNG 1.40 MB）→ 参考图 1024×576（640 KB）→ flux2 + LoRA 提交 1.55s / 加载 33.8s（含挂载，权重命中缓存）/ 推理 22.5s / wall 62.4s；输出严格 1536×864（PNG 1,414,089 B）；绿边残留 0.00%（exact+near 均为 0）、接缝比 左 1.15 / 右 1.14、内容区逐通道色偏 ΔR -1.55 / ΔG -1.34 / ΔB +3.47（`maxAbsDelta 3.47`）、内容区平均差 12.87 / 核心区 13.30；显存 `max_allocated` 9348 → 10701 MiB（`reserved` +1484 MiB）。对比 `sdxl-inpaint` 历史 4 样本中位 35.31s → **提速 1.57×**。
 - **推理缓存探针（`--accel-cache`，`bench-results/gpu-live/2026-11-18T08-05-25/`）**：flux2-klein-4b 1024² / 4 步 / seed 42，每档 2 轮；off 13.27 / 9.38s（中位 11.33），on 9.57 / 9.76s（中位 9.66），两档输出逐字节相同（PNG 1,905,413 B，MAE 0）、峰值显存同为 7928 MiB；远端日志 `[accel] WARN cache 不适用：block 输出形状混合（tensor 与 (encoder, hidden) 元组并存），firstBlock 不支持` → **缓存未生效，1.17× 为冷启动噪声，不构成加速收益**。
 - **FLUX.2 Klein 9B（Colab A100）**：**受平台容量限制未取得 measured，本轮不发布资产**。2026-11-18 16:06~17:49，A100+highRam 正式冒烟 19 次与探针 2 次全部 `POST /tun/m/assign → 503`，A100 不带 highRam 3 次同样 503，G4 不带 hm 503 / 带 hm 400（档位不可用）；唯一一次 A100+hm 分配成功（16:11 探针，`machineShape=1`，3.9s，已立即释放）证明账号与档位链路正常。L4 兜底分配成功但加载阶段 OOM（可用 22.03 GiB / 权重 32.32 GiB），实例已释放。全程 `assignments=0`、无活跃 endpoint；CCU 197.5556 → 197.4744（净 0.0813 CU，仅 L4 加载尝试产生）。`node tools/colab/smoke-provider.mjs --check --gpu A100 --high-ram --preset flux2-klein-9b` 全 PASS，工具与配置就绪，只欠平台容量；草稿与复测命令见 [ROADMAP 十六](docs/ROADMAP.md)。
+
+#### 修复（检阅反馈，第四轮：对话与 Agent 工具链边界，2026-11-18）
+
+> 背景：对对话与 Agent 工具链的边界审计发现 3 处问题；同轮核查确认 `lib/tools.js` 的 `scanHistory(ctx, limit)` 传参与 `lib/output.js` 兼容数字 / 对象两种入参，均有效、无需改动。逐项修复如下，交互规范见 [SPEC.md](docs/SPEC.md) §5.19.3 / §5.22.5。
+
+- **聚焦视图在历史未落入已加载分页时丢失 item**：`ChatPanel.focusEntryOfPath()` 在 `libraryEntryOf(focus.path)` 找不到记录（`/history` 尚未刷新完成，或该图在已加载分页之外）时返回 `{ image, item: null }`，导致聚焦卡的「对比原图」不出现、点「重新生成」因缺少提示词失败。`ChatPanel` 新增按需回填 effect：聚焦路径不在 `library.items` / `gallery` 时按路径调用 `library.loadTree(path)`——与版本面板同一通道（`GET /history/tree` 按图片路径取回所属条目并入已加载分页），合并后的重渲染即可拿到完整 `{ image, item }`；条目已在分页内不再请求，旧宿主没有该路由（404）时 `loadTree` 只降级一次、回到栈项兜底。
+- **Agent 文生图 schema 从源头剔除 inpaintOnly 预设**：`lib/tools.js` 的 `imagen_generate` / `imagen_batch` `presetId` 枚举与 `imagen_generate` 描述里的模型库改用同一份「可文生图预设」清单（契约 `PRESETS` 剔除 `inpaintOnly`，当前即 `sdxl-inpaint`），不再依赖宿主入队时运行时拒绝；`imagen_session`（专用重绘权重允许预载给舞台图片工具）与 `imagen_recipes`（只读检索）仍列全部预设。描述目录与枚举同口径后，Agent 不会再被介绍一个 schema 必然拒绝的目标。
+- **意图模型推荐感知当前算力来源 provider**：`shared/models-guide.js` 新增 `providerIdOf` / `presetProvidersOf` / `presetAvailableForProvider` / `presetProviderRestrictionOf`（providers 能力位的 shared 唯一判定；`src/logic/preset.js` 改为薄 re-export，不再维护第二套），`modelCatalogText()` 支持 `textToImageOnly` / `provider` / `presets` 过滤。`POST /imagen-api/intent` 由 `index.js` 注入 `getProvider`（运行设置的实时读数）：system prompt 的模型目录只列当前来源可运行、主表单可选的文生图模型；`normalizeModelHint` 按同口径丢弃 `providers` 不含当前来源与 `inpaintOnly` 的目标，客户端 `intentModelHint` 二次归一带上 `state.provider` 给旧宿主兜底。当前发布资产均未声明 `providers`（暂无实际故障），该过滤为后续仅 Colab 模型（如 9B）就位。
+- **测试**：`agent-batch` 18 → 19（generate 枚举 / 描述目录剔除 `sdxl-inpaint`、会话与配方保持全量的对照断言）；`check-client-logic` 93 → 94（模型目录过滤、modelHint 能力位判定与薄 re-export 同函数断言）；`check-client-chat` 20 → 21（聚焦路径缺失触发按路径回填、条目已在分页不请求、旧宿主替身缺 `loadTree` 安全降级）；`host-e2e` 63（扩展意图断言：system prompt 目录不含 `sdxl-inpaint` 且标注当前算力来源、inpaintOnly 目标的 modelHint 被丢弃）。全量 `npm test` 40/40 步全绿（含契约与 Python 远端 518 项）。
+
+#### 切换与修复（发版收口：现代扩图引擎启用 + 导入图与助手协同修复，2026-11-18）
+
+- **现代扩图引擎切换为默认路径（`FLUX.2 Klein 4B + fal/flux-2-klein-4B-outpaint-lora`）**：针对实机裸导入图走 `sdxl-inpaint` 扩图易出现木框/裱边伪影与边缘色块问题，正式采用阶段十六已验证的纯绿 `#00FF00` 画布条件生图路径。`shared/contract.js` 新增 `OUTPAINT_ENGINE`；`OutpaintEditor` 导出长边 `≤ 1024` 的纯绿留白画布（不再生成多余蒙版），`ToolSubmitBar` 在扩图下隐藏无意义的 `strength` 滑块；`JobQueue.taskPayload` 按 `presetId: flux2-klein-4b` + 无蒙版画布自动注入 `pipeline.lora` 并通过 `referenceImages` 下发（留空自动发 LoRA 触发词，输入描述则拼接追加、不污染 `meta.params.prompt`）；`generate.js` 将 `outpaint` 产物纳入非扩散回填链路。
+- **裸导入图与工具/助手协同修复**：`useImageTool.targetOf` 接入 `isBareImportOf`，拦截裸本地导入图把随机文件名带入图片工具提示词；`toolPromptPlaceholderOf` 按工具与底图是否有原提示词分流占位文案，消除「提示留空沿用但无原提示词又拦下」的冲突；`ChatPanel.compareFocus` 对比原图前同步切回舞台焦点；`useChatThread` 在助手确认卡覆写表单前托管脏草稿并清除旧 `origin`，`useStudioForm` 补齐 `draftEditing` 暴露与同步 `ref` 更新。
+- **验证**：`image-tool-render`（16/16）、`image-tool`、`jobs-wait`、`check-client-chat` 同步补齐回归断言；全量 `npm test` 40/40 步与 `npm run package` 打包通过后正式发布 `0.13.0`。
 
 ## 0.12.0 — 2026-11-18
 

@@ -17,7 +17,7 @@
  * 客户端合成画布 + 蒙版后按普通 inpaint 提交）。
  */
 
-import { LIMITS, OUTPAINT, UPSCALE } from '../../shared/contract.js'
+import { LIMITS, OUTPAINT, OUTPAINT_ENGINE, UPSCALE } from '../../shared/contract.js'
 
 import { clampInt, clampNumber, clampSize } from './clamp.js'
 import { positiveSize } from './format.js'
@@ -93,7 +93,7 @@ export const IMAGE_TOOLS = Object.freeze([
     form: 'canvas',
     group: 'process',
     icon: 'frame',
-    capability: 'supportsInpaint',
+    capability: 'supportsReference',
     labelKey: 'studio.imageTool.outpaint',
     ready: true,
   }),
@@ -155,7 +155,12 @@ export function toolPresetOf(presets, currentId, toolId) {
   }
 
   if (tool.id === 'outpaint') {
-    // 扩图优先专用权重：9 通道 inpaint 底座对「大片新增区域」的融合明显更好。
+    // 现代扩图引擎：优先固定选用 FLUX.2 Klein 4B + Outpaint LoRA（纯绿画布条件生图）；
+    // 预设列表里缺失它时（如老旧测试替身），再按顺序回退专用 inpaint / 通用垫图。
+    const modern = list.find((item) => item.id === OUTPAINT_ENGINE.presetId) || null
+    if (modern) {
+      return { preset: modern, switched: !current || modern.id !== current.id, fallback: false }
+    }
     const native = list.find((item) => item.id === INPAINT_PRESET_ID && supportsInpaint(item)) || null
     if (native) {
       return { preset: native, switched: !current || native.id !== current.id, fallback: false }
@@ -230,12 +235,13 @@ export function toolPromptFallback(targetPrompt) {
  *    避免一边显示「留空则沿用原作品提示词」、一边拦截无提示词的自相矛盾。
  */
 export function toolPromptPlaceholderOf({ t, toolId, targetPrompt }) {
+  if (toolId === 'outpaint') {
+    return typeof t === 'function' ? t('studio.outpaint.promptPlaceholderNoTarget') : ''
+  }
   const own = toolPromptFallback(targetPrompt)
   if (own) return own
   if (typeof t !== 'function') return ''
-  return toolId === 'outpaint'
-    ? t('studio.outpaint.promptPlaceholderNoTarget')
-    : t('studio.imageTool.promptPlaceholderNoTarget')
+  return t('studio.imageTool.promptPlaceholderNoTarget')
 }
 
 /** 有限数值；缺失 / 非法返回 null（用于 steps / cfg 这类「没填就用预设推荐值」的字段）。 */
@@ -405,9 +411,12 @@ export function buildOutpaintToolBody(input) {
   if (!canvas) return null
 
   const typed = typeof source.prompt === 'string' ? source.prompt.trim() : ''
-  // 扩图对无原提示词的底图（如裸本地导入图）允许留空，自动补中性场景延展提示词。
-  const prompt = (typed || toolPromptFallback(source.targetPrompt) || OUTPAINT_DEFAULT_PROMPT)
-    .slice(0, LIMITS.prompt.maxChars)
+  const modernEngine = preset.id === OUTPAINT_ENGINE.presetId && !canvas.mask
+  // 现代扩图（FLUX.2 Klein 4B + Outpaint LoRA）留空时由 Host 组装触发词，不在 meta 里写英文触发词也不沿用旧提示词；
+  // 旧式 9 通道兜底预设仍允许回退原提示词 / 中性扩图词。
+  const prompt = modernEngine
+    ? typed.slice(0, LIMITS.prompt.maxChars)
+    : (typed || toolPromptFallback(source.targetPrompt) || OUTPAINT_DEFAULT_PROMPT).slice(0, LIMITS.prompt.maxChars)
 
   const rawStrength = finiteNumber(source.strength)
   const strength = clampMaskStrength(rawStrength === null ? Number(OUTPAINT.strength) : rawStrength, true)
@@ -419,7 +428,7 @@ export function buildOutpaintToolBody(input) {
     tool: 'outpaint',
     presetId: preset.id,
     prompt,
-    negativePrompt: source.negativeActive === true ? hintOf(preset) : '',
+    negativePrompt: !modernEngine && source.negativeActive === true ? hintOf(preset) : '',
     width: canvas.width,
     height: canvas.height,
     steps: presetSteps(preset),
@@ -430,9 +439,8 @@ export function buildOutpaintToolBody(input) {
     autoStart: true,
     reference: {
       image: canvas.image,
-      mask: canvas.mask,
+      ...(canvas.mask ? { mask: canvas.mask, strength } : (!modernEngine ? { strength } : {})),
       sourcePath: targetPath,
-      strength,
       ...(outpaintContent ? { outpaintContent } : {}),
     },
   }
@@ -462,9 +470,11 @@ export function normalizeOutpaintCanvas(input) {
   const source = input && typeof input === 'object' ? input : {}
   const image = normalizeMaskData(source.image)
   const mask = normalizeMaskData(source.mask)
-  if (!image || !mask) return null
-  if (base64BytesOf(image) > Number(LIMITS.reference.maxBytes)) return null
-  if (base64BytesOf(mask) > Number(LIMITS.mask.maxBytes)) return null
+  if (!image) return null
+  // 现代绿边画布走 referenceImages（上限 4 MiB），旧带蒙版路径走 reference（8 MiB）与 mask（2 MiB）。
+  const imageMaxBytes = mask ? Number(LIMITS.reference.maxBytes) : Number(LIMITS.referenceImages.maxBytes)
+  if (base64BytesOf(image) > imageMaxBytes) return null
+  if (mask && base64BytesOf(mask) > Number(LIMITS.mask.maxBytes)) return null
 
   const step = Number(LIMITS.width.step) > 0 ? Number(LIMITS.width.step) : 8
   const maxEdge = Number(OUTPAINT.maxEdge)
