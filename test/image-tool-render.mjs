@@ -717,8 +717,10 @@ async function main() {
       images: [bareImage],
     }
     harness.api().openTool('outpaint', { image: bareImage, item: bareItem })
-    await refresh()
+    let next = await refresh()
     assert.equal(harness.api().target.prompt, '', '裸导入图不应把文件名写入工具回退提示词')
+    const outpaintTextarea = byClassOne(next, 'ofs-tool-prompt-input')
+    assert.ok(outpaintTextarea && outpaintTextarea.props.placeholder.includes('留空则自动延续原图场景'), '裸导入图扩图应提示可选留空自动延续')
 
     const metaImage = { ...bareImage, path: 'imagen-output/20261118-02/01.png' }
     const metaItem = {
@@ -728,6 +730,11 @@ async function main() {
       params: { prompt: 'misty mountain train station at dawn', steps: 4, cfg: 0, seed: 42 },
       images: [metaImage],
     }
+    harness.api().openTool('inpaint', { image: bareImage, item: bareItem })
+    next = await refresh()
+    const inpaintBareTextarea = byClassOne(next, 'ofs-tool-prompt-input')
+    assert.ok(inpaintBareTextarea && inpaintBareTextarea.props.placeholder.includes('当前底图没有原提示词'), '裸导入图进局部重绘不应提示留空沿用原提示词')
+
     harness.api().openTool('inpaint', { image: metaImage, item: metaItem })
     await refresh()
     assert.equal(harness.api().target.prompt, 'misty mountain train station at dawn', '带 PNG 元数据的导入图应保留原生成提示词')

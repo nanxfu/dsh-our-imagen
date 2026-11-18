@@ -21,6 +21,7 @@ import {
   IMAGE_TOOL_FORMS,
   IMAGE_TOOL_GROUPS,
   IMAGE_TOOLS,
+  OUTPAINT_DEFAULT_PROMPT,
   buildImageToolBody,
   buildOutpaintToolBody,
   buildUpscaleToolBody,
@@ -30,6 +31,7 @@ import {
   normalizeOutpaintCanvas,
   toolPresetOf,
   toolPromptFallback,
+  toolPromptPlaceholderOf,
   toolStrengthDefaultOf,
   toolStrengthMaxOf,
   workKeyOf,
@@ -424,8 +426,21 @@ async function main() {
     assert.equal(buildOutpaintToolBody({ ...base, targetPath: '' }), null)
     assert.equal(buildOutpaintToolBody({ ...base, preset: null }), null)
     assert.equal(buildOutpaintToolBody({ ...base, canvas: null }), null)
-    assert.equal(buildOutpaintToolBody({ ...base, prompt: '', targetPrompt: '' }), null)
+    const fallbackOutpaint = buildOutpaintToolBody({ ...base, prompt: '', targetPrompt: '' })
+    assert.ok(fallbackOutpaint, '扩图底图无原提示词且留空时应自动回退中性延展提示词')
+    assert.equal(fallbackOutpaint.prompt, OUTPAINT_DEFAULT_PROMPT)
     assert.equal(buildOutpaintToolBody(null), null)
+    // 输入框占位文案按工具与是否有原提示词区分，避免提示矛盾。
+    const fakeT = (key) => key
+    assert.equal(toolPromptPlaceholderOf({ t: fakeT, toolId: 'outpaint', targetPrompt: '一只荷花' }), '一只荷花')
+    assert.equal(
+      toolPromptPlaceholderOf({ t: fakeT, toolId: 'outpaint', targetPrompt: '' }),
+      'studio.outpaint.promptPlaceholderNoTarget',
+    )
+    assert.equal(
+      toolPromptPlaceholderOf({ t: fakeT, toolId: 'inpaint', targetPrompt: '' }),
+      'studio.imageTool.promptPlaceholderNoTarget',
+    )
   })
 
   await check('normalizeOutpaintCanvas：base64 / 体积 / 8 对齐 / 画布边界校验与覆盖率', () => {
@@ -545,7 +560,7 @@ async function main() {
     }), 'studio.imageTool.upscaleTooLarge')
   })
 
-  await check('imageToolBlockedKeyOf：outpaint 依次检查预设 / 画布 / 提示词', () => {
+  await check('imageToolBlockedKeyOf：outpaint 依次检查预设 / 画布（空提示词允许留空延展）', () => {
     const base = {
       tool: 'outpaint',
       targetPath: 'imagen-output/a/01.png',
@@ -562,7 +577,7 @@ async function main() {
       ...base,
       prompt: '',
       targetPrompt: '',
-    }), 'studio.imageTool.blockedNoPrompt')
+    }), '', '裸导入图等无原提示词底图扩图时不应再以 blockedNoPrompt 拦截')
     // 用户输入了提示词时不再依赖作品原提示词。
     assert.equal(imageToolBlockedKeyOf({ ...base, targetPrompt: '', prompt: '把天空换成晚霞' }), '')
     // 专用 inpaint 权重在扩图下不要求涂抹蒙版（画布自带蒙版），不会命中 onlyHint。

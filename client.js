@@ -569,6 +569,7 @@ var zh = {
   "studio.imageTool.presetLabel": "模型",
   "studio.imageTool.promptLabel": "修改描述",
   "studio.imageTool.promptPlaceholder": "留空则沿用原作品提示词",
+  "studio.imageTool.promptPlaceholderNoTarget": "请填写修改描述（当前底图没有原提示词）",
   "studio.imageTool.strengthLabel": "重绘强度",
   "studio.imageTool.submit": "重绘",
   "studio.imageTool.exit": "取消",
@@ -721,6 +722,7 @@ var zh = {
   "studio.outpaint.ratio.9x16": "9:16",
   "studio.outpaint.ratio.4x3": "4:3",
   "studio.outpaint.coverage": "新增画面 {percent}%",
+  "studio.outpaint.promptPlaceholderNoTarget": "可选：描述要延展的内容（留空则自动延续原图场景）",
   "studio.outpaint.center": "回中",
   "studio.outpaint.dragHint": "拖动内容框调整留白位置",
   "studio.outpaint.canvasLabel": "扩图画布预览：内容框之外是新增区域。",
@@ -1239,6 +1241,7 @@ var en = {
   "studio.imageTool.presetLabel": "Model",
   "studio.imageTool.promptLabel": "Change description",
   "studio.imageTool.promptPlaceholder": "Leave empty to reuse the original prompt",
+  "studio.imageTool.promptPlaceholderNoTarget": "Write a change description (this image has no original prompt)",
   "studio.imageTool.strengthLabel": "Redraw strength",
   "studio.imageTool.submit": "Redraw",
   "studio.imageTool.exit": "Cancel",
@@ -1392,6 +1395,7 @@ var en = {
   "studio.outpaint.ratio.9x16": "9:16",
   "studio.outpaint.ratio.4x3": "4:3",
   "studio.outpaint.coverage": "New area {percent}%",
+  "studio.outpaint.promptPlaceholderNoTarget": "Optional: describe what to extend (leave empty to continue the scene naturally)",
   "studio.outpaint.center": "Center",
   "studio.outpaint.dragHint": "Drag the content frame to adjust the padding",
   "studio.outpaint.canvasLabel": "Outpaint canvas preview: the area outside the content frame is newly generated.",
@@ -9811,8 +9815,15 @@ function toolStrengthMaxOf(toolId, hasMask) {
   const inpaintMax = Number(LIMITS.strength.inpaintMax);
   return Number.isFinite(inpaintMax) ? Math.max(max, inpaintMax) : max;
 }
+var OUTPAINT_DEFAULT_PROMPT = "seamless extension of the existing scene, matching lighting, perspective, textures and atmosphere";
 function toolPromptFallback(targetPrompt) {
   return String(targetPrompt ?? "").trim().slice(0, LIMITS.prompt.maxChars);
+}
+function toolPromptPlaceholderOf({ t, toolId, targetPrompt }) {
+  const own = toolPromptFallback(targetPrompt);
+  if (own) return own;
+  if (typeof t !== "function") return "";
+  return toolId === "outpaint" ? t("studio.outpaint.promptPlaceholderNoTarget") : t("studio.imageTool.promptPlaceholderNoTarget");
 }
 function finiteNumber(value) {
   if (value === null || value === void 0 || value === "") return null;
@@ -9909,8 +9920,7 @@ function buildOutpaintToolBody(input) {
   const canvas = normalizeOutpaintCanvas(source.canvas);
   if (!canvas) return null;
   const typed = typeof source.prompt === "string" ? source.prompt.trim() : "";
-  const prompt = (typed || toolPromptFallback(source.targetPrompt)).slice(0, LIMITS.prompt.maxChars);
-  if (!prompt) return null;
+  const prompt = (typed || toolPromptFallback(source.targetPrompt) || OUTPAINT_DEFAULT_PROMPT).slice(0, LIMITS.prompt.maxChars);
   const rawStrength = finiteNumber(source.strength);
   const strength = clampMaskStrength(rawStrength === null ? Number(OUTPAINT.strength) : rawStrength, true);
   const outpaintContent = buildOutpaintContentBody(canvas);
@@ -10000,8 +10010,6 @@ function imageToolBlockedKeyOf(input) {
   }
   if (tool.id === "outpaint") {
     if (!normalizeOutpaintCanvas(source.canvas)) return "studio.outpaint.blockedCanvas";
-    const typedPrompt = typeof source.prompt === "string" ? source.prompt.trim() : "";
-    if (!typedPrompt && !toolPromptFallback(source.targetPrompt)) return "studio.imageTool.blockedNoPrompt";
     return "";
   }
   const typed = typeof source.prompt === "string" ? source.prompt.trim() : "";
@@ -12201,7 +12209,11 @@ function Stage(props) {
     }
   };
   const target = imageTool ? imageTool.target : null;
-  const promptPlaceholder = target && target.prompt || t("studio.imageTool.promptPlaceholder");
+  const promptPlaceholder = toolPromptPlaceholderOf({
+    t,
+    toolId: activeTool ? activeTool.id : "",
+    targetPrompt: target && target.prompt
+  });
   const editorKey = target && target.path ? target.path : "none";
   const editorNode = editorOpen ? activeTool.form === "canvas" ? activeTool.id === "outpaint" ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
     OutpaintEditor,

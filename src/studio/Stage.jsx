@@ -5,7 +5,7 @@ import React from 'react'
 import { INSPIRE_KEYS } from '../constants.js'
 import { formatText, formatSeconds, percentOf } from '../logic/format.js'
 import { referenceUrlOf } from '../logic/reference.js'
-import { IMAGE_TOOLS } from '../logic/imageTool.js'
+import { IMAGE_TOOLS, toolPromptPlaceholderOf } from '../logic/imageTool.js'
 import { normalizeOutpaintContent } from '../logic/outpaint.js'
 import { jobCountText } from '../logic/status.js'
 import { Icon } from './icons.jsx'
@@ -162,7 +162,11 @@ export function Stage(props) {
   }
 
   const target = imageTool ? imageTool.target : null
-  const promptPlaceholder = (target && target.prompt) || t('studio.imageTool.promptPlaceholder')
+  const promptPlaceholder = toolPromptPlaceholderOf({
+    t,
+    toolId: activeTool ? activeTool.id : '',
+    targetPrompt: target && target.prompt,
+  })
   // 画布编辑器内部有底图尺寸 / 加载态 / 画笔等本地状态：显式挂 key，换底图时整块重建，
   // 避免沿用上一张图的画布尺寸与「已加载」判断（阶段十五 Phase C0）。
   const editorKey = target && target.path ? target.path : 'none'

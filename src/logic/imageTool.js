@@ -209,6 +209,10 @@ export function toolStrengthMaxOf(toolId, hasMask) {
   return Number.isFinite(inpaintMax) ? Math.max(max, inpaintMax) : max
 }
 
+/** 扩图底图（如裸本地导入图）无原提示词时的中性场景延展默认提示词。 */
+export const OUTPAINT_DEFAULT_PROMPT =
+  'seamless extension of the existing scene, matching lighting, perspective, textures and atmosphere'
+
 /**
  * 提交提示词：工具输入为空时回退目标作品自己的提示词（Lead 决策 D2）。
  *
@@ -217,6 +221,21 @@ export function toolStrengthMaxOf(toolId, hasMask) {
  */
 export function toolPromptFallback(targetPrompt) {
   return String(targetPrompt ?? '').trim().slice(0, LIMITS.prompt.maxChars)
+}
+
+/**
+ * 工具提示词输入框占位文案：
+ *  - 底图自带原提示词时直接显示原提示词（留空沿用）；
+ *  - 裸导入图等无原提示词底图：扩图允许留空走自动延续，其余工具提示必填修改描述，
+ *    避免一边显示「留空则沿用原作品提示词」、一边拦截无提示词的自相矛盾。
+ */
+export function toolPromptPlaceholderOf({ t, toolId, targetPrompt }) {
+  const own = toolPromptFallback(targetPrompt)
+  if (own) return own
+  if (typeof t !== 'function') return ''
+  return toolId === 'outpaint'
+    ? t('studio.outpaint.promptPlaceholderNoTarget')
+    : t('studio.imageTool.promptPlaceholderNoTarget')
 }
 
 /** 有限数值；缺失 / 非法返回 null（用于 steps / cfg 这类「没填就用预设推荐值」的字段）。 */
@@ -386,8 +405,9 @@ export function buildOutpaintToolBody(input) {
   if (!canvas) return null
 
   const typed = typeof source.prompt === 'string' ? source.prompt.trim() : ''
-  const prompt = (typed || toolPromptFallback(source.targetPrompt)).slice(0, LIMITS.prompt.maxChars)
-  if (!prompt) return null
+  // 扩图对无原提示词的底图（如裸本地导入图）允许留空，自动补中性场景延展提示词。
+  const prompt = (typed || toolPromptFallback(source.targetPrompt) || OUTPAINT_DEFAULT_PROMPT)
+    .slice(0, LIMITS.prompt.maxChars)
 
   const rawStrength = finiteNumber(source.strength)
   const strength = clampMaskStrength(rawStrength === null ? Number(OUTPAINT.strength) : rawStrength, true)
@@ -511,8 +531,6 @@ export function imageToolBlockedKeyOf(input) {
   }
   if (tool.id === 'outpaint') {
     if (!normalizeOutpaintCanvas(source.canvas)) return 'studio.outpaint.blockedCanvas'
-    const typedPrompt = typeof source.prompt === 'string' ? source.prompt.trim() : ''
-    if (!typedPrompt && !toolPromptFallback(source.targetPrompt)) return 'studio.imageTool.blockedNoPrompt'
     return ''
   }
   const typed = typeof source.prompt === 'string' ? source.prompt.trim() : ''
