@@ -12,14 +12,14 @@
 
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { apply as applyPlugin } from '../index.js'
 import { invokeLlm } from '../lib/llm.js'
 import { createLogRoutes } from '../lib/routes/logs.js'
-import { normalizeSaveTo, resolveWorkspaceWritePath } from '../lib/paths.js'
+import { normalizeSaveTo, resolveOutputPath, resolveWorkspaceWritePath } from '../lib/paths.js'
 import { registerTools } from '../lib/tools.js'
 import { INTENT, LIMITS, UPSCALE, VERSION } from '../shared/contract.js'
 import { createCheckRunner } from './helpers/check.mjs'
@@ -941,6 +941,30 @@ async function main() {
     const escape = await resolveWorkspaceWritePath(fakeCtx, '../escape.png')
     assert.equal(escape.ok, false)
     assert.equal(escape.code, 'invalid_path')
+  })
+
+  await check('产物路径归一：工作区根为非规范形式时不逃逸出 imagen-output/', async () => {
+    // 回归：Windows runner 的 TEMP 可能是 8.3 短名（`C:\Users\RUNNER~1\...`），
+    // realpath 会还原成长名（`C:\Users\runneradmin\...`）；两者指向同一目录但词法不同。
+    // 这里用软链 / junction 别名稳定复现同一类偏差：工作区根非规范形式时，
+    // 相对路径必须仍以 imagen-output/ 开头，不能出现 `../`（否则入队校验会拒绝参考图）。
+    const realWs = join(workspace, '..', `imagen-paths-real-${process.pid}`)
+    const aliasWs = join(workspace, '..', `imagen-paths-alias-${process.pid}`)
+    const imageDir = join(realWs, 'imagen-output', '20260101-000000-alias')
+    await mkdir(imageDir, { recursive: true })
+    await writeFile(join(imageDir, '01.png'), headerOnlyPng(64, 48))
+    await symlink(realWs, aliasWs, 'junction')
+
+    try {
+      const aliasCtx = { get: (name) => (name === 'workingDirectory' ? { defaultDirectory: aliasWs } : undefined) }
+      const found = await resolveOutputPath(aliasCtx, 'imagen-output/20260101-000000-alias/01.png')
+      assert.ok(found, '别名工作区下的产物应能解析')
+      assert.equal(found.relative, 'imagen-output/20260101-000000-alias/01.png')
+      assert.ok(!found.relative.startsWith('..'), `相对路径不得逃逸：${found.relative}`)
+    } finally {
+      await rm(aliasWs, { recursive: true, force: true })
+      await rm(realWs, { recursive: true, force: true })
+    }
   })
 
   await check('HTTP 提交 saveTo：响应带 deliveredPaths，非法路径 400 invalid_path', async () => {
