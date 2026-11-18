@@ -602,6 +602,104 @@ async function main() {
     assert.equal(ratioOfTree(next), String(widePlan.width / widePlan.height), '换底图后画布比例取自新底图')
   })
 
+  await check('扩图编辑器：缓存命中（未触发 onLoad）与跨源画布污染兜底导出', async () => {
+    const { tree, harness } = await mountStage()
+    buttonByText(tree, '扩图').props.onClick()
+    let next = await refresh()
+    const editor = byClassOne(next, 'ofs-outpaint-editor')
+    assert.ok(editor)
+    const imgNode = byClassOne(next, 'ofs-outpaint-photo')
+    assert.equal(typeof imgNode.props.onLoad, 'function')
+
+    const appliedList = []
+    const Outpaint = client.components.OutpaintEditor
+    function EditorHarness() {
+      return client.react.createElement(Outpaint, {
+        t,
+        target: { path: 'imagen-output/job-1/07.png', url: 'http://127.0.0.1:5200/imagen-api/file?path=x', width: 1024, height: 768 },
+        tool: { id: 'outpaint', form: 'canvas', ready: true },
+        outpaint: { ratioId: 'source', anchor: { x: 0.5, y: 0.5 }, canvas: null },
+        onRatioChange() {},
+        onAnchorChange() {},
+        onCanvasApply(payload) {
+          appliedList.push(payload)
+          return { ok: true }
+        },
+      })
+    }
+    client.unmount()
+    const editorTree = await client.mountRaw(EditorHarness, {})
+
+    // mountRaw 之后再装 canvas / baseURI 替身（unmount + mountRaw 会重建假 document）。
+    const savedDocCreate = globalThis.document.createElement
+    const savedBaseUri = globalThis.document.baseURI
+    const savedCreateBitmap = globalThis.createImageBitmap
+    const savedFetch = globalThis.fetch
+    const taintedImg = { complete: true, naturalWidth: 1024, naturalHeight: 768, tainted: true }
+    try {
+      globalThis.document.baseURI = 'http://127.0.0.1:4100/'
+      globalThis.createImageBitmap = async () => ({
+        width: 1024,
+        height: 768,
+        tainted: false,
+        close() {},
+      })
+      globalThis.fetch = async () => ({
+        ok: true,
+        blob: async () => ({}),
+      })
+      globalThis.document.createElement = (tag) => {
+        if (tag !== 'canvas') return {}
+        let hasTaint = false
+        return {
+          width: 0,
+          height: 0,
+          getContext: () => ({
+            fillStyle: '',
+            fillRect() {},
+            drawImage(source) {
+              if (source && source.tainted) hasTaint = true
+            },
+          }),
+          toDataURL() {
+            if (hasTaint) {
+              const err = new Error('Tainted canvases may not be exported')
+              err.name = 'SecurityError'
+              throw err
+            }
+            return 'data:image/png;base64,AAAA'
+          },
+        }
+      }
+
+      const renderedImg = byClassOne(editorTree, 'ofs-outpaint-photo')
+      // 模拟浏览器缓存命中：不触发 onLoad，只经由回调 ref 传入已 complete 的 <img>，
+      // 再推进假时钟触发导出（期间 toDataURL 抛 SecurityError，走同源 fetch 兜底）。
+      assert.equal(typeof renderedImg.props.ref, 'function')
+      renderedImg.props.ref(taintedImg)
+      await client.rerenderRaw()
+      globalThis.fetch = async () => ({
+        ok: true,
+        blob: async () => ({}),
+      })
+      await client.advanceTimers(10)
+      await client.settle()
+      await client.rerenderRaw()
+      const applied = appliedList[appliedList.length - 1] || null
+      assert.ok(applied, '缓存命中 + SecurityError 跨源兜底后仍应成功导出画布')
+      assert.equal(applied.image, 'AAAA')
+      assert.equal(applied.mask, 'AAAA')
+      assert.equal(applied.width, 1232)
+      assert.equal(applied.height, 928)
+    } finally {
+      globalThis.document.createElement = savedDocCreate
+      globalThis.document.baseURI = savedBaseUri
+      globalThis.createImageBitmap = savedCreateBitmap
+      globalThis.fetch = savedFetch
+      void harness
+    }
+  })
+
   client.unmount()
   summary()
 }

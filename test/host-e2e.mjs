@@ -754,6 +754,7 @@ async function main() {
     const res = await fetch(new URL(image.url, host.origin))
     assert.equal(res.status, 200)
     assert.equal(res.headers.get('content-type'), 'image/png')
+    assert.equal(res.headers.get('access-control-allow-origin'), '*')
     const bytes = Buffer.from(await res.arrayBuffer())
     assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a')
   })

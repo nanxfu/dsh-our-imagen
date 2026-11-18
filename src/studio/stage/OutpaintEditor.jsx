@@ -14,6 +14,7 @@
 
 import React from 'react'
 
+import { apiUrl } from '../../api.js'
 import { formatText, percentOf } from '../../logic/format.js'
 import {
   OUTPAINT_EXPAND_ID,
@@ -23,6 +24,7 @@ import {
   outpaintPlanOf,
   outpaintRatioOptions,
 } from '../../logic/outpaint.js'
+import { referenceUrlOf } from '../../logic/reference.js'
 
 /** 工具栏触控热区：移动端最小 44px（与 MaskEditor 同一约定）。 */
 const HIT_STYLE = { minHeight: 44, minWidth: 44 }
@@ -42,6 +44,96 @@ function stripDataUrl(text) {
 function percentOfSize(value, total) {
   if (!(Number(total) > 0)) return '0%'
   return `${(Number(value) / Number(total)) * 100}%`
+}
+
+/**
+ * 把可读的图像源（HTMLImageElement / ImageBitmap）合成为扩图画布与蒙版 base64。
+ *
+ * 内容区先画、边缘延拓条带后画，两者互不重叠；`toDataURL` 放在同一个函数里，
+ * 遇到跨域画布污染（`SecurityError`）时会一起抛出给调用方走同源 fetch 兜底。
+ */
+function renderOutpaintDataUrls(doc, drawable, plan, sourceWidth, sourceHeight) {
+  const imageCanvas = doc.createElement('canvas')
+  imageCanvas.width = plan.width
+  imageCanvas.height = plan.height
+  const maskCanvas = doc.createElement('canvas')
+  maskCanvas.width = plan.width
+  maskCanvas.height = plan.height
+  const imageCtx = typeof imageCanvas.getContext === 'function' ? imageCanvas.getContext('2d') : null
+  const maskCtx = typeof maskCanvas.getContext === 'function' ? maskCanvas.getContext('2d') : null
+  if (!imageCtx || !maskCtx) return null
+  if (typeof imageCanvas.toDataURL !== 'function' || typeof maskCanvas.toDataURL !== 'function') return null
+
+  const scaleX = sourceWidth / plan.content.width
+  const scaleY = sourceHeight / plan.content.height
+  imageCtx.drawImage(drawable, plan.content.x, plan.content.y, plan.content.width, plan.content.height)
+  for (const strip of outpaintEdgeStripsOf(plan)) {
+    imageCtx.drawImage(
+      drawable,
+      strip.source.x * scaleX,
+      strip.source.y * scaleY,
+      strip.source.width * scaleX,
+      strip.source.height * scaleY,
+      strip.target.x,
+      strip.target.y,
+      strip.target.width,
+      strip.target.height,
+    )
+  }
+  maskCtx.fillStyle = '#ffffff'
+  maskCtx.fillRect(0, 0, plan.width, plan.height)
+  maskCtx.fillStyle = '#000000'
+  maskCtx.fillRect(plan.content.x, plan.content.y, plan.content.width, plan.content.height)
+
+  return {
+    image: stripDataUrl(imageCanvas.toDataURL('image/png')),
+    mask: stripDataUrl(maskCanvas.toDataURL('image/png')),
+    width: plan.width,
+    height: plan.height,
+    content: plan.content,
+  }
+}
+
+/** 从同源 / CORS 地址拉取干净像素，解决宿主与 fileUrl 跨源导致的 canvas 污染。 */
+async function fetchCleanDrawable(urls) {
+  if (typeof fetch !== 'function') return null
+  for (const url of urls) {
+    if (!url) continue
+    try {
+      const res = await fetch(url, { credentials: 'same-origin' })
+      if (!res || !res.ok) continue
+      const blob = await res.blob()
+      if (typeof createImageBitmap === 'function') {
+        const bitmap = await createImageBitmap(blob)
+        return {
+          drawable: bitmap,
+          width: bitmap.width,
+          height: bitmap.height,
+          dispose: () => { if (typeof bitmap.close === 'function') bitmap.close() },
+        }
+      }
+      if (typeof Image === 'function' && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+        const objectUrl = URL.createObjectURL(blob)
+        const loaded = await new Promise((resolve, reject) => {
+          const img = new Image()
+          img.onload = () => resolve(img)
+          img.onerror = () => reject(new Error('image_load_failed'))
+          img.src = objectUrl
+        }).finally(() => {
+          URL.revokeObjectURL(objectUrl)
+        })
+        return {
+          drawable: loaded,
+          width: loaded.naturalWidth,
+          height: loaded.naturalHeight,
+          dispose: () => {},
+        }
+      }
+    } catch {
+      // 当前候选地址失败，继续试下一个地址。
+    }
+  }
+  return null
 }
 
 /**
@@ -79,6 +171,15 @@ export function OutpaintEditor(props) {
   const dragAnchorRef = React.useRef(null)
   const applyRef = React.useRef(onCanvasApply)
   applyRef.current = onCanvasApply
+  const exportSeqRef = React.useRef(0)
+  const mountedRef = React.useRef(true)
+  React.useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      exportSeqRef.current += 1
+    }
+  }, [])
 
   const canEdit = Boolean(target && target.path && tool && tool.id === 'outpaint')
   const ratioId = outpaint && typeof outpaint.ratioId === 'string' && outpaint.ratioId
@@ -100,75 +201,10 @@ export function OutpaintEditor(props) {
     anchor: previewAnchor,
   })
 
-  /**
-   * 把当前版面合成两张画布并交给工具域。
-   *
-   * image = 黑底 + 原图（等比放进内容框）；黑边整体在蒙版内，不参与最终像素；
-   * mask = 白底 + 内容框涂黑（白 = 新增区域）。两张图与画布同尺寸，Host 直接按参考图 + 蒙版提交。
-   */
-  function exportCanvas() {
-    if (!plan.ok) return
-    const doc = typeof document === 'undefined' ? null : document
-    if (!doc || typeof doc.createElement !== 'function') return
-    const sourceImage = imageRef.current
-    if (!sourceImage || sourceImage.complete === false) return
-    const imageCanvas = doc.createElement('canvas')
-    imageCanvas.width = plan.width
-    imageCanvas.height = plan.height
-    const maskCanvas = doc.createElement('canvas')
-    maskCanvas.width = plan.width
-    maskCanvas.height = plan.height
-    const imageCtx = typeof imageCanvas.getContext === 'function' ? imageCanvas.getContext('2d') : null
-    const maskCtx = typeof maskCanvas.getContext === 'function' ? maskCanvas.getContext('2d') : null
-    if (!imageCtx || !maskCtx) return
-    if (typeof imageCanvas.toDataURL !== 'function' || typeof maskCanvas.toDataURL !== 'function') return
-
-    // 新增区域不再用纯黑填底：纯黑会在内容区边界制造硬跳变，VAE 的 latent 边界可能把它
-    // 混进过渡带。改为把内容框四边 1px 边缘像素向新增区拉伸（edge clamp），边界两侧
-    // 颜色连续；内容区先画、条带后画，两者互不重叠，顺序不影响像素。
-    const sourceWidth = natural.width > 0 ? natural.width : plan.content.width
-    const sourceHeight = natural.height > 0 ? natural.height : plan.content.height
-    const scaleX = sourceWidth / plan.content.width
-    const scaleY = sourceHeight / plan.content.height
-    try {
-      imageCtx.drawImage(
-        sourceImage,
-        plan.content.x,
-        plan.content.y,
-        plan.content.width,
-        plan.content.height,
-      )
-      for (const strip of outpaintEdgeStripsOf(plan)) {
-        imageCtx.drawImage(
-          sourceImage,
-          strip.source.x * scaleX,
-          strip.source.y * scaleY,
-          strip.source.width * scaleX,
-          strip.source.height * scaleY,
-          strip.target.x,
-          strip.target.y,
-          strip.target.width,
-          strip.target.height,
-        )
-      }
-    } catch {
-      // 底图还没解码好 / 画布被污染：等 onLoad 后的下一轮再导。
-      return
-    }
-    maskCtx.fillStyle = '#ffffff'
-    maskCtx.fillRect(0, 0, plan.width, plan.height)
-    maskCtx.fillStyle = '#000000'
-    maskCtx.fillRect(plan.content.x, plan.content.y, plan.content.width, plan.content.height)
-
-    const result = typeof applyRef.current === 'function'
-      ? applyRef.current({
-          image: stripDataUrl(imageCanvas.toDataURL('image/png')),
-          mask: stripDataUrl(maskCanvas.toDataURL('image/png')),
-          width: plan.width,
-          height: plan.height,
-          content: plan.content,
-        })
-      : null
+  /** 把导出的画布写回工具草稿，并把体积/合法性失败转成可见提示。 */
+  function commitExport(exported) {
+    if (!exported) return
+    const result = typeof applyRef.current === 'function' ? applyRef.current(exported) : null
     if (result && result.ok === false) {
       if (result.reason === 'too_large') setNotice(t('studio.outpaint.tooLarge'))
       else if (result.reason === 'invalid') setNotice(t('studio.outpaint.invalidCanvas'))
@@ -177,6 +213,80 @@ export function OutpaintEditor(props) {
     }
     setNotice('')
   }
+
+  /**
+   * 把当前版面合成两张画布并交给工具域。
+   *
+   * 优先直接从已加载的 `<img>` 绘制导出；若因跨源（如宿主 UI 与 fileUrl 端口/域不同）导致
+   * `toDataURL` 触发 `SecurityError` 画布污染，自动用同源 fetch 拉一次干净像素再导。
+   */
+  function exportCanvas() {
+    if (!plan.ok) return
+    const doc = typeof document === 'undefined' ? null : document
+    if (!doc || typeof doc.createElement !== 'function') return
+    const sourceImage = imageRef.current
+    if (!sourceImage || sourceImage.complete === false) return
+
+    const sourceWidth = natural.width > 0 ? natural.width : plan.content.width
+    const sourceHeight = natural.height > 0 ? natural.height : plan.content.height
+    const seq = ++exportSeqRef.current
+    try {
+      const exported = renderOutpaintDataUrls(doc, sourceImage, plan, sourceWidth, sourceHeight)
+      if (exported) commitExport(exported)
+      return
+    } catch {
+      // 直接导出受阻（常见于跨域 SecurityError）：走同源 fetch 兜底解码后再导出。
+    }
+
+    const sameOrigin = target && target.path && doc.baseURI ? apiUrl(referenceUrlOf(target.path)) : ''
+    const candidates = [sameOrigin, target && target.url ? target.url : ''].filter(
+      (value, index, list) => value && list.indexOf(value) === index,
+    )
+    if (candidates.length === 0) return
+
+    void fetchCleanDrawable(candidates).then((clean) => {
+      if (!mountedRef.current || seq !== exportSeqRef.current) {
+        if (clean) clean.dispose()
+        return
+      }
+      if (!clean) {
+        setNotice(t('studio.outpaint.invalidCanvas'))
+        return
+      }
+      try {
+        const w = clean.width > 0 ? clean.width : sourceWidth
+        const h = clean.height > 0 ? clean.height : sourceHeight
+        const exported = renderOutpaintDataUrls(doc, clean.drawable, plan, w, h)
+        if (exported) commitExport(exported)
+      } catch {
+        if (mountedRef.current && seq === exportSeqRef.current) setNotice(t('studio.outpaint.invalidCanvas'))
+      } finally {
+        clean.dispose()
+      }
+    })
+  }
+
+  /** 若图片已解码完成（缓存命中 / 同步就绪），同步标记 loaded 与真实自然宽高。 */
+  function syncLoadedFromNode(imageElement) {
+    if (!imageElement || !imageElement.complete) return
+    const width = Number(imageElement.naturalWidth)
+    const height = Number(imageElement.naturalHeight)
+    if (!(width > 0) || !(height > 0)) return
+    setLoaded((prev) => (prev ? prev : true))
+    setNatural((prev) => (prev.width === width && prev.height === height ? prev : { width, height }))
+  }
+
+  /** 节点 ref 同步兜底：某些 webview 对缓存命中的 <img> 直接标记 complete，不再触发 onLoad。 */
+  function attachImageNode(node) {
+    imageRef.current = node
+    syncLoadedFromNode(node)
+  }
+
+  // 双保险：若图片在 mount 与 effect 之间完成解码，再扫一遍 complete 状态。
+  const targetUrl = target && target.url ? target.url : ''
+  React.useEffect(() => {
+    syncLoadedFromNode(imageRef.current)
+  }, [targetUrl])
 
   // 参数 / 底图变化后下一帧导出（setTimeout 0）：连续点胶囊不会把每一下都算一遍。
   // 依赖键覆盖所有影响画布内容的量；`loaded` 保证底图可绘制后才导。
@@ -342,7 +452,7 @@ export function OutpaintEditor(props) {
             <div className="ofs-outpaint-preview" role="img" aria-label={t('studio.outpaint.canvasLabel')}>
               {target.url ? (
                 <img
-                  ref={imageRef}
+                  ref={attachImageNode}
                   src={target.url}
                   alt={target.prompt || t('studio.image.alt')}
                   className="ofs-outpaint-photo"

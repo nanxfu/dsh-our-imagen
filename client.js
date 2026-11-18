@@ -11618,6 +11618,87 @@ function percentOfSize(value, total) {
   if (!(Number(total) > 0)) return "0%";
   return `${Number(value) / Number(total) * 100}%`;
 }
+function renderOutpaintDataUrls(doc, drawable, plan, sourceWidth, sourceHeight) {
+  const imageCanvas = doc.createElement("canvas");
+  imageCanvas.width = plan.width;
+  imageCanvas.height = plan.height;
+  const maskCanvas = doc.createElement("canvas");
+  maskCanvas.width = plan.width;
+  maskCanvas.height = plan.height;
+  const imageCtx = typeof imageCanvas.getContext === "function" ? imageCanvas.getContext("2d") : null;
+  const maskCtx = typeof maskCanvas.getContext === "function" ? maskCanvas.getContext("2d") : null;
+  if (!imageCtx || !maskCtx) return null;
+  if (typeof imageCanvas.toDataURL !== "function" || typeof maskCanvas.toDataURL !== "function") return null;
+  const scaleX = sourceWidth / plan.content.width;
+  const scaleY = sourceHeight / plan.content.height;
+  imageCtx.drawImage(drawable, plan.content.x, plan.content.y, plan.content.width, plan.content.height);
+  for (const strip of outpaintEdgeStripsOf(plan)) {
+    imageCtx.drawImage(
+      drawable,
+      strip.source.x * scaleX,
+      strip.source.y * scaleY,
+      strip.source.width * scaleX,
+      strip.source.height * scaleY,
+      strip.target.x,
+      strip.target.y,
+      strip.target.width,
+      strip.target.height
+    );
+  }
+  maskCtx.fillStyle = "#ffffff";
+  maskCtx.fillRect(0, 0, plan.width, plan.height);
+  maskCtx.fillStyle = "#000000";
+  maskCtx.fillRect(plan.content.x, plan.content.y, plan.content.width, plan.content.height);
+  return {
+    image: stripDataUrl(imageCanvas.toDataURL("image/png")),
+    mask: stripDataUrl(maskCanvas.toDataURL("image/png")),
+    width: plan.width,
+    height: plan.height,
+    content: plan.content
+  };
+}
+async function fetchCleanDrawable(urls) {
+  if (typeof fetch !== "function") return null;
+  for (const url of urls) {
+    if (!url) continue;
+    try {
+      const res = await fetch(url, { credentials: "same-origin" });
+      if (!res || !res.ok) continue;
+      const blob = await res.blob();
+      if (typeof createImageBitmap === "function") {
+        const bitmap = await createImageBitmap(blob);
+        return {
+          drawable: bitmap,
+          width: bitmap.width,
+          height: bitmap.height,
+          dispose: () => {
+            if (typeof bitmap.close === "function") bitmap.close();
+          }
+        };
+      }
+      if (typeof Image === "function" && typeof URL !== "undefined" && typeof URL.createObjectURL === "function") {
+        const objectUrl = URL.createObjectURL(blob);
+        const loaded = await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("image_load_failed"));
+          img.src = objectUrl;
+        }).finally(() => {
+          URL.revokeObjectURL(objectUrl);
+        });
+        return {
+          drawable: loaded,
+          width: loaded.naturalWidth,
+          height: loaded.naturalHeight,
+          dispose: () => {
+          }
+        };
+      }
+    } catch {
+    }
+  }
+  return null;
+}
 function OutpaintEditor(props) {
   const {
     t,
@@ -11643,6 +11724,15 @@ function OutpaintEditor(props) {
   const dragAnchorRef = import_react33.default.useRef(null);
   const applyRef = import_react33.default.useRef(onCanvasApply);
   applyRef.current = onCanvasApply;
+  const exportSeqRef = import_react33.default.useRef(0);
+  const mountedRef = import_react33.default.useRef(true);
+  import_react33.default.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      exportSeqRef.current += 1;
+    };
+  }, []);
   const canEdit = Boolean(target && target.path && tool && tool.id === "outpaint");
   const ratioId = outpaint && typeof outpaint.ratioId === "string" && outpaint.ratioId ? outpaint.ratioId : OUTPAINT_EXPAND_ID;
   const anchor = outpaintAnchorOf(outpaint && outpaint.anchor);
@@ -11660,61 +11750,9 @@ function OutpaintEditor(props) {
     ratioId,
     anchor: previewAnchor
   });
-  function exportCanvas() {
-    if (!plan.ok) return;
-    const doc = typeof document === "undefined" ? null : document;
-    if (!doc || typeof doc.createElement !== "function") return;
-    const sourceImage = imageRef.current;
-    if (!sourceImage || sourceImage.complete === false) return;
-    const imageCanvas = doc.createElement("canvas");
-    imageCanvas.width = plan.width;
-    imageCanvas.height = plan.height;
-    const maskCanvas = doc.createElement("canvas");
-    maskCanvas.width = plan.width;
-    maskCanvas.height = plan.height;
-    const imageCtx = typeof imageCanvas.getContext === "function" ? imageCanvas.getContext("2d") : null;
-    const maskCtx = typeof maskCanvas.getContext === "function" ? maskCanvas.getContext("2d") : null;
-    if (!imageCtx || !maskCtx) return;
-    if (typeof imageCanvas.toDataURL !== "function" || typeof maskCanvas.toDataURL !== "function") return;
-    const sourceWidth = natural.width > 0 ? natural.width : plan.content.width;
-    const sourceHeight = natural.height > 0 ? natural.height : plan.content.height;
-    const scaleX = sourceWidth / plan.content.width;
-    const scaleY = sourceHeight / plan.content.height;
-    try {
-      imageCtx.drawImage(
-        sourceImage,
-        plan.content.x,
-        plan.content.y,
-        plan.content.width,
-        plan.content.height
-      );
-      for (const strip of outpaintEdgeStripsOf(plan)) {
-        imageCtx.drawImage(
-          sourceImage,
-          strip.source.x * scaleX,
-          strip.source.y * scaleY,
-          strip.source.width * scaleX,
-          strip.source.height * scaleY,
-          strip.target.x,
-          strip.target.y,
-          strip.target.width,
-          strip.target.height
-        );
-      }
-    } catch {
-      return;
-    }
-    maskCtx.fillStyle = "#ffffff";
-    maskCtx.fillRect(0, 0, plan.width, plan.height);
-    maskCtx.fillStyle = "#000000";
-    maskCtx.fillRect(plan.content.x, plan.content.y, plan.content.width, plan.content.height);
-    const result = typeof applyRef.current === "function" ? applyRef.current({
-      image: stripDataUrl(imageCanvas.toDataURL("image/png")),
-      mask: stripDataUrl(maskCanvas.toDataURL("image/png")),
-      width: plan.width,
-      height: plan.height,
-      content: plan.content
-    }) : null;
+  function commitExport(exported) {
+    if (!exported) return;
+    const result = typeof applyRef.current === "function" ? applyRef.current(exported) : null;
     if (result && result.ok === false) {
       if (result.reason === "too_large") setNotice(t("studio.outpaint.tooLarge"));
       else if (result.reason === "invalid") setNotice(t("studio.outpaint.invalidCanvas"));
@@ -11723,6 +11761,63 @@ function OutpaintEditor(props) {
     }
     setNotice("");
   }
+  function exportCanvas() {
+    if (!plan.ok) return;
+    const doc = typeof document === "undefined" ? null : document;
+    if (!doc || typeof doc.createElement !== "function") return;
+    const sourceImage = imageRef.current;
+    if (!sourceImage || sourceImage.complete === false) return;
+    const sourceWidth = natural.width > 0 ? natural.width : plan.content.width;
+    const sourceHeight = natural.height > 0 ? natural.height : plan.content.height;
+    const seq = ++exportSeqRef.current;
+    try {
+      const exported = renderOutpaintDataUrls(doc, sourceImage, plan, sourceWidth, sourceHeight);
+      if (exported) commitExport(exported);
+      return;
+    } catch {
+    }
+    const sameOrigin = target && target.path && doc.baseURI ? apiUrl(referenceUrlOf(target.path)) : "";
+    const candidates = [sameOrigin, target && target.url ? target.url : ""].filter(
+      (value, index, list) => value && list.indexOf(value) === index
+    );
+    if (candidates.length === 0) return;
+    void fetchCleanDrawable(candidates).then((clean) => {
+      if (!mountedRef.current || seq !== exportSeqRef.current) {
+        if (clean) clean.dispose();
+        return;
+      }
+      if (!clean) {
+        setNotice(t("studio.outpaint.invalidCanvas"));
+        return;
+      }
+      try {
+        const w = clean.width > 0 ? clean.width : sourceWidth;
+        const h2 = clean.height > 0 ? clean.height : sourceHeight;
+        const exported = renderOutpaintDataUrls(doc, clean.drawable, plan, w, h2);
+        if (exported) commitExport(exported);
+      } catch {
+        if (mountedRef.current && seq === exportSeqRef.current) setNotice(t("studio.outpaint.invalidCanvas"));
+      } finally {
+        clean.dispose();
+      }
+    });
+  }
+  function syncLoadedFromNode(imageElement) {
+    if (!imageElement || !imageElement.complete) return;
+    const width = Number(imageElement.naturalWidth);
+    const height = Number(imageElement.naturalHeight);
+    if (!(width > 0) || !(height > 0)) return;
+    setLoaded((prev) => prev ? prev : true);
+    setNatural((prev) => prev.width === width && prev.height === height ? prev : { width, height });
+  }
+  function attachImageNode(node) {
+    imageRef.current = node;
+    syncLoadedFromNode(node);
+  }
+  const targetUrl = target && target.url ? target.url : "";
+  import_react33.default.useEffect(() => {
+    syncLoadedFromNode(imageRef.current);
+  }, [targetUrl]);
   const exportKey = plan.ok ? `${plan.ratioId}|${plan.width}x${plan.height}|${plan.content.x},${plan.content.y}|${natural.width}x${natural.height}` : "";
   import_react33.default.useEffect(() => {
     if (!exportKey || !loaded) return void 0;
@@ -11860,7 +11955,7 @@ function OutpaintEditor(props) {
             target.url ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
               "img",
               {
-                ref: imageRef,
+                ref: attachImageNode,
                 src: target.url,
                 alt: target.prompt || t("studio.image.alt"),
                 className: "ofs-outpaint-photo",
