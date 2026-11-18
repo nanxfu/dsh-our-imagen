@@ -75,6 +75,10 @@ def dependency_versions() -> dict:
 def gpu_memory_payload() -> dict | None:
     """只读显存快照（MiB 取整）；用于 M3 真机验收对比 txt2img → img2img 是否额外占显存。
 
+    ``max_allocated_mb`` 的口径是"当前管线峰值"：daemon 在加载 / 切换管线成功后调用
+    ``reset_peak_memory_stats()``（见 daemon.ensure_pipeline），否则读到的是进程累计最大值，
+    真机 A/B 各档之间不可比（INFERENCE_ACCELERATION_RESEARCH §4.3.5 复测建议②）。
+
     只读已加载的 torch 模块（``sys.modules``），不在 /health 里触发重库 import：
     torch 尚未加载、CUDA 不可用或读取异常时一律返回 None，且不影响 status / phase 判定。
     """

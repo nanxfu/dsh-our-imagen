@@ -63,6 +63,10 @@ user-invocable: true
 - `pipeline.accel`（可选）：推理加速开关对象，键只允许 `vaeTiling` / `vaeSlicing` / `channelsLast` /
   `fuseQkv`（布尔，缺省整块省略 = 全部关闭）。没有真机 A/B 数据前不要写，写错键会直接被
   `npm run models:check` 拒绝；
+- `providers`（可选）：算力来源能力位，取值只能是 `"kaggle"` / `"colab"` 的非空无重复数组；缺省 = 两种来源都可用。
+  只有当模型确实需要特定后端（如 32 GiB 级权重的 9B 模型只能在 Colab A100/G4 跑）时才写，工作台会据此置灰
+  不匹配来源的模型卡并在生成前拦下；**没有真机验证与显存预算证据前不要用它把模型藏进大显存档位**，
+  写错值会被 `npm run models:check` 拒绝；
 - 字段格式见本 skill 末尾模板，完整定义见 `docs/MODEL_ASSET_SPEC.md`。
 
 写完后先自检一遍 JSON 合法性，再进入下一步。

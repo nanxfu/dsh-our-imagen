@@ -29,6 +29,9 @@ import { buildKernelFolder, randomSlug, removeKernelFolder } from '../lib/kernel
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const PAYLOAD_SOURCE = join(ROOT, 'tools', 'payload', 'verify-model.py')
 const WORK_DIR = join(ROOT, '.tmp', 'verify')
+// 受 HF 授权保护的仓库（如 FLUX.2 Klein 9B）需要 Token 才能下载。Token 只从环境变量或
+// 工作台私有的 `.imagen/settings.json`（0600）读取，不进日志、不进注入配置以外的任何输出。
+const SETTINGS_FILE = join(ROOT, '.imagen', 'settings.json')
 
 const PROMPT =
   'A red-crowned crane standing in a misty lotus pond at dawn, Chinese ink painting, soft light, fine detail'
@@ -155,9 +158,44 @@ async function loadModelConfig(relativePath) {
   return { absolute, model }
 }
 
-/** 下发给远端 payload 的配置（prompt/采样次数固定，保证不同模型间可比）。 */
-export function payloadConfigOf(model) {
-  return {
+/**
+ * 读取 HF Token：优先环境变量，其次工作台私有设置文件。
+ *
+ * 返回 null 表示没有可用 Token；空串 / 明显不是 `hf_` 前缀的值一律视为无效，避免把
+ * 占位符当 Token 注入远端后表现为「401 且原因不明」。
+ *
+ * @param {{ env?: Record<string, string | undefined>, settingsFile?: string }} [options]
+ * @returns {Promise<string | null>}
+ */
+export async function readHfToken(options = {}) {
+  const env = options.env ?? process.env
+  const candidates = [env.HF_TOKEN, env.HUGGING_FACE_HUB_TOKEN]
+  for (const raw of candidates) {
+    const value = typeof raw === 'string' ? raw.trim() : ''
+    if (value.startsWith('hf_') && value.length > 16) return value
+  }
+  const file = options.settingsFile ?? SETTINGS_FILE
+  try {
+    const parsed = JSON.parse(await readFile(file, 'utf8'))
+    const value = typeof parsed?.hfToken === 'string' ? parsed.hfToken.trim() : ''
+    if (value.startsWith('hf_') && value.length > 16) return value
+  } catch {
+    // 没有设置文件或格式损坏都属于「没有 Token」，由调用方决定是否强依赖。
+  }
+  return null
+}
+
+/**
+ * 下发给远端 payload 的配置（prompt/采样次数固定，保证不同模型间可比）。
+ *
+ * `hfToken` 只在确实需要下载受限仓库时传入；普通模型保持字段集合不变，
+ * 既有 dry-run / 打包演练的注入配置断言因此不受影响。
+ *
+ * @param {object} model 模型资产
+ * @param {{ hfToken?: string | null }} [options]
+ */
+export function payloadConfigOf(model, options = {}) {
+  const config = {
     id: model.id,
     pipeline: model.pipeline,
     size: Number(model.size),
@@ -167,6 +205,8 @@ export function payloadConfigOf(model) {
     prompt: PROMPT,
     seed: 42,
   }
+  if (typeof options.hfToken === 'string' && options.hfToken.trim()) config.hf_token = options.hfToken.trim()
+  return config
 }
 
 // ── 宿主侧 subprocess 适配 ────────────────────────────────────────────────
@@ -232,8 +272,8 @@ function printLogTail(text, limit = 20) {
 
 // ── 打包与执行 ────────────────────────────────────────────────────────────
 
-async function packageKernel(model, username) {
-  const config = payloadConfigOf(model)
+async function packageKernel(model, username, options = {}) {
+  const config = payloadConfigOf(model, options)
   const folder = await buildKernelFolder({
     username,
     slug: randomSlug(),
@@ -355,13 +395,23 @@ async function writeMeasured(absolutePath, model, measured) {
 async function runVerify(options, model, absolutePath) {
   const ctx = createContext()
   const timeoutMin = options.timeoutMin
+  // 受限仓库必须先有 Token：没有 Token 的推送只会下载失败并浪费一次排队。
+  const hfToken = await readHfToken()
+  if (model.gated === true && !hfToken) {
+    throw Object.assign(
+      new Error('该模型是 HuggingFace 受限仓库，需要先提供 HF Token（环境变量 HF_TOKEN 或 .imagen/settings.json 的 hfToken）'),
+      { failureCode: 'auth_required' },
+    )
+  }
   console.log(`[1/5] 打包 Kernel（模型 ${model.id}）…`)
+  if (hfToken) console.log('  · 已注入 HF Token（来源：环境变量或私有设置文件，值不打印）')
   const username = await kaggleUsername(ctx).catch((error) => {
     throw new Error(`读取 Kaggle 用户名失败：${error?.message ?? error}`)
   })
-  const { folder } = await packageKernel(model, username)
+  const packageOptions = hfToken ? { hfToken } : {}
+  const { folder, config } = await packageKernel(model, username, packageOptions)
   try {
-    await inspectPackage(folder, payloadConfigOf(model))
+    await inspectPackage(folder, config)
     console.log(`[2/5] 推送 Kernel：${folder.kernelId}（accelerator=${ACCELERATOR}，超时 ${timeoutMin} 分钟）`)
     const pushed = await pushKernel(ctx, folder.dir, {
       accelerator: ACCELERATOR,

@@ -135,6 +135,8 @@ export function apply(ctx, config = {}) {
     options: {
       sessionWaitMs: toInt(config.sessionWaitMinutes, TIMEOUTS.sessionWaitMs / 60000, 5, 240) * 60 * 1000,
       generateTimeoutMs: toInt(config.generateTimeoutSeconds, TIMEOUTS.remoteJobMs / 1000, 30, 1800) * 1000,
+      // 模型算力来源能力位（如 9B 仅 Colab）的 Host 侧兜底：每次入队按当前设置判断，切换 provider 即时生效。
+      getProvider: () => settings.current().provider,
     },
   })
 

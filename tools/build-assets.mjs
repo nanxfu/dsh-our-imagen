@@ -16,7 +16,7 @@ import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { PIPELINE_ACCEL_KEYS } from '../shared/contract.js'
+import { PIPELINE_ACCEL_KEYS, SETTINGS } from '../shared/contract.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const MODELS_DIR = join(ROOT, 'models')
@@ -186,6 +186,24 @@ export async function loadModels(modelsDir = MODELS_DIR) {
     if (typeof model.supportsNegative !== 'boolean') {
       fail(`${where} 的 supportsNegative 必须是布尔值（管线是否真的消费 negative_prompt）`)
     }
+    // 算力来源能力位（可选）：只能在指定远端后端运行的模型显式声明（如 9B 级权重只在
+    // Colab A100/G4 跑得动，Kaggle 2×T4 必然 OOM）。缺省 = 契约 SETTINGS.providers 全可用，
+    // 与历史资产语义一致；显式给出时必须是取值域内的非空、无重复数组，避免「写错来源名」
+    // 让门控静默失效（漏掉的来源会被当成全可用）。
+    if (model.providers !== undefined) {
+      const providers = model.providers
+      const allowed = SETTINGS.providers
+      if (!Array.isArray(providers) || providers.length === 0) {
+        fail(`${where} 的 providers 必须是非空数组（允许值：${allowed.join(' / ')}）`)
+      }
+      const unknown = providers.filter((id) => !allowed.includes(id))
+      if (unknown.length > 0) {
+        fail(`${where} 的 providers 含未知来源 ${unknown.join(', ')}（允许值：${allowed.join(' / ')}）`)
+      }
+      if (new Set(providers).size !== providers.length) {
+        fail(`${where} 的 providers 有重复项：${providers.join(', ')}`)
+      }
+    }
     // 图生图（垫图重绘）能力：可以缺省（缺省按 false 归一），显式给出时必须是布尔值。
     // 只有整套 diffusers 管线能用 AutoPipelineForImage2Image.from_pipe 复用的模型才能标 true。
     if ('supportsImg2Img' in model && typeof model.supportsImg2Img !== 'boolean') {
@@ -298,6 +316,9 @@ function projectPresets(models) {
     inpaintOnly: model.inpaintOnly === true,
     // 负向提示词能力：客户端据此显隐「排除项」、助手据此决定是否输出 negative。
     supportsNegative: model.supportsNegative === true,
+    // 算力来源能力位（可选）：显式声明时才输出该字段，缺省 = Kaggle / Colab 都可用。
+    // 未声明的模型不写空数组 / null，保证既有 10 个模型的对外快照逐字不变。
+    ...(Array.isArray(model.providers) ? { providers: [...model.providers] } : {}),
     sizeOptions: model.sizeOptions,
     pipeline: model.pipeline,
   }))

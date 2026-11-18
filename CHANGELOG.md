@@ -70,6 +70,40 @@
   - **P0 加速 A/B（同 Kernel、同 seed、同 prompt、同尺寸，每档 2 轮取中位）**：`sdxl-lightning` 1024² 4 步开 `channels_last + fuse_qkv + vae_tiling`：6.19s → 5.96s（1.04× / +3.9%），峰值显存 10233 → 11469 MB（+1236），同 seed 输出 MAE **11.06/255** 且构图改变（4 步蒸馏对数值扰动敏感）→ **不合入**；`sdxl-inpaint` 1536×864 扩图 30 步开 `vae_tiling`：35.91s → 37.53s（0.96×，慢 4.5%），内容区核心差 0、输出 MAE 3.8/255，但累计峰值口径无法证实降显存收益 → **不合入**。10 份模型资产全部保持未启用 `pipeline.accel`；数据与测量口径限制见 [INFERENCE_ACCELERATION_RESEARCH.md](docs/INFERENCE_ACCELERATION_RESEARCH.md) §4.3。
   - **原生 `Flux2KleinInpaintPipeline` 探针（备选扩图路线）**：可直接加载 4B 权重并出图，1360×768 扩图 22.18s（比 `sdxl-inpaint` 35.42s 快 1.6~1.83×）、扩图成片自然；但 >1 MP 画布被内部静默缩放到 1360×768，1280×720 画布虽尺寸正确但 4 步接缝肉眼可见 → 本轮不迁移默认扩图引擎，结论记入 SPEC §2.2 与 §4.3.3。
 
+### 阶段十六：Phase C 遗留收口（现代扩图引擎、推理缓存与大显存模型，2026-11-18）
+
+> 背景：用户提示「STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md 里的任务似乎没有都完成」。逐条核对后：C0 的 ⬜「`inpaintOnly` 回填过滤」实际已在 `58ed11b` 实现并有测试（文档勾选残留，本轮已纠正并复核）；真正遗留的是 C1 的「现代扩图演进（Klein 4B + Outpaint LoRA）」「P1 推理缓存与 Colab L4 FP8」与 C2 的「FLUX.2 Klein 9B / Qwen-Image-Edit 接入」。本节逐项收口，结论与真机数据见 [ROADMAP 第十六节](docs/ROADMAP.md) 与 [INFERENCE_ACCELERATION_RESEARCH.md](docs/INFERENCE_ACCELERATION_RESEARCH.md) §4.4。
+
+#### 功能与能力
+
+- **FLUX.2 可选 LoRA（`remote/inference/loaders/diffusers.py`）**：`Flux2Loader` 支持 `pipeline.lora = {repo, weight, scale?}`——预挂载优先（`localModels`）→ `hf_hub_download` → `Flux2LoraLoaderMixin.load_lora_weights`（diffusers 0.43 自动把 PEFT `base_model.model.*` / Kohya 格式转成 `diffusion_model.*`）；`scale ≠ 1` 用 `set_adapters` 应用。缺字段 / `scale` 非法属请求错误（加载底座前拦下）；下载或挂载失败属加载失败（回收显存、不静默出图不带 LoRA）；`deviceMap="balanced"` 与单卡两条路径都覆盖。离线 15 项断言见 `test/remote/test_flux2_lora.py`。
+- **现代扩图引擎真机评估（Klein 4B + Outpaint LoRA）**：`test/gpu-live.mjs` 新增 `--outpaint-lora`——源图 864² → 纯绿画布 1536×864 + 1024×576 参考图 → `flux2-klein-4b` + `fal/flux-2-klein-4B-outpaint-lora`（scale 1.1）+ 固定提示词；记录耗时 / 显存 / 内容区像素差 / 绿边残留 / 接缝 / 色偏。真机（Kaggle 2×T4）：加载 33.8s / 推理 22.5s / 输出严格 1536×864 / 绿边残留 0.00% / 接缝比 1.14~1.15 / 色偏 max 3.47，对比 `sdxl-inpaint` 历史中位 35.31s **提速 1.57×**。**决策：暂不迁移默认扩图引擎**（LoRA 为整图重绘，内容区平均差 12.87/255，不具备 `sdxl-inpaint` 的逐像素保真；列为下一阶段首选候选）。
+- **P1 推理缓存探针与 FP8 评估**：`apply_accel` 新增实验性 `accel.cache = {type:'firstBlock', threshold?}`（不进 `PIPELINE_ACCEL_KEYS`、不写模型资产、失败 WARN 跳过）；真机探针得到 `[accel] WARN cache 不适用：block 输出形状混合（tensor 与 (encoder, hidden) 元组并存）`，两档输出逐像素一致（MAE 0）、峰值显存同为 7928 MiB、中位 1.17× 属首轮冷启动噪声 → **不合入**；SDXL 家族为 UNet 管线同样不适用。Colab L4 `torchao` FP8 经预算评估无合入价值（transformer 量化后仍加 15.26GB 文本编码器，超 L4 可用显存）→ 不引入 `torchao` 依赖。
+- **`/health.gpu_memory` 峰值口径修正**：`remote/daemon.py` 新增 `reset_peak_memory_stats()`，`ensure_pipeline` 加载 / 切换成功后调用；`max_allocated_mb` 从「进程累计峰值」改为「当前管线峰值」，真机 A/B 档位之间可比较（修正前的历史数字不可直接与新数字相减，见 INFERENCE §4.3.5 / §4.4.4）。
+- **大显存模型（`flux2-klein-9b`）接入准备与算力来源门控**：
+  - `.tmp/models/flux2-klein-9b.verified-pending.json`：9.08B distilled（4 步 / CFG 1.0）、组件权重 32.32 GiB（transformer 17.32 + 8B Qwen3 文本编码器 15.26 + VAE 0.16）、`allowPatterns` 排除根目录 18.16GB 单文件副本、HF 受限仓库（`gated: auto`，需 HF Token）、FLUX Non-Commercial 许可、`supportsReference: true`、`providers: ["colab"]`。**按模型资产 SOP，未取得真机 measured 的资产不入库**：本轮 `models/` 仍为 10 个模型，草稿与验证命令留档待补测（`tools/colab/smoke-provider.mjs --gpu A100 --high-ram --preset flux2-klein-9b --report …`）。
+  - 模型资产新增可选 `providers: ('kaggle'|'colab')[]` 能力位（缺省 = 全可用；本轮无发布资产声明）；`tools/build-assets.mjs` 校验并投影到生成物；`src/logic/preset.js` 新增 `providerIdOf` / `presetProvidersOf` / `presetAvailableForProvider` / `presetProviderRestrictionOf`（唯一判定口径）；`ModelCardPicker` 对不可用预设置灰、标「仅 Colab」并给原因提示；`generateCapabilityOf` 新增 `blockedProvider`（含模型名与当前 / 所需来源，拦下时不发请求）；Host 侧 `JobQueue.submit` 用 `providerGateOf(preset, settings.provider)` 再兜一层（Agent 工具 / 旧客户端 / 直连 API 都绕不过，返回 `invalid_request`、不占队列、不触达远端）；字典 zh/en 各 621 键同构。交互规范见 [SPEC.md](docs/SPEC.md) §5.22。
+- **`tools/verify-model.mjs` 支持受限仓库**：优先读环境变量 `HF_TOKEN` / `HUGGING_FACE_HUB_TOKEN`，否则读 `<workspace>/.imagen/settings.json` 的 `hfToken`（0600 私有文件）；payload 只设置远端进程环境变量，不打印、不进 report。新增 8 项离线断言（`test/check-verify-model.mjs`）。
+- **`tools/colab/smoke-provider.mjs`**：新增 `--report <path>`（结构化 JSON：GPU / 预设、assign/ready 耗时、作业 load/单图秒数、PNG 尺寸与字节、`/health.gpu_memory`、device、CCU 与 assignments 前后、measured 四要素）、`--size`、`--high-ram`、`--check` 离线校验；HF Token 复用 `readHfToken()`，只报来源不打印；A100 需高内存机型（普通 A100 / G4 当前会 4xx/503）。
+
+#### 接口与配置
+
+- `models/*.json` 新增可选顶层字段 `providers`（`kaggle` / `colab`，非空无重复）；生成物只在显式配置时携带该字段，本轮 10 个发布资产均不写该字段（对外快照逐字不变）。
+- `pipeline.lora` 语义扩展到 `flux2` loader（`{repo, weight, scale?}`，`scale` 缺省 1.0）；无资产默认启用，供请求级评估 / 后续引擎接入使用。文档见 [MODEL_ASSET_SPEC.md](docs/MODEL_ASSET_SPEC.md) §2.6。
+- `test/gpu-live.mjs` 新增 `--outpaint-lora` / `--accel-cache` 两个真机验收模式与 `--self-test` 零配额纯函数自检（绿边画布 / 参考图缩放 / 接缝与色偏指标 / spec 覆盖 / 尺寸映射）。
+
+#### 测试
+
+- 新增：`test/remote/test_flux2_lora.py`（15）、`test/remote/test_accel_cache.py`（21）、`test/check-client-provider.mjs`（5）；`test/remote/test_health.py` 新增峰值重置 6 项；`test/check-verify-model.mjs` 8 项。
+- 计数：`test/remote/run.py` 476 → **518**；`check-client-logic` 93、`check-client-shell` 53、`check-client-provider` 5、`check-client-locale` zh/en 各 621 键同构；`jobs-wait` 40 → **41**（`providerGateOf` 纯函数 + `submit` 接线）；`npm test` 全绿。
+
+#### 真机验收
+
+- **环境**：Kaggle 2×Tesla T4、Python 3.13.16 / torch 2.11.0+cu130 / diffusers 0.43.0 / transformers 5.23.0（两次 Kernel 均 `COMPLETE` 后关机，无 `RUNNING` / `QUEUED` 残留）；Colab Pro（A100 需高内存机型）。
+- **现代扩图引擎（`--outpaint-lora`，`bench-results/gpu-live/2026-11-18T08-00-07/`）**：源图 `sdxl-lightning` 864²（加载 44.6s / 出图 15.82s）→ 绿边画布 1536×864（绿区 43.75%，PNG 1.40 MB）→ 参考图 1024×576（640 KB）→ flux2 + LoRA 提交 1.55s / 加载 33.8s（含挂载，权重命中缓存）/ 推理 22.5s / wall 62.4s；输出严格 1536×864（PNG 1,414,089 B）；绿边残留 0.00%（exact+near 均为 0）、接缝比 左 1.15 / 右 1.14、内容区逐通道色偏 ΔR -1.55 / ΔG -1.34 / ΔB +3.47（`maxAbsDelta 3.47`）、内容区平均差 12.87 / 核心区 13.30；显存 `max_allocated` 9348 → 10701 MiB（`reserved` +1484 MiB）。对比 `sdxl-inpaint` 历史 4 样本中位 35.31s → **提速 1.57×**。
+- **推理缓存探针（`--accel-cache`，`bench-results/gpu-live/2026-11-18T08-05-25/`）**：flux2-klein-4b 1024² / 4 步 / seed 42，每档 2 轮；off 13.27 / 9.38s（中位 11.33），on 9.57 / 9.76s（中位 9.66），两档输出逐字节相同（PNG 1,905,413 B，MAE 0）、峰值显存同为 7928 MiB；远端日志 `[accel] WARN cache 不适用：block 输出形状混合（tensor 与 (encoder, hidden) 元组并存），firstBlock 不支持` → **缓存未生效，1.17× 为冷启动噪声，不构成加速收益**。
+- **FLUX.2 Klein 9B（Colab A100）**：**受平台容量限制未取得 measured，本轮不发布资产**。2026-11-18 16:06~17:49，A100+highRam 正式冒烟 19 次与探针 2 次全部 `POST /tun/m/assign → 503`，A100 不带 highRam 3 次同样 503，G4 不带 hm 503 / 带 hm 400（档位不可用）；唯一一次 A100+hm 分配成功（16:11 探针，`machineShape=1`，3.9s，已立即释放）证明账号与档位链路正常。L4 兜底分配成功但加载阶段 OOM（可用 22.03 GiB / 权重 32.32 GiB），实例已释放。全程 `assignments=0`、无活跃 endpoint；CCU 197.5556 → 197.4744（净 0.0813 CU，仅 L4 加载尝试产生）。`node tools/colab/smoke-provider.mjs --check --gpu A100 --high-ram --preset flux2-klein-9b` 全 PASS，工具与配置就绪，只欠平台容量；草稿与复测命令见 [ROADMAP 十六](docs/ROADMAP.md)。
+
 ## 0.12.0 — 2026-11-18
 
 > 主题：长排队可操作化。Kaggle 免费 GPU 偶发队列条目卡住（45 分钟仍 `QUEUED`；重新推送一个 Kernel 常常能在几十秒内拿到 GPU，但同样受平台负载影响，不是保证）。本批把「干等 45 分钟」改成三层提示与一键重排，并补上旧 Kernel 清理与远端自证无人接管。

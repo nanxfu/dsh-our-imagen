@@ -636,6 +636,28 @@ def free_cuda_cache() -> None:
         log(f"[cuda] empty_cache 失败：{short(exc)}")
 
 
+def reset_peak_memory_stats() -> None:
+    """把 CUDA 显存峰值统计重置到当前时刻（best-effort，失败只记日志）。
+
+    ``/health.gpu_memory.max_allocated_mb`` 读的是 ``torch.cuda.max_memory_allocated()``，
+    它统计**进程内累计峰值**：切过一次模型后，新管线读到的仍是旧管线 / 加载阶段的最大值，
+    真机 A/B 各档之间不可比（见 docs/INFERENCE_ACCELERATION_RESEARCH.md §4.3.5 复测建议②）。
+    加载 / 切换成功后重置，让 max_allocated 反映当前管线峰值；空闲回收与 release 行为不变。
+
+    只读 ``sys.modules`` 里已加载的 torch：加载路径一定先 import torch；ensure_pipeline 被
+    mock 的测试替身环境也不为这次重置额外拉起一个重库。CUDA 不可用时静默跳过。
+    """
+    try:
+        torch = sys.modules.get("torch")
+        cuda = getattr(torch, "cuda", None) if torch is not None else None
+        if cuda is None or not cuda.is_available():
+            return
+        cuda.reset_peak_memory_stats()
+        log("[cuda] 显存峰值统计已重置（/health 反映当前管线峰值）")
+    except Exception as exc:  # noqa: BLE001 - 观测口径修正不能影响加载结果
+        log(f"[cuda] 重置显存峰值失败（已忽略）：{short(exc)}")
+
+
 from cache_ops import CACHE_PROBE_WORK_DIR, DISK_HEADROOM, HF_CACHE_ENV_NAMES, HF_CACHE_REPO_PREFIX, HF_REPO_RE, HF_TOKEN_ENV_NAMES, _SECRET_MIN_CHARS, _cache_free_gib, _cache_path_protected, _decode_mount_path, _dir_size_gib, _existing_ancestor, _redact_secrets, _repo_key, _with_headroom, anima_local_assets_from, build_cache_probe_lines, cache_keep_repos_from, cache_model_dirs, cache_repo_candidates, disk_usage_root, disk_usage_target, disk_usage_text, ensure_cache_capacity_with, ensure_disk_capacity_with, evict_cache_dirs, hf_hub_cache_dir, local_model_dir_from, longest_mount_prefix, mount_point_of_path, pipeline_repos, prefetch_weights, probe_free_gib, read_mount_points, repo_from_cache_dir_name, required_download_gb, resolve_local_model_from, resolve_local_weight_from, run_disk_precheck  # noqa: E402
 
 from remote.inference.registry import LoadContext, default_registry  # noqa: E402
@@ -759,6 +781,11 @@ def ensure_pipeline(pipeline_spec: dict) -> tuple[object, float]:
         STATE.loaded = [identity]
         STATE.sig_params = sig_params
         STATE.native_inpaint = pipeline_spec.get("nativeInpaint") is True
+    # 显存峰值口径（INFERENCE_ACCELERATION_RESEARCH §4.3.5 复测建议②）：from_pretrained 与
+    # device_map 分片装载会把进程级 max_memory_allocated 顶到加载峰值，不重置的话后续
+    # /health 读数仍然是"历史最大值"，真机 A/B 档位之间无法比较。重置放在加载成功之后，
+    # 只影响观测口径，不改 release / 空闲回收行为。
+    reset_peak_memory_stats()
     set_phase("ready")
     log(f"[load] 模型就绪，用时 {elapsed}s（{identity}）")
     return pipe, elapsed

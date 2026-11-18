@@ -1,6 +1,6 @@
 # 推理加速与显存优化 SOTA 调研及验证方案
 
-> **状态**：📋 调研完成；P0 加速项已按第四节协议在 Kaggle `2×T4` 完成首轮真机 A/B（2026-11-18，见 §4.2/§4.3），**首轮三项均未达合入门槛，默认路径保持未启用**；P1 缓存类优化尚未实现与实测。  
+> **状态**：📋 调研完成；P0 加速项已按第四节协议在 Kaggle `2×T4` 完成首轮真机 A/B（2026-11-18，见 §4.2/§4.3），**首轮三项均未达合入门槛，默认路径保持未启用**。P1 缓存类优化与 Colab `torchao` FP8 已于阶段十六完成可行性探针与真机评估（见 §4.4）：**当前模型组合下均不适用/无合入价值，不做运行时改造**；`/health.gpu_memory` 峰值口径已改为「当前管线峰值」。  
 > **适用范围**：`remote/inference/loaders/` 推理加载与采样路径（Kaggle `2×Tesla T4` 与 Colab `L4 / A100`）  
 > **核心原则**：**一切收益以同 Seed / 同尺寸真机对照数据为准**；未经真机实测验证与画质复核的加速项不得合入默认路径，**只有真正落地并跑出实测数据的优化才能写入 `README.md` 对外对比宣传**。
 
@@ -161,6 +161,46 @@
 - 参考生图：`01-source-1.png`、`01-source-2.png`、`02-reference-1ref-1024x1024.png`、`02-reference-1ref-1024x1024-round2.png`、`02-reference-2ref-1024x1024.png`、`02-reference-1ref-1280x720-frame.png`、`03-txt2img-after-refs.png`
 - 加速 A/B：`02-accel-{off,on}-round{1,2}.png`、`02-outpaint-{off,on}-round{1,2}.png`、`02-outpaint-canvas.png`、`02-outpaint-mask.png`
 - 原生 inpaint 探针：`bench-results/gpu-live/2026-11-17T22-02-48-probe/`（含 `PROBE-SUMMARY.md`）
+
+---
+
+### 4.4 P1 缓存与 Colab FP8 评估（2026-11-18，阶段十六收口）
+
+> 目标：按 §2 P1 条款验证「多步模型跳步缓存（FBCache / TeaCache）」与「Colab L4 `torchao` FP8」能否在当前模型组合上带来可合入收益。结论：**两者均不适用/无合入价值，不做运行时改造**；`pipeline.accel` 保留 P0 四个稳定布尔开关，不新增量化或缓存字段。
+
+#### 4.4.1 实验条件与实现
+
+- **实现**：`remote/inference/loaders/diffusers.py` 的 `apply_accel` 新增实验性 `accel.cache = { type: 'firstBlock', threshold? }`（默认 `threshold=0.05`），只在请求级 `pipeline` 覆盖里使用；**不进入 `PIPELINE_ACCEL_KEYS`、不写入任何模型资产**。特性检测 diffusers `FirstBlockCacheConfig` / `apply_first_block_cache`，只对 `pipe.transformer` 生效；所有不适用场景只打印 `[accel] WARN cache 不适用：<原因>` 后继续出图（探针语义，不阻断）。
+- **静态预检**：应用前检查 block 数量、`TransformerBlockRegistry` 是否注册以及各 block 返回形状是否同类；不通过即跳过，避免挂半套 hook 后前向崩溃。
+- **环境**：Kaggle 2×Tesla T4、Python 3.13.16 / torch 2.11.0+cu130 / diffusers 0.43.0 / transformers 5.23.0；Kernel `mogudd/imagen-99e55e1c`（已关机，无残留）。
+
+#### 4.4.2 FBCache 真机 A/B（`flux2-klein-4b`，1024² / 4 步 / seed 42，每档 2 轮）
+
+| 档位 | 轮次耗时（s） | 中位耗时（s） | 两档输出 MAE | 峰值显存（`max_allocated_mb`） |
+| :--- | :--- | ---: | ---: | ---: |
+| off | 13.27 / 9.38 | 11.33 | — | 7928 |
+| on（`cache.firstBlock`） | 9.57 / 9.76 | 9.66 | **0**（四张 PNG 字节数完全相同，1905413 B） | 7928 |
+
+- **缓存未生效**：远端日志为 `[accel] WARN cache 不适用：block 输出形状混合（tensor 与 (encoder, hidden) 元组并存），firstBlock 不支持`。diffusers 0.43 的 `apply_first_block_cache` 把首个 block 当 head、最后一个 block 当 tail，并按「首尾输出同构」的假设做残差相加；`Flux2Transformer2DModel` 是双栈结构（`transformer_blocks` 返回元组、`single_transformer_blocks` 返回张量），不满足该假设，强行应用会在运行期报错。
+- **off 档 11.33s 的中位偏高是首轮冷启动**：第二轮 off 9.38s vs on 9.76s（on 反而略慢 4%）。因缓存未应用且两档输出逐像素一致，**不能把 1.17× 的中位比当作加速收益**。
+- **SDXL 家族**：`sdxl-*` 是 UNet 管线，没有 `pipe.transformer`，firstBlock cache 天然不适用；要覆盖 25~30 步 SDXL 需要自研 UNet 级跳步缓存，属第三方研究项，不在本轮范围。
+
+#### 4.4.3 Colab L4 `torchao` FP8 评估（不做运行时改造）
+
+- **diffusers 0.43 现状**：`TorchAoConfig`（`Float8WeightOnlyConfig` 等）只对管线内的 transformer 权重做量化，文本编码器保持原精度；换言之 9B 级模型的显存大头（8B Qwen3 文本编码器，15.26GB）无法靠 FP8 缩掉。
+- **显存预算**：`flux2-klein-9b` transformer fp8 约 9.1GB + 文本编码器 fp16 15.26GB + VAE 0.16GB ≈ 24.5GB，仍超过 L4 的 22.4GiB 可用显存；Colab A100 40GB 已能直接跑 fp16 全量。FP8 的目标机型（L4/G4 等 Ada/Blackwell）要么装不下，要么本就不需要它。
+- **收益面**：`flux2-klein-4b` 在 L4 上 fp16 已可运行，FP8 只可能带来吞吐收益，但需引入 `torchao` 依赖与量化缓存，且与「免费云端、零额外依赖、冷启动优先」的定位冲突。
+- **结论**：本轮不引入 `torchao` FP8；若后续接入 20B 级编辑模型并落到 80GB 单卡，再按「fp8 + 量化文本编码器 + 新运行时」整体评估。
+
+#### 4.4.4 测量口径修正（已合入）
+
+- `remote/daemon.py` 新增 `reset_peak_memory_stats()`，在 `ensure_pipeline` 加载/切换成功后调用；`/health.gpu_memory.max_allocated_mb` 从「进程累计峰值」改为「当前管线峰值」，档位之间可比较（§4.3.5 复测建议②）。
+- 注意：本修正之前的历史报告（§4.2/§4.3）是累计口径，不能与修正后的数字直接相减比较；同一次真机会话内的「加载前 → 生成后」对比仍然有效（会话内只加载一次时不触发重置）。
+
+#### 4.4.5 产物索引
+
+- 报告与样张：`bench-results/gpu-live/2026-11-18T08-05-25/`（`report.json` 的 `accelCache` 段 + `01/02-cache-{off,on}-round{1,2}.png`）
+- 运行日志：`.tmp/colab/accel-cache.log`
 
 ---
 

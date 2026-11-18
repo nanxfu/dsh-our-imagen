@@ -513,9 +513,10 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 - 请求形状：`references: ["imagen-output/<目录>/<文件>", ...]`，1~`LIMITS.referenceImages.maxCount`
   （2）个 `imagen-output/` 内作品的工作区相对路径（与 `reference.path` 同一套越界校验，
   拒绝绝对路径 / 盘符 / `..` / 非产物目录），重复路径直接拒绝。
-- 能力门槛：所选预设必须 `supportsReference = true`（首期只有 `flux2-klein-4b`）；Host 入队前拦截，
-  daemon 再按 loader 白名单（`reference_names()`，首期只有 `flux2`）兜底，非支持模型收到参考图返回
-  400 `invalid_request`（**不静默丢弃**）。
+- 能力门槛：所选预设必须 `supportsReference = true`（当前 `flux2-klein-4b`，`flux2` loader 家族；
+  `flux2-klein-9b` 为待验证草稿，未发布）；Host 入队前拦截，daemon 再按 loader 白名单
+  （`reference_names()`，首期只有 `flux2`）兜底，非支持模型收到参考图返回 400 `invalid_request`
+  （**不静默丢弃**）。
 - 边界（`LIMITS.referenceImages`，契约唯一来源）：单张原始字节 ≤ 4 MiB、只接受 PNG / JPEG、
   长边 ≥ `minEdge`（128）；**每张参考图分别校验，不设 strength / 蒙版语义**（多传其它字段逐项 400）。
   Host 读盘后按 base64 膨胀估算总量，超过远端请求体预算（`TIMEOUTS.remoteGenerateMaxBytes`）
@@ -1733,3 +1734,38 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
     `check-client-logic` 89 → 90（聚合出口校验，另改写表单快照用例纳入 references 指纹）、
     `check-client-shell` 52 → 53（整页工作台参考图槽）、`image-tool-render` 14 项（动作坞复用组
     6 个按钮，含「设为参考图」）；`check-client-locale` zh/en 各 616 键同构。
+
+### 5.22 第十八批交互补充（模型算力来源门控，阶段十六）
+
+> 设计依据：[MODEL_ASSET_SPEC.md](MODEL_ASSET_SPEC.md) §2.5 与 [ROADMAP.md](ROADMAP.md) 第十六节。
+> 规范范围只限「模型可用性」：页面结构、生成请求体与远端协议均不变（`providers` 只影响可选性与预检）。
+> **当前没有随包发布的资产声明 `providers`**：`flux2-klein-9b` 资产草稿（32.3 GiB，仅 Colab A100 可运行）
+> 正在等待真机验证，验证通过前不入库、不出现在模型列表；门控能力与 UI 先就绪，供后续大显存模型直接复用。
+
+1. **资产能力位**：模型资产可在顶层声明可选 `providers: ('kaggle' | 'colab')[]`；缺省 = 两种来源都可用，
+   生成物里不出现该字段（旧资产与旧宿主预设保持一致语义）。
+2. **模型卡置灰**：`ModelCardPicker` 对当前算力来源不可用的模型设置原生 `disabled` / `aria-disabled`、
+   标「仅 Colab」（或「仅 Kaggle」）角标，`title` 说明原因（含当前来源与所需来源）；键盘上下键沿用既有
+   `disabled` 过滤，自动跳过不可选项；已选中该预设时，触发器仍显示当前选择，但点击列表项不会切换。
+3. **生成前预检**：`generateCapabilityOf` 在参考图与 `inpaintOnly` 检查之前先判算力来源；不匹配时返回
+   `reason='provider'`、`blockedKey='studio.form.blockedProvider'`，toast 文案包含模型名与「当前 / 所需」
+   两个来源。**不发宿主请求、不浪费远端配额、不静默换模型**；用户可切换算力来源（设置抽屉的 `provider`
+   一旦改为 `colab`，下次生成即放行）或改用其它模型。Host 侧还有一道兜底：`JobQueue.submit` 用
+   `providerGateOf(preset, settings.provider)` 再判一次（Agent 工具 / 旧客户端 / 直连 API 都绕不过），
+   不匹配时返回 `invalid_request` 与同口径说明，任务不占队列、不触发远端提交。
+4. **来源归一**：判定只在组合层做一次——`compute.provider`（`state.provider → session.provider → kaggle`）
+   传给模型卡与预检；`providerIdOf()` 对非法值回退契约 `SETTINGS.defaultProvider`（`kaggle`），避免旧宿主
+   缺字段时把模型全部判成不可用。
+5. **大显存资产口径（草稿，未发布）**：`flux2-klein-9b` 为 9.08B distilled（4 步 / CFG 1.0）、
+   `supportsReference=true`、组件权重 ~32.3 GiB（transformer 17.3 GiB + 8B Qwen3 文本编码器 15.3 GiB）、
+   HF 受限仓库（需 HF Token，FLUX 非商用许可）；Kaggle 2×T4（双卡合计 29.1 GiB）必然 OOM，故预期声明
+   `providers: ["colab"]`。Colab 侧 A100 需高内存机型（`colabHighRam`；普通 A100 档位 503），G4 当前不可用。
+   草稿与验证脚本见 `.tmp/models/flux2-klein-9b.verified-pending.json` 与 `tools/colab/smoke-provider.mjs
+   --gpu A100 --high-ram`。
+6. **文案与无障碍**：中英字典新增 5 键严格同构（来源展示名、仅 X 角标、阻断说明、×2 语言）；
+   角标与置灰态不影响触控热区（选项本身 ≥44px）。
+7. **测试**：新增 `test/check-client-provider.mjs`（5 项：置灰 + 角标、双向 / 英文、缺省与非法回退、
+   不可用时点生成 0 请求且 toast 含模型名与来源、匹配时正常提交）；`check-client-logic` 90 → 93
+   （能力位纯函数与预检阻断 / 放行）、`check-client-shell` 53（不受影响）、`check-client-locale` 616 → 621；
+   `jobs-wait` 40 → 41（`providerGateOf` 纯函数 + `submit` 接线：被拒不占队列、切 colab 放行）；
+   `check-contract` 仍为 14 项（发布资产 10 个，无 `providers` 字段）。

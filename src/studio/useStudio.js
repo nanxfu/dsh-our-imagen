@@ -44,6 +44,7 @@ import {
 } from '../logic/generate.js'
 import { safeResetPatch } from '../../shared/models-guide.js'
 import { accountStatusOf } from '../logic/probe.js'
+import { providerNameKeyOf } from '../logic/preset.js'
 import { referenceListOf, referencePathsOf } from '../logic/reference.js'
 import { useChatThread } from './hooks/useChatThread.js'
 import { useImageTool } from './hooks/useImageTool.js'
@@ -261,7 +262,9 @@ export function useStudio(props) {
    * 不会从这里被带出来；左栏参考图槽非空时，`form.buildBody()` 会把有序路径数组写进
    * `references`（Phase C2，所有入口共用同一份拼装，助手与重试不会漏带）。
    *
-   * 两条前置预检（都不发请求）：
+   * 三条前置预检（都不发请求）：
+   *  - 当前算力来源跑不了的有效预设（资产 `providers` 能力位，如 9B 仅 Colab）：
+   *    拦下并说明当前 / 所需来源与模型名，算力来源取组合层唯一的 `compute.provider`；
    *  - 参考图槽非空但当前模型不支持原生参考：拦下并提示换模型 / 移除参考图（不静默丢图）；
    *  - 专用局部重绘预设（`inpaintOnly`）不能文生图：本次请求改用兜底预设并轻提示（决策 D3），
    *    左栏表单保持用户选择不变。
@@ -279,9 +282,20 @@ export function useStudio(props) {
       preset: effectivePreset,
       presets,
       references: requestedReferences,
+      // 与顶栏模型卡同源：provider 只在组合层归一一次（compute.provider），不在这里重复推导。
+      provider: compute.provider,
     })
     if (!capability.ok) {
-      ui.showToast(t(capability.blockedKey))
+      // blockedParams 里是算力来源 id；提示文案要用本地化展示名，拼装只在组合层做一次。
+      const blocked = capability.blockedParams
+      const params = blocked
+        ? {
+            ...blocked,
+            provider: t(providerNameKeyOf(blocked.provider)),
+            needed: t(providerNameKeyOf(blocked.needed)),
+          }
+        : undefined
+      ui.showToast(formatText(t(capability.blockedKey), params))
       return false
     }
     const requestPreset = capability.preset || effectivePreset

@@ -87,6 +87,7 @@
 | `supportsReference` | 模型原生参考生图能力。**必填布尔值**；基础管线原生接收 `image=[PIL...]` 图像条件、宽高仍由请求决定的模型才能标 `true`，见 §2.2.1 |
 | `inpaintOnly` | 专用局部重绘权重：只能带蒙版使用，不能文生图 / 纯图生图。可缺省，缺省按 `false`；标 `true` 时 `supportsInpaint` 必须为 `true` 且 `pipeline.nativeInpaint` 必须为 `true`，见 §2.2 |
 | `supportsNegative` | 负向提示词能力：模型管线是否真的消费 `negative_prompt`。必填布尔值，见 §2.3 |
+| `providers` | 算力来源能力位：模型能在哪些远端后端运行。可缺省，缺省 = `kaggle` / `colab` 全可用；显式给出时必须是非空、无重复的 `kaggle` / `colab` 数组，见 §2.5 |
 | `pipeline` | 下发给远端 Daemon 的加载描述；`downloadGb` 用于下载前磁盘预检；可选 `accel` 推理加速开关，见 §2.4 |
 | `measured` | 靶场实测指标：峰值显存、加载耗时、稳态耗时、实际下载量。未实测的字段填 `null` |
 
@@ -225,7 +226,12 @@
 | `true` | 管线接受负向提示词：`negative_prompt` 会参与条件编码（SDXL 家族在 `cfg > 0` 时生效，`anima` 运行时在 CFG > 1 时作为无条件分支参与引导，推荐 CFG=4） |
 | `false` | 管线没有负向词输入，传了也会被丢弃；客户端与助手应隐藏「排除项」，避免用户填写无效参数 |
 
-当前 10 个预设中只有 `flux2-klein-4b` 为 `false`：diffusers 的 `Flux2Pipeline.__call__` 没有 `negative_prompt` 参数，`remote/daemon.py` 的 `run_task()` 按 `__call__` 签名（`STATE.sig_params`）过滤参数，即使请求里带了负向词也不会传进管线。其余 9 个（`sdxl-lightning` / `hyper-sdxl-8step` / `sdxl-turbo` / `playground-v2.5` / `sdxl-base` / `sdxl-inpaint` / `realvis-v5` / `animagine-xl-3.1` / `anima-light-lavender`）为 `true`：SDXL 家族走 diffusers 的 `negative_prompt` 形参（专用 inpaint 权重同样支持）；`anima-light-lavender` 的自定义运行时显式接收并使用负向词。
+当前 11 个预设中只有 `flux2-klein-4b` 与 `flux2-klein-9b` 为 `false`：diffusers 的 FLUX.2 管线
+`__call__` 没有 `negative_prompt` 参数，`remote/daemon.py` 的 `run_task()` 按 `__call__` 签名
+（`STATE.sig_params`）过滤参数，即使请求里带了负向词也不会传进管线。其余 9 个（`sdxl-lightning` /
+`hyper-sdxl-8step` / `sdxl-turbo` / `playground-v2.5` / `sdxl-base` / `sdxl-inpaint` / `realvis-v5` /
+`animagine-xl-3.1` / `anima-light-lavender`）为 `true`：SDXL 家族走 diffusers 的 `negative_prompt`
+形参（专用 inpaint 权重同样支持）；`anima-light-lavender` 的自定义运行时显式接收并使用负向词。
 
 判定标准：
 
@@ -269,6 +275,81 @@
 `shared/contract.js` 的 `PIPELINE_ACCEL_KEYS`（`vaeTiling` / `vaeSlicing` / `channelsLast` / `fuseQkv`），
 未知键直接报错（开关名写错会让 A/B 数据失真），值必须是布尔。远端镜像名在
 `remote/inference/loaders/diffusers.py` 的 `ACCEL_FLAGS`，`test/check-contract.mjs` 校验两侧同名。
+
+### 2.5 算力来源能力位（providers）
+
+部分大模型只在特定远端后端跑得动：例如 `FLUX.2 Klein 9B` 组件权重 32.32 GiB，需要 Colab
+`A100` 这类大显存档（Kaggle 2×T4 合计 29.12 GiB，加载即 OOM）。`providers` 让工作台在
+**选择模型**与**生成前预检**两处就挡住「注定失败、还会白烧一次配额」的组合，而不是等远端报 OOM。
+**当前没有随包发布的资产声明该字段**（`flux2-klein-9b` 资产草稿正在等待 Colab A100 真机验证，
+见 [ROADMAP.md](ROADMAP.md) 第十六节）；能力位与门控代码先就绪，后续大显存模型接入直接复用。
+
+| 取值 | 含义 |
+| :--- | :--- |
+| `["colab"]` | 仅 Colab（`A100` 等大显存档）可运行。Kaggle 用户在模型卡里看到置灰且标「仅 Colab」的选项，无法选择；若通过历史回填 / 草稿恢复等路径让表单停在该预设上，点生成也会被本地预检拦下，宿主请求不会发出 |
+| `["kaggle"]` | 仅 Kaggle 可运行（当前无此类资产，能力位先留好，UI 与预检对称生效） |
+| 缺省（不写该字段） | 两种来源都支持。生成物里**不会出现** `providers` 字段，既有模型的对外快照逐字不变 |
+
+JSON 示例（与 `supportsNegative` 同级、平铺在顶层；以下为草稿形态，尚未发布）：
+
+```json
+{
+  "id": "flux2-klein-9b",
+  "supportsNegative": false,
+  "supportsReference": true,
+  "providers": ["colab"]
+}
+```
+
+取值与缺省口径：
+
+- 取值域只有 `kaggle` / `colab`，与 `shared/contract.js` 的 `SETTINGS.providers` 是唯一来源；
+- 必须是**非空数组**且**无重复**：写 `[]` 会被构建拒绝（它的语义和「缺省」重叠，容易让人误以为不可用）；
+- 缺省 = 两种来源全可用，与现有 10 个资产语义一致，不需要补字段；
+- 旧宿主下发的预设没有该字段时，客户端按「全可用」处理，不会误伤既有流程。
+
+消费方：
+
+- **构建**：`tools/build-assets.mjs` 校验上述规则，合法时把字段透传到 `shared/models.generated.js`
+  的 `PRESETS` / `PUBLIC_PRESETS`；`shared/contract.js` 的 `publicPresets()` 只剔除 `pipeline`，
+  因此该字段随 `/state.presets` 自动下发客户端。
+- **客户端**：`src/logic/preset.js` 的 `presetProvidersOf()` / `presetAvailableForProvider()` /
+  `presetProviderRestrictionOf()` 是唯一判定口径（缺省 / 空数组 = 全可用，`provider` 非法回退
+  `kaggle`）。模型卡 `ModelCardPicker` 对当前 provider 不可用的预设置灰、标「仅 Colab」角标并给
+  原因提示，键盘导航按现有 `disabled` 过滤自动跳过；`generateCapabilityOf()` 在生成前预检里以
+  `studio.form.blockedProvider` 拦下（文案含模型名与当前 / 所需算力来源），宿主请求不会发出。
+- **Host**：`lib/jobs/queue.js` 的 `providerGateOf(preset, settings.provider)` 在入队前再判一次
+  （Agent 工具 / 旧客户端 / 直连 API 绕不过），不匹配时返回 `invalid_request`、任务不占队列、
+  不触达远端。daemon 不读该字段：远端是否真跑得动仍以 OOM / 加载失败为准（首道防线在客户端，
+  第二道在 Host，最后一道是远端的显存现实）。
+
+校验：`tools/build-assets.mjs` 拒绝非数组、空数组、未知来源与重复项；`npm run models:check`
+与 `node test/check-contract.mjs` 校验生成物与 `models/` 同步；客户端行为由
+`test/check-client-logic.mjs`（缺省 / 单来源 / 非法 provider 回退 / 阻断与放行）与
+`test/check-client-provider.mjs`（置灰、角标、不可用时点生成不发请求）覆盖，Host 兜底由
+`test/jobs-wait.mjs` 的 `providerGateOf` 用例覆盖。
+
+### 2.6 FLUX.2 可选 LoRA（pipeline.lora）
+
+`pipeline.lora` 原本只服务 `sdxl-lora` loader（LoRA 是底座的一部分）；阶段十六起
+`flux2` loader 也接受这一字段，作为**底座上的可选叠加项**（缺省 `null` 时行为不变）。
+当前仓库没有模型资产默认启用它，该能力用于「特定用途 LoRA」的请求级评估与后续接入
+（例如扩图 LoRA：`fal/flux-2-klein-4B-outpaint-lora`）。
+
+| 键 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `repo` | string | HuggingFace 仓库；与 `pipeline.base` 相同口径 |
+| `weight` | string | 仓库内的权重文件名，例如 `flux-outpaint-lora.safetensors` |
+| `scale` | number \| null | 可选权重系数，缺省 / `null` = 1.0；≠1 时按 `set_adapters` 应用，非数字 / NaN 直接报请求错误 |
+
+- **格式**：diffusers 0.43 的 `Flux2LoraLoaderMixin` 同时接受 diffusers 与 PEFT
+  （`base_model.model.*`）两种 state dict，后者会自动转成 `diffusion_model.*`；Kohya 格式也会转换。
+- **预挂载优先**：命中 `localModels` 映射时直接用本地权重，否则 `hf_hub_download` 后挂载；
+  下载体积会计入验证 payload 的 `downloadGb`。
+- **错误语义**：字段缺失 / `scale` 非法属请求错误（在加载底座前拦下）；下载或挂载失败属加载失败
+  （回收显存、不静默出图不带 LoRA）。
+- **真机证据**：Kaggle 2×T4 上 `flux2-klein-4b + 上述扩图 LoRA`（scale=1.1）可正常加载与出图，
+  详见 [ROADMAP.md](ROADMAP.md) 第十六节与 [CHANGELOG](../CHANGELOG.md)。
 
 ## 3. 录入与验证流程
 

@@ -306,6 +306,29 @@
   color: var(--ofs-accent);
 }
 
+/* 模型卡选项里的算力来源角标（与语言角标同形，用告警色区分「当前来源跑不了」）。 */
+.ofs-model-provider {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in oklab, var(--ofs-warn) 34%, transparent);
+  border-radius: 4px;
+  background: var(--ofs-warn-soft);
+  color: var(--ofs-warn);
+  font-size: 9.5px;
+  font-weight: 550;
+  line-height: 1;
+  letter-spacing: .02em;
+}
+
+/* 置灰项不响应 hover 高亮：disabled 属性由浏览器挡住点击，视觉上也别给「可选」暗示。 */
+.ofs-model-option.is-provider-gated:hover {
+  border-color: transparent;
+  background: color-mix(in oklab, var(--ofs-sunken) 55%, transparent);
+}
+
 .ofs-model-desc {
   overflow: hidden;
   color: var(--ofs-ink-2);

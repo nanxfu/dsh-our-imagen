@@ -6,11 +6,20 @@
  *
  * 交互按 WAI-ARIA listbox：方向键循环、Enter/Space 选中、Esc 关闭并把焦点还给触发器、
  * 点击外部关闭；两个顶栏弹层（算力 / 模型）由 TopBar 负责互斥。
+ *
+ * 算力来源门控（资产可选字段 `providers`）：当前 provider 跑不了的模型（如 9B 仅 Colab）
+ * 置灰禁用、标「仅 Colab」角标并给原因提示；键盘导航复用现有 disabled 过滤自动跳过。
+ * 缺省 providers 的模型保持既有行为（两种来源都可选）。
  */
 
 import React from 'react'
 
-import { formatSeconds } from '../logic/format.js'
+import { formatSeconds, formatText } from '../logic/format.js'
+import {
+  presetAvailableForProvider,
+  presetProviderRestrictionOf,
+  providerNameKeyOf,
+} from '../logic/preset.js'
 import { Icon } from './icons.jsx'
 import posterAnimagine from './posters/animagine-xl-3.1.webp'
 import posterAnimaLavender from './posters/anima-light-lavender.webp'
@@ -46,9 +55,17 @@ const LABELS = {
   langZhEn: 'studio.preset.langZhEn',
   langEnOnly: 'studio.preset.langEnOnly',
   imageToolOnly: 'studio.preset.imageToolOnly',
+  // 算力来源门控：当前 provider 跑不了的模型置灰 + 「仅 Colab」角标与原因提示。
+  providerOnly: 'studio.preset.providerOnly',
+  providerBlocked: 'studio.preset.providerBlocked',
   footer: 'studio.preset.footer',
   steps: 'studio.preset.stepsUnit',
   dualGpu: 'studio.preset.dualGpu',
+}
+
+/** 算力来源展示名（无效 id 由 providerNameKeyOf 回退到契约默认来源）。 */
+function providerText(t, provider) {
+  return t(providerNameKeyOf(provider))
 }
 
 function shortOf(preset) {
@@ -77,7 +94,7 @@ function specOf(t, preset) {
 }
 
 export function ModelCardPicker(props) {
-  const { t, isEn, presets, value, defaultPreset, onChange, open, onOpenChange } = props
+  const { t, isEn, presets, value, defaultPreset, provider = '', onChange, open, onOpenChange } = props
   const list = Array.isArray(presets) ? presets : []
   const active = list.find((preset) => preset.id === value) || list[0] || null
   const rootRef = React.useRef(null)
@@ -121,6 +138,8 @@ export function ModelCardPicker(props) {
   function choose(preset) {
     // 专用局部重绘权重只服务舞台图片工具：主表单选择器不给选（Lead 决策 D3）。
     if (!preset || preset.inpaintOnly === true) return
+    // 当前算力来源跑不了的模型同样不可选：禁用态已挡一层，这里再兜一层（测试 / 旧宿主直调回调）。
+    if (!presetAvailableForProvider(preset, provider)) return
     if (onChange) onChange(preset)
     onOpenChange(false)
     if (triggerRef.current) triggerRef.current.focus({ preventScroll: true })
@@ -200,6 +219,17 @@ export function ModelCardPicker(props) {
               const isDefault = preset.id === defaultPreset
               // 专用局部重绘权重只出现在舞台图片工具里：主表单选择器标成不可选。
               const imageToolOnly = preset.inpaintOnly === true
+              // 算力来源门控：只对显式声明 providers 的模型生效，缺省 = 两种来源都可用。
+              // 不可用时置灰禁用并给「仅 Colab」角标；键盘导航按现有 disabled 过滤自动跳过。
+              const restrictedProvider = presetProviderRestrictionOf(preset)
+              const providerBlocked = !presetAvailableForProvider(preset, provider)
+              const disabled = imageToolOnly || providerBlocked
+              const blockedTitle = providerBlocked
+                ? formatText(t(LABELS.providerBlocked), {
+                    provider: providerText(t, provider),
+                    needed: providerText(t, restrictedProvider),
+                  })
+                : undefined
               const optionEta = etaOf(t, preset)
               const description = descriptionOf(preset, isEn)
               return (
@@ -208,11 +238,11 @@ export function ModelCardPicker(props) {
                   type="button"
                   role="option"
                   aria-selected={selected ? 'true' : 'false'}
-                  aria-disabled={imageToolOnly ? 'true' : undefined}
-                  disabled={imageToolOnly}
-                  className={`ofs-model-option${selected ? ' is-on' : ''}${imageToolOnly ? ' is-tool-only' : ''}`}
+                  aria-disabled={disabled ? 'true' : undefined}
+                  disabled={disabled}
+                  className={`ofs-model-option${selected ? ' is-on' : ''}${imageToolOnly ? ' is-tool-only' : ''}${providerBlocked ? ' is-provider-gated' : ''}`}
                   data-preset-id={preset.id}
-                  title={imageToolOnly ? t(LABELS.imageToolOnly) : undefined}
+                  title={imageToolOnly ? t(LABELS.imageToolOnly) : blockedTitle}
                   onClick={() => choose(preset)}
                 >
                   <span className="ofs-model-poster" aria-hidden="true">
@@ -233,6 +263,11 @@ export function ModelCardPicker(props) {
                           {t(preset.supportsChinese === true ? LABELS.langZhEn : LABELS.langEnOnly)}
                         </span>
                       )}
+                      {restrictedProvider ? (
+                        <span className="ofs-model-provider">
+                          {formatText(t(LABELS.providerOnly), { provider: providerText(t, restrictedProvider) })}
+                        </span>
+                      ) : null}
                       {isDefault ? <span className="ofs-model-default">{t(LABELS.default)}</span> : null}
                     </span>
                     {description ? <span className="ofs-model-desc">{description}</span> : null}

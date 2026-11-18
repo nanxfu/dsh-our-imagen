@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { buildKernelFolder, removeKernelFolder } from '../lib/kernel.js'
-import { classifyFailure, payloadConfigOf } from '../tools/verify-model.mjs'
+import { classifyFailure, payloadConfigOf, readHfToken } from '../tools/verify-model.mjs'
 import { createCheckRunner } from './helpers/check.mjs'
 import { assertPythonImports, assertPythonSyntax, inspectZip } from './helpers/python-check.mjs'
 
@@ -150,6 +150,29 @@ async function main() {
         if (!(key in config)) throw new Error(`缺少 ${key}`)
       }
       if (config.pipeline.base !== 'test/model') throw new Error('pipeline 未原样下发')
+      if ('hf_token' in config) throw new Error('没有 Token 时不能下发 hf_token')
+      const withToken = payloadConfigOf(validModel(), { hfToken: 'hf_test_0123456789abcdef' })
+      if (withToken.hf_token !== 'hf_test_0123456789abcdef') throw new Error('hf_token 未按选项下发')
+      if ('hf_token' in payloadConfigOf(validModel(), { hfToken: '   ' })) throw new Error('空白 Token 不应下发')
+    })
+
+    await check('readHfToken：环境变量优先，其次私有设置文件，非法值视为没有', async () => {
+      const settings = join(dir, 'settings.json')
+      await writeFile(settings, JSON.stringify({ schema: 2, hfToken: 'hf_file_0123456789abcdef' }), 'utf8')
+      if (await readHfToken({ env: {}, settingsFile: settings }) !== 'hf_file_0123456789abcdef') {
+        throw new Error('未从设置文件读取 Token')
+      }
+      if (await readHfToken({ env: { HF_TOKEN: 'hf_env_0123456789abcdef' }, settingsFile: settings }) !== 'hf_env_0123456789abcdef') {
+        throw new Error('环境变量没有优先')
+      }
+      if (await readHfToken({ env: { HF_TOKEN: 'not-a-token' }, settingsFile: settings }) !== 'hf_file_0123456789abcdef') {
+        throw new Error('非法环境变量应当回退到设置文件')
+      }
+      if (await readHfToken({ env: {}, settingsFile: join(dir, 'missing.json') }) !== null) {
+        throw new Error('设置文件缺失应返回 null')
+      }
+      await writeFile(settings, '{broken json', 'utf8')
+      if (await readHfToken({ env: {}, settingsFile: settings }) !== null) throw new Error('损坏的设置文件应返回 null')
     })
 
     await check('失败分类：pip 冲突 / OOM / 磁盘 / 超时 / 兜底', () => {

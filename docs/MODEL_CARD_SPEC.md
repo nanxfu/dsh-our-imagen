@@ -158,7 +158,7 @@
 ## 6. 验收标准
 
 1. **视觉一致性**：彻底清除系统原生白底 `<select>`，浮层风格与云端算力弹层（`ofs-popover`）完全同构。
-2. **血统透明**：用户进入界面即可明确区分 FLUX（`FLUX.2 Klein 4B`）、SDXL 系列与 Anima（`Anima Light Lavender`）三类底座，不再误解为单一模型；10 个模型（含专用 `SDXL Inpaint`）都能在列表中看到并选中。
+2. **血统透明**：用户进入界面即可明确区分 FLUX（`FLUX.2 Klein 4B`）、SDXL 系列与 Anima（`Anima Light Lavender`）三类底座，不再误解为单一模型；10 个模型（含专用 `SDXL Inpaint`）都能在列表中看到并选中。模型资产的可选 `providers` 能力位会在卡片上按当前算力来源置灰（当前无发布资产启用，UI 已就绪）。
 3. **资产纯净**：9 张独立海报随构建内联为 data URL（`sdxl-inpaint` 复用 SDXL 家族海报），无任何外部图片 HTTP 请求；海报资源 base64 合计 20116 字符（含前缀 20323 字符），低于 20KB 预算。
 4. **功能兼容**：切换模型后，画布尺寸、CFG、步数等推荐值联动更新，历史出图的 Recall / Variant 逻辑不受影响。
 5. **回归**：`npm test` 全绿；`tools/preview.mjs` 的深色 / 浅色 / 窄屏截图通过人工核对；键盘与 `prefers-reduced-motion` 验证通过。

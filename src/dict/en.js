@@ -170,6 +170,11 @@ export const en = {
   'studio.preset.langEnOnly': 'EN only',
   // Dedicated inpainting weights live in the stage image tools only; the form picker marks them unselectable.
   'studio.preset.imageToolOnly': 'Image tools only',
+  // Compute-source capability: models the current provider cannot run are greyed out with a badge.
+  'studio.preset.providerOnly': 'Only {provider}',
+  'studio.preset.providerBlocked': 'This model cannot run on the current compute source ({provider}); switch to {needed} to use it.',
+  'studio.preset.providerName.kaggle': 'Kaggle',
+  'studio.preset.providerName.colab': 'Colab',
   'studio.preset.stepsUnit': 'steps',
   'studio.preset.dualGpu': 'Dual GPU',
   'studio.preset.footer': 'Posters are conceptual, not model outputs. Switching applies the recommended size and steps.',
@@ -203,6 +208,8 @@ export const en = {
   // An inpaint-only preset cannot do text-to-image: the form falls back for this request, or blocks if none exists.
   'studio.form.autoText2Image': 'The current preset only supports partial redraw; this request uses {preset} for text-to-image',
   'studio.form.blockedInpaintOnly': 'The current preset only supports partial redraw and no text-to-image preset is available. Switch models.',
+  // Compute-source mismatch (asset `providers` capability): name the model and both sources; never switch silently.
+  'studio.form.blockedProvider': '“{preset}” requires {needed}, but the current compute source is {provider}. Switch the compute source in Run settings or pick another model.',
 
   // ── Preview ───────────────────────────────────────────────────
   'studio.stage.empty': 'Preview',

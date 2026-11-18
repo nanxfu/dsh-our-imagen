@@ -1,6 +1,6 @@
 # 工作台交互语义对齐、双向助手闭环与模型原生参考规划
 
-> **状态**：✅ Phase 0、Phase A、Phase B 与 Phase C 已全部完成（2026-11-18，未发版）。Phase C（模型原生参考生图）已完成契约 / 远端 / 客户端全链路与 Kaggle `2×T4` 真机验收：`supportsReference` 首期载体 `FLUX.2 Klein 4B` 的 1~2 张参考生图、左栏参考图槽、动作坞「设为参考图」与推理加速同 Seed 对照均已有实测结论。  
+> **状态**：✅ Phase 0、Phase A、Phase B 与 Phase C 已全部完成（2026-11-18，未发版）。Phase C 的遗留项（C1 现代扩图演进 / P1 推理缓存与 FP8、C2 大显存模型接入）已在**阶段十六**逐项收口，见 [ROADMAP.md](ROADMAP.md) 第十六节：C0 的 ⬜ 项经复核确认早已实现（文档勾选残留已纠正）；Klein 4B + Outpaint LoRA 完成真机评估（提速 1.57×，决策不迁移默认引擎）；FBCache 探针与 Colab L4 FP8 评估结论为不适用 / 无合入价值；`FLUX.2 Klein 9B` 完成接入准备与 `providers` 能力位门控（真机验证受 Colab A100 容量限制，资产暂不发布）；Qwen-Image-Edit 记录为不接入（显存预算不足）。  
 > **前置基线**：0.13.0（已完成阶段十二「舞台图片处理工具栏解耦」与阶段十三「显式新建绘图、多作品草稿与树状版本管理」）。  
 > **核心原则**：UI 保持克制、减少用户参数决策；表单—舞台—助手三向闭环；**不做多模态看图过渡方案**，直接基于图像模型原生能力补齐“参考图与编辑统一体验”；不给 SDXL 堆砌过时外挂技术债。
 
@@ -210,7 +210,9 @@
 > - **C1 契约、能力与远端参考分支**：`LIMITS.referenceImages`（maxCount 2 / 4 MiB / maxEdge 1024 / minEdge 128）+ `PROTOCOL.daemon.referenceImages`；模型资产新增必填 `supportsReference`（仅 `flux2-klein-4b`，与 `supportsImg2Img` 互斥）；Host 请求 `references: string[]` → job 级 `referenceImages: [{image_b64}]`，远端提交期只读图片头、执行期整批解码一次，`run_task` 以基础管线 `image=[PIL...]` 条件出图且宽高严格取请求值；`meta.json` 写 `referenceSources` 并由 `/history` / `/history/tree` 透传（独立新根，不进版本树）。`flux2-klein-4b` 资产修正 `variant=null` + 组件 `allowPatterns` 白名单（跳过 7.75 GB 单文件重复副本）+ `downloadGb 16.0`，白名单在真机首次即加载成功。新增 `pipeline.accel` 加速开关脚手架（缺省逐字不变、fuse 幂等）。
 > - **C1 真机结论**：参考生图 1 张约 20~21s、2 张约 40s（纯文生图稳态 8.6s），同 seed 两轮逐像素一致，1280×720 画幅保持通过，显存全程无增长；参考条件为**弱参考**（有参考 vs 无参考 MAE 7.71/255，prompt + seed 主导），产品文案不承诺强一致。P0 加速（`channels_last + fuse_qkv`、`vae_tiling`）实测为「提速不显著 / 画质不一致 / 扩图反而变慢」，**全部不合入默认路径**，模型资产不启用 `pipeline.accel`；原生 `Flux2KleinInpaintPipeline` 可加载但因 1 MP 画布上限与 4 步接缝质量，本轮不迁移默认扩图引擎。
 > - **C2 左栏参考图槽与交互**：新增 `src/logic/reference.js`（槽位增删 / 去重 / 上限 / 路径归一 / 能力门控 / dirty 指纹 / 请求体拼装）与 `src/studio/rail/ReferenceSection.jsx`（提示词之后、画面设置之前；空态 / 1~2 张网格 / 单张移除 / 满额提示 / 从作品选择 / 拖入本机图片经 `/import` 落盘后入槽 / 弱参考提示）；不支持参考的预设就地提示并给「切换到 FLUX.2 Klein 4B」与「改用整图重绘」，生成前拦下（不发请求、不静默丢图）；动作坞复用组新增「设为参考图」；助手生成经同一 `buildBody` 自动携带参考槽；参考槽计入表单 dirty 指纹并随新建创作 / 还原原图 / 回填清理。字典 zh/en 各 616 键同构。
-> - **测试**：新增 `test/reference.mjs`（17）、`test/remote/test_reference_images.py`（36）；`check-client-logic` 90、`check-client-shell` 53、`check-client-draft` 11、`image-tool-render` 14、`check-contract` 14、`jobs-wait` 40、`host-e2e` 63、`test/remote/run.py` 476；`npm test` 39 步全绿。
+> - **C1 遗留（阶段十六收口）**：`Flux2Loader` 支持 `pipeline.lora`（预挂载 / `hf_hub_download` / `set_adapters`，离线 15 项断言）；`test/gpu-live.mjs --outpaint-lora` 在 Kaggle 2×T4 完成 `flux2-klein-4b + fal Outpaint LoRA` 真机评估——加载 33.8s / 推理 22.5s / 输出严格 1536×864 / 绿边残留 0.00% / 接缝比 1.14~1.15 / 内容区色偏 max 3.47，对比 `sdxl-inpaint` 历史中位 **提速 1.57×**；因内容区为整图重绘（平均差 12.87/255）不满足「扩图保留原图」的像素保真语义，**决策不迁移默认引擎**，列为下一阶段首选候选。P1 缓存（FBCache）真机探针得到 `[accel] WARN cache 不适用：block 输出形状混合`（两档输出逐像素一致、显存同为 7928 MiB，中位 1.17× 属冷启动噪声），SDXL 家族为 UNet 无 transformer，**P1 缓存不成立、不合入**；Colab L4 `torchao` FP8 经预算评估无合入价值（9B fp8 transformer + 15.26GB 文本编码器仍超 L4 可用显存）。详见 [INFERENCE_ACCELERATION_RESEARCH.md](INFERENCE_ACCELERATION_RESEARCH.md) §4.4。
+> - **C2 遗留（阶段十六收口）**：新增 `providers` 算力来源能力位（资产可选字段 + 构建校验 + 客户端模型卡置灰 + `generateCapabilityOf` 的 `blockedProvider` 预检 + Host `providerGateOf` 兜底）；`flux2-klein-9b`（9.08B distilled / 4 步 / CFG 1.0 / 组件权重 32.32 GiB / HF 受限仓库 / FLUX NCL）的资产草稿与 Colab 验证脚本已就绪，但 **Colab A100 真机验证受容量限制（assign 持续 503）未取得 measured，按 SOP 本轮不发布模型资产**；**Qwen-Image-Edit-2511 本轮不接入**——BF16 全量 53.76GiB 超出 2×T4 / L4 / A100-40GB 全部预算，社区 FP8 单文件 + BF16 文本端仍约 34.6GiB，重启条件为单卡 ≥80GB 或自研量化运行时。详见 [ROADMAP.md](ROADMAP.md) 第十六节。
+> - **测试**：新增 `test/reference.mjs`（17）、`test/remote/test_reference_images.py`（36）、`test/remote/test_flux2_lora.py`（15）、`test/remote/test_accel_cache.py`（21）、`test/check-client-provider.mjs`（5）；`check-client-logic` 90 → 93、`check-client-shell` 53、`check-client-draft` 11、`image-tool-render` 14、`check-contract` 14、`jobs-wait` 40、`host-e2e` 63、`test/remote/run.py` 476 → 518；`npm test` 全绿。
 
 * **目标**：基于模型原生能力实现极简的“参考生新图（自由换场景、换画幅、批量抽卡）”与同主角批量分镜，同时收口 Phase A / B 检阅发现的状态同步与后处理遗留问题。
 * **Phase C0 — 状态同步漏洞与 Phase B 检阅遗留收口（顺手必修）**：
@@ -222,7 +224,7 @@
      - **删除作品级联清理（`useWorkLibrary.deleteImages`）**：按 `removed` 路径清理对应 `imageTool.workDrafts` 与表单 `origin` / `draft.source` 引用；若删掉了当前预览作品并回退到下一张图，同步刷新左栏回填。
   2. **衍生作品回填与重新生成过滤（`src/logic/generate.js`）**：
      - ✅ **已完成（`dd3ade4`）** **高清放大（`upscale`）**：`isNonDiffusionRecallOf` / `diffusionSourceOf` 已沿 `sourceImage` 回溯父作品扩散参数，父作品缺失时走降级补丁（合法预设 + `upscaleSource`/钳制尺寸 + 推荐步数），不再将 `realesrgan-x2plus` / `steps: 0` / `2048px` 写入表单或生成请求。
-     - ⬜ **待修：`inpaint` / `outpaint` 的 `inpaintOnly` 预设过滤**：当 `item.presetId` 为 `inpaintOnly`（如 `sdxl-inpaint`）时，回填左栏纯文生图表单不得写入该不可用预设（避免左栏模型选择器显示空白未选中态），应沿 `sourceImage` 回溯或保留表单当前可用扩散预设。
+     - ✅ **已完成（`58ed11b`，本轮复核确认）** **`inpaint` / `outpaint` 的 `inpaintOnly` 预设过滤**：当 `item.presetId` 为 `inpaintOnly`（如 `sdxl-inpaint`）时，回填左栏纯文生图表单不写入该不可用预设（避免左栏模型选择器显示空白未选中态）；实现落在 `src/logic/generate.js` 的 `isNonDiffusionRecallOf` / `diffusionSourceOf` / `iteratePatch` / `rerollOverrides`——沿 `sourceImage` 在已加载历史里回溯父作品的真实扩散参数（最多 8 层、防成环、跳过裸导入父作品），父作品缺失时走降级补丁（合法扩散预设 + 钳制尺寸 + 推荐步数/CFG + 随机种子），绝不把 `sdxl-inpaint`、0 步或超限尺寸带进表单或生成请求。用例见 `test/check-client-logic.mjs` 的「阶段十五 Phase C0：局部重绘 / 扩图产物的 inpaintOnly 预设过滤」一节（回填、重新生成、降级选模、链式回溯）。
   3. ✅ **已完成（`dd3ade4`）** **Phase B 扩图画质与拉帘对齐收口**：
      - ✅ **统一扩图画布填底为边缘像素延拓（edge-clamp）**：`outpaintEdgeStripsOf` + `OutpaintEditor.jsx` + `test/gpu-live.mjs` 已统一为边缘像素延拓并完成真机复验（逐像素比对 0 差异）。
      - ✅ **扩图「对比原图」拉帘子矩形对齐**：契约 `OUTPAINT.content` / `reference.outpaintContent` / `meta.outpaintContent` / `/history` 透传与 `CompareSlider.jsx` 百分比子矩形定位均已落地通过。
@@ -232,17 +234,17 @@
      - **补齐组件实例 `key`**：在 `Stage.jsx` 为 `<MaskEditor key={target.path} />`、`<OutpaintEditor key={target.path} />` 与 `<CompareSlider key={...} />` 显式挂 `key`，避免内部 `useState` 残留上一张图的尺寸/加载态。
      - **去重公共小工具**：把在 `Stage.jsx` / `ToolSubmitBar.jsx` / `OutpaintEditor.jsx` / `MaskEditor.jsx` 重复 4 份的 `percentOf` 及多处重复的 `positiveSize` 收进 `src/logic/format.js` 等纯工具模块。
      - *明确不作为本轮重活*：render 内写 `*Ref.current` 的并发安全改造与 `MaskEditor.jsx`（846 行）拆 hook 留作按需专项，不在无功能需求时为洁癖做大面积重写。
-* **Phase C1 — `FLUX.2 Klein 4B` 参考能力与 Outpaint LoRA 真机验证与推理抽象**：
-  - 在 Kaggle `2×T4` 实测 `Flux2KleinPipeline` 在 `fp16`（及按需 CPU offload）下单图与多图参考输入的显存峰值、耗时与参考图数量/尺寸安全边界；
-  - 顺带评估 **`FLUX.2 Klein 4B + Outpaint LoRA`**（如 `fal/flux-2-klein-4B-outpaint-lora` + 约定边界填充）在 2×T4 上的扩图接缝、主体锁定与耗时表现（对比 Phase B 的 `sdxl-inpaint` 35.4s 基线），决策是否将 `outpaint` 后端默认引擎迁移至 Klein 4B + LoRA；
-  - 同步按 [INFERENCE_ACCELERATION_RESEARCH.md](INFERENCE_ACCELERATION_RESEARCH.md) 顺带验证 P0/P1 推理加速与省显存方案（`vae_tiling`、`channels_last` + `fuse_qkv_projections`、多步模型 `FBCache` / `TeaCache`，以及 Colab L4 上的 `torchao` FP8），跑出「普通默认部署 vs 优化部署」的同 Seed 真机对比数据后再择优合入与同步至 `README`；
-  - 在 `shared/contract.js`、`models/*.json` 与 `remote/inference/loaders/` 新增独立能力字段 `supportsReference`（及参考图列表限制，与 `supportsImg2Img` 隔离），打通 `daemon.py` 按 `referenceImages`（保留 `width`/`height`）的文生图推理分支。
-* **Phase C2 — 左栏参考槽、拖放分流与批量分镜**：
-  - 落地左栏顶部参考图槽（支持 1~N 张参考图、从新画布/浏览态拖放挂载、动作坞一键「设为参考图」）；
-  - 当所选模型不支持 `supportsReference` 时，在参考区提示并支持一键切到支持模型或跳转舞台「整图重绘」；
-  - 生成产物写入独立 `v1` 根（元数据记 `referenceSources` 用于溯源，不折叠进参考图版本树）；
-  - 对话助手与 `imagen_batch` 支持带参考图的批量分镜生成；
-  - 配合路线图十四（Colab L4/A100 后端）接入后，顺势引入 **`FLUX.2 Klein 9B`** 与 **`Qwen-Image-Edit`**。
+* **Phase C1 — `FLUX.2 Klein 4B` 参考能力与 Outpaint LoRA 真机验证与推理抽象** —— ✅ **已完成（Phase C1 主体 2026-11-18；Outpaint LoRA 与 P1 加速于阶段十六收口）**：
+  - ✅ 在 Kaggle `2×T4` 实测 `Flux2KleinPipeline` 在 `fp16`（及按需 CPU offload）下单图与多图参考输入的显存峰值、耗时与参考图数量/尺寸安全边界（1 张 20~21s / 2 张 40s，显存无增长，弱参考结论见 §四 C1 真机结论）；
+  - ✅ 已评估 **`FLUX.2 Klein 4B + Outpaint LoRA`**（`fal/flux-2-klein-4B-outpaint-lora` + 绿边填充约定）在 2×T4 上的扩图接缝、主体锁定与耗时：推理 22.5s（对比 `sdxl-inpaint` 历史中位 35.31s，**提速 1.57×**）、绿边残留 0.00%、接缝比 1.14~1.15、色偏 max 3.47，但内容区为整图重绘（平均差 12.87/255）；**决策：暂不迁移默认引擎**，数据与理由见 [ROADMAP 十六](ROADMAP.md) §2；
+  - ✅ 已按 [INFERENCE_ACCELERATION_RESEARCH.md](INFERENCE_ACCELERATION_RESEARCH.md) 完成 P0/P1 对照：P0（`vae_tiling`、`channels_last + fuse_qkv`）此前已判定不合入；P1（`FBCache` / 多步模型跳步缓存）真机探针得到「flux2 双栈输出形状混合、SDXL UNet 无 transformer，均不适用」，两档输出逐像素一致，**不合入**；Colab L4 `torchao` FP8 经预算评估无合入价值（详见 INFERENCE §4.4）；**未按「验证后同步 README」执行，因为没有任何一项达到合入门槛**；
+  - ✅ 在 `shared/contract.js`、`models/*.json` 与 `remote/inference/loaders/` 新增独立能力字段 `supportsReference`（及参考图列表限制，与 `supportsImg2Img` 隔离），打通 `daemon.py` 按 `referenceImages`（保留 `width`/`height`）的文生图推理分支。
+* **Phase C2 — 左栏参考槽、拖放分流与批量分镜** —— ✅ **已完成（C2 主体 2026-11-18；大显存模型于阶段十六收口）**：
+  - ✅ 左栏顶部参考图槽（1~2 张、从新画布/浏览态拖放挂载、动作坞一键「设为参考图」）；
+  - ✅ 所选模型不支持 `supportsReference` 时在参考区提示，并支持一键切到支持模型或跳转舞台「整图重绘」；
+  - ✅ 生成产物写入独立 `v1` 根（元数据记 `referenceSources` 用于溯源，不折叠进参考图版本树）；
+  - ✅ 对话助手与 `imagen_batch` 支持带参考图的批量分镜生成（助手经同一 `buildBody` 自动携带参考槽；`imagen_batch` 新增公共 `references` 参数，全部条目共用同一组参考图）；
+  - ✅ 完成 **`FLUX.2 Klein 9B`** 的接入准备（资产草稿 `.tmp/models/flux2-klein-9b.verified-pending.json` + `providers: ["colab"]` 能力位与工作台 / Host 双层门控）；**真机验证受阻于 Colab A100 容量（assign 持续 503），按 SOP 未取得 measured 的资产不入库，本轮不发布**；**`Qwen-Image-Edit` 本轮不接入**，原因与重启条件见 [ROADMAP 十六](ROADMAP.md) §5。
 
 ---
 

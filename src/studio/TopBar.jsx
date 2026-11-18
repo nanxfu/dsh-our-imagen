@@ -351,6 +351,8 @@ export function TopBar(props) {
         presets={presets}
         value={fields.presetId}
         defaultPreset={compute.defaultPreset}
+        // 算力来源门控与生成前预检共用组合层唯一归一的 provider，不在这里再推导。
+        provider={compute.provider}
         open={modelOpen}
         onOpenChange={(next) => {
           setModelOpen(next)

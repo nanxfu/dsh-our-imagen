@@ -221,6 +221,11 @@ var zh = {
   "studio.preset.langEnOnly": "仅英文",
   // 专用局部重绘权重只出现在舞台图片工具里，主表单模型卡标成不可选。
   "studio.preset.imageToolOnly": "仅图片工具",
+  // 算力来源能力位：当前来源跑不了的模型置灰 + 角标（如 9B 只在 Colab 大显存后端可用）。
+  "studio.preset.providerOnly": "仅 {provider}",
+  "studio.preset.providerBlocked": "当前算力来源（{provider}）跑不了这个模型；切换到 {needed} 后可用。",
+  "studio.preset.providerName.kaggle": "Kaggle",
+  "studio.preset.providerName.colab": "Colab",
   "studio.preset.stepsUnit": "步",
   "studio.preset.dualGpu": "双 GPU",
   "studio.preset.footer": "海报为概念示意，非出图样例；切换会套用推荐尺寸与步数。",
@@ -253,6 +258,8 @@ var zh = {
   // 专用局部重绘预设不能文生图：主表单本次请求自动切兜底预设 / 一个可用预设都没有时拦下。
   "studio.form.autoText2Image": "当前预设只支持局部重绘，本次已改用 {preset} 文生图",
   "studio.form.blockedInpaintOnly": "当前预设只支持局部重绘，且没有可用的文生图预设；请切换模型。",
+  // 算力来源不匹配（模型资产 providers 能力位）：明确当前 / 所需来源与模型名，不静默换模型。
+  "studio.form.blockedProvider": "「{preset}」只能运行在 {needed} 上，当前算力来源是 {provider}；请到运行设置里切换算力来源，或改用其他模型。",
   // ── 画面预览 ─────────────────────────────────────────────────
   "studio.stage.empty": "画面预览",
   "studio.stage.emptyHint": "在左侧输入画面描述，点击生成即可开始出图。",
@@ -884,6 +891,11 @@ var en = {
   "studio.preset.langEnOnly": "EN only",
   // Dedicated inpainting weights live in the stage image tools only; the form picker marks them unselectable.
   "studio.preset.imageToolOnly": "Image tools only",
+  // Compute-source capability: models the current provider cannot run are greyed out with a badge.
+  "studio.preset.providerOnly": "Only {provider}",
+  "studio.preset.providerBlocked": "This model cannot run on the current compute source ({provider}); switch to {needed} to use it.",
+  "studio.preset.providerName.kaggle": "Kaggle",
+  "studio.preset.providerName.colab": "Colab",
   "studio.preset.stepsUnit": "steps",
   "studio.preset.dualGpu": "Dual GPU",
   "studio.preset.footer": "Posters are conceptual, not model outputs. Switching applies the recommended size and steps.",
@@ -916,6 +928,8 @@ var en = {
   // An inpaint-only preset cannot do text-to-image: the form falls back for this request, or blocks if none exists.
   "studio.form.autoText2Image": "The current preset only supports partial redraw; this request uses {preset} for text-to-image",
   "studio.form.blockedInpaintOnly": "The current preset only supports partial redraw and no text-to-image preset is available. Switch models.",
+  // Compute-source mismatch (asset `providers` capability): name the model and both sources; never switch silently.
+  "studio.form.blockedProvider": "“{preset}” requires {needed}, but the current compute source is {provider}. Switch the compute source in Run settings or pick another model.",
   // ── Preview ───────────────────────────────────────────────────
   "studio.stage.empty": "Preview",
   "studio.stage.emptyHint": "Describe the image on the left, then press Generate.",
@@ -2943,7 +2957,7 @@ var shell_default = "/*\n * 外壳：整页容器、顶栏、云端过渡状态�
 var pipeline_default = '/*\n * 生图流水线：顶栏下方一条 40px 高的单行节点条。\n *\n * 左边是固定五段的节点序列（申请 GPU 的四段 + 生成），右边是排队数与总等待时长。\n * 只在有等待时出现，由组合层决定内容；这里只管形态：中性卡片、小圆点、连接线与克制的动效。\n *\n * 配色立场（见 tokens.css）：语义色只以小圆点与窄条出现——\n *   已完成 = ok 绿点；当前 = 墨黑点 + 1.5 秒呼吸；\n *   排队变慢 = 琥珀点 + 琥珀文字；失败 = 红点；待开始 = 空心灰点。\n */\n\n.ofs-pipeline {\n  position: relative;\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  height: 40px;\n  margin: 12px 16px 0;\n  padding: 0 12px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: var(--ofs-r-md);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  line-height: 1.4;\n  overflow: hidden;\n  animation: ofs-fade-in 220ms ease;\n  /* 出现/消失用高度过渡：等待超过 1.5 秒才出现，快速出图不闪条。 */\n  transition:\n    height 200ms ease,\n    margin-top 200ms ease,\n    opacity 180ms ease,\n    border-color 200ms ease;\n}\n\n/* 收起态：高度归零但不移除节点（外层常驻，避免工作区上下跳动）。 */\n.ofs-pipeline.is-hidden {\n  height: 0;\n  margin-top: 0;\n  border-color: transparent;\n  opacity: 0;\n  pointer-events: none;\n}\n\n/* ── 左侧：节点与连接线 ─────────────────────────────────────── */\n.ofs-pl-rail {\n  position: relative;\n  display: flex;\n  align-items: center;\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ofs-pl-node {\n  position: relative;\n  z-index: 1;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  flex: 0 0 auto;\n  padding: 4px 8px;\n  border-radius: var(--ofs-r-pill);\n}\n\n/* 当前节点：一枚浅浅的底，让「现在在这一格」不靠颜色也能读出来。 */\n.ofs-pl-node.is-active {\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-pl-dot {\n  flex: 0 0 auto;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: transparent;\n  box-shadow: inset 0 0 0 1.5px var(--ofs-ink-4);\n}\n\n.ofs-pl-node.is-done .ofs-pl-dot {\n  background: var(--ofs-ok);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-ok) 16%, transparent);\n}\n\n.ofs-pl-node.is-active .ofs-pl-dot {\n  background: var(--ofs-accent);\n  animation: ofs-pl-breathe 1.5s ease-in-out infinite;\n}\n\n.ofs-pl-node.is-warn .ofs-pl-dot {\n  background: var(--ofs-warn);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-warn) 18%, transparent);\n  animation: ofs-warn-pulse 2.2s ease-out infinite;\n}\n\n.ofs-pl-node.is-failed .ofs-pl-dot {\n  background: var(--ofs-error);\n  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ofs-error) 18%, transparent);\n}\n\n.ofs-pl-label {\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n}\n\n.ofs-pl-node.is-done .ofs-pl-label {\n  color: var(--ofs-ink-2);\n}\n\n.ofs-pl-node.is-active .ofs-pl-label {\n  color: var(--ofs-ink);\n  font-weight: 650;\n}\n\n.ofs-pl-node.is-warn .ofs-pl-label {\n  color: var(--ofs-warn);\n  font-weight: 600;\n}\n\n.ofs-pl-node.is-failed .ofs-pl-label {\n  color: var(--ofs-error);\n  font-weight: 600;\n}\n\n/* 生成节点的分张计数：跟着当前节点，不另开一行。 */\n.ofs-pl-sub {\n  margin-left: 1px;\n  color: var(--ofs-ink-2);\n  font-weight: 500;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n/* 「比平时久」：只给文字上色，不垫色底。 */\n.ofs-pl-tag {\n  margin-left: 1px;\n  color: var(--ofs-warn);\n  font-size: 10.5px;\n  font-weight: 600;\n  white-space: nowrap;\n}\n\n.ofs-pl-tag::before {\n  content: "·";\n  margin-right: 5px;\n  color: var(--ofs-ink-4);\n  font-weight: 400;\n}\n\n/* 连接线：走完的段是实线，正在走的那一段有一道很慢的流光。 */\n.ofs-pl-link {\n  position: relative;\n  flex: 1 1 12px;\n  min-width: 14px;\n  height: 1px;\n  background: var(--ofs-hairline);\n  overflow: hidden;\n}\n\n.ofs-pl-link.is-filled {\n  background: color-mix(in oklab, var(--ofs-ink) 20%, transparent);\n}\n\n.ofs-pl-link.is-flowing::after {\n  content: "";\n  position: absolute;\n  inset: -0.5px 0;\n  background: linear-gradient(\n    90deg,\n    transparent 0%,\n    color-mix(in oklab, var(--ofs-ink) 42%, transparent) 50%,\n    transparent 100%\n  );\n  background-size: 220% 100%;\n  animation: ofs-pl-flow 2.6s linear infinite;\n}\n\n/* 折叠态（云端已就绪 → 生成）：只剩两个锚点时不要拉满整行，\n   否则那条长线会被读成「还有很长一段进度要走」。 */\n.ofs-pl-rail.is-folded .ofs-pl-link {\n  flex: 0 0 26px;\n}\n\n/* ── 右侧：排队数与总等待 ───────────────────────────────────── */\n.ofs-pl-meta {\n  flex: 0 1 auto;\n  display: flex;\n  align-items: center;\n  gap: 9px;\n  padding-left: 14px;\n  border-left: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  white-space: nowrap;\n  overflow: hidden;\n}\n\n.ofs-pl-queue {\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-pl-time {\n  color: var(--ofs-ink-2);\n  font-variant-numeric: tabular-nums;\n}\n\n/* 完成态：最后节点亮一次（一次显影），整条随后淡出。 */\n.ofs-pipeline.is-complete .ofs-pl-node.is-done:last-child .ofs-pl-dot {\n  animation: ofs-pl-develop 800ms cubic-bezier(0.22, 1, 0.36, 1) 1;\n}\n\n.ofs-pipeline.is-complete .ofs-pl-node.is-done:last-child .ofs-pl-label {\n  color: var(--ofs-ok);\n  font-weight: 600;\n}\n\n/* 关闭云端：不属于生成流程，只留一行「正在关闭云端…」，不画节点。 */\n.ofs-pipeline.is-closing .ofs-pl-meta {\n  display: none;\n}\n\n/* ── 动效 ───────────────────────────────────────────────────── */\n@keyframes ofs-pl-breathe {\n  0%, 100% { box-shadow: 0 0 0 2px color-mix(in oklab, var(--ofs-accent) 16%, transparent); }\n  50% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--ofs-accent) 3%, transparent); }\n}\n\n@keyframes ofs-pl-flow {\n  from { background-position: 220% 0; }\n  to { background-position: -120% 0; }\n}\n\n@keyframes ofs-pl-develop {\n  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ofs-ok) 55%, transparent); }\n  100% { box-shadow: 0 0 0 12px color-mix(in oklab, var(--ofs-ok) 0%, transparent); }\n}\n';
 
 // src/styles/model-picker.css
-var model_picker_default = '/* 模型选择卡（ModelCardPicker） */\n.ofs-model-wrap {\n  position: relative;\n  flex: 0 0 auto;\n}\n\n.ofs-model {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 10px 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    color 160ms ease,\n    background-color 160ms ease;\n}\n\n.ofs-model:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-model:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-model[aria-expanded="true"] {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-model > svg {\n  flex: 0 0 auto;\n}\n\n.ofs-model.is-empty {\n  cursor: default;\n}\n\n.ofs-model-family {\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 4px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  color: var(--ofs-ink-2);\n  font-size: 10px;\n  font-weight: 650;\n  line-height: 1;\n  letter-spacing: .05em;\n}\n\n.ofs-model-now {\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  font-weight: 600;\n  line-height: 1;\n  letter-spacing: .01em;\n}\n\n.ofs-model-div {\n  width: 1px;\n  height: 12px;\n  background: var(--ofs-hairline);\n}\n\n.ofs-model-eta {\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 550;\n  line-height: 1;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-model-caret {\n  color: var(--ofs-ink-3);\n  transition: transform 180ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model[aria-expanded="true"] .ofs-model-caret {\n  transform: rotate(180deg);\n}\n\n/* 弹层：与云端状态弹层同构；列表自身滚动，头尾固定。 */\n.ofs-model-menu {\n  position: absolute;\n  top: calc(100% + 8px);\n  right: 0;\n  z-index: 40;\n  display: flex;\n  flex-direction: column;\n  width: min(380px, calc(100vw - 32px));\n  max-height: 420px;\n  padding: 8px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  animation: ofs-pop-in 160ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding: 4px 10px 9px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: .03em;\n}\n\n.ofs-model-head span:last-child {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 500;\n  letter-spacing: .02em;\n}\n\n.ofs-model-list {\n  flex: 1 1 auto;\n  min-height: 0;\n  max-height: 304px; /* 4 行 × 76px：避免截出半行，剩余模型用滚动查看 */\n  overflow-y: auto;\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 6px 0 0;\n  overscroll-behavior: contain;\n  scrollbar-gutter: stable;\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-model-list::-webkit-scrollbar {\n  width: 6px;\n}\n\n.ofs-model-list::-webkit-scrollbar-thumb {\n  border-radius: 3px;\n  background: var(--ofs-ink-4);\n}\n\n.ofs-model-option {\n  appearance: none;\n  display: grid;\n  grid-template-columns: 56px minmax(0, 1fr) auto;\n  align-items: center;\n  gap: 12px;\n  width: 100%;\n  padding: 9px 10px;\n  border: 1px solid transparent;\n  border-radius: 12px;\n  background: color-mix(in oklab, var(--ofs-sunken) 55%, transparent);\n  color: var(--ofs-ink);\n  text-align: left;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease;\n}\n\n.ofs-model-option:hover {\n  border-color: var(--ofs-hairline);\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-model-option.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-model-option:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-model-poster {\n  display: block;\n  width: 56px;\n  height: 56px;\n  overflow: hidden;\n  border: 1px solid var(--ofs-print-edge);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n}\n\n.ofs-model-poster img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n  filter: saturate(.96) brightness(.98);\n  transition:\n    filter 170ms ease,\n    transform 220ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model-option:hover .ofs-model-poster img {\n  filter: saturate(1.03) brightness(1.05);\n  transform: scale(1.03);\n}\n\n.ofs-model-poster-fallback {\n  display: grid;\n  place-items: center;\n  width: 100%;\n  height: 100%;\n  color: var(--ofs-ink-3);\n  font-size: 18px;\n  font-weight: 650;\n}\n\n.ofs-model-copy {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  min-width: 0;\n}\n\n.ofs-model-line {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-model-fam {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 4px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  color: var(--ofs-ink-3);\n  font-size: 9.5px;\n  font-weight: 650;\n  line-height: 1;\n  letter-spacing: .05em;\n}\n\n.ofs-model-option.is-on .ofs-model-fam {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-model-name {\n  overflow: hidden;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  font-weight: 600;\n  line-height: 1.3;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n.ofs-model-default {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 5px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink-2);\n  font-size: 10px;\n  font-weight: 600;\n  line-height: 1;\n}\n\n.ofs-model-lang {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 5px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  color: var(--ofs-ink-3);\n  font-size: 9.5px;\n  font-weight: 550;\n  line-height: 1;\n}\n\n.ofs-model-lang.is-zh {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n.ofs-model-desc {\n  overflow: hidden;\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  line-height: 1.45;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n.ofs-model-spec {\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 500;\n  line-height: 1.4;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-model-side {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 4px;\n  min-width: 46px;\n}\n\n.ofs-model-option-eta {\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 550;\n  line-height: 1.2;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: .01em;\n  white-space: nowrap;\n}\n\n.ofs-model-option.is-on .ofs-model-option-eta {\n  color: var(--ofs-ink);\n  font-weight: 600;\n}\n\n.ofs-model-check {\n  display: grid;\n  place-items: center;\n  width: 16px;\n  height: 16px;\n  color: var(--ofs-accent);\n  opacity: 0;\n  transition: opacity 140ms ease;\n}\n\n.ofs-model-option.is-on .ofs-model-check {\n  opacity: 1;\n}\n\n.ofs-model-foot {\n  flex: 0 0 auto;\n  margin-top: 4px;\n  padding: 9px 10px 3px;\n  border-top: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11.5px;\n  font-weight: 500;\n  line-height: 1.5;\n  letter-spacing: .01em;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-model-menu {\n    animation: none;\n  }\n\n  .ofs-model,\n  .ofs-model-caret,\n  .ofs-model-option,\n  .ofs-model-poster img,\n  .ofs-model-check {\n    transition: none;\n  }\n}\n';
+var model_picker_default = '/* 模型选择卡（ModelCardPicker） */\n.ofs-model-wrap {\n  position: relative;\n  flex: 0 0 auto;\n}\n\n.ofs-model {\n  appearance: none;\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  height: 34px;\n  padding: 0 10px 0 11px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: var(--ofs-r-pill);\n  background: var(--ofs-card);\n  color: var(--ofs-ink-2);\n  font-size: 12px;\n  font-weight: 550;\n  white-space: nowrap;\n  cursor: pointer;\n  box-shadow: var(--ofs-shadow-card);\n  transition:\n    border-color 160ms ease,\n    color 160ms ease,\n    background-color 160ms ease;\n}\n\n.ofs-model:hover {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink);\n}\n\n.ofs-model:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-model[aria-expanded="true"] {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-card-solid);\n}\n\n.ofs-model > svg {\n  flex: 0 0 auto;\n}\n\n.ofs-model.is-empty {\n  cursor: default;\n}\n\n.ofs-model-family {\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 4px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  color: var(--ofs-ink-2);\n  font-size: 10px;\n  font-weight: 650;\n  line-height: 1;\n  letter-spacing: .05em;\n}\n\n.ofs-model-now {\n  color: var(--ofs-ink);\n  font-size: 12.5px;\n  font-weight: 600;\n  line-height: 1;\n  letter-spacing: .01em;\n}\n\n.ofs-model-div {\n  width: 1px;\n  height: 12px;\n  background: var(--ofs-hairline);\n}\n\n.ofs-model-eta {\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 550;\n  line-height: 1;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-model-caret {\n  color: var(--ofs-ink-3);\n  transition: transform 180ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model[aria-expanded="true"] .ofs-model-caret {\n  transform: rotate(180deg);\n}\n\n/* 弹层：与云端状态弹层同构；列表自身滚动，头尾固定。 */\n.ofs-model-menu {\n  position: absolute;\n  top: calc(100% + 8px);\n  right: 0;\n  z-index: 40;\n  display: flex;\n  flex-direction: column;\n  width: min(380px, calc(100vw - 32px));\n  max-height: 420px;\n  padding: 8px;\n  border: 1px solid var(--ofs-card-border);\n  border-radius: 16px;\n  background: var(--ofs-card-solid);\n  box-shadow: var(--ofs-shadow-lift);\n  animation: ofs-pop-in 160ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model-head {\n  flex: 0 0 auto;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding: 4px 10px 9px;\n  border-bottom: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: .03em;\n}\n\n.ofs-model-head span:last-child {\n  color: var(--ofs-ink-3);\n  font-size: 10.5px;\n  font-weight: 500;\n  letter-spacing: .02em;\n}\n\n.ofs-model-list {\n  flex: 1 1 auto;\n  min-height: 0;\n  max-height: 304px; /* 4 行 × 76px：避免截出半行，剩余模型用滚动查看 */\n  overflow-y: auto;\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  padding: 6px 0 0;\n  overscroll-behavior: contain;\n  scrollbar-gutter: stable;\n  scrollbar-width: thin;\n  scrollbar-color: var(--ofs-ink-4) transparent;\n}\n\n.ofs-model-list::-webkit-scrollbar {\n  width: 6px;\n}\n\n.ofs-model-list::-webkit-scrollbar-thumb {\n  border-radius: 3px;\n  background: var(--ofs-ink-4);\n}\n\n.ofs-model-option {\n  appearance: none;\n  display: grid;\n  grid-template-columns: 56px minmax(0, 1fr) auto;\n  align-items: center;\n  gap: 12px;\n  width: 100%;\n  padding: 9px 10px;\n  border: 1px solid transparent;\n  border-radius: 12px;\n  background: color-mix(in oklab, var(--ofs-sunken) 55%, transparent);\n  color: var(--ofs-ink);\n  text-align: left;\n  cursor: pointer;\n  transition:\n    background-color 150ms ease,\n    border-color 150ms ease;\n}\n\n.ofs-model-option:hover {\n  border-color: var(--ofs-hairline);\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-model-option.is-on {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n}\n\n.ofs-model-option:focus-visible {\n  outline: none;\n  box-shadow: var(--ofs-focus-ring);\n}\n\n.ofs-model-poster {\n  display: block;\n  width: 56px;\n  height: 56px;\n  overflow: hidden;\n  border: 1px solid var(--ofs-print-edge);\n  border-radius: 10px;\n  background: var(--ofs-sunken);\n}\n\n.ofs-model-poster img {\n  display: block;\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n  filter: saturate(.96) brightness(.98);\n  transition:\n    filter 170ms ease,\n    transform 220ms cubic-bezier(.22, 1, .36, 1);\n}\n\n.ofs-model-option:hover .ofs-model-poster img {\n  filter: saturate(1.03) brightness(1.05);\n  transform: scale(1.03);\n}\n\n.ofs-model-poster-fallback {\n  display: grid;\n  place-items: center;\n  width: 100%;\n  height: 100%;\n  color: var(--ofs-ink-3);\n  font-size: 18px;\n  font-weight: 650;\n}\n\n.ofs-model-copy {\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  min-width: 0;\n}\n\n.ofs-model-line {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-model-fam {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 4px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  color: var(--ofs-ink-3);\n  font-size: 9.5px;\n  font-weight: 650;\n  line-height: 1;\n  letter-spacing: .05em;\n}\n\n.ofs-model-option.is-on .ofs-model-fam {\n  border-color: var(--ofs-accent-soft-border);\n  color: var(--ofs-ink-2);\n}\n\n.ofs-model-name {\n  overflow: hidden;\n  color: var(--ofs-ink);\n  font-size: 13px;\n  font-weight: 600;\n  line-height: 1.3;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n.ofs-model-default {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 5px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  background: var(--ofs-card-solid);\n  color: var(--ofs-ink-2);\n  font-size: 10px;\n  font-weight: 600;\n  line-height: 1;\n}\n\n.ofs-model-lang {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 5px;\n  border: 1px solid var(--ofs-hairline);\n  border-radius: 4px;\n  color: var(--ofs-ink-3);\n  font-size: 9.5px;\n  font-weight: 550;\n  line-height: 1;\n}\n\n.ofs-model-lang.is-zh {\n  border-color: var(--ofs-accent-soft-border);\n  background: var(--ofs-accent-soft);\n  color: var(--ofs-accent);\n}\n\n/* 模型卡选项里的算力来源角标（与语言角标同形，用告警色区分「当前来源跑不了」）。 */\n.ofs-model-provider {\n  flex: 0 0 auto;\n  display: inline-flex;\n  align-items: center;\n  height: 16px;\n  padding: 0 5px;\n  border: 1px solid color-mix(in oklab, var(--ofs-warn) 34%, transparent);\n  border-radius: 4px;\n  background: var(--ofs-warn-soft);\n  color: var(--ofs-warn);\n  font-size: 9.5px;\n  font-weight: 550;\n  line-height: 1;\n  letter-spacing: .02em;\n}\n\n/* 置灰项不响应 hover 高亮：disabled 属性由浏览器挡住点击，视觉上也别给「可选」暗示。 */\n.ofs-model-option.is-provider-gated:hover {\n  border-color: transparent;\n  background: color-mix(in oklab, var(--ofs-sunken) 55%, transparent);\n}\n\n.ofs-model-desc {\n  overflow: hidden;\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  font-weight: 500;\n  line-height: 1.45;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n}\n\n.ofs-model-spec {\n  overflow: hidden;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  font-weight: 500;\n  line-height: 1.4;\n  white-space: nowrap;\n  text-overflow: ellipsis;\n  font-variant-numeric: tabular-nums;\n}\n\n.ofs-model-side {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 4px;\n  min-width: 46px;\n}\n\n.ofs-model-option-eta {\n  color: var(--ofs-ink-2);\n  font-size: 12.5px;\n  font-weight: 550;\n  line-height: 1.2;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: .01em;\n  white-space: nowrap;\n}\n\n.ofs-model-option.is-on .ofs-model-option-eta {\n  color: var(--ofs-ink);\n  font-weight: 600;\n}\n\n.ofs-model-check {\n  display: grid;\n  place-items: center;\n  width: 16px;\n  height: 16px;\n  color: var(--ofs-accent);\n  opacity: 0;\n  transition: opacity 140ms ease;\n}\n\n.ofs-model-option.is-on .ofs-model-check {\n  opacity: 1;\n}\n\n.ofs-model-foot {\n  flex: 0 0 auto;\n  margin-top: 4px;\n  padding: 9px 10px 3px;\n  border-top: 1px solid var(--ofs-hairline);\n  color: var(--ofs-ink-3);\n  font-size: 11.5px;\n  font-weight: 500;\n  line-height: 1.5;\n  letter-spacing: .01em;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ofs-model-menu {\n    animation: none;\n  }\n\n  .ofs-model,\n  .ofs-model-caret,\n  .ofs-model-option,\n  .ofs-model-poster img,\n  .ofs-model-check {\n    transition: none;\n  }\n}\n';
 
 // src/styles/guidance.css
 var guidance_default = '/* ── 异常指引 ───────────────────────────────────────────────── */\n/*\n * 中性卡片 + 左缘 2px 窄条：与生图流水线、创作面板同一套材质。\n * tokens.css 的立场是「语义色只以小圆点或窄条出现，不参与大面积装饰」，\n * 所以不再用整块琥珀/红底——等待与环境前置用琥珀窄条，硬错误用红窄条。\n */\n.ofs-guidance {\n  display: flex;\n  align-items: flex-start;\n  gap: 10px;\n  margin: 12px 16px 0;\n  padding: 10px 12px;\n  border: 1px solid var(--ofs-hairline);\n  border-left: 2px solid var(--ofs-warn);\n  border-radius: 14px;\n  background: var(--ofs-card);\n  animation: ofs-fade-in 220ms ease;\n}\n\n/* 硬错误（显存不足、连接中断、会话异常、生成失败…）：只把窄条换成红色。 */\n.ofs-guidance.is-error {\n  border-left-color: var(--ofs-error);\n}\n\n.ofs-guidance-icon {\n  display: grid;\n  place-items: center;\n  flex: 0 0 auto;\n  width: 28px;\n  height: 28px;\n  border-radius: 9px;\n  background: var(--ofs-sunken);\n  color: var(--ofs-ink-3);\n}\n\n.ofs-guidance-body {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  min-width: 0;\n}\n\n.ofs-guidance-title {\n  font-size: 12.5px;\n  color: var(--ofs-ink);\n}\n\n.ofs-guidance-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n/* ── 排队卡住提示（10 分钟档，非错误态）──────────────────────── */\n/* 沿用指引卡布局；色调用默认的琥珀窄条，和真正的报错（红窄条）区分开。 */\n\n/* 横幅主操作：墨黑实心胶囊（工作台自己的主操作语言），靠层级而不是颜色抢注意力。 */\n.ofs-guidance-actions .ofs-chip.is-on {\n  border-color: transparent;\n  background: var(--ofs-accent);\n  color: var(--ofs-accent-ink);\n  font-weight: 600;\n  text-decoration: none;\n}\n\n.ofs-guidance-detail {\n  color: var(--ofs-ink-2);\n  font-size: 11.5px;\n  line-height: 1.5;\n  overflow-wrap: anywhere;\n  display: -webkit-box;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n  line-clamp: 2;\n  overflow: hidden;\n}\n\n/* 指引卡的可执行提示（Windows PATH、凭据文件位置、GPU 开启步骤）：不截断，允许换行。 */\n.ofs-guidance-note {\n  margin: 0;\n  color: var(--ofs-ink-3);\n  font-size: 11px;\n  line-height: 1.55;\n  overflow-wrap: anywhere;\n}\n\n.ofs-guidance-command {\n  display: inline-block;\n  max-width: 100%;\n  padding: 3px 8px;\n  border: 1px solid var(--ofs-sunken-border);\n  border-radius: 8px;\n  background: color-mix(in oklab, var(--ofs-card-solid) 70%, transparent);\n  color: var(--ofs-ink);\n  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;\n  font-size: 11.5px;\n  overflow-wrap: anywhere;\n}\n\n/* 直连登录的 manual 兜底：授权链接 + 复制按钮 + 授权码输入 + 行内校验错误。 */\n.ofs-guidance-manual {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  min-width: 0;\n}\n\n.ofs-guidance-url {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ofs-guidance-code {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ofs-guidance-code-input {\n  flex: 1 1 200px;\n  min-width: 0;\n  height: 30px;\n  font-size: 11.5px;\n}\n\n.ofs-guidance-code-error {\n  margin: 0;\n  color: var(--ofs-error);\n  font-size: 11px;\n  line-height: 1.5;\n}\n';
@@ -9337,6 +9351,28 @@ function referencePresetOf(presets) {
   if (preferred && supportsImg2Img(preferred)) return preferred;
   return list.find(supportsImg2Img) || null;
 }
+function providerIdOf(provider) {
+  return SETTINGS.providers.includes(provider) ? provider : SETTINGS.defaultProvider;
+}
+function presetProvidersOf(preset) {
+  const raw = preset && Array.isArray(preset.providers) ? preset.providers : [];
+  const allowed = [];
+  for (const id of raw) {
+    if (SETTINGS.providers.includes(id) && !allowed.includes(id)) allowed.push(id);
+  }
+  return allowed.length > 0 ? allowed : [...SETTINGS.providers];
+}
+function presetAvailableForProvider(preset, provider) {
+  return presetProvidersOf(preset).includes(providerIdOf(provider));
+}
+function presetProviderRestrictionOf(preset) {
+  const list = presetProvidersOf(preset);
+  return list.length === 1 ? list[0] : "";
+}
+function providerNameKeyOf(provider) {
+  const id = providerIdOf(provider);
+  return `studio.preset.providerName.${id}`;
+}
 function presetSelectPatch(next, current, presets) {
   const target = next && typeof next === "object" && next.id ? next : null;
   if (!target) return {};
@@ -10461,8 +10497,17 @@ function effectivePresetOf(overrides, preset, presets) {
 function generateCapabilityOf(options = {}) {
   const preset = options.preset && typeof options.preset === "object" ? options.preset : null;
   const presets = Array.isArray(options.presets) ? options.presets : [];
-  const result = { ok: true, reason: "", blockedKey: "", notice: null, preset: null };
+  const result = { ok: true, reason: "", blockedKey: "", blockedParams: null, notice: null, preset: null };
   if (presets.length === 0) return result;
+  const provider = providerIdOf(options.provider);
+  const needed = presetProviderRestrictionOf(preset);
+  if (needed && needed !== provider) {
+    result.ok = false;
+    result.reason = "provider";
+    result.blockedKey = "studio.form.blockedProvider";
+    result.blockedParams = { preset: presetLabelOf(preset), provider, needed };
+    return result;
+  }
   const referenceCapability = referenceCapabilityOf(preset, options.references);
   if (!referenceCapability.ok) {
     result.ok = false;
@@ -12546,10 +12591,16 @@ var LABELS = {
   langZhEn: "studio.preset.langZhEn",
   langEnOnly: "studio.preset.langEnOnly",
   imageToolOnly: "studio.preset.imageToolOnly",
+  // 算力来源门控：当前 provider 跑不了的模型置灰 + 「仅 Colab」角标与原因提示。
+  providerOnly: "studio.preset.providerOnly",
+  providerBlocked: "studio.preset.providerBlocked",
   footer: "studio.preset.footer",
   steps: "studio.preset.stepsUnit",
   dualGpu: "studio.preset.dualGpu"
 };
+function providerText(t, provider) {
+  return t(providerNameKeyOf(provider));
+}
 function shortOf(preset) {
   return preset.short || preset.label || preset.id;
 }
@@ -12572,7 +12623,7 @@ function specOf(t, preset) {
   return parts.join(" · ");
 }
 function ModelCardPicker(props) {
-  const { t, isEn, presets, value, defaultPreset, onChange, open, onOpenChange } = props;
+  const { t, isEn, presets, value, defaultPreset, provider = "", onChange, open, onOpenChange } = props;
   const list = Array.isArray(presets) ? presets : [];
   const active = list.find((preset) => preset.id === value) || list[0] || null;
   const rootRef = import_react36.default.useRef(null);
@@ -12610,6 +12661,7 @@ function ModelCardPicker(props) {
   }, [open, onOpenChange]);
   function choose(preset) {
     if (!preset || preset.inpaintOnly === true) return;
+    if (!presetAvailableForProvider(preset, provider)) return;
     if (onChange) onChange(preset);
     onOpenChange(false);
     if (triggerRef.current) triggerRef.current.focus({ preventScroll: true });
@@ -12677,6 +12729,13 @@ function ModelCardPicker(props) {
         const image = POSTERS[preset.id] || "";
         const isDefault = preset.id === defaultPreset;
         const imageToolOnly = preset.inpaintOnly === true;
+        const restrictedProvider = presetProviderRestrictionOf(preset);
+        const providerBlocked = !presetAvailableForProvider(preset, provider);
+        const disabled = imageToolOnly || providerBlocked;
+        const blockedTitle = providerBlocked ? formatText(t(LABELS.providerBlocked), {
+          provider: providerText(t, provider),
+          needed: providerText(t, restrictedProvider)
+        }) : void 0;
         const optionEta = etaOf(t, preset);
         const description = descriptionOf(preset, isEn);
         return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(
@@ -12685,11 +12744,11 @@ function ModelCardPicker(props) {
             type: "button",
             role: "option",
             "aria-selected": selected ? "true" : "false",
-            "aria-disabled": imageToolOnly ? "true" : void 0,
-            disabled: imageToolOnly,
-            className: `ofs-model-option${selected ? " is-on" : ""}${imageToolOnly ? " is-tool-only" : ""}`,
+            "aria-disabled": disabled ? "true" : void 0,
+            disabled,
+            className: `ofs-model-option${selected ? " is-on" : ""}${imageToolOnly ? " is-tool-only" : ""}${providerBlocked ? " is-provider-gated" : ""}`,
             "data-preset-id": preset.id,
-            title: imageToolOnly ? t(LABELS.imageToolOnly) : void 0,
+            title: imageToolOnly ? t(LABELS.imageToolOnly) : blockedTitle,
             onClick: () => choose(preset),
             children: [
               /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-model-poster", "aria-hidden": "true", children: image ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("img", { src: image, alt: "", width: "56", height: "56", draggable: "false" }) : /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-model-poster-fallback", children: (preset.family || preset.id || "M").slice(0, 1) }) }),
@@ -12698,6 +12757,7 @@ function ModelCardPicker(props) {
                   preset.family ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-model-fam", children: preset.family }) : null,
                   /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-model-name", children: shortOf(preset) }),
                   imageToolOnly ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-model-lang is-tool-only", children: t(LABELS.imageToolOnly) }) : /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: preset.supportsChinese === true ? "ofs-model-lang is-zh" : "ofs-model-lang", children: t(preset.supportsChinese === true ? LABELS.langZhEn : LABELS.langEnOnly) }),
+                  restrictedProvider ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-model-provider", children: formatText(t(LABELS.providerOnly), { provider: providerText(t, restrictedProvider) }) }) : null,
                   isDefault ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-model-default", children: t(LABELS.default) }) : null
                 ] }),
                 description ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "ofs-model-desc", children: description }) : null,
@@ -13060,6 +13120,7 @@ function TopBar(props) {
         presets,
         value: fields.presetId,
         defaultPreset: compute.defaultPreset,
+        provider: compute.provider,
         open: modelOpen,
         onOpenChange: (next) => {
           setModelOpen(next);
@@ -15527,10 +15588,18 @@ function useStudio(props) {
     const capability = generateCapabilityOf({
       preset: effectivePreset,
       presets,
-      references: requestedReferences
+      references: requestedReferences,
+      // 与顶栏模型卡同源：provider 只在组合层归一一次（compute.provider），不在这里重复推导。
+      provider: compute.provider
     });
     if (!capability.ok) {
-      ui.showToast(t(capability.blockedKey));
+      const blocked = capability.blockedParams;
+      const params = blocked ? {
+        ...blocked,
+        provider: t(providerNameKeyOf(blocked.provider)),
+        needed: t(providerNameKeyOf(blocked.needed))
+      } : void 0;
+      ui.showToast(formatText(t(capability.blockedKey), params));
       return false;
     }
     const requestPreset = capability.preset || effectivePreset;

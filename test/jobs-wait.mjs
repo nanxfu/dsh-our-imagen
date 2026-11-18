@@ -36,6 +36,7 @@ import {
   normalizeStrength,
   normalizeTool,
   normalizeUpscaleRequest,
+  providerGateOf,
 } from '../lib/jobs.js'
 import { readHistoryItem, saveJobOutput, scanHistory } from '../lib/output.js'
 import { submitGenerate, waitForJob } from '../lib/remote.js'
@@ -1835,6 +1836,53 @@ async function main() {
     // 深度上限是「旧数据回溯成本」的硬边界，不是必须走完整条链。
     assert.equal(meta.rootImage, chain[1], `应停在 8 层上限处，实际 ${meta.rootImage}`)
     assert.notEqual(meta.rootImage, chain[0], '超过上限后不再继续回溯到真正的根')
+  })
+
+  await check('算力来源能力位：Host 侧兜底拒绝当前 provider 跑不了的预设', async () => {
+    // 纯函数口径：缺省 / 空数组放行；显式 providers 不匹配时给出可读原因。
+    assert.equal(providerGateOf({ id: 'plain' }, 'kaggle'), null, '缺省 providers 两种来源都放行')
+    assert.equal(providerGateOf({ id: 'plain', providers: [] }, 'kaggle'), null, '空数组按缺省处理')
+    assert.equal(providerGateOf({ id: 'nine', providers: ['colab'] }, 'colab'), null, '匹配来源放行')
+    assert.equal(providerGateOf({ id: 'nine', providers: ['colab'] }, undefined), null, '来源未知时不误拦')
+    const gated = providerGateOf({ id: 'flux2-klein-9b', label: 'FLUX.2 Klein 9B', providers: ['colab'] }, 'kaggle')
+    assert.equal(gated.code, 'invalid_request')
+    assert.ok(gated.message.includes('FLUX.2 Klein 9B'), gated.message)
+    assert.ok(gated.message.includes('colab') && gated.message.includes('kaggle'), gated.message)
+
+    // 接线口径：submit 用当前 provider 判断，被拒任务不占队列；切换到 colab 后同一请求不再被该门拒绝。
+    // 本轮没有发布声明 providers 的资产：临时给默认预设置位，测完还原（不依赖资产是否入库）。
+    const target = PRESETS.find((preset) => preset.id === PRESET)
+    assert.ok(target, '找不到默认预设')
+    target.providers = ['colab']
+    const queue = new JobQueue({
+      ctx: makeCtx(),
+      session: makeSession({ connection: () => ({ endpoint: 'http://127.0.0.1:1', token: 'test-token' }) }),
+      defaultPreset: PRESET,
+      options: { generateTimeoutMs: 1000, getProvider: () => 'kaggle' },
+    })
+    try {
+      const rejected = queue.submit({ prompt: '在 Kaggle 选仅 Colab 预设' })
+      assert.equal(rejected.ok, false)
+      assert.equal(rejected.code, 'invalid_request')
+      assert.ok(rejected.message.includes(target.label ?? PRESET), rejected.message)
+      assert.ok(rejected.message.includes('colab'), rejected.message)
+      assert.equal(queue.pending.length, 0, '被拒任务不占队列')
+
+      const colabQueue = new JobQueue({
+        ctx: makeCtx(),
+        session: makeSession(),
+        defaultPreset: PRESET,
+        options: { generateTimeoutMs: 1000, getProvider: () => 'colab' },
+      })
+      // 只验证门控接线：拦下执行阶段（不连远端、不等待会话），避免用例引入异步噪声。
+      colabQueue.runNext = () => {}
+      const accepted = colabQueue.submit({ prompt: '在 Colab 跑仅 Colab 预设' })
+      assert.equal(accepted.ok, true, '切到 colab 后应当放行')
+      colabQueue.dispose()
+    } finally {
+      delete target.providers
+      queue.dispose()
+    }
   })
 
   clearTimeout(watchdog)

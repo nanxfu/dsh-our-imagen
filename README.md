@@ -121,7 +121,7 @@
 
 <div align="center">
   <img src="docs/assets/model-picker-dark.png" alt="生图工作台 深色主题模型选择卡" width="100%" />
-  <p><sub>深色主题模型选择卡：10 款内置模型对比与实测耗时</sub></p>
+  <p><sub>深色主题模型选择卡：内置模型对比与实测耗时</sub></p>
 </div>
 
 </td>

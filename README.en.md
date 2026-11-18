@@ -120,7 +120,7 @@ Not every machine has a high-VRAM GPU, and setting up PyTorch, CUDA, and ComfyUI
 
 <div align="center">
   <img src="docs/assets/model-picker-dark.png" alt="Dark Theme Model Picker" width="100%" />
-  <p><sub>Dark theme model picker: 10 built-in models with measured generation times</sub></p>
+  <p><sub>Dark theme model picker: built-in models with measured generation times</sub></p>
 </div>
 
 </td>

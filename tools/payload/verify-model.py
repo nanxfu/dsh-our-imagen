@@ -212,6 +212,13 @@ def main() -> None:
         if not EMBEDDED_CONFIG_B64.strip():
             raise RuntimeError("未收到注入配置：EMBEDDED_CONFIG_B64 为空")
         config = json.loads(base64.b64decode(EMBEDDED_CONFIG_B64).decode("utf-8"))
+        # 受限仓库（如 FLUX.2 Klein 9B）的下载凭据：只写进进程环境变量，
+        # 不写日志、不进 report。huggingface_hub 会自动读取 HF_TOKEN。
+        hf_token = config.get("hf_token")
+        if isinstance(hf_token, str) and hf_token.strip():
+            os.environ["HF_TOKEN"] = hf_token.strip()
+            os.environ["HUGGING_FACE_HUB_TOKEN"] = hf_token.strip()
+            log("[auth] 已注入 HF Token（值不打印）")
         report["id"] = config.get("id")
         report["pipeline"] = config.get("pipeline")
         report["size"] = config.get("size")

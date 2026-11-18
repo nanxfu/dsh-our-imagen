@@ -3063,6 +3063,93 @@ await check('纯文生图能力预检：专用局部重绘预设自动兜底，�
   assert.equal(logic.presetLabelOf(null), '')
 })
 
+// 算力来源能力位 providers 的纯函数口径：缺省全可用、单来源限制、非法 provider 回退 kaggle。
+await check('算力来源能力位：缺省全可用 / 单来源限制 / 非法 provider 回退 kaggle', () => {
+  const both = { id: 'sdxl-lightning', label: 'SDXL Lightning' }
+  const colabOnly = { id: 'flux2-klein-9b', label: 'FLUX.2 Klein 9B', providers: ['colab'] }
+  const kaggleOnly = { id: 'kaggle-only', label: 'Kaggle Only', providers: ['kaggle'] }
+
+  // 缺省 / 空数组 = 契约 providers 全可用（旧资产与旧宿主预设语义不变）。
+  assert.deepEqual(logic.presetProvidersOf(both), [...SETTINGS.providers])
+  assert.deepEqual(logic.presetProvidersOf({ providers: [] }), [...SETTINGS.providers])
+  assert.deepEqual(logic.presetProvidersOf(null), [...SETTINGS.providers])
+  assert.deepEqual(logic.presetProvidersOf(colabOnly), ['colab'])
+  // 重复项去重、未知来源忽略；全被过滤掉时按全可用兜底（脏数据不把模型从界面里抹掉）。
+  assert.deepEqual(logic.presetProvidersOf({ providers: ['colab', 'colab'] }), ['colab'])
+  assert.deepEqual(logic.presetProvidersOf({ providers: ['colab', 'a100'] }), ['colab'])
+  assert.deepEqual(logic.presetProvidersOf({ providers: ['a100'] }), [...SETTINGS.providers])
+  // 返回新数组：调用方修改不会污染预设对象（预设对象来自 /state 的共享快照）。
+  const copy = logic.presetProvidersOf(colabOnly)
+  copy.push('kaggle')
+  assert.deepEqual(colabOnly.providers, ['colab'])
+
+  // 可用性：缺省两种都可用；单来源只认自己；非法 provider 按契约默认来源（kaggle）判断。
+  assert.equal(logic.presetAvailableForProvider(both, 'kaggle'), true)
+  assert.equal(logic.presetAvailableForProvider(both, 'colab'), true)
+  assert.equal(logic.presetAvailableForProvider(colabOnly, 'colab'), true)
+  assert.equal(logic.presetAvailableForProvider(colabOnly, 'kaggle'), false)
+  assert.equal(logic.presetAvailableForProvider(kaggleOnly, 'kaggle'), true)
+  assert.equal(logic.presetAvailableForProvider(kaggleOnly, 'colab'), false)
+  assert.equal(logic.providerIdOf('unknown'), SETTINGS.defaultProvider)
+  assert.equal(logic.providerIdOf(undefined), SETTINGS.defaultProvider)
+  assert.equal(logic.presetAvailableForProvider(kaggleOnly, 'unknown'), true, '非法 provider 回退 kaggle')
+  assert.equal(logic.presetAvailableForProvider(colabOnly, 'unknown'), false, '非法 provider 回退 kaggle')
+  // 角标限制与展示名键：只有单来源模型需要「仅 xx」角标。
+  assert.equal(logic.presetProviderRestrictionOf(colabOnly), 'colab')
+  assert.equal(logic.presetProviderRestrictionOf(kaggleOnly), 'kaggle')
+  assert.equal(logic.presetProviderRestrictionOf(both), '')
+  assert.equal(logic.providerNameKeyOf('colab'), 'studio.preset.providerName.colab')
+  assert.equal(logic.providerNameKeyOf('nope'), 'studio.preset.providerName.kaggle')
+})
+
+// 生成前预检：当前算力来源跑不了有效预设时拦下（含模型名与来源），不放行、不自动换模型。
+await check('生成前预检：算力来源不匹配时拦下并给来源说明', () => {
+  const lightning = { id: 'sdxl-lightning', label: 'SDXL Lightning' }
+  const colabOnly = { id: 'flux2-klein-9b', label: 'FLUX.2 Klein 9B', providers: ['colab'], supportsReference: true }
+  const kaggleOnly = { id: 'kaggle-only', label: 'Kaggle Only', providers: ['kaggle'] }
+  const presets = [colabOnly, kaggleOnly, lightning]
+
+  const blocked = logic.generateCapabilityOf({ preset: colabOnly, presets, provider: 'kaggle' })
+  assert.equal(blocked.ok, false)
+  assert.equal(blocked.reason, 'provider')
+  assert.equal(blocked.blockedKey, 'studio.form.blockedProvider')
+  assert.deepEqual(blocked.blockedParams, { preset: 'FLUX.2 Klein 9B', provider: 'kaggle', needed: 'colab' })
+  // 拦下时不改模型、不带兜底预设 / 轻提示：换算力来源还是换模型由用户自己决定。
+  assert.equal(blocked.preset, null)
+  assert.equal(blocked.notice, null)
+
+  // 来源匹配 / 缺省 providers / 非法 provider 回退 kaggle / 预设未就绪：都放行。
+  assert.equal(logic.generateCapabilityOf({ preset: colabOnly, presets, provider: 'colab' }).ok, true)
+  assert.equal(logic.generateCapabilityOf({ preset: kaggleOnly, presets, provider: 'kaggle' }).ok, true)
+  assert.equal(logic.generateCapabilityOf({ preset: kaggleOnly, presets, provider: 'bad' }).ok, true, '非法 provider 回退 kaggle')
+  assert.equal(logic.generateCapabilityOf({ preset: colabOnly, presets, provider: 'bad' }).ok, false, '非法 provider 回退 kaggle 后仍拦 colab-only')
+  assert.equal(logic.generateCapabilityOf({ preset: lightning, presets, provider: 'kaggle' }).ok, true, '缺省 providers 的旧模型不受影响')
+  assert.equal(logic.generateCapabilityOf({ preset: lightning, presets, provider: 'colab' }).ok, true)
+  assert.equal(logic.generateCapabilityOf({ preset: colabOnly, presets: [], provider: 'kaggle' }).ok, true, '预设列表未就绪不误拦')
+  assert.equal(logic.generateCapabilityOf({ preset: null, presets, provider: 'kaggle' }).ok, true)
+})
+
+// 新增算力来源门控文案键由 client-ui 维护字典，这里锁键名与占位符两侧都存在。
+await check('算力来源门控文案键：中英文两侧齐全', () => {
+  for (const key of [
+    'studio.preset.providerOnly',
+    'studio.preset.providerBlocked',
+    'studio.preset.providerName.kaggle',
+    'studio.preset.providerName.colab',
+    'studio.form.blockedProvider',
+  ]) {
+    assert.equal(typeof DICT.zh[key], 'string', `${key} 缺少中文文案`)
+    assert.ok(DICT.zh[key].length > 0, `${key} 中文文案为空`)
+    assert.equal(typeof DICT.en[key], 'string', `${key} 缺少英文文案`)
+    assert.ok(DICT.en[key].length > 0, `${key} 英文文案为空`)
+  }
+  // 占位符与调用方参数键必须对得上：拼错字段名会原样显示 {preset}。
+  for (const name of ['preset', 'provider', 'needed']) {
+    assert.ok(DICT.zh['studio.form.blockedProvider'].includes(`{${name}}`), `blockedProvider 中文缺少 {${name}} 占位`)
+    assert.ok(DICT.en['studio.form.blockedProvider'].includes(`{${name}}`), `blockedProvider 英文缺少 {${name}} 占位`)
+  }
+})
+
 // 失败重试参数：只重放纯文生图字段；参考图 / 蒙版的恢复迁到 useImageTool（决策 D5）。
 await check('失败重试参数：只重放纯文生图字段', () => {
   const job = {

@@ -121,6 +121,89 @@ class HealthPayloadTest(DaemonUnitTest):
         self.assertIsNot(payload["loaded"], d.STATE.loaded)
 
 
+class PipelinePeakResetTest(DaemonUnitTest):
+    """INFERENCE_ACCELERATION_RESEARCH §4.3.5 复测建议②：加载 / 切换管线后重置显存峰值。
+
+    口径由 daemon.ensure_pipeline 负责：加载成功后调用 ``torch.cuda.reset_peak_memory_stats()``，
+    让 ``/health.gpu_memory.max_allocated_mb`` 反映当前管线峰值而不是进程累计值。
+    健康快照本身（三项 MiB 取整、字段集合）不变，所以 HealthPayloadTest 的断言无需同步。
+    """
+
+    @staticmethod
+    def fake_torch(*, available=True, reset_error=None):  # noqa: ANN201
+        calls: list[bool] = []
+
+        def reset_peak_memory_stats() -> None:
+            calls.append(True)
+            if reset_error is not None:
+                raise reset_error
+
+        module = types.ModuleType("torch")
+        module.cuda = types.SimpleNamespace(
+            is_available=lambda: available,
+            reset_peak_memory_stats=reset_peak_memory_stats,
+        )
+        return module, calls
+
+    def load(self, module, spec=None):  # noqa: ANN001, ANN201
+        """在假 torch 下走一次 ensure_pipeline（管线构建本身用替身，不碰 diffusers）。"""
+        pipe = object()
+        with mock.patch.dict(sys.modules, {"torch": module}), mock.patch.object(
+            d.CACHE, "ensure_cache_capacity"
+        ), mock.patch.object(d, "build_pipeline", return_value=(pipe, "sdxl:org/base")):
+            return d.ensure_pipeline(spec or {"loader": "sdxl", "base": "org/base"})
+
+    def test_resets_peak_after_successful_load(self) -> None:
+        module, calls = self.fake_torch()
+        pipe, elapsed = self.load(module)
+        self.assertIs(d.STATE.pipe, pipe)
+        self.assertIsInstance(elapsed, float)
+        self.assertEqual(d.STATE.phase, "ready")
+        self.assertEqual(calls, [True], "加载成功后必须重置进程累计峰值")
+        self.assertLogContains("[cuda] 显存峰值统计已重置")
+
+    def test_does_not_reset_when_cuda_unavailable(self) -> None:
+        module, calls = self.fake_torch(available=False)
+        self.load(module)
+        self.assertEqual(calls, [])
+        self.assertEqual(d.STATE.phase, "ready")
+        self.assertNotIn("[cuda] 显存峰值统计已重置", self.logs())
+
+    def test_does_not_reset_when_torch_not_loaded(self) -> None:
+        """测试替身 / 未装 torch 的环境不为了这次重置额外拉起重库。"""
+        with mock.patch.dict(sys.modules, {"torch": None}):
+            d.reset_peak_memory_stats()
+        self.assertNotIn("[cuda]", self.logs())
+
+    def test_reset_failure_does_not_break_load(self) -> None:
+        module, calls = self.fake_torch(reset_error=RuntimeError("CUDA 未初始化"))
+        self.load(module)
+        self.assertEqual(calls, [True])
+        self.assertEqual(d.STATE.phase, "ready")
+        self.assertLogContains("重置显存峰值失败（已忽略）")
+        # /health 不受影响：观测口径修正失败不能把进程打成 error。
+        payload = d.health_payload()
+        self.assertEqual(payload["status"], "ok")
+
+    def test_cached_pipeline_is_not_loaded_twice(self) -> None:
+        module, calls = self.fake_torch()
+        spec = {"loader": "sdxl", "base": "org/base"}
+        self.load(module, spec)
+        self.load(module, spec)
+        self.assertEqual(calls, [True], "同配置复用已加载管线时不应再次重置峰值")
+
+    def test_failed_load_does_not_reset(self) -> None:
+        module, calls = self.fake_torch()
+        with mock.patch.dict(sys.modules, {"torch": module}), mock.patch.object(
+            d.CACHE, "ensure_cache_capacity"
+        ), mock.patch.object(d, "build_pipeline", side_effect=d.LoadError("boom")), mock.patch.object(
+            d, "free_cuda_cache"
+        ):
+            with self.assertRaises(d.LoadError):
+                d.ensure_pipeline({"loader": "sdxl", "base": "org/base"})
+        self.assertEqual(calls, [], "加载失败不重置：此时没有「当前管线」可归属")
+
+
 class HealthLockOrderTest(DaemonUnitTest):
     """规格 §5.8：锁顺序唯一方向 JOB_LOCK → STATE_LOCK，/health 不能反着取。"""
 

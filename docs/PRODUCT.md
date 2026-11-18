@@ -31,7 +31,7 @@ web
 
 ## Capabilities and Constraints
 
-- **模型预设**：支持 10 个模型——SDXL Lightning（默认）、Hyper-SDXL 8-Step、SDXL Turbo、Playground v2.5、SDXL Base 1.0、SDXL Inpaint（专用局部重绘权重）、RealVisXL V5.0、FLUX.2 Klein 4B、Animagine XL 3.1、Anima Light Lavender；名称、家族与定位描述以 `models/*.json` 为唯一来源。
+- **模型预设**：支持 10 个模型——SDXL Lightning（默认）、Hyper-SDXL 8-Step、SDXL Turbo、Playground v2.5、SDXL Base 1.0、SDXL Inpaint（专用局部重绘权重）、RealVisXL V5.0、FLUX.2 Klein 4B、Animagine XL 3.1、Anima Light Lavender；名称、家族与定位描述以 `models/*.json` 为唯一来源。模型资产可选 `providers` 能力位声明可用算力来源（当前暂无资产启用，结构为后续大显存模型准备）。
 - **画面调优**：5 组画幅比例（1:1、16:9、9:16、4:3、3:4）、分辨率档位（长边，取自预设 `sizeOptions`，短边按比例换算）、自定义宽高折叠、高级设置（步数、CFG、种子）；生成张数 1~4 提权到页脚常驻。有参考图时「画面设置」自动让位于「出图尺寸跟随参考图」，不再展示可点却无效的尺寸控件。
 - **能力驱动的显隐**：排除项只在所选模型真的消费负向词且 CFG > 0 时出现（默认 CFG=0 的极速模型与 `FLUX.2 Klein 4B` 默认隐藏），隐藏时不渲染、不提交无效参数；用户抬高 CFG 后可用。
 - **提示词工坊**：支持中英文自然语言输入；提示词为空时提供 5 组开箱即用的启发式场景灵感卡；支持大模型四维润色（光影、材质、构图、氛围，可收起 / 展开）与一键转英文。

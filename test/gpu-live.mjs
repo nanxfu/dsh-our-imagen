@@ -50,6 +50,18 @@
  *     `channelsLast + fuseQkv + vaeTiling`，`sdxl-inpaint --outpaint` 用 `vaeTiling`。
  *     report.json 的 `accel` 段记录每档每轮耗时、中位耗时、提速比、前后峰值显存、
  *     两档输出 MAE（画质差异）与扩图接缝指标。`--accel-rounds <n>` 控制每档轮数（默认 2）。
+ *   - `--outpaint-lora`：Phase C2「现代扩图引擎」真机验收（`flux2-klein-4b` + 扩图 LoRA，
+ *     单个 Kernel 会话内一次提交）：先用 `--source-preset`（默认 sdxl-lightning）出 864x864
+ *     内容源图，构造 1536x864 纯绿 #00FF00 画布（内容居中），把整张画布等比缩到 1024x576
+ *     （保持绿边比例、满足 referenceImages 长边 ≤1024）作为 job 级参考图，再提交 flux2
+ *     输出 1536x864。report.json 的 `outpaintLora` 段记录提交/执行秒数、输出尺寸与字节数、
+ *     前后显存、内容区平均差、绿边残留比例、接缝指标、内容区颜色漂移，并与历史
+ *     sdxl-inpaint 扩图基线（bench-results 报告）对比。
+ *   - `--accel-cache`：Phase C2 推理缓存探针（flux2-klein-4b 同 seed 文生图 A/B）：
+ *     on 档在 pipeline 上覆盖 `accel.cache = {type:'firstBlock', threshold:0.05}`，
+ *     report.json 的 `accelCache` 段记录每档耗时/显存/两档 MAE，并从 /logs 的
+ *     `[accel] ... cache ...` 行判定缓存「已应用」还是「不适用（WARN 跳过）」。
+ *     该开关是实验性探针，本轮不写入任何模型资产。
  *
  * 前置条件：默认走直连，本机有可用的 Kaggle 凭据（`~/.kaggle/credentials.json` 等）即可；
 加 `--cli` 时才要求本机安装并登录 kaggle CLI。账号需启用 GPU 加速器且当天配额充足。
@@ -58,7 +70,7 @@
  */
 
 import { spawn } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { deflateSync, inflateSync } from 'node:zlib'
@@ -82,6 +94,33 @@ const OUT_DIR = join(PLUGIN_ROOT, 'bench-results', 'gpu-live')
 // 用来验证 9 通道 inpaint 在大画布上的显存与边缘融合。
 const OUTPAINT_CANVAS = { width: 1536, height: 864 }
 const OUTPAINT_CONTENT = { x: 336, y: 0, width: 864, height: 864 }
+// Phase C2 现代扩图引擎（flux2 + 官方扩图 LoRA）的固定口径：
+//  - 内容区仍是 864x864 居中，新增区域改用纯绿 #00FF00 填底（LoRA 训练约定：绿边 = 待填充）；
+//  - 参考图 = 整张画布等比缩到 1024x576（长边 1024 满足 referenceImages.maxEdge，绿边比例不变）；
+//  - prompt 固化为 LoRA 训练时的指令句，scale 1.1 是官方卡片推荐值。
+const OUTPAINT_LORA = {
+  targetPreset: 'flux2-klein-4b',
+  sourcePreset: 'sdxl-lightning',
+  lora: {
+    repo: 'fal/flux-2-klein-4B-outpaint-lora',
+    weight: 'flux-outpaint-lora.safetensors',
+    scale: 1.1,
+  },
+  prompt: 'Fill the green spaces according to the image',
+  seed: 42,
+  green: { r: 0, g: 255, b: 0 },
+  reference: { width: 1024, height: 576 },
+}
+// 历史基线兜底（sdxl-inpaint 9 通道 inpaint，1536x864）：运行时会重新扫描
+// bench-results/gpu-live/*/report.json 取最近样本，扫不到时用这三个常量值。
+const OUTPAINT_LORA_BASELINE = {
+  preset: 'sdxl-inpaint',
+  width: OUTPAINT_CANVAS.width,
+  height: OUTPAINT_CANVAS.height,
+  samples: [35.42, 35.2, 35.91],
+}
+// Phase C2 缓存加速探针的固定配置：firstBlock 缓存（实验性，仅真机 A/B 用）。
+const ACCEL_CACHE = { type: 'firstBlock', threshold: 0.05 }
 const KEEP = process.argv.includes('--keep')
 const HELP = process.argv.includes('--help') || process.argv.includes('-h')
 // 默认走直连（0.8.2 起的默认访问方式，不需要本机 kaggle CLI）；
@@ -123,6 +162,8 @@ function printHelp() {
   node test/gpu-live.mjs --preset flux2-klein-4b --reference [--reference-count 1,2]
   node test/gpu-live.mjs --preset sdxl-lightning --accel ab
   node test/gpu-live.mjs --preset sdxl-inpaint --source-preset sdxl-lightning --outpaint --accel ab
+  node test/gpu-live.mjs --preset flux2-klein-4b --outpaint-lora [--source-preset sdxl-lightning]
+  node test/gpu-live.mjs --preset flux2-klein-4b --accel-cache [--accel-rounds 2]
   node test/gpu-live.mjs --c1-acceptance [--accel-rounds 2]
     ↑ Phase C1 一次性正式验收：1 个 Kernel 内跑完「参考生图 + sdxl-lightning A/B + sdxl-inpaint 扩图 A/B」
 
@@ -148,8 +189,15 @@ function printHelp() {
   --accel <on|off|ab>
                     推理加速 A/B 验收（默认 ab = 先 off 再 on）：sdxl-lightning 1024² 用
                     channelsLast + fuseQkv + vaeTiling；--outpaint 模式 sdxl-inpaint 用 vaeTiling
+  --accel-cache     推理缓存探针（仅 flux2 家族）：flux2-klein-4b 同 seed 文生图 A/B，
+                    on 档在 pipeline 上覆盖 accel.cache = {type:'firstBlock', threshold:0.05}；
+                    report 记录 [accel] ... cache ... 应用/跳过日志、两档 MAE 与显存。
+                    缓存是实验性探针，本轮不写入模型资产
+  --outpaint-lora   现代扩图引擎验收（仅 flux2 家族）：flux2-klein-4b + 官方扩图 LoRA，
+                    纯绿 #00FF00 画布 1536x864、内容 864x864 居中、参考图 1024x576，
+                    输出 1536x864；只做单次提交，默认预设就是 flux2-klein-4b
   --accel-rounds <n>
-                    仅 --accel：每档轮数（默认 2，取中位耗时）
+                    仅 --accel / --accel-cache：每档轮数（默认 2，取中位耗时）
   --inpaint-prompt <text>
                     局部重绘使用单独的提示词（默认与 --prompt 相同）。给一段与文生图不同的描述，
                     才能肉眼确认白色蒙版区真的按新内容重写
@@ -179,6 +227,7 @@ function printHelp() {
   --strength <n>    垫图 / 局部重绘强度（img2img 0.2~0.9；--inpaint 时上限放宽到 1.0，默认 0.6）
   --cli             用本机 kaggle CLI 推 Kernel（默认走直连，不需要 CLI）
   --keep            结束后不关机，保留 Kernel 便于手动观察
+  --self-test       只跑扩图画布/参考图/绿边统计等纯函数自检，不推 Kernel、不消耗配额
   --help, -h        显示本帮助；不会推送 Kernel，也不会消耗配额
 
 前置条件：
@@ -194,6 +243,9 @@ function printHelp() {
   - outpaint：--outpaint 模式的画布/内容区尺寸、新增区覆盖率、内容区像素差与前后显存
   - reference：--reference 模式每例参考图数量/尺寸/耗时/前后显存/输出尺寸断言、确定性与参考影响度 MAE
   - accel：--accel 模式每档每轮耗时、中位耗时、提速比、峰值显存差、两档输出 MAE 与扩图接缝指标
+  - outpaintLora：--outpaint-lora 模式的 LoRA 配置、提交/执行秒数、输出尺寸与字节数、前后显存、
+    内容区平均差、绿边残留比例、接缝指标、内容区颜色漂移与 sdxl-inpaint 历史基线对比
+  - accelCache：--accel-cache 模式每档耗时/显存、两档 MAE 与 [accel] cache 应用/跳过日志判定
   - versions：远端 /health 上报的依赖版本快照（用于维护 LKGR 基线）
   - cacheLogs：远端 [cache] 日志摘要，拉取失败时为 null（不影响验证结论）
 
@@ -223,9 +275,15 @@ function normalizeStrengthValue(value, ceiling = LIMITS.strength.max) {
   return Math.round(Math.min(upper, Math.max(min, aligned)) * 100) / 100
 }
 
-/** 解析并校验命令行参数；--help 由调用方提前处理，不会走到这里。 */
+/** 解析并校验命令行参数；--help / --self-test 由调用方提前处理，不会走到这里。 */
 function parseOptions() {
-  const presetArg = String(argOf('preset', 'sdxl-lightning')).trim()
+  // Phase C2 的两个独立验收模式：现代扩图引擎（flux2 + 扩图 LoRA）与推理缓存探针。
+  const outpaintLora = process.argv.includes('--outpaint-lora')
+  const accelCache = process.argv.includes('--accel-cache')
+  // --outpaint-lora 的目标预设固定是 flux2-klein-4b；其它模式保持历史的 sdxl-lightning 默认。
+  const presetArg = String(
+    argOf('preset', outpaintLora ? OUTPAINT_LORA.targetPreset : 'sdxl-lightning'),
+  ).trim()
   const presetsArg = String(argOf('presets', '')).trim()
   const rawList = presetsArg ? presetsArg.split(',') : [presetArg]
   const presets = []
@@ -270,18 +328,49 @@ function parseOptions() {
     }
     accel = raw === 'both' ? 'ab' : raw
   }
+  // Phase C2：--outpaint-lora 用 flux2 基础管线 + 扩图 LoRA，必须是支持原生参考生图的预设。
+  if (outpaintLora) {
+    if (presets.length !== 1) throw new Error('--outpaint-lora 只能配合单个预设使用')
+    const target = presetById(presets[0])
+    if (target?.pipeline?.loader !== 'flux2' || target?.supportsReference !== true) {
+      throw new Error(
+        `--outpaint-lora 需要 flux2 家族的参考生图预设（默认 ${OUTPAINT_LORA.targetPreset}），` +
+          `当前 ${presets[0]}`,
+      )
+    }
+  }
+  // Phase C2：--accel-cache 只对 flux2 的 transformer 做 firstBlock 缓存探针。
+  if (accelCache) {
+    if (presets.length !== 1) throw new Error('--accel-cache 只能配合单个预设使用')
+    if (presetById(presets[0])?.pipeline?.loader !== 'flux2') {
+      throw new Error(`--accel-cache 只对 flux2 家族的预设做缓存探针（当前 ${presets[0]}）`)
+    }
+  }
   // Phase C1 一次性正式验收：一个 Kernel 会话内连续跑「参考生图 + 文生图 A/B + 扩图 A/B」。
   const c1Acceptance = process.argv.includes('--c1-acceptance')
-  if (c1Acceptance && (img2img || inpaint || upscale || outpaint || reference || accel)) {
+  if (
+    c1Acceptance &&
+    (img2img || inpaint || upscale || outpaint || reference || accel || outpaintLora || accelCache)
+  ) {
     throw new Error('--c1-acceptance 是独立的一次性验收模式，不能与其它验收模式组合')
   }
-  const modeCount = [img2img, inpaint, upscale, outpaint, reference, c1Acceptance].filter(Boolean).length
+  const modeCount = [
+    img2img,
+    inpaint,
+    upscale,
+    outpaint,
+    outpaintLora,
+    reference,
+    accelCache,
+    c1Acceptance,
+  ].filter(Boolean).length
   if (modeCount > 1) {
     throw new Error(
-      '--img2img / --inpaint / --upscale / --outpaint / --reference / --c1-acceptance 是互相独立的验收模式，请分开运行',
+      '--img2img / --inpaint / --upscale / --outpaint / --outpaint-lora / --reference / ' +
+        '--accel-cache / --c1-acceptance 是互相独立的验收模式，请分开运行',
     )
   }
-  if (accel && (img2img || inpaint || upscale)) {
+  if (accel && (img2img || inpaint || upscale || outpaintLora || accelCache)) {
     throw new Error('--accel 只能与默认文生图或 --outpaint 组合（本轮验收范围）')
   }
   // 局部重绘 / 扩图的源图预设：专用 inpaint 模型不能文生图，验收时先用普通模型出源图。
@@ -428,8 +517,13 @@ function parseOptions() {
   const rawAccelRounds = Number(argOf('accel-rounds', '2'))
   const accelRounds =
     Number.isFinite(rawAccelRounds) && rawAccelRounds > 0 ? Math.min(5, Math.round(rawAccelRounds)) : 2
-  if (process.argv.includes('--accel-rounds') && !accel && !process.argv.includes('--c1-acceptance')) {
-    throw new Error('--accel-rounds 只能配合 --accel / --c1-acceptance 使用')
+  if (
+    process.argv.includes('--accel-rounds') &&
+    !accel &&
+    !accelCache &&
+    !process.argv.includes('--c1-acceptance')
+  ) {
+    throw new Error('--accel-rounds 只能配合 --accel / --accel-cache / --c1-acceptance 使用')
   }
   return {
     presets,
@@ -439,6 +533,8 @@ function parseOptions() {
     inpaint,
     upscale,
     outpaint,
+    outpaintLora,
+    accelCache,
     reference,
     c1Acceptance,
     referenceCounts,
@@ -697,6 +793,23 @@ async function collectCacheLogs(endpoint, token) {
   }
 }
 
+/**
+ * 拉远端 /logs 并按正则挑行（Phase C2 的 LoRA / 缓存标记日志取证用）。
+ *
+ * 与 collectGenLogs / collectCacheLogs 的区别：调用方给匹配器，用于单次提交后立刻
+ * 取证（例如 `[load] flux2 LoRA 已挂载`、`[accel] WARN cache 不适用`）。
+ * 拉取失败只返回一条说明，不影响验证结论。
+ */
+async function collectLogLines(endpoint, token, matcher) {
+  try {
+    const payload = await requestLogs(endpoint, token, 0, 8000)
+    const lines = Array.isArray(payload?.lines) ? payload.lines : []
+    return lines.filter((line) => typeof line === 'string' && matcher.test(line)).slice(-80)
+  } catch (error) {
+    return [`（远端日志拉取失败：${String(error?.message ?? error).slice(0, 120)}）`]
+  }
+}
+
 function artifactName(index, presetId, total) {
   return total === 1 ? '01.png' : `${String(index + 1).padStart(2, '0')}-${presetId}.png`
 }
@@ -777,6 +890,111 @@ function accelOffConfigOf() {
 /** 在预设 pipeline spec 上覆盖 accel（其它字段逐字保留）。 */
 function withAccelSpec(pipelineSpec, accelConfig) {
   return { ...(pipelineSpec ?? {}), accel: { ...accelConfig } }
+}
+
+/**
+ * Phase C2：在 flux2 pipeline spec 上覆盖扩图 LoRA（其它字段逐字保留）。
+ *
+ * 远端 Flux2Loader 按 `{repo, weight, scale}` 挂载 LoRA：优先命中预挂载权重，
+ * 未命中时 hf_hub_download；scale ≠1 时按适配器权重缩放。spec 里不带 `accel`，
+ * 避免把缓存探针和 LoRA 混在同一次提交里。
+ */
+function withFlux2LoraSpec(pipelineSpec, lora = OUTPAINT_LORA.lora) {
+  return {
+    ...(pipelineSpec ?? {}),
+    lora: { repo: lora.repo, weight: lora.weight, scale: lora.scale },
+  }
+}
+
+/** Phase C2：缓存探针 on 档的 pipeline spec（只覆盖 `accel.cache`，其余字段逐字保留）。 */
+function withAccelCacheSpec(pipelineSpec, cache = ACCEL_CACHE) {
+  return {
+    ...(pipelineSpec ?? {}),
+    accel: { ...(pipelineSpec?.accel ?? {}), cache: { type: cache.type, threshold: cache.threshold } },
+  }
+}
+
+/** Phase C2：缓存探针 off 档的 pipeline spec（原资产，显式不带 accel）。 */
+function accelCacheOffSpec(preset) {
+  const spec = { ...(preset?.pipeline ?? {}) }
+  delete spec.accel
+  return spec
+}
+
+/**
+ * 出图尺寸与请求画布不一致时，把内容区坐标按比例映射到实际输出尺寸。
+ *
+ * flux2 内部可能按约 1 MP 面积上限静默缩放画布（1536x864 → 1360x768），
+ * 此时内容区在输出里的相对位置不变，按同一比例换算后再算像素差/接缝才有意义。
+ */
+function scaledContentOf(outputSize, canvas = OUTPAINT_CANVAS, content = OUTPAINT_CONTENT) {
+  if (!outputSize || !canvas.width || !canvas.height) return { ...content }
+  const sx = outputSize.width / canvas.width
+  const sy = outputSize.height / canvas.height
+  return {
+    x: Math.round(content.x * sx),
+    y: Math.round(content.y * sy),
+    width: Math.round(content.width * sx),
+    height: Math.round(content.height * sy),
+  }
+}
+
+/**
+ * 扫描 bench-results/gpu-live/<ts>/report.json 汇总历史 sdxl-inpaint 扩图耗时基线。
+ *
+ * 只读历史报告（不存在或解析失败时回退常量 OUTPAINT_LORA_BASELINE），给 `--outpaint-lora`
+ * 的现代扩图引擎一个同画布（1536x864）、同任务（扩图）的可比耗时基准。
+ * 取三种来源：outpaint.imageSeconds、accel(configs[].rounds[].imageSeconds)、
+ * c1-acceptance 的 outpaint 段；每份报告只贡献一次，避免 c1 报告把权重放大。
+ */
+async function loadOutpaintBaseline() {
+  const samples = []
+  const sources = []
+  try {
+    const entries = await readdir(OUT_DIR, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      let report
+      try {
+        report = JSON.parse(await readFile(join(OUT_DIR, entry.name, 'report.json'), 'utf8'))
+      } catch {
+        continue
+      }
+      const found = []
+      const single = report?.outpaint
+      if (single?.preset === OUTPAINT_LORA_BASELINE.preset && Number.isFinite(single.imageSeconds)) {
+        found.push(single.imageSeconds)
+      }
+      const accelSections = [report?.accel, report?.accel?.outpaint]
+      for (const section of accelSections) {
+        if (section?.preset !== OUTPAINT_LORA_BASELINE.preset) continue
+        // 加速 A/B 只取 off 档（与历史单次扩图同配置），避免把 vaeTiling 档的耗时混进基线。
+        const offConfigs = (section.configs ?? []).filter((config) => config.label === 'off')
+        const configs = offConfigs.length ? offConfigs : (section.configs ?? [])
+        for (const config of configs) {
+          for (const round of config.rounds ?? []) {
+            if (Number.isFinite(round.imageSeconds)) found.push(round.imageSeconds)
+          }
+        }
+      }
+      if (!found.length) continue
+      samples.push(...found)
+      sources.push(`bench-results/gpu-live/${entry.name}/report.json`)
+    }
+  } catch {
+    // bench-results 不存在（干净检出）时静默回退常量基线。
+  }
+  const values = samples.length ? samples : [...OUTPAINT_LORA_BASELINE.samples]
+  return {
+    preset: OUTPAINT_LORA_BASELINE.preset,
+    canvas: `${OUTPAINT_LORA_BASELINE.width}x${OUTPAINT_LORA_BASELINE.height}`,
+    samples: values.map((value) => Math.round(value * 100) / 100),
+    sampleCount: values.length,
+    medianSeconds: medianOf(values),
+    minSeconds: Math.round(Math.min(...values) * 100) / 100,
+    sources: sources.slice(-8),
+    note: 'sdxl-inpaint 在 1536x864 画布上的历史扩图推理秒数（bench-results 历史报告汇总）',
+  }
 }
 
 /**
@@ -1277,6 +1495,249 @@ function contentRegionDiff(sourcePng, outPng, content = OUTPAINT_CONTENT, margin
 }
 
 /**
+ * Phase C2：构造纯绿扩图画布（LoRA 训练约定：绿边 = 待填充区域）。
+ *
+ * 与 `buildOutpaintCanvas` 的区别只在新区域填充：这里用 #00FF00 纯色，而不是边缘延拓；
+ * 内容区仍按 `content` 原样贴入（逐像素复制，不缩放），画布与内容区几何保持与 B2 一致，
+ * 这样历史 sdxl-inpaint 基线与新引擎的耗时/内容区像素差可以直接对比。
+ */
+function buildGreenOutpaintCanvas(
+  sourcePng,
+  canvas = OUTPAINT_CANVAS,
+  content = OUTPAINT_CONTENT,
+  fill = OUTPAINT_LORA.green,
+) {
+  const source = decodePng(sourcePng)
+  if (!source) throw new Error('outpaint-lora：无法解码源图 PNG')
+  if (source.width !== content.width || source.height !== content.height) {
+    throw new Error(
+      `outpaint-lora：源图应为 ${content.width}x${content.height}，收到 ${source.width}x${source.height}`,
+    )
+  }
+  const pixels = Buffer.alloc(canvas.width * canvas.height * 3)
+  for (let offset = 0; offset < pixels.length; offset += 3) {
+    pixels[offset] = fill.r
+    pixels[offset + 1] = fill.g
+    pixels[offset + 2] = fill.b
+  }
+  for (let y = 0; y < content.height; y += 1) {
+    const sourceRow = y * source.width * source.channels
+    const targetRow = (content.y + y) * canvas.width * 3
+    for (let x = 0; x < content.width; x += 1) {
+      const sourceOffset = sourceRow + x * source.channels
+      const targetOffset = targetRow + (content.x + x) * 3
+      pixels[targetOffset] = source.pixels[sourceOffset]
+      pixels[targetOffset + 1] =
+        source.channels >= 3 ? source.pixels[sourceOffset + 1] : source.pixels[sourceOffset]
+      pixels[targetOffset + 2] =
+        source.channels >= 3 ? source.pixels[sourceOffset + 2] : source.pixels[sourceOffset]
+    }
+  }
+  const greenPixels = canvas.width * canvas.height - content.width * content.height
+  return {
+    png: encodePngRgb(canvas.width, canvas.height, pixels),
+    width: canvas.width,
+    height: canvas.height,
+    content: { ...content },
+    sourceSize: { width: source.width, height: source.height },
+    fill: 'green',
+    fillColor: '#00FF00',
+    greenCoverage: greenPixels / (canvas.width * canvas.height),
+  }
+}
+
+/**
+ * Phase C2：把 PNG 双线性缩放到指定尺寸（用于生成 1024x576 的绿边参考图）。
+ *
+ * 只处理 8 位灰度/RGB/RGBA（decodePng 的既有范围）：目标按最近映射取源坐标，
+ * 四个邻点按小数权重插值。双线性而不是最近邻：参考图的绿边/内容边界若出现锯齿，
+ * 模型可能把锯齿当成画面纹理继续放大。解码失败返回 null。
+ */
+function resizePngTo(png, targetWidth, targetHeight) {
+  const image = decodePng(png)
+  if (!image) return null
+  const channels = image.channels ?? 3
+  if (channels < 3) return null
+  const width = Math.max(1, Math.round(Number(targetWidth) || 0))
+  const height = Math.max(1, Math.round(Number(targetHeight) || 0))
+  const pixels = Buffer.alloc(width * height * 3)
+  const scaleX = image.width / width
+  const scaleY = image.height / height
+  const sourceAt = (x, y, channel) => {
+    const sx = Math.min(image.width - 1, Math.max(0, x))
+    const sy = Math.min(image.height - 1, Math.max(0, y))
+    return image.pixels[(sy * image.width + sx) * channels + channel]
+  }
+  for (let y = 0; y < height; y += 1) {
+    const sourceY = Math.max(0, Math.min(image.height - 1, (y + 0.5) * scaleY - 0.5))
+    const y0 = Math.floor(sourceY)
+    const y1 = Math.min(image.height - 1, y0 + 1)
+    const fy = sourceY - y0
+    for (let x = 0; x < width; x += 1) {
+      const sourceX = Math.max(0, Math.min(image.width - 1, (x + 0.5) * scaleX - 0.5))
+      const x0 = Math.floor(sourceX)
+      const x1 = Math.min(image.width - 1, x0 + 1)
+      const fx = sourceX - x0
+      const targetOffset = (y * width + x) * 3
+      for (let channel = 0; channel < 3; channel += 1) {
+        const top = sourceAt(x0, y0, channel) * (1 - fx) + sourceAt(x1, y0, channel) * fx
+        const bottom = sourceAt(x0, y1, channel) * (1 - fx) + sourceAt(x1, y1, channel) * fx
+        pixels[targetOffset + channel] = Math.round(top * (1 - fy) + bottom * fy)
+      }
+    }
+  }
+  return {
+    png: encodePngRgb(width, height, pixels),
+    width,
+    height,
+    sourceSize: { width: image.width, height: image.height },
+  }
+}
+
+/**
+ * Phase C2：绿边残留统计——出图里仍是纯绿（容差内）的像素占比。
+ *
+ * `exactGreenRatio` 只认严格 #00FF00；`nearGreenRatio` 允许每个通道 ±tolerance
+ * （默认 24），用来覆盖 VAE 编解码造成的轻微色偏。残留比例越低说明 LoRA 把绿边
+ * 填得越充分；>5% 通常意味着有明显没被填充的区域。
+ */
+function greenAreaStats(png, options = {}) {
+  const image = decodePng(png)
+  if (!image) return null
+  const channels = image.channels ?? 3
+  if (channels < 3) return null
+  const tolerance = Number.isFinite(Number(options.tolerance))
+    ? Math.max(0, Math.round(Number(options.tolerance)))
+    : 24
+  let exact = 0
+  let near = 0
+  const total = image.width * image.height
+  for (let index = 0; index < total; index += 1) {
+    const offset = index * channels
+    const red = image.pixels[offset]
+    const green = image.pixels[offset + 1]
+    const blue = image.pixels[offset + 2]
+    if (red === 0 && green === 255 && blue === 0) {
+      exact += 1
+      near += 1
+      continue
+    }
+    if (
+      Math.abs(red) <= tolerance &&
+      Math.abs(green - 255) <= tolerance &&
+      Math.abs(blue) <= tolerance
+    ) {
+      near += 1
+    }
+  }
+  return {
+    width: image.width,
+    height: image.height,
+    totalPixels: total,
+    tolerance,
+    exactGreenPixels: exact,
+    nearGreenPixels: near,
+    exactGreenRatio: Math.round((exact / total) * 10000) / 10000,
+    nearGreenRatio: Math.round((near / total) * 10000) / 10000,
+  }
+}
+
+/**
+ * Phase C2：内容区颜色漂移——源图内容区与出图同一区域的逐通道均值差。
+ *
+ * 新引擎如果整体重画内容（而不是保留原像素），亮度差可能不大但色调会漂移；
+ * 这里补一组成分 RGB 的均值对比，`maxAbsDelta` > 8 通常肉眼可辨。
+ */
+function contentColorDrift(sourcePng, outPng, content = OUTPAINT_CONTENT, margin = 16) {
+  const source = decodePng(sourcePng)
+  const out = decodePng(outPng)
+  if (!source || !out) return null
+  if (source.width !== content.width || source.height !== content.height) return null
+  if (out.width < content.x + content.width || out.height < content.y + content.height) return null
+  const x0 = Math.max(0, margin)
+  const y0 = Math.max(0, margin)
+  const x1 = content.width - Math.max(0, margin)
+  const y1 = content.height - Math.max(0, margin)
+  if (x1 <= x0 || y1 <= y0) return null
+  let sourceR = 0
+  let sourceG = 0
+  let sourceB = 0
+  let outR = 0
+  let outG = 0
+  let outB = 0
+  let count = 0
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      const sourceOffset = (y * content.width + x) * source.channels
+      const outOffset = ((content.y + y) * out.width + (content.x + x)) * out.channels
+      sourceR += source.pixels[sourceOffset]
+      sourceG += source.pixels[sourceOffset + 1]
+      sourceB += source.pixels[sourceOffset + 2]
+      outR += out.pixels[outOffset]
+      outG += out.pixels[outOffset + 1]
+      outB += out.pixels[outOffset + 2]
+      count += 1
+    }
+  }
+  if (!count) return null
+  const round2 = (value) => Math.round(value * 100) / 100
+  const sourceMean = { r: round2(sourceR / count), g: round2(sourceG / count), b: round2(sourceB / count) }
+  const outputMean = { r: round2(outR / count), g: round2(outG / count), b: round2(outB / count) }
+  const delta = {
+    r: round2(outputMean.r - sourceMean.r),
+    g: round2(outputMean.g - sourceMean.g),
+    b: round2(outputMean.b - sourceMean.b),
+  }
+  const maxAbsDelta = round2(Math.max(Math.abs(delta.r), Math.abs(delta.g), Math.abs(delta.b)))
+  return {
+    margin,
+    sourceMean,
+    outputMean,
+    delta,
+    maxAbsDelta,
+    meanAbsDelta: round2((Math.abs(delta.r) + Math.abs(delta.g) + Math.abs(delta.b)) / 3),
+  }
+}
+
+/**
+ * Phase C2：现代扩图提交的尺寸计划（画布 → 参考图），并校验参考图满足契约。
+ *
+ * 参考图 = 整张画布等比缩放（绿边比例不变），长边必须 ≤ `LIMITS.referenceImages.maxEdge`
+ * （1024），否则远端提交期会 400。返回计划里带 `contentInReference` 便于报告核对。
+ */
+function outpaintLoraPlan(
+  canvas = OUTPAINT_CANVAS,
+  content = OUTPAINT_CONTENT,
+  reference = OUTPAINT_LORA.reference,
+) {
+  const scale = reference.width / canvas.width
+  const plan = {
+    canvas: { width: canvas.width, height: canvas.height },
+    content: { ...content },
+    reference: { width: reference.width, height: reference.height },
+    scale: Math.round(scale * 10000) / 10000,
+    sameAspect:
+      Math.abs(canvas.width / canvas.height - reference.width / reference.height) <= 0.01,
+    contentInReference: {
+      x: Math.round(content.x * scale),
+      y: Math.round(content.y * scale),
+      width: Math.round(content.width * scale),
+      height: Math.round(content.height * scale),
+    },
+  }
+  const maxEdge = Number(LIMITS.referenceImages?.maxEdge) || 1024
+  if (Math.max(plan.reference.width, plan.reference.height) > maxEdge) {
+    throw new Error(
+      `outpaint-lora：参考图长边 ${Math.max(plan.reference.width, plan.reference.height)} 超过契约上限 ${maxEdge}`,
+    )
+  }
+  if (!plan.sameAspect) {
+    throw new Error('outpaint-lora：参考图与画布宽高比不一致，绿边比例会失真')
+  }
+  return plan
+}
+
+/**
  * Phase B1 真机验收：把刚生成的图作为源图发 `tool=upscale`。
  *
  * 远端不读 pipeline / tasks，只收 `{tool, reference:{image_b64}}`；结果里的
@@ -1466,6 +1927,106 @@ async function runOutpaint({ endpoint, token, presetId, sourcePng, prompt }) {
     prompt,
   })
   return { png: submitted.png, canvasPng: composed.png, maskPng: mask.png, entry: submitted.entry }
+}
+
+/**
+ * Phase C2：提交一次「绿边画布 + 参考图」的 flux2 扩图（不重绘蒙版，走原生参考条件）。
+ *
+ * 与 B2 的 `submitOutpaintOnce` 的区别：这里没有蒙版/strength，参考图是整张画布缩放后的
+ * job 级 `referenceImages`；输出尺寸取请求画布（flux2 若按内部 1 MP 上限缩放会在结果里
+ * 体现，调用方记录并换算内容区坐标）。
+ *
+ * 采用 submitGenerate + waitForJob 而不是 requestGenerate，是为了把提交耗时与执行耗时
+ * 分开计（`submitSeconds` / `wallSeconds`）——LoRA 首次挂载和权重下载都发生在执行阶段，
+ * 分开后能看出是不是卡在提交/排队。
+ */
+async function submitOutpaintLoraOnce({
+  endpoint,
+  token,
+  presetId,
+  referencePng,
+  prompt,
+  pipelineSpec = null,
+  seed = OUTPAINT_LORA.seed,
+}) {
+  const preset = presetById(presetId)
+  const spec = pipelineSpec ?? withFlux2LoraSpec(preset.pipeline)
+  console.log(
+    `  · [outpaint-lora] ${presetId} 参考图 ${pngSize(referencePng)?.width ?? '?'}x` +
+      `${pngSize(referencePng)?.height ?? '?'}（${referencePng.length} 字节）→ 请求 ` +
+      `${OUTPAINT_CANVAS.width}x${OUTPAINT_CANVAS.height}，LoRA scale=${OUTPAINT_LORA.lora.scale} …`,
+  )
+  const begin = Date.now()
+  const submitted = await submitGenerate(endpoint, token, {
+    pipeline: spec,
+    modelId: preset.repo,
+    referenceImages: [{ image_b64: referencePng.toString('base64') }],
+    tasks: [
+      {
+        name: '01',
+        prompt,
+        negative_prompt: preset.negativeHint ?? '',
+        seed,
+        width: OUTPAINT_CANVAS.width,
+        height: OUTPAINT_CANVAS.height,
+        steps: preset.steps,
+        cfg: preset.cfg,
+      },
+    ],
+  })
+  const submitMs = Date.now() - begin
+  const pollTimes = []
+  const response = await waitForJob(endpoint, token, submitted.job_id, {
+    timeoutMs: 600000,
+    onProgress: () => pollTimes.push(Date.now()),
+  })
+  const pollGaps = pollTimes.slice(1).map((time, index) => time - pollTimes[index])
+  const wallSeconds = Number(((Date.now() - begin) / 1000).toFixed(1))
+  const result = response.results?.[0]
+  if (!result?.image_b64) throw new Error('outpaint-lora：远端没有返回图片')
+  const png = Buffer.from(result.image_b64, 'base64')
+  const isPng = png.subarray(0, 8).toString('hex') === '89504e470d0a1a0a'
+  if (!isPng) throw new Error('outpaint-lora：返回内容不是合法 PNG')
+  const outputSize = pngSize(png)
+  const outputSizeMatchesRequested =
+    Boolean(outputSize) &&
+    outputSize.width === OUTPAINT_CANVAS.width &&
+    outputSize.height === OUTPAINT_CANVAS.height
+  console.log(
+    `  · 扩图完成：${outputSize?.width ?? '?'}x${outputSize?.height ?? '?'}` +
+      `${outputSizeMatchesRequested ? '' : '（与请求尺寸不一致，flux2 可能按 1MP 面积上限缩放）'}，` +
+      `提交 ${Math.round(submitMs / 10) / 100}s / 加载 ${response.load_seconds ?? '-'}s / ` +
+      `推理 ${result.seconds ?? '-'}s / PNG ${png.length} 字节`,
+  )
+  return {
+    png,
+    entry: {
+      preset: presetId,
+      modelId: preset.repo,
+      pipelineKind: preset.pipeline?.loader ?? null,
+      engine: 'flux2+outpaint-lora',
+      lora: { ...OUTPAINT_LORA.lora },
+      prompt,
+      seed,
+      requestedWidth: OUTPAINT_CANVAS.width,
+      requestedHeight: OUTPAINT_CANVAS.height,
+      width: outputSize?.width ?? null,
+      height: outputSize?.height ?? null,
+      outputSizeMatchesRequested,
+      referenceWidth: pngSize(referencePng)?.width ?? null,
+      referenceHeight: pngSize(referencePng)?.height ?? null,
+      referenceBytes: referencePng.length,
+      submitSeconds: Math.round(submitMs / 10) / 100,
+      loadSeconds: response.load_seconds ?? null,
+      imageSeconds: result.seconds ?? null,
+      wallSeconds,
+      pollCount: pollTimes.length,
+      maxPollGapMs: pollGaps.length ? Math.max(...pollGaps) : null,
+      jobId: submitted.job_id,
+      pngBytes: png.length,
+      isPng,
+    },
+  }
 }
 
 /**
@@ -2054,6 +2615,336 @@ async function runAccelOutpaintPhase({ endpoint, token, presetId, sourcePresetId
   return { report, images, models }
 }
 
+/**
+ * Phase C2 现代扩图引擎验收（flux2-klein-4b + 扩图 LoRA，单次提交）。
+ *
+ * 流程：源图（864x864）→ 纯绿 #00FF00 画布（1536x864，内容居中）→ 等比缩到 1024x576
+ * 作为原生参考图 → 带 LoRA 提交一次，输出 1536x864。
+ *
+ * 关键观察点（全部写入 report.outpaintLora，失败不抛，保留证据）：
+ *  - 输出尺寸是否严格等于 1536x864（flux2 可能按内部 1 MP 面积上限缩放，不一致时按比例
+ *    换算内容区坐标再算差值）；
+ *  - 内容区平均差 / 核心区平均差：参考生图会整体重画，差值大是预期，这里只做定量记录；
+ *  - 绿边残留比例：仍是纯绿的像素占比，越低说明 LoRA 填充越充分；
+ *  - 接缝指标：内容区左右边界的横向梯度 vs 内容区内部梯度（复用 B2 口径）；
+ *  - 内容区颜色漂移：源图与出图内容区的逐通道均值差（补亮度差看不到的色调偏移）；
+ *  - 耗时：submitSeconds / wallSeconds / load_seconds / imageSeconds，并与 bench-results
+ *    里 sdxl-inpaint 的 1536x864 历史基线对比；
+ *  - [load] 日志里的 LoRA 挂载证据（`flux2 LoRA 已挂载 …`）。
+ */
+async function runOutpaintLoraPhase({ endpoint, token, presetId, sourcePresetId, prompt }) {
+  const target = presetById(presetId)
+  if (target?.pipeline?.loader !== 'flux2' || target?.supportsReference !== true) {
+    throw new Error(`outpaint-lora：需要 flux2 家族的参考生图预设，当前 ${presetId}`)
+  }
+  const plan = outpaintLoraPlan()
+  const models = []
+  const images = []
+  const notes = []
+
+  // 1) 内容源图：默认 sdxl-lightning 出 864x864，几何与 Phase B2 的历史基线完全一致。
+  const source = await generateOne({
+    endpoint,
+    token,
+    presetId: sourcePresetId,
+    prompt,
+    index: 0,
+    total: 1,
+    width: OUTPAINT_CONTENT.width,
+    height: OUTPAINT_CONTENT.height,
+  })
+  models.push(source.entry)
+  images.push({
+    index: 'outpaint-lora-source',
+    presetId: sourcePresetId,
+    png: source.png,
+    name: '01-source-content.png',
+  })
+  const sourceSize = pngSize(source.png)
+  if (
+    !sourceSize ||
+    sourceSize.width !== OUTPAINT_CONTENT.width ||
+    sourceSize.height !== OUTPAINT_CONTENT.height
+  ) {
+    throw new Error(
+      `outpaint-lora：源图应为 ${OUTPAINT_CONTENT.width}x${OUTPAINT_CONTENT.height}，` +
+        `收到 ${sourceSize?.width ?? '?'}x${sourceSize?.height ?? '?'}`,
+    )
+  }
+  console.log(
+    `  · ${sourcePresetId} 文生图完成：${sourceSize.width}x${sourceSize.height}，加载 ` +
+      `${source.entry.loadSeconds ?? '-'}s / 出图 ${source.entry.imageSeconds ?? '-'}s`,
+  )
+
+  // 2) 纯绿画布 + 1024x576 参考图（等比缩小，绿边比例不变；满足 referenceImages 契约）。
+  const composed = buildGreenOutpaintCanvas(source.png)
+  const reference = resizePngTo(composed.png, plan.reference.width, plan.reference.height)
+  if (!reference) throw new Error('outpaint-lora：无法生成参考图（画布 PNG 解码失败）')
+  console.log(
+    `  · [outpaint-lora] 绿边画布 ${composed.width}x${composed.height}（内容区 ` +
+      `${composed.content.width}x${composed.content.height} @ ${composed.content.x},` +
+      `${composed.content.y}，绿边 ${(composed.greenCoverage * 100).toFixed(2)}%，` +
+      `画布 ${composed.png.length} 字节）→ 参考图 ${reference.width}x${reference.height}` +
+      `（${reference.png.length} 字节）`,
+  )
+  images.push(
+    {
+      index: 'outpaint-lora-canvas',
+      presetId: `${presetId}-outpaint-lora`,
+      png: composed.png,
+      name: '02-outpaint-lora-canvas.png',
+    },
+    {
+      index: 'outpaint-lora-reference',
+      presetId: `${presetId}-outpaint-lora`,
+      png: reference.png,
+      name: '02-outpaint-lora-reference.png',
+    },
+  )
+
+  // 3) 带 LoRA 提交一次（参考图走 job 级 referenceImages，没有蒙版/strength 语义）。
+  const pipelineSpec = withFlux2LoraSpec(target.pipeline)
+  const gpuMemoryBefore = await readGpuMemory(endpoint, token)
+  const run = await submitOutpaintLoraOnce({
+    endpoint,
+    token,
+    presetId,
+    referencePng: reference.png,
+    prompt: OUTPAINT_LORA.prompt,
+    pipelineSpec,
+  })
+  const gpuMemoryAfter = await readGpuMemory(endpoint, token)
+  const loraLogs = await collectLogLines(endpoint, token, /\[load\].*(lora|LoRA)|LoRA/i)
+  if (!loraLogs.some((line) => /LoRA 已挂载|LoRA 权重|使用预挂载 LoRA/i.test(line))) {
+    notes.push('远端 [load] 日志里没有 LoRA 挂载成功行，需确认远端 Flux2Loader 已支持 pipeline.lora')
+  }
+
+  // 4) 像素指标：输出尺寸与请求不一致时按同一比例换算内容区坐标后再比较。
+  const metricsContent = run.entry.outputSizeMatchesRequested
+    ? { ...OUTPAINT_CONTENT }
+    : scaledContentOf(run.entry, plan.canvas, OUTPAINT_CONTENT)
+  if (!run.entry.outputSizeMatchesRequested) {
+    notes.push(
+      `输出尺寸 ${run.entry.width}x${run.entry.height} 与请求 ` +
+        `${OUTPAINT_CANVAS.width}x${OUTPAINT_CANVAS.height} 不一致；像素差/接缝按缩放后的内容区 ` +
+        `(${metricsContent.x},${metricsContent.y},${metricsContent.width}x${metricsContent.height}) 计算`,
+    )
+  }
+  // 出图被缩放时源图内容也要缩到同一尺寸才能逐像素比较（contentRegionDiff 要求宽高一致）；
+  // 双线性缩放会引入轻微模糊，差值只能作为量级参考，报告里用 metricsNote 标注。
+  let diffSource = source.png
+  let metricsNote = '源图内容区与出图内容区同尺寸逐像素比较'
+  if (
+    !run.entry.outputSizeMatchesRequested &&
+    metricsContent.width !== sourceSize.width
+  ) {
+    const scaledSource = resizePngTo(source.png, metricsContent.width, metricsContent.height)
+    if (scaledSource) {
+      diffSource = scaledSource.png
+      metricsNote = '出图被缩放，源图内容区先双线性缩放到同尺寸再比较（差值只作量级参考）'
+    } else {
+      metricsNote = '出图被缩放且源图无法缩放，像素差不可比'
+    }
+  }
+  const contentMeanDiff = contentRegionDiff(diffSource, run.png, metricsContent, 0)
+  const contentCoreMeanDiff = contentRegionDiff(diffSource, run.png, metricsContent, 16)
+  const green = greenAreaStats(run.png)
+  const seam = outpaintSeamMetrics(run.png, metricsContent)
+  const colorDrift = contentColorDrift(diffSource, run.png, metricsContent, 16)
+  const baseline = await loadOutpaintBaseline()
+  const speedupVsBaseline =
+    Number.isFinite(run.entry.imageSeconds) &&
+    run.entry.imageSeconds > 0 &&
+    Number.isFinite(baseline.medianSeconds)
+      ? Math.round((baseline.medianSeconds / run.entry.imageSeconds) * 100) / 100
+      : null
+  if (Number.isFinite(green?.nearGreenRatio) && green.nearGreenRatio > 0.05) {
+    notes.push(`绿边残留 ${(green.nearGreenRatio * 100).toFixed(2)}%（>5%），可能有未填充的新增区域`)
+  }
+
+  const reservedDeltaMb =
+    Number.isFinite(gpuMemoryBefore?.reserved_mb) && Number.isFinite(gpuMemoryAfter?.reserved_mb)
+      ? gpuMemoryAfter.reserved_mb - gpuMemoryBefore.reserved_mb
+      : null
+  images.push({
+    index: 'outpaint-lora',
+    presetId: `${presetId}-outpaint-lora`,
+    png: run.png,
+    name: '03-outpaint-lora.png',
+  })
+  models.push({
+    preset: presetId,
+    modelId: target.repo,
+    pipelineKind: target.pipeline?.loader ?? null,
+    ...run.entry,
+  })
+  const report = {
+    ...run.entry,
+    sourcePreset: sourcePresetId,
+    source: {
+      width: sourceSize.width,
+      height: sourceSize.height,
+      loadSeconds: source.entry.loadSeconds,
+      imageSeconds: source.entry.imageSeconds,
+      wallSeconds: source.entry.wallSeconds,
+      pngBytes: source.entry.pngBytes,
+    },
+    plan,
+    canvas: {
+      width: composed.width,
+      height: composed.height,
+      content: composed.content,
+      fill: composed.fill,
+      fillColor: composed.fillColor,
+      greenCoverage: Number((composed.greenCoverage * 100).toFixed(4)),
+      pngBytes: composed.png.length,
+      referenceBytes: reference.png.length,
+    },
+    metricsContent,
+    metricsNote,
+    contentMeanDiff,
+    contentCoreMeanDiff,
+    green,
+    seam,
+    colorDrift,
+    gpuMemoryBefore,
+    gpuMemoryAfter,
+    reservedDeltaMb,
+    loraLogs,
+    baseline,
+    speedupVsBaseline,
+    baselineNote:
+      'speedupVsBaseline = sdxl-inpaint 历史中位推理秒数 / 本次 flux2+LoRA 推理秒数（>1 表示新引擎更快）',
+    notes,
+  }
+  console.log(
+    `  · [outpaint-lora] 输出 ${run.entry.width ?? '?'}x${run.entry.height ?? '?'}，` +
+      `内容区平均差 ${contentMeanDiff ?? '-'}（核心区 ${contentCoreMeanDiff ?? '-'}），` +
+      `绿边残留 ${green ? `${(green.nearGreenRatio * 100).toFixed(2)}%` : '-'}，` +
+      `接缝比 ${seam?.leftRatio ?? '-'}/${seam?.rightRatio ?? '-'}，` +
+      `颜色漂移 ${colorDrift?.maxAbsDelta ?? '-'}，对 sdxl-inpaint 基线提速 ` +
+      `${speedupVsBaseline ?? '-'}（基线 ${baseline.medianSeconds ?? '-'}s）`,
+  )
+  return { report, images, models }
+}
+
+/**
+ * Phase C2 推理缓存探针：flux2-klein-4b 同 seed / 同尺寸 / 同 prompt 的 off/on A/B。
+ *
+ * on 档在 pipeline 上覆盖 `accel.cache = {type:'firstBlock', threshold:0.05}`；远端若
+ * 特性检测不支持（diffusers 版本没有 Flux2 block 注册接口）会打印
+ * `[accel] WARN cache 不适用：<原因>` 并继续出图——这本身就是结论证据，所以这里不抛错，
+ * 而是把日志判定写进 report.accelCache.cacheStatus。
+ */
+async function runAccelCachePhase({ endpoint, token, presetId, prompt, rounds }) {
+  const preset = presetById(presetId)
+  if (preset?.pipeline?.loader !== 'flux2') {
+    throw new Error(`accel-cache：只对 flux2 家族的预设做缓存探针，当前 ${presetId}`)
+  }
+  const models = []
+  const images = []
+  const configs = []
+  const configPngs = new Map()
+  for (const label of ['off', 'on']) {
+    const spec = label === 'off' ? accelCacheOffSpec(preset) : withAccelCacheSpec(preset.pipeline, ACCEL_CACHE)
+    const gpuMemoryBefore = await readGpuMemory(endpoint, token)
+    const roundEntries = []
+    const pngs = []
+    for (let round = 0; round < rounds; round += 1) {
+      const run = await generateOne({
+        endpoint,
+        token,
+        presetId,
+        prompt,
+        index: 0,
+        total: 1,
+        pipelineSpec: spec,
+        seed: 42,
+      })
+      roundEntries.push({ round: round + 1, ...run.entry })
+      pngs.push(run.png)
+    }
+    const gpuMemoryAfter = await readGpuMemory(endpoint, token)
+    const cacheLogs = label === 'on' ? await collectLogLines(endpoint, token, /\[accel\].*cache/i) : []
+    const reservedDeltaMb =
+      Number.isFinite(gpuMemoryBefore?.reserved_mb) && Number.isFinite(gpuMemoryAfter?.reserved_mb)
+        ? gpuMemoryAfter.reserved_mb - gpuMemoryBefore.reserved_mb
+        : null
+    pngs.forEach((png, roundIndex) => {
+      images.push({
+        index: 'accel-cache',
+        presetId: `${presetId}-accel-cache`,
+        png,
+        name: `0${label === 'off' ? 1 : 2}-cache-${label}-round${roundIndex + 1}.png`,
+      })
+    })
+    configPngs.set(label, pngs[pngs.length - 1])
+    configs.push({
+      label,
+      // 只记录覆盖项，不重复整份 pipeline（loader/base 在报告顶层）。
+      pipelineOverrides:
+        label === 'on' ? { accel: { cache: { type: ACCEL_CACHE.type, threshold: ACCEL_CACHE.threshold } } } : { accel: null },
+      rounds: roundEntries,
+      medianSeconds: medianOf(roundEntries.map((round) => round.imageSeconds)),
+      gpuMemoryBefore,
+      gpuMemoryAfter,
+      reservedDeltaMb,
+      cacheLogs,
+    })
+    models.push({ ...roundEntries[0] })
+    console.log(
+      `  · [accel-cache:${label}] 中位出图 ${medianOf(roundEntries.map((round) => round.imageSeconds))}s，` +
+        `峰值显存 ${gpuMemoryAfter?.max_allocated_mb ?? '-'} MB（首轮加载 ${roundEntries[0].loadSeconds ?? '-'}s）` +
+        `${label === 'on' && cacheLogs.length ? `，cache 日志 ${cacheLogs.length} 行` : ''}`,
+    )
+  }
+  const offConfig = configs.find((config) => config.label === 'off') ?? null
+  const onConfig = configs.find((config) => config.label === 'on') ?? null
+  const maeOffOn = offConfig && onConfig ? meanAbsDiffPng(configPngs.get('off'), configPngs.get('on')) : null
+  const cacheLogs = onConfig?.cacheLogs ?? []
+  const skipped = cacheLogs.some((line) => /WARN|不适用|跳过|不支持/i.test(line))
+  const applied = cacheLogs.some(
+    (line) => !/WARN/i.test(line) && /(已启用|已应用|启用|应用|apply|enabled|firstBlock)/i.test(line),
+  )
+  const cacheStatus = skipped
+    ? applied
+      ? 'applied-with-warn'
+      : 'not-applicable'
+    : applied
+      ? 'applied'
+      : 'unknown'
+  const report = {
+    preset: presetId,
+    mode: 'txt2img',
+    family: preset.pipeline?.loader ?? null,
+    modelId: preset.repo,
+    width: preset.size,
+    height: preset.size,
+    steps: preset.steps,
+    seed: 42,
+    roundsPerConfig: rounds,
+    order: ['off', 'on'],
+    cache: { ...ACCEL_CACHE },
+    configs,
+    speedup: speedupOf(offConfig, onConfig),
+    peakMaxAllocatedDeltaMb: peakDeltaOf(offConfig, onConfig),
+    maeOffOn,
+    cacheLogs,
+    cacheStatus,
+    // true = 日志确认缓存已应用；false = 远端明确报「不适用」；null = 没有可判定的日志。
+    cacheSupported: cacheStatus === 'applied' || cacheStatus === 'applied-with-warn' ? true : cacheStatus === 'not-applicable' ? false : null,
+    note:
+      'cache 是实验性探针（本轮不写入模型资产）；speedup = off 中位推理秒数 / on 中位推理秒数' +
+      '（>1 表示 on 更快）；cacheStatus=not-applicable 表示远端 diffusers 不支持 Flux2 block 缓存注册',
+  }
+  console.log(
+    `  · [accel-cache] 提速比 ${report.speedup ?? '-'}（off ${offConfig?.medianSeconds ?? '-'}s → ` +
+      `on ${onConfig?.medianSeconds ?? '-'}s），两档输出 MAE ${maeOffOn ?? '-'}，` +
+      `cache 状态 ${cacheStatus}`,
+  )
+  return { report, images, models }
+}
+
 async function main() {
   const options = parseOptions()
   const single = options.presets.length === 1
@@ -2155,9 +3046,14 @@ async function main() {
             : options.outpaint
               ? `[4/5] 文生图 + 扩图（画布 ${OUTPAINT_CANVAS.width}x${OUTPAINT_CANVAS.height}，` +
                 `内容区 ${OUTPAINT_CONTENT.width}x${OUTPAINT_CONTENT.height} 居中，strength ${OUTPAINT.strength}）…`
-              : single
-                ? '[4/5] 生成一张 …'
-                : `[4/5] 在同一会话内连续生成 ${options.presets.length} 个模型（验证 LRU 缓存清理）…`,
+              : options.outpaintLora
+                ? `[4/5] flux2 + 扩图 LoRA（绿边画布 ${OUTPAINT_CANVAS.width}x${OUTPAINT_CANVAS.height}，` +
+                  `参考图 ${OUTPAINT_LORA.reference.width}x${OUTPAINT_LORA.reference.height}，单次提交）…`
+                : options.accelCache
+                  ? `[4/5] flux2 文生图缓存 A/B（off/on，firstBlock threshold ${ACCEL_CACHE.threshold}）…`
+                  : single
+                    ? '[4/5] 生成一张 …'
+                    : `[4/5] 在同一会话内连续生成 ${options.presets.length} 个模型（验证 LRU 缓存清理）…`,
     )
     const models = []
     const images = []
@@ -2165,8 +3061,10 @@ async function main() {
     let inpaintReport = null
     let upscaleReport = null
     let outpaintReport = null
+    let outpaintLoraReport = null
     let referenceReport = null
     let accelReport = null
+    let accelCacheReport = null
     if (options.img2img) {
       // M3 真机验收：先文生图，再用刚生成的图做垫图重绘；对比 /health.gpu_memory。
       if (!single) throw new Error('--img2img 只能配合单个 --preset 使用')
@@ -2453,6 +3351,32 @@ async function main() {
         models.push(...accelPhase.models)
         images.push(...accelPhase.images)
       }
+    } else if (options.outpaintLora) {
+      // Phase C2：现代扩图引擎（flux2-klein-4b + 扩图 LoRA），源图仍由 --source-preset 出。
+      if (!single) throw new Error('--outpaint-lora 只能配合单个 --preset 使用')
+      const loraPhase = await runOutpaintLoraPhase({
+        endpoint,
+        token,
+        presetId: options.presets[0],
+        sourcePresetId: options.sourcePreset,
+        prompt: options.prompt,
+      })
+      outpaintLoraReport = loraPhase.report
+      models.push(...loraPhase.models)
+      images.push(...loraPhase.images)
+    } else if (options.accelCache) {
+      // Phase C2：flux2 文生图的 firstBlock 缓存探针（off/on 同 seed，多轮取中位）。
+      if (!single) throw new Error('--accel-cache 只能配合单个 --preset 使用')
+      const cachePhase = await runAccelCachePhase({
+        endpoint,
+        token,
+        presetId: options.presets[0],
+        prompt: options.prompt,
+        rounds: options.accelRounds,
+      })
+      accelCacheReport = cachePhase.report
+      models.push(...cachePhase.models)
+      images.push(...cachePhase.images)
     } else if (options.reference) {
       // Phase C1：模型原生参考生图验收（源图 → 1/2 张参考图 → 1280x720 画幅保持 → 显存复测）。
       if (!single) throw new Error('--reference 只能配合单个 --preset 使用')
@@ -2601,11 +3525,16 @@ async function main() {
       upscale: upscaleReport,
       // Phase B2：--outpaint 模式的画布/内容区、内容区像素差与显存对比（非该模式为 null）。
       outpaint: outpaintReport,
+      // Phase C2：--outpaint-lora 模式的 LoRA 配置、提交/执行耗时、输出尺寸、绿边残留、
+      // 内容区像素差/颜色漂移、接缝指标与 sdxl-inpaint 历史基线对比（非该模式为 null）。
+      outpaintLora: outpaintLoraReport,
       // Phase C1：--reference 模式的参考图数量/尺寸/耗时/显存/输出尺寸断言（非该模式为 null）。
       reference: referenceReport,
       // Phase C1：--accel 模式的 A/B 数据（单模式为 {mode:'txt2img'|'outpaint',...}，
       // --c1-acceptance 一次性验收为 {mode:'c1-acceptance', txt2img, outpaint}；非该模式为 null）。
       accel: accelReport,
+      // Phase C2：--accel-cache 模式的缓存探针 A/B 数据与 [accel] cache 日志判定（非该模式为 null）。
+      accelCache: accelCacheReport,
       versions: health.versions ?? null,
       finalVersions: finalHealth.versions ?? null,
       cacheLogs,
@@ -2628,9 +3557,152 @@ async function main() {
   }
 }
 
+/**
+ * 零配额自检：只跑 Phase C2 新增的纯函数（画布 / 参考图缩放 / 绿边统计 / 颜色漂移 /
+ * spec 覆盖 / 尺寸计划），不连远端、不推 Kernel、不消耗 GPU 配额。
+ *
+ * 运行：`node test/gpu-live.mjs --self-test`（退出码 0 全通过）。
+ */
+function runSelfTest() {
+  const { width: canvasWidth, height: canvasHeight } = OUTPAINT_CANVAS
+  const { x, y, width: contentWidth, height: contentHeight } = OUTPAINT_CONTENT
+  const failures = []
+  const check = (name, fn) => {
+    try {
+      fn()
+      console.log(`PASS  ${name}`)
+    } catch (error) {
+      failures.push(name)
+      console.log(`FAIL  ${name} — ${error?.message ?? error}`)
+    }
+  }
+  const expect = (condition, message) => {
+    if (!condition) throw new Error(message)
+  }
+  const closeTo = (actual, expected, tolerance, label) => {
+    expect(Math.abs(actual - expected) <= tolerance, `${label} 期望 ≈${expected}，实际 ${actual}`)
+  }
+
+  // 程序化 864x864 源图：横向渐变 + 中心方块，保证不是纯绿（避免绿边统计被误判）。
+  const sourcePixels = Buffer.alloc(contentWidth * contentHeight * 3)
+  for (let row = 0; row < contentHeight; row += 1) {
+    for (let column = 0; column < contentWidth; column += 1) {
+      const offset = (row * contentWidth + column) * 3
+      const inBox =
+        column >= contentWidth / 4 &&
+        column < (contentWidth * 3) / 4 &&
+        row >= contentHeight / 4 &&
+        row < (contentHeight * 3) / 4
+      sourcePixels[offset] = Math.round((column / contentWidth) * 255)
+      sourcePixels[offset + 1] = inBox ? 200 : Math.round((row / contentHeight) * 160)
+      sourcePixels[offset + 2] = inBox ? 60 : 120
+    }
+  }
+  const sourcePng = encodePngRgb(contentWidth, contentHeight, sourcePixels)
+  const composed = buildGreenOutpaintCanvas(sourcePng)
+  const reference = resizePngTo(composed.png, OUTPAINT_LORA.reference.width, OUTPAINT_LORA.reference.height)
+
+  check('绿边画布：尺寸 = 1536x864，内容区居中贴入，剩余区域为 #00FF00', () => {
+    expect(composed.width === canvasWidth && composed.height === canvasHeight, '画布尺寸不符')
+    const image = decodePng(composed.png)
+    expect(image, '画布 PNG 无法解码')
+    const offsetOf = (px, py) => (py * image.width + px) * image.channels
+    const left = offsetOf(0, 0)
+    expect(
+      image.pixels[left] === 0 && image.pixels[left + 1] === 255 && image.pixels[left + 2] === 0,
+      '新增区域不是纯绿',
+    )
+    const center = offsetOf(x + Math.floor(contentWidth / 2), y + Math.floor(contentHeight / 2))
+    const sourceCenter = (Math.floor(contentHeight / 2) * contentWidth + Math.floor(contentWidth / 2)) * 3
+    expect(
+      image.pixels[center] === sourcePixels[sourceCenter] &&
+        image.pixels[center + 1] === sourcePixels[sourceCenter + 1] &&
+        image.pixels[center + 2] === sourcePixels[sourceCenter + 2],
+      '内容区像素没有逐像素贴入',
+    )
+    closeTo(composed.greenCoverage, 0.4375, 0.0001, '绿边覆盖率')
+  })
+
+  check('绿边统计：纯绿画布残留比例 ≈ 43.75%，源图内容区不误判为绿', () => {
+    const stats = greenAreaStats(composed.png)
+    expect(stats, '画布统计失败')
+    closeTo(stats.nearGreenRatio, 0.4375, 0.002, 'nearGreenRatio')
+    closeTo(stats.exactGreenRatio, 0.4375, 0.002, 'exactGreenRatio')
+    const sourceStats = greenAreaStats(sourcePng)
+    expect(sourceStats.nearGreenRatio === 0, `源图绿边比例应为 0，实际 ${sourceStats.nearGreenRatio}`)
+  })
+
+  check('参考图缩放：1024x576，绿边比例保持（误差 <1%），双线性输出可解码', () => {
+    expect(reference, '参考图缩放失败')
+    expect(reference.width === 1024 && reference.height === 576, '参考图尺寸不符')
+    const stats = greenAreaStats(reference.png)
+    expect(stats, '参考图统计失败')
+    closeTo(stats.nearGreenRatio, 0.4375, 0.01, '参考图绿边比例')
+  })
+
+  check('尺寸计划：画布/参考图同宽高比，内容区按比例映射，长边不超契约上限', () => {
+    const plan = outpaintLoraPlan()
+    expect(plan.sameAspect === true, '画布与参考图宽高比不一致')
+    expect(plan.contentInReference.x === 224 && plan.contentInReference.y === 0, '内容区推算位置不符')
+    expect(plan.contentInReference.width === 576 && plan.contentInReference.height === 576, '内容区推算尺寸不符')
+    const maxEdge = Number(LIMITS.referenceImages?.maxEdge) || 1024
+    expect(Math.max(plan.reference.width, plan.reference.height) <= maxEdge, '参考图长边超过契约上限')
+  })
+
+  check('LoRA / 缓存 spec 覆盖：其它字段逐字保留，不修改原 pipeline', () => {
+    const pipeline = { loader: 'flux2', base: 'black-forest-labs/FLUX.2-klein-4B', lora: null }
+    const loraSpec = withFlux2LoraSpec(pipeline)
+    expect(loraSpec.loader === 'flux2' && loraSpec.base === pipeline.base, 'loader/base 被改动')
+    expect(
+      loraSpec.lora.repo === OUTPAINT_LORA.lora.repo &&
+        loraSpec.lora.weight === OUTPAINT_LORA.lora.weight &&
+        loraSpec.lora.scale === OUTPAINT_LORA.lora.scale,
+      'LoRA 覆盖值不符',
+    )
+    expect(pipeline.lora === null, 'withFlux2LoraSpec 修改了原 spec')
+    const cacheSpec = withAccelCacheSpec(pipeline)
+    expect(cacheSpec.accel.cache.type === 'firstBlock', 'cache type 不符')
+    expect(cacheSpec.accel.cache.threshold === ACCEL_CACHE.threshold, 'cache threshold 不符')
+    expect(cacheSpec.loader === 'flux2', '缓存覆盖丢了 loader')
+    const offSpec = accelCacheOffSpec({ pipeline: { ...pipeline, accel: { vaeTiling: true } } })
+    expect(offSpec.accel === undefined, 'off 档仍带 accel')
+    expect(offSpec.loader === 'flux2', 'off 档丢了 loader')
+  })
+
+  check('内容区坐标换算：flux2 按 1MP 上限缩到 1360x768 时按比例映射', () => {
+    const scaled = scaledContentOf({ width: 1360, height: 768 })
+    expect(scaled.x === 298 && scaled.y === 0, `x/y 映射不符：${scaled.x},${scaled.y}`)
+    expect(scaled.width === 765 && scaled.height === 768, `宽高映射不符：${scaled.width}x${scaled.height}`)
+  })
+
+  check('内容区颜色漂移：同图差值为 0，整体提亮后 maxAbsDelta 可检出', () => {
+    const contentOnly = { x: 0, y: 0, width: contentWidth, height: contentHeight }
+    const identical = contentColorDrift(sourcePng, composed.png, { ...OUTPAINT_CONTENT }, 16)
+    expect(identical, '颜色漂移计算失败')
+    expect(identical.maxAbsDelta === 0, `同图 maxAbsDelta 应为 0，实际 ${identical.maxAbsDelta}`)
+    const brighter = Buffer.from(sourcePixels)
+    for (let offset = 0; offset < brighter.length; offset += 1) {
+      brighter[offset] = Math.min(255, brighter[offset] + 10)
+    }
+    const drift = contentColorDrift(sourcePng, encodePngRgb(contentWidth, contentHeight, brighter), contentOnly, 16)
+    expect(drift, '提亮图颜色漂移计算失败')
+    closeTo(drift.maxAbsDelta, 10, 1, '提亮后 maxAbsDelta')
+  })
+
+  const failed = failures.length
+  console.log(
+    `\n自检${failed ? `失败 ${failed} 项：${failures.join('、')}` : '全部通过'}（不推 Kernel、不消耗 GPU 配额）`,
+  )
+  return failed === 0
+}
+
 if (HELP) {
   printHelp()
   process.exit(0)
+}
+
+if (process.argv.includes('--self-test')) {
+  process.exit(runSelfTest() ? 0 : 1)
 }
 
 // 离线校验 PNG 辅助函数（画布/蒙版/像素差）时置 GPU_LIVE_SKIP_MAIN=1：只加载函数，
@@ -2658,20 +3730,35 @@ if (process.env.GPU_LIVE_SKIP_MAIN !== '1') {
 // 真机验收脚本不对外提供 API；这里只把 PNG 辅助函数与参数解析导出给离线自检
 // （`GPU_LIVE_SKIP_MAIN=1`，不推送 Kernel、不消耗配额）。
 export {
+  ACCEL_CACHE,
   OUTPAINT_CANVAS,
   OUTPAINT_CONTENT,
+  OUTPAINT_LORA,
+  accelCacheOffSpec,
   accelOffConfigOf,
   accelOnConfigOf,
+  buildGreenOutpaintCanvas,
   buildOutpaintCanvas,
   buildOutpaintMaskPng,
+  contentColorDrift,
   contentRegionDiff,
   decodePng,
   encodePngRgb,
+  generateOne,
+  greenAreaStats,
+  loadOutpaintBaseline,
   meanAbsDiffPng,
   medianOf,
+  outpaintLoraPlan,
   outpaintSeamMetrics,
   parseOptions,
   peakDeltaOf,
+  resizePngTo,
+  runSelfTest,
+  scaledContentOf,
   speedupOf,
+  submitOutpaintLoraOnce,
+  withAccelCacheSpec,
   withAccelSpec,
+  withFlux2LoraSpec,
 }

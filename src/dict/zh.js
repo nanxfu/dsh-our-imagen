@@ -170,6 +170,11 @@ export const zh = {
   'studio.preset.langEnOnly': '仅英文',
   // 专用局部重绘权重只出现在舞台图片工具里，主表单模型卡标成不可选。
   'studio.preset.imageToolOnly': '仅图片工具',
+  // 算力来源能力位：当前来源跑不了的模型置灰 + 角标（如 9B 只在 Colab 大显存后端可用）。
+  'studio.preset.providerOnly': '仅 {provider}',
+  'studio.preset.providerBlocked': '当前算力来源（{provider}）跑不了这个模型；切换到 {needed} 后可用。',
+  'studio.preset.providerName.kaggle': 'Kaggle',
+  'studio.preset.providerName.colab': 'Colab',
   'studio.preset.stepsUnit': '步',
   'studio.preset.dualGpu': '双 GPU',
   'studio.preset.footer': '海报为概念示意，非出图样例；切换会套用推荐尺寸与步数。',
@@ -203,6 +208,8 @@ export const zh = {
   // 专用局部重绘预设不能文生图：主表单本次请求自动切兜底预设 / 一个可用预设都没有时拦下。
   'studio.form.autoText2Image': '当前预设只支持局部重绘，本次已改用 {preset} 文生图',
   'studio.form.blockedInpaintOnly': '当前预设只支持局部重绘，且没有可用的文生图预设；请切换模型。',
+  // 算力来源不匹配（模型资产 providers 能力位）：明确当前 / 所需来源与模型名，不静默换模型。
+  'studio.form.blockedProvider': '「{preset}」只能运行在 {needed} 上，当前算力来源是 {provider}；请到运行设置里切换算力来源，或改用其他模型。',
 
   // ── 画面预览 ─────────────────────────────────────────────────
   'studio.stage.empty': '画面预览',

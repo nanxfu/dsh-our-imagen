@@ -22,7 +22,7 @@ import { LIMITS, UPSCALE } from '../../shared/contract.js'
 import { clampInt, clampNumber, clampSize, parseSeed } from './clamp.js'
 import { positiveSize } from './format.js'
 import { clampMaskStrength, referenceMaskForSubmit } from './mask.js'
-import { inpaintOnlyOf, ratioIdOf, referencePresetOf } from './preset.js'
+import { inpaintOnlyOf, presetProviderRestrictionOf, providerIdOf, ratioIdOf, referencePresetOf } from './preset.js'
 import { negativeForSubmit } from './prompt.js'
 import { referenceCapabilityOf, referencePathsOf } from './reference.js'
 
@@ -139,7 +139,10 @@ export function effectivePresetOf(overrides, preset, presets) {
 /**
  * 主表单本次请求的能力预检。
  *
- * 两条互斥的图片条件在这里分流：
+ * 三道互不重叠的门在这里收口：
+ *  - 算力来源（`providers`）：模型资产声明了运行后端时，当前 provider 不支持就拦下并给
+ *    「当前/所需来源 + 模型名」的说明——这是硬约束，换模型或换算力来源都能解决，放在最前面
+ *    给出根因，避免用户被参考图提示误导；
  *  - `references`（模型原生参考图，Phase C2）非空：当前预设必须 `supportsReference = true`，
  *    否则拦下并给「换模型 / 移除参考图」的说明——不静默丢图，也不自动换模型；
  *  - 专用局部重绘权重（`inpaintOnly`）只能带蒙版使用，不能文生图：本次请求改用可文生图的
@@ -152,10 +155,12 @@ export function effectivePresetOf(overrides, preset, presets) {
  * @param {object|null} options.preset 当前（或覆盖项解析出的）有效预设
  * @param {Array<object>} options.presets 宿主下发的预设列表
  * @param {unknown} [options.references] 本次请求要带的原生参考图（槽位或覆盖项）
+ * @param {string} [options.provider] 当前算力来源 id（组合层已归一的 provider）
  * @returns {{
  *   ok: boolean,
- *   reason: ''|'preset'|'reference',
+ *   reason: ''|'preset'|'reference'|'provider',
  *   blockedKey: string,
+ *   blockedParams: null|{preset: string, provider: string, needed: string},
  *   notice: null|{key: string, params: object},
  *   preset: object|null,
  * }} preset 是本次请求要改用的兜底预设；空表示沿用有效预设
@@ -163,9 +168,21 @@ export function effectivePresetOf(overrides, preset, presets) {
 export function generateCapabilityOf(options = {}) {
   const preset = options.preset && typeof options.preset === 'object' ? options.preset : null
   const presets = Array.isArray(options.presets) ? options.presets : []
-  const result = { ok: true, reason: '', blockedKey: '', notice: null, preset: null }
+  const result = { ok: true, reason: '', blockedKey: '', blockedParams: null, notice: null, preset: null }
   // 预设列表还没拿到（启动瞬间）时不做判断，交给宿主，避免误拦文生图。
   if (presets.length === 0) return result
+  // 算力来源能力位：只有显式声明了 providers 的模型会被限制；缺省 = 两种来源都可用。
+  // provider 非法时按契约默认来源（kaggle）判断，与顶栏模型卡使用同一份归一规则。
+  const provider = providerIdOf(options.provider)
+  const needed = presetProviderRestrictionOf(preset)
+  if (needed && needed !== provider) {
+    result.ok = false
+    result.reason = 'provider'
+    result.blockedKey = 'studio.form.blockedProvider'
+    // 文案由界面本地化：这里只给 id 与展示名，不在纯逻辑层拼中文。
+    result.blockedParams = { preset: presetLabelOf(preset), provider, needed }
+    return result
+  }
   // 原生参考图路径优先：槽位非空时不改模型、不丢图，只拦下并说明原因。
   const referenceCapability = referenceCapabilityOf(preset, options.references)
   if (!referenceCapability.ok) {
