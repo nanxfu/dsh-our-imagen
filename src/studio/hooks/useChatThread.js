@@ -207,8 +207,13 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
     // 默认随机种子：跨主题对话沿用上一张的种子会让构图僵化，只有卡上显式打开开关才沿用。
     const seed = intentSeedOf(message, state && state.lastJob, form.form.seed)
     if (seed !== null) overrides.seed = seed
+    // 确认卡提交前若左栏有未提交修改或正在编辑托管草稿，先托管进草稿卡再覆写表单。
+    if ((form.dirty || form.draftEditing) && typeof form.parkDraft === 'function') {
+      form.parkDraft()
+    }
     const patch = intentFormPatch(message, DEFAULT_RATIOS, { negativeActive })
     if (Object.keys(patch).length > 0) form.patchForm(patch)
+    if (typeof form.clearOrigin === 'function') form.clearOrigin()
     // 助手确认卡同样走组合层 generate → form.buildBody：左栏参考图槽非空时自动带
     // `references`（Phase C2 的请求链路统一在一个出口，助手不会漏带、也不会另拼一套）。
     const ok = await generate(overrides, { pushUser: false, source: 'assistant' })
@@ -222,7 +227,13 @@ export function useChatThread({ t, isEn, alive, state, form, generate }) {
    */
   function handoffIntent(message) {
     if (!message || typeof form.applyIntent !== 'function') return false
-    return Boolean(form.applyIntent(message))
+    const hasPrompt = typeof message.prompt === 'string' && message.prompt.trim().length > 0
+    if (hasPrompt && (form.dirty || form.draftEditing) && typeof form.parkDraft === 'function') {
+      form.parkDraft()
+    }
+    const applied = Boolean(form.applyIntent(message))
+    if (applied && typeof form.clearOrigin === 'function') form.clearOrigin()
+    return applied
   }
 
   /** 意图卡上的「沿用上张构图」开关：默认关闭，只改这张卡自己的状态。 */

@@ -203,10 +203,19 @@ export function ChatPanel(props) {
     }
   }
 
-  /** 对比原图：只对有 sourceImage 的派生版本出现，开关交给舞台的对比层。 */
+  /** 对比原图：只对有 sourceImage 的派生版本出现，先确保舞台停在这张图，再开关对比层。 */
   function compareFocus(entry) {
     if (!entry || !entry.item || !entry.item.sourceImage) return
     if (!ui || typeof ui.setCompareOpen !== 'function') return
+    const targetPath = entry.image && typeof entry.image.path === 'string' ? entry.image.path.trim() : ''
+    const stagePath = library && library.selected && library.selected.image && typeof library.selected.image.path === 'string'
+      ? library.selected.image.path.trim()
+      : ''
+    if (targetPath && targetPath !== stagePath) {
+      openPath(targetPath)
+      ui.setCompareOpen(true)
+      return
+    }
     ui.setCompareOpen(!ui.compareOpen)
   }
 

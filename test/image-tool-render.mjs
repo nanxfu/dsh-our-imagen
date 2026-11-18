@@ -700,6 +700,39 @@ async function main() {
     }
   })
 
+  await check('裸本地导入图进图片工具时不拿文件名当扩散提示词；带元数据导入保留原提示词', async () => {
+    const { harness } = await mountStage()
+    const bareImage = {
+      path: 'imagen-output/20261118-01/01.png',
+      file: '01.png',
+      url: '/imagen-api/file?path=imagen-output%2F20261118-01%2F01.png',
+      width: 1280,
+      height: 720,
+    }
+    const bareItem = {
+      jobId: 'imp-bare',
+      source: 'import',
+      prompt: 'e2rtLaj32QMf3G-random-file',
+      params: { prompt: 'e2rtLaj32QMf3G-random-file', width: 1280, height: 720 },
+      images: [bareImage],
+    }
+    harness.api().openTool('outpaint', { image: bareImage, item: bareItem })
+    await refresh()
+    assert.equal(harness.api().target.prompt, '', '裸导入图不应把文件名写入工具回退提示词')
+
+    const metaImage = { ...bareImage, path: 'imagen-output/20261118-02/01.png' }
+    const metaItem = {
+      jobId: 'imp-meta',
+      source: 'import',
+      prompt: 'misty mountain train station at dawn',
+      params: { prompt: 'misty mountain train station at dawn', steps: 4, cfg: 0, seed: 42 },
+      images: [metaImage],
+    }
+    harness.api().openTool('inpaint', { image: metaImage, item: metaItem })
+    await refresh()
+    assert.equal(harness.api().target.prompt, 'misty mountain train station at dawn', '带 PNG 元数据的导入图应保留原生成提示词')
+  })
+
   client.unmount()
   summary()
 }

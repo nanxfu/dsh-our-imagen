@@ -4126,6 +4126,13 @@ function ChatPanel(props) {
   function compareFocus(entry) {
     if (!entry || !entry.item || !entry.item.sourceImage) return;
     if (!ui || typeof ui.setCompareOpen !== "function") return;
+    const targetPath = entry.image && typeof entry.image.path === "string" ? entry.image.path.trim() : "";
+    const stagePath = library && library.selected && library.selected.image && typeof library.selected.image.path === "string" ? library.selected.image.path.trim() : "";
+    if (targetPath && targetPath !== stagePath) {
+      openPath(targetPath);
+      ui.setCompareOpen(true);
+      return;
+    }
     ui.setCompareOpen(!ui.compareOpen);
   }
   function continueFocus(entry) {
@@ -13499,14 +13506,24 @@ function useChatThread({ t, isEn, alive, state, form, generate }) {
     }
     const seed = intentSeedOf(message, state && state.lastJob, form.form.seed);
     if (seed !== null) overrides.seed = seed;
+    if ((form.dirty || form.draftEditing) && typeof form.parkDraft === "function") {
+      form.parkDraft();
+    }
     const patch = intentFormPatch(message, DEFAULT_RATIOS, { negativeActive });
     if (Object.keys(patch).length > 0) form.patchForm(patch);
+    if (typeof form.clearOrigin === "function") form.clearOrigin();
     const ok = await generate(overrides, { pushUser: false, source: "assistant" });
     if (ok && typeof form.markClean === "function") form.markClean();
   }
   function handoffIntent(message) {
     if (!message || typeof form.applyIntent !== "function") return false;
-    return Boolean(form.applyIntent(message));
+    const hasPrompt = typeof message.prompt === "string" && message.prompt.trim().length > 0;
+    if (hasPrompt && (form.dirty || form.draftEditing) && typeof form.parkDraft === "function") {
+      form.parkDraft();
+    }
+    const applied = Boolean(form.applyIntent(message));
+    if (applied && typeof form.clearOrigin === "function") form.clearOrigin();
+    return applied;
   }
   function toggleIntentLockSeed(messageId) {
     setMessages((prev) => prev.map((message) => {
@@ -13606,7 +13623,8 @@ function targetOf(entry) {
   const params = item && item.params && typeof item.params === "object" ? item.params : null;
   const ownPrompt = item && typeof item.prompt === "string" ? item.prompt.trim() : "";
   const paramsPrompt = params && typeof params.prompt === "string" ? params.prompt.trim() : "";
-  const prompt = (ownPrompt || paramsPrompt).slice(0, LIMITS.prompt.maxChars);
+  const rawPrompt = isBareImportOf({ image, item }) ? "" : ownPrompt || paramsPrompt;
+  const prompt = rawPrompt.slice(0, LIMITS.prompt.maxChars);
   return {
     path,
     url: typeof image.url === "string" && image.url ? image.url : referenceUrlOf(path),
@@ -14762,11 +14780,15 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     setCleanBaseline(formSnapshotOf(form));
   }, [cleanBaseline, form.presetId]);
   function patchForm(partial) {
-    setForm((prev) => applyNegativePatch(prev, partial));
+    const next = applyNegativePatch(formRef.current, partial);
+    formRef.current = next;
+    setForm(next);
   }
   function selectPreset(next) {
     if (!next || !next.id) return;
-    setForm((prev) => applyNegativePatch(prev, presetSelectPatch(next, prev, presets)));
+    const updated = applyNegativePatch(formRef.current, presetSelectPatch(next, formRef.current, presets));
+    formRef.current = updated;
+    setForm(updated);
   }
   function addReference(value) {
     const result = referenceAdd(formRef.current.references, value);
@@ -14818,6 +14840,12 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     originRef.current = null;
     return true;
   }
+  function clearOrigin() {
+    if (!originRef.current) return false;
+    originRef.current = null;
+    setOrigin(null);
+    return true;
+  }
   function forgetRemovedPaths(paths) {
     const removed = new Set((Array.isArray(paths) ? paths : []).filter(Boolean));
     if (removed.size === 0) return false;
@@ -14852,7 +14880,10 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     const parked = prev && prev.editing === true;
     if (!dirty && !parked) return prev;
     const next = parkDraftOf(prev, originRef.current, formRef.current);
-    if (next !== prev) setDraft(next);
+    if (next !== prev) {
+      draftRef.current = next;
+      setDraft(next);
+    }
     return next;
   }
   function openDraft() {
@@ -15053,10 +15084,12 @@ ${value}` : value });
     newCreation,
     // 阶段十五 Phase C0：解除与上一张作品的绑定、删除作品后的引用清理。
     detachOrigin,
+    clearOrigin,
     forgetRemovedPaths,
     // 草稿托管（阶段十五 A1）：draftView 是展示用派生状态，四个动作由组合层在切换点调用。
     draft,
     draftView,
+    draftEditing: Boolean(draftView && draftView.editing),
     parkDraft,
     openDraft,
     clearDraft,

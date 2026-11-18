@@ -148,13 +148,17 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
 
   /** 表单补丁统一入口：负向层数据与展示文本在这里保持同步。 */
   function patchForm(partial) {
-    setForm((prev) => applyNegativePatch(prev, partial))
+    const next = applyNegativePatch(formRef.current, partial)
+    formRef.current = next
+    setForm(next)
   }
 
   /** 切换预设：套用推荐尺寸 / 步数 / 引导强度，并按负向能力整层替换模型负向词。 */
   function selectPreset(next) {
     if (!next || !next.id) return
-    setForm((prev) => applyNegativePatch(prev, presetSelectPatch(next, prev, presets)))
+    const updated = applyNegativePatch(formRef.current, presetSelectPatch(next, formRef.current, presets))
+    formRef.current = updated
+    setForm(updated)
   }
 
   // ---- 原生参考图槽（阶段十五 Phase C2） -----------------------------------
@@ -254,6 +258,14 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     return true
   }
 
+  /** 清空来源作品绑定：助手确认卡覆写表单时避免继续显示旧作品的「正在微调」。 */
+  function clearOrigin() {
+    if (!originRef.current) return false
+    originRef.current = null
+    setOrigin(null)
+    return true
+  }
+
   /**
    * 删除作品后的引用清理（阶段十五 Phase C0）。
    *
@@ -307,7 +319,10 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     const parked = prev && prev.editing === true
     if (!dirty && !parked) return prev
     const next = parkDraftOf(prev, originRef.current, formRef.current)
-    if (next !== prev) setDraft(next)
+    if (next !== prev) {
+      draftRef.current = next
+      setDraft(next)
+    }
     return next
   }
 
@@ -581,10 +596,12 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     newCreation,
     // 阶段十五 Phase C0：解除与上一张作品的绑定、删除作品后的引用清理。
     detachOrigin,
+    clearOrigin,
     forgetRemovedPaths,
     // 草稿托管（阶段十五 A1）：draftView 是展示用派生状态，四个动作由组合层在切换点调用。
     draft,
     draftView,
+    draftEditing: Boolean(draftView && draftView.editing),
     parkDraft,
     openDraft,
     clearDraft,

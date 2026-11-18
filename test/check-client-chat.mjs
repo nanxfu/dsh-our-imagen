@@ -98,6 +98,7 @@ async function mountChatPanel(options = {}) {
         openMessage: (path) => calls.opens.push(path),
         gallery: options.gallery ?? [],
         items: options.items ?? [],
+        selected: options.selected ?? null,
       },
       actions: {
         sending: Boolean(options.sending),
@@ -552,6 +553,36 @@ await check('渲染：单图聚焦的面包屑与快捷动作胶囊', async () =
   } finally {
     back.client.unmount()
   }
+  // 舞台停在别的图时点「对比原图」：先切回焦点图再打开对比（不开关错作品）；
+  // 已停在焦点图且 compareOpen=true 时才关闭对比。
+  const switched = await mountChatPanel({
+    focus,
+    focusBackLabel: '4 张生成结果',
+    gallery: [{ image: focusedImage, item }],
+    selected: { image: parentImage, item: { jobId: 'job-0', prompt: '原图', images: [parentImage] } },
+    compareOpen: true,
+  })
+  try {
+    findClass(switched.tree, 'ofs-chat-focus-action')[0].props.onClick()
+    assert.equal(switched.calls.opens.at(-1), focusedImage.path, '[focus] 舞台停在别的作品时对比前先切回焦点图')
+    assert.deepEqual(switched.calls.compares, [true], '[focus] 切回后应打开对比而非沿用旧图开关反转')
+  } finally {
+    switched.client.unmount()
+  }
+  const sameWork = await mountChatPanel({
+    focus,
+    focusBackLabel: '4 张生成结果',
+    gallery: [{ image: focusedImage, item }],
+    selected: { image: focusedImage, item },
+    compareOpen: true,
+  })
+  try {
+    findClass(sameWork.tree, 'ofs-chat-focus-action')[0].props.onClick()
+    assert.equal(sameWork.calls.opens.length, 0, '[focus] 已在焦点图上时不再重复切换')
+    assert.deepEqual(sameWork.calls.compares, [false], '[focus] 已在焦点图上再点对比原图应关闭')
+  } finally {
+    sameWork.client.unmount()
+  }
   // 没有 sourceImage 的根图：不出现「对比原图」胶囊，其余动作仍在。
   const root = await mountChatPanel({
     focus,
@@ -853,6 +884,53 @@ await check('渲染：带入参数面板写入真实表单（useStudio + handoff
     assert.equal(latest.studio.chat.handoffIntent({ prompt: '   ', ratioId: '1:1', count: 2 }), false)
     await client.rerenderRaw()
     assert.equal(JSON.stringify(latest.studio.form.form), before, '空提示词不应改动表单')
+  } finally {
+    client.unmount()
+  }
+})
+// 助手确认卡覆写表单时的状态协同：已有作品脏草稿应先托管、且清掉旧的「正在微调」来源标记。
+await check('渲染：助手生成/带入先托管左栏脏草稿并清除旧 origin', async () => {
+  const workA = {
+    jobId: 'job-a',
+    prompt: 'A 的荷花池塘',
+    presetId: 'sdxl-lightning',
+    width: 1024,
+    height: 1024,
+    params: { prompt: 'A 的荷花池塘', width: 1024, height: 1024, steps: 4, cfg: 0, seed: 7 },
+    images: [{ path: 'imagen-output/job-a/01.png', file: '01.png', url: '/imagen-api/file?path=a', width: 1024, height: 1024, seed: 7 }],
+  }
+  const responses = studioResponses(readyState, { items: [workA] }, { '/imagen-api/generate': { id: 'job-b', status: 'queued' } })
+  const client = await createTestClient({ now: NOW, responses, testBuild: true })
+  const React = client.react
+  const h = React.createElement
+  const latest = {}
+  function Harness() {
+    const studio = client.hooks.useStudio({ t: client.internals.i18n.fallbackTranslate('zh') })
+    latest.studio = studio
+    return h('div', { className: 'ofs-chat-draft-harness' }, studio.form.form.prompt)
+  }
+  try {
+    await client.mountRaw(Harness, {})
+    await client.settle()
+    // 选中作品 A 并改写提示词形成未提交脏修改。
+    latest.studio.actions.previewWork({ image: workA.images[0], item: workA })
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.origin && latest.studio.form.origin.path, workA.images[0].path)
+    latest.studio.form.patchForm({ prompt: 'A 改到一半的草稿' })
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.dirty, true)
+    // 点助手「按此生成」：旧脏修改应先托管到草稿卡，不再被覆盖丢弃；旧 origin 清空。
+    await latest.studio.chat.generateIntent({ prompt: 'neon alley in rain', ratioId: '16:9', count: 1 })
+    await client.settle()
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.form.prompt, 'neon alley in rain')
+    assert.equal(latest.studio.form.origin, null, '助手确认卡覆写后不应残留旧作品「正在微调」')
+    assert.equal(latest.studio.form.tuning, null)
+    assert.equal(latest.studio.form.draft && latest.studio.form.draft.form.prompt, 'A 改到一半的草稿', '原左栏未提交修改应托管进草稿卡')
+    // 点回草稿卡后 draftEditing 暴露为 true，再切换到空白新建时也能感知草稿编辑态。
+    assert.equal(latest.studio.form.openDraft(), true)
+    await client.rerenderRaw()
+    assert.equal(latest.studio.form.draftEditing, true, 'openDraft 后 draftEditing 必须暴露为 true')
   } finally {
     client.unmount()
   }

@@ -29,7 +29,7 @@ import { negativePromptActive } from '../../../shared/models-guide.js'
 
 import { submitGenerate } from '../../api/resources.js'
 import { formatText, positiveSize } from '../../logic/format.js'
-import { presetLabelOf } from '../../logic/generate.js'
+import { isBareImportOf, presetLabelOf } from '../../logic/generate.js'
 import { referenceUrlOf } from '../../logic/reference.js'
 import {
   buildImageToolBody,
@@ -97,7 +97,9 @@ function targetOf(entry) {
   const params = item && item.params && typeof item.params === 'object' ? item.params : null
   const ownPrompt = item && typeof item.prompt === 'string' ? item.prompt.trim() : ''
   const paramsPrompt = params && typeof params.prompt === 'string' ? params.prompt.trim() : ''
-  const prompt = (ownPrompt || paramsPrompt).slice(0, LIMITS.prompt.maxChars)
+  // 裸本地导入图（无 PNG tEXt 元数据）把文件名留在 params.prompt 只作标题展示，不能拿来当扩散提示词。
+  const rawPrompt = isBareImportOf({ image, item }) ? '' : (ownPrompt || paramsPrompt)
+  const prompt = rawPrompt.slice(0, LIMITS.prompt.maxChars)
   return {
     path,
     url: typeof image.url === 'string' && image.url ? image.url : referenceUrlOf(path),
