@@ -20,6 +20,10 @@
 - **工具链**：`tools/verify-model.mjs` / `tools/colab/smoke-provider.mjs` 支持 `--config <草稿 JSON>` 与 `--write`（把实测写回 `measured`）；新增 `tools/colab/acceptance-17.mjs`（阶段十七真机验收，含 503 / 排队退避与任何路径必保 stop）、`tools/colab/steady-17.mjs`（按资产 SOP 的稳态中位数采样）与 `tools/colab/image-analysis.py`（Pillow 蒙版 / 像素差 / alpha 分析）。
 - **模型实测回填**：`z-image-turbo` 与 `qwen-image-2.1` 的 `measured.steadySeconds` 按协议（丢弃首张 + 后 3 张中位数）更新为 **30.66s / 43.68s**（原值 57.73s / 91.21s 是首图含冷启预热的口径）；`shared/models.generated.js` 随之重新生成，模型卡与顶栏速度读数同步变准。
 
+### 界面与动效
+
+- **创作页操作动效**：以「换纸」为唯一作者时刻——画幅比注册成 `<number>` 自定义属性（`@property --ofs-frame-r`），改比例时取景框按新画幅收放并落定（420ms，`linear()` 末段约 0.8% 过冲再收回），四角裁切标记跟着纸边重新落墨（340ms），纸面引导文案保持常驻居中避免闪烁；只过渡这个数字、不过渡 `width`，窗口缩放时纸仍立即跟随布局。左栏其余操作收敛为三种短反馈：压印（按下向台面沉 1px，110ms）、落定（选中态出现时回位一次，200~260ms，含模式切换分段控件）、抽屉（折叠区按真实高度从 `grid-template-rows: 0fr` 长到 `1fr`，240ms，收起仍即时卸载）；页脚规格摘要与「画面设置」读数按值重挂载后浮上（170ms），表单 ↔ 创作助手与创作 ↔ 画廊切换时面板淡入落定（200ms），参考图入槽与进度胶囊各一次 200ms 入场。动效令牌集中在 `tokens.css` 的 `--ofs-ease-*` / `--ofs-time-*`，移除 `prefers-reduced-motion: reduce` 降级压制，`docs/DESIGN.md` Motion 章节同步更新。
+
 ### 文档与示例
 
 - `docs/ROADMAP.md` 第十七节收口（状态、第 4 节验收记录、第 5 节真机验收、排期表）；`README.md` / `README.en.md` 更新 7 款模型清单、双算力来源与「同一提示词 · 各模型风格对照」示例墙（7 张 = 2 张既有 Kaggle 成片 + 5 张 Colab L4/T4 真机成片）；`docs/PRODUCT.md` / `docs/SPEC.md` / `docs/ARCHITECTURE.md` / `docs/MODEL_CARD_SPEC.md` / `docs/MODEL_ASSET_SPEC.md` 同步 7 款口径与 `providers` 现状；`docs/TROUBLESHOOTING.md` 补齐参考图 / 透明背景 / 现代扩图新口径，并新增「模型原生参考图与透明背景」一节。

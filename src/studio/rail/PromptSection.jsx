@@ -11,6 +11,7 @@ import { LIMITS } from '../../../shared/contract.js'
 
 import { Tooltip } from '../../components/Tooltip.jsx'
 import { Icon } from '../icons.jsx'
+import { Drawer } from './Drawer.jsx'
 import { Fieldset } from './Fieldset.jsx'
 
 const PROMPT_MAX = LIMITS.prompt.maxChars
@@ -98,28 +99,30 @@ export function PromptSection({
             </span>
           </div>
           {refineOpen ? (
-            <>
-              {refineGroups.map((group) => (
-                <div className="ofs-refine-group" key={group.dimension}>
-                  <span className="ofs-refine-dim">{t(`studio.refine.${group.dimension}`)}</span>
-                  <div className="ofs-suggestions">
-                    {group.options.map((option) => (
-                      <button
-                        type="button"
-                        key={option.id}
-                        className={option.applied ? 'ofs-suggestion is-on' : 'ofs-suggestion'}
-                        // 界面显示 UI 语言标签，插入提示词的始终是英文本。
-                        onClick={() => toggleRefine(option.text)}
-                        aria-pressed={option.applied}
-                        title={option.text}
-                      >
-                        {option.label || option.text}
-                      </button>
-                    ))}
+            <Drawer>
+              <div className="ofs-refine-list">
+                {refineGroups.map((group) => (
+                  <div className="ofs-refine-group" key={group.dimension}>
+                    <span className="ofs-refine-dim">{t(`studio.refine.${group.dimension}`)}</span>
+                    <div className="ofs-suggestions">
+                      {group.options.map((option) => (
+                        <button
+                          type="button"
+                          key={option.id}
+                          className={option.applied ? 'ofs-suggestion is-on' : 'ofs-suggestion'}
+                          // 界面显示 UI 语言标签，插入提示词的始终是英文本。
+                          onClick={() => toggleRefine(option.text)}
+                          aria-pressed={option.applied}
+                          title={option.text}
+                        >
+                          {option.label || option.text}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </>
+                ))}
+              </div>
+            </Drawer>
           ) : null}
         </div>
       ) : null}

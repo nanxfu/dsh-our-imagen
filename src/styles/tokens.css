@@ -79,6 +79,20 @@
 
   --ofs-font: -apple-system, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 
+  /* 动效：只做三件事——按下（压印）、选中（落定）、换画幅（换纸）。
+     时长与曲线都从这里取，不在各处再写一套毫秒数。 */
+  --ofs-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ofs-ease-press: cubic-bezier(0.32, 0, 0.24, 1);
+  --ofs-time-press: 110ms;
+  --ofs-time-readout: 170ms;
+  --ofs-time-feedback: 200ms;
+  --ofs-time-drawer: 240ms;
+  --ofs-time-notch-sheet: 260ms;
+  --ofs-time-marks: 340ms;
+  /* 换纸：起手果断，落定前约 0.8% 的过冲再收回——像把裁切刀推到新画幅上。 */
+  --ofs-ease-sheet: linear(0, 0.4 16%, 0.78 34%, 0.96 52%, 1.008 68%, 1.003 84%, 1);
+  --ofs-time-sheet: 420ms;
+
   /* 留白节奏 */
   --ofs-pad: 18px;
   --ofs-gap: 14px;

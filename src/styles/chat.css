@@ -809,16 +809,3 @@
     height: 112px;
   }
 }
-
-/* 动效停用时，微光条改成一条静态浅色线，信息不丢。 */
-@media (prefers-reduced-motion: reduce) {
-  .ofs-chat-shimmer {
-    background: var(--ofs-accent-soft-border);
-    opacity: 0.9;
-    animation: none;
-  }
-
-  .ofs-panel--chat .ofs-chat-dot.is-live {
-    animation: none;
-  }
-}

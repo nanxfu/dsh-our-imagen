@@ -258,13 +258,3 @@
 .ofs-compare:focus-visible .ofs-compare-divider {
   background: #fff;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .ofs-import-overlay {
-    animation: none;
-  }
-
-  .ofs-import-choose {
-    transition: none;
-  }
-}

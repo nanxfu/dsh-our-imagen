@@ -219,7 +219,7 @@ export function Rail(props) {
           <Icon name="sparkles" size={16} />
           {sending ? t('studio.generating') : t('studio.generate')}
         </button>
-        <p className="ofs-hint ofs-spec-summary">
+        <p className="ofs-hint ofs-spec-summary" key={specParts.join('·')}>
           {specParts.join(' · ')}
         </p>
       </div>

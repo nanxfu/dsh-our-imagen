@@ -10,6 +10,7 @@ import { stepModeOf, stepTierOf } from '../../../shared/models-guide.js'
 import { Tooltip } from '../../components/Tooltip.jsx'
 import { formatText } from '../../logic/format.js'
 import { Icon } from '../icons.jsx'
+import { Drawer } from './Drawer.jsx'
 import { Fieldset } from './Fieldset.jsx'
 
 function AdvancedParamsGrid({
@@ -163,14 +164,16 @@ export function ParamsSection({
               <Tooltip text={t('studio.negativeTooltip')} />
             </div>
             {negativeOpen ? (
-              <textarea
-                className="ofs-row-textarea"
-                rows={3}
-                value={fields.negative}
-                placeholder={negativePlaceholder}
-                spellCheck={false}
-                onChange={(event) => patchForm({ negative: event.target.value })}
-              />
+              <Drawer>
+                <textarea
+                  className="ofs-row-textarea"
+                  rows={3}
+                  value={fields.negative}
+                  placeholder={negativePlaceholder}
+                  spellCheck={false}
+                  onChange={(event) => patchForm({ negative: event.target.value })}
+                />
+              </Drawer>
             ) : null}
           </div>
         ) : null}
@@ -190,15 +193,17 @@ export function ParamsSection({
             </button>
           </div>
           {advancedOpen ? (
-            <AdvancedParamsGrid
-              t={t}
-              fields={fields}
-              activePreset={activePreset}
-              patchForm={patchForm}
-              applyCfg={applyCfg}
-              resetSeed={resetSeed}
-              seedText={seedText}
-            />
+            <Drawer>
+              <AdvancedParamsGrid
+                t={t}
+                fields={fields}
+                activePreset={activePreset}
+                patchForm={patchForm}
+                applyCfg={applyCfg}
+                resetSeed={resetSeed}
+                seedText={seedText}
+              />
+            </Drawer>
           ) : null}
         </div>
       </div>

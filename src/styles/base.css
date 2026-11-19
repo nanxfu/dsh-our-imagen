@@ -269,7 +269,8 @@
   transition:
     background-color 150ms ease,
     border-color 150ms ease,
-    color 150ms ease;
+    color 150ms ease,
+    transform var(--ofs-time-press) var(--ofs-ease-press);
 }
 
 .ofs-chip:hover:not(:disabled) {
@@ -326,7 +327,8 @@
   transition:
     background-color 160ms ease,
     color 160ms ease,
-    box-shadow 160ms ease;
+    box-shadow 160ms ease,
+    transform var(--ofs-time-press) var(--ofs-ease-press);
 }
 
 .ofs-seg button:hover {
@@ -338,6 +340,7 @@
   color: var(--ofs-ink);
   font-weight: 600;
   box-shadow: 0 1px 2px rgb(16 16 20 / 8%);
+  animation: ofs-notch var(--ofs-time-feedback) var(--ofs-ease-sheet) 1;
 }
 
 /* ── 状态点 ─────────────────────────────────────────────────── */
@@ -387,6 +390,16 @@
 @keyframes ofs-pop-in {
   from { opacity: 0; transform: translateY(6px) scale(0.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes ofs-notch {
+  from { transform: translateY(1.5px) scale(0.965); }
+  to { transform: none; }
+}
+
+@keyframes ofs-panel-enter {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
 }
 
 /* ── 悬浮提示 ─────────────────────────────────────────────── */
@@ -454,14 +467,4 @@
 
 .ofs-tip-pop.is-below {
   transform: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ofs-root *,
-  .ofs-root *::before,
-  .ofs-root *::after {
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 1ms !important;
-  }
 }

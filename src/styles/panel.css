@@ -270,7 +270,8 @@
   transition:
     border-color 150ms ease,
     color 150ms ease,
-    background-color 150ms ease;
+    background-color 150ms ease,
+    transform var(--ofs-time-press) var(--ofs-ease-press);
 }
 
 .ofs-suggestion:hover {
@@ -336,6 +337,13 @@
   gap: 4px;
 }
 
+/* 润色建议列表：包上抽屉后仍保留原来的 7px 组间距（抽屉是单个 flex 子项）。 */
+.ofs-refine-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
 /* ── 画面比例 ───────────────────────────────────────────────── */
 .ofs-ratio-row {
   display: flex;
@@ -358,7 +366,8 @@
   transition:
     border-color 160ms ease,
     background-color 160ms ease,
-    color 160ms ease;
+    color 160ms ease,
+    transform var(--ofs-time-press) var(--ofs-ease-press);
 }
 
 .ofs-ratio:hover {
@@ -640,7 +649,8 @@
   transition:
     border-color 150ms ease,
     background-color 150ms ease,
-    color 150ms ease;
+    color 150ms ease,
+    transform var(--ofs-time-press) var(--ofs-ease-press);
 }
 
 .ofs-qty-option:hover {
@@ -1164,4 +1174,103 @@
 
 .ofs-ref-quality {
   color: var(--ofs-ink-4);
+}
+/* ── 操作动效：压印 / 落定 / 抽屉 / 读数 ─────────────────────────────
+ * 创作页的操作只有四种动效，都对应一件具体的事：
+ *   压印 (press) —— 按下时控件往台面沉一点，确认「点到了」；
+ *   落定 (notch) —— 选中态刚出现时回位一次，确认「选的是它」；
+ *   抽屉 (drawer) —— 折叠区按真实高度长出来，内容不整块跳；
+ *   读数 (tick) —— 尺寸 / 张数读数从下方浮上来，确认「改的是这个数」。
+ * 换纸（改画幅 → 台面上的纸换形）是这一页唯一的主角，在 stage.css。
+ * 四种都只动 transform / opacity / 高度。
+ */
+
+/* 压印：同一套按下手感，只给「做选择」的紧凑控件。 */
+.ofs-root :is(
+  .ofs-chip,
+  .ofs-seg button,
+  .ofs-ratio,
+  .ofs-qty-option,
+  .ofs-suggestion,
+  .ofs-example
+):active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+}
+
+/* 落定：画幅比例用换纸同一套曲线（它与换纸是同一个动作的两端）。 */
+.ofs-ratio.is-on {
+  animation: ofs-notch var(--ofs-time-notch-sheet) var(--ofs-ease-sheet) 1;
+}
+
+.ofs-qty-option.is-on,
+.ofs-suggestion.is-on {
+  animation: ofs-notch var(--ofs-time-feedback) var(--ofs-ease-sheet) 1;
+}
+
+/* 抽屉：折叠区挂载时从 0fr 长到 1fr，内层再落定 3px。 */
+.ofs-drawer {
+  display: grid;
+  grid-template-rows: 0fr;
+  animation: ofs-drawer-open var(--ofs-time-drawer) var(--ofs-ease-out) forwards;
+}
+
+/* min-height: 0 让 0fr 真的能压到 0；四周 5px 的「负边距 + 内边距」
+   是给焦点环留的通道——overflow: hidden 会裁掉子元素向外 4px 的焦点环，
+   负边距让裁剪框比内容框大一圈，而内容盒的位置与尺寸保持原样。 */
+.ofs-drawer-inner {
+  min-height: 0;
+  margin: -5px;
+  padding: 5px;
+  overflow: hidden;
+}
+
+.ofs-drawer-inner > * {
+  animation: ofs-drawer-land var(--ofs-time-drawer) var(--ofs-ease-out) backwards;
+}
+
+@keyframes ofs-drawer-open {
+  from {
+    grid-template-rows: 0fr;
+  }
+  to {
+    grid-template-rows: 1fr;
+  }
+}
+
+@keyframes ofs-drawer-land {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 读数：尺寸 / 张数读数变化时从下方浮上来（组件按值重挂载，见 Rail / FrameSection）。 */
+.ofs-spec-summary,
+.ofs-frame-readout {
+  animation: ofs-readout-in var(--ofs-time-readout) var(--ofs-ease-out) backwards;
+}
+
+@keyframes ofs-readout-in {
+  from {
+    opacity: 0.3;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 面板换形：表单 ↔ 对话切换时整块面板淡入落定，说明换的是同一张工作台的另一面。 */
+.ofs-panel {
+  animation: ofs-panel-enter var(--ofs-time-feedback) var(--ofs-ease-out) backwards;
+}
+
+/* 参考图入槽：缩略图落进网格时轻微弹入，只动 transform / opacity。 */
+.ofs-ref-item {
+  animation: ofs-pop-in var(--ofs-time-feedback) var(--ofs-ease-out) backwards;
 }

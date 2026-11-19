@@ -259,7 +259,8 @@ export function Stage(props) {
             <span />
           </div>
           <div className="ofs-frame ofs-frame--draft" style={{ '--ofs-frame-r': String(frameRatio) }}>
-            <span className="ofs-marks" aria-hidden="true">
+            {/* 换纸：画幅变一次，裁切标记跟着重新落墨（见 stage.css）；纸面文案保持常驻不闪烁。 */}
+            <span className="ofs-marks" aria-hidden="true" key={`marks:${frameRatio}`}>
               <span />
               <span />
               <span />
@@ -324,7 +325,8 @@ export function Stage(props) {
       <section className="ofs-stage">
         <div className="ofs-figure ofs-figure--empty">
           <div className="ofs-frame" style={{ '--ofs-frame-r': String(frameRatio) }}>
-            <span className="ofs-marks" aria-hidden="true">
+            {/* 换纸：画幅变一次，裁切标记跟着重新落墨（见 stage.css）；纸面文案保持常驻不闪烁。 */}
+            <span className="ofs-marks" aria-hidden="true" key={`marks:${frameRatio}`}>
               <span />
               <span />
               <span />

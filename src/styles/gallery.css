@@ -26,6 +26,7 @@
   gap: var(--ofs-gap);
   padding: var(--ofs-gallery-pad-top) 20px 26px;
   overscroll-behavior: contain;
+  animation: ofs-panel-enter var(--ofs-time-feedback) var(--ofs-ease-out) backwards;
 }
 
 .ofs-gallery.is-empty {

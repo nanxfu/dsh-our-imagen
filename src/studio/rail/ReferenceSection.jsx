@@ -21,6 +21,7 @@ import { formatText } from '../../logic/format.js'
 import { referenceListOf, referenceMaxCount } from '../../logic/reference.js'
 import { filesOf, hasFilePayload } from '../drag.js'
 import { Icon } from '../icons.jsx'
+import { Drawer } from './Drawer.jsx'
 import { Fieldset } from './Fieldset.jsx'
 
 /** 从作品选择一次最多列几张：复用已加载的历史分页，不新造页面。 */
@@ -175,26 +176,28 @@ export function ReferenceSection(props) {
             {picking ? t('studio.reference.pickClose') : t('studio.reference.pickWork')}
           </button>
           {picking ? (
-            pickable.length > 0 ? (
-              <div className="ofs-ref-works" aria-label={t('studio.reference.pickWork')}>
-                {pickable.map((entry) => (
-                  <button
-                    type="button"
-                    key={entry.image.path}
-                    className="ofs-ref-work"
-                    title={entry.item && entry.item.prompt ? entry.item.prompt : entry.image.path}
-                    onClick={() => {
-                      if (actions && typeof actions.addReference === 'function') actions.addReference(entry)
-                      setPicking(false)
-                    }}
-                  >
-                    <img src={entry.image.url} alt={entry.item && entry.item.prompt ? entry.item.prompt : entry.image.path} loading="lazy" />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="ofs-hint">{t('studio.reference.pickEmpty')}</p>
-            )
+            <Drawer>
+              {pickable.length > 0 ? (
+                <div className="ofs-ref-works" aria-label={t('studio.reference.pickWork')}>
+                  {pickable.map((entry) => (
+                    <button
+                      type="button"
+                      key={entry.image.path}
+                      className="ofs-ref-work"
+                      title={entry.item && entry.item.prompt ? entry.item.prompt : entry.image.path}
+                      onClick={() => {
+                        if (actions && typeof actions.addReference === 'function') actions.addReference(entry)
+                        setPicking(false)
+                      }}
+                    >
+                      <img src={entry.image.url} alt={entry.item && entry.item.prompt ? entry.item.prompt : entry.image.path} loading="lazy" />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="ofs-hint">{t('studio.reference.pickEmpty')}</p>
+              )}
+            </Drawer>
           ) : null}
         </div>
 

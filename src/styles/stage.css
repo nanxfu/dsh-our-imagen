@@ -182,7 +182,18 @@
  * 空态与等待出图时，桌上是一张还没曝光的空白相纸：比例跟当前画幅走，
  * 出图时同一位置换成显影完成的相纸——所以纸边、投影与 .ofs-print 同一套材质。
  * 外框负责按比例定尺寸（裁切标记贴它的四角），内框负责裁掉溢出的内容。
+ *
+ * 换纸（本页唯一的作者时刻）：画幅比注册成 <number> 自定义属性，只过渡这个数字，
+ * 宽度与 aspect-ratio 都跟着它逐帧重算——纸是被「推」到新比例的，不是跳变。
+ * 只过渡 --ofs-frame-r 而不过渡 width：窗口缩放时纸仍然立即跟上布局，不被 420ms 拖住。
+ * 末段约 0.8% 的过冲由 --ofs-ease-sheet 给出，对应裁切刀推到新画幅后的一次落定。
  */
+@property --ofs-frame-r {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
 .ofs-frame {
   position: relative;
   width: min(calc(100cqw - 44px), calc((100cqh - 44px) * var(--ofs-frame-r, 1)));
@@ -192,7 +203,8 @@
   box-shadow:
     0 0 0 1px var(--ofs-print-edge),
     var(--ofs-print-shadow);
-  animation: ofs-frame-in 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: ofs-frame-in var(--ofs-time-notch-sheet) var(--ofs-ease-out) backwards;
+  transition: --ofs-frame-r var(--ofs-time-sheet) var(--ofs-ease-sheet);
 }
 
 .ofs-frame-body {
@@ -219,11 +231,22 @@
   }
 }
 
+/* 换纸：裁切标记跟着重新落墨。 */
+@keyframes ofs-marks-settle {
+  from {
+    opacity: 0.24;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* 四角裁切标记：纸上要被框住的那块区域 */
 .ofs-marks {
   position: absolute;
   inset: -12px;
   pointer-events: none;
+  animation: ofs-marks-settle var(--ofs-time-marks) var(--ofs-ease-out) backwards;
 }
 
 .ofs-marks span {
@@ -281,6 +304,17 @@
   color: var(--ofs-ink-2);
   font-size: 11.5px;
   white-space: nowrap;
+  /* 开始等待时胶囊淡入：只动透明度，位置由下面的变体决定，避免和 translate 打架。 */
+  animation: ofs-progress-in var(--ofs-time-feedback) var(--ofs-ease-out) backwards;
+}
+
+@keyframes ofs-progress-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .ofs-progress-label {
@@ -440,7 +474,8 @@
   transition:
     border-color 150ms ease,
     color 150ms ease,
-    background-color 150ms ease;
+    background-color 150ms ease,
+    transform var(--ofs-time-press) var(--ofs-ease-press);
 }
 
 .ofs-example:hover {
@@ -1452,11 +1487,5 @@
 
   .ofs-outpaint-ratios {
     justify-content: flex-start;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ofs-draft-backdrop span {
-    animation: none;
   }
 }
