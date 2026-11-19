@@ -88,11 +88,15 @@ export function Rail(props) {
   const tuningText = formatText(t('studio.rail.tuning'), {
     prompt: tuningPrompt || t('studio.rail.tuningUnknown'),
   })
-  // 未提交草稿（阶段十五 A1）：左栏顶部换成「正在新草稿中编辑（源自此图）」+「还原原图」。
+  // 未提交草稿（1A 多作品草稿）：只对当前正在编辑的作品展示「正在新草稿中编辑（源自：…）」+「还原原图」。
   // 只有确实有来源作品时才给还原入口（来源已丢失时只保留状态文案）。
   const draftSource = draftView && draftView.active && draftView.source ? draftView.source : null
   const draftActive = Boolean(draftView && draftView.active && draftView.source)
   const canRestore = Boolean(draftSource) && typeof restoreOriginal === 'function'
+  const draftPrompt = draftSource && typeof draftSource.prompt === 'string' ? draftSource.prompt.trim() : ''
+  const draftStatusText = draftPrompt
+    ? formatText(t('studio.rail.draftStatusFrom'), { prompt: draftPrompt })
+    : t('studio.rail.draftStatus')
   const startNewCreation = typeof newCreation === 'function' ? newCreation : () => {}
 
   // 排除项：只有当前模型 + CFG 真的消费负向词时才出现（Host 与 Client 共用同一判定）。
@@ -117,8 +121,8 @@ export function Rail(props) {
           否则保留原有的「正在微调：某张作品」轻量提示行。 */}
       {draftActive ? (
         <div className="ofs-tuning is-draft">
-          <p className="ofs-tuning-source" title={draftSource && draftSource.prompt ? draftSource.prompt : undefined}>
-            {t('studio.rail.draftStatus')}
+          <p className="ofs-tuning-source" title={draftPrompt || undefined}>
+            {draftStatusText}
           </p>
           {canRestore ? (
             <button

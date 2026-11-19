@@ -32,8 +32,10 @@ import { clampInt, clampNumber } from '../../logic/clamp.js'
 import {
   draftSourceOf,
   draftViewOf,
+  formDraftChangesOf,
   formSnapshotOf,
   isFormDirty,
+  lruWorkFormDrafts,
   newCreationPatch,
   originalPatchOf,
   parkDraftOf,
@@ -82,33 +84,59 @@ const EMPTY_FORM = {
   references: [],
 }
 
-export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
+export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt, initialSession }) {
   const { presets, defaultPreset } = preset
-  const [form, setForm] = React.useState(() => ({
-    ...EMPTY_FORM,
-    prompt: initialPrompt,
-  }))
+  const saved = initialSession && typeof initialSession === 'object' ? initialSession : null
+  const [form, setForm] = React.useState(() => {
+    if (!initialPrompt && saved && saved.form && typeof saved.form === 'object') {
+      return { ...EMPTY_FORM, ...saved.form }
+    }
+    return {
+      ...EMPTY_FORM,
+      prompt: initialPrompt,
+    }
+  })
   const [refineGroups, setRefineGroups] = React.useState([])
   const [refineSource, setRefineSource] = React.useState('')
   const [enhancing, setEnhancing] = React.useState(false)
   const [translating, setTranslating] = React.useState(false)
   // 干净基准快照：最近一次「生成提交 / 从作品回填 / 新建创作 / 初始预设同步」时的表单，
   // 与当前表单不一致即为 dirty（dirty 现在意味着「有一次要被托管的未提交修改」）。
-  const [cleanBaseline, setCleanBaseline] = React.useState('')
+  const [cleanBaseline, setCleanBaseline] = React.useState(() => (
+    !initialPrompt && saved && typeof saved.cleanBaseline === 'string' ? saved.cleanBaseline : ''
+  ))
   // 参数来源作品：当前表单是哪张作品的原始参数；同时充当「还原原图」的还原目标。
-  const [origin, setOrigin] = React.useState(null)
-  // 草稿槽：已托管的未提交编辑（见 logic/form.js 的 draftViewOf 说明）。
-  const [draft, setDraft] = React.useState(null)
+  const [origin, setOrigin] = React.useState(() => (
+    !initialPrompt && saved && saved.origin && typeof saved.origin === 'object' ? saved.origin : null
+  ))
+  // 多作品左栏表单草稿表：按作品 path 独立存放未提交的参数/提示词草稿，互不覆盖。
+  const [workFormDrafts, setWorkFormDrafts] = React.useState(() => (
+    !initialPrompt && saved && saved.workFormDrafts && typeof saved.workFormDrafts === 'object'
+      ? lruWorkFormDrafts(saved.workFormDrafts)
+      : {}
+  ))
+  // 纯空白画布草稿槽（origin 为 null 时使用）。
+  const [blankDraft, setBlankDraft] = React.useState(() => (
+    !initialPrompt && saved && saved.blankDraft && typeof saved.blankDraft === 'object' && saved.blankDraft.form
+      ? saved.blankDraft
+      : null
+  ))
   // 事件回调里要读最新表单（不依赖渲染闭包），异步动作与快照计算都用它。
   const formRef = React.useRef(form)
   formRef.current = form
+  const cleanBaselineRef = React.useRef(cleanBaseline)
+  cleanBaselineRef.current = cleanBaseline
   const originRef = React.useRef(origin)
   originRef.current = origin
-  const draftRef = React.useRef(draft)
-  draftRef.current = draft
+  const workFormDraftsRef = React.useRef(workFormDrafts)
+  workFormDraftsRef.current = workFormDrafts
+  const blankDraftRef = React.useRef(blankDraft)
+  blankDraftRef.current = blankDraft
   const dirty = isFormDirty(form, cleanBaseline)
-  // 草稿派生状态：draftCard / Rail 顶部状态行与「还原原图」共用同一份判定。
-  const draftView = draftViewOf({ draft, dirty, origin })
+  const currentWorkDraft = origin && origin.path ? (workFormDrafts[origin.path] || null) : null
+  const draft = currentWorkDraft || (origin && origin.path ? null : blankDraft)
+  // 草稿派生状态：Rail 顶部状态行与「还原原图」只看当前表单及其所属作品。
+  const draftView = draftViewOf({ draft: blankDraft, formDraft: currentWorkDraft, dirty, origin })
 
   // 比例由当前尺寸反推（按约分后的长宽比，而不是像素精确相等）：
   // 768×768 与 1024×1024 都算 1:1，800×600 算 4:3；切换预设改变宽高时也不会停在旧值上。
@@ -143,7 +171,9 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   // 之后基准只在生成提交、作品回填、新建创作时更新，手动修改不再动它。
   React.useEffect(() => {
     if (cleanBaseline || !form.presetId) return
-    setCleanBaseline(formSnapshotOf(form))
+    const nextBaseline = formSnapshotOf(form)
+    cleanBaselineRef.current = nextBaseline
+    setCleanBaseline(nextBaseline)
   }, [cleanBaseline, form.presetId])
 
   /** 表单补丁统一入口：负向层数据与展示文本在这里保持同步。 */
@@ -200,26 +230,55 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
    */
   function markClean(submitted) {
     if (submitted && formRef.current !== submitted) return false
-    setCleanBaseline(formSnapshotOf(formRef.current))
+    const nextBaseline = formSnapshotOf(formRef.current)
+    cleanBaselineRef.current = nextBaseline
+    setCleanBaseline(nextBaseline)
     return true
   }
 
   /**
    * 从作品回填（胶片条点击 / 画廊打开作品）：套用纯逻辑算好的补丁并记录来源作品。
    *
-   * 回填属于「刚从另一张图加载完」，本身不算手动修改，所以同时更新干净基准。
-   * 参考图与蒙版不在主表单上，回填不会影响舞台工具域里的草稿；
-   * 左栏参考图槽属于上一段创作输入，回填时清空（未提交的槽位已由调用方先行托管进草稿）。
+   * 若目标作品已有尚未提交的表单草稿，优先恢复该作品草稿，并保留该作品原始参数作干净基准
+   * （这样「还原原图」与胶片条草稿圆点始终保持准确）。
    */
   function applyRecall(patch, entry) {
     const partial = patch && typeof patch === 'object' ? { ...patch } : {}
     if (Object.keys(partial).length === 0) return false
+    const nextOrigin = draftSourceOf(entry, partial)
+    const saved = nextOrigin.path ? workFormDraftsRef.current[nextOrigin.path] : null
+    // 离开空白画布草稿编辑态，但保留空白草稿本身以便随时点回新建画布卡。
+    const currentBlank = blankDraftRef.current
+    if (currentBlank && currentBlank.editing === true) {
+      const parkedBlank = { ...currentBlank, editing: false }
+      blankDraftRef.current = parkedBlank
+      setBlankDraft(parkedBlank)
+    }
+    if (saved && saved.form) {
+      partial.references = []
+      const fallbackBaseline = formSnapshotOf(applyNegativePatch(formRef.current, partial))
+      const baseline = typeof saved.baseline === 'string' && saved.baseline ? saved.baseline : fallbackBaseline
+      if (isFormDirty(saved.form, baseline)) {
+        const resolvedOrigin = saved.source && saved.source.path ? saved.source : nextOrigin
+        formRef.current = saved.form
+        cleanBaselineRef.current = baseline
+        originRef.current = resolvedOrigin
+        setForm(saved.form)
+        setCleanBaseline(baseline)
+        setOrigin(resolvedOrigin)
+        return true
+      }
+    }
     // 清参考图槽与「干净基准」同源：回填后表单就是那张作品的参数，不残留上一张的参考图。
     partial.references = []
     const next = applyNegativePatch(formRef.current, partial)
+    const baseline = formSnapshotOf(next)
+    formRef.current = next
+    cleanBaselineRef.current = baseline
+    originRef.current = nextOrigin
     setForm(next)
-    setCleanBaseline(formSnapshotOf(next))
-    setOrigin(draftSourceOf(entry, partial))
+    setCleanBaseline(baseline)
+    setOrigin(nextOrigin)
     return true
   }
 
@@ -227,14 +286,26 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
    * 新建创作：清空提示词 / 固定种子，负向层回到当前预设默认推荐状态。
    *
    * 当前模型预设与画幅比例是下一张仍要用的常用设置，保留不动；
-   * 来源作品、托管草稿与 dirty 一起清掉（§6.1.7）。
+   * 显式重置当前焦点（清掉当前作品或空白画布的草稿与 origin），但不误删其它作品已托管的草稿。
    */
   function newCreation() {
+    const currentOrigin = originRef.current
+    if (currentOrigin && currentOrigin.path && workFormDraftsRef.current[currentOrigin.path]) {
+      const nextDrafts = { ...workFormDraftsRef.current }
+      delete nextDrafts[currentOrigin.path]
+      workFormDraftsRef.current = nextDrafts
+      setWorkFormDrafts(nextDrafts)
+    }
     const next = applyNegativePatch(formRef.current, newCreationPatch(formRef.current, activePreset))
+    const nextBaseline = formSnapshotOf(next)
+    formRef.current = next
+    cleanBaselineRef.current = nextBaseline
+    originRef.current = null
+    blankDraftRef.current = null
     setForm(next)
-    setCleanBaseline(formSnapshotOf(next))
+    setCleanBaseline(nextBaseline)
     setOrigin(null)
-    setDraft(null)
+    setBlankDraft(null)
     ui.showToast(t('studio.toast.newCreation'))
   }
 
@@ -249,12 +320,19 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
    */
   function detachOrigin() {
     const next = applyNegativePatch(formRef.current, newCreationPatch(formRef.current, activePreset))
-    setForm(next)
-    setCleanBaseline(formSnapshotOf(next))
-    setOrigin(null)
-    // 同步 ref：同一事件里紧随其后的动作（回填 / 托管）要读到「已解除绑定」的最新值。
+    const nextBaseline = formSnapshotOf(next)
     formRef.current = next
+    cleanBaselineRef.current = nextBaseline
     originRef.current = null
+    const currentBlank = blankDraftRef.current
+    if (currentBlank && currentBlank.editing === true) {
+      const parkedBlank = { ...currentBlank, editing: false }
+      blankDraftRef.current = parkedBlank
+      setBlankDraft(parkedBlank)
+    }
+    setForm(next)
+    setCleanBaseline(nextBaseline)
+    setOrigin(null)
     return true
   }
 
@@ -269,8 +347,8 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   /**
    * 删除作品后的引用清理（阶段十五 Phase C0）。
    *
-   * 来源作品与托管草稿的来源快照都可能指向刚被删掉的图：把它们去掉引用，
-   * 否则「还原原图」会把参数还原到一张已经不存在的作品上。
+   * 来源作品与多作品草稿表都可能指向刚被删掉的图：清理被删作品的草稿与引用，
+   * 并摘除草稿参考槽里指向已删图的路径。
    *
    * @param {Array<string>} paths 被删除的图片路径
    * @returns {boolean} 是否有引用被清理
@@ -281,16 +359,47 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     let changed = false
     const currentOrigin = originRef.current
     if (currentOrigin && currentOrigin.path && removed.has(currentOrigin.path)) {
-      setOrigin(null)
       originRef.current = null
+      setOrigin(null)
       changed = true
     }
-    const currentDraft = draftRef.current
-    if (currentDraft && currentDraft.source && removed.has(currentDraft.source.path)) {
-      const next = { ...currentDraft, source: null }
-      setDraft(next)
-      draftRef.current = next
+    const prevDrafts = workFormDraftsRef.current
+    let draftsDirty = false
+    const nextDrafts = {}
+    for (const [key, entry] of Object.entries(prevDrafts)) {
+      if (removed.has(key) || (entry && entry.source && removed.has(entry.source.path))) {
+        draftsDirty = true
+        continue
+      }
+      if (entry && entry.form && Array.isArray(entry.form.references) && entry.form.references.length > 0) {
+        const keptRefs = referencePurgeOf(entry.form.references, [...removed])
+        if (keptRefs.length !== entry.form.references.length) {
+          const updatedForm = { ...entry.form, references: keptRefs }
+          nextDrafts[key] = {
+            ...entry,
+            form: updatedForm,
+            changed: formDraftChangesOf(updatedForm, entry.baseline),
+          }
+          draftsDirty = true
+          continue
+        }
+      }
+      nextDrafts[key] = entry
+    }
+    if (draftsDirty) {
+      workFormDraftsRef.current = nextDrafts
+      setWorkFormDrafts(nextDrafts)
       changed = true
+    }
+    const currentBlank = blankDraftRef.current
+    if (currentBlank && currentBlank.form && Array.isArray(currentBlank.form.references) && currentBlank.form.references.length > 0) {
+      const keptRefs = referencePurgeOf(currentBlank.form.references, [...removed])
+      if (keptRefs.length !== currentBlank.form.references.length) {
+        const nextBlank = { ...currentBlank, form: { ...currentBlank.form, references: keptRefs } }
+        blankDraftRef.current = nextBlank
+        setBlankDraft(nextBlank)
+        changed = true
+      }
     }
     // 参考图槽里指向已删作品的路径也要摘掉：留着只会让生成请求以 invalid_path 失败。
     const currentRefs = formRef.current.references
@@ -306,82 +415,205 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     return changed
   }
 
-  // ---- 草稿托管（阶段十五 Phase A1） ---------------------------------------
+  // ---- 多作品草稿托管（按作品 path 独立存储 + 空白画布草稿槽） ----------------
+
+  function hasWorkDraft(path) {
+    const key = typeof path === 'string' ? path.trim() : ''
+    return Boolean(key && workFormDraftsRef.current[key] && workFormDraftsRef.current[key].form)
+  }
 
   /**
-   * 把当前未提交修改托管进草稿槽（§6.1.3）。
-   *
-   * 已有草稿时用当前编辑覆盖内容（来源沿用当前表单的来源作品）；没有可托管内容
-   * （不脏、也不在草稿编辑态）时保持原样。返回托管后的草稿或 null。
+   * 托管当前未提交修改：
+   *  - 来自作品时写入 `workFormDrafts[origin.path]`，不同作品互不覆盖；
+   *  - 空白新建画布时写入 `blankDraft`。
    */
   function parkDraft() {
-    const prev = draftRef.current
-    const parked = prev && prev.editing === true
-    if (!dirty && !parked) return prev
-    const next = parkDraftOf(prev, originRef.current, formRef.current)
-    if (next !== prev) {
-      draftRef.current = next
-      setDraft(next)
+    const currentOrigin = originRef.current
+    const baseline = cleanBaselineRef.current
+    const isDirty = isFormDirty(formRef.current, baseline)
+    if (currentOrigin && currentOrigin.path) {
+      if (!isDirty) return workFormDraftsRef.current[currentOrigin.path] || null
+      const nextEntry = {
+        source: currentOrigin,
+        form: formRef.current,
+        baseline,
+        changed: formDraftChangesOf(formRef.current, baseline),
+        lastTouchedAt: Date.now(),
+      }
+      const nextDrafts = lruWorkFormDrafts({
+        ...workFormDraftsRef.current,
+        [currentOrigin.path]: nextEntry,
+      })
+      workFormDraftsRef.current = nextDrafts
+      setWorkFormDrafts(nextDrafts)
+      return nextEntry
     }
-    return next
+    const prevBlank = blankDraftRef.current
+    const parked = prevBlank && prevBlank.editing === true
+    if (!isDirty && !parked) return prevBlank
+    const nextBlank = {
+      ...parkDraftOf(prevBlank, null, formRef.current),
+      baseline: baseline || (prevBlank && prevBlank.baseline) || '',
+    }
+    blankDraftRef.current = nextBlank
+    setBlankDraft(nextBlank)
+    return nextBlank
   }
 
   /**
-   * 点草稿卡（§6.1.4）：恢复草稿内容并进入草稿编辑态。
-   *
-   * 没有已托管草稿但有未提交修改时，当前表单本身就是草稿：先托管再进入编辑态。
-   * 两者都没有时返回 false，调用方按「切到新建画布」处理。
+   * 点最左端新建画布卡：先把当前作品的未提交改动托管进它自己的草稿槽，
+   * 若存在空白画布草稿则恢复它，否则返回 false 交由调用方进入干净空白画布。
    */
   function openDraft() {
-    const prev = draftRef.current
-    if (prev && prev.form) {
-      setForm(prev.form)
-      setCleanBaseline(formSnapshotOf(prev.form))
-      // 托管草稿可能源自空白新建画布（prev.source === null），切回时必须同步覆盖旧 origin。
-      const nextOrigin = prev.source || null
-      setOrigin(nextOrigin)
-      originRef.current = nextOrigin
-      setDraft({ ...prev, editing: true })
+    const currentOrigin = originRef.current
+    if (currentOrigin && currentOrigin.path && isFormDirty(formRef.current, cleanBaselineRef.current)) {
+      parkDraft()
+    }
+    const prevBlank = blankDraftRef.current
+    if (prevBlank && prevBlank.form) {
+      const fallbackBaseline = formSnapshotOf(
+        applyNegativePatch(prevBlank.form, newCreationPatch(prevBlank.form, activePreset)),
+      )
+      const baseline = typeof prevBlank.baseline === 'string' && prevBlank.baseline
+        ? prevBlank.baseline
+        : fallbackBaseline
+      const nextBlank = { ...prevBlank, editing: true }
+      formRef.current = prevBlank.form
+      cleanBaselineRef.current = baseline
+      originRef.current = null
+      blankDraftRef.current = nextBlank
+      setForm(prevBlank.form)
+      setCleanBaseline(baseline)
+      setOrigin(null)
+      setBlankDraft(nextBlank)
       return true
     }
-    if (!dirty) return false
-    const next = parkDraftOf(null, originRef.current, formRef.current)
-    setDraft({ ...next, editing: true })
-    setCleanBaseline(formSnapshotOf(formRef.current))
-    return true
+    if (!currentOrigin && isFormDirty(formRef.current, cleanBaselineRef.current)) {
+      const baseline = cleanBaselineRef.current
+      const nextBlank = {
+        ...parkDraftOf(null, null, formRef.current),
+        baseline,
+        editing: true,
+      }
+      blankDraftRef.current = nextBlank
+      setBlankDraft(nextBlank)
+      return true
+    }
+    return false
   }
 
-  /** 清空草稿槽（提交成功 / 新建创作 / 还原原图）。 */
+  /** 清空当前焦点的草稿槽（提交成功时只清当前作品/空白画布的草稿，不动其它作品）。 */
   function clearDraft() {
-    if (draftRef.current) setDraft(null)
+    const currentOrigin = originRef.current
+    if (currentOrigin && currentOrigin.path) {
+      if (!workFormDraftsRef.current[currentOrigin.path]) return
+      const nextDrafts = { ...workFormDraftsRef.current }
+      delete nextDrafts[currentOrigin.path]
+      workFormDraftsRef.current = nextDrafts
+      setWorkFormDrafts(nextDrafts)
+      return
+    }
+    if (blankDraftRef.current) {
+      blankDraftRef.current = null
+      setBlankDraft(null)
+    }
+  }
+
+  /** 按路径清空某张作品的左栏表单草稿（胶片条圆点 / 版本面板清空按钮调用）。 */
+  function clearWorkDraft(path) {
+    const key = typeof path === 'string' ? path.trim() : ''
+    if (!key) return false
+    const hadStored = Boolean(workFormDraftsRef.current[key])
+    if (hadStored) {
+      const nextDrafts = { ...workFormDraftsRef.current }
+      delete nextDrafts[key]
+      workFormDraftsRef.current = nextDrafts
+      setWorkFormDrafts(nextDrafts)
+    }
+    const currentOrigin = originRef.current
+    if (currentOrigin && currentOrigin.path === key && isFormDirty(formRef.current, cleanBaselineRef.current)) {
+      const patch = originalPatchOf(currentOrigin)
+      if (patch) {
+        const next = applyNegativePatch(formRef.current, { ...patch, references: [] })
+        const nextBaseline = formSnapshotOf(next)
+        formRef.current = next
+        cleanBaselineRef.current = nextBaseline
+        setForm(next)
+        setCleanBaseline(nextBaseline)
+      }
+      return true
+    }
+    return hadStored
   }
 
   /**
-   * 还原原图（§6.1.5）：恢复来源作品的原始参数、清掉草稿，回到干净基准。
+   * 还原原图（§6.1.5）：恢复来源作品的原始参数、清掉该作品的草稿，回到干净基准。
    *
    * 参考图槽属于被放弃的那份草稿，一并清空（来源作品的参数里没有槽位）。
    *
    * 返回来源作品（供组合层切回该作品的预览焦点）；没有可还原的来源时返回 null。
    */
   function restoreOriginal() {
-    const prev = draftRef.current
-    const source = (prev && prev.source) || originRef.current
+    const source = originRef.current
     const patch = originalPatchOf(source)
     if (!patch) return null
     const next = applyNegativePatch(formRef.current, { ...patch, references: [] })
+    const nextBaseline = formSnapshotOf(next)
+    formRef.current = next
+    cleanBaselineRef.current = nextBaseline
+    originRef.current = source
     setForm(next)
-    setCleanBaseline(formSnapshotOf(next))
+    setCleanBaseline(nextBaseline)
     setOrigin(source)
-    setDraft(null)
+    if (source && source.path && workFormDraftsRef.current[source.path]) {
+      const nextDrafts = { ...workFormDraftsRef.current }
+      delete nextDrafts[source.path]
+      workFormDraftsRef.current = nextDrafts
+      setWorkFormDrafts(nextDrafts)
+    }
     return source
   }
 
-  // 草稿编辑态的实时托管：打开草稿卡后继续改表单，改动同步写回草稿槽。
-  // 这样中途点别的作品 / 打开图片工具时，草稿卡里始终是最新内容（不依赖每个出口都记得托管）。
+  // 实时托管：
+  //  - 正在编辑某张作品时，只要相对该作品基准有改动就同步进 workFormDrafts[origin.path]，
+  //    改回原样时自动移除草稿；
+  //  - 正在编辑空白画布草稿时，改动同步写回 blankDraft。
   React.useEffect(() => {
-    const current = draftRef.current
-    if (!current || current.editing !== true || current.form === form) return
-    setDraft({ ...current, form })
+    const currentOrigin = originRef.current
+    const baseline = cleanBaselineRef.current
+    if (currentOrigin && currentOrigin.path) {
+      if (!baseline) return
+      if (isFormDirty(form, baseline)) {
+        const nextEntry = {
+          source: currentOrigin,
+          form,
+          baseline,
+          changed: formDraftChangesOf(form, baseline),
+          lastTouchedAt: Date.now(),
+        }
+        setWorkFormDrafts((prev) => {
+          const existing = prev[currentOrigin.path]
+          if (existing && existing.form === form && existing.baseline === baseline) return prev
+          const updated = lruWorkFormDrafts({ ...prev, [currentOrigin.path]: nextEntry })
+          workFormDraftsRef.current = updated
+          return updated
+        })
+      } else if (workFormDraftsRef.current[currentOrigin.path]) {
+        setWorkFormDrafts((prev) => {
+          if (!prev[currentOrigin.path]) return prev
+          const next = { ...prev }
+          delete next[currentOrigin.path]
+          workFormDraftsRef.current = next
+          return next
+        })
+      }
+      return
+    }
+    const currentBlank = blankDraftRef.current
+    if (!currentBlank || currentBlank.editing !== true || currentBlank.form === form) return
+    const nextBlank = { ...currentBlank, form }
+    blankDraftRef.current = nextBlank
+    setBlankDraft(nextBlank)
   }, [form])
 
   /**
@@ -426,19 +658,20 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
    * 自动补上当前模型推荐的负向词，用户不必自己再找一遍。
    */
   function applyCfg(value) {
-    const next = clampNumber(value, LIMITS.cfg.min, LIMITS.cfg.max, form.cfg)
-    setForm((prev) => {
-      const current = presets.find((item) => item.id === prev.presetId) || null
-      const patch = { cfg: next }
-      const wasActive = negativePromptActive(current, prev.cfg)
-      const isActive = negativePromptActive(current, next)
-      if (!wasActive && isActive) {
-        const layers = resolveNegativeLayers(prev, presets)
-        const hint = hintOf(current)
-        if (!layers.model && hint) Object.assign(patch, negativeLayersPatch({ ...layers, model: hint }))
-      }
-      return applyNegativePatch(prev, patch)
-    })
+    const next = clampNumber(value, LIMITS.cfg.min, LIMITS.cfg.max, formRef.current.cfg)
+    const prev = formRef.current
+    const current = presets.find((item) => item.id === prev.presetId) || null
+    const patch = { cfg: next }
+    const wasActive = negativePromptActive(current, prev.cfg)
+    const isActive = negativePromptActive(current, next)
+    if (!wasActive && isActive) {
+      const layers = resolveNegativeLayers(prev, presets)
+      const hint = hintOf(current)
+      if (!layers.model && hint) Object.assign(patch, negativeLayersPatch({ ...layers, model: hint }))
+    }
+    const updated = applyNegativePatch(prev, patch)
+    formRef.current = updated
+    setForm(updated)
   }
 
   /** 恢复随机种子：清空输入，提交时按未指定种子处理。 */
@@ -586,8 +819,9 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     referenceSwitchPreset,
     referenceSwitchLabel,
     referenceMax,
-    // 脏判定：现在只表示「有一次未提交修改，切作品时会被托管进草稿卡」。
+    // 脏判定：现在只表示「有一次未提交修改，切作品时会被托管进对应作品的草稿槽」。
     dirty,
+    cleanBaseline,
     // 来源作品（面板顶部的轻量提示）：保留 tuning 的旧形状给 Rail / 助手面板使用。
     tuning: origin ? { prompt: origin.prompt, path: origin.path } : null,
     origin,
@@ -598,8 +832,12 @@ export function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     detachOrigin,
     clearOrigin,
     forgetRemovedPaths,
-    // 草稿托管（阶段十五 A1）：draftView 是展示用派生状态，四个动作由组合层在切换点调用。
+    // 多作品草稿托管：按作品 path 独立存储的 workFormDrafts + 空白画布 blankDraft。
     draft,
+    workFormDrafts,
+    blankDraft,
+    hasWorkDraft,
+    clearWorkDraft,
     draftView,
     draftEditing: Boolean(draftView && draftView.editing),
     parkDraft,

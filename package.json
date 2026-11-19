@@ -1,6 +1,6 @@
 {
   "name": "dsh-our-imagen",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "type": "module",
   "description": "Free image generation workbench backed by Kaggle GPUs",
   "license": "MIT",

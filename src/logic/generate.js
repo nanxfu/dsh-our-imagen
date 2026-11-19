@@ -216,6 +216,7 @@ export function generateCapabilityOf(options = {}) {
  *
  * @param {object} options
  * @param {boolean} [options.dirty] 表单是否有未提交修改（有则先托管）
+ * @param {boolean} [options.hasTargetDraft] 目标作品自己是否已存有未提交草稿（提示已恢复）
  * @param {boolean} [options.hasDraft] 草稿槽里是否已有托管草稿（保留并提示）
  * @param {object} [options.patch] `iteratePatch()` 的结果
  * @returns {{ action: 'recall'|'idle', park: boolean, noticeKey: string }}
@@ -223,8 +224,10 @@ export function generateCapabilityOf(options = {}) {
 export function previewRecallOf(options = {}) {
   const patch = options.patch && typeof options.patch === 'object' ? options.patch : {}
   if (Object.keys(patch).length === 0) return { action: 'idle', park: false, noticeKey: '' }
-  // 当前编辑还没托管：先落进草稿卡，再回填目标作品。
+  // 当前编辑还没托管：先按当前来源作品托管进草稿表，再回填目标作品。
   if (options.dirty === true) return { action: 'recall', park: true, noticeKey: 'studio.toast.draftKept' }
+  // 目标作品自己有已保存草稿：直接恢复该作品草稿并明确提示。
+  if (options.hasTargetDraft === true) return { action: 'recall', park: false, noticeKey: 'studio.toast.draftRestored' }
   // 草稿卡里已有内容：回填不影响它，同样提示「草稿已保留」。
   if (options.hasDraft === true) return { action: 'recall', park: false, noticeKey: 'studio.toast.draftKept' }
   return { action: 'recall', park: false, noticeKey: 'studio.toast.recalled' }

@@ -373,8 +373,9 @@ export const zh = {
   'studio.toast.copied': '已复制文件绝对路径',
   'studio.toast.submitted': '已提交生图任务',
   'studio.toast.recalled': '参数已回填',
-  // 胶卷点击遇到未提交的手动修改：只换预览、保留草稿。
+  // 胶卷点击遇到未提交的手动修改：按作品保留草稿。
   'studio.toast.draftKept': '已保留当前草稿',
+  'studio.toast.draftRestored': '已恢复该作品草稿',
   'studio.toast.newCreation': '已开始新的创作',
   'studio.toast.favorited': '已加入收藏',
   'studio.toast.unfavorited': '已取消收藏',
@@ -642,6 +643,7 @@ export const zh = {
   'studio.filmstrip.draftFrom': '源自此图',
   'studio.filmstrip.draftFromPrompt': '源自：{prompt}',
   'studio.rail.draftStatus': '正在新草稿中编辑（源自此图）',
+  'studio.rail.draftStatusFrom': '正在新草稿中编辑（源自：{prompt}）',
   'studio.rail.restoreOriginal': '还原原图',
   'studio.toast.restoredOriginal': '已还原原图参数',
   // 来源作品已被删除（或不在已加载列表）：参数照常还原，但舞台不再停在别的图上冒充来源。

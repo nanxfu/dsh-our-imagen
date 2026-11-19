@@ -57,10 +57,12 @@ function mergePendingFavorites(serverList, pendingMap) {
   return merged
 }
 
-export function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode, onImagesRemoved }) {
-  const [selectedPath, setSelectedPath] = React.useState('')
+export function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode, initialSelectedPath, initialNewDraftExplicit, onImagesRemoved }) {
+  const [selectedPath, setSelectedPath] = React.useState(() => (
+    typeof initialSelectedPath === 'string' ? initialSelectedPath : ''
+  ))
   // 事件回调里要读最新选中路径（删除后判断「删的是不是当前预览」），不依赖渲染闭包。
-  const selectedPathRef = React.useRef('')
+  const selectedPathRef = React.useRef(selectedPath)
   selectedPathRef.current = selectedPath
   const [historyItems, setHistoryItems] = React.useState([])
   const [historyHasMoreState, setHistoryHasMoreState] = React.useState(false)
@@ -68,7 +70,7 @@ export function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode, onIm
   const [favorites, setFavorites] = React.useState([])
   // 阶段十三：显式新建绘图态与版本树按需拉取（打开工作台默认从新建画布起步）。
   const [workspaceMode, setWorkspaceMode] = React.useState(() => (initialWorkspaceMode === 'work' ? 'work' : 'new_draft'))
-  const [newDraftExplicit, setNewDraftExplicit] = React.useState(false)
+  const [newDraftExplicit, setNewDraftExplicit] = React.useState(() => Boolean(initialNewDraftExplicit))
   const [newDraftPending, setNewDraftPending] = React.useState(false)
   const [treeUnavailable, setTreeUnavailable] = React.useState(false)
   const [treeLoadingRoot, setTreeLoadingRoot] = React.useState('')
@@ -457,6 +459,7 @@ export function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode, onIm
     items: historyItems,
     lineage,
     // 工作区焦点：new_draft 时 selected 为 null，作品条显示新建草稿卡。
+    selectedPath,
     workspaceMode,
     newDraftExplicit,
     newDraftPending,

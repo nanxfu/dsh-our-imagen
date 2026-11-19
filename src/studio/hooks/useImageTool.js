@@ -127,6 +127,16 @@ function presetsForTool(list, tool) {
   return []
 }
 
+function initialBaselinesOf(initialWorkDrafts) {
+  const restored = {}
+  if (initialWorkDrafts && typeof initialWorkDrafts === 'object') {
+    for (const [key, entry] of Object.entries(initialWorkDrafts)) {
+      if (entry && entry.baseline && typeof entry.baseline === 'object') restored[key] = entry.baseline
+    }
+  }
+  return restored
+}
+
 /**
  * 图片工具状态域。
  *
@@ -140,7 +150,7 @@ function presetsForTool(list, tool) {
  * @param {Function} [input.onSubmitted] 提交成功回调，收到响应里的 job 对象
  * @param {string} [input.currentPresetId] 左栏当前预设 id（可选）：工具优先沿用它
  */
-export function useImageTool({ t, alive, ui, presets, defaultPreset, provider, onSubmitted, currentPresetId }) {
+export function useImageTool({ t, alive, ui, presets, defaultPreset, provider, onSubmitted, currentPresetId, initialWorkDrafts }) {
   const rawList = Array.isArray(presets) ? presets.filter((item) => item && item.id) : []
   const list = provider ? rawList.filter((item) => presetAvailableForProvider(item, provider)) : rawList
   const [draft, setDraft] = React.useState(() => emptyDraft())
@@ -154,14 +164,17 @@ export function useImageTool({ t, alive, ui, presets, defaultPreset, provider, o
   // 提交中的同步闸门：连续点击时 useState 的闭包可能还没刷新，用 ref 立即生效。
   const inFlightRef = React.useRef(false)
 
-  // ── 阶段十三：按作品路径缓存的未提交编辑草稿（会话内内存，LRU 上限 8）──────
+  // ── 阶段十三：按作品路径缓存的未提交编辑草稿（LRU 上限 8）──────────────────
   //
   // 只做旁路存储：`draft` 仍是唯一的活动草稿来源，Stage / dock 读到的字段完全不变。
   // 每次草稿变化（每次 setDraft 都会产生新对象）同步写入映射；草稿没有实际改动时移除。
-  const [workDrafts, setWorkDrafts] = React.useState({})
+  const [workDrafts, setWorkDrafts] = React.useState(() => (
+    initialWorkDrafts && typeof initialWorkDrafts === 'object' ? lruDrafts(initialWorkDrafts, DRAFT_LRU_LIMIT) : {}
+  ))
   // 每个作品「干净基线」的 { presetId, strength }：判断参数是否被用户改过，
   // 恢复草稿时沿用原基线，避免一打开就亮圆点。
-  const baselinesRef = React.useRef({})
+  const baselinesRef = React.useRef(null)
+  if (baselinesRef.current === null) baselinesRef.current = initialBaselinesOf(initialWorkDrafts)
 
   const removeWorkDraft = (key) => {
     const path = draftKeyOf(key)
@@ -211,6 +224,7 @@ export function useImageTool({ t, alive, ui, presets, defaultPreset, provider, o
           mask: draft.mask,
           outpaint: out,
           changed,
+          baseline,
           lastTouchedAt: Date.now(),
         },
       }, DRAFT_LRU_LIMIT)

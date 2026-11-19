@@ -375,6 +375,7 @@ export const en = {
   'studio.toast.recalled': 'Settings restored',
   // Filmstrip click with unsaved manual edits: preview switches, draft stays.
   'studio.toast.draftKept': 'Current draft kept',
+  'studio.toast.draftRestored': 'Restored unsaved draft',
   'studio.toast.newCreation': 'Started a new creation',
   'studio.toast.favorited': 'Added to favorites',
   'studio.toast.unfavorited': 'Removed from favorites',
@@ -642,6 +643,7 @@ export const en = {
   'studio.filmstrip.draftFrom': 'From this image',
   'studio.filmstrip.draftFromPrompt': 'From: {prompt}',
   'studio.rail.draftStatus': 'Editing a new draft from this image',
+  'studio.rail.draftStatusFrom': 'Editing draft (from: {prompt})',
   'studio.rail.restoreOriginal': 'Restore original',
   'studio.toast.restoredOriginal': 'Original settings restored',
   // Source work deleted (or not in the loaded list): settings are restored, the stage does not

@@ -417,8 +417,9 @@ var zh = {
   "studio.toast.copied": "已复制文件绝对路径",
   "studio.toast.submitted": "已提交生图任务",
   "studio.toast.recalled": "参数已回填",
-  // 胶卷点击遇到未提交的手动修改：只换预览、保留草稿。
+  // 胶卷点击遇到未提交的手动修改：按作品保留草稿。
   "studio.toast.draftKept": "已保留当前草稿",
+  "studio.toast.draftRestored": "已恢复该作品草稿",
   "studio.toast.newCreation": "已开始新的创作",
   "studio.toast.favorited": "已加入收藏",
   "studio.toast.unfavorited": "已取消收藏",
@@ -677,6 +678,7 @@ var zh = {
   "studio.filmstrip.draftFrom": "源自此图",
   "studio.filmstrip.draftFromPrompt": "源自：{prompt}",
   "studio.rail.draftStatus": "正在新草稿中编辑（源自此图）",
+  "studio.rail.draftStatusFrom": "正在新草稿中编辑（源自：{prompt}）",
   "studio.rail.restoreOriginal": "还原原图",
   "studio.toast.restoredOriginal": "已还原原图参数",
   // 来源作品已被删除（或不在已加载列表）：参数照常还原，但舞台不再停在别的图上冒充来源。
@@ -1091,6 +1093,7 @@ var en = {
   "studio.toast.recalled": "Settings restored",
   // Filmstrip click with unsaved manual edits: preview switches, draft stays.
   "studio.toast.draftKept": "Current draft kept",
+  "studio.toast.draftRestored": "Restored unsaved draft",
   "studio.toast.newCreation": "Started a new creation",
   "studio.toast.favorited": "Added to favorites",
   "studio.toast.unfavorited": "Removed from favorites",
@@ -1349,6 +1352,7 @@ var en = {
   "studio.filmstrip.draftFrom": "From this image",
   "studio.filmstrip.draftFromPrompt": "From: {prompt}",
   "studio.rail.draftStatus": "Editing a new draft from this image",
+  "studio.rail.draftStatusFrom": "Editing draft (from: {prompt})",
   "studio.rail.restoreOriginal": "Restore original",
   "studio.toast.restoredOriginal": "Original settings restored",
   // Source work deleted (or not in the loaded list): settings are restored, the stage does not
@@ -1797,7 +1801,7 @@ var PUBLIC_PRESETS = [
 ];
 
 // shared/contract.js
-var VERSION = "0.13.0";
+var VERSION = "0.14.0";
 var ROUTES = {
   state: { method: "GET", path: "/imagen-api/state" },
   probe: { method: "POST", path: "/imagen-api/probe" },
@@ -9654,6 +9658,8 @@ function Rail(props) {
   const draftSource = draftView && draftView.active && draftView.source ? draftView.source : null;
   const draftActive = Boolean(draftView && draftView.active && draftView.source);
   const canRestore = Boolean(draftSource) && typeof restoreOriginal === "function";
+  const draftPrompt = draftSource && typeof draftSource.prompt === "string" ? draftSource.prompt.trim() : "";
+  const draftStatusText = draftPrompt ? formatText(t("studio.rail.draftStatusFrom"), { prompt: draftPrompt }) : t("studio.rail.draftStatus");
   const startNewCreation = typeof newCreation === "function" ? newCreation : () => {
   };
   const showNegative = negativeActive === true;
@@ -9667,7 +9673,7 @@ function Rail(props) {
   return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("aside", { className: "ofs-panel ofs-panel--form", children: [
     /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(PanelModeTabs, { t, mode, setMode, onNewCreation: startNewCreation }),
     draftActive ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "ofs-tuning is-draft", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "ofs-tuning-source", title: draftSource && draftSource.prompt ? draftSource.prompt : void 0, children: t("studio.rail.draftStatus") }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "ofs-tuning-source", title: draftPrompt || void 0, children: draftStatusText }),
       canRestore ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
         "button",
         {
@@ -11898,6 +11904,7 @@ function previewRecallOf(options = {}) {
   const patch = options.patch && typeof options.patch === "object" ? options.patch : {};
   if (Object.keys(patch).length === 0) return { action: "idle", park: false, noticeKey: "" };
   if (options.dirty === true) return { action: "recall", park: true, noticeKey: "studio.toast.draftKept" };
+  if (options.hasTargetDraft === true) return { action: "recall", park: false, noticeKey: "studio.toast.draftRestored" };
   if (options.hasDraft === true) return { action: "recall", park: false, noticeKey: "studio.toast.draftKept" };
   return { action: "recall", park: false, noticeKey: "studio.toast.recalled" };
 }
@@ -14728,6 +14735,260 @@ function useCompletionNotice({ t, ui, job, activeJob }) {
 // src/studio/useStudio.js
 var import_react48 = __toESM(require("react"), 1);
 
+// src/logic/form.js
+var SNAPSHOT_FIELDS = ["prompt", "negative", "presetId", "seed"];
+function textOf4(value) {
+  return typeof value === "string" ? value : String(value ?? "");
+}
+function numberish(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+function formSnapshotOf(form) {
+  const input = form && typeof form === "object" ? form : {};
+  const snapshot2 = {};
+  for (const field of SNAPSHOT_FIELDS) {
+    snapshot2[field] = field === "seed" ? textOf4(input.seed).trim() : textOf4(input[field]);
+  }
+  snapshot2.width = numberish(input.width);
+  snapshot2.height = numberish(input.height);
+  snapshot2.steps = numberish(input.steps);
+  snapshot2.cfg = numberish(input.cfg);
+  snapshot2.count = numberish(input.count);
+  snapshot2.references = referenceFingerprintOf(input.references);
+  return JSON.stringify(snapshot2);
+}
+function isFormDirty(form, baseline) {
+  if (typeof baseline !== "string" || baseline === "") return false;
+  return formSnapshotOf(form) !== baseline;
+}
+function newCreationPatch(form, preset) {
+  const input = form && typeof form === "object" ? form : {};
+  const active = preset && typeof preset === "object" ? preset : null;
+  const cfg = Number(input.cfg);
+  const negativeActive = negativePromptActive(active, Number.isFinite(cfg) ? cfg : void 0);
+  const layers = normalizeNegativeLayers({
+    model: negativeActive ? hintOf(active) : "",
+    user: ""
+  });
+  return {
+    prompt: "",
+    seed: "",
+    references: [],
+    ...negativeLayersPatch(layers)
+  };
+}
+function draftSourceOf(entry, patch) {
+  const image = entry && entry.image || {};
+  const item = entry && entry.item || {};
+  const params = item && item.params || {};
+  const path = typeof image.path === "string" && image.path ? image.path : typeof image.file === "string" ? image.file : "";
+  const prompt = typeof item.prompt === "string" && item.prompt || typeof params.prompt === "string" && params.prompt || (typeof image.file === "string" ? image.file : "");
+  const cleanPatch = patch && typeof patch === "object" ? { ...patch } : {};
+  return { path, prompt, patch: cleanPatch };
+}
+function originalPatchOf(source) {
+  const patch = source && source.patch && typeof source.patch === "object" ? source.patch : null;
+  if (!patch || Object.keys(patch).length === 0) return null;
+  return { ...patch };
+}
+var FORM_DRAFT_LRU_LIMIT = 20;
+function formDraftChangesOf(form, baseline) {
+  if (typeof baseline !== "string" || baseline === "") return { prompt: false, params: false };
+  let base;
+  try {
+    base = JSON.parse(baseline);
+  } catch {
+    return { prompt: false, params: false };
+  }
+  const current = JSON.parse(formSnapshotOf(form));
+  const promptChanged = textOf4(current.prompt) !== textOf4(base.prompt);
+  const paramsChanged = Object.keys(current).some((key) => key !== "prompt" && current[key] !== base[key]);
+  return { prompt: promptChanged, params: paramsChanged };
+}
+function formDraftSummaryOf(entry) {
+  const holder = entry && typeof entry === "object" && entry.form ? entry : null;
+  if (!holder) {
+    return {
+      active: false,
+      items: [],
+      count: 0,
+      hasMask: false,
+      hasPrompt: false,
+      hasParams: false,
+      tool: "form",
+      lastTouchedAt: 0,
+      coverage: 0
+    };
+  }
+  const computed = holder.changed && typeof holder.changed === "object" ? holder.changed : formDraftChangesOf(holder.form, holder.baseline);
+  let hasPrompt = computed.prompt === true;
+  let hasParams = computed.params === true;
+  if (!hasPrompt && !hasParams) hasParams = true;
+  const items = [];
+  if (hasPrompt) items.push("prompt");
+  if (hasParams) items.push("params");
+  const touched = Number(holder.lastTouchedAt);
+  return {
+    active: items.length > 0,
+    items,
+    count: items.length,
+    hasMask: false,
+    hasPrompt,
+    hasParams,
+    tool: "form",
+    lastTouchedAt: Number.isFinite(touched) ? touched : 0,
+    coverage: 0
+  };
+}
+function lruWorkFormDrafts(drafts, limit = FORM_DRAFT_LRU_LIMIT) {
+  const max = Number.isFinite(Number(limit)) && Number(limit) >= 0 ? Math.floor(Number(limit)) : FORM_DRAFT_LRU_LIMIT;
+  const entries = drafts && typeof drafts === "object" ? Object.entries(drafts) : [];
+  const candidates = [];
+  entries.forEach(([key, entry], order) => {
+    const path = typeof key === "string" ? key.trim() : "";
+    if (!path || !entry || typeof entry !== "object" || !entry.form) return;
+    const touched = Number(entry.lastTouchedAt);
+    candidates.push({ path, entry, touched: Number.isFinite(touched) ? touched : 0, order });
+  });
+  candidates.sort((left, right) => right.touched - left.touched || left.order - right.order);
+  const kept = {};
+  for (const item of candidates.slice(0, max)) kept[item.path] = item.entry;
+  return kept;
+}
+function mergeWorkDrafts(toolDrafts, formDrafts) {
+  const tools = toolDrafts && typeof toolDrafts === "object" ? toolDrafts : {};
+  const forms = formDrafts && typeof formDrafts === "object" ? formDrafts : {};
+  const keys = /* @__PURE__ */ new Set([...Object.keys(tools), ...Object.keys(forms)]);
+  const merged = {};
+  for (const key of keys) {
+    const toolEntry = tools[key] && typeof tools[key] === "object" ? tools[key] : null;
+    const formEntry = forms[key] && typeof forms[key] === "object" && forms[key].form ? forms[key] : null;
+    if (!toolEntry && !formEntry) continue;
+    if (!formEntry) {
+      merged[key] = toolEntry;
+      continue;
+    }
+    const formSummary = formDraftSummaryOf(formEntry);
+    if (!toolEntry) {
+      merged[key] = {
+        changed: {
+          mask: false,
+          prompt: formSummary.hasPrompt,
+          params: formSummary.hasParams
+        },
+        lastTouchedAt: formSummary.lastTouchedAt
+      };
+      continue;
+    }
+    const toolChanged = toolEntry.changed && typeof toolEntry.changed === "object" ? toolEntry.changed : {};
+    const toolMask = toolChanged.mask === true || Boolean(toolEntry.mask && textOf4(toolEntry.mask.data));
+    const toolPrompt = toolChanged.prompt === true;
+    const toolParams = toolChanged.params === true;
+    const toolTouched = Number(toolEntry.lastTouchedAt);
+    merged[key] = {
+      ...toolEntry,
+      changed: {
+        mask: toolMask,
+        prompt: toolPrompt || formSummary.hasPrompt,
+        params: toolParams || formSummary.hasParams
+      },
+      lastTouchedAt: Math.max(Number.isFinite(toolTouched) ? toolTouched : 0, formSummary.lastTouchedAt)
+    };
+  }
+  return merged;
+}
+function parkDraftOf(draft, source, form) {
+  const prev = draft && typeof draft === "object" && draft.form ? draft : null;
+  const shape = form && typeof form === "object" ? form : null;
+  if (!shape) return prev;
+  const nextSource = source && typeof source === "object" ? source : prev && prev.source || null;
+  return { source: nextSource, form: shape, editing: false };
+}
+function draftViewOf(state = {}) {
+  const draft = state.draft && typeof state.draft === "object" && state.draft.form ? state.draft : null;
+  const formDraft = state.formDraft && typeof state.formDraft === "object" && state.formDraft.form ? state.formDraft : null;
+  const origin = state.origin && typeof state.origin === "object" ? state.origin : null;
+  if (origin && origin.path) {
+    if (draft && draft.source && draft.source.path === origin.path && draft.editing === true) {
+      return {
+        active: true,
+        parked: true,
+        editing: true,
+        source: origin,
+        form: draft.form
+      };
+    }
+    if (state.dirty === true) {
+      return {
+        active: true,
+        parked: Boolean(formDraft),
+        editing: Boolean(formDraft),
+        source: origin,
+        form: null
+      };
+    }
+    return {
+      active: false,
+      parked: false,
+      editing: false,
+      source: origin,
+      form: null
+    };
+  }
+  const blank = draft && !(draft.source && draft.source.path) ? draft : null;
+  const editingBlank = Boolean(blank && blank.editing === true);
+  return {
+    active: state.dirty === true || editingBlank,
+    parked: Boolean(blank),
+    editing: editingBlank,
+    source: null,
+    form: blank ? blank.form : null
+  };
+}
+
+// src/studio/sessionSnapshot.js
+var STUDIO_SESSION_KEY = "our-imagen.studio.session.v1";
+function storageOf() {
+  try {
+    if (typeof window !== "undefined" && window && window.sessionStorage) return window.sessionStorage;
+  } catch {
+  }
+  return null;
+}
+function safeObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+function readStudioSession() {
+  const storage = storageOf();
+  if (!storage || typeof storage.getItem !== "function") return null;
+  try {
+    const raw = storage.getItem(STUDIO_SESSION_KEY);
+    if (!raw || typeof raw !== "string") return null;
+    const parsed = JSON.parse(raw);
+    return safeObject(parsed);
+  } catch {
+    return null;
+  }
+}
+function writeStudioSession(snapshot2) {
+  const storage = storageOf();
+  const payload = safeObject(snapshot2);
+  if (!storage || typeof storage.setItem !== "function" || !payload) return false;
+  try {
+    storage.setItem(STUDIO_SESSION_KEY, JSON.stringify(payload));
+    return true;
+  } catch {
+    try {
+      const compact = { ...payload, imageToolWorkDrafts: {} };
+      storage.setItem(STUDIO_SESSION_KEY, JSON.stringify(compact));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 // src/studio/hooks/useChatThread.js
 var import_react41 = __toESM(require("react"), 1);
 function useChatThread({ t, isEn, alive, state, form, generate }) {
@@ -14984,7 +15245,16 @@ function presetsForTool(list, tool) {
   }
   return [];
 }
-function useImageTool({ t, alive, ui, presets, defaultPreset, provider, onSubmitted, currentPresetId }) {
+function initialBaselinesOf(initialWorkDrafts) {
+  const restored = {};
+  if (initialWorkDrafts && typeof initialWorkDrafts === "object") {
+    for (const [key, entry] of Object.entries(initialWorkDrafts)) {
+      if (entry && entry.baseline && typeof entry.baseline === "object") restored[key] = entry.baseline;
+    }
+  }
+  return restored;
+}
+function useImageTool({ t, alive, ui, presets, defaultPreset, provider, onSubmitted, currentPresetId, initialWorkDrafts }) {
   const rawList = Array.isArray(presets) ? presets.filter((item) => item && item.id) : [];
   const list = provider ? rawList.filter((item) => presetAvailableForProvider(item, provider)) : rawList;
   const [draft, setDraft] = import_react42.default.useState(() => emptyDraft());
@@ -14994,8 +15264,9 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, provider, onSubmit
   const draftRef = import_react42.default.useRef(draft);
   draftRef.current = draft;
   const inFlightRef = import_react42.default.useRef(false);
-  const [workDrafts, setWorkDrafts] = import_react42.default.useState({});
-  const baselinesRef = import_react42.default.useRef({});
+  const [workDrafts, setWorkDrafts] = import_react42.default.useState(() => initialWorkDrafts && typeof initialWorkDrafts === "object" ? lruDrafts(initialWorkDrafts, DRAFT_LRU_LIMIT) : {});
+  const baselinesRef = import_react42.default.useRef(null);
+  if (baselinesRef.current === null) baselinesRef.current = initialBaselinesOf(initialWorkDrafts);
   const removeWorkDraft = (key) => {
     const path = draftKeyOf(key);
     if (!path) return;
@@ -15038,6 +15309,7 @@ function useImageTool({ t, alive, ui, presets, defaultPreset, provider, onSubmit
           mask: draft.mask,
           outpaint: out,
           changed,
+          baseline,
           lastTouchedAt: Date.now()
         }
       }, DRAFT_LRU_LIMIT);
@@ -15940,83 +16212,6 @@ function useSessionControl({ t, host, ui, alive }) {
 // src/studio/hooks/useStudioForm.js
 var import_react46 = __toESM(require("react"), 1);
 
-// src/logic/form.js
-var SNAPSHOT_FIELDS = ["prompt", "negative", "presetId", "seed"];
-function textOf4(value) {
-  return typeof value === "string" ? value : String(value ?? "");
-}
-function numberish(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
-}
-function formSnapshotOf(form) {
-  const input = form && typeof form === "object" ? form : {};
-  const snapshot2 = {};
-  for (const field of SNAPSHOT_FIELDS) {
-    snapshot2[field] = field === "seed" ? textOf4(input.seed).trim() : textOf4(input[field]);
-  }
-  snapshot2.width = numberish(input.width);
-  snapshot2.height = numberish(input.height);
-  snapshot2.steps = numberish(input.steps);
-  snapshot2.cfg = numberish(input.cfg);
-  snapshot2.count = numberish(input.count);
-  snapshot2.references = referenceFingerprintOf(input.references);
-  return JSON.stringify(snapshot2);
-}
-function isFormDirty(form, baseline) {
-  if (typeof baseline !== "string" || baseline === "") return false;
-  return formSnapshotOf(form) !== baseline;
-}
-function newCreationPatch(form, preset) {
-  const input = form && typeof form === "object" ? form : {};
-  const active = preset && typeof preset === "object" ? preset : null;
-  const cfg = Number(input.cfg);
-  const negativeActive = negativePromptActive(active, Number.isFinite(cfg) ? cfg : void 0);
-  const layers = normalizeNegativeLayers({
-    model: negativeActive ? hintOf(active) : "",
-    user: ""
-  });
-  return {
-    prompt: "",
-    seed: "",
-    references: [],
-    ...negativeLayersPatch(layers)
-  };
-}
-function draftSourceOf(entry, patch) {
-  const image = entry && entry.image || {};
-  const item = entry && entry.item || {};
-  const params = item && item.params || {};
-  const path = typeof image.path === "string" && image.path ? image.path : typeof image.file === "string" ? image.file : "";
-  const prompt = typeof item.prompt === "string" && item.prompt || typeof params.prompt === "string" && params.prompt || (typeof image.file === "string" ? image.file : "");
-  const cleanPatch = patch && typeof patch === "object" ? { ...patch } : {};
-  return { path, prompt, patch: cleanPatch };
-}
-function originalPatchOf(source) {
-  const patch = source && source.patch && typeof source.patch === "object" ? source.patch : null;
-  if (!patch || Object.keys(patch).length === 0) return null;
-  return { ...patch };
-}
-function parkDraftOf(draft, source, form) {
-  const prev = draft && typeof draft === "object" && draft.form ? draft : null;
-  const shape = form && typeof form === "object" ? form : null;
-  if (!shape) return prev;
-  const nextSource = source && typeof source === "object" ? source : prev && prev.source || null;
-  return { source: nextSource, form: shape, editing: false };
-}
-function draftViewOf(state = {}) {
-  const draft = state.draft && typeof state.draft === "object" && state.draft.form ? state.draft : null;
-  const origin = state.origin && typeof state.origin === "object" ? state.origin : null;
-  const source = draft ? draft.source || null : origin;
-  return {
-    active: Boolean(draft) || state.dirty === true,
-    parked: Boolean(draft),
-    editing: Boolean(draft && draft.editing === true),
-    source,
-    form: draft ? draft.form : null
-  };
-}
-
 // src/logic/refine.js
 var SEPARATOR_CHARS = /[，,、;；\n\r\t ]/;
 var CJK = /[\u3400-\u9fff]/;
@@ -16077,27 +16272,40 @@ var EMPTY_FORM = {
   // 原生参考图槽（Phase C2）：槽位项 `{ path, url, width, height, name }`，上限见契约。
   references: []
 };
-function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
+function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt, initialSession }) {
   const { presets, defaultPreset } = preset;
-  const [form, setForm] = import_react46.default.useState(() => ({
-    ...EMPTY_FORM,
-    prompt: initialPrompt
-  }));
+  const saved = initialSession && typeof initialSession === "object" ? initialSession : null;
+  const [form, setForm] = import_react46.default.useState(() => {
+    if (!initialPrompt && saved && saved.form && typeof saved.form === "object") {
+      return { ...EMPTY_FORM, ...saved.form };
+    }
+    return {
+      ...EMPTY_FORM,
+      prompt: initialPrompt
+    };
+  });
   const [refineGroups, setRefineGroups] = import_react46.default.useState([]);
   const [refineSource, setRefineSource] = import_react46.default.useState("");
   const [enhancing, setEnhancing] = import_react46.default.useState(false);
   const [translating, setTranslating] = import_react46.default.useState(false);
-  const [cleanBaseline, setCleanBaseline] = import_react46.default.useState("");
-  const [origin, setOrigin] = import_react46.default.useState(null);
-  const [draft, setDraft] = import_react46.default.useState(null);
+  const [cleanBaseline, setCleanBaseline] = import_react46.default.useState(() => !initialPrompt && saved && typeof saved.cleanBaseline === "string" ? saved.cleanBaseline : "");
+  const [origin, setOrigin] = import_react46.default.useState(() => !initialPrompt && saved && saved.origin && typeof saved.origin === "object" ? saved.origin : null);
+  const [workFormDrafts, setWorkFormDrafts] = import_react46.default.useState(() => !initialPrompt && saved && saved.workFormDrafts && typeof saved.workFormDrafts === "object" ? lruWorkFormDrafts(saved.workFormDrafts) : {});
+  const [blankDraft, setBlankDraft] = import_react46.default.useState(() => !initialPrompt && saved && saved.blankDraft && typeof saved.blankDraft === "object" && saved.blankDraft.form ? saved.blankDraft : null);
   const formRef = import_react46.default.useRef(form);
   formRef.current = form;
+  const cleanBaselineRef = import_react46.default.useRef(cleanBaseline);
+  cleanBaselineRef.current = cleanBaseline;
   const originRef = import_react46.default.useRef(origin);
   originRef.current = origin;
-  const draftRef = import_react46.default.useRef(draft);
-  draftRef.current = draft;
+  const workFormDraftsRef = import_react46.default.useRef(workFormDrafts);
+  workFormDraftsRef.current = workFormDrafts;
+  const blankDraftRef = import_react46.default.useRef(blankDraft);
+  blankDraftRef.current = blankDraft;
   const dirty = isFormDirty(form, cleanBaseline);
-  const draftView = draftViewOf({ draft, dirty, origin });
+  const currentWorkDraft = origin && origin.path ? workFormDrafts[origin.path] || null : null;
+  const draft = currentWorkDraft || (origin && origin.path ? null : blankDraft);
+  const draftView = draftViewOf({ draft: blankDraft, formDraft: currentWorkDraft, dirty, origin });
   const ratioId = ratioIdOf(form.width, form.height);
   const activePreset = presets.find((item) => item.id === form.presetId) || null;
   const negativeHint = hintOf(activePreset);
@@ -16119,7 +16327,9 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   }, [presets.length, defaultPreset]);
   import_react46.default.useEffect(() => {
     if (cleanBaseline || !form.presetId) return;
-    setCleanBaseline(formSnapshotOf(form));
+    const nextBaseline = formSnapshotOf(form);
+    cleanBaselineRef.current = nextBaseline;
+    setCleanBaseline(nextBaseline);
   }, [cleanBaseline, form.presetId]);
   function patchForm(partial) {
     const next = applyNegativePatch(formRef.current, partial);
@@ -16152,34 +16362,83 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
   }
   function markClean(submitted) {
     if (submitted && formRef.current !== submitted) return false;
-    setCleanBaseline(formSnapshotOf(formRef.current));
+    const nextBaseline = formSnapshotOf(formRef.current);
+    cleanBaselineRef.current = nextBaseline;
+    setCleanBaseline(nextBaseline);
     return true;
   }
   function applyRecall(patch, entry) {
     const partial = patch && typeof patch === "object" ? { ...patch } : {};
     if (Object.keys(partial).length === 0) return false;
+    const nextOrigin = draftSourceOf(entry, partial);
+    const saved2 = nextOrigin.path ? workFormDraftsRef.current[nextOrigin.path] : null;
+    const currentBlank = blankDraftRef.current;
+    if (currentBlank && currentBlank.editing === true) {
+      const parkedBlank = { ...currentBlank, editing: false };
+      blankDraftRef.current = parkedBlank;
+      setBlankDraft(parkedBlank);
+    }
+    if (saved2 && saved2.form) {
+      partial.references = [];
+      const fallbackBaseline = formSnapshotOf(applyNegativePatch(formRef.current, partial));
+      const baseline2 = typeof saved2.baseline === "string" && saved2.baseline ? saved2.baseline : fallbackBaseline;
+      if (isFormDirty(saved2.form, baseline2)) {
+        const resolvedOrigin = saved2.source && saved2.source.path ? saved2.source : nextOrigin;
+        formRef.current = saved2.form;
+        cleanBaselineRef.current = baseline2;
+        originRef.current = resolvedOrigin;
+        setForm(saved2.form);
+        setCleanBaseline(baseline2);
+        setOrigin(resolvedOrigin);
+        return true;
+      }
+    }
     partial.references = [];
     const next = applyNegativePatch(formRef.current, partial);
+    const baseline = formSnapshotOf(next);
+    formRef.current = next;
+    cleanBaselineRef.current = baseline;
+    originRef.current = nextOrigin;
     setForm(next);
-    setCleanBaseline(formSnapshotOf(next));
-    setOrigin(draftSourceOf(entry, partial));
+    setCleanBaseline(baseline);
+    setOrigin(nextOrigin);
     return true;
   }
   function newCreation() {
+    const currentOrigin = originRef.current;
+    if (currentOrigin && currentOrigin.path && workFormDraftsRef.current[currentOrigin.path]) {
+      const nextDrafts = { ...workFormDraftsRef.current };
+      delete nextDrafts[currentOrigin.path];
+      workFormDraftsRef.current = nextDrafts;
+      setWorkFormDrafts(nextDrafts);
+    }
     const next = applyNegativePatch(formRef.current, newCreationPatch(formRef.current, activePreset));
+    const nextBaseline = formSnapshotOf(next);
+    formRef.current = next;
+    cleanBaselineRef.current = nextBaseline;
+    originRef.current = null;
+    blankDraftRef.current = null;
     setForm(next);
-    setCleanBaseline(formSnapshotOf(next));
+    setCleanBaseline(nextBaseline);
     setOrigin(null);
-    setDraft(null);
+    setBlankDraft(null);
     ui.showToast(t("studio.toast.newCreation"));
   }
   function detachOrigin() {
     const next = applyNegativePatch(formRef.current, newCreationPatch(formRef.current, activePreset));
-    setForm(next);
-    setCleanBaseline(formSnapshotOf(next));
-    setOrigin(null);
+    const nextBaseline = formSnapshotOf(next);
     formRef.current = next;
+    cleanBaselineRef.current = nextBaseline;
     originRef.current = null;
+    const currentBlank = blankDraftRef.current;
+    if (currentBlank && currentBlank.editing === true) {
+      const parkedBlank = { ...currentBlank, editing: false };
+      blankDraftRef.current = parkedBlank;
+      setBlankDraft(parkedBlank);
+    }
+    setForm(next);
+    setCleanBaseline(nextBaseline);
+    setOrigin(null);
     return true;
   }
   function clearOrigin() {
@@ -16194,16 +16453,47 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     let changed = false;
     const currentOrigin = originRef.current;
     if (currentOrigin && currentOrigin.path && removed.has(currentOrigin.path)) {
-      setOrigin(null);
       originRef.current = null;
+      setOrigin(null);
       changed = true;
     }
-    const currentDraft = draftRef.current;
-    if (currentDraft && currentDraft.source && removed.has(currentDraft.source.path)) {
-      const next = { ...currentDraft, source: null };
-      setDraft(next);
-      draftRef.current = next;
+    const prevDrafts = workFormDraftsRef.current;
+    let draftsDirty = false;
+    const nextDrafts = {};
+    for (const [key, entry] of Object.entries(prevDrafts)) {
+      if (removed.has(key) || entry && entry.source && removed.has(entry.source.path)) {
+        draftsDirty = true;
+        continue;
+      }
+      if (entry && entry.form && Array.isArray(entry.form.references) && entry.form.references.length > 0) {
+        const keptRefs = referencePurgeOf(entry.form.references, [...removed]);
+        if (keptRefs.length !== entry.form.references.length) {
+          const updatedForm = { ...entry.form, references: keptRefs };
+          nextDrafts[key] = {
+            ...entry,
+            form: updatedForm,
+            changed: formDraftChangesOf(updatedForm, entry.baseline)
+          };
+          draftsDirty = true;
+          continue;
+        }
+      }
+      nextDrafts[key] = entry;
+    }
+    if (draftsDirty) {
+      workFormDraftsRef.current = nextDrafts;
+      setWorkFormDrafts(nextDrafts);
       changed = true;
+    }
+    const currentBlank = blankDraftRef.current;
+    if (currentBlank && currentBlank.form && Array.isArray(currentBlank.form.references) && currentBlank.form.references.length > 0) {
+      const keptRefs = referencePurgeOf(currentBlank.form.references, [...removed]);
+      if (keptRefs.length !== currentBlank.form.references.length) {
+        const nextBlank = { ...currentBlank, form: { ...currentBlank.form, references: keptRefs } };
+        blankDraftRef.current = nextBlank;
+        setBlankDraft(nextBlank);
+        changed = true;
+      }
     }
     const currentRefs = formRef.current.references;
     if (Array.isArray(currentRefs) && currentRefs.length > 0) {
@@ -16217,53 +16507,173 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     }
     return changed;
   }
+  function hasWorkDraft(path) {
+    const key = typeof path === "string" ? path.trim() : "";
+    return Boolean(key && workFormDraftsRef.current[key] && workFormDraftsRef.current[key].form);
+  }
   function parkDraft() {
-    const prev = draftRef.current;
-    const parked = prev && prev.editing === true;
-    if (!dirty && !parked) return prev;
-    const next = parkDraftOf(prev, originRef.current, formRef.current);
-    if (next !== prev) {
-      draftRef.current = next;
-      setDraft(next);
+    const currentOrigin = originRef.current;
+    const baseline = cleanBaselineRef.current;
+    const isDirty = isFormDirty(formRef.current, baseline);
+    if (currentOrigin && currentOrigin.path) {
+      if (!isDirty) return workFormDraftsRef.current[currentOrigin.path] || null;
+      const nextEntry = {
+        source: currentOrigin,
+        form: formRef.current,
+        baseline,
+        changed: formDraftChangesOf(formRef.current, baseline),
+        lastTouchedAt: Date.now()
+      };
+      const nextDrafts = lruWorkFormDrafts({
+        ...workFormDraftsRef.current,
+        [currentOrigin.path]: nextEntry
+      });
+      workFormDraftsRef.current = nextDrafts;
+      setWorkFormDrafts(nextDrafts);
+      return nextEntry;
     }
-    return next;
+    const prevBlank = blankDraftRef.current;
+    const parked = prevBlank && prevBlank.editing === true;
+    if (!isDirty && !parked) return prevBlank;
+    const nextBlank = {
+      ...parkDraftOf(prevBlank, null, formRef.current),
+      baseline: baseline || prevBlank && prevBlank.baseline || ""
+    };
+    blankDraftRef.current = nextBlank;
+    setBlankDraft(nextBlank);
+    return nextBlank;
   }
   function openDraft() {
-    const prev = draftRef.current;
-    if (prev && prev.form) {
-      setForm(prev.form);
-      setCleanBaseline(formSnapshotOf(prev.form));
-      const nextOrigin = prev.source || null;
-      setOrigin(nextOrigin);
-      originRef.current = nextOrigin;
-      setDraft({ ...prev, editing: true });
+    const currentOrigin = originRef.current;
+    if (currentOrigin && currentOrigin.path && isFormDirty(formRef.current, cleanBaselineRef.current)) {
+      parkDraft();
+    }
+    const prevBlank = blankDraftRef.current;
+    if (prevBlank && prevBlank.form) {
+      const fallbackBaseline = formSnapshotOf(
+        applyNegativePatch(prevBlank.form, newCreationPatch(prevBlank.form, activePreset))
+      );
+      const baseline = typeof prevBlank.baseline === "string" && prevBlank.baseline ? prevBlank.baseline : fallbackBaseline;
+      const nextBlank = { ...prevBlank, editing: true };
+      formRef.current = prevBlank.form;
+      cleanBaselineRef.current = baseline;
+      originRef.current = null;
+      blankDraftRef.current = nextBlank;
+      setForm(prevBlank.form);
+      setCleanBaseline(baseline);
+      setOrigin(null);
+      setBlankDraft(nextBlank);
       return true;
     }
-    if (!dirty) return false;
-    const next = parkDraftOf(null, originRef.current, formRef.current);
-    setDraft({ ...next, editing: true });
-    setCleanBaseline(formSnapshotOf(formRef.current));
-    return true;
+    if (!currentOrigin && isFormDirty(formRef.current, cleanBaselineRef.current)) {
+      const baseline = cleanBaselineRef.current;
+      const nextBlank = {
+        ...parkDraftOf(null, null, formRef.current),
+        baseline,
+        editing: true
+      };
+      blankDraftRef.current = nextBlank;
+      setBlankDraft(nextBlank);
+      return true;
+    }
+    return false;
   }
   function clearDraft() {
-    if (draftRef.current) setDraft(null);
+    const currentOrigin = originRef.current;
+    if (currentOrigin && currentOrigin.path) {
+      if (!workFormDraftsRef.current[currentOrigin.path]) return;
+      const nextDrafts = { ...workFormDraftsRef.current };
+      delete nextDrafts[currentOrigin.path];
+      workFormDraftsRef.current = nextDrafts;
+      setWorkFormDrafts(nextDrafts);
+      return;
+    }
+    if (blankDraftRef.current) {
+      blankDraftRef.current = null;
+      setBlankDraft(null);
+    }
+  }
+  function clearWorkDraft(path) {
+    const key = typeof path === "string" ? path.trim() : "";
+    if (!key) return false;
+    const hadStored = Boolean(workFormDraftsRef.current[key]);
+    if (hadStored) {
+      const nextDrafts = { ...workFormDraftsRef.current };
+      delete nextDrafts[key];
+      workFormDraftsRef.current = nextDrafts;
+      setWorkFormDrafts(nextDrafts);
+    }
+    const currentOrigin = originRef.current;
+    if (currentOrigin && currentOrigin.path === key && isFormDirty(formRef.current, cleanBaselineRef.current)) {
+      const patch = originalPatchOf(currentOrigin);
+      if (patch) {
+        const next = applyNegativePatch(formRef.current, { ...patch, references: [] });
+        const nextBaseline = formSnapshotOf(next);
+        formRef.current = next;
+        cleanBaselineRef.current = nextBaseline;
+        setForm(next);
+        setCleanBaseline(nextBaseline);
+      }
+      return true;
+    }
+    return hadStored;
   }
   function restoreOriginal() {
-    const prev = draftRef.current;
-    const source = prev && prev.source || originRef.current;
+    const source = originRef.current;
     const patch = originalPatchOf(source);
     if (!patch) return null;
     const next = applyNegativePatch(formRef.current, { ...patch, references: [] });
+    const nextBaseline = formSnapshotOf(next);
+    formRef.current = next;
+    cleanBaselineRef.current = nextBaseline;
+    originRef.current = source;
     setForm(next);
-    setCleanBaseline(formSnapshotOf(next));
+    setCleanBaseline(nextBaseline);
     setOrigin(source);
-    setDraft(null);
+    if (source && source.path && workFormDraftsRef.current[source.path]) {
+      const nextDrafts = { ...workFormDraftsRef.current };
+      delete nextDrafts[source.path];
+      workFormDraftsRef.current = nextDrafts;
+      setWorkFormDrafts(nextDrafts);
+    }
     return source;
   }
   import_react46.default.useEffect(() => {
-    const current = draftRef.current;
-    if (!current || current.editing !== true || current.form === form) return;
-    setDraft({ ...current, form });
+    const currentOrigin = originRef.current;
+    const baseline = cleanBaselineRef.current;
+    if (currentOrigin && currentOrigin.path) {
+      if (!baseline) return;
+      if (isFormDirty(form, baseline)) {
+        const nextEntry = {
+          source: currentOrigin,
+          form,
+          baseline,
+          changed: formDraftChangesOf(form, baseline),
+          lastTouchedAt: Date.now()
+        };
+        setWorkFormDrafts((prev) => {
+          const existing = prev[currentOrigin.path];
+          if (existing && existing.form === form && existing.baseline === baseline) return prev;
+          const updated = lruWorkFormDrafts({ ...prev, [currentOrigin.path]: nextEntry });
+          workFormDraftsRef.current = updated;
+          return updated;
+        });
+      } else if (workFormDraftsRef.current[currentOrigin.path]) {
+        setWorkFormDrafts((prev) => {
+          if (!prev[currentOrigin.path]) return prev;
+          const next = { ...prev };
+          delete next[currentOrigin.path];
+          workFormDraftsRef.current = next;
+          return next;
+        });
+      }
+      return;
+    }
+    const currentBlank = blankDraftRef.current;
+    if (!currentBlank || currentBlank.editing !== true || currentBlank.form === form) return;
+    const nextBlank = { ...currentBlank, form };
+    blankDraftRef.current = nextBlank;
+    setBlankDraft(nextBlank);
   }, [form]);
   function buildBody(overrides, options = {}) {
     const presetOverride = options.preset && typeof options.preset === "object" ? options.preset : null;
@@ -16289,19 +16699,20 @@ function useStudioForm({ t, isEn, alive, ui, preset, initialPrompt }) {
     patchForm({ width: size.width, height: size.height });
   }
   function applyCfg(value) {
-    const next = clampNumber(value, LIMITS.cfg.min, LIMITS.cfg.max, form.cfg);
-    setForm((prev) => {
-      const current = presets.find((item) => item.id === prev.presetId) || null;
-      const patch = { cfg: next };
-      const wasActive = negativePromptActive(current, prev.cfg);
-      const isActive = negativePromptActive(current, next);
-      if (!wasActive && isActive) {
-        const layers = resolveNegativeLayers(prev, presets);
-        const hint = hintOf(current);
-        if (!layers.model && hint) Object.assign(patch, negativeLayersPatch({ ...layers, model: hint }));
-      }
-      return applyNegativePatch(prev, patch);
-    });
+    const next = clampNumber(value, LIMITS.cfg.min, LIMITS.cfg.max, formRef.current.cfg);
+    const prev = formRef.current;
+    const current = presets.find((item) => item.id === prev.presetId) || null;
+    const patch = { cfg: next };
+    const wasActive = negativePromptActive(current, prev.cfg);
+    const isActive = negativePromptActive(current, next);
+    if (!wasActive && isActive) {
+      const layers = resolveNegativeLayers(prev, presets);
+      const hint = hintOf(current);
+      if (!layers.model && hint) Object.assign(patch, negativeLayersPatch({ ...layers, model: hint }));
+    }
+    const updated = applyNegativePatch(prev, patch);
+    formRef.current = updated;
+    setForm(updated);
   }
   function resetSeed() {
     patchForm({ seed: "" });
@@ -16416,8 +16827,9 @@ ${value}` : value });
     referenceSwitchPreset,
     referenceSwitchLabel,
     referenceMax,
-    // 脏判定：现在只表示「有一次未提交修改，切作品时会被托管进草稿卡」。
+    // 脏判定：现在只表示「有一次未提交修改，切作品时会被托管进对应作品的草稿槽」。
     dirty,
+    cleanBaseline,
     // 来源作品（面板顶部的轻量提示）：保留 tuning 的旧形状给 Rail / 助手面板使用。
     tuning: origin ? { prompt: origin.prompt, path: origin.path } : null,
     origin,
@@ -16428,8 +16840,12 @@ ${value}` : value });
     detachOrigin,
     clearOrigin,
     forgetRemovedPaths,
-    // 草稿托管（阶段十五 A1）：draftView 是展示用派生状态，四个动作由组合层在切换点调用。
+    // 多作品草稿托管：按作品 path 独立存储的 workFormDrafts + 空白画布 blankDraft。
     draft,
+    workFormDrafts,
+    blankDraft,
+    hasWorkDraft,
+    clearWorkDraft,
     draftView,
     draftEditing: Boolean(draftView && draftView.editing),
     parkDraft,
@@ -16483,16 +16899,16 @@ function mergePendingFavorites(serverList, pendingMap) {
   }
   return merged;
 }
-function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode, onImagesRemoved }) {
-  const [selectedPath, setSelectedPath] = import_react47.default.useState("");
-  const selectedPathRef = import_react47.default.useRef("");
+function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode, initialSelectedPath, initialNewDraftExplicit, onImagesRemoved }) {
+  const [selectedPath, setSelectedPath] = import_react47.default.useState(() => typeof initialSelectedPath === "string" ? initialSelectedPath : "");
+  const selectedPathRef = import_react47.default.useRef(selectedPath);
   selectedPathRef.current = selectedPath;
   const [historyItems, setHistoryItems] = import_react47.default.useState([]);
   const [historyHasMoreState, setHistoryHasMoreState] = import_react47.default.useState(false);
   const [historyLoadingMore, setHistoryLoadingMore] = import_react47.default.useState(false);
   const [favorites, setFavorites] = import_react47.default.useState([]);
   const [workspaceMode, setWorkspaceMode] = import_react47.default.useState(() => initialWorkspaceMode === "work" ? "work" : "new_draft");
-  const [newDraftExplicit, setNewDraftExplicit] = import_react47.default.useState(false);
+  const [newDraftExplicit, setNewDraftExplicit] = import_react47.default.useState(() => Boolean(initialNewDraftExplicit));
   const [newDraftPending, setNewDraftPending] = import_react47.default.useState(false);
   const [treeUnavailable, setTreeUnavailable] = import_react47.default.useState(false);
   const [treeLoadingRoot, setTreeLoadingRoot] = import_react47.default.useState("");
@@ -16808,6 +17224,7 @@ function useWorkLibrary({ t, alive, ui, state, initialWorkspaceMode, onImagesRem
     items: historyItems,
     lineage,
     // 工作区焦点：new_draft 时 selected 为 null，作品条显示新建草稿卡。
+    selectedPath,
     workspaceMode,
     newDraftExplicit,
     newDraftPending,
@@ -16841,10 +17258,16 @@ function useStudio(props) {
   const host = useHostState();
   const alive = useAlive();
   const state = host.state;
+  const savedSession = import_react48.default.useMemo(() => readStudioSession(), []);
+  const hasExplicitView = Boolean(props && (props.view === "gallery" || props.view === "studio"));
+  const hasExplicitPanel = Boolean(props && (props.panelMode === "chat" || props.panelMode === "form"));
+  const hasExplicitWorkspace = Boolean(props && (props.workspaceMode === "work" || props.workspaceMode === "new_draft"));
   const initialPrompt = props && typeof props.initialPrompt === "string" ? props.initialPrompt : "";
-  const initialView = props && props.view === "gallery" ? "gallery" : "studio";
-  const initialPanelMode = props && props.panelMode === "chat" ? "chat" : "form";
-  const initialWorkspaceMode = props && props.workspaceMode === "work" ? "work" : "new_draft";
+  const initialView = hasExplicitView ? props.view : savedSession && savedSession.view === "gallery" ? "gallery" : "studio";
+  const initialPanelMode = hasExplicitPanel ? props.panelMode : savedSession && savedSession.panelMode === "chat" ? "chat" : "form";
+  const initialWorkspaceMode = hasExplicitWorkspace ? props.workspaceMode : savedSession && savedSession.workspaceMode === "work" ? "work" : "new_draft";
+  const initialSelectedPath = !hasExplicitWorkspace && savedSession && typeof savedSession.selectedPath === "string" ? savedSession.selectedPath : "";
+  const initialNewDraftExplicit = !hasExplicitWorkspace && Boolean(savedSession && savedSession.newDraftExplicit);
   const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : [];
   const defaultPreset = state && state.defaultPreset || "";
   const [sending, setSending] = import_react48.default.useState(false);
@@ -16855,7 +17278,15 @@ function useStudio(props) {
   const kaggleLogin = useKaggleLogin({ t, ui, onDone: () => control.runProbe() });
   const colabLogin = useColabLogin({ t, ui, onDone: () => host.refresh() });
   const provider = state && state.provider || control.session && control.session.provider || "kaggle";
-  const form = useStudioForm({ t, isEn, alive, ui, preset: { presets, defaultPreset }, initialPrompt });
+  const form = useStudioForm({
+    t,
+    isEn,
+    alive,
+    ui,
+    preset: { presets, defaultPreset },
+    initialPrompt,
+    initialSession: !initialPrompt ? savedSession : null
+  });
   const imageTool = useImageTool({
     t,
     alive,
@@ -16865,6 +17296,7 @@ function useStudio(props) {
     provider,
     // 工具优先沿用左栏当前模型（支持对应能力时），但不回写左栏。
     currentPresetId: form.form.presetId,
+    initialWorkDrafts: savedSession && savedSession.imageToolWorkDrafts ? savedSession.imageToolWorkDrafts : void 0,
     // 阶段十五 A2：舞台图片工具提交成功后，把动作镜像进助手线程（kind 记录不进 intentHistory）。
     onSubmitted: (job, meta) => {
       if (meta && typeof meta === "object") {
@@ -16880,6 +17312,8 @@ function useStudio(props) {
     ui,
     state,
     initialWorkspaceMode,
+    initialSelectedPath,
+    initialNewDraftExplicit,
     // 阶段十五 Phase C0：删除作品后的级联清理（工具草稿 + 左栏来源引用 + 回退图回填）。
     onImagesRemoved: handleImagesRemoved
   });
@@ -16901,8 +17335,50 @@ function useStudio(props) {
   }
   const formView = { ...form, newCreation: newDraft };
   const draftView = form.draftView;
-  const draftSource = draftView && draftView.source ? draftView.source : null;
-  const draftPrompt = draftSource && typeof draftSource.prompt === "string" ? draftSource.prompt.trim() : "";
+  const mergedWorkDrafts = import_react48.default.useMemo(
+    () => mergeWorkDrafts(imageTool.workDrafts, form.workFormDrafts),
+    [imageTool.workDrafts, form.workFormDrafts]
+  );
+  function clearAnyWorkDraft(path) {
+    imageTool.clearWorkDraft(path);
+    form.clearWorkDraft(path);
+  }
+  function combinedWorkDraftSummary(value) {
+    const key = typeof value === "string" ? value.trim() : value && value.image && typeof value.image.path === "string" ? value.image.path.trim() : "";
+    const toolSummary = imageTool.workDraftSummary(key);
+    const formEntry = key && form.workFormDrafts ? form.workFormDrafts[key] || null : null;
+    if (!formEntry) return toolSummary;
+    const formSummary = formDraftSummaryOf(formEntry);
+    if (!toolSummary || !toolSummary.active) return formSummary;
+    return workDraftSummary(mergedWorkDrafts[key] || null);
+  }
+  import_react48.default.useEffect(() => {
+    writeStudioSession({
+      view: ui.view,
+      panelMode: ui.panelMode,
+      workspaceMode: library.workspaceMode,
+      selectedPath: library.selectedPath,
+      newDraftExplicit: library.newDraftExplicit,
+      form: form.form,
+      cleanBaseline: form.cleanBaseline,
+      origin: form.origin,
+      workFormDrafts: form.workFormDrafts,
+      blankDraft: form.blankDraft,
+      imageToolWorkDrafts: imageTool.workDrafts
+    });
+  }, [
+    ui.view,
+    ui.panelMode,
+    library.workspaceMode,
+    library.selectedPath,
+    library.newDraftExplicit,
+    form.form,
+    form.cleanBaseline,
+    form.origin,
+    form.workFormDrafts,
+    form.blankDraft,
+    imageTool.workDrafts
+  ]);
   const libraryView = {
     ...library,
     // 阶段十五 Phase C0：助手点结果图 / 单图聚焦返回与胶片条同口径——先按需托管 dirty
@@ -16916,17 +17392,17 @@ function useStudio(props) {
       height: form.form.height,
       presetLabel: form.activePreset ? presetLabelOf(form.activePreset) : "",
       prompt: form.form.prompt,
-      // 草稿托管态：dirty 时草稿卡实时出现；已托管的草稿点了就恢复。
-      // 舞台保持展示来源作品（work 焦点）时不闪空，只有点草稿卡才切到 new_draft 取景框。
-      draft: Boolean(draftView && draftView.active) && (Boolean(draftView.parked) || library.workspaceMode === "work"),
-      draftFrom: draftPrompt,
-      draftFromSource: Boolean(draftSource),
-      draftEditing: Boolean(draftView && draftView.editing)
+      // 1A：最左端卡片回归纯「新建空白画布」，只承载无来源作品的空白画布草稿；
+      // 各作品自身的未提交草稿直接展示在作品缩略图草稿圆点上。
+      draft: Boolean(form.blankDraft) || library.workspaceMode === "new_draft" && form.dirty && !form.origin,
+      draftFrom: "",
+      draftFromSource: false,
+      draftEditing: Boolean(draftView && draftView.editing && !form.origin)
     },
-    // 工具域的未提交编辑草稿：缩略图圆点 / 版本面板圆点与清空都用这一份。
-    workDrafts: imageTool.workDrafts,
-    clearWorkDraft: imageTool.clearWorkDraft,
-    workDraftSummary: imageTool.workDraftSummary
+    // 合并工具域与左栏表单的多作品草稿：缩略图圆点 / 版本面板圆点与一键清空统一走这里。
+    workDrafts: mergedWorkDrafts,
+    clearWorkDraft: clearAnyWorkDraft,
+    workDraftSummary: combinedWorkDraftSummary
   };
   function startSession2() {
     return control.startSession(form.form.presetId || defaultPreset);
@@ -17059,9 +17535,11 @@ function useStudio(props) {
       return;
     }
     const patch = iteratePatch(target, form.form, presets, library.items);
+    const targetPath = target && target.image && typeof target.image.path === "string" ? target.image.path.trim() : "";
     const decision = previewRecallOf({
       dirty: form.dirty,
-      hasDraft: Boolean(form.draft),
+      hasTargetDraft: Boolean(targetPath && form.hasWorkDraft(targetPath)),
+      hasDraft: false,
       patch
     });
     if (decision.park || form.draftEditing) form.parkDraft();
@@ -17107,18 +17585,25 @@ function useStudio(props) {
     ui.showToast(t("studio.toast.restoredOriginal"));
     return true;
   }
-  function openImageTool(kind, entry) {
+  function openImageTool(kind, entry, options = {}) {
     const target = entry || library.selected;
     if (!target) {
       ui.showToast(t("studio.imageTool.blockedTarget"));
       return false;
     }
-    if (form.draftEditing) form.parkDraft();
-    library.selectImage(target.image ? target : { image: target });
+    if (form.dirty || form.draftEditing) form.parkDraft();
     if (!imageTool.openTool(kind, target)) return false;
+    if (options.recall === true && target.image) recallTarget(target, { notice: false });
+    library.selectImage(target.image ? target : { image: target });
     ui.setView("studio");
     ui.setPanelMode("form");
     ui.setZoom(false);
+    return true;
+  }
+  function zoomWork(entry) {
+    if (!entry) return false;
+    if (entry.image) recallTarget(entry, { notice: false });
+    library.zoomImage(entry);
     return true;
   }
   function addReference(entry) {
@@ -17267,6 +17752,7 @@ function useStudio(props) {
       newDraft,
       focusNewDraft,
       previewWork,
+      zoomWork,
       reroll,
       openImageTool,
       activateImport,
@@ -17336,9 +17822,9 @@ function Studio(props) {
             onLoadMore: library.loadMore,
             onDelete: library.deleteImages,
             onExport: library.exportPaths,
-            onRedraw: (entry) => actions.openImageTool("inpaint", entry),
+            onRedraw: (entry) => actions.openImageTool("inpaint", entry, { recall: true }),
             onToggleFavorite: library.toggleFavorite,
-            onZoom: library.zoomImage,
+            onZoom: (entry) => actions.zoomWork(entry),
             onOpenStudio: (entry) => {
               actions.previewWork(entry);
               ui.setView("studio");

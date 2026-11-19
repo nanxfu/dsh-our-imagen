@@ -747,29 +747,30 @@ await check('状态流转：新建创作清空参考槽、回填先托管、草�
     assert.equal(form().form.references.length, 0, '新建创作清空参考槽')
     assert.equal(form().form.presetId, 'sdxl-lightning', '模型预设保留')
 
-    // 回填作品：未提交的参考槽先托管进草稿，再清空当前槽位（展示该作品的干净基准）。
+    // 回填其它作品 B：A 未提交的参考槽先托管进 A 的草稿槽，再清空当前槽位（展示 B 的干净基准）。
     studio().actions.previewWork(entryA)
     await client.rerenderRaw()
     studio().actions.addReference(workB.images[0])
     await client.rerenderRaw()
     assert.equal(form().dirty, true)
-    studio().actions.previewWork(entryA)
+    studio().actions.previewWork(entryB)
     await client.rerenderRaw()
     assert.equal(form().form.references.length, 0, '回填作品时清空参考槽')
-    assert.equal(form().draft && form().draft.form.references.length, 1, '未提交的参考槽进了草稿卡')
-    assert.equal(form().form.prompt, 'A 的荷花池塘', '回填参数照常生效')
+    const savedA = form().workFormDrafts && form().workFormDrafts[workA.images[0].path]
+    assert.equal(savedA && savedA.form.references.length, 1, '未提交的参考槽进了作品 A 的草稿槽')
+    assert.equal(form().form.prompt, 'B 的山间晨雾', '回填参数照常生效')
 
-    // 点草稿卡：恢复草稿内容（参考槽跟着回来）。
-    studio().actions.focusNewDraft()
+    // 点回作品 A：恢复作品 A 的草稿内容（参考槽跟着回来）。
+    studio().actions.previewWork(entryA)
     await client.rerenderRaw()
-    assert.equal(form().form.references.length, 1, '草稿卡恢复参考槽')
+    assert.equal(form().form.references.length, 1, '切回作品 A 恢复参考槽')
 
     // 还原原图：放弃草稿，参考槽一并清空。
     const restored = studio().actions.restoreOriginal()
     await client.rerenderRaw()
     assert.equal(restored, true)
     assert.equal(form().form.references.length, 0, '还原原图清空参考槽')
-    assert.equal(form().draft, null, '草稿被丢弃')
+    assert.equal(form().workFormDrafts[workA.images[0].path], undefined, '草稿被丢弃')
   } finally {
     client.unmount()
   }

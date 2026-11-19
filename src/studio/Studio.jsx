@@ -103,9 +103,9 @@ export function Studio(props) {
                 onLoadMore={library.loadMore}
                 onDelete={library.deleteImages}
                 onExport={library.exportPaths}
-                onRedraw={(entry) => actions.openImageTool('inpaint', entry)}
+                onRedraw={(entry) => actions.openImageTool('inpaint', entry, { recall: true })}
                 onToggleFavorite={library.toggleFavorite}
-                onZoom={library.zoomImage}
+                onZoom={(entry) => actions.zoomWork(entry)}
                 onOpenStudio={(entry) => {
                   // 阶段十五 A1：画廊「在工作台打开」与主点击同义——切回工作台并回填参数；
                   // 左栏若有未提交草稿，由 previewWork 先行托管进草稿卡，不会丢。

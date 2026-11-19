@@ -29,8 +29,10 @@ import React from 'react'
 import { submitGenerate } from '../api/resources.js'
 import { useHostState } from '../hooks/useHostState.js'
 import { translator } from '../i18n.js'
+import { formDraftSummaryOf, mergeWorkDrafts } from '../logic/form.js'
 import { guidanceDetailOf, guidanceKindOf, guidanceSurfaceOf, isConnectionCode } from '../logic/guidance.js'
 import { formatText } from '../logic/format.js'
+import { workDraftSummary as lineageWorkDraftSummary } from '../logic/lineage.js'
 import {
   effectivePresetOf,
   formSummaryOf,
@@ -46,6 +48,7 @@ import { safeResetPatch } from '../../shared/models-guide.js'
 import { accountStatusOf } from '../logic/probe.js'
 import { providerNameKeyOf } from '../logic/preset.js'
 import { referenceListOf, referencePathsOf } from '../logic/reference.js'
+import { readStudioSession, writeStudioSession } from './sessionSnapshot.js'
 import { useChatThread } from './hooks/useChatThread.js'
 import { useImageTool } from './hooks/useImageTool.js'
 import { useColabLogin, useKaggleLogin } from './hooks/useKaggleLogin.js'
@@ -80,11 +83,27 @@ export function useStudio(props) {
   const alive = useAlive()
   const state = host.state
 
+  // 跨侧栏切换恢复：只在宿主重挂载且外部未显式传参时，从 sessionStorage 恢复上次焦点与草稿。
+  const savedSession = React.useMemo(() => readStudioSession(), [])
+  const hasExplicitView = Boolean(props && (props.view === 'gallery' || props.view === 'studio'))
+  const hasExplicitPanel = Boolean(props && (props.panelMode === 'chat' || props.panelMode === 'form'))
+  const hasExplicitWorkspace = Boolean(props && (props.workspaceMode === 'work' || props.workspaceMode === 'new_draft'))
+
   // 预览与测试用的初始值在组合层解析，域 hook 只接收结果。
   const initialPrompt = props && typeof props.initialPrompt === 'string' ? props.initialPrompt : ''
-  const initialView = props && props.view === 'gallery' ? 'gallery' : 'studio'
-  const initialPanelMode = props && props.panelMode === 'chat' ? 'chat' : 'form'
-  const initialWorkspaceMode = props && props.workspaceMode === 'work' ? 'work' : 'new_draft'
+  const initialView = hasExplicitView
+    ? props.view
+    : (savedSession && savedSession.view === 'gallery' ? 'gallery' : 'studio')
+  const initialPanelMode = hasExplicitPanel
+    ? props.panelMode
+    : (savedSession && savedSession.panelMode === 'chat' ? 'chat' : 'form')
+  const initialWorkspaceMode = hasExplicitWorkspace
+    ? props.workspaceMode
+    : (savedSession && savedSession.workspaceMode === 'work' ? 'work' : 'new_draft')
+  const initialSelectedPath = !hasExplicitWorkspace && savedSession && typeof savedSession.selectedPath === 'string'
+    ? savedSession.selectedPath
+    : ''
+  const initialNewDraftExplicit = !hasExplicitWorkspace && Boolean(savedSession && savedSession.newDraftExplicit)
 
   // 宿主下发的预设配置：表单同步与顶栏展示共用同一份。
   const presets = Array.isArray(state && state.presets) ? state.presets.filter((item) => item && item.id) : []
@@ -104,7 +123,15 @@ export function useStudio(props) {
   // Colab Google OAuth 登录会话：成功后刷新一次 /state 同步 colabAuth 摘要。
   const colabLogin = useColabLogin({ t, ui, onDone: () => host.refresh() })
   const provider = (state && state.provider) || (control.session && control.session.provider) || 'kaggle'
-  const form = useStudioForm({ t, isEn, alive, ui, preset: { presets, defaultPreset }, initialPrompt })
+  const form = useStudioForm({
+    t,
+    isEn,
+    alive,
+    ui,
+    preset: { presets, defaultPreset },
+    initialPrompt,
+    initialSession: !initialPrompt ? savedSession : null,
+  })
   // 舞台图片工具域：底图 / 提示词 / 强度 / 蒙版 / 工具预设全部独立于左栏表单。
   const imageTool = useImageTool({
     t,
@@ -115,6 +142,7 @@ export function useStudio(props) {
     provider,
     // 工具优先沿用左栏当前模型（支持对应能力时），但不回写左栏。
     currentPresetId: form.form.presetId,
+    initialWorkDrafts: savedSession && savedSession.imageToolWorkDrafts ? savedSession.imageToolWorkDrafts : undefined,
     // 阶段十五 A2：舞台图片工具提交成功后，把动作镜像进助手线程（kind 记录不进 intentHistory）。
     onSubmitted: (job, meta) => {
       if (meta && typeof meta === 'object') {
@@ -131,6 +159,8 @@ export function useStudio(props) {
     ui,
     state,
     initialWorkspaceMode,
+    initialSelectedPath,
+    initialNewDraftExplicit,
     // 阶段十五 Phase C0：删除作品后的级联清理（工具草稿 + 左栏来源引用 + 回退图回填）。
     onImagesRemoved: handleImagesRemoved,
   })
@@ -186,8 +216,53 @@ export function useStudio(props) {
    *  - `draftEditing`：当前表单是否正在编辑草稿（点草稿卡恢复后）。
    */
   const draftView = form.draftView
-  const draftSource = draftView && draftView.source ? draftView.source : null
-  const draftPrompt = draftSource && typeof draftSource.prompt === 'string' ? draftSource.prompt.trim() : ''
+  const mergedWorkDrafts = React.useMemo(
+    () => mergeWorkDrafts(imageTool.workDrafts, form.workFormDrafts),
+    [imageTool.workDrafts, form.workFormDrafts],
+  )
+  function clearAnyWorkDraft(path) {
+    imageTool.clearWorkDraft(path)
+    form.clearWorkDraft(path)
+  }
+  function combinedWorkDraftSummary(value) {
+    const key = typeof value === 'string'
+      ? value.trim()
+      : (value && value.image && typeof value.image.path === 'string' ? value.image.path.trim() : '')
+    const toolSummary = imageTool.workDraftSummary(key)
+    const formEntry = key && form.workFormDrafts ? (form.workFormDrafts[key] || null) : null
+    if (!formEntry) return toolSummary
+    const formSummary = formDraftSummaryOf(formEntry)
+    if (!toolSummary || !toolSummary.active) return formSummary
+    return lineageWorkDraftSummary(mergedWorkDrafts[key] || null)
+  }
+  // 跨侧栏切换持久化：焦点、当前表单、多作品草稿与工具草稿随变更写入 sessionStorage。
+  React.useEffect(() => {
+    writeStudioSession({
+      view: ui.view,
+      panelMode: ui.panelMode,
+      workspaceMode: library.workspaceMode,
+      selectedPath: library.selectedPath,
+      newDraftExplicit: library.newDraftExplicit,
+      form: form.form,
+      cleanBaseline: form.cleanBaseline,
+      origin: form.origin,
+      workFormDrafts: form.workFormDrafts,
+      blankDraft: form.blankDraft,
+      imageToolWorkDrafts: imageTool.workDrafts,
+    })
+  }, [
+    ui.view,
+    ui.panelMode,
+    library.workspaceMode,
+    library.selectedPath,
+    library.newDraftExplicit,
+    form.form,
+    form.cleanBaseline,
+    form.origin,
+    form.workFormDrafts,
+    form.blankDraft,
+    imageTool.workDrafts,
+  ])
   const libraryView = {
     ...library,
     // 阶段十五 Phase C0：助手点结果图 / 单图聚焦返回与胶片条同口径——先按需托管 dirty
@@ -201,17 +276,17 @@ export function useStudio(props) {
       height: form.form.height,
       presetLabel: form.activePreset ? presetLabelOf(form.activePreset) : '',
       prompt: form.form.prompt,
-      // 草稿托管态：dirty 时草稿卡实时出现；已托管的草稿点了就恢复。
-      // 舞台保持展示来源作品（work 焦点）时不闪空，只有点草稿卡才切到 new_draft 取景框。
-      draft: Boolean(draftView && draftView.active) && (Boolean(draftView.parked) || library.workspaceMode === 'work'),
-      draftFrom: draftPrompt,
-      draftFromSource: Boolean(draftSource),
-      draftEditing: Boolean(draftView && draftView.editing),
+      // 1A：最左端卡片回归纯「新建空白画布」，只承载无来源作品的空白画布草稿；
+      // 各作品自身的未提交草稿直接展示在作品缩略图草稿圆点上。
+      draft: Boolean(form.blankDraft) || (library.workspaceMode === 'new_draft' && form.dirty && !form.origin),
+      draftFrom: '',
+      draftFromSource: false,
+      draftEditing: Boolean(draftView && draftView.editing && !form.origin),
     },
-    // 工具域的未提交编辑草稿：缩略图圆点 / 版本面板圆点与清空都用这一份。
-    workDrafts: imageTool.workDrafts,
-    clearWorkDraft: imageTool.clearWorkDraft,
-    workDraftSummary: imageTool.workDraftSummary,
+    // 合并工具域与左栏表单的多作品草稿：缩略图圆点 / 版本面板圆点与一键清空统一走这里。
+    workDrafts: mergedWorkDrafts,
+    clearWorkDraft: clearAnyWorkDraft,
+    workDraftSummary: combinedWorkDraftSummary,
   }
 
   /** 启动会话（默认优先检查并接管仍在排队/运行的原 Kernel）。 */
@@ -417,12 +492,16 @@ export function useStudio(props) {
     }
     // 高清放大 / inpaintOnly 等非扩散产物不直接回填：沿 sourceImage 找父作品的真实扩散参数。
     const patch = iteratePatch(target, form.form, presets, library.items)
+    const targetPath = target && target.image && typeof target.image.path === 'string'
+      ? target.image.path.trim()
+      : ''
     const decision = previewRecallOf({
       dirty: form.dirty,
-      hasDraft: Boolean(form.draft),
+      hasTargetDraft: Boolean(targetPath && form.hasWorkDraft(targetPath)),
+      hasDraft: false,
       patch,
     })
-    // 先在原焦点上托管（草稿编辑态切走时同样要留下最新内容），再回填目标作品的干净基准。
+    // 先在原焦点上托管（各自进自己的草稿槽），再回填目标作品参数或恢复目标作品草稿。
     if (decision.park || form.draftEditing) form.parkDraft()
     if (notice && decision.noticeKey) ui.showToast(t(decision.noticeKey))
     if (decision.action !== 'recall') return
@@ -507,21 +586,31 @@ export function useStudio(props) {
    * @param {object} [entry] 胶卷 / 画廊条目 `{ image, item }`；缺省用当前选中作品
    * @returns {boolean} 是否成功打开（即时工具为是否已发起提交）
    */
-  function openImageTool(kind, entry) {
+  function openImageTool(kind, entry, options = {}) {
     const target = entry || library.selected
     if (!target) {
       ui.showToast(t('studio.imageTool.blockedTarget'))
       return false
     }
-    // 离开草稿编辑焦点：先把最新修改托管进草稿槽（§6.1.3 的同一套托管语义）。
-    if (form.draftEditing) form.parkDraft()
+    // 离开当前表单焦点前按需托管未提交修改，保证不同作品草稿不互相覆盖。
+    if (form.dirty || form.draftEditing) form.parkDraft()
+    if (!imageTool.openTool(kind, target)) return false
+    // 从画廊点击「重绘编辑」切回工作台时，同步绑定左栏 origin 与参数，避免退出工具后编辑作品不弹草稿提示。
+    if (options.recall === true && target.image) recallTarget(target, { notice: false })
     // D4：「选中该作品 + 切回舞台 + 打开工具」三步语义一致——退出工具后舞台停在该作品上。
     // 传裸 image 对象时包成条目；selectImage 同时会把工作区焦点从 new_draft 切回 work。
     library.selectImage(target.image ? target : { image: target })
-    if (!imageTool.openTool(kind, target)) return false
     ui.setView('studio')
     ui.setPanelMode('form')
     ui.setZoom(false)
+    return true
+  }
+
+  /** 从画廊「查看大图」进入工作台放大层：同步回填左栏来源，保证关掉大图后编辑作品能正常识别草稿来源。 */
+  function zoomWork(entry) {
+    if (!entry) return false
+    if (entry.image) recallTarget(entry, { notice: false })
+    library.zoomImage(entry)
     return true
   }
 
@@ -744,6 +833,7 @@ export function useStudio(props) {
       newDraft,
       focusNewDraft,
       previewWork,
+      zoomWork,
       reroll,
       openImageTool,
       activateImport,

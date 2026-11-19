@@ -436,6 +436,31 @@ export async function loadClient(options = {}) {
     return { ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(responses[key])) }
   }
 
+function createMemoryStorage() {
+  const store = new Map()
+  return {
+    get length() {
+      return store.size
+    },
+    getItem(key) {
+      const k = String(key)
+      return store.has(k) ? store.get(k) : null
+    },
+    setItem(key, value) {
+      store.set(String(key), String(value))
+    },
+    removeItem(key) {
+      store.delete(String(key))
+    },
+    clear() {
+      store.clear()
+    },
+    key(index) {
+      return [...store.keys()][index] ?? null
+    },
+  }
+}
+
   let registration = null
   // 浏览器里 window 总是存在且带事件 API：生产代码直接调用即可，不必再写 typeof 防御。
   const fakeWindow = {
@@ -444,6 +469,7 @@ export async function loadClient(options = {}) {
         registration = module
       },
     },
+    sessionStorage: options.sessionStorage || createMemoryStorage(),
     innerWidth: 1280,
     innerHeight: 800,
     scrollX: 0,

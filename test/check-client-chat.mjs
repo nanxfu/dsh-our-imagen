@@ -983,18 +983,20 @@ await check('渲染：助手生成/带入先托管左栏脏草稿并清除旧 or
     latest.studio.form.patchForm({ prompt: 'A 改到一半的草稿' })
     await client.rerenderRaw()
     assert.equal(latest.studio.form.dirty, true)
-    // 点助手「按此生成」：旧脏修改应先托管到草稿卡，不再被覆盖丢弃；旧 origin 清空。
+    // 点助手「按此生成」：旧脏修改应先托管到作品 A 自己的草稿槽，旧 origin 清空。
     await latest.studio.chat.generateIntent({ prompt: 'neon alley in rain', ratioId: '16:9', count: 1 })
     await client.settle()
     await client.rerenderRaw()
     assert.equal(latest.studio.form.form.prompt, 'neon alley in rain')
     assert.equal(latest.studio.form.origin, null, '助手确认卡覆写后不应残留旧作品「正在微调」')
     assert.equal(latest.studio.form.tuning, null)
-    assert.equal(latest.studio.form.draft && latest.studio.form.draft.form.prompt, 'A 改到一半的草稿', '原左栏未提交修改应托管进草稿卡')
-    // 点回草稿卡后 draftEditing 暴露为 true，再切换到空白新建时也能感知草稿编辑态。
-    assert.equal(latest.studio.form.openDraft(), true)
+    const savedA = latest.studio.form.workFormDrafts && latest.studio.form.workFormDrafts[workA.images[0].path]
+    assert.equal(savedA && savedA.form && savedA.form.prompt, 'A 改到一半的草稿', '原左栏未提交修改应托管进对应作品草稿槽')
+    // 点回作品 A 后恢复该作品草稿，draftEditing 为 true。
+    latest.studio.actions.previewWork({ image: workA.images[0], item: workA })
     await client.rerenderRaw()
-    assert.equal(latest.studio.form.draftEditing, true, 'openDraft 后 draftEditing 必须暴露为 true')
+    assert.equal(latest.studio.form.form.prompt, 'A 改到一半的草稿')
+    assert.equal(latest.studio.form.draftEditing, true, '切回有草稿的作品后 draftEditing 必须暴露为 true')
   } finally {
     client.unmount()
   }
@@ -1172,21 +1174,21 @@ await check('渲染：胶卷点击回填参数、草稿托管与新建创作边�
     form().patchForm({ prompt: '我自己的草稿' })
     await client.rerenderRaw()
     assert.equal(form().dirty, true, '手动修改后应标记为脏')
-    // 脏时点胶卷：预览照常切换；未提交修改先托管进草稿卡，再回填被点作品（§6.1.3）。
+    // 脏时点胶卷：预览照常切换；空白画布未提交修改先托管进 blankDraft，再回填被点作品。
     latest.studio.actions.previewWork(thumbB)
     await client.rerenderRaw()
     assert.equal(latest.studio.library.selected.image.path, thumbB.image.path, '预览应切到被点的图')
     assert.equal(form().form.prompt, '测试用的荷花池塘', '脏表单先托管草稿，再回填被点作品的参数')
     assert.equal(form().dirty, false, '回填后表单是干净基准')
-    assert.ok(form().draft && form().draft.form.prompt === '我自己的草稿', '未提交修改应被托管进草稿卡')
-    assert.equal(form().draftView && form().draftView.parked, true, '草稿卡应显示已托管草稿')
+    assert.ok(form().blankDraft && form().blankDraft.form.prompt === '我自己的草稿', '空白画布修改应托管进 blankDraft')
+    assert.equal(latest.studio.library.newDraftCard.draft, true, '空白画布草稿卡应显示未提交草稿')
     assert.ok(latest.studio.ui.toast && latest.studio.ui.toast.text.includes('已保留当前草稿'), '托管草稿应提示「已保留当前草稿」')
-    // 生成提交成功后表单回到干净状态（干净基准更新到刚提交的内容），草稿随提交清空。
+    // 生成提交成功后表单回到干净状态（干净基准更新到刚提交的内容），当前作品草稿为 null（不影响其它草稿）。
     await latest.studio.actions.generate()
     await client.settle()
     await client.rerenderRaw()
     assert.equal(form().dirty, false, '刚生成完应回到干净状态')
-    assert.equal(form().draft, null, '提交成功后草稿卡应清空')
+    assert.equal(form().draft, null, '当前作品提交成功后草稿槽应为空')
     // 干净时再点胶卷：完整回填该作品参数，保留原图 seed。
     latest.studio.actions.previewWork(thumbB)
     await client.rerenderRaw()

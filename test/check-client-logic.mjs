@@ -3273,6 +3273,12 @@ await check('胶片条点击判定：脏修改先托管再回填，草稿保留�
     park: true,
     noticeKey: 'studio.toast.draftKept',
   })
+  // 干净但目标作品自己存有草稿：恢复草稿并给出对应提示。
+  assert.deepEqual(logic.previewRecallOf({ dirty: false, hasTargetDraft: true, patch }), {
+    action: 'recall',
+    park: false,
+    noticeKey: 'studio.toast.draftRestored',
+  })
   // 干净但草稿卡里已有托管草稿：回填不影响草稿，同样提示草稿保留。
   assert.deepEqual(logic.previewRecallOf({ dirty: false, hasDraft: true, patch }), {
     action: 'recall',
@@ -3345,6 +3351,25 @@ await check('草稿托管：来源快照、还原补丁与草稿卡展示状态'
   assert.equal(logic.draftViewOf({ draft: null, dirty: true, origin: null }).active, true, '没有来源的脏修改同样是未提交草稿')
   const parkedView = logic.draftViewOf({ draft: { ...first, editing: true }, dirty: false, origin: source })
   assert.deepEqual(parkedView, { active: true, parked: true, editing: true, source, form: { prompt: '改到一半' } })
+  // 空白画布草稿（source=null）不得遮蔽正在编辑的具体作品 origin。
+  const blankDraft = { source: null, form: { prompt: '空白想法' }, editing: false }
+  const workEditingView = logic.draftViewOf({ draft: blankDraft, dirty: true, origin: source })
+  assert.equal(workEditingView.active, true)
+  assert.equal(workEditingView.source, source, '有 origin 时 source 必须指向该作品')
+  assert.equal(logic.draftViewOf({ draft: blankDraft, dirty: false, origin: source }).active, false, '干净作品不得被空白草稿标为 active')
+
+  // 多作品表单草稿摘要与工具草稿合并：prompt / params 独立识别且与 mask 合并。
+  const baseForm = { prompt: '荷花池塘', negative: '', presetId: 'sdxl-lightning', width: 1024, height: 1024, steps: 4, cfg: 0, count: 1, seed: '7', references: [] }
+  const baseline = logic.formSnapshotOf(baseForm)
+  const editedForm = { ...baseForm, prompt: '雨夜荷花', width: 1280 }
+  assert.deepEqual(logic.formDraftChangesOf(editedForm, baseline), { prompt: true, params: true })
+  const formSummary = logic.formDraftSummaryOf({ source, form: editedForm, baseline, lastTouchedAt: 100 })
+  assert.deepEqual(formSummary.items, ['prompt', 'params'])
+  const merged = logic.mergeWorkDrafts(
+    { 'imagen-output/a/01.png': { mask: { data: 'data:image/png;base64,AA', coverage: 0.2 }, changed: { mask: true, prompt: false, params: false }, lastTouchedAt: 50 } },
+    { 'imagen-output/a/01.png': { source, form: editedForm, baseline, lastTouchedAt: 100 } },
+  )
+  assert.deepEqual(logic.workDraftSummary(merged['imagen-output/a/01.png']).items, ['mask', 'prompt', 'params'])
 })
 
 // mask-aware 强度钳制：带蒙版放宽到契约 inpaintMax，img2img 维持 max。
