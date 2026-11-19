@@ -1,0 +1,67 @@
+{
+  "id": "anima-turbo-v1.1",
+  "order": 60,
+  "label": "Anima Turbo v1.1",
+  "family": "Anima",
+  "short": "Anima Turbo",
+  "description": {
+    "zh": "8~12 步新一代二次元 DiT，支持自然语言与 Danbooru 标签",
+    "en": "8–12 step next-gen anime DiT supporting natural language and tags"
+  },
+  "repo": "circlestone-labs/Anima",
+  "params": "2B DiT + Qwen3-0.6B",
+  "license": "CircleStone Labs Non-Commercial",
+  "licenseKind": "restricted",
+  "gated": false,
+  "gpus": 1,
+  "tier": "fast",
+  "size": 1024,
+  "steps": 10,
+  "stepRange": null,
+  "cfg": 1,
+  "negativeHint": "",
+  "promptStyle": "danbooru",
+  "qualityPrefix": "masterpiece, best quality",
+  "supportsChinese": false,
+  "supportsImg2Img": false,
+  "supportsReference": false,
+  "supportsInpaint": false,
+  "supportsNegative": true,
+  "sizeOptions": [
+    768,
+    1024,
+    1152
+  ],
+  "runtime": "default",
+  "pipeline": {
+    "loader": "anima",
+    "base": "circlestone-labs/Anima",
+    "weight": "split_files/diffusion_models/anima-turbo-v1.1.safetensors",
+    "textEncoder": {
+      "repo": "circlestone-labs/Anima",
+      "weight": "split_files/text_encoders/qwen_3_06b_base.safetensors"
+    },
+    "vae": {
+      "repo": "Qwen/Qwen-Image",
+      "subfolder": "vae"
+    },
+    "tokenizers": {
+      "repo": "hugging-apps/anima-light-lavender-demo",
+      "repoType": "space"
+    },
+    "dtype": "auto",
+    "shift": 3,
+    "downloadGb": 5.25,
+    "allowPatterns": null,
+    "deviceMap": null,
+    "variant": null,
+    "lora": null,
+    "scheduler": null
+  },
+  "measured": {
+    "peakVramMb": 8469,
+    "loadSeconds": 102.7,
+    "steadySeconds": 21.56,
+    "downloadGb": 5.25
+  }
+}

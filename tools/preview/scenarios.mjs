@@ -173,7 +173,7 @@ const publicPreset = (id) => {
   return found
 }
 const preset = publicPreset('sdxl-lightning')
-const turbo = publicPreset('sdxl-turbo')
+const turbo = publicPreset('sana-sprint-1.6b')
 
 // 历史条目的展示文案要与图片内容对应，避免「图是动漫、文案写赛博朋克」的错位。
 const SHOWCASE_COPY = {
@@ -259,7 +259,7 @@ const fallbackHistory = [
     jobId: 'job-9000',
     dir: 'imagen-output/20261109-115900-job-9000',
     prompt: '东方水墨风格的远山与孤舟，大面积留白',
-    presetId: 'sdxl-turbo',
+    presetId: 'sana-sprint-1.6b',
     finishedAt: at(-9 * 3600),
     images: [image(900), image(910, 648, 1152)],
   },
@@ -275,7 +275,7 @@ const fallbackHistory = [
     jobId: 'job-8998',
     dir: 'imagen-output/20261105-161500-job-8998',
     prompt: '极简主义的建筑光影，米白墙面与斜射晨光',
-    presetId: 'sdxl-base',
+    presetId: 'z-image-turbo',
     finishedAt: at(-4 * 24 * 3600),
     images: [image(897, 1152, 648), image(896, 1024, 1024), image(895, 648, 1152)],
   },

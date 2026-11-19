@@ -1,0 +1,61 @@
+{
+  "id": "flux2-klein-9b",
+  "order": 50,
+  "label": "FLUX.2 Klein 9B",
+  "family": "FLUX",
+  "short": "Klein 9B",
+  "description": {
+    "zh": "9B 蒸馏编辑模型，4 步出图，非商用许可",
+    "en": "9B distilled editing model, 4-step generation, non-commercial license"
+  },
+  "repo": "black-forest-labs/FLUX.2-klein-9B",
+  "params": "9.08B",
+  "license": "FLUX Non-Commercial License",
+  "licenseKind": "restricted",
+  "gated": true,
+  "gpus": 1,
+  "tier": "fast",
+  "size": 1024,
+  "steps": 4,
+  "cfg": 1,
+  "negativeHint": "",
+  "promptStyle": "natural",
+  "qualityPrefix": "",
+  "sizeOptions": [
+    768,
+    1024
+  ],
+  "runtime": "default",
+  "supportsImg2Img": false,
+  "supportsInpaint": false,
+  "supportsReference": true,
+  "supportsNegative": false,
+  "providers": [
+    "colab"
+  ],
+  "pipeline": {
+    "loader": "flux2",
+    "base": "black-forest-labs/FLUX.2-klein-9B",
+    "dtype": "bf16",
+    "cpuOffload": true,
+    "lora": null,
+    "scheduler": null,
+    "variant": null,
+    "downloadGb": 34.7,
+    "allowPatterns": [
+      "model_index.json",
+      "scheduler/**",
+      "text_encoder/**",
+      "tokenizer/**",
+      "transformer/**",
+      "vae/**"
+    ],
+    "deviceMap": "balanced"
+  },
+  "measured": {
+    "peakVramMb": 18107,
+    "loadSeconds": 98.9,
+    "steadySeconds": 130.87,
+    "downloadGb": null
+  }
+}

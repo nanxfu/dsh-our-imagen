@@ -168,10 +168,12 @@ export const UPSCALE = {
 /**
  * 扩图（阶段十五 Phase B2，`tool: 'outpaint'`）的共享口径。
  *
- * 扩图不新增远端推理能力：客户端把原图缩放后放进更大的画布、把新增区域涂白生成蒙版，
- * 再按普通局部重绘提交（远端复用 `sdxl-inpaint` 的 9 通道管线，未涂抹区域由
- * `composite_inpaint_image` 按蒙版贴回原像素）。本常量只约束客户端画布构造，
- * 因此不进入 `daemonContract()`（远端只看到一次合法的 inpaint 请求）。
+ * 本常量只约束客户端的扩图画布几何（画布尺寸、原图内容框、上限与默认强度），
+ * 因此不进入 `daemonContract()`。真正的远端推理分两代：
+ *  - 现代引擎（阶段十六起，默认路径）：`OUTPAINT_ENGINE` 的纯绿画布 + `flux2-klein-4b`
+ *    Outpaint LoRA 条件生图；
+ *  - 历史回退：把新增区域涂白生成蒙版按普通局部重绘提交（9 通道 `sdxl-inpaint` 已在
+ *    阶段十七下线，旧历史记录仍可能带 `outpaint` 元数据，回填逻辑统一按非扩散产物处理）。
  */
 export const OUTPAINT = {
   // 快捷比例胶囊（顺序即界面顺序）：source = 跟随原图比例、四边扩 20%。
@@ -181,7 +183,7 @@ export const OUTPAINT = {
   // 「四边扩 20%」= 画布尺寸 ×1.2（每边 10%）。
   expandRatio: 1.2,
   // 画布长边 / 总像素上限：1536×1024 量级，与远端 width/height 契约上限对齐，
-  // 也保证 2×T4 上 9 通道 inpaint 不 OOM（真机验收见 CHANGELOG）。
+  // 也保证免费卡（2×T4 / L4）上现代扩图引擎不 OOM（真机验收见 CHANGELOG）。
   maxEdge: 1536,
   maxPixels: 1600000,
   minEdge: 256,

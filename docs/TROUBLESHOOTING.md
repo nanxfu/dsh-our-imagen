@@ -112,13 +112,13 @@ Kaggle 容器的 `/kaggle/working` 通常只有 20 GB，写入层满了会转只
 **实测基线（2026-11-13，2×Tesla T4）**：远端 `[cache]` 探针输出为
 `HF_HUB_CACHE=/root/.cache/huggingface/hub | mount=/ | free=966.6GiB | /kaggle/working mount=/kaggle/working free=19.5GiB`。
 也就是说当前镜像的权重缓存落在根卷 `/`（约 966 GiB 可用），不在 20 GB 的 `/kaggle/working` 上；
-同一会话内连续切换 sdxl-lightning → flux2-klein-4b → anima-light-lavender（合计约 27 GB 权重）未触发逐出
+同一会话内连续切换 sdxl-lightning → flux2-klein-4b → Anima 家族模型（合计约 27 GB 权重）未触发逐出
 （`evictedCount=0`）、磁盘未爆。逐出逻辑是**小容量镜像 / 未来镜像变更时的兜底**，由 `test/remote/test_cache.py`
 的缓存清理用例覆盖；判断依据始终是缓存目录自己所在盘的余量（`disk_usage_target()`），而不是写死 `/kaggle/working`。
 
 处理：
 - 优先用权重预挂载（`datasetSources` + `localModels`），跳过下载；
-- 或先跑一次小模型（SDXL Turbo / Lightning）确认链路，再换大模型；
+- 或先跑一次小模型（SANA-Sprint / Lightning）确认链路，再换大模型；
 - 远端日志里 `[cache]` / `[env] disk ...` 行会列出缓存目录与挂载点可用空间。
 
 ---
@@ -195,10 +195,13 @@ LKGR（Last Known Good Revision）是一组**在真实 Kaggle GPU 上跑通过�
 | 0.43.0 | 5.22.2 | 1.15.0 | 0.21.2 | 1.33.0 | sdxl-lightning（SDXL-LoRA）+ flux2-klein-4b（FLUX.2）+ anima-light-lavender（Anima）/ Kaggle 2×Tesla T4 | 2026-11-13 |
 | 0.43.0 | 5.23.0 | 1.15.0 | 0.21.3 | 1.33.0 | sdxl-lightning 文生图 + 垫图重绘（M3 图生图，同会话 from_pipe 复用底座）/ Kaggle 2×Tesla T4 | 2026-11-13 |
 
+> 表中 2026-11-13 行的 Anima 模型是当时的 `anima-light-lavender`（已在阶段十七下线，由
+> `anima-turbo-v1.1` 接替）；新增验证请使用现役 7 款模型，历史行只作回退依据，不覆盖。
+>
 > 同次实测的完整版本快照：python 3.13.16、torch 2.11.0+cu130、safetensors 0.8.0、pillow 13.0.0
 > （`report.json` 的 `versions` 字段）。三个模型在**同一会话**内连续切换均出图成功，
 > 加载耗时分别为 0s / 125.9s / 89.6s，出图 16.2s / 10.1s / 76.3s。
-> 复现命令：`npm run test:gpu -- --presets sdxl-lightning,flux2-klein-4b,anima-light-lavender`。
+> 复现命令：`npm run test:gpu -- --presets sdxl-lightning,flux2-klein-4b,anima-turbo-v1.1`。
 > M3 图生图复跑（2026-11-13，同镜像）：`node test/gpu-live.mjs --preset sdxl-lightning --img2img`，
 > 文生图 15.6s → 垫图重绘 7.0s（`loadSeconds=0`，from_pipe 复用底座）；重绘前后 `/health.gpu_memory`
 > `allocated_mb` 7000→7000、`max_allocated_mb` 10233→10233、`reserved_mb` +2（噪声），显存无额外增长。
@@ -207,7 +210,7 @@ LKGR（Last Known Good Revision）是一组**在真实 Kaggle GPU 上跑通过�
 
 1. 在真机上跑一次连续切模型验证（会消耗 GPU 配额）：
    ```powershell
-   npm run test:gpu -- --presets sdxl-lightning,flux2-klein-4b,anima-light-lavender
+   npm run test:gpu -- --presets sdxl-lightning,flux2-klein-4b,anima-turbo-v1.1
    ```
    脚本会把 `/health.versions`（python / torch / diffusers / transformers / accelerate / peft / huggingface_hub / safetensors / pillow 的纯版本号）、每个模型的加载/出图耗时与远端 `[cache]` 日志摘要写进 `report.json`。
 2. 把当次运行 `versions` 里的 diffusers / transformers / accelerate / peft / huggingface_hub 抄到本表新行，同时记录验证过的模型与设备（例如「SDXL Lightning + FLUX.2 klein + Anima / 2×Tesla T4」）和日期。
@@ -253,7 +256,7 @@ CLI 与直连两种模式都能读到同一份凭据。
 
 | 现象 | 排查 |
 | :--- | :--- |
-| 参考图槽位是灰的 / 点生成被拦下 | 当前预设不支持垫图。首期只有 SDXL 家族（`sdxl-lightning`、`hyper-sdxl-8step`、`sdxl-turbo`、`playground-v2.5`、`sdxl-base`、`realvis-v5`、`animagine-xl-3.1`）支持；切到其中一个或移除参考图即可。`flux2-klein-4b` / `anima-light-lavender` 暂不支持 |
+| 参考图槽位是灰的 / 点生成被拦下 | 左栏「参考图」槽（模型原生参考生图）只支持 `flux2-klein-4b`、`flux2-klein-9b`（仅 Colab）与 `qwen-image-2.1`（仅 Colab）；舞台「局部涂抹 / 整图重绘」的参考图只支持 `sdxl-lightning` 与 `z-image-turbo`（仅 Colab）。切到对应模型、或移除参考图/参考槽即可 |
 | `invalid_path`（参考图不存在或越界） | 参考图必须存在于工作区 `imagen-output/` 内（画廊作品天然满足）；手动改过工作区、删除了原图或从别处拷来路径时会失败，重新从画廊选图即可 |
 | `invalid_request`（参考图不合法） | 只接受 PNG / JPEG，原始体积 ≤ 8 MiB，长边 ≥ 128；过大的图请先在本地缩小。上传来源（base64）与作品路径二选一 |
 | 重绘结果几乎等于原图 / 变化太大 | 调「重绘强度」：越小越贴近原图，越大越放飞（0.2~0.9）。SDXL Lightning 这类 4 步蒸馏模型在低强度下可改动的步数很少，建议 0.5~0.7 |
@@ -284,7 +287,22 @@ CLI 与直连两种模式都能读到同一份凭据。
 | 比例胶囊选中「原图比例」时提示扩不出新增区域 | 目标比例与源图比例一致时没有可新增区域，换 `16:9` / `9:16` / `4:3` 或「四边扩 20%」 |
 | 提交按钮禁用 / 提示画布未生成 | 编辑器导出画布是异步的（等底图 load 后下一帧），稍等或重新切换一次比例；体积超限时也会提示「请改用更小的比例」 |
 | `invalid_request`（扩图画布或蒙版超限） | 画布图片 ≤ 8 MiB、蒙版 ≤ 2 MiB（契约 `LIMITS.reference/mask`）。1536×864 量级实测画布约 1.4 MB、蒙版约 8 KB，正常不会触发 |
-| 新增区域边界有硬接缝 | 默认已选 9 通道专用权重 `sdxl-inpaint`（输出模型胶囊），远端会按覆盖率羽化（2~8px）并与原图做像素级合成；若手动换成通用底座，边界融合会明显变弱。真机验收：保留区核心像素差 0.00/255，边界 8px 亮度跳变 1.18 / 2.82（全图相邻列均值 0.63） |
-| 扩图后原图内容变糊 / 被重画 | 保留区由 `composite_inpaint_image` 贴回原像素，核心区应几乎为 0 差；若变糊，检查提交的 `presetId` 是否为支持局部重绘的模型、强度是否被调到 1.0 以外的极端值，并确认画布内容框内的图像是等比缩放的（不是拉伸变形） |
-| 想确认扩图没有额外占显存 | 远端 `/health.gpu_memory` 对比；真机脚本 `node test/gpu-live.mjs --preset sdxl-inpaint --source-preset sdxl-lightning --outpaint` 会输出画布 / 内容区 / 覆盖率 / 内容区像素差与前后显存；实测 1536×864 画布推理 35.4s、峰值 < 14.56 GB |
+| 新增区域边界有硬接缝 | 默认走 `flux2-klein-4b` + Outpaint LoRA 的纯绿画布条件生图，新增区域由模型重绘而不是羽化拼接；真机验收（2026-11-18，Kaggle `2×T4`，1536×864）接缝梯度比 1.14~1.15（≈1，无硬缝）、绿边残留 0.00%、内容区色偏 max 3.47/255。若预设列表缺少现代引擎而回退通用局部重绘，边界融合会明显变弱（历史路径的保留区核心像素差 0.00/255、边界 8px 亮度跳变 1.18 / 2.82） |
+| 扩图后原图内容变糊 / 被重画 | 现代引擎按「绿边画布 + 参考条件」重绘整张画面，内容区会被模型重新生成（实测内容区平均差约 12.87/255），不承诺逐像素保真；需要严格保真请改用局部涂抹。若明显变形，检查内容框内的图像是否等比缩放（不是拉伸） |
+| 想确认扩图没有额外占显存 | 远端 `/health.gpu_memory` 对比；真机脚本 `node test/gpu-live.mjs --outpaint-lora` 输出画布 / 内容区 / 绿边残留 / 接缝 / 前后显存；实测加载 33.8s、推理 22.5s、峰值 `max_allocated` 9348→10701 MiB |
 | Agent 侧有 `imagen_upscale` 但没有扩图工具 | 设计如此：扩图画布需要像素级合成，Host 保持零图像依赖；扩图请在舞台动作坞里提交（原因见 SPEC §3.7） |
+
+---
+
+## 12. 模型原生参考图与透明背景（阶段十五 Phase C / 阶段十七）
+
+左栏「参考图」槽走的是**模型原生参考条件**（`references`，与舞台工具的单图垫图 `reference` 是两条互斥路径）：
+1~2 张画廊作品作为基础管线的图像条件，不吃重绘强度，出图宽高取请求值。它是弱参考：构图与主体仍由提示词与种子主导。
+
+| 现象 | 排查 |
+| :--- | :--- |
+| 参考图槽是灰的 / 生成被拦下 | 只有 `flux2-klein-4b`、`flux2-klein-9b`（仅 Colab）与 `qwen-image-2.1`（仅 Colab）声明 `supportsReference`；当前算力来源不满足时模型卡置灰并标「仅 Colab」，Host 入队前还有一层兜底拒绝（`invalid_request`，不占队列） |
+| 参考图不生效 / 出图几乎只跟随提示词 | 三个模型都是弱参考，属预期行为；把参考图主体写进提示词、或改用舞台「整图重绘 / 局部涂抹」（`sdxl-lightning`、`z-image-turbo`）能得到更强的像素级约束 |
+| 带透明通道的 PNG 作参考图 | 远端解码参考图时统一转 RGB（alpha 不参与条件），透明区域的 RGB 残值仍会被编码；透明背景的参考图建议先按白底合成再上传 |
+| 想生成透明背景（抠图素材 / 贴纸） | 当前仅 `qwen-image-2.1`（仅 Colab）可稳定产出：提示词明确写 `transparent background, sticker style` 等要求时返回 **RGBA PNG**，alpha 端到端保留（远端原样编码、Host 原样落盘、浏览器按 alpha 合成）。真机实测（2026-11-20，L4，1024²）：alpha=0 占 7.9%、alpha≤1 占 65.3%、完全不透明占 32.9%。注意**透明区的 RGB 仍有残留**（实测偏紫），消费端必须按 alpha 合成，直接丢弃 alpha 当 RGB 用会得到紫底图 |
+| 透明背景图在工作台里看起来"有底色" | 舞台按 alpha 合成、透出的是工作台背景色，属正常渲染；需要白底预览或导出时，请用本地图片工具合成到白底 |

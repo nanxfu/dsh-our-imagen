@@ -26,8 +26,11 @@ from remote.inference.loaders.base import LoadContext, ModelLoader
 from remote.inference.loaders.diffusers import (
     DiffusersLoader,
     Flux2Loader,
+    QwenImage21Loader,
+    SanaSprintLoader,
     SdxlLoader,
     SdxlLoraLoader,
+    ZImageLoader,
 )
 
 
@@ -122,11 +125,19 @@ _DEFAULT_REGISTRY: LoaderRegistry | None = None
 def default_registry() -> LoaderRegistry:
     """生产注册表（进程内单例，daemon 与 ``pipeline_loader`` 共用同一份）。
 
-    顺序与改造前 ``SUPPORTED_LOADERS`` 一致：``sdxl / sdxl-lora / flux2 / anima``。
+    既有顺序保持不变：``sdxl / sdxl-lora / flux2 / anima``，新增家族追加在末尾。
     """
     global _DEFAULT_REGISTRY
     if _DEFAULT_REGISTRY is None:
         _DEFAULT_REGISTRY = LoaderRegistry(
-            (SdxlLoader(), SdxlLoraLoader(), Flux2Loader(), AnimaLoader())
+            (
+                SdxlLoader(),
+                SdxlLoraLoader(),
+                Flux2Loader(),
+                AnimaLoader(),
+                ZImageLoader(),
+                SanaSprintLoader(),
+                QwenImage21Loader(),
+            )
         )
     return _DEFAULT_REGISTRY

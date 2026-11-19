@@ -267,7 +267,7 @@ async function seedHistoryEntry(workspace, dirName, jobId, prompt) {
     JSON.stringify({
       version: 1,
       jobId,
-      presetId: 'sdxl-turbo',
+      presetId: 'sdxl-lightning',
       modelId: 'mock-model',
       createdAt: '2099-01-01T00:00:00.000Z',
       finishedAt: '2099-01-01T00:00:01.000Z',
@@ -369,7 +369,7 @@ async function main() {
     const generate = fake.tools.find((tool) => tool.name === 'imagen_generate')
     // 模型知识来自 models/*.json 的单一来源：描述里能看到各模型定位与写法，而不是只有 id 枚举。
     assert.match(generate.description, /可用模型/, '工具描述应带模型库')
-    for (const label of ['SDXL Lightning', 'RealVisXL V5.0', 'FLUX.2 Klein 4B', 'Animagine XL 3.1']) {
+    for (const label of ['SDXL Lightning', 'Z-Image Turbo', 'FLUX.2 Klein 4B', 'Anima Turbo v1.1']) {
       assert.ok(generate.description.includes(label), `工具描述应包含模型画像：${label}`)
     }
     assert.ok(generate.description.includes('提示词写法'), '模型库应包含提示词写法')
@@ -416,7 +416,7 @@ async function main() {
     const { status, body } = await json(host.origin, '/imagen-api/session/start', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ presetId: 'sdxl-turbo' }),
+      body: JSON.stringify({ presetId: 'sdxl-lightning' }),
     })
     assert.equal(status, 200)
     assert.equal(body.ok, true)
@@ -443,7 +443,7 @@ async function main() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         prompt: '测试用的荷花池塘',
-        presetId: 'sdxl-turbo',
+        presetId: 'sdxl-lightning',
         negativePrompt: 'blurry',
         width: 512,
         height: 512,
@@ -476,7 +476,7 @@ async function main() {
       [7, 8],
       '同批多张的 seed 应递增',
     )
-    assert.equal(jobBodies[0].pipeline.loader, 'sdxl')
+    assert.equal(jobBodies[0].pipeline.loader, 'sdxl-lora')
 
     for (const image of body.output.images) {
       const absolute = join(workspace, ...image.path.split('/'))
@@ -1143,13 +1143,13 @@ async function main() {
       const natural = await json(host.origin, '/imagen-api/enhance', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ prompt: '一只赛博猫', presetId: 'realvis-v5', locale: 'zh' }),
+        body: JSON.stringify({ prompt: '一只赛博猫', presetId: 'z-image-turbo', locale: 'zh' }),
       })
       assert.equal(natural.body.source, 'model')
       const naturalCall = llm.calls.at(-1)
-      assert.ok(naturalCall.system.includes('RealVisXL V5.0'), 'system prompt 应带目标模型画像')
+      assert.ok(naturalCall.system.includes('Z-Image Turbo'), 'system prompt 应带目标模型画像')
       assert.ok(naturalCall.system.includes('自然语言段落'), 'natural 模型应要求自然语言段落')
-      assert.ok(naturalCall.system.includes('多步质量档'), '多步模型应要求更细的质感描写')
+      assert.ok(naturalCall.system.includes('快速档'), '快速模型应带速度档位说明')
 
       // 无负向词能力的模型：润色建议必须引导用正面视觉描述表达排除意图。
       const flux = await json(host.origin, '/imagen-api/enhance', {
@@ -1395,7 +1395,7 @@ async function main() {
     const result = await json(host.origin, '/imagen-api/intent', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text, presetId: 'animagine-xl-3.1', locale: 'zh' }),
+      body: JSON.stringify({ text, presetId: 'anima-turbo-v1.1', locale: 'zh' }),
     })
     assert.equal(result.status, 200)
     assert.equal(result.body.ok, true)
@@ -1443,14 +1443,14 @@ async function main() {
       negative: 'blurry, low quality, text, watermark',
       style: 'film',
       clarify: null,
-      modelHint: { presetId: 'realvis-v5', reason: '写实街景与皮肤质感更适合 RealVisXL' },
+      modelHint: { presetId: 'flux2-klein-4b', reason: '写实街景与光影质感更适合 FLUX.2 Klein 4B' },
     }))
     fake.setLlm(llm)
     try {
       const result = await json(host.origin, '/imagen-api/intent', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: '画一张横版的雨夜街景，要写实一点', locale: 'zh', presetId: 'animagine-xl-3.1' }),
+        body: JSON.stringify({ text: '画一张横版的雨夜街景，要写实一点', locale: 'zh', presetId: 'anima-turbo-v1.1', cfg: 4 }),
       })
       assert.equal(result.status, 200)
       assert.equal(result.body.source, 'model')
@@ -1462,7 +1462,7 @@ async function main() {
       assert.equal(result.body.clarify, null)
       assert.deepEqual(
         result.body.modelHint,
-        { presetId: 'realvis-v5', reason: '写实街景与皮肤质感更适合 RealVisXL' },
+        { presetId: 'flux2-klein-4b', reason: '写实街景与光影质感更适合 FLUX.2 Klein 4B' },
         '合法 modelHint 原样透传',
       )
       assert.equal('styleId' in result.body, false, '模型输出的旧 style 字段应被忽略')
@@ -1473,13 +1473,13 @@ async function main() {
       assert.ok(call.system.includes('【身份与使命】'), 'system prompt 应有身份与使命段')
       assert.ok(call.system.includes('【模型手册】'), 'system prompt 应有模型手册段')
       assert.ok(call.system.includes('【组织与沟通策略】'), 'system prompt 应有组织与沟通策略段')
-      assert.ok(call.system.includes('Animagine XL 3.1'), '模型手册应带当前模型画像')
-      assert.ok(call.system.includes('RealVisXL V5.0'), '模型手册应带全库模型')
-      // 模型目录按当前算力来源与主表单可选项过滤：inpaintOnly 专用重绘权重不进目录。
+      assert.ok(call.system.includes('Anima Turbo v1.1'), '模型手册应带当前模型画像')
+      assert.ok(call.system.includes('FLUX.2 Klein 4B'), '模型手册应带全库模型')
+      // 模型目录按当前算力来源与主表单可选项过滤：仅 Colab 模型不在 Kaggle 目录里出现。
       assert.ok(call.system.includes('当前算力来源 kaggle'), '模型手册应说明目录已按算力来源过滤')
-      assert.ok(!call.system.includes('sdxl-inpaint'), '模型目录不得包含 inpaintOnly 专用权重（文生图选不了）')
+      assert.ok(!call.system.includes('sdxl-inpaint'), '模型目录不得包含已下线或 inpaintOnly 预设')
       assert.ok(call.system.includes('Danbooru'), 'danbooru 预设应要求标签流')
-      assert.ok(call.system.includes('masterpiece, best quality, highres'), '质量词前缀应写进 system prompt')
+      assert.ok(call.system.includes('masterpiece, best quality'), '质量词前缀应写进 system prompt')
       assert.ok(call.system.includes('summary'), 'system prompt 应约定 summary 字段')
       assert.ok(call.system.includes('"negative"'), 'system prompt 应约定 negative 字段')
       assert.ok(call.system.includes('modelHint') && call.system.includes('clarify'), 'system prompt 应约定澄清与模型建议')
@@ -1489,7 +1489,7 @@ async function main() {
       const natural = await json(host.origin, '/imagen-api/intent', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: '画一张横版的雨夜街景，要写实一点', locale: 'zh', presetId: 'realvis-v5' }),
+        body: JSON.stringify({ text: '画一张横版的雨夜街景，要写实一点', locale: 'zh', presetId: 'flux2-klein-4b' }),
       })
       assert.equal(natural.body.source, 'model')
       assert.ok(llm.calls[1].system.includes('自然语言段落'), 'natural 预设应要求自然语言段落')
@@ -1537,9 +1537,9 @@ async function main() {
       assert.equal(raised.body.negative, 'blurry, low quality', 'CFG 抬高后 negative 应透传')
       assert.ok(llm.calls.at(-1).system.includes('CFG=5'))
 
-      // 推荐 CFG>0 且带 negativeHint 的模型：默认即可用负向词。
-      const animagine = await request({ text: '二次元少女', presetId: 'animagine-xl-3.1' })
-      assert.equal(animagine.body.negative, 'blurry, low quality', '推荐配置可用负向词时应透传')
+      // 支持负向词但无 negativeHint 的模型：推荐 CFG<=1 时不生效，抬高 CFG 后透传。
+      const anima = await request({ text: '二次元少女', presetId: 'anima-turbo-v1.1', cfg: 4 })
+      assert.equal(anima.body.negative, 'blurry, low quality', '支持负向词的模型在 CFG>1 时应透传')
 
       // 不支持负向词的模型：即使 CFG 很高也必须空串。
       const flux = await request({ text: '雨夜街道', presetId: 'flux2-klein-4b', cfg: 9 })
@@ -2036,7 +2036,7 @@ async function main() {
       JSON.stringify({
         version: 1,
         jobId: 'j_tree_root',
-        presetId: 'sdxl-turbo',
+        presetId: 'sdxl-lightning',
         createdAt: '2020-01-02T00:00:00.000Z',
         finishedAt: '2020-01-02T00:00:01.000Z',
         params: { prompt: '版本树根', negativePrompt: '', width: 512, height: 512, steps: 3, cfg: 1.5, seed: 1, count: 1 },
@@ -2328,7 +2328,7 @@ async function main() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         tool: 'outpaint',
-        presetId: 'sdxl-inpaint',
+        presetId: 'sdxl-lightning',
         prompt: '向四周扩展成 16:9 的风景',
         width: 1280,
         height: 720,
@@ -2343,7 +2343,7 @@ async function main() {
     const job = submitted.body
     assert.equal(job.status, 'done', JSON.stringify(job))
     assert.equal(job.tool, 'outpaint')
-    assert.equal(job.presetId, 'sdxl-inpaint', '扩图优先使用 9 通道 inpaint 权重')
+    assert.equal(job.presetId, 'sdxl-lightning', '老式蒙版扩图使用支持局部重绘的预设')
     assert.deepEqual(job.params.reference, { sourcePath: rootPath, strength: 1.0, mask: true })
 
     // 远端看不到 outpaint：它就是一次普通局部重绘（带 mask_b64）。
@@ -2382,7 +2382,7 @@ async function main() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         tool: 'outpaint',
-        presetId: 'sdxl-inpaint',
+        presetId: 'sdxl-lightning',
         prompt: '向四周扩展并保持内容位置',
         width: 1280,
         height: 720,
@@ -2466,7 +2466,7 @@ async function main() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           tool: 'outpaint',
-          presetId: 'sdxl-inpaint',
+          presetId: 'sdxl-lightning',
           prompt: '非法内容框',
           reference,
         }),

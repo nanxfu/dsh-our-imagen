@@ -12,9 +12,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=flat-square)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/nanxfu/dsh-our-imagen?style=flat-square)](https://github.com/nanxfu/dsh-our-imagen)
  <a href="https://linux.do/"><img src="https://img.shields.io/badge/LINUX%20DO-社区友链-555?style=flat-square" alt="LINUX DO" /></a>
-> **当前处于 Preview 阶段**：目前默认内置 Kaggle 免费双卡 GPU 驱动，Colab、本地 GPU 及自建 Worker 支持正在陆续接入。
+> **当前处于 Preview 阶段**：默认内置 Kaggle 免费双卡 GPU 驱动，Colab 驱动已接入（大显存模型仅 Colab 可用），本地 GPU 与自建 Worker 支持在规划中。
 
-[快速上手](#三步上手) · [算力后端](#算力后端支持) · [核心功能](#核心功能) · [常见问答](#常见问答) · [开发与测试](#开发与测试) · [English](README.en.md)
+[快速上手](#三步上手) · [算力后端](#算力后端支持) · [核心功能](#核心功能) · [模型示例](#模型示例) · [常见问答](#常见问答) · [开发与测试](#开发与测试) · [English](README.en.md)
 
 </div>
 
@@ -33,9 +33,11 @@
 | 后端驱动 | 状态 | 算力规格 | 成本 / 门槛 | 说明 |
 | :--- | :---: | :--- | :--- | :--- |
 | **Kaggle GPU Driver** | **已内置 (默认)** | 2×Nvidia Tesla T4 (30G 显存) | **免费**（每周 30 小时额度） | 开箱即用，自动会话管理与加密回传 |
-| **Google Colab Driver** | **接入中** | Nvidia T4 / A100 | 免费 / 订阅 | Notebook 挂载与隧道直连 |
+| **Google Colab Driver** | **已接入** | Nvidia T4（免费）/ L4、A100（Colab Pro） | 免费 / 订阅 | Notebook 挂载与隧道直连；`Z-Image Turbo`、`Qwen-Image 2.1`、`FLUX.2 Klein 9B` 显存需求更高，仅此来源可用 |
 | **自建远端 Worker** | **规划中** | 自建服务器 / AutoDL / RunPod | 按需计费 / 私有部署 | 适合有私有 GPU 或需要长驻服务的用户 |
 | **本地直连 (Local/ComfyUI)** | **规划中** | 本机独显 (RTX 3060/4090 等) | 本地硬件 | 适合本地大显存显卡，离线低延迟 |
+
+**切换到 Colab**：运行设置 → 算力来源选 `Colab Pro（需授权）` →「Google / Colab 授权」点「在浏览器中授权」，凭据写入 `%USERPROFILE%\.imagen\colab-credentials.json`；可选 GPU 档位 T4 / L4 / A100 与高内存机型。`Z-Image Turbo`、`Qwen-Image 2.1`、`FLUX.2 Klein 9B` 需要切换到 Colab 才能在模型卡中选择。
 
 ---
 
@@ -46,11 +48,12 @@
 <td width="48%">
 
 ### 1. 独立工作台
-* **内置 10 款开源模型**：涵盖极速出图（`SDXL Lightning`、`Hyper-SDXL`、`SDXL Turbo`）、写实与通用（`SDXL Base`、`RealVisXL`、`Playground v2.5`）、动漫专项（`Animagine XL 3.1`、`Anima Light Lavender`）、`FLUX.2 Klein 4B`，以及局部重绘专用权重 `SDXL Inpaint`。
+* **内置 7 款现代开源模型**：极速与通用（`SDXL Lightning`、`SANA-Sprint 1.6B`、`Z-Image Turbo`）、参考与扩图（`FLUX.2 Klein 4B`、`FLUX.2 Klein 9B`、`Qwen-Image 2.1`）、二次元专项（`Anima Turbo v1.1`）；名称、架构与定位以 [`models/*.json`](models/) 为准。
+* **双算力来源**：`SDXL Lightning`、`SANA-Sprint 1.6B`、`FLUX.2 Klein 4B`、`Anima Turbo v1.1` 可在 Kaggle 免费 T4 与 Colab 运行；`Z-Image Turbo`、`Qwen-Image 2.1`、`FLUX.2 Klein 9B` 显存需求更高，仅 Colab 可用（模型卡标「仅 Colab」并置灰）。
 * **干净的参数面板**：提示词、画幅比例、分辨率、步数、引导强度和随机种子集中在一个面板里，生成张数（1~4）常驻页脚。
-* **只显示生效参数**：例如 `4 步极速模型` 和 `FLUX.2 Klein 4B` 会自动隐藏无效的排除项；专用局部重绘权重只在图片工具里出现。
+* **只显示生效参数**：模型不消费负向词或默认引导强度为 0 时，排除项自动隐藏且不提交；参考图、局部重绘与扩图入口只在当前模型真正支持时出现。
 * **快捷词缀**：光影、材质、构图、氛围四类常用英文短语一键追加（界面显示中文标签），支持收起/展开。
-* **舞台图片工具**：选中作品后点下方的「局部涂抹 / 整图重绘」就地编辑，画布与提交栏内置修改描述、重绘强度与模型切换；画廊与大图的「以此图重绘」一步直达局部涂抹。高清放大 / 扩图已预留扩展位（后续接入）。
+* **舞台图片工具**：选中作品后点下方的「局部涂抹 / 整图重绘」就地编辑，画布与提交栏内置修改描述、重绘强度与模型切换；画廊与大图的「以此图重绘」一步直达局部涂抹。高清放大（Real-ESRGAN ×2）与扩图（`FLUX.2 Klein 4B` + Outpaint LoRA）已接入，产物作为子版本归档。
 * **作品条与版本树**：底部作品条按版本树折叠，`⎇ N` 角标展开版本派生面板，涂抹 / 整图重绘产出的图自动成为 v2/v3 子版本；每张作品的未提交编辑草稿有圆点标记，切换作品不丢笔迹。支持一键带回全部参数或生成变体；画廊按日期归档，支持搜索、收藏、批量选择与单张删除。
 
 </td>
@@ -70,7 +73,7 @@
 ### 2. 对话生图与创作助手
 * **对话直接调用**：宿主自动挂载 `imagen_generate`、`imagen_batch`、`imagen_recipes`、`imagen_session`、`imagen_history` 等工具，在聊天窗口里直接说需求就能出图；一句话可以规划一组配图或分镜，配方库只提供可见的提示词模板，不做暗箱拼接。
 * **先确认再执行**：内置助手会把自然语言翻译成英文提示词、推断比例并检查当前模型的参数限制，先给出确认卡片，点确定后再跑。
-* **模型适配提醒**：助手了解 10 款模型的提示词习惯与专长，如果当前模型不太适合你的描述，会给出提示。
+* **模型适配提醒**：助手了解 7 款模型的提示词习惯与专长，如果当前模型不太适合你的描述，会给出提示。
 * **工作台联动**：确认卡可以一键带入参数面板继续精调；聊天里生成的图片也可以直接在工作台里打开做二次编辑。
 
 </td>
@@ -141,7 +144,9 @@
 
 ## 模型示例
 
-以下 9 张样张均由本插件调用 Kaggle 2×T4 实际生成，仅转存为 WebP，未做后期修图；耗时取自当次生成记录。
+以下 7 张样张均由本插件真机生成，仅转存为 WebP，未做后期修图；耗时取自当次生成记录，是**首图耗时**（含冷启 / 切模型预热，不等同稳态）；模型卡上的速度读数按「丢弃首张 + 后 3 张中位数」的稳态口径回填。
+
+其中 5 张是**同一提示词 · 各模型风格对照**：红冠鹤与晨间荷塘（seed 42，`A red-crowned crane standing in a misty lotus pond at dawn, Chinese ink painting, soft light, fine detail`）在 Colab L4 / T4 上跨模型生成——`SANA-Sprint 1.6B` 与 `FLUX.2 Klein 9B` 偏水墨，`Z-Image Turbo` 与 `Qwen-Image 2.1` 偏写实摄影，`Anima Turbo v1.1` 为二次元插画。另外 2 张是 `SDXL Lightning` 与 `FLUX.2 Klein 4B` 的既有示例（Kaggle 2×T4）。
 
 <table>
 <tr>
@@ -153,14 +158,14 @@
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/hyper-sdxl-8step-baroque-still-life.webp" alt="Hyper-SDXL 8-Step 生成的巴洛克静物" width="100%" />
-  <p><sub>Hyper-SDXL 8-Step · 巴洛克静物 · 约 8.0 秒</sub></p>
+  <img src="docs/assets/showcase/sana-sprint-1.6b-crane-pond.webp" alt="SANA-Sprint 1.6B 生成的红冠鹤与晨间荷塘" width="100%" />
+  <p><sub>SANA-Sprint 1.6B · 红冠鹤与晨间荷塘 · Colab L4 · 4.07 秒</sub></p>
 </div>
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/sdxl-turbo-crimson-moon.webp" alt="SDXL Turbo 生成的赤月下的武士" width="100%" />
-  <p><sub>SDXL Turbo · 赤月下的武士 · 约 3.9 秒</sub></p>
+  <img src="docs/assets/showcase/z-image-turbo-crane-pond.webp" alt="Z-Image Turbo 生成的红冠鹤与晨间荷塘" width="100%" />
+  <p><sub>Z-Image Turbo · 红冠鹤与晨间荷塘 · Colab L4 · 57.73 秒</sub></p>
 </div>
 </td>
 </tr>
@@ -168,41 +173,20 @@
 <tr>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/playground-v2.5-floating-islands.webp" alt="Playground v2.5 生成的云端瀑布梦境" width="100%" />
-  <p><sub>Playground v2.5 · 云端瀑布梦境 · 约 19.6 秒</sub></p>
+  <img src="docs/assets/showcase/qwen-image-2.1-crane-pond.webp" alt="Qwen-Image 2.1 生成的红冠鹤与晨间荷塘" width="100%" />
+  <p><sub>Qwen-Image 2.1 · 红冠鹤与晨间荷塘 · Colab L4 · 91.21 秒</sub></p>
 </div>
 </td>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/sdxl-base-alpine-lake.webp" alt="SDXL Base 1.0 生成的高山湖泊的金色黄昏" width="100%" />
-  <p><sub>SDXL Base 1.0 · 高山湖泊的金色黄昏 · 约 17.1 秒</sub></p>
-</div>
-</td>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/realvis-v5-fisherman-portrait.webp" alt="RealVisXL V5.0 生成的海边老渔民肖像" width="100%" />
-  <p><sub>RealVisXL V5.0 · 海边老渔民肖像 · 约 21.1 秒</sub></p>
-</div>
-</td>
-</tr>
-
-<tr>
 <td width="33.3%">
 <div align="center">
   <img src="docs/assets/showcase/flux2-klein-4b-kyoto-poster.webp" alt="FLUX.2 Klein 4B 生成的极简京都旅行海报" width="100%" />
-  <p><sub>FLUX.2 Klein 4B · 极简京都旅行海报 · 约 6.8 秒</sub></p>
+  <p><sub>FLUX.2 Klein 4B · 极简京都旅行海报 · Kaggle 2×T4 · 约 6.8 秒</sub></p>
 </div>
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/animagine-xl-3.1-sakura-girl.webp" alt="Animagine XL 3.1 生成的樱花巷口的少女" width="100%" />
-  <p><sub>Animagine XL 3.1 · 樱花巷口的少女 · 约 21.1 秒</sub></p>
-</div>
-</td>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/anima-light-lavender-lavender-field.webp" alt="Anima Light Lavender 生成的薰衣草花田的黄昏" width="100%" />
-  <p><sub>Anima Light Lavender · 薰衣草花田的黄昏 · 约 63.4 秒</sub></p>
+  <img src="docs/assets/showcase/flux2-klein-9b-crane-pond.webp" alt="FLUX.2 Klein 9B 生成的红冠鹤与晨间荷塘" width="100%" />
+  <p><sub>FLUX.2 Klein 9B · 红冠鹤与晨间荷塘 · Colab L4 · 130.87 秒</sub></p>
 </div>
 </td>
 </tr>
@@ -210,44 +194,14 @@
 
 <table>
 <tr>
+<td width="33.3%"></td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/realvis-v5-blackhole-station.webp" alt="RealVisXL V5.0 生成的黑洞边缘观测站" width="100%" />
-  <p><sub>RealVisXL V5.0 · 黑洞边缘观测站 · 约 37.1 秒</sub></p>
+  <img src="docs/assets/showcase/anima-turbo-v1.1-crane-pond.webp" alt="Anima Turbo v1.1 生成的红冠鹤与晨间荷塘" width="100%" />
+  <p><sub>Anima Turbo v1.1 · 红冠鹤与晨间荷塘 · Colab T4 · 21.56 秒</sub></p>
 </div>
 </td>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/sdxl-base-dyson-sphere.webp" alt="SDXL Base 1.0 生成的垂死恒星旁的戴森球" width="100%" />
-  <p><sub>SDXL Base 1.0 · 垂死恒星旁的戴森球 · 约 27.6 秒</sub></p>
-</div>
-</td>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/flux2-klein-4b-storm-eye.webp" alt="FLUX.2 Klein 4B 生成的风暴云中的巨眼" width="100%" />
-  <p><sub>FLUX.2 Klein 4B · 风暴云中的巨眼 · 约 9.0 秒</sub></p>
-</div>
-</td>
-</tr>
-<tr>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/sdxl-base-alien-ocean-monster.webp" alt="SDXL Base 1.0 生成的冰层下的外星深海巨兽" width="100%" />
-  <p><sub>SDXL Base 1.0 · 冰层下的外星深海巨兽 · 约 26.7 秒</sub></p>
-</div>
-</td>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/realvis-v5-mountain-sunrise.webp" alt="RealVisXL V5.0 生成的日出层峦山脉" width="100%" />
-  <p><sub>RealVisXL V5.0 · 日出层峦山脉 · 约 33.3 秒</sub></p>
-</div>
-</td>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/sdxl-lightning-shanhaijing-dijiang.webp" alt="SDXL Lightning 生成的山海经帝江·洒金岩彩" width="100%" />
-  <p><sub>SDXL Lightning · 山海经帝江·洒金岩彩 · 约 6.2 秒</sub></p>
-</div>
-</td>
+<td width="33.3%"></td>
 </tr>
 </table>
 
@@ -341,13 +295,13 @@ kaggle auth login
 <details>
 <summary><b>Q2: 我的电脑需要独立显卡吗？</b></summary>
 
-不需要。模型加载和推理都在 Kaggle 云端执行，本地只负责显示界面和保存图片。
+不需要。模型加载和推理都在云端（Kaggle 或 Colab）执行，本地只负责显示界面和保存图片。
 </details>
 
 <details>
 <summary><b>Q3: 首次开机为什么需要等几分钟？</b></summary>
 
-云端冷启动包含三步：分配 2×T4 实例、检查运行环境、下载并加载模型权重，通常需要 3~10 分钟。就绪后连续生成无需再等，插件默认 30 分钟空闲自动关机，也可以随时手动关机。
+云端冷启动包含三步：分配云端实例（Kaggle 2×T4，或 Colab 的 L4 / A100）、检查运行环境、下载并加载模型权重，通常需要 3~10 分钟。就绪后连续生成无需再等，插件默认 30 分钟空闲自动关机，也可以随时手动关机。
 </details>
 
 <details>
@@ -359,17 +313,19 @@ kaggle auth login
 <details>
 <summary><b>Q5: 目前内置了哪些模型？</b></summary>
 
-配置定义在 [`models/*.json`](models/)：
-- `SDXL Lightning`（默认，4 步极速）
-- `Hyper-SDXL 8-Step`（兼顾细节与速度）
-- `SDXL Turbo`（极速草图）
-- `Playground v2.5`（色彩与美感表现较好）
-- `SDXL Base 1.0`（经典标准底模）
-- `SDXL Inpaint`（局部重绘专用 9 通道权重，只能带蒙版使用）
-- `RealVisXL V5.0`（写实人像与摄影）
-- `FLUX.2 Klein 4B`（轻量新一代扩散架构）
-- `Animagine XL 3.1`（二次元与动漫）
-- `Anima Light Lavender`（二次元插画，Cosmos-Predict2 2B 底座）
+配置定义在 [`models/*.json`](models/)，当前 7 款：
+
+| 模型 | 定位 | 算力来源 | 许可 |
+| :--- | :--- | :--- | :--- |
+| `SDXL Lightning` | 默认；SDXL + 4 步 LoRA，极速出图，支持图生图 / 局部重绘 | Kaggle / Colab | OpenRAIL++ |
+| `SANA-Sprint 1.6B` | 1.6B 线性 DiT，2 步超快 1024px 生成，轻量灵感探索 | Kaggle / Colab | Apache-2.0 |
+| `Z-Image Turbo` | 6B S3-DiT，写实摄影、中英双语文字与局部重绘 | 仅 Colab | Apache-2.0 |
+| `Qwen-Image 2.1` | 7B DiT + Qwen3-VL，强排版、多图参考编辑；参考图支持 RGBA 输入 | 仅 Colab | Qwen Research License（非商用） |
+| `FLUX.2 Klein 4B` | 轻量新一代架构，多图参考 + 扩图引擎（Outpaint LoRA） | Kaggle / Colab | Apache-2.0 |
+| `FLUX.2 Klein 9B` | 9B 蒸馏编辑模型，4 步出图、参考编辑 | 仅 Colab（HF gated） | FLUX Non-Commercial |
+| `Anima Turbo v1.1` | 2B 二次元 DiT，支持自然语言与 Danbooru 标签 | Kaggle / Colab | CircleStone Labs 非商用 |
+
+已下线的旧模型：`SDXL Turbo`、`Hyper-SDXL 8-Step`、`SDXL Base 1.0`、`Playground v2.5`、`RealVisXL V5.0`、`Animagine XL 3.1`、`SDXL Inpaint`、`Anima Light Lavender`。
 </details>
 
 ---
@@ -403,4 +359,4 @@ kaggle auth login
 - 本项目基于 [MIT License](LICENSE) 开源。
 - 感谢 [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness) 团队提供插件扩展体系与设计规范。
 - 感谢 Kaggle 为开发者提供免费 GPU 算力。
-- 感谢 Hugging Face diffusers 与各大开源模型团队（Stability AI、ByteDance、Playground AI、CagliostroLab 等）。
+- 感谢 Hugging Face diffusers 与各大开源模型团队（Stability AI、ByteDance、Efficient-Large-Model、通义万相、Black Forest Labs、CircleStone Labs 等）。

@@ -10,12 +10,12 @@ export const models = Array.isArray(SITE_DATA.models) ? SITE_DATA.models : [];
 
 export const showcaseItems = Array.isArray(SITE_DATA.showcase?.items) ? SITE_DATA.showcase.items : [];
 
-/** Hero 轮播优先使用的四张成片；缺失时退回成片墙前四张。取四种不同气质：海报、街景、人像、二次元。 */
+/** Hero 轮播优先使用的四张成片；缺失时退回成片墙前四张。取四种不同气质：海报、街景、写实对照、二次元。 */
 const HERO_PICKS = [
   'flux2-klein-4b-kyoto-poster.webp',
   'sdxl-lightning-cyberpunk-street.webp',
-  'realvis-v5-window-landscape.webp',
-  'animagine-xl-3.1-sakura-girl.webp',
+  'qwen-image-2.1-crane-pond.webp',
+  'anima-turbo-v1.1-crane-pond.webp',
 ];
 
 export const heroItems = HERO_PICKS.map((file) => showcaseItems.find((item) => item.file === file)).filter(

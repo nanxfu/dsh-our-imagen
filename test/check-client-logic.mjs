@@ -1879,8 +1879,8 @@ await check('参考图预设回退：支持能力来自预设公开视图，缺�
 
 await check('公开预设的局部重绘能力与模型家族一致', () => {
   const inpaintable = PUBLIC_PRESETS.filter((item) => logic.supportsInpaint(item))
-  assert.ok(inpaintable.length > 0, '至少要有 SDXL 家族支持局部重绘')
-  // 首期只对 SDXL 家族开放：支持 Inpaint 的必须同时支持图生图，不支持图生图的模型不得支持 Inpaint。
+  assert.ok(inpaintable.length > 0, '至少要有支持局部重绘的公开预设')
+  // 支持 Inpaint 的必须同时支持图生图，不支持图生图的模型不得支持 Inpaint。
   assert.ok(inpaintable.every((item) => logic.supportsImg2Img(item)), '支持 Inpaint 的模型必须同时支持图生图')
   assert.ok(
     PUBLIC_PRESETS.filter((item) => !logic.supportsImg2Img(item)).every((item) => !logic.supportsInpaint(item)),
@@ -1888,8 +1888,10 @@ await check('公开预设的局部重绘能力与模型家族一致', () => {
   )
   assert.deepEqual(
     inpaintable.map((item) => item.id).sort(),
-    PUBLIC_PRESETS.filter((item) => item.family === 'SDXL').map((item) => item.id).sort(),
-    '公开预设里只有 SDXL 家族支持局部重绘',
+    PUBLIC_PRESETS.filter((item) => item.family === 'SDXL' || item.family === 'Z-Image')
+      .map((item) => item.id)
+      .sort(),
+    '公开预设里当前只有 SDXL 与 Z-Image 家族支持局部重绘',
   )
 })
 
@@ -3142,14 +3144,14 @@ await check('模型目录与 modelHint：inpaintOnly / 算力来源过滤同一�
     modelCatalogText({ presets, textToImageOnly: true, provider: 'colab' }).includes('flux2-klein-9b'),
     'colab 来源照常列出',
   )
-  // 真实公开目录：sdxl-inpaint 是当前唯一 inpaintOnly 资产，textToImageOnly 后不再出现。
-  assert.ok(modelCatalogText().includes('SDXL Inpaint'), '真实目录默认仍含专用重绘权重（缺省不过滤）')
+  // 真实公开目录：sdxl-inpaint 已下线，默认目录与 textToImageOnly 目录都不含它，默认预设始终存在。
+  assert.ok(!modelCatalogText().includes('sdxl-inpaint'))
   assert.ok(!modelCatalogText({ textToImageOnly: true }).includes('sdxl-inpaint'))
   assert.ok(modelCatalogText({ textToImageOnly: true }).includes('sdxl-lightning'))
 
   // modelHint 目标判定：专用重绘权重主表单不可选、不能文生图，一律不是合法目标。
   assert.equal(
-    normalizeModelHint({ presetId: 'sdxl-inpaint', reason: '局部重绘专用' }, 'sdxl-lightning'),
+    normalizeModelHint({ presetId: 'sdxl-inpaint', reason: '局部重绘专用' }, 'sdxl-lightning', { presets: [both, inpaint] }),
     null,
     'inpaintOnly 预设不得作为 modelHint 目标',
   )

@@ -50,11 +50,11 @@ export const RECIPES = [
     title: '日系二次元插画',
     category: 'illustration',
     tags: ['日系', '二次元', '动漫', '插画', '角色', 'anime', 'character', 'illustration'],
-    recommendedPresets: ['animagine-xl-3.1', 'sdxl-lightning', 'anima-light-lavender'],
+    recommendedPresets: ['anima-turbo-v1.1', 'sdxl-lightning'],
     ratioId: '3:4',
     promptTemplate: {
       danbooru:
-        'masterpiece, best quality, highres, {subject}, anime style, detailed eyes, clean lineart, soft lighting, pastel colors, simple background',
+        'masterpiece, best quality, {subject}, anime style, detailed eyes, clean lineart, soft lighting, pastel colors, simple background',
       concise:
         '{subject}, anime illustration, clean lineart, detailed eyes, soft lighting, pastel colors, simple background, high detail',
       natural:
@@ -63,14 +63,14 @@ export const RECIPES = [
     negativePrompt:
       'nsfw, lowres, bad anatomy, bad hands, worst quality, low quality, jpeg artifacts, watermark, signature, text, extra digits',
     notes:
-      'Danbooru 模板以标签短语组织，质量词前缀沿用 Animagine XL 3.1 的 qualityPrefix；主体可以拆成人数、外貌、服装、动作等标签，不要写完整句子。',
+      'Danbooru 模板以标签短语组织，质量词前缀沿用 Anima Turbo v1.1 的 qualityPrefix；主体可以拆成人数、外貌、服装、动作等标签，不要写完整句子。',
   },
   {
     id: 'cyber-neon',
     title: '赛博霓虹夜景',
     category: 'cinematic',
     tags: ['赛博', '霓虹', '雨夜', '未来城市', '科技感', 'cyberpunk', 'neon', 'night'],
-    recommendedPresets: ['sdxl-base', 'realvis-v5', 'flux2-klein-4b', 'hyper-sdxl-8step'],
+    recommendedPresets: ['z-image-turbo', 'flux2-klein-4b', 'flux2-klein-9b', 'sana-sprint-1.6b'],
     ratioId: '16:9',
     promptTemplate: {
       natural:
@@ -80,14 +80,14 @@ export const RECIPES = [
     },
     negativePrompt: 'blurry, low quality, flat lighting, dull colors, watermark, text',
     notes:
-      '色彩与氛围由「霓虹招牌 + 湿润反光 + 青品色调」这组正面描述决定；FLUX.2 不接受负向词，排除意图要写进正面描述。',
+      '色彩与氛围由「霓虹招牌 + 湿润反光 + 青品色调」这组正面描述决定；FLUX.2 / Z-Image / SANA-Sprint 不接受负向词，排除意图要写进正面描述。',
   },
   {
     id: 'photo-portrait',
     title: '写实人像摄影',
     category: 'photography',
     tags: ['人像', '写实', '摄影', '肖像', '真实感', 'portrait', 'photorealistic', 'photo'],
-    recommendedPresets: ['realvis-v5', 'sdxl-base', 'playground-v2.5'],
+    recommendedPresets: ['z-image-turbo', 'flux2-klein-9b', 'flux2-klein-4b'],
     ratioId: '3:4',
     promptTemplate: {
       natural:
@@ -103,7 +103,7 @@ export const RECIPES = [
     title: '极简海报',
     category: 'poster',
     tags: ['极简', '海报', '留白', '平面', '排版', 'minimal', 'poster', 'graphic design'],
-    recommendedPresets: ['flux2-klein-4b', 'playground-v2.5', 'sdxl-lightning'],
+    recommendedPresets: ['z-image-turbo', 'flux2-klein-4b', 'sana-sprint-1.6b', 'sdxl-lightning'],
     ratioId: '3:4',
     promptTemplate: {
       natural:
@@ -113,18 +113,18 @@ export const RECIPES = [
     },
     negativePrompt: 'text, watermark, clutter, busy background, low quality, blurry',
     notes:
-      '海报靠留白与配色，不靠堆元素；需要文字排版时建议生成后用设计工具叠加，扩散模型自带的文字通常不可读。',
+      '海报靠留白与配色，不靠堆元素；若需要直接在画面内渲染中英文标题排版，可优先使用 Z-Image Turbo。',
   },
   {
     id: 'watercolor-ink',
     title: '水墨水彩插画',
     category: 'illustration',
     tags: ['水墨', '水彩', '国风', '手绘', '留白', 'ink', 'watercolor', 'traditional'],
-    recommendedPresets: ['animagine-xl-3.1', 'sdxl-lightning', 'anima-light-lavender'],
+    recommendedPresets: ['anima-turbo-v1.1', 'z-image-turbo', 'sdxl-lightning'],
     ratioId: '3:4',
     promptTemplate: {
       danbooru:
-        'masterpiece, best quality, highres, {subject}, chinese ink painting, watercolor, wet brush strokes, rice paper texture, large negative space, muted colors',
+        'masterpiece, best quality, {subject}, chinese ink painting, watercolor, wet brush strokes, rice paper texture, large negative space, muted colors',
       concise:
         '{subject}, chinese ink and watercolor painting, wet brush strokes, rice paper texture, large negative space, muted colors',
       natural:
@@ -140,7 +140,7 @@ export const RECIPES = [
     title: '产品静物摄影',
     category: 'product',
     tags: ['产品', '静物', '电商', '质感', 'product', 'still life', 'commercial'],
-    recommendedPresets: ['flux2-klein-4b', 'playground-v2.5', 'sdxl-base'],
+    recommendedPresets: ['flux2-klein-4b', 'flux2-klein-9b', 'z-image-turbo'],
     ratioId: '1:1',
     promptTemplate: {
       natural:
@@ -157,13 +157,13 @@ export const RECIPES = [
     title: '绘本童趣插画',
     category: 'illustration',
     tags: ['绘本', '童趣', '儿童', '插画', '温暖', 'picture book', 'children'],
-    recommendedPresets: ['sdxl-lightning', 'animagine-xl-3.1', 'anima-light-lavender'],
+    recommendedPresets: ['sdxl-lightning', 'sana-sprint-1.6b', 'anima-turbo-v1.1'],
     ratioId: '4:3',
     promptTemplate: {
       concise:
         '{subject}, children picture book illustration, warm colors, soft rounded shapes, simple background, gentle lighting, cheerful mood',
       danbooru:
-        'masterpiece, best quality, highres, {subject}, children picture book illustration, warm colors, soft shapes, simple background, gentle lighting',
+        'masterpiece, best quality, {subject}, children picture book illustration, warm colors, soft shapes, simple background, gentle lighting',
       natural:
         'A children picture book illustration of {subject}, warm colors and soft rounded shapes, simple background, gentle lighting, cheerful and friendly mood.',
     },
@@ -176,13 +176,15 @@ export const RECIPES = [
     title: '概念场景大景',
     category: 'concept',
     tags: ['场景', '概念', '风景', '大景', '世界观', 'landscape', 'concept art', 'environment'],
-    recommendedPresets: ['sdxl-base', 'flux2-klein-4b', 'hyper-sdxl-8step', 'anima-light-lavender'],
+    recommendedPresets: ['flux2-klein-4b', 'z-image-turbo', 'sana-sprint-1.6b', 'anima-turbo-v1.1'],
     ratioId: '16:9',
     promptTemplate: {
       natural:
         'A concept art environment of {subject}, epic scale, layered depth, atmospheric perspective, dramatic sky, cinematic lighting, high detail.',
       concise:
         '{subject}, concept art environment, epic scale, layered depth, atmospheric perspective, dramatic sky, cinematic lighting',
+      danbooru:
+        'no humans, scenery, landscape, {subject}, epic scale, atmospheric perspective, dramatic sky, cinematic lighting, high detail',
     },
     negativePrompt: 'blurry, low quality, flat composition, watermark, text',
     notes:

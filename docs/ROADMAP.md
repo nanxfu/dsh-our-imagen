@@ -356,6 +356,7 @@
 - `test/gpu-live.mjs --outpaint-lora`：源图 864×864（`sdxl-lightning`）→ 纯绿 `#00FF00` 画布 1536×864（内容居中）→ 双线性缩至 1024×576 参考图（满足 `referenceImages` 长边 ≤ 1024）→ `flux2-klein-4b` + `fal/flux-2-klein-4B-outpaint-lora`（scale 1.1）+ 固定提示词，输出 1536×864；记录耗时 / 显存 / 内容区像素差 / 绿边残留 / 接缝 / 逐通道色偏。
 - **真机数据（Kaggle 2×T4，diffusers 0.43.0 / torch 2.11.0+cu130）**：加载 33.8s（含 LoRA 挂载，权重命中缓存）/ 推理 22.5s / 输出严格 1536×864（未被 1MP 条件上限缩放）/ PNG 1.41 MB；绿边残留 **0.00%**；接缝梯度比 左 1.15 / 右 1.14（≈1，无硬缝）；内容区色偏 ΔR -1.55 / ΔG -1.34 / ΔB +3.47（max 3.47）；峰值显存 `max_allocated` 9348 → 10701 MiB（`reserved` +1484 MiB）。对比 `sdxl-inpaint` 历史中位（1536×864，4 样本 35.31s）**提速 1.57×**。
 - **决策：本轮不迁移默认扩图引擎**。LoRA 路径是**整图重绘**（内容区平均差 12.87/255、核心区 13.30），不具备 `sdxl-inpaint` 的逐像素保真（保留区 0.00）；「扩图保留原图内容」与「更快 / 无接缝」之间存在产品取舍，需要界面上显式的「保真 / 重绘」二选一策略。数据表明 LoRA 候选在速度、接缝与色偏上全面优于现有基线，列为下一阶段首选（远端 LoRA 能力与真机验收脚本已就绪，可直接复用）。
+- **后续（0.13.0 发版）**：该候选已切换为默认扩图引擎（`OUTPAINT_ENGINE` = `flux2-klein-4b` + Outpaint LoRA，纯绿画布条件生图，见 `docs/SPEC.md` §5.20 与 `lib/jobs/queue.js`）；历史「扩张画布 + 蒙版」方案仅作为预设列表缺少现代引擎时的回退，9 通道 `sdxl-inpaint` 已在阶段十七下线。
 
 ### 3. 推理缓存加速探针（P1）与 Colab FP8 评估
 
@@ -390,6 +391,64 @@
 
 ---
 
+## 十七、 模型阵营重构与现代 DiT 演进（Z-Image-Turbo / SANA-Sprint / Qwen-Image 2.1 / FLUX.2 Klein 9B，2026-11-18 ~ 2026-11-19）
+
+> **状态**：✅ 已完成（2026-11-20，未发版）。7 款现役模型与新增 Loader 全部落库；第 4 节的三项收口（Z-Image 连出与原生重绘、Qwen 双参考与 RGBA、海报/文档）已闭环，真机数据见第 5 节。
+
+### 1. 模型阵营精简（12 款 → 7 款现代正交矩阵）
+
+- **已下线（8 款）**：`sdxl-turbo`、`hyper-sdxl-8step`、`sdxl-base`、`playground-v2.5`、`realvis-v5`、`animagine-xl-3.1`、`sdxl-inpaint`、`anima-light-lavender`。
+  - 扩图已在 0.13.0 切往 `flux2-klein-4b + Outpaint LoRA`；局部重绘在 Kaggle 由 `sdxl-lightning` 兜底、在 Colab 可走 `z-image-turbo` 原生重绘，不再保留专用 9 通道 `sdxl-inpaint`。
+- **现役 7 款（全部 ≤10 步蒸馏模型）**：
+
+| 预设 ID | 架构 / 定位 | 算力来源 | 步数 / CFG | 实测真机数据（环境） | 能力与许可要点 |
+| --- | --- | --- | --- | --- | --- |
+| `sdxl-lightning` | SDXL + 4-step LoRA（默认 + Kaggle 重绘兜底） | Kaggle / Colab | 4 / 0 | 10,347 MiB · 7.7s 加载 · 6.2s | OpenRAIL++，`img2img` / `inpaint` |
+| `sana-sprint-1.6b` | 1.6B Linear DiT + Gemma-2-2B（极速文生图） | Kaggle / Colab | 2 / 4.5 | L4: `10,329 MiB` / `4.07s`；T4: `12,596 MiB` / `7.25s` | Apache-2.0；T4 `sm<8.0` 时 `SanaSprintLoader` 仅将 `AutoencoderDC` 升为 `fp32` |
+| `z-image-turbo` | `Tongyi-MAI/Z-Image-Turbo`（6B S3-DiT + Qwen3-4B） | 仅 Colab | 9 / 0 | L4: `12,232 MiB` · 131.7s 加载 · 稳态 `30.66s`（首图 57.49s / 连出 32.89s） | **Apache-2.0 可商用**，中英双语，`ZImageLoader` 开启 `img2img` / `inpaint`（真机已验证） |
+| `qwen-image-2.1` | `Qwen/Qwen-Image-2.1-Turbo`（7B DiT + Qwen3-VL-8B） | 仅 Colab | 8 / 1 | L4: `16,764 MiB` · 95.9s 加载 · 稳态 `43.68s`（双参考 51.83s） | **非商用 `qwen-research`**，`gated=false`，`supportsReference=true`，透明背景输出（真机 RGBA 验证） |
+| `flux2-klein-4b` | `FLUX.2 Klein 4B`（Apache-2.0，参考 + 扩图引擎） | Kaggle / Colab | 4 / 1 | `7,929 MiB` · 28.2s 加载 · `10.24s` | Apache-2.0，多图参考与 `outpaint` 引擎 |
+| `flux2-klein-9b` | `FLUX.2 Klein 9B`（高配 9B 参考编辑） | 仅 Colab | 4 / 1 | L4: `18,107 MiB` · 98.9s 加载 · `130.87s` | 非商用、`gated=true`，`bf16 + cpuOffload: true` |
+| `anima-turbo-v1.1` | `Anima Turbo v1.1`（2B DiT 二次元） | Kaggle / Colab | 10 / 1 | T4: `8,469 MiB` · 102.7s 加载 · `21.56s` | 非商用，`_anima_load_dit` 兼容 `model.diffusion_model.` |
+
+### 2. 新增远端 Loader 与管线适配
+
+- `remote/inference/loaders/diffusers.py` 与 `remote/inference/registry.py`：
+  - 新增通用 `pipeline.dtype`（`fp16`/`bf16`/`fp32`）与 `pipeline.cpuOffload`（`enable_model_cpu_offload()`，替代原先高显存模型强依赖 A100 的卡死路径）。
+  - 新增 `ZImageLoader`（`zimage`，`bf16`，开启 `supports_img2img` / `supports_inpaint`）。
+  - 新增 `SanaSprintLoader`（`sana-sprint`，`bf16`；T4 全 `fp16` 实测溢出成 3 KiB 纯黑 PNG，改为 `sm < 8.0` 仅升 `pipe.vae` 至 `fp32` 后 T4 实测一次通过）。
+  - 新增 `QwenImage21Loader`（`qwen-image-2.1`，`bf16`，`supports_reference=True`；直接复用 PyPI `diffusers==0.43.0` + `transformers==5.23.0` 原生 `QwenImage21Pipeline`）。
+- `remote/pipeline_loader.py`：`filter_call_kwargs` 为使用 `true_cfg_scale` 的管线（如 `QwenImage21Pipeline`）自动把请求 `cfg` 映射为 `true_cfg_scale`（`>= 1.0`），并按 `cfg > 1.0` 门控 `negative_prompt`。
+
+### 3. 技术调研与路线决策记录
+
+- **为什么仅接入 `Qwen-Image-2.1-Turbo`（对外命名 `Qwen-Image 2.1`）而非「8 步/40 步双模同卡」**：HF 仓库核实官方无独立 Turbo LoRA，`Qwen/Qwen-Image-2.1`（30.86 GB，VAE 1.26 GB，4 分片 TE）与 `Qwen-Image-2.1-Turbo`（30.26 GB，VAE 0.63 GB，单文件 TE）为独立权重；切档意味着后台卸载/重载整套 ~30 GB 管线且 Seed 语义不互通。优先采用单一 Turbo 8 步版以零切换损耗获得最佳体验。
+- **为什么暂不在 Kaggle 2×T4 上引入量化 / `stable-diffusion.cpp` GGUF 运行时**：
+  1. T4（`sm_75`）无原生 FP8 / INT4 / BF16 Tensor Core，量化仅减显存不提速（每步仍需反量化回 FP16）；
+  2. `Qwen-Image 2.1` 的 `Qwen3-VL-8B` 编码器（16.33 GB）在 `diffusers` 内置 FP8 路径下不被量化；而社区 `GGUF` + `stable-diffusion.cpp` 路线（`AtomicChat` / `Comfy-Org` / `chatrlabs`）需额外维护 C++ 二进制、组件拼装与 30 GB 预挂载 Kaggle Dataset，与已直接跑通的 Colab L4 `diffusers` 原生路径相比性价比过低，列为远期备选。
+- **保留 `flux2-klein-9b`**：用户决策保留与 `Z-Image-Turbo`、`Qwen-Image 2.1` 并存，均通过 `providers: ["colab"]` 门控。
+
+### 4. 收口验收记录（2026-11-20 完成）
+
+- **`z-image-turbo` 连出稳态与原生重绘（Colab L4）**：
+  - 连出稳态：同会话连出 4 张，丢弃首张 58.64s，后 3 张 32.91 / 30.66 / 30.00s → **中位数 30.66s**（`load_seconds` 全为 0）；`measured.steadySeconds` 由 57.73s 回填为 **30.66s**（首图含冷启预热，不用于速度承诺）。
+  - 原生 `img2img`：`AutoPipelineForImage2Image.from_pipe` 复用已加载底座（`load_seconds=0`），strength 0.6，推理 27.68s，出图 1024²；与源图平均差 11.37/255、56.4% 像素变化。
+  - 原生 `inpaint`：`AutoPipelineForInpainting.from_pipe`（首建后复用），25.02% 圆形蒙版 + strength 0.8，推理 30.32s，出图 1024²；日志含「蒙版覆盖率 25.02% 羽化半径 8px」与「已按蒙版合成」；保留区核心 **728,472 像素逐像素差 0**（含羽化带平均 0.5565/255），蒙版内平均差 52.05/255（96.3% 像素变化）；显存峰值 12,394 MiB，较文生图仅 +162 MiB。
+- **`qwen-image-2.1` 多图参考与透明背景（Colab L4）**：
+  - 多图参考（`referenceImages` 2 张）：51.83s（`load_seconds=0`），出图 1024²；相对同会话纯文生图平均差 35.07/255（87.6% 变化），相对同提示词同 seed 的无参考对照平均差 **54.24/255（98.4% 变化）** → 参考条件确实生效（弱参考，构图仍由提示词与 seed 主导）。双参考峰值显存 20,127 MiB（L4 24 GB，余量约 4 GB）。
+  - 透明背景：三次返回的 PNG 均为 RGBA（PNG 颜色类型 6），daemon `_encode_png` 原样保留 alpha；默认文生图 alpha 232~255（91.1% 为 255，实质不透明）；明确要求「透明背景 / 贴纸」时 alpha=0 占 7.9%、≤1 占 65.3%、=255 占 32.9%、不透明包围盒 510×856 → **当前链路可导出真透明背景**。透明区 RGB 仍有残留（偏紫），消费端必须按 alpha 合成。
+- **海报与文档**：新增 `sana-sprint-1.6b` / `z-image-turbo` / `qwen-image-2.1` 三张 Pexels 海报，`anima-light-lavender.webp` 重命名为 `anima-turbo-v1.1.webp`，删除 6 张下线模型海报；最终 6 份图片覆盖 7 张模型卡，data URL 合计 **17,598 字符**（上限 20,480）；README / README.en / PRODUCT / SPEC / ARCHITECTURE / MODEL_CARD_SPEC / MODEL_ASSET_SPEC 与示例墙（7 张，含 5 张同提示词跨模型对照）、README 界面截图同步更新；`docs/TROUBLESHOOTING.md` 补齐参考图 / 透明背景与扩图新口径。
+
+### 5. 阶段十七真机验收
+
+- **环境**：Colab L4（NVIDIA L4 / python 3.13.16 / torch 2.14.1+cu130 / diffusers 0.43.0 / transformers 5.23.0 / pillow 11.3.0）；单会话覆盖 `z-image-turbo` 与 `qwen-image-2.1`。
+- **会话成本**：provision 195.3s（assign 10.6s + ready 184.7s）；ready→stop **699.6s**（≤35 分钟目标）；assignments 0→0、CCU `assignmentsCount=0`，余额 196.7577→196.3573（Δ0.4003 CU），无遗留 Kernel。
+- **验收脚本与产物**：新增 `tools/colab/acceptance-17.mjs`（`--check` 离线校验、503/排队退避与任何路径必保 stop）与 `tools/colab/image-analysis.py`（Pillow 蒙版 / 像素差 / alpha 分析）；报告 `.tmp/colab/acceptance-17.json`（31 项 checks，其中 1 项为断言口径误写、已在 `assertionCorrections` 中裁决），PNG 11 张存于 `.tmp/colab/acceptance-17/`。
+- **稳态补测**：`tools/colab/steady-17.mjs` 按 `MODEL_ASSET_SPEC` 协议（丢弃首张、后 3 张取中位数）补测纯文生图稳态：z-image-turbo **30.66s**、qwen-image-2.1 **43.68s**（报告 `.tmp/colab/steady-17.json`，GPU 会话 620.7s，CCU Δ0.3791）。
+- **展示口径**：模型卡 / 顶栏显示 `measured.steadySeconds`（稳态），首图含冷启或切模型预热，不用于速度承诺；上表同时标注首图与稳态。
+
+---
+
 ## 后续阶段排期总览
 
 | 阶段 | 主题 | 所属条线 | 前置依赖 | 预计定位 |
@@ -399,4 +458,5 @@
 | **十三** | 显式新建绘图、多作品草稿圆点与树状版本管理 | 前端 + Host 元数据 | 十二（方案 B 底座） | **✅ 已完成（0.13.0，未发版）** |
 | **十四** | Google Colab（Colab Pro）后端接入 | Host 算力扩展 + `remote/` 适配 | 十一收口后可与十二/十三并行（需先过 M0 探针） | **✅ 已完成并合入 `main`（2026-11-18）** |
 | **十五** | 交互语义对齐、双向助手闭环与模型原生参考演进（Phase 0~C） | 全链路体验 + 导入 + 后处理与 DiT 原生参考 | 十三（工作区草稿与版本树） | **✅ 已完成（0.13.0，未发版）**：Phase 0 / A / B 此前完成，Phase C（C0 状态收口、C1 原生参考与推理加速真机对照、C2 左栏参考槽）本轮收口 |
-| **十六** | Phase C 遗留收口：现代扩图引擎、推理缓存与大显存模型（用户提示「计划文档任务未全部完成」后启动） | 远端推理 + 客户端门控 + 真机验收 | 十五（Phase C） | **✅ 已完成（0.13.0，未发版）**：FLUX.2 LoRA 能力、Klein 4B + Outpaint LoRA 真机评估（提速 1.57×，决策不迁移默认引擎）、P1 缓存/FP8 评估（不适用，不合入）、`providers` 算力来源能力位与双层门控、Qwen-Image-Edit 不接入结论、峰值显存口径修正；**9B 资产因 Colab A100 真机验证受阻未发布**（草稿与验证脚本已就绪） |
+| **十六** | Phase C 遗留收口：现代扩图引擎、推理缓存与大显存模型（用户提示「计划文档任务未全部完成」后启动） | 远端推理 + 客户端门控 + 真机验收 | 十五（Phase C） | **✅ 已完成（0.13.0，未发版）**：FLUX.2 LoRA 能力、Klein 4B + Outpaint LoRA 真机评估、P1 缓存/FP8 评估、`providers` 门控、峰值显存口径修正（后续大显存模型实测衔接进阶段十七） |
+| **十七** | 模型阵营重构与现代 DiT 演进（下线 8 款老旧 SDXL/慢模，上线 `SANA-Sprint` / `Z-Image-Turbo` / `Anima Turbo v1.1` / `FLUX.2 Klein 9B` / `Qwen-Image 2.1`） | 远端 Loader + 模型资产 + Colab/T4 真机验证 | 十四（Colab 后端）+ 十六（`providers` 门控） | **✅ 已完成（2026-11-20，未发版）**：7 款现役模型全部落库（3 个新 Loader + `dtype` / `cpuOffload`）；Z-Image 原生 img2img / inpaint（保留区像素差 0）与稳态 30.66s、Qwen 双参考（参考影响 54.24/255）与 RGBA 真透明输出完成真机验收；海报 / 文档 / 示例墙 / 界面截图同步 7 款口径 |

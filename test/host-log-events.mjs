@@ -23,7 +23,7 @@ import { flushHostLog, hostLogPath, installFileLog, readHostLogTail } from '../l
 import { LIMITS } from '../shared/contract.js'
 import { createCheckRunner } from './helpers/check.mjs'
 
-const PRESET = 'sdxl-turbo'
+const PRESET = 'sdxl-lightning'
 const { check, results } = createCheckRunner()
 
 let workspace = null

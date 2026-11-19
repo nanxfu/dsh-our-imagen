@@ -475,26 +475,27 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
   `LIMITS.reference.maxEdge`（1536）由远端解码后等比缩小，小于 `LIMITS.reference.minEdge` 的图直接拒绝。
 - `reference.strength`：重绘强度，按契约 `LIMITS.strength` 钳制并对齐（步长 0.05，默认 `0.6`）。
   不带蒙版的垫图上限是 `LIMITS.strength.max`（0.9）；带 `mask` 的局部重绘上限放宽到
-  `LIMITS.strength.inpaintMax`（1.0）——9 通道 inpaint 权重在全重绘时需要更高的替换力度，
-  只放宽这一档，img2img 的保守上限不变（Host 与 daemon 用同一口径）。
+  `LIMITS.strength.inpaintMax`（1.0）——大面积重绘需要更高的替换力度，只放宽这一档，
+  img2img 的保守上限不变（Host 与 daemon 用同一口径）。
 - `reference.mask`：可选，局部重绘蒙版。PNG base64（可带 `data:image/png;base64,` 前缀），
   黑白二值图：**白色为重绘区域、黑色为保留区域**；体积上限 `LIMITS.mask.maxBytes`（2 MiB）。
   只允许 PNG（蒙版是程序生成的二值图，JPEG 的压缩噪声会让边界不可控）。带 `mask` 时必须同时有
   `path` / `image` 之一（没有参考图就无从重绘），否则 `400 invalid_request`。远端解码后转灰度 `'L'`
   并用最近邻对齐到参考图精确宽高；未涂抹时不传该字段，请求体与纯图生图逐字一致。
-  只对 `supportsInpaint = true` 的模型（SDXL 家族）开放，其它 loader 由远端按白名单返回
-  `400 invalid_request`（文案明确「该模型不支持局部重绘」）。
+  只对 `supportsInpaint = true` 的模型（当前 `sdxl-lightning` 与 `z-image-turbo`，前者为 Kaggle 兜底、
+  后者仅 Colab）开放，其它 loader 由远端按白名单返回 `400 invalid_request`（文案明确「该模型不支持局部重绘」）。
 - **空蒙版拦截**：解码对齐后统计白色（重绘）区域覆盖率，低于 `LIMITS.mask.minCoverage`
   （0.0005，即 0.05%）按空蒙版拒绝——任务在执行期、**加载模型前**以 `invalid_request` 失败，
   不浪费 GPU；全白（整图重绘）是合法请求，必须放行。客户端在导出前也用同一阈值拦住空涂抹。
 - **羽化分档**：羽化半径随蒙版覆盖率自适应（精细小蒙版不波及周围像素）：覆盖率 < 0.5% → 2px，
   < 5% → 4px，更大按短边 0.8% 计算并钳在 6~8px。常量集中在 `remote/inference/reference_codec.py`
   顶部，真机复验后可只改常量。
-- 首期只对 `supportsImg2Img = true` 的模型（SDXL 家族）开放参考图；远端对不支持的 loader 返回
-  `400 invalid_request`。参考图是 job 级参数：一张参考图跑整批 `count`（每张 seed 递增）。
-- 专用局部重绘预设（`inpaintOnly = true`，如 `sdxl-inpaint`）：只用于带蒙版的局部重绘，
+- 首期只对 `supportsImg2Img = true` 的模型（当前 `sdxl-lightning` 与 `z-image-turbo`）开放参考图；
+  远端对不支持的 loader 返回 `400 invalid_request`。参考图是 job 级参数：一张参考图跑整批 `count`（每张 seed 递增）。
+- 专用局部重绘预设标记（`inpaintOnly = true`）：契约仍保留该能力位——这类预设只能带蒙版做局部重绘，
   **必须同时提供参考图与蒙版**；缺任一项时客户端拦下生成、Host 入队返回 `400 invalid_request`、
-  daemon 提交期同样拒绝。这类预设生成的图与普通预设一样落盘、可回填参数。
+  daemon 提交期同样拒绝。阶段十七起 7 款现役资产均为 `inpaintOnly = false`（原 `sdxl-inpaint`
+  专用 9 通道权重已下线），客户端仍有防御性兜底：选到该类预设时改用兜底预设并轻提示。
 - 校验失败：路径/文件问题 → `400 invalid_path`；格式、体积、强度或模型能力问题 →
   `400 invalid_request`（执行阶段发现的问题让任务以 `invalid_path` / `invalid_request` 失败，
   不占用 GPU 加载模型）。
@@ -513,10 +514,10 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 - 请求形状：`references: ["imagen-output/<目录>/<文件>", ...]`，1~`LIMITS.referenceImages.maxCount`
   （2）个 `imagen-output/` 内作品的工作区相对路径（与 `reference.path` 同一套越界校验，
   拒绝绝对路径 / 盘符 / `..` / 非产物目录），重复路径直接拒绝。
-- 能力门槛：所选预设必须 `supportsReference = true`（当前 `flux2-klein-4b`，`flux2` loader 家族；
-  `flux2-klein-9b` 为待验证草稿，未发布）；Host 入队前拦截，daemon 再按 loader 白名单
-  （`reference_names()`，首期只有 `flux2`）兜底，非支持模型收到参考图返回 400 `invalid_request`
-  （**不静默丢弃**）。
+- 能力门槛：所选预设必须 `supportsReference = true`（当前 `flux2-klein-4b`、`flux2-klein-9b`（仅 Colab）
+  与 `qwen-image-2.1`（仅 Colab））；Host 入队前拦截，daemon 再按 loader 白名单
+  （`reference_names()`，当前为 `flux2` 与 `qwen-image-2.1` 两个 loader）兜底，非支持模型收到参考图返回
+  400 `invalid_request`（**不静默丢弃**）。
 - 边界（`LIMITS.referenceImages`，契约唯一来源）：单张原始字节 ≤ 4 MiB、只接受 PNG / JPEG、
   长边 ≥ `minEdge`（128）；**每张参考图分别校验，不设 strength / 蒙版语义**（多传其它字段逐项 400）。
   Host 读盘后按 base64 膨胀估算总量，超过远端请求体预算（`TIMEOUTS.remoteGenerateMaxBytes`）
@@ -524,6 +525,7 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 - 推理语义：参考图只作为模型的图像条件（基础管线 `image=[PIL...]`，不经
   `AutoPipelineForImage2Image`、不吃 `strength`），**出图宽高严格取请求的 `width`/`height`**，
   不跟随参考图；执行期逐张完整解码一次、转 RGB、长边超过 `maxEdge`（1024）时等比缩小（不写盘）。
+  参考图可带 RGBA 输入，解码时统一转 RGB（alpha 通道不参与条件）。
 - 产物与溯源：`meta.json` 写 `referenceSources`（工作区相对路径数组）与 `source: "ai"`；
   这类产物**不折叠进参考图版本树**（`sourceImage` / `rootImage` 均为 `null`，每张候选图各自为根）。
   远端 results 不新增字段（图片实际宽高以 PNG 与 results 的 `width`/`height` 为准）。
@@ -536,11 +538,12 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 - 耗时基线（同一批真机数据）：纯文生图 1024² 约 9.1s；1 张参考图约 21~22s；2 张约 31s；
   3 张约 52s。参考图使耗时近似线性增长而显存几乎不变（17941→17950/17959 MB），
   因此契约把 `maxCount` 收紧到 2（收益主要来自 1~2 张）。
-- **原生局部重绘未接入（本轮结论）**：diffusers 0.43 的 `AutoPipelineForInpainting` 映射
+- **原生局部重绘未接入（持续结论）**：diffusers 0.43 的 `AutoPipelineForInpainting` 映射
   不含 `flux2-klein`；原生 `Flux2KleinInpaintPipeline`（`image` + `mask_image` + 可选
   `image_reference`）必须按显式类加载，且其内部 1 MP 面积上限会**静默缩放画布**
-  （如 1536×864 → 1360×768），出图尺寸与扩图接缝不可控。本轮不接入默认扩图，只作为后续
-  演进评估项保留（Phase C 规划里的 Outpaint LoRA 路线同理，需真机 A/B 后再决策）。
+  （如 1536×864 → 1360×768），出图尺寸与扩图接缝不可控，因此不接为默认局部重绘路径。
+  扩图改走 `flux2-klein-4b` + Outpaint LoRA 的绿边画布条件生图（见下文「扩图」与 §5.20），
+  该路线已在阶段十六真机验收（`ROADMAP.md` 第十六节）。
 
 **高清放大（`tool: "upscale"`，阶段十五 Phase B1）**：
 
@@ -560,10 +563,16 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 
 **扩图（`tool: "outpaint"`，阶段十五 Phase B2）**：
 
-- 扩图**不新增远端能力**：客户端把原图缩放后放进更大的画布、把新增区域涂白生成蒙版，再按普通
-  局部重绘提交（`presetId` 默认 `sdxl-inpaint`，复用已验证的 9 通道管线），远端看到的就是一次
-  合法的 inpaint 请求。
-- 请求体与局部重绘相同，只是 `reference` 用**本地画布来源**：`{ image: <扩张后画布 PNG base64>,
+- **现代扩图引擎（默认路径）**：扩图不在远端新增推理能力。客户端把原图放进更大的画布、新增区域铺
+  `#00FF00` 纯绿底后导出画布（长边缩至 `LIMITS.referenceImages.maxEdge`），Host 按 `OUTPAINT_ENGINE`
+  （`shared/contract.js`）组装请求：`presetId` 固定 `flux2-klein-4b`，`pipeline.lora` 注入
+  `fal/flux-2-klein-4B-outpaint-lora`（`scale` 1.1），画布作为 1 张原生参考图（`referenceImages`）提交；
+  用户未填补充描述时用固定指令 `Fill the green spaces according to the image`，填写则拼接追加。
+  远端按 `flux2` 原生参考路径执行，`negative_prompt` 传空。
+- **历史回退路径**：预设列表里没有现代扩图引擎时（旧宿主 / 测试替身），退回「扩张画布 + 白=新增区蒙版」
+  的普通局部重绘提交。专用 9 通道 `sdxl-inpaint` 权重已在阶段十七下线，仅旧历史数据仍可能带
+  `outpaint` 元数据，回填逻辑按非扩散产物处理。
+- 回退路径的请求体与局部重绘相同，`reference` 用**本地画布来源**：`{ image: <扩张后画布 PNG base64>,
   mask: <白=新增区 PNG base64>, sourcePath: <原作品路径>, outpaintContent: {...}, strength: 1.0 }`。
   画布尺寸写进 `width` / `height`（256~1536、8 对齐）；新增区域占比由客户端保证 ≥ 2%，空蒙版/无画布
   在 Host 与客户端双重拦截。
@@ -826,8 +835,8 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 {
   "text": "画一张横版的雨夜街景，不要文字",
   "locale": "zh",
-  "presetId": "sdxl-base",
-  "cfg": 7.5,
+  "presetId": "sdxl-lightning",
+  "cfg": 0,
   "history": [
     { "role": "user", "content": "上一轮：雨夜街景" },
     { "role": "assistant", "content": "rainy night city street, wet pavement reflecting neon signs" }
@@ -1138,16 +1147,16 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 
 - **返回**：与 `imagen_generate` 同形的任务摘要文本；高清放大任务的 `presetId` 为
   `realesrgan-x2plus`，`params.reference.sourcePath` 指向源图。
-- **实现边界**：扩图暂不提供 Agent 工具——扩图画布需要像素级的等比缩放 / 居中 / 白边蒙版合成，
+- **实现边界**：扩图暂不提供 Agent 工具——扩图画布需要像素级的等比缩放、内容框定位与纯绿画布合成，
   Host 保持零图像依赖（不引入 sharp / jimp）；扩图由用户在工作台舞台动作坞提交（见 §5.20）。
 
 ---
 
 ## 4. 模型基准与硬件实测数据
 
-运行环境：Kaggle Nvidia Tesla T4（分配 2 块 T4，每卡可用显存 14.56 GiB，CUDA 12.x）。
+**实测环境**：Kaggle Nvidia Tesla T4（分配 2 块 T4，每卡可用显存 14.56 GiB，CUDA 12.x）与 Google Colab（Nvidia L4 / T4；Colab Pro 另有 A100 档）。
 **数值以 `shared/contract.js` 的 `PRESETS` 为准**（`peakVramMb` 为实测峰值显存，`loadSeconds` 为首次加载耗时，
-`steadySeconds` 为加载完成后的单张稳定耗时）。
+`steadySeconds` 为加载完成后的单张稳定耗时）。阶段十七起现役 7 款全部为 ≤10 步蒸馏模型。
 
 `presets` 的公开视图随模型资产下发提示词与能力字段：`negativeHint`（该预设推荐的负向提示词，切换预设或把 CFG 抬到可用时自动回填模型负向层）、
 `promptStyle`（`danbooru` / `natural` / `concise`，决定意图解析与润色时给模型的书写口径）、`qualityPrefix`（质量词前缀，无则为空串）、
@@ -1155,21 +1164,25 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 与 `supportsNegative`（管线是否真的消费 `negative_prompt`）。字段来源是 `models/*.json`。
 负向词最终是否可用还要看 CFG 与推荐词，判定规则见 [`docs/MODEL_ASSET_SPEC.md`](MODEL_ASSET_SPEC.md) §2.3。
 
-| 预设 ID | 基础模型与权重 | 默认尺寸（可选档位） | 步数 / CFG | 加载 / 单张耗时 | 峰值显存 | 下载量 | 卡数 | 档位 | 负向词 |
-| :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :--- | :--- |
-| **`sdxl-lightning`** *(默认)* | `stabilityai/stable-diffusion-xl-base-1.0` + `ByteDance/SDXL-Lightning` (4-step LoRA) | 1024（768 / 1024 / 1152） | 4 步 / 0 | 7.7s / 6.2s | 10347 MB | 6.78 GB | 1 | fast | 支持（默认隐藏） |
-| **`hyper-sdxl-8step`** | `stabilityai/stable-diffusion-xl-base-1.0` + `ByteDance/Hyper-SD` (8-step LoRA) | 1024（768 / 1024） | 8 步 / 0 | 14.3s / 7.74s | 10347 MB | 7.35 GB | 1 | fast | 支持（默认隐藏） |
-| **`sdxl-turbo`** | `stabilityai/sdxl-turbo` | 512（512 / 768 / 1024） | 4 步 / 0 | 4.0s / 1.87s | 7666 MB | 6.62 GB | 1 | fast | 支持（默认隐藏） |
-| **`playground-v2.5`** | `playgroundai/playground-v2.5-1024px-aesthetic` | 1024（768 / 1024） | 30 步 / 3 | 5.7s / 28.34s | 9967 MB | 6.46 GB | 1 | usable | 支持 |
-| **`sdxl-base`** | `stabilityai/stable-diffusion-xl-base-1.0` | 1024（768 / 1024 / 1152） | 25 步 / 7.5 | 5.8s / 27.8s | 9966 MB | 6.78 GB | 1 | usable | 支持 |
-| **`sdxl-inpaint`** *(专用局部重绘)* | `diffusers/stable-diffusion-xl-1.0-inpainting-0.1`（9 通道 UNet，`nativeInpaint`） | 1024（768 / 1024 / 1152） | 30 步 / 8 | 待实测 / 22.4s | 待实测 | 7.0 GB | 1 | quality | 支持 |
-| **`realvis-v5`** | `SG161222/RealVisXL_V5.0` | 1024（768 / 1024） | 25 步 / 5 | 5.2s / 24.53s | 9967 MB | 6.46 GB | 1 | usable | 支持 |
-| **`flux2-klein-4b`** *(实验)* | `black-forest-labs/FLUX.2-klein-4B` | 1024（768 / 1024） | 4 步 / 1.0 | 28.2s / 10.24s | 7929 MB | 16.0 GB | 2 | fast | 不支持 |
-| **`animagine-xl-3.1`** | `cagliostrolab/animagine-xl-3.1` | 1024（768 / 1024） | 28 步 / 7 | 4.8s / 26.17s | 9176 MB | 6.46 GB | 1 | usable | 支持 |
-| **`anima-light-lavender`** | `Johnny-Z/Anima-Light-Lavender`（Cosmos-Predict2 2B DiT + Qwen3-0.6B + Qwen-Image VAE，单文件 checkpoint，`anima` loader） | 1024（768 / 1024 / 1152） | 25 步 / 4 | 43.5s / 80.64s | 8470 MB | 5.25 GB | 1 | usable | 支持（默认隐藏） |
+| 预设 ID | 基础模型与权重 | 默认尺寸（可选档位） | 步数 / CFG | 加载 / 单张耗时（实测环境） | 峰值显存 | 下载量 | 卡数 | 档位 | 算力来源 | 负向词 |
+| :--- | :--- | :--- | :--- | :--- | ---: | ---: | ---: | :--- | :--- | :--- |
+| **`sdxl-lightning`** *(默认)* | `stabilityai/stable-diffusion-xl-base-1.0` + `ByteDance/SDXL-Lightning` (4-step LoRA) | 1024（768 / 1024 / 1152） | 4 步 / 0 | 7.7s / 6.2s（Kaggle 2×T4） | 10347 MB | 6.78 GB | 1 | fast | Kaggle / Colab | 支持（默认隐藏） |
+| **`sana-sprint-1.6b`** | `Efficient-Large-Model/Sana_Sprint_1.6B_1024px_diffusers`（1.6B 线性 DiT + Gemma-2-2B） | 1024（768 / 1024） | 2 步 / 4.5 | 35.2s / 4.07s（Colab L4） | 10329 MB | 9.07 GB | 1 | fast | Kaggle / Colab | 不支持 |
+| **`z-image-turbo`** | `Tongyi-MAI/Z-Image-Turbo`（6B S3-DiT + Qwen3-4B） | 1024（768 / 1024 / 1152） | 9 步 / 0 | 131.7s / 30.66s（Colab L4，稳态中位数） | 12232 MB | 30.64 GB | 1 | fast | 仅 Colab | 不支持 |
+| **`qwen-image-2.1`** | `Qwen/Qwen-Image-2.1-Turbo`（7B DiT + Qwen3-VL-8B） | 1024（768 / 1024） | 8 步 / 1 | 95.9s / 43.68s（Colab L4，稳态中位数） | 16764 MB | 30.26 GB | 1 | fast | 仅 Colab | 支持（CFG > 1 时生效，默认隐藏） |
+| **`flux2-klein-4b`** | `black-forest-labs/FLUX.2-klein-4B` | 1024（768 / 1024） | 4 步 / 1.0 | 28.2s / 10.24s（Kaggle 2×T4） | 7929 MB | 16.0 GB | 2 | fast | Kaggle / Colab | 不支持 |
+| **`flux2-klein-9b`** | `black-forest-labs/FLUX.2-klein-9B`（HF gated） | 1024（768 / 1024） | 4 步 / 1 | 98.9s / 130.87s（Colab L4） | 18107 MB | 34.7 GB | 1 | fast | 仅 Colab | 不支持 |
+| **`anima-turbo-v1.1`** | `circlestone-labs/Anima`（2B DiT + Qwen3-0.6B） | 1024（768 / 1024 / 1152） | 10 步 / 1 | 102.7s / 21.56s（Colab T4） | 8469 MB | 5.25 GB | 1 | fast | Kaggle / Colab | 支持（`negativeHint` 为空，默认隐藏） |
+
+> **算力来源列**：`providers` 缺省的预设（`sdxl-lightning`、`sana-sprint-1.6b`、`flux2-klein-4b`、`anima-turbo-v1.1`）
+> 两种来源都可用；声明 `providers: ["colab"]` 的三款（`z-image-turbo`、`qwen-image-2.1`、`flux2-klein-9b`）
+> 只能切到 Colab 运行。当前算力来源不匹配时，客户端模型卡置灰并标「仅 Colab」，生成前置预检与
+> `JobQueue.submit` 的 `providerGateOf` 双重拦截（`invalid_request`，不占队列、不静默换模型）。
 
 > **负向词列**：「支持」表示默认配置下「排除项」可见；「支持（默认隐藏）」表示模型有负向词能力，但默认 CFG（0 或等于推荐值）
-> 与推荐词条件下不展示，用户抬高 CFG 后出现；「不支持」表示管线 `__call__` 没有 `negative_prompt` 参数（`flux2`），传了也会被丢弃。
+> 与推荐词条件下不展示，用户抬高 CFG 后出现；「不支持」表示管线 `__call__` 没有 `negative_prompt` 参数
+> （`sana-sprint`、`zimage`、`flux2` 家族），传了也会被丢弃。`qwen-image-2.1` 走 `true_cfg_scale`，
+> 仅当 CFG > 1.0 时远端才传递负向词。
 
 > **双卡说明**：`flux2-klein-4b` 的 pipeline 使用 `deviceMap: "balanced"`，Kernel 申请 2×T4 时按 `gpus: 2` 下发；
 > 其余预设单卡即可。
@@ -1177,8 +1190,8 @@ Host 会放弃当前会话、best-effort 删除旧 Kernel，然后推送一个�
 > **`flux2-klein-4b` 下载口径**：仓库根目录另有一份 7.75 GB 的单文件权重副本与示意图片，组件白名单
 > （`pipeline.allowPatterns`）只取 `model_index.json` 与 `scheduler` / `text_encoder` / `tokenizer` /
 > `transformer` / `vae` 目录，规划下载量 16.0 GB、`measured.downloadGb` 待新版白名单冷启动真机重测后回填。
-> 该模型同时支持模型原生参考生图（`supportsReference`，`references` 1~2 张），耗时与「弱参考」定位见
-> §2.2「模型原生参考图」。
+> 该模型同时支持模型原生参考生图（`supportsReference`，`references` 1~2 张）与 `outpaint` 引擎（Outpaint LoRA），
+> 耗时与「弱参考」定位见 §2.2「模型原生参考图」；`flux2-klein-9b` 同样 `supportsReference = true`，仅 Colab 可用。
 >
 > **首张生成延迟说明**：远端服务支持在 Kernel 启动时预载模型（`preload`）；但首次推理仍需建立 CUDA Context
 > 与内存池，耗时高于 `steadySeconds`，从第二张开始进入稳定速度。
@@ -1449,7 +1462,7 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
 6. **测试**：`src/logic/mask.js` 纯逻辑（画笔 / 状态归一、画布比例、导出前置校验、指纹）与 `src/logic/preset.js`
    的 `supportsInpaint` 进 `check-client-logic`；`check-client-render` 覆盖入口按能力显隐、工具栏键盘 / 触控
    结构、导出后按 `reference.mask` 提交与清理入口。真机显存与画质验收见 ROADMAP 第十条。
-7. **专用局部重绘预设（`sdxl-inpaint`）**：9 通道 inpaint 专用权重，加载后即为局部重绘管线
+7. **专用局部重绘预设（`sdxl-inpaint`，阶段十七已下线）**：9 通道 inpaint 专用权重，加载后即为局部重绘管线
    （不走 `from_pipe`）。它是 `inpaintOnly` 预设：只能带参考图 + 蒙版使用，缺任一项时生成按钮旁给出
    说明并拦下提交；参考图兜底预设与「以此图重绘」的自动切换会跳过它。真机验收（2026-11-16）
    结论：整图蒙版 + 提示词时文本遵循完整（如「蓝色大象」可完整生成）；**小蒙版时强度需要接近上限
@@ -1519,11 +1532,12 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
    `inpaintOnly` 预设（如 `sdxl-inpaint`）不再出现在主表单预设选择器中，只在图片工具内部可选；
    旧界面态残留该预设时，面板生成自动切到支持文生图的兜底预设并轻提示，不静默失败。
 2. **舞台动作坞**：图片下方的 `.ofs-dock` 分两组——图片处理（`局部涂抹`、`整图重绘`、`高清放大`/`扩图`
-   占位）与创作复用（`带回参数`、`再画一张`）。高清放大 / 扩图在 0.13.0 仍为禁用占位（`title` 说明
-   规划中），交互框架按 `instant / inline / canvas` 三类形态注册，后续接入只补描述符与远端能力。
+   占位）与创作复用（`带回参数`、`再画一张`）。高清放大 / 扩图在本阶段为禁用占位，0.13.0 起已可用
+   （见 §5.20）；交互框架按 `instant / inline / canvas` 三类形态注册，后续接入只补描述符与远端能力。
    `复制路径` 只保留在图片右上角悬浮按钮里，动作坞不再重复。
 3. **一步直达局部涂抹**：在舞台或大图预览点 `局部涂抹` 即以当前作品为底图打开画布，无需先「设为参考图」。
-   工具内部自动选模：当前预设支持 Inpaint 时沿用，否则优先 `sdxl-inpaint`、再退支持垫图的兜底预设；
+   工具内部自动选模：当前预设支持 Inpaint 时沿用，否则优先专用局部重绘权重（`sdxl-inpaint` 已于
+   阶段十七下线，当前直接跳过）、再退支持垫图的兜底预设；
    自动改用只发生在工具内，**不回写左栏**的 `presetId`，并在工具条提示当前使用的模型。工具级预设可在
    支持的 Inpaint 预设间切换。
 4. **画布 + 内置轻量提交栏**：画布沿用第十一阶段的蒙版能力（画笔 / 橡皮擦 / 清空 / 反选 / 覆盖率、
@@ -1631,6 +1645,10 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
 > 设计依据：[STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md) §四 Phase B。
 > 两个工具都在舞台动作坞（`ImageDock`）里一步直达，产物统一作为当前作品的派生子版本进入版本树；
 > 编辑态与左栏表单完全隔离，不写 `form`、不污染 `intentHistory`。
+>
+> **阶段十六升级**：扩图默认路径已切到 `flux2-klein-4b` + Outpaint LoRA 的纯绿画布条件生图
+> （协议见 §2.2「扩图」）。下文关于 9 通道权重 / 蒙版 / 边缘延拓的条目保留为阶段十五的历史实现说明；
+> 当前客户端导出绿底画布、不再生成蒙版，专用 `sdxl-inpaint` 权重已于阶段十七下线。
 
 1. **高清放大（`upscale`，instant 形态）**：动作坞点「高清放大」即提交，不进入编辑态、没有参数表单。
    源图固定按 `UPSCALE.factor`（2）倍放大（Real-ESRGAN 轻量超分，远端不加载扩散模型）。
@@ -1653,27 +1671,26 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
      拖拽内容框（pointer capture）即可把原图在画布里的位置挪到任意一侧，方向键按 8px 微调，
      双击或点「回中」复位；拖拽过程只更新预览，松手才写回草稿并重新导出。画布与内容框尺寸
      全部按 8px 对齐，且受 `OUTPAINT.maxEdge`（1536）/ `maxPixels`（1.6 MP）/ `minEdge`（256）约束。
-   - **提交栏**：模型默认 9 通道专用权重 `sdxl-inpaint`（也可切换其它支持局部重绘的模型）、
-     修改描述留空时回退原作品提示词、强度默认 `1.0` 且上限 `1.0`（覆盖大面积新增区域需要满步数）。
-   - **提交与归档**：编辑器把画布导出为 `reference.image`（扩张后的画布 + 原图放进内容框）、
-     `reference.mask`（白 = 新增区域）、`reference.sourcePath`（原作品路径）与
-     `reference.outpaintContent`（原图在画布里的归一化内容框，见 §2.2）；Host 写
+   - **提交栏**：模型默认现代扩图引擎 `flux2-klein-4b`（`OUTPAINT_ENGINE`，Host 注入 Outpaint LoRA
+     并把画布作为原生参考图提交；预设列表缺少该引擎时才回退通用局部重绘模型）。
+     修改描述留空时由 Host 拼接固定指令 `Fill the green spaces according to the image`，填写则追加在原指令后。
+   - **提交与归档**：编辑器把画布导出为 `reference.image`（纯绿扩张画布 + 原图放进内容框）、
+     `reference.sourcePath`（原作品路径）与 `reference.outpaintContent`（原图在画布里的归一化内容框，见 §2.2）；
+     Host 判定现代引擎后注入 Outpaint LoRA、把画布转成 `referenceImages` 提交（不再传蒙版 / strength），写
      `meta.outpaint = true` / `meta.outpaintContent` 并把 `sourceImage` / `rootImage` 指回原作品，
-     因此扩图产物直接挂在原图版本树下（类型「扩图」，同时 `inpaint = true`）。提交后助手线程追加
+     因此扩图产物直接挂在原图版本树下（类型「扩图」）。提交后助手线程追加
      镜像动作与任务气泡，完成后可用「对比原图」拉帘看新增边界。
-   - **画布填充（第二轮补修）**：新增区域不再用纯黑 / 纯白填充，改为把内容框四边 1px 边缘像素向
-     新增区拉伸延拓（等价于对源图做 edge clamp；左右/上下/四角共 8 条条带，纯逻辑在
-     `outpaintEdgeStripsOf`，`test/gpu-live.mjs` 用同一算法构造验收画布并做过逐像素一致性比对）。
-     这样内容区与新增区在边界两侧颜色连续，也给「4 通道 inpaint / strength < 1」这类会用到原图
-     latent 的路径留下更合理的起点；9 通道 + strength 1.0 的基线路径下填充色几乎不进入条件图，
-     真机成片差异在数值噪声级（见 CHANGELOG 0.13.0 修复条目）。
+   - **画布填充**：现代引擎下新增区域固定铺 `#00FF00` 纯绿（`OUTPAINT_ENGINE.green`），由模型按指令填充；
+     历史回退路径才使用内容框四边 1px 边缘像素延拓（`outpaintEdgeStripsOf`，仅保留在纯逻辑与
+     真机验收脚本中供旧路径使用）。
    - **对比原图对齐（第二轮补修）**：扩图产物的「对比原图」拉帘不再把原图放大铺满——按
      `outpaintContent` 把底图放回它在扩图画布中的真实位置（百分比定位、`object-fit: fill`），
      框外露出纸面背景；常规整图重绘 / 局部涂抹 / 高清放大产物没有该字段，仍按整幅对比。
    - **编辑保护与失败恢复**：扩图编辑态拒绝导入替换底图（沿用 Phase A 的编辑态保护）；提交失败保留
      底图 / 比例 / 锚点 / 提示词，动作坞「继续编辑」按原参数重开；换作品 / 换工具 / 新建创作清空画布草稿。
      草稿圆点把「比例 / 锚点」变化计为参数改动（`params`），与局部涂抹的蒙版圆点口径一致。
-   - **体积与空态**：导出的画布 / 蒙版超过契约体积（参考图 8 MiB / 蒙版 2 MiB）时就地提示、不提交；
+   - **体积与空态**：导出的画布超过契约体积（现代引擎按 `LIMITS.referenceImages.maxBytes` 4 MiB、
+     历史回退路径按参考图 8 MiB / 蒙版 2 MiB）时就地提示、不提交；
      画布还没导出时提交按钮禁用并提示原因。
 3. **版本树与助手统一**：版本类型新增 `upscale` / `outpaint`（`LINEAGE_KINDS`），
    版本面板显示对应文案与图标；在途任务的幽灵节点优先按 `job.tool` 判类型（其次 `sourceMode` /
@@ -1744,8 +1761,8 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
 
 > 设计依据：[MODEL_ASSET_SPEC.md](MODEL_ASSET_SPEC.md) §2.5 与 [ROADMAP.md](ROADMAP.md) 第十六节。
 > 规范范围只限「模型可用性」：页面结构、生成请求体与远端协议均不变（`providers` 只影响可选性与预检）。
-> **当前没有随包发布的资产声明 `providers`**：`flux2-klein-9b` 资产草稿（32.3 GiB，仅 Colab A100 可运行）
-> 正在等待真机验证，验证通过前不入库、不出现在模型列表；门控能力与 UI 先就绪，供后续大显存模型直接复用。
+> **阶段十七起已有资产声明 `providers`**：`z-image-turbo`、`qwen-image-2.1`、`flux2-klein-9b` 声明
+> `["colab"]`，其余 4 款缺省（两种来源都可用）；门控从「预留能力」变为实际生效。
 
 1. **资产能力位**：模型资产可在顶层声明可选 `providers: ('kaggle' | 'colab')[]`；缺省 = 两种来源都可用，
    生成物里不出现该字段（旧资产与旧宿主预设保持一致语义）。
@@ -1765,18 +1782,17 @@ Kaggle 免费 GPU 的排队时长不可控：本机历史日志里 6 次正常�
 5. **意图模型推荐同口径过滤（第四轮补修）**：`POST /imagen-api/intent` 的 system prompt 模型目录与
    `modelHint` 归一都按当前算力来源过滤（`normalizeModelHint` 丢弃 `providers` 不含当前来源的目标、
    无条件丢弃 `inpaintOnly` 目标），客户端 `intentModelHint` 二次归一带上 `state.provider` 给旧宿主兜底；
-   算力来源取运行设置的实时读数，切换来源后下一次解析即生效。当前发布资产均未声明 `providers`，
-   该过滤为后续仅 Colab 模型（如 9B）就位。
-6. **大显存资产口径（草稿，未发布）**：`flux2-klein-9b` 为 9.08B distilled（4 步 / CFG 1.0）、
+   算力来源取运行设置的实时读数，切换来源后下一次解析即生效。阶段十七起 3 款仅 Colab 资产
+   由该过滤排除在 Kaggle 来源的模型目录与 `modelHint` 目标之外。
+6. **大显存资产口径（阶段十七已发布）**：`flux2-klein-9b` 为 9.08B distilled（4 步 / CFG 1.0）、
    `supportsReference=true`、组件权重 ~32.3 GiB（transformer 17.3 GiB + 8B Qwen3 文本编码器 15.3 GiB）、
-   HF 受限仓库（需 HF Token，FLUX 非商用许可）；Kaggle 2×T4（双卡合计 29.1 GiB）必然 OOM，故预期声明
-   `providers: ["colab"]`。Colab 侧 A100 需高内存机型（`colabHighRam`；普通 A100 档位 503），G4 当前不可用。
-   草稿与验证脚本见 `.tmp/models/flux2-klein-9b.verified-pending.json` 与 `tools/colab/smoke-provider.mjs
-   --gpu A100 --high-ram`。
+   HF 受限仓库（需 HF Token，FLUX 非商用许可）；Kaggle 2×T4（双卡合计 29.1 GiB）必然 OOM，故声明
+   `providers: ["colab"]`，真机验收在 Colab L4（实测 18,107 MiB / 加载 98.9s / 单张 130.87s）。
+   同批声明仅 Colab 的还有 `z-image-turbo` 与 `qwen-image-2.1`。
 7. **文案与无障碍**：中英字典新增 5 键严格同构（来源展示名、仅 X 角标、阻断说明、×2 语言）；
    角标与置灰态不影响触控热区（选项本身 ≥44px）。
 8. **测试**：新增 `test/check-client-provider.mjs`（5 项：置灰 + 角标、双向 / 英文、缺省与非法回退、
    不可用时点生成 0 请求且 toast 含模型名与来源、匹配时正常提交）；`check-client-logic` 90 → 93
    （能力位纯函数与预检阻断 / 放行）、`check-client-shell` 53（不受影响）、`check-client-locale` 616 → 621；
    `jobs-wait` 40 → 41（`providerGateOf` 纯函数 + `submit` 接线：被拒不占队列、切 colab 放行）；
-   `check-contract` 仍为 14 项（发布资产 10 个，无 `providers` 字段）。
+   `check-contract` 仍为 14 项（阶段十七发布资产 7 个，其中 3 个声明 `providers`）。

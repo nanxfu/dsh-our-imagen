@@ -122,9 +122,9 @@
 
 | 取值 | 含义 | 要求 |
 | :--- | :--- | :--- |
-| `danbooru` | Danbooru 标签流模型（如 Animagine） | 英文逗号分隔的标签：质量词前缀、主体、外观、场景、构图、光影；不写完整句子 |
-| `natural` | 自然语言段落型模型（SDXL Base / RealVis / FLUX 等） | 一到两句完整英文句子：主体、环境、光线、材质、镜头 |
-| `concise` | 少步快速模型（Lightning / Hyper / Turbo） | 简短英文短语（约 25 词以内），优先主体、场景与光影，少用修辞 |
+| `danbooru` | Danbooru 标签流模型（如 `anima-turbo-v1.1`） | 英文逗号分隔的标签：质量词前缀、主体、外观、场景、构图、光影；不写完整句子 |
+| `natural` | 自然语言段落型模型（`sana-sprint-1.6b` / `z-image-turbo` / `qwen-image-2.1` / FLUX 等） | 一到两句完整英文句子：主体、环境、光线、材质、镜头 |
+| `concise` | 少步快速模型（如 `sdxl-lightning` 的 4 步档） | 简短英文短语（约 25 词以内），优先主体、场景与光影，少用修辞 |
 
 消费方：`lib/intent.js` 的对话意图解析按当前预设的这两个字段动态约束宿主模型，要求 `prompt` 永远是英文；`qualityPrefix` 会作为固定质量词要求写进提示词开头。中文只出现在确认卡的 `summary`（UI 语言摘要）里，不进入发给模型的提示词。
 
@@ -150,8 +150,8 @@
 
 判定标准：
 
-- 模型必须是可被 diffusers 整管复用的模型（当前 `pipeline.loader` 为 `sdxl` / `sdxl-lora`），其组件能被 `AutoPipelineForImage2Image.from_pipe()` / `AutoPipelineForInpainting.from_pipe()` 直接复用；
-- 首期（0.12.0）只开放 SDXL 家族（含 SDXL + LoRA 组合）；`flux2` / `anima` 等特殊 loader 暂不支持，两者都标 `false`；
+- 模型必须是可被 diffusers 整管复用的模型（当前 `pipeline.loader` 为 `sdxl` / `sdxl-lora` / `zimage`），其组件能被 `AutoPipelineForImage2Image.from_pipe()` / `AutoPipelineForInpainting.from_pipe()` 直接复用；
+- 当前开放给 `sdxl-lora`（`sdxl-lightning`）与 `zimage`（`z-image-turbo`）两个 loader；`flux2` / `anima` / `sana-sprint` / `qwen-image-2.1` 等 loader 暂不支持，均标 `false`；
 - `supportsInpaint = true` 必须同时 `supportsImg2Img = true`（蒙版叠在参考图上，没有参考图就无从重绘），`tools/build-assets.mjs` 会校验这条联合约束；
 - 标 `true` 前必须在真机用一张参考图（局部重绘还要加一张蒙版）跑通一次，并按 §3 的验证流程记录结果。
 
@@ -159,6 +159,8 @@
 
 通用底座（4 通道 UNet）的局部重绘靠 `from_pipe` 派生，走的是「每步把未涂抹区域混回」的兼容路径，边界融合质量有限。
 对「只做局部重绘」的专用权重（9 通道 UNet，如 `diffusers/stable-diffusion-xl-1.0-inpainting-0.1`）：
+契约保留 `inpaintOnly` + `pipeline.nativeInpaint` 两个标记（阶段十七起 7 款现役资产均未使用，
+原 `sdxl-inpaint` 已下线；能力位与远端 nativeInpaint 加载分支仍保留，供后续专用权重复用）。
 
 | 字段 | 取值 | 说明 |
 | :--- | :--- | :--- |
@@ -175,7 +177,7 @@
 通用能力字段（`supportsImg2Img` / `supportsInpaint`）的消费方：
 - 客户端：`shared/contract.js` 的 `publicPresets()` 只剔除 `pipeline`，能力字段随预设公开视图下发；参考图槽位、画廊「以此图重绘」与涂抹入口按字段决定是否可用，不支持时自动切到支持预设或置灰提示。
 - Host：提交 `/generate` 前校验参考图与蒙版的来源、格式、体积、尺寸边界与 `strength`；二进制不进任务公开视图，只把 `sourcePath` / `strength` / 是否带蒙版记进产物 meta。
-- daemon：`SUPPORTED_IMG2IMG_LOADERS` / `SUPPORTED_INPAINT_LOADERS`（均为 `sdxl` / `sdxl-lora`）是最后一道兜底，其它 loader 一律按 `invalid_request` 拒绝，不信任客户端标记。
+- daemon：`img2img_names()` / `inpaint_names()`（当前 `sdxl` / `sdxl-lora` / `zimage`）是最后一道兜底，其它 loader 一律按 `invalid_request` 拒绝，不信任客户端标记。
 
 校验：`tools/build-assets.mjs` 要求两个字段若存在必须是布尔值，且 `supportsInpaint` 不能脱离 `supportsImg2Img`；缺省按 `false` 归一后写入 `shared/models.generated.js`（`npm run models:check` 会一并校验生成物同步）。
 
@@ -198,7 +200,8 @@
 
 - 模型的基础生成管线 `__call__` 原生接收 `image`（`list[PIL.Image.Image] | PIL.Image.Image`）且仍保留
   `width` / `height` / `num_inference_steps` / `guidance_scale` / `generator`；
-- 首期（Phase C1）只登记 `flux2`（`Flux2KleinPipeline`）；其它家族需先真机验证再标 `true`；
+- 当前登记 `flux2`（`Flux2KleinPipeline`，`flux2-klein-4b` / `flux2-klein-9b`）与 `qwen-image-2.1`
+  （`QwenImage21Pipeline`）两个 loader；其它家族需先真机验证再标 `true`；
 - **与 `supportsImg2Img` 互斥**：两种请求形状不同（`references` 数组 vs `reference` 单图），同一预设
   同时标 `true` 会让 Host / 客户端无法判断走哪条路径，`tools/build-assets.mjs` 会拒绝这种组合。
   未来若某个模型确实两条都支持，再放开该联合约束并补「优先走哪条」的客户端口径；
@@ -211,7 +214,7 @@
 - 客户端：`supportsReference` 随 `publicPresets()` 下发，参考槽位据此决定是否可用与提示文案；
 - Host：`references` 只允许在预设 `supportsReference=true` 且 `tool=generate` 时放行，与 `reference` 互斥，
   路径形状 / 数量按契约校验，读盘后的体积与魔数校验在执行阶段完成；
-- daemon：`SUPPORTED_REFERENCE_LOADERS`（首期仅 `flux2`）是最后一道兜底，非支持 loader 一律 400，
+- daemon：`reference_names()`（当前 `flux2` 与 `qwen-image-2.1`）是最后一道兜底，非支持 loader 一律 400，
   不信任客户端标记。
 
 校验：`supportsReference` 为**必填**布尔值；`npm run models:check` 与 `node test/check-contract.mjs`
@@ -223,21 +226,21 @@
 
 | 取值 | 含义 |
 | :--- | :--- |
-| `true` | 管线接受负向提示词：`negative_prompt` 会参与条件编码（SDXL 家族在 `cfg > 0` 时生效，`anima` 运行时在 CFG > 1 时作为无条件分支参与引导，推荐 CFG=4） |
+| `true` | 管线接受负向提示词：`negative_prompt` 会参与条件编码（SDXL 系在 `cfg > 0` 时生效；`qwen-image-2.1` 走 `true_cfg_scale`，仅在 CFG > 1 时传递；`anima` 运行时在 CFG > 1 时作为无条件分支参与引导，当前 `anima-turbo-v1.1` 推荐 CFG=1） |
 | `false` | 管线没有负向词输入，传了也会被丢弃；客户端与助手应隐藏「排除项」，避免用户填写无效参数 |
 
-当前 11 个预设中只有 `flux2-klein-4b` 与 `flux2-klein-9b` 为 `false`：diffusers 的 FLUX.2 管线
-`__call__` 没有 `negative_prompt` 参数，`remote/daemon.py` 的 `run_task()` 按 `__call__` 签名
-（`STATE.sig_params`）过滤参数，即使请求里带了负向词也不会传进管线。其余 9 个（`sdxl-lightning` /
-`hyper-sdxl-8step` / `sdxl-turbo` / `playground-v2.5` / `sdxl-base` / `sdxl-inpaint` / `realvis-v5` /
-`animagine-xl-3.1` / `anima-light-lavender`）为 `true`：SDXL 家族走 diffusers 的 `negative_prompt`
-形参（专用 inpaint 权重同样支持）；`anima-light-lavender` 的自定义运行时显式接收并使用负向词。
+当前 7 款现役预设中 4 款为 `false`：`sana-sprint-1.6b`、`z-image-turbo`、`flux2-klein-4b`、
+`flux2-klein-9b`（SANA、Z-Image 与 diffusers FLUX.2 管线的 `__call__` 没有 `negative_prompt` 参数，
+`remote/daemon.py` 的 `run_task()` 按 `__call__` 签名过滤参数，即使请求里带了负向词也不会传进管线）。
+其余 3 款为 `true`：`sdxl-lightning`（SDXL 走 diffusers 的 `negative_prompt` 形参）、
+`qwen-image-2.1`（`true_cfg_scale` 语义，CFG > 1 时才传负向词）与 `anima-turbo-v1.1`
+（自定义运行时显式接收并使用负向词）。
 
 判定标准：
 
 - 查看 loader 对应生成管线的 `__call__` 是否接受 `negative_prompt`（diffusers 源码 / 模型卡），或真机确认负向词确实改变出图；
 - 不确定时填 `false`：标错的成本不对称——`false` 只是隐藏了可用能力，`true` 会让界面多出一个实际被丢弃的输入框，并让助手输出无效负向词；
-- 该字段与 `negativeHint`（模型推荐默认负向词）相互独立：支持负向词但默认不推荐时 `negativeHint` 可以是空串（如 `anima-light-lavender`），此时排除项默认隐藏，用户主动抬高 CFG 后出现。
+- 该字段与 `negativeHint`（模型推荐默认负向词）相互独立：支持负向词但默认不推荐时 `negativeHint` 可以是空串（如 `anima-turbo-v1.1`），此时排除项默认隐藏，用户主动抬高 CFG 后出现。
 
 联合判定：是否展示/使用负向词由 `shared/models-guide.js` 的 `negativePromptActive(preset, cfg)` 决定，Host 与 Client 共用同一份规则，不得各写一套：
 
@@ -246,7 +249,7 @@
 3. 必须 `cfg > 0`（CFG=0 的采样会忽略负向词，daemon 也不会传）；
 4. 且 `negativeHint` 非空，或用户把 CFG 抬到高于预设推荐值。
 
-结果：默认 `cfg = 0` 的 4 步极速模型（`sdxl-lightning` / `hyper-sdxl-8step` / `sdxl-turbo`）与 `flux2-klein-4b` 默认隐藏排除项；用户抬高 CFG 后出现，恢复默认后再次隐藏。
+结果：7 款默认参数下排除项均隐藏——`sdxl-lightning` 与 `z-image-turbo` 默认 CFG=0；`sana-sprint-1.6b`、`flux2-klein-4b`、`flux2-klein-9b` 管线不消费负向词；`qwen-image-2.1` 与 `anima-turbo-v1.1` 的推荐负向词为空串。用户抬高 CFG 后，`sdxl-lightning`、`qwen-image-2.1`、`anima-turbo-v1.1` 可出现排除项，恢复默认后再次隐藏。
 
 消费方：
 
@@ -281,8 +284,10 @@
 部分大模型只在特定远端后端跑得动：例如 `FLUX.2 Klein 9B` 组件权重 32.32 GiB，需要 Colab
 `A100` 这类大显存档（Kaggle 2×T4 合计 29.12 GiB，加载即 OOM）。`providers` 让工作台在
 **选择模型**与**生成前预检**两处就挡住「注定失败、还会白烧一次配额」的组合，而不是等远端报 OOM。
-**当前没有随包发布的资产声明该字段**（`flux2-klein-9b` 资产草稿正在等待 Colab A100 真机验证，
-见 [ROADMAP.md](ROADMAP.md) 第十六节）；能力位与门控代码先就绪，后续大显存模型接入直接复用。
+**阶段十七起已有 3 个随包发布的资产声明该字段**：`z-image-turbo`、`qwen-image-2.1`、
+`flux2-klein-9b` 均声明 `providers: ["colab"]`；其余 4 款缺省（两种来源都可用）。
+`flux2-klein-9b` 已在 Colab L4 真机验证（18,107 MiB / 加载 98.9s / 单张 130.87s，
+见 [ROADMAP.md](ROADMAP.md) 第十七节）。
 
 | 取值 | 含义 |
 | :--- | :--- |
@@ -290,7 +295,7 @@
 | `["kaggle"]` | 仅 Kaggle 可运行（当前无此类资产，能力位先留好，UI 与预检对称生效） |
 | 缺省（不写该字段） | 两种来源都支持。生成物里**不会出现** `providers` 字段，既有模型的对外快照逐字不变 |
 
-JSON 示例（与 `supportsNegative` 同级、平铺在顶层；以下为草稿形态，尚未发布）：
+JSON 示例（与 `supportsNegative` 同级、平铺在顶层；阶段十七已随 `flux2-klein-9b` 等资产发布）：
 
 ```json
 {
@@ -305,7 +310,7 @@ JSON 示例（与 `supportsNegative` 同级、平铺在顶层；以下为草稿�
 
 - 取值域只有 `kaggle` / `colab`，与 `shared/contract.js` 的 `SETTINGS.providers` 是唯一来源；
 - 必须是**非空数组**且**无重复**：写 `[]` 会被构建拒绝（它的语义和「缺省」重叠，容易让人误以为不可用）；
-- 缺省 = 两种来源全可用，与现有 10 个资产语义一致，不需要补字段；
+- 缺省 = 两种来源全可用，与现有 4 个未声明 `providers` 的资产语义一致，不需要补字段；
 - 旧宿主下发的预设没有该字段时，客户端按「全可用」处理，不会误伤既有流程。
 
 消费方：

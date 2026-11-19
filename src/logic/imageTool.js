@@ -44,7 +44,14 @@ export const IMAGE_TOOL_FORMS = Object.freeze(['instant', 'inline', 'canvas'])
 /** 动作坞分组：图片处理（针对当前作品的二次处理）与创作复用（继续创作）。 */
 export const IMAGE_TOOL_GROUPS = Object.freeze(['process', 'reuse'])
 
-/** 局部重绘首选的专用权重预设：当前模型不支持 Inpaint 时优先切到它。 */
+/**
+ * 专用局部重绘权重的预设 id。
+ *
+ * 阶段十七已把 9 通道专用权重 `sdxl-inpaint` 下线：现役 7 款模型都不再声明
+ * `inpaintOnly`，生产路径命中不到这个偏好分支，局部重绘统一走通用底座
+ * `from_pipe` 兜底（`referencePresetOf()`）。保留常量与分支是为了将来重新引入
+ * 原生 inpaint 权重时直接复用同一套选模规则，不用再改 `toolPresetOf`。
+ */
 const INPAINT_PRESET_ID = 'sdxl-inpaint'
 
 /**
@@ -118,12 +125,14 @@ function resolveTool(value) {
  * 自动选模：工具要用的预设。
  *
  * 规则（Lead 决策：工具内选模不回写左栏表单）：
- *  - inpaint：当前预设支持 Inpaint 就沿用；否则优先专用权重 `sdxl-inpaint`（存在且支持时），
- *    再退 `referencePresetOf()` 的通用垫图兜底；一个都没有 → preset: null。
+ *  - inpaint：当前预设支持 Inpaint 就沿用；否则若有专用权重（`INPAINT_PRESET_ID`，阶段十七
+ *    下线后生产列表无命中）则用它，再退 `referencePresetOf()` 的通用垫图兜底；
+ *    一个都没有 → preset: null。
  *  - img2img：当前预设支持整图垫图就沿用；否则退 `referencePresetOf()`。
  *    专用局部重绘权重（inpaintOnly）不能做纯整图重绘，即使它声明 supportsImg2Img 也不沿用。
- *  - outpaint：**优先专用 9 通道权重 `sdxl-inpaint`**（扩图新增面积大，通用底座边界融合弱），
- *    其次当前预设（支持 Inpaint 时），最后通用垫图兜底。
+ *  - outpaint：优先现代扩图引擎 `flux2-klein-4b`（`OUTPAINT_ENGINE.presetId`，纯绿画布条件
+ *    生图）；预设列表缺失它时才依次回退专用 inpaint 权重、当前预设（支持 Inpaint 时）、
+ *    通用垫图兜底。
  *  - upscale：远端超分不读扩散预设，返回 `{ preset: null }`（hook 不对它做预设校验）。
  *
  * @param {Array<object>} presets 宿主下发的预设列表

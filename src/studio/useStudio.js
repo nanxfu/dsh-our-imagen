@@ -103,6 +103,7 @@ export function useStudio(props) {
   const kaggleLogin = useKaggleLogin({ t, ui, onDone: () => control.runProbe() })
   // Colab Google OAuth 登录会话：成功后刷新一次 /state 同步 colabAuth 摘要。
   const colabLogin = useColabLogin({ t, ui, onDone: () => host.refresh() })
+  const provider = (state && state.provider) || (control.session && control.session.provider) || 'kaggle'
   const form = useStudioForm({ t, isEn, alive, ui, preset: { presets, defaultPreset }, initialPrompt })
   // 舞台图片工具域：底图 / 提示词 / 强度 / 蒙版 / 工具预设全部独立于左栏表单。
   const imageTool = useImageTool({
@@ -111,6 +112,7 @@ export function useStudio(props) {
     ui,
     presets,
     defaultPreset,
+    provider,
     // 工具优先沿用左栏当前模型（支持对应能力时），但不回写左栏。
     currentPresetId: form.form.presetId,
     // 阶段十五 A2：舞台图片工具提交成功后，把动作镜像进助手线程（kind 记录不进 intentHistory）。
@@ -250,7 +252,7 @@ export function useStudio(props) {
     queueNotice,
     retryHost,
     kaggleLogin,
-    provider: (state && state.provider) || (control.session && control.session.provider) || 'kaggle',
+    provider,
     colabAuth: (state && state.colabAuth) || null,
     colabLogin,
   }

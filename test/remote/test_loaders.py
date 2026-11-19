@@ -38,10 +38,13 @@ class LoaderRegistryBoundaryTest(DaemonUnitTest):
         self.assertEqual(d.SUPPORTED_LOADERS, d.LOADERS.names())
         self.assertEqual(d.SUPPORTED_IMG2IMG_LOADERS, d.LOADERS.img2img_names())
         self.assertEqual(d.SUPPORTED_INPAINT_LOADERS, d.LOADERS.inpaint_names())
-        self.assertEqual(d.SUPPORTED_LOADERS, ("sdxl", "sdxl-lora", "flux2", "anima"))
-        self.assertEqual(d.SUPPORTED_IMG2IMG_LOADERS, ("sdxl", "sdxl-lora"))
-        # 首期局部重绘只对 SDXL 家族开放：与垫图名单独立登记，互不连坐。
-        self.assertEqual(d.SUPPORTED_INPAINT_LOADERS, ("sdxl", "sdxl-lora"))
+        self.assertEqual(
+            d.SUPPORTED_LOADERS,
+            ("sdxl", "sdxl-lora", "flux2", "anima", "zimage", "sana-sprint", "qwen-image-2.1"),
+        )
+        self.assertEqual(d.SUPPORTED_IMG2IMG_LOADERS, ("sdxl", "sdxl-lora", "zimage"))
+        # 局部重绘对 SDXL 与 Z-Image 开放：与垫图名单独立登记，互不连坐。
+        self.assertEqual(d.SUPPORTED_INPAINT_LOADERS, ("sdxl", "sdxl-lora", "zimage"))
 
     def test_daemon_no_longer_branches_on_loader_names(self) -> None:
         source = DAEMON_PATH.read_text(encoding="utf-8")
@@ -79,7 +82,7 @@ class LoaderRegistryBoundaryTest(DaemonUnitTest):
             d.build_pipeline(spec)
         with self.assertRaises(d.RequestError) as submit_ctx:
             d.validate_generate_spec(make_spec(pipeline=spec))
-        expected = "未知 loader：'nope'（支持 sdxl, sdxl-lora, flux2, anima）"
+        expected = "未知 loader：'nope'（支持 sdxl, sdxl-lora, flux2, anima, zimage, sana-sprint, qwen-image-2.1）"
         self.assertEqual(str(load_ctx.exception), expected)
         self.assertEqual(str(submit_ctx.exception), expected)
 
@@ -450,6 +453,206 @@ class NativeInpaintLoaderTest(DaemonUnitTest):
             {"loader": "sdxl", "base": "stabilityai/stable-diffusion-xl-base-1.0"}
         )
         self.assertEqual(factories, ["text2img"], "普通 sdxl 底座仍走文生图工厂")
+
+
+class ModernDitLoaderTest(DaemonUnitTest):
+    """zimage / sana-sprint loader 及通用 dtype / cpuOffload 能力。"""
+
+    def _run_modern_build(self, pipeline_spec: dict, *, device_count: int = 1, has_specific_class: bool = True):
+        seen: dict = {}
+
+        class FakePipe:
+            def __init__(self) -> None:
+                self.device = None
+                self.offloaded = False
+                self.scheduler = types.SimpleNamespace(config={})
+
+            def to(self, device: str):
+                self.device = device
+                return self
+
+            def enable_model_cpu_offload(self) -> None:
+                self.offloaded = True
+
+        def make_factory(tag: str):
+            class FakeFactory:
+                @staticmethod
+                def from_pretrained(source, **kwargs):  # noqa: ANN001
+                    seen["factory"] = tag
+                    seen["source"] = source
+                    seen["kwargs"] = kwargs
+                    return FakePipe()
+
+            return FakeFactory
+
+        fake_torch = types.ModuleType("torch")
+        fake_torch.float16 = "float16"
+        fake_torch.bfloat16 = "bfloat16"
+        fake_torch.float32 = "float32"
+        fake_torch.cuda = types.SimpleNamespace(device_count=lambda: device_count)
+
+        fake_diffusers = types.ModuleType("diffusers")
+        fake_diffusers.AutoPipelineForText2Image = make_factory("auto")
+        if has_specific_class:
+            fake_diffusers.ZImagePipeline = make_factory("zimage_cls")
+            fake_diffusers.SanaSprintPipeline = make_factory("sana_cls")
+            fake_diffusers.QwenImage21Pipeline = make_factory("qwen21_cls")
+
+        with (
+            mock.patch.dict(sys.modules, {"torch": fake_torch, "diffusers": fake_diffusers}),
+            mock.patch.object(d.CACHE, "resolve_local_model", return_value=None),
+            mock.patch.object(d.CACHE, "ensure_disk_capacity"),
+            mock.patch.object(d.CACHE, "prefetch_weights"),
+        ):
+            pipe, identity = d.build_pipeline(pipeline_spec)
+        return pipe, identity, seen
+
+    def test_zimage_defaults_to_bf16_and_supports_cpu_offload(self) -> None:
+        pipe, identity, seen = self._run_modern_build(
+            {"loader": "zimage", "base": "Tongyi-MAI/Z-Image-Turbo", "cpuOffload": True}
+        )
+        self.assertEqual(identity, "zimage:Tongyi-MAI/Z-Image-Turbo")
+        self.assertEqual(seen["factory"], "zimage_cls")
+        self.assertEqual(seen["kwargs"]["torch_dtype"], "bfloat16")
+        self.assertNotIn("device_map", seen["kwargs"])
+        self.assertTrue(pipe.offloaded)
+        self.assertIsNone(pipe.device)
+
+    def test_sana_sprint_loads_with_bf16_and_moves_to_cuda(self) -> None:
+        pipe, identity, seen = self._run_modern_build(
+            {"loader": "sana-sprint", "base": "Efficient-Large-Model/Sana_Sprint_1.6B_1024px_diffusers"}
+        )
+        self.assertEqual(identity, "sana-sprint:Efficient-Large-Model/Sana_Sprint_1.6B_1024px_diffusers")
+        self.assertEqual(seen["factory"], "sana_cls")
+        self.assertEqual(seen["kwargs"]["torch_dtype"], "bfloat16")
+        self.assertEqual(pipe.device, "cuda")
+        self.assertFalse(pipe.offloaded)
+
+    def test_sana_sprint_upcasts_vae_to_fp32_without_native_bf16(self) -> None:
+        class FakeLatent:
+            def __init__(self, dtype: str) -> None:
+                self.dtype = dtype
+
+            def to(self, *, dtype: str):
+                return FakeLatent(dtype)
+
+        class FakeVae:
+            def __init__(self) -> None:
+                self.dtype = "bfloat16"
+                self.decoded_dtypes: list[str] = []
+
+            def to(self, *, dtype: str):
+                self.dtype = dtype
+                return self
+
+            def decode(self, z):
+                self.decoded_dtypes.append(z.dtype)
+                return z
+
+        class FakeSanaPipe:
+            def __init__(self) -> None:
+                self.device = None
+                self.vae = FakeVae()
+
+            def to(self, device: str):
+                self.device = device
+                return self
+
+        fake_torch = types.ModuleType("torch")
+        fake_torch.float16 = "float16"
+        fake_torch.bfloat16 = "bfloat16"
+        fake_torch.float32 = "float32"
+        fake_torch.cuda = types.SimpleNamespace(
+            device_count=lambda: 1,
+            is_available=lambda: True,
+            get_device_capability=lambda _idx: (7, 5),
+        )
+        fake_diffusers = types.ModuleType("diffusers")
+        fake_diffusers.AutoPipelineForText2Image = object()
+        fake_diffusers.SanaSprintPipeline = types.SimpleNamespace(from_pretrained=lambda *_a, **_kw: FakeSanaPipe())
+
+        with (
+            mock.patch.dict(sys.modules, {"torch": fake_torch, "diffusers": fake_diffusers}),
+            mock.patch.object(d.CACHE, "resolve_local_model", return_value=None),
+            mock.patch.object(d.CACHE, "ensure_disk_capacity"),
+            mock.patch.object(d.CACHE, "prefetch_weights"),
+        ):
+            pipe, _identity = d.build_pipeline(
+                {"loader": "sana-sprint", "base": "Efficient-Large-Model/Sana_Sprint_1.6B_1024px_diffusers"}
+            )
+        self.assertEqual(pipe.vae.dtype, "float32")
+        pipe.vae.decode(FakeLatent("bfloat16"))
+        self.assertEqual(pipe.vae.decoded_dtypes, ["float32"])
+
+    def test_flux2_cpu_offload_skips_device_map_and_enables_offload(self) -> None:
+        pipe, _identity, seen = self._run_modern_build(
+            {
+                "loader": "flux2",
+                "base": "black-forest-labs/FLUX.2-klein-9B",
+                "dtype": "bf16",
+                "cpuOffload": True,
+                "deviceMap": "balanced",
+            },
+            device_count=2,
+        )
+        self.assertEqual(seen["kwargs"]["torch_dtype"], "bfloat16")
+        self.assertNotIn("device_map", seen["kwargs"])
+        self.assertTrue(pipe.offloaded)
+        self.assertIsNone(pipe.device)
+
+    def test_invalid_dtype_raises_request_error_without_releasing_gpu(self) -> None:
+        released: list[bool] = []
+        ctx = remote_loader_base.LoadContext(
+            cache=d.CACHE,
+            log=d.log,
+            error_cls=d.LoadError,
+            request_error_cls=d.RequestError,
+            release_gpu=lambda: released.append(True),
+        )
+        loader = d.LOADERS.get("zimage")
+        fake_torch = types.ModuleType("torch")
+        fake_torch.float16 = "float16"
+        fake_diffusers = types.ModuleType("diffusers")
+        fake_diffusers.AutoPipelineForText2Image = object()
+        with (
+            mock.patch.dict(sys.modules, {"torch": fake_torch, "diffusers": fake_diffusers}),
+            mock.patch.object(loader, "prepare_base", return_value="/local/zimage"),
+        ):
+            with self.assertRaises(d.RequestError):
+                loader.load({"loader": "zimage", "base": "Tongyi-MAI/Z-Image-Turbo", "dtype": "int4"}, ctx)
+        self.assertEqual(released, [])
+
+    def test_qwen_image_21_defaults_to_bf16_and_supports_cpu_offload(self) -> None:
+        pipe, identity, seen = self._run_modern_build(
+            {"loader": "qwen-image-2.1", "base": "Qwen/Qwen-Image-2.1-Turbo", "cpuOffload": True}
+        )
+        self.assertEqual(identity, "qwen-image-2.1:Qwen/Qwen-Image-2.1-Turbo")
+        self.assertEqual(seen["factory"], "qwen21_cls")
+        self.assertEqual(seen["kwargs"]["torch_dtype"], "bfloat16")
+        self.assertNotIn("device_map", seen["kwargs"])
+        self.assertTrue(pipe.offloaded)
+        self.assertIsNone(pipe.device)
+
+    def test_filter_call_kwargs_maps_true_cfg_scale(self) -> None:
+        sig = {"prompt", "image", "negative_prompt", "true_cfg_scale", "width", "height", "num_inference_steps", "generator"}
+        turbo_filtered = remote_pipeline_loader.filter_call_kwargs(
+            {"prompt": "cat", "guidance_scale": 1.0, "width": 1024, "height": 1024},
+            sig,
+            negative_prompt="blurry",
+            cfg=1.0,
+        )
+        self.assertNotIn("guidance_scale", turbo_filtered)
+        self.assertEqual(turbo_filtered["true_cfg_scale"], 1.0)
+        self.assertNotIn("negative_prompt", turbo_filtered)
+
+        cfg_filtered = remote_pipeline_loader.filter_call_kwargs(
+            {"prompt": "cat", "guidance_scale": 4.0, "width": 1024, "height": 1024},
+            sig,
+            negative_prompt="blurry",
+            cfg=4.0,
+        )
+        self.assertEqual(cfg_filtered["true_cfg_scale"], 4.0)
+        self.assertEqual(cfg_filtered["negative_prompt"], "blurry")
 
 if __name__ == "__main__":
     import unittest

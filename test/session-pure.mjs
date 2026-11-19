@@ -490,7 +490,7 @@ function makeGenerationQueue(connection) {
   return new JobQueue({
     ctx: null,
     session: { connection },
-    defaultPreset: 'sdxl-turbo',
+    defaultPreset: 'sdxl-lightning',
     options: { generateTimeoutMs: 5000 },
   })
 }
@@ -512,14 +512,14 @@ async function scenarioRemotePort() {
     const queue = makeGenerationQueue(() => ({ endpoint: mock.endpoint, token: 'test-token' }))
 
     await check('成功路径：逐张提交、seed 递增、字段名转换、返回 modelId', async () => {
-      const { results, modelId } = await queue.generate({ id: 'job-1', presetId: 'sdxl-turbo', params })
+      const { results, modelId } = await queue.generate({ id: 'job-1', presetId: 'sdxl-lightning', params })
       // 逐张提交（合作式取消的前提）：count=2 对应 2 个远端 job，每个 tasks 只含 1 项。
       assert.equal(mock.state.calls, 2)
       const bodies = mock.state.bodies
       assert.equal(bodies.length, 2)
       for (const body of bodies) {
-        assert.equal(body.pipeline.loader, 'sdxl')
-        assert.equal(body.modelId, 'stabilityai/sdxl-turbo')
+        assert.equal(body.pipeline.loader, 'sdxl-lora')
+        assert.equal(body.modelId, 'stabilityai/stable-diffusion-xl-base-1.0 + ByteDance/SDXL-Lightning')
         assert.equal(body.tasks.length, 1, '每个远端 job 只含 1 个 task')
       }
       assert.deepEqual(
@@ -547,7 +547,7 @@ async function scenarioRemotePort() {
     await check('seed 接近上界时环形回绕：全部落在契约范围内且按序递增', async () => {
       const offset = mock.state.bodies.length
       const wrapped = { ...params, seed: LIMITS.seed.max - 1, count: 4 }
-      await queue.generate({ id: 'job-2', presetId: 'sdxl-turbo', params: wrapped })
+      await queue.generate({ id: 'job-2', presetId: 'sdxl-lightning', params: wrapped })
       const seeds = mock.state.bodies.slice(offset).map((body) => body.tasks[0].seed)
       assert.deepEqual(seeds, [LIMITS.seed.max - 1, 0, 1, 2], `回绕结果：${seeds}`)
       assert.ok(
@@ -559,7 +559,7 @@ async function scenarioRemotePort() {
     await check('连接不可用 → session_absent（原文案）', async () => {
       const offline = makeGenerationQueue(() => ({ endpoint: null, token: null }))
       await assert.rejects(
-        () => offline.generate({ id: 'job-3', presetId: 'sdxl-turbo', params }),
+        () => offline.generate({ id: 'job-3', presetId: 'sdxl-lightning', params }),
         (error) => error.code === 'session_absent' && error.message === '远端连接不可用',
       )
     })
@@ -599,7 +599,7 @@ async function scenarioRemotePort() {
         () =>
           queue.generate({
             id: 'job-empty',
-            presetId: 'sdxl-turbo',
+            presetId: 'sdxl-lightning',
             params: { prompt: 'x', negativePrompt: '', seed: 1, width: 512, height: 512, steps: 1, cfg: 0, count: 1 },
           }),
         (error) => error.code === 'empty_result' && error.message === '远端没有返回图片',

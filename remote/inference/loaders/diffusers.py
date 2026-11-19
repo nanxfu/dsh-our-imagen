@@ -1,4 +1,4 @@
-"""Diffusers 家族的三个加载策略：``sdxl`` / ``sdxl-lora`` / ``flux2``。
+"""Diffusers 家族加载策略：``sdxl`` / ``sdxl-lora`` / ``flux2`` / ``zimage`` / ``sana-sprint``。
 
 分支体从 ``pipeline_loader.load_diffusers_pipeline`` 的 if/elif 原样搬来（工厂选择、调度器
 默认值、LoRA 挂载顺序、``device_map`` 口径都没动），只是把"用哪个工厂 / 要不要 LoRA / 要不要
@@ -10,18 +10,22 @@ if/elif。
 ``pipeline_loader.load_diffusers_pipeline`` 这个兼容入口）；``load`` 才是 daemon 的完整路径
 （预挂载解析 → 磁盘预检 → 预下载 → 构建），错误分类与显存回收也只在这一层。
 
-阶段十六 Phase C 遗留收口新增两处能力（都不改旧资产路径）：
+阶段十六 Phase C 遗留收口及现代模型扩展能力（都不改旧资产路径）：
 
 - ``flux2`` 支持可选 ``pipeline.lora``：预挂载优先 → ``hf_hub_download`` → ``load_lora_weights``，
   可选 ``scale`` 经 ``set_adapters`` 生效（见 :class:`Flux2Loader`）；
 - ``pipeline.accel.cache`` 实验性 firstBlock 缓存探针：只对 ``pipe.transformer`` 生效，
-  不支持时 WARN 跳过、不阻断出图（见 :func:`_apply_experimental_cache`）。
+  不支持时 WARN 跳过、不阻断出图（见 :func:`_apply_experimental_cache`）；
+- 通用 ``pipeline.dtype``（``fp16`` / ``bf16`` / ``fp32``，缺省按家族默认值）与
+  ``pipeline.cpuOffload``（``enable_model_cpu_offload()``），适配 Z-Image / Sana-Sprint /
+  大显存 FLUX.2 等现代 DiT 架构。
 
 依赖：``pipeline_loader`` 的工厂与调度器实现（扁平导入，与 daemon 共用同一份模块实例）。
 """
 
 from __future__ import annotations
 
+import functools
 import math
 import os
 
@@ -282,16 +286,94 @@ class DiffusersLoader(ModelLoader):
     ):
         raise NotImplementedError(f"{type(self).__name__} 未实现 construct()")
 
-    @staticmethod
-    def _base_kwargs(spec: dict) -> dict:
-        """``from_pretrained`` 的公共 kwargs：fp16 + safetensors，可选 fp16 变体。"""
+    default_dtype = "fp16"
+
+    @classmethod
+    def _resolve_dtype(cls, spec: dict, request_error_cls=ValueError):  # noqa: ANN001, ANN205
+        """解析 ``pipeline.dtype``（fp16/bf16/fp32）；缺省按类默认，非法值报请求错误。"""
         import torch
 
-        kwargs: dict = {"torch_dtype": torch.float16, "use_safetensors": True}
+        raw = spec.get("dtype")
+        key = str(raw if raw is not None else cls.default_dtype).strip().lower()
+        mapping = {
+            "fp16": getattr(torch, "float16", None),
+            "float16": getattr(torch, "float16", None),
+            "bf16": getattr(torch, "bfloat16", None),
+            "bfloat16": getattr(torch, "bfloat16", None),
+            "fp32": getattr(torch, "float32", None),
+            "float32": getattr(torch, "float32", None),
+        }
+        if key not in mapping:
+            raise request_error_cls(f"不支持的 pipeline.dtype={raw!r}（仅支持 fp16 / bf16 / fp32）")
+        resolved = mapping[key]
+        if resolved is None:
+            raise request_error_cls(f"当前 torch 环境不支持 dtype={key}")
+        return resolved
+
+    @classmethod
+    def _base_kwargs(cls, spec: dict, *, request_error_cls=ValueError) -> dict:  # noqa: ANN001
+        """``from_pretrained`` 的公共 kwargs：按 ``dtype`` + safetensors，可选变体。"""
+        kwargs: dict = {
+            "torch_dtype": cls._resolve_dtype(spec, request_error_cls=request_error_cls),
+            "use_safetensors": True,
+        }
         variant = spec.get("variant")
         if variant:
             kwargs["variant"] = str(variant)
         return kwargs
+
+    @staticmethod
+    def _cuda_device_count() -> int:
+        try:
+            import torch
+
+            return int(torch.cuda.device_count())
+        except Exception:  # noqa: BLE001 - 没有 torch 时按未知处理
+            return 0
+
+    @classmethod
+    def _apply_device_map_kwarg(
+        cls,
+        spec: dict,
+        kwargs: dict,
+        *,
+        default_map: str | None = None,
+        log=print,  # noqa: ANN001
+    ) -> tuple[bool, int]:
+        """决定加载时是否传 ``device_map``；``cpuOffload`` 与单卡都跳过分片。"""
+        cpu_offload = spec.get("cpuOffload") is True
+        device_count = cls._cuda_device_count()
+        raw_map = spec.get("deviceMap")
+        device_map = str(raw_map).strip() if raw_map else (default_map or "")
+        if cpu_offload:
+            log(f"[load] {spec.get('loader') or 'diffusers'} 将启用 cpuOffload，跳过 device_map 分片")
+            return False, device_count
+        if not device_map:
+            return False, device_count
+        if device_count == 1:
+            log(f"[load] {spec.get('loader') or 'diffusers'} 单卡（device_count=1），跳过 device_map 分片")
+            return False, device_count
+        kwargs["device_map"] = device_map
+        log(
+            f"[load] {spec.get('loader') or 'diffusers'} 使用 device_map={device_map}（device_count={device_count}）"
+        )
+        return True, device_count
+
+    @staticmethod
+    def _place_pipe(pipe, spec: dict, *, used_device_map: bool, log=print):  # noqa: ANN001, ANN205
+        """完成管线设备放置：``cpuOffload`` 优先，其次保留 ``device_map``，否则移至 cuda。"""
+        if spec.get("cpuOffload") is True:
+            offload = getattr(pipe, "enable_model_cpu_offload", None)
+            if callable(offload):
+                offload()
+                log("[load] 已启用 enable_model_cpu_offload()")
+                return pipe
+            log("[load] WARN 管线不支持 enable_model_cpu_offload()，回退到 .to('cuda')")
+        if used_device_map:
+            return pipe
+        moved = pipe.to("cuda")
+        log(f"[load] 管线已移至 cuda（execution_device={getattr(moved, '_execution_device', 'cuda')}）")
+        return moved
 
 
 class SdxlLoader(DiffusersLoader):
@@ -327,10 +409,15 @@ class SdxlLoader(DiffusersLoader):
 
             factory = AutoPipelineForText2Image
         pipe = from_pretrained_with_variant_fallback(
-            factory, source, self._base_kwargs(spec), self.name, log=log, error_cls=error_cls
+            factory,
+            source,
+            self._base_kwargs(spec, request_error_cls=request_error_cls),
+            self.name,
+            log=log,
+            error_cls=error_cls,
         )
         apply_scheduler(pipe, spec, log=log)
-        return pipe.to("cuda")
+        return self._place_pipe(pipe, spec, used_device_map=False, log=log)
 
 
 class SdxlLoraLoader(DiffusersLoader):
@@ -364,7 +451,12 @@ class SdxlLoraLoader(DiffusersLoader):
         from diffusers import StableDiffusionXLPipeline
 
         pipe = from_pretrained_with_variant_fallback(
-            StableDiffusionXLPipeline, source, self._base_kwargs(spec), self.name, log=log, error_cls=error_cls
+            StableDiffusionXLPipeline,
+            source,
+            self._base_kwargs(spec, request_error_cls=request_error_cls),
+            self.name,
+            log=log,
+            error_cls=error_cls,
         )
         apply_scheduler(pipe, spec, default_type="euler", log=log)
         if local_lora_weight:
@@ -382,7 +474,7 @@ class SdxlLoraLoader(DiffusersLoader):
                 on_lora_download(downloaded)
             pipe.load_lora_weights(lora_repo, weight_name=lora_weight)
         log(f"[load] LoRA 已挂载：{lora_repo}/{lora_weight}")
-        return pipe.to("cuda")
+        return self._place_pipe(pipe, spec, used_device_map=False, log=log)
 
 
 class Flux2Loader(DiffusersLoader):
@@ -469,24 +561,14 @@ class Flux2Loader(DiffusersLoader):
         lora = _lora_config(spec, request_error_cls)
         from diffusers import AutoPipelineForText2Image
 
-        kwargs = self._base_kwargs(spec)
-        balanced = str(spec.get("deviceMap") or "balanced")
-        # 单卡（Colab L4 / 单 T4）没有分片对象：传 balanced 只会让 accelerate 多一层包装。
-        # device_count 未知（CPU 环境 / 测试替身）时仍按显式配置走，避免改变既有行为。
-        try:
-            import torch
-            device_count = torch.cuda.device_count()
-        except Exception:  # noqa: BLE001 - 没有 torch 时按未知处理
-            device_count = 0
-        if device_count == 1:
-            log("[load] flux2 单卡（device_count=1），跳过 device_map 分片")
-        else:
-            kwargs["device_map"] = balanced
-            log(f"[load] flux2 使用 device_map={balanced}（device_count={device_count}）")
+        kwargs = self._base_kwargs(spec, request_error_cls=request_error_cls)
+        used_device_map, _device_count = self._apply_device_map_kwarg(
+            spec, kwargs, default_map="balanced", log=log
+        )
         pipe = from_pretrained_with_variant_fallback(
             AutoPipelineForText2Image, source, kwargs, self.name, log=log, error_cls=error_cls
         )
-        # LoRA 在转设备前挂载：注入的适配器层跟随 pipe.to("cuda") 一起上卡；
+        # LoRA 在转设备/cpuOffload 前挂载：注入的适配器层跟随管线一起上卡或挂 offload hook；
         # device_map="balanced" 路径不转设备，直接挂在已分片的 transformer 上。
         if lora is not None:
             self._mount_lora(
@@ -497,9 +579,128 @@ class Flux2Loader(DiffusersLoader):
                 log=log,
                 error_cls=error_cls,
             )
-        # 单卡不走 device_map 时必须显式搬上 GPU：否则 from_pretrained 会把权重留在 CPU，
-        # 表现为"能加载、能出图，但 1024² 要十几分钟"（实测在 CPU 上跑满 600s 超时）。
-        if device_count == 1:
-            pipe = pipe.to("cuda")
-            log(f"[load] flux2 单卡已移至 cuda（execution_device={getattr(pipe, '_execution_device', 'cuda')}）")
-        return pipe
+        return self._place_pipe(pipe, spec, used_device_map=used_device_map, log=log)
+
+
+class ZImageLoader(DiffusersLoader):
+    """Z-Image（S3-DiT）：默认 ``bf16``，支持 ``AutoPipelineForImage2Image/Inpainting.from_pipe``。"""
+
+    name = "zimage"
+    default_dtype = "bf16"
+    supports_img2img = True
+    supports_inpaint = True
+
+    def construct(  # noqa: ANN001, ANN201
+        self,
+        spec,
+        *,
+        source,
+        local_lora_weight=None,
+        on_lora_download=None,
+        log=print,
+        error_cls=RuntimeError,
+        request_error_cls=ValueError,
+    ):
+        import diffusers
+
+        factory = getattr(diffusers, "ZImagePipeline", None) or diffusers.AutoPipelineForText2Image
+        kwargs = self._base_kwargs(spec, request_error_cls=request_error_cls)
+        used_device_map, _device_count = self._apply_device_map_kwarg(spec, kwargs, log=log)
+        pipe = from_pretrained_with_variant_fallback(
+            factory, source, kwargs, self.name, log=log, error_cls=error_cls
+        )
+        apply_scheduler(pipe, spec, log=log)
+        return self._place_pipe(pipe, spec, used_device_map=used_device_map, log=log)
+
+
+class SanaSprintLoader(DiffusersLoader):
+    """SANA-Sprint（1.6B Linear DiT，1~4 步）：默认 ``bf16``，纯文生图极速底座。"""
+
+    name = "sana-sprint"
+    default_dtype = "bf16"
+
+    @staticmethod
+    def _supports_native_bf16() -> bool:
+        try:
+            import torch
+
+            if not torch.cuda.is_available():
+                return True
+            major, _minor = torch.cuda.get_device_capability(0)
+            return major >= 8
+        except Exception:  # noqa: BLE001 - 检测失败时不额外改动管线
+            return True
+
+    def construct(  # noqa: ANN001, ANN201
+        self,
+        spec,
+        *,
+        source,
+        local_lora_weight=None,
+        on_lora_download=None,
+        log=print,
+        error_cls=RuntimeError,
+        request_error_cls=ValueError,
+    ):
+        import diffusers
+        import torch
+
+        factory = getattr(diffusers, "SanaSprintPipeline", None) or diffusers.AutoPipelineForText2Image
+        kwargs = self._base_kwargs(spec, request_error_cls=request_error_cls)
+        used_device_map, _device_count = self._apply_device_map_kwarg(spec, kwargs, log=log)
+        pipe = from_pretrained_with_variant_fallback(
+            factory, source, kwargs, self.name, log=log, error_cls=error_cls
+        )
+        # Turing (sm_75, T4) 的 cuDNN 缺少 AutoencoderDC 所需 bf16 conv2d 引擎；
+        # 仅将解码 VAE 升为 fp32（与解码入口做 dtype 对齐）即可保留主体 bf16 稳定性并绕开引擎报错。
+        if (
+            kwargs.get("torch_dtype") == getattr(torch, "bfloat16", None)
+            and not self._supports_native_bf16()
+            and getattr(pipe, "vae", None) is not None
+        ):
+            pipe.vae.to(dtype=torch.float32)
+            orig_decode = pipe.vae.decode
+
+            @functools.wraps(orig_decode)
+            def _decode_fp32(z, *args, **kwargs_inner):
+                if hasattr(z, "dtype") and z.dtype != torch.float32:
+                    z = z.to(dtype=torch.float32)
+                return orig_decode(z, *args, **kwargs_inner)
+
+            pipe.vae.decode = _decode_fp32
+            log("[load] sana-sprint: GPU 无原生 bf16（sm<80），VAE 已升为 fp32")
+        return self._place_pipe(pipe, spec, used_device_map=used_device_map, log=log)
+
+
+class QwenImage21Loader(DiffusersLoader):
+    """Qwen-Image 2.1（7B 单流 DiT + Qwen3-VL-8B）：默认 ``bf16``，支持原生多图参考与编辑。
+
+    ``QwenImage21Pipeline`` 同时承接纯文生图与多图参考条件（``image=[PIL...]``，与 ``flux2``
+    同走 ``supports_reference`` 路径，不走加噪 img2img）；真实 CFG 入口参数名为 ``true_cfg_scale``
+    （在 ``filter_call_kwargs`` 自动从 ``cfg`` 映射，``> 1`` 时才生效 ``negative_prompt``）。
+    """
+
+    name = "qwen-image-2.1"
+    default_dtype = "bf16"
+    supports_reference = True
+
+    def construct(  # noqa: ANN001, ANN201
+        self,
+        spec,
+        *,
+        source,
+        local_lora_weight=None,
+        on_lora_download=None,
+        log=print,
+        error_cls=RuntimeError,
+        request_error_cls=ValueError,
+    ):
+        import diffusers
+
+        factory = getattr(diffusers, "QwenImage21Pipeline", None) or diffusers.AutoPipelineForText2Image
+        kwargs = self._base_kwargs(spec, request_error_cls=request_error_cls)
+        used_device_map, _device_count = self._apply_device_map_kwarg(spec, kwargs, log=log)
+        pipe = from_pretrained_with_variant_fallback(
+            factory, source, kwargs, self.name, log=log, error_cls=error_cls
+        )
+        return self._place_pipe(pipe, spec, used_device_map=used_device_map, log=log)

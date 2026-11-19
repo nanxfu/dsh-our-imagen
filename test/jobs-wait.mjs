@@ -43,7 +43,7 @@ import { submitGenerate, waitForJob } from '../lib/remote.js'
 import { LIMITS, PRESETS, UPSCALE } from '../shared/contract.js'
 import { createCheckRunner } from './helpers/check.mjs'
 
-const PRESET = 'sdxl-turbo'
+const PRESET = 'sdxl-lightning'
 // 1×1 透明 PNG：走真实的 saveJobOutput 落盘路径。
 const PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
@@ -1120,9 +1120,20 @@ async function main() {
   })
 
   await check('专用局部重绘模型（inpaintOnly）：缺蒙版拒绝入队，带蒙版放行', async () => {
-    const preset = PRESETS.find((item) => item.id === 'sdxl-inpaint')
-    assert.ok(preset, '契约里应有 sdxl-inpaint 预设')
-    assert.equal(preset.inpaintOnly, true, 'sdxl-inpaint 应标记 inpaintOnly')
+    const mockInpaintId = '__mock_inpaint_only__'
+    PRESETS.push({
+      id: mockInpaintId,
+      label: 'Mock Inpaint Only',
+      size: 1024,
+      steps: 30,
+      cfg: 8,
+      supportsImg2Img: true,
+      supportsInpaint: true,
+      inpaintOnly: true,
+      supportsNegative: true,
+      supportsReference: false,
+      providers: [],
+    })
     const remote = await startFlakyRemote()
     remote.state.onGenerate = (state, count) => {
       const body = state.generateCalls[count - 1]
@@ -1140,7 +1151,7 @@ async function main() {
     })
     try {
       // 1) 纯文生图：直接拒绝（不占队列、不触发远端）。
-      const plain = queue.submit({ prompt: '文生图', presetId: 'sdxl-inpaint' })
+      const plain = queue.submit({ prompt: '文生图', presetId: mockInpaintId })
       assert.equal(plain.ok, false, 'inpaintOnly 预设不能文生图')
       assert.equal(plain.code, 'invalid_request')
       assert.ok(plain.message.includes('只支持局部重绘'), plain.message)
@@ -1148,7 +1159,7 @@ async function main() {
       // 2) 只有参考图、没有蒙版：同样拒绝（纯图生图也不行）。
       const img2img = queue.submit({
         prompt: '纯图生图',
-        presetId: 'sdxl-inpaint',
+        presetId: mockInpaintId,
         reference: { path: seedPath },
       })
       assert.equal(img2img.ok, false)
@@ -1158,13 +1169,14 @@ async function main() {
       // 3) 参考图 + 蒙版：放行并走远端。
       const ok = queue.submit({
         prompt: '局部重绘',
-        presetId: 'sdxl-inpaint',
+        presetId: mockInpaintId,
         reference: { path: seedPath, strength: 0.8, mask: PNG_B64 },
       })
       assert.equal(ok.ok, true, JSON.stringify(ok))
       const done = await queue.waitFor(ok.job.id, 10)
       assert.equal(done.status, 'done', JSON.stringify(done.error))
     } finally {
+      PRESETS.pop()
       queue.dispose()
       await remote.close()
     }
@@ -1478,7 +1490,7 @@ async function main() {
       const content = { x: 0.1, y: 0.05, width: 0.8, height: 0.9 }
       const submitted = queue.submit({
         tool: 'outpaint',
-        presetId: 'sdxl-inpaint',
+        presetId: 'sdxl-lightning',
         prompt: '向四周扩展成 16:9 的风景',
         width: 1280,
         height: 720,
@@ -1489,7 +1501,7 @@ async function main() {
       })
       assert.equal(submitted.ok, true, JSON.stringify(submitted))
       assert.equal(submitted.job.tool, 'outpaint')
-      assert.equal(submitted.job.presetId, 'sdxl-inpaint')
+      assert.equal(submitted.job.presetId, 'sdxl-lightning')
       // 公开视图只暴露归一后的小对象（不含二进制），内容框随 params 透传给客户端。
       assert.deepEqual(submitted.job.params.reference, {
         sourcePath,
@@ -1525,7 +1537,7 @@ async function main() {
       // 旧客户端（不带 outpaintContent）：meta 显式写 null，历史端该字段恒存在。
       const legacy = queue.submit({
         tool: 'outpaint',
-        presetId: 'sdxl-inpaint',
+        presetId: 'sdxl-lightning',
         prompt: '不带内容框的扩图',
         reference: { image: PNG_B64, mask: PNG_B64, sourcePath, strength: 1.0 },
       })
@@ -1734,7 +1746,7 @@ async function main() {
       // 2) 模型能力位：不支持 supportsReference 的预设直接拒绝（daemon 侧还有白名单兜底）。
       const unsupported = queue.submit({
         prompt: 'SDXL 用原生参考',
-        presetId: 'sdxl-turbo',
+        presetId: 'sdxl-lightning',
         references: [seedPath],
       })
       assert.equal(unsupported.ok, false)

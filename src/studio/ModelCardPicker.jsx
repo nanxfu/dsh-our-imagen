@@ -21,31 +21,25 @@ import {
   providerNameKeyOf,
 } from '../logic/preset.js'
 import { Icon } from './icons.jsx'
-import posterAnimagine from './posters/animagine-xl-3.1.webp'
-import posterAnimaLavender from './posters/anima-light-lavender.webp'
-import posterBase from './posters/sdxl-base.webp'
+import posterAnima from './posters/anima-turbo-v1.1.webp'
 import posterFlux from './posters/flux2-klein-4b.webp'
-import posterHyper from './posters/hyper-sdxl-8step.webp'
 import posterLightning from './posters/sdxl-lightning.webp'
-import posterPlayground from './posters/playground-v2.5.webp'
-import posterRealvis from './posters/realvis-v5.webp'
-import posterTurbo from './posters/sdxl-turbo.webp'
+import posterQwen from './posters/qwen-image-2.1.webp'
+import posterSana from './posters/sana-sprint-1.6b.webp'
+import posterZImage from './posters/z-image-turbo.webp'
 
 const MENU_ID = 'ofs-model-menu'
 
 /** 模型海报：按模型 id 对应 src/studio/posters/*.webp，构建期内联为 data URL。 */
 const POSTERS = {
   'sdxl-lightning': posterLightning,
-  'hyper-sdxl-8step': posterHyper,
-  'sdxl-turbo': posterTurbo,
-  'playground-v2.5': posterPlayground,
-  'sdxl-base': posterBase,
-  // 专用 inpaint 权重沿用 SDXL 家族海报（同一底座血统，不单独占一份图片资产）。
-  'sdxl-inpaint': posterBase,
-  'realvis-v5': posterRealvis,
+  'sana-sprint-1.6b': posterSana,
+  'z-image-turbo': posterZImage,
+  'qwen-image-2.1': posterQwen,
   'flux2-klein-4b': posterFlux,
-  'animagine-xl-3.1': posterAnimagine,
-  'anima-light-lavender': posterAnimaLavender,
+  // FLUX.2 两档共用一张海报，不额外占图片资产。
+  'flux2-klein-9b': posterFlux,
+  'anima-turbo-v1.1': posterAnima,
 }
 
 const LABELS = {

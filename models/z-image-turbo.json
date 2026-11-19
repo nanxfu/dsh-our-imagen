@@ -1,0 +1,64 @@
+{
+  "id": "z-image-turbo",
+  "order": 30,
+  "label": "Z-Image Turbo",
+  "family": "Z-Image",
+  "short": "Z-Image",
+  "description": {
+    "zh": "6B S3-DiT，8 步写实摄影、中英双语文字与局部重绘",
+    "en": "6B S3-DiT, 8-step photorealism, bilingual text and inpainting"
+  },
+  "repo": "Tongyi-MAI/Z-Image-Turbo",
+  "params": "6B S3-DiT + Qwen3-4B",
+  "license": "Apache-2.0",
+  "licenseKind": "open",
+  "gated": false,
+  "gpus": 1,
+  "tier": "fast",
+  "size": 1024,
+  "steps": 9,
+  "stepRange": null,
+  "cfg": 0,
+  "negativeHint": "",
+  "promptStyle": "natural",
+  "qualityPrefix": "",
+  "supportsChinese": true,
+  "supportsImg2Img": true,
+  "supportsReference": false,
+  "supportsInpaint": true,
+  "supportsNegative": false,
+  "providers": [
+    "colab"
+  ],
+  "sizeOptions": [
+    768,
+    1024,
+    1152
+  ],
+  "runtime": "default",
+  "pipeline": {
+    "loader": "zimage",
+    "base": "Tongyi-MAI/Z-Image-Turbo",
+    "dtype": "bf16",
+    "cpuOffload": true,
+    "lora": null,
+    "scheduler": null,
+    "variant": null,
+    "downloadGb": 30.64,
+    "allowPatterns": [
+      "model_index.json",
+      "scheduler/**",
+      "text_encoder/**",
+      "tokenizer/**",
+      "transformer/**",
+      "vae/**"
+    ],
+    "deviceMap": null
+  },
+  "measured": {
+    "peakVramMb": 12232,
+    "loadSeconds": 131.7,
+    "steadySeconds": 30.66,
+    "downloadGb": null
+  }
+}

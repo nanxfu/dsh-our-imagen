@@ -1,5 +1,48 @@
 # 变更记录
 
+## 0.14.0 — 未发布（2026-11-20）
+
+> 主题：模型阵营重构与现代 DiT 演进（ROADMAP 第十七项）。把 12 款旧模型精简为 7 款 ≤10 步蒸馏模型：新增 `SANA-Sprint 1.6B`、`Z-Image Turbo`、`Qwen-Image 2.1`、`FLUX.2 Klein 9B` 与 `Anima Turbo v1.1`，下线 8 款旧 SDXL / 慢速模型与专用 9 通道重绘权重；远端补齐 `dtype` / `cpuOffload` 与三套新 Loader、`true_cfg_scale` 映射；`providers` 算力来源门控首次随资产启用。Z-Image 原生重绘、Qwen 多图参考与透明背景输出完成 Colab L4 真机验收；海报、示例墙与 README / PRODUCT / SPEC 等文档同步到 7 款口径。真机数据与决策记录见 [ROADMAP](docs/ROADMAP.md) 第十七节。
+
+### 功能
+
+- **模型阵营（12 → 7 款）**：
+  - 下线 8 款：`sdxl-turbo`、`hyper-sdxl-8step`、`sdxl-base`、`playground-v2.5`、`realvis-v5`、`animagine-xl-3.1`、`sdxl-inpaint`（专用 9 通道重绘权重）与 `anima-light-lavender`。旧历史记录里的这些 `presetId` 仍可浏览与回填（`generate.js` 统一按非扩散 / 已下线预设回溯父作品的真实扩散参数），但不再参与新生成。
+  - 新增 5 款：`sana-sprint-1.6b`（1.6B 线性 DiT + Gemma-2-2B，2 步 / CFG 4.5，Apache-2.0）、`z-image-turbo`（6B S3-DiT + Qwen3-4B，9 步 / CFG 0，Apache-2.0，中英双语与原生 `img2img` / `inpaint`）、`qwen-image-2.1`（7B DiT + Qwen3-VL-8B，8 步 Turbo，非商用，`supportsReference` 与透明背景输出）、`flux2-klein-9b`（9B，4 步，HF gated 非商用，`bf16 + cpuOffload`）、`anima-turbo-v1.1`（2B DiT 二次元，10 步，非商用）。
+  - 保留 `sdxl-lightning`（默认 / Kaggle 重绘兜底）与 `flux2-klein-4b`（多图参考 + 扩图引擎）；7 款全部 ≤10 步蒸馏。
+- **`providers` 算力来源门控首次启用**：`z-image-turbo`、`qwen-image-2.1`、`flux2-klein-9b` 声明 `providers: ["colab"]`；模型卡置灰并标「仅 Colab」，`generateCapabilityOf` 前置拦下不发请求，Host `JobQueue.submit` 另有 `providerGateOf` 兜底，舞台图片工具的预设列表同样按当前算力来源过滤。
+- **远端 Loader 与管线适配**（`remote/inference/loaders/diffusers.py` / `registry.py` / `pipeline_loader.py`）：
+  - 通用 `pipeline.dtype`（`fp16` / `bf16` / `fp32`，非法值在加载前报请求错误）与 `pipeline.cpuOffload`（`enable_model_cpu_offload()`），替代高显存模型强依赖 A100 的路径；`device_map` 口径统一为「cpuOffload 优先、单卡跳过分片」，SDXL 家族在单卡下也不再被 `device_map` 包装。
+  - 新增 `ZImageLoader`（`zimage`，默认 `bf16`，`supports_img2img` / `supports_inpaint`）、`SanaSprintLoader`（`sana-sprint`，默认 `bf16`；Turing `sm<8.0` 无原生 bf16 卷积引擎，仅将解码 VAE 升 `fp32` 并包装 `decode`，T4 一次通过）、`QwenImage21Loader`（`qwen-image-2.1`，默认 `bf16`，`supports_reference`，复用 diffusers 0.43 原生 `QwenImage21Pipeline`）。
+  - `filter_call_kwargs`：使用 `true_cfg_scale` 的管线（`QwenImage21Pipeline`）自动把请求 `cfg` 映射为 `true_cfg_scale`（≥1.0），负向词门限随之为 `cfg > 1.0`。
+  - `remote/anima_runtime.py` 的 DiT 权重前缀兼容 `net.` / `model.diffusion_model.` / `diffusion_model.` / `blocks.`，`anima-turbo-v1.1` 无需改权重即可加载。
+- **客户端与配方库**：模型选择卡海报映射改为 7 款（新增 `sana-sprint-1.6b` / `z-image-turbo` / `qwen-image-2.1` 三张，`anima-light-lavender.webp` 重命名为 `anima-turbo-v1.1.webp`，删除 6 张下线海报，`flux2-klein-9b` 复用 Klein 4B 海报）；`shared/recipes.js` 的 `recommendedPresets` 全部改到现役 7 款（并为概念场景配方补 danbooru 模板）；`useImageTool` 按 `provider` 过滤预设；`lib/tools.js` 与相关注释中的旧预设示例同步。
+- **工具链**：`tools/verify-model.mjs` / `tools/colab/smoke-provider.mjs` 支持 `--config <草稿 JSON>` 与 `--write`（把实测写回 `measured`）；新增 `tools/colab/acceptance-17.mjs`（阶段十七真机验收，含 503 / 排队退避与任何路径必保 stop）、`tools/colab/steady-17.mjs`（按资产 SOP 的稳态中位数采样）与 `tools/colab/image-analysis.py`（Pillow 蒙版 / 像素差 / alpha 分析）。
+- **模型实测回填**：`z-image-turbo` 与 `qwen-image-2.1` 的 `measured.steadySeconds` 按协议（丢弃首张 + 后 3 张中位数）更新为 **30.66s / 43.68s**（原值 57.73s / 91.21s 是首图含冷启预热的口径）；`shared/models.generated.js` 随之重新生成，模型卡与顶栏速度读数同步变准。
+
+### 文档与示例
+
+- `docs/ROADMAP.md` 第十七节收口（状态、第 4 节验收记录、第 5 节真机验收、排期表）；`README.md` / `README.en.md` 更新 7 款模型清单、双算力来源与「同一提示词 · 各模型风格对照」示例墙（7 张 = 2 张既有 Kaggle 成片 + 5 张 Colab L4/T4 真机成片）；`docs/PRODUCT.md` / `docs/SPEC.md` / `docs/ARCHITECTURE.md` / `docs/MODEL_CARD_SPEC.md` / `docs/MODEL_ASSET_SPEC.md` 同步 7 款口径与 `providers` 现状；`docs/TROUBLESHOOTING.md` 补齐参考图 / 透明背景 / 现代扩图新口径，并新增「模型原生参考图与透明背景」一节。
+- `docs/assets/showcase/manifest.json` 重写为 7 条，清理 49 张下线模型成片；`src/studio/posters/SOURCES.md` 重写（6 份图片、data URL 合计 17,598 字符 ≤ 20,480）；README 四张界面截图用现役模型重新生成。
+
+### 真机验收（Colab L4，2026-11-20）
+
+- **z-image-turbo**：warm 预加载 139.1s / 首图 57.49s / 连出 32.89s / 稳态中位数 30.66s（4 连出丢弃首张）；原生 `img2img` 27.68s（`from_pipe` 复用底座，strength 0.6，与源图平均差 11.37/255、56.4% 像素变化）；原生 `inpaint` 30.32s（25.02% 圆形蒙版 + strength 0.8，保留区核心 728,472 像素逐像素差 **0**，含羽化带平均 0.5565/255，蒙版内平均差 52.05/255）；显存峰值 12,394 MiB（较文生图 +162 MiB）。
+- **qwen-image-2.1**：切模型加载 122.6s（另测 99.1s）/ 首图 97.28~121.4s / 稳态中位数 43.68s；双图参考 51.83s，与同提示词同 seed 的无参考对照平均差 **54.24/255（98.4% 变化）**，参考条件确实生效（弱参考）；双参考峰值显存 20,127 MiB（L4 余量约 4 GB）；透明背景提示词返回 RGBA PNG（alpha=0 占 7.9%、≤1 占 65.3%、=255 占 32.9%），**当前链路可导出真透明背景**，透明区 RGB 仍有残留（偏紫），消费端需按 alpha 合成。
+- **会话成本**：两轮验收合计 provision 195.3s + 263.1s，GPU 会话 699.6s + 620.7s，CCU 196.7577 → 195.9782，assignments 0→0，无遗留 Kernel；数据与复跑脚本见 ROADMAP 第十七节 §5。
+
+### 测试
+
+- 远端：`test/remote/test_loaders.py` 新增 7 组 loader 用例（dtype / cpuOffload / device_map 跳过 / SANA T4 VAE 升 fp32 / Qwen / `true_cfg_scale` 映射 / 非法 dtype 请求错误），`python test/remote/run.py` 525 项通过。
+- 客户端与 Host：`image-tool` / `host-e2e` / `jobs-wait` / `agent-batch` / `session-pure` / `check-contract` 等同步 7 款资产与 `providers` 门控断言；`npm test` 全绿（40 步）。
+
+### 已知限制
+
+- z-image 原生 inpaint 的保留区逐像素不变（合成后），羽化带内仍有轻微变化（平均 0.5565/255）。
+- qwen 透明输出在透明区残留低 alpha 的 RGB 值（实测偏紫），消费端必须按 alpha 合成；双参考峰值显存 20,127 MiB，继续增加参考张数或分辨率需留意 OOM。
+- 旧历史产物（`sdxl-inpaint` / 已下线模型）仍可浏览与回填，但不再参与新生成；`inpaintOnly` 与远端 `nativeInpaint` 分支保留给未来的原生 inpaint 权重。
+- 文档类：`docs/MODEL_EXPERIMENT_GUIDE.md`（模型入库指南）等历史 / 研究文档仍以旧模型为例，本轮未改写。
+
 ## 0.13.0 — 2026-11-18
 
 > 主题：图像后处理闭环与模型原生参考生图。接通舞台动作坞预留的「高清放大」与「扩图」：前者是独立的轻量超分推理（不加载扩散模型），后者由客户端合成画布、复用已验证的 9 通道局部重绘。随后完成 ROADMAP 第十五项 Phase C：引入 `FLUX.2 Klein 4B` 的原生参考生图能力（`supportsReference`）、左栏参考图槽与真机同 Seed 推理加速对照，并收口工作台焦点 / 来源同步与 `tEXt` 元数据带来的遗留问题。对应 ROADMAP 第十五项 Phase B / Phase C，设计依据见 [docs/STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md](docs/STUDIO_UX_POLISH_AND_MODERN_PIPELINE_PLAN.md) §四、加速数据见 [docs/INFERENCE_ACCELERATION_RESEARCH.md](docs/INFERENCE_ACCELERATION_RESEARCH.md) §4.3。

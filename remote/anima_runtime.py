@@ -897,10 +897,16 @@ def _anima_load_dit(dit_path, dit_dtype, device, log):
     finally:
         torch.set_default_dtype(previous_dtype)
 
-    state = load_file(dit_path)
-    state = {key[len("net."):]: value for key, value in state.items() if key.startswith("net.")}
-    if not state:
-        raise RuntimeError(f"DiT 权重里没有 net. 前缀的 tensor：{dit_path}")
+    raw_state = load_file(dit_path)
+    prefixes = ("net.", "model.diffusion_model.", "diffusion_model.")
+    matched_prefix = next((p for p in prefixes if any(k.startswith(p) for k in raw_state)), "")
+    if matched_prefix:
+        state = {key[len(matched_prefix):]: value for key, value in raw_state.items() if key.startswith(matched_prefix)}
+    elif any(k.startswith("blocks.") for k in raw_state):
+        state = raw_state
+    else:
+        raise RuntimeError(f"DiT 权重缺少已知前缀（net. / model.diffusion_model. / blocks.）：{dit_path}")
+    del raw_state
     missing, unexpected = transformer.load_state_dict(state, strict=False)
     del state
     if missing:

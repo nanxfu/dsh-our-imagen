@@ -63,9 +63,10 @@ class ReferenceImagesContractTest(DaemonUnitTest):
         self.assertEqual(d._limit_spec("referenceImages"), CONTRACT["limits"]["referenceImages"])
 
     def test_registry_exposes_reference_whitelist(self) -> None:
-        self.assertEqual(d.SUPPORTED_REFERENCE_LOADERS, ("flux2",))
-        self.assertEqual(d.LOADERS.reference_names(), ("flux2",))
+        self.assertEqual(d.SUPPORTED_REFERENCE_LOADERS, ("flux2", "qwen-image-2.1"))
+        self.assertEqual(d.LOADERS.reference_names(), ("flux2", "qwen-image-2.1"))
         self.assertTrue(d.LOADERS.get("flux2").supports_reference)
+        self.assertTrue(d.LOADERS.get("qwen-image-2.1").supports_reference)
         for name in ("sdxl", "sdxl-lora", "anima"):
             self.assertFalse(d.LOADERS.get(name).supports_reference, name)
         # 三条能力各自独立：flux2 只支持原生参考，不支持垫图 / 局部重绘。

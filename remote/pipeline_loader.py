@@ -228,13 +228,18 @@ def filter_call_kwargs(
     negative_prompt: str = "",
     cfg: float | None = 0.0,
 ) -> dict:
-    """按 __call__ 签名过滤入参，并仅在支持 negative_prompt 且 CFG > 0 时注入负向词。"""
+    """按 __call__ 签名过滤入参，并仅在支持 negative_prompt 且 CFG 有效时注入负向词。"""
     kwargs = dict(call_kwargs)
+    uses_true_cfg = "true_cfg_scale" in sig_params and "guidance_scale" not in sig_params
+    if uses_true_cfg and "guidance_scale" in kwargs:
+        raw_cfg = kwargs.pop("guidance_scale")
+        kwargs["true_cfg_scale"] = max(1.0, float(raw_cfg if raw_cfg is not None else 1.0))
+    neg_threshold = 1.0 if uses_true_cfg else 0.0
     if (
         negative_prompt
         and "negative_prompt" in sig_params
         and cfg is not None
-        and float(cfg) > 0.0
+        and float(cfg) > neg_threshold
     ):
         kwargs["negative_prompt"] = negative_prompt
     if sig_params:

@@ -1,6 +1,6 @@
 # 工作台交互语义对齐、双向助手闭环与模型原生参考规划
 
-> **状态**：✅ Phase 0、Phase A、Phase B 与 Phase C 已全部完成（2026-11-18，未发版）。Phase C 的遗留项（C1 现代扩图演进 / P1 推理缓存与 FP8、C2 大显存模型接入）已在**阶段十六**逐项收口，见 [ROADMAP.md](ROADMAP.md) 第十六节：C0 的 ⬜ 项经复核确认早已实现（文档勾选残留已纠正）；Klein 4B + Outpaint LoRA 完成真机评估（提速 1.57×，决策不迁移默认引擎）；FBCache 探针与 Colab L4 FP8 评估结论为不适用 / 无合入价值；`FLUX.2 Klein 9B` 完成接入准备与 `providers` 能力位门控（真机验证受 Colab A100 容量限制，资产暂不发布）；Qwen-Image-Edit 记录为不接入（显存预算不足）。  
+> **状态**：✅ Phase 0、Phase A、Phase B 与 Phase C 已全部完成（2026-11-18，未发版）。Phase C 遗留项在**阶段十六**收口后，已于**阶段十七**（见 [ROADMAP.md](ROADMAP.md) 第十七节）借助 `dtype` / `cpuOffload` 完成 `FLUX.2 Klein 9B`（L4 实测通过并发布）、`Z-Image-Turbo`、`SANA-Sprint 1.6B`、`Anima Turbo v1.1` 与 `Qwen-Image 2.1` 的现代 DiT 上线（20B 级 `Qwen-Image-Edit-2511` 仍不接入）。  
 > **前置基线**：0.13.0（已完成阶段十二「舞台图片处理工具栏解耦」与阶段十三「显式新建绘图、多作品草稿与树状版本管理」）。  
 > **核心原则**：UI 保持克制、减少用户参数决策；表单—舞台—助手三向闭环；**不做多模态看图过渡方案**，直接基于图像模型原生能力补齐“参考图与编辑统一体验”；不给 SDXL 堆砌过时外挂技术债。
 

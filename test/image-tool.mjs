@@ -41,10 +41,23 @@ import { createCheckRunner } from './helpers/check.mjs'
 
 const byId = (id) => PRESETS.find((preset) => preset.id === id) || null
 const lightning = byId('sdxl-lightning')
-const inpaintPreset = byId('sdxl-inpaint')
+const zimage = byId('z-image-turbo')
 const flux2 = byId('flux2-klein-4b')
-const animagine = byId('animagine-xl-3.1')
-const anima = byId('anima-light-lavender')
+const anima = byId('anima-turbo-v1.1')
+/** 专用局部重绘模拟预设：验证 inpaintOnly 契约分支，不依赖线上是否保留 sdxl-inpaint。 */
+const inpaintPreset = {
+  id: 'sdxl-inpaint',
+  label: 'SDXL Inpaint',
+  family: 'SDXL',
+  size: 1024,
+  steps: 30,
+  cfg: 8,
+  negativeHint: 'blurry, low quality',
+  supportsNegative: true,
+  supportsImg2Img: true,
+  supportsInpaint: true,
+  inpaintOnly: true,
+}
 
 /** 合法蒙版 base64（逻辑层只校验 base64 形状，不解码 PNG）。 */
 const MASK_DATA = Buffer.from('fake-inpaint-mask').toString('base64')
@@ -102,10 +115,10 @@ async function main() {
     assert.equal(imageToolOf(null), null)
   })
 
-  await check('工具能力与模型资产一致：inpaintOnly 专用权重存在', () => {
-    assert.ok(inpaintPreset, '模型资产里应有 sdxl-inpaint')
-    assert.equal(inpaintPreset.inpaintOnly, true)
-    assert.equal(inpaintPreset.supportsInpaint, true)
+  await check('工具能力与真实模型资产一致：inpaint/img2img 能力位合规，无多余 inpaintOnly 权重', () => {
+    assert.equal(byId('sdxl-inpaint'), null, 'sdxl-inpaint 已下线')
+    assert.equal(zimage.supportsInpaint, true)
+    assert.equal(zimage.supportsImg2Img, true)
     assert.ok(PRESETS.some((preset) => preset.supportsInpaint === true), '至少一款模型支持局部重绘')
     assert.ok(PRESETS.some((preset) => preset.supportsImg2Img === true), '至少一款模型支持整图垫图')
     assert.equal(lightning.inpaintOnly ?? false, false)
@@ -131,10 +144,15 @@ async function main() {
   })
 
   await check('toolPresetOf：inpaint 无专用权重时退通用垫图兜底（跳过 inpaintOnly）', () => {
-    const result = toolPresetOf([flux2, animagine], 'flux2-klein-4b', 'inpaint')
-    assert.equal(result.preset.id, 'animagine-xl-3.1')
+    const result = toolPresetOf([flux2, zimage], 'flux2-klein-4b', 'inpaint')
+    assert.equal(result.preset.id, 'z-image-turbo')
     assert.equal(result.switched, true)
     assert.equal(result.fallback, true)
+    const noInpaintFlag = { id: 'sdxl-img2img-only', supportsImg2Img: true, supportsInpaint: false }
+    const fallbackResult = toolPresetOf([flux2, noInpaintFlag], 'flux2-klein-4b', 'inpaint')
+    assert.equal(fallbackResult.preset.id, 'sdxl-img2img-only')
+    assert.equal(fallbackResult.switched, true)
+    assert.equal(fallbackResult.fallback, true)
     // 只有 inpaintOnly 模型、没有可做图生图的模型 → 选不出来（referencePresetOf 跳过专用权重）。
     const onlyInpaint = { id: 'only-inpaint', supportsInpaint: true, supportsImg2Img: true, inpaintOnly: true }
     const none = toolPresetOf([flux2, onlyInpaint], 'flux2-klein-4b', 'inpaint')
@@ -177,8 +195,9 @@ async function main() {
     assert.equal(noNative.preset.id, 'sdxl-lightning')
     assert.equal(noNative.switched, false)
     assert.equal(noNative.fallback, false)
-    const fallback = toolPresetOf([animagine], 'sdxl-lightning', 'outpaint')
-    assert.equal(fallback.preset.id, 'animagine-xl-3.1')
+    const fallbackOnly = { id: 'sdxl-img2img-only', supportsImg2Img: true, supportsInpaint: false }
+    const fallback = toolPresetOf([fallbackOnly], 'sdxl-lightning', 'outpaint')
+    assert.equal(fallback.preset.id, 'sdxl-img2img-only')
     assert.equal(fallback.switched, true)
     assert.equal(fallback.fallback, true)
     assert.equal(toolPresetOf([], '', 'outpaint').preset, null)
@@ -189,7 +208,7 @@ async function main() {
     assert.equal(toolStrengthDefaultOf('inpaint', inpaintPreset), 0.9)
     assert.equal(toolStrengthDefaultOf('outpaint', lightning), OUTPAINT.strength)
     assert.equal(toolStrengthDefaultOf('outpaint', inpaintPreset), OUTPAINT.strength)
-    assert.equal(toolStrengthDefaultOf('img2img', animagine), LIMITS.strength.default)
+    assert.equal(toolStrengthDefaultOf('img2img', zimage), LIMITS.strength.default)
     assert.equal(toolStrengthDefaultOf('upscale', lightning), LIMITS.strength.default)
     assert.equal(toolStrengthDefaultOf('nope', null), LIMITS.strength.default)
   })
@@ -216,8 +235,8 @@ async function main() {
       targetPath: 'imagen-output/job-1/07.png',
       targetPrompt: '一只荷花',
       target: { width: 1024, height: 768 },
-      preset: animagine,
-      presets: [animagine],
+      preset: zimage,
+      presets: [zimage],
       prompt: '',
       strength: 0.8,
       mask: { data: MASK_DATA, coverage: 0.2 },
@@ -228,13 +247,13 @@ async function main() {
       'autoStart', 'cfg', 'count', 'height', 'negativePrompt', 'presetId', 'prompt',
       'reference', 'seed', 'steps', 'waitSeconds', 'width',
     ].sort())
-    assert.equal(body.presetId, 'animagine-xl-3.1')
+    assert.equal(body.presetId, 'z-image-turbo')
     assert.equal(body.prompt, '一只荷花', '工具提示词为空时应回退目标作品提示词')
     assert.equal(body.negativePrompt, '')
     assert.equal(body.width, 1024)
     assert.equal(body.height, 768)
-    assert.equal(body.steps, animagine.steps)
-    assert.equal(body.cfg, animagine.cfg)
+    assert.equal(body.steps, zimage.steps)
+    assert.equal(body.cfg, zimage.cfg)
     assert.equal(body.seed, '')
     assert.equal(body.count, 1)
     assert.equal(body.waitSeconds, 0)
@@ -250,16 +269,16 @@ async function main() {
       tool: 'inpaint',
       targetPath: 'imagen-output/job-1/07.png',
       targetPrompt: '原提示词',
-      preset: animagine,
+      preset: lightning,
       prompt: ' 把帽子换成红色贝雷帽 ',
       strength: 0.8,
       mask: { data: MASK_DATA, coverage: 0.2 },
       negativeActive: true,
     })
     assert.equal(body.prompt, '把帽子换成红色贝雷帽')
-    assert.equal(body.width, animagine.size)
-    assert.equal(body.height, animagine.size)
-    assert.equal(body.negativePrompt, String(animagine.negativeHint || '').trim(), '负向词可用时才带模型推荐词')
+    assert.equal(body.width, lightning.size)
+    assert.equal(body.height, lightning.size)
+    assert.equal(body.negativePrompt, String(lightning.negativeHint || '').trim(), '负向词可用时才带模型推荐词')
   })
 
   await check('buildImageToolBody：img2img 不提交蒙版，强度按通用上限钳制', () => {
@@ -267,7 +286,7 @@ async function main() {
       tool: 'img2img',
       targetPath: 'imagen-output/job-1/07.png',
       targetPrompt: '一只荷花',
-      preset: animagine,
+      preset: zimage,
       prompt: '',
       strength: 0.95,
       mask: { data: MASK_DATA, coverage: 0.2 },
@@ -282,7 +301,7 @@ async function main() {
       tool: 'inpaint',
       targetPath: 'imagen-output/job-1/07.png',
       targetPrompt: '一只荷花',
-      preset: animagine,
+      preset: zimage,
       prompt: '',
       strength: 0.95,
       mask: { data: MASK_DATA, coverage: 0.2 },
@@ -294,7 +313,7 @@ async function main() {
       tool: 'inpaint',
       targetPath: 'imagen-output/job-1/07.png',
       targetPrompt: '一只荷花',
-      preset: animagine,
+      preset: zimage,
       prompt: '',
       strength: 0.95,
       mask: null,
@@ -309,7 +328,7 @@ async function main() {
       tool: 'inpaint',
       targetPath: 'imagen-output/job-1/07.png',
       targetPrompt: '一只荷花',
-      preset: animagine,
+      preset: zimage,
       prompt: '',
       strength: 0.8,
       negativeActive: false,
@@ -324,7 +343,7 @@ async function main() {
       tool: 'inpaint',
       targetPath: 'imagen-output/job-1/07.png',
       targetPrompt: '一只荷花',
-      preset: animagine,
+      preset: zimage,
       prompt: '',
       strength: 0.8,
       negativeActive: false,
@@ -336,8 +355,8 @@ async function main() {
     assert.equal(buildImageToolBody({ ...base, tool: 'upscale' }), null)
     assert.equal(buildImageToolBody(null), null)
     // 预设只给 id 时用 presets 列表解析。
-    const resolved = buildImageToolBody({ ...base, preset: null, presetId: 'animagine-xl-3.1', presets: [animagine] })
-    assert.equal(resolved.presetId, 'animagine-xl-3.1')
+    const resolved = buildImageToolBody({ ...base, preset: null, presetId: 'z-image-turbo', presets: [zimage] })
+    assert.equal(resolved.presetId, 'z-image-turbo')
   })
 
   await check('buildUpscaleToolBody：零参数请求体（无预设 / 无种子语义）', () => {
@@ -541,21 +560,21 @@ async function main() {
     assert.equal(imageToolBlockedKeyOf({
       tool: 'inpaint',
       targetPath: 'a.png',
-      preset: animagine,
+      preset: zimage,
       prompt: '',
       targetPrompt: '',
     }), 'studio.imageTool.blockedNoPrompt')
     assert.equal(imageToolBlockedKeyOf({
       tool: 'inpaint',
       targetPath: 'a.png',
-      preset: animagine,
+      preset: zimage,
       prompt: '加一顶帽子',
     }), '')
     // 目标作品有原提示词时，工具输入为空也算可提交（提交时回退）。
     assert.equal(imageToolBlockedKeyOf({
       tool: 'inpaint',
       targetPath: 'a.png',
-      preset: animagine,
+      preset: zimage,
       prompt: '',
       targetPrompt: '一只荷花',
     }), '')
@@ -642,7 +661,7 @@ async function main() {
       tool: 'inpaint',
       targetPath: 'imagen-output/job-1/07.png',
       targetPrompt: '一只荷花',
-      preset: animagine,
+      preset: zimage,
       prompt: '',
       strength: 0.8,
       mask: { data: MASK_DATA, coverage: 0.2 },
@@ -651,7 +670,7 @@ async function main() {
     assert.equal(summary.tool, 'inpaint')
     assert.equal(summary.form, 'canvas')
     assert.equal(summary.targetPath, 'imagen-output/job-1/07.png')
-    assert.equal(summary.presetId, 'animagine-xl-3.1')
+    assert.equal(summary.presetId, 'z-image-turbo')
     assert.equal(summary.promptChars, 0)
     assert.equal(summary.promptFallback, true)
     assert.equal(summary.hasMask, true)

@@ -5,6 +5,8 @@
 > 2026-11-11 修订：解除「纯内联 SVG / 零位图资产 / Bundle ≤4KB」限制；海报改为真实图片，构建期以内联 data URL 注入；模型数量按仓库现状扩展为 8 个。审批记录见 `design-demos/` 的对话与实现说明。
 >
 > 2026-11-11 二次修订：新增 `anima-light-lavender`（Anima 家族，Cosmos-Predict2 2B 底座），模型数量 8 → 9；海报 9 张，base64 合计 20116 字符（含 `data:` 前缀 20323 字符），仍在 20KB 预算内。架构与实测数据见 [`ANIMA_LOADER_SPEC.md`](ANIMA_LOADER_SPEC.md)。
+>
+> **2026-11-20 阶段十七修订**：模型阵营由 10 款精简为 7 款现役（下线 8 款旧 SDXL/慢模），下表已替换为现役清单；海报改为 6 份独立图片覆盖 7 张模型卡（`flux2-klein-9b` 复用 `flux2-klein-4b.webp`），base64 合计 17460 字符（含前缀 17598 字符）。
 
 ---
 
@@ -29,7 +31,7 @@
 
 ## 2. 信息架构与字段映射
 
-> 家族徽标当前有三族：`SDXL`、`FLUX`、`Anima`（`anima-light-lavender`，2026-11-11 新增）。
+> 家族徽标当前有六族：`SDXL`、`SANA`、`Z-Image`、`Qwen`、`FLUX`、`Anima`（对应 7 款现役模型，2026-11-20 阶段十七修订）。
 
 每个预设条目展示 4 个层级的信息：
 
@@ -48,14 +50,14 @@
 | 模型 ID | 家族 (Family) | 研发厂商 | 界面主标题 (label) | 触发器短名 (short) | 定位描述 (zh) | 定位描述 (en) | 关键规格 | 实测耗时 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | `sdxl-lightning` | **SDXL** | Stability × ByteDance | SDXL Lightning | Lightning | 4 步极速出图，平衡画质与耗时（默认推荐） | 4-step fast generation, balanced quality | 3.5B+LoRA · 1024px · 4 步 | ~6.2s |
-| `hyper-sdxl-8step` | **SDXL** | Stability × ByteDance | Hyper-SDXL 8-Step | Hyper-SD 8 | 8 步蒸馏，速度与画质的折中 | 8-step distilled balance of speed and quality | 3.5B+LoRA · 1024px · 8 步 | ~7.7s |
-| `sdxl-turbo` | **SDXL** | Stability AI | SDXL Turbo | Turbo | 实时低延迟，适合构图灵感与草稿速探 | Real-time low latency, ideal for drafting | 3.5B · 512px · 4 步 | ~1.9s |
-| `playground-v2.5` | **SDXL** | Playground AI | Playground v2.5 | Playground 2.5 | 美学取向，画面干净耐看 | Aesthetic-first, clean and polished | 3.5B · 1024px · 30 步 | ~28.3s |
-| `sdxl-base` | **SDXL** | Stability AI | SDXL Base 1.0 | Base 1.0 | 25 步原生精绘，结构完整细节扎实 | 25-step native base, rich structural details | 3.5B · 1024px · 25 步 | ~27.8s |
-| `realvis-v5` | **SDXL** | SG161222 | RealVisXL V5.0 | RealVis V5 | 超写实摄影质感，人像与皮肤细节 | Photorealistic detail for portraits and skin | 3.5B · 1024px · 25 步 | ~24.5s |
-| `flux2-klein-4b` | **FLUX** | Black Forest Labs | FLUX.2 Klein 4B | Klein 4B | 下一代前沿架构，商业级质感与光影 | Next-gen architecture, commercial grade | 3.88B · 1024px · 双 GPU | ~10.2s |
-| `animagine-xl-3.1` | **SDXL** | Cagliostro Lab | Animagine XL 3.1 | Animagine 3.1 | 二次元插画与角色表现 | Anime illustration and character art | 3.5B · 1024px · 28 步 | ~26.2s |
-| `anima-light-lavender` | **Anima** | CircleStone Labs × Johnny-Z | Anima Light Lavender | Lavender | 长自然语言驱动的二次元插画，Cosmos-Predict2 2B 底座 | Anime illustration driven by long natural-language prompts | 2B + Qwen3-0.6B · 1024px · 25 步 | ~80.6s |
+| `sana-sprint-1.6b` | **SANA** | Efficient-Large-Model | SANA-Sprint 1.6B | SANA-Sprint | 1.6B 线性 DiT，2 步超快 1024px 生成，轻量灵感探索 | 1.6B Linear DiT, 2-step ultra-fast 1024px generation | 1.6B+Gemma-2-2B · 1024px · 2 步 | ~4.1s |
+| `z-image-turbo` | **Z-Image** | 通义万相（Tongyi-MAI） | Z-Image Turbo | Z-Image | 6B S3-DiT，8 步写实摄影、中英双语文字与局部重绘 | 6B S3-DiT, 8-step photorealism, bilingual text and inpainting | 6B+Qwen3-4B · 1024px · 9 步 | ~30.7s |
+| `qwen-image-2.1` | **Qwen** | 阿里 Qwen | Qwen-Image 2.1 | Qwen 2.1 | 7B DiT + Qwen3-VL-8B（8 步 Turbo），强排版/多图编辑/透明背景（非商用） | 7B DiT + Qwen3-VL-8B (8-step Turbo), strong typography, editing & RGBA (non-commercial) | 7B+Qwen3-VL-8B · 1024px · 8 步 | ~43.7s |
+| `flux2-klein-4b` | **FLUX** | Black Forest Labs | FLUX.2 Klein 4B | Klein 4B | 下一代前沿架构，商业级质感与光影 | Next-gen architecture, commercial grade | 3.88B · 1024px · 双 GPU · 4 步 | ~10.2s |
+| `flux2-klein-9b` | **FLUX** | Black Forest Labs | FLUX.2 Klein 9B | Klein 9B | 9B 蒸馏编辑模型，4 步出图，非商用许可 | 9B distilled editing model, 4-step generation, non-commercial license | 9.08B · 1024px · 4 步 | ~130.9s |
+| `anima-turbo-v1.1` | **Anima** | CircleStone Labs | Anima Turbo v1.1 | Anima Turbo | 8~12 步新一代二次元 DiT，支持自然语言与 Danbooru 标签 | 8–12 step next-gen anime DiT supporting natural language and tags | 2B+Qwen3-0.6B · 1024px · 10 步 | ~21.6s |
+
+> 其中 `z-image-turbo`、`qwen-image-2.1`、`flux2-klein-9b` 资产声明 `providers: ["colab"]`，在 Kaggle 来源下模型卡置灰并标「仅 Colab」；其余 4 款两种来源都可用。
 
 字段落点：
 - `label`：完整商业名，用于画廊筛选、最近生成栏、契约与无障碍文案；
@@ -72,9 +74,9 @@
 
 ### 3.1 资产规格
 
-1. 每个模型一张 56×56 海报；源文件为方形 WebP（112×112 或 96×96，quality 55–75），放在 `src/studio/posters/<model-id>.webp`。`sdxl-inpaint` 复用 SDXL 家族海报（`sdxl-base.webp`），不单独占一份图片资产。
+1. 每个模型一张 56×56 海报；源文件为方形 WebP（112×112 或 96×96，quality 55–75），放在 `src/studio/posters/<model-id>.webp`。当前 6 份图片覆盖 7 张模型卡：`flux2-klein-9b` 复用 `flux2-klein-4b.webp`，不单独占一份图片资产。
 2. `build.mjs` 为 esbuild 增加 `.webp: 'dataurl'` loader，构建期把图片内联为 data URL；运行时零网络请求，单文件分发不裂图。
-3. 9 张独立海报的 data URL base64 总量预算 ≤20KB（实测 20116 字符，含 `data:image/webp;base64,` 前缀为 20323 字符）；`sdxl-inpaint` 复用 SDXL Base 海报、不新增字节。组件、样式与文案代码不计入这个图片预算，客户端 Bundle 总增量约 35KB。
+3. 6 份独立海报的 data URL base64 总量预算 ≤20KB（当前实测 raw 合计 13088 B，base64 合计 17460 字符，含 `data:image/webp;base64,` 前缀为 17598 字符；`flux2-klein-9b` 复用 Klein 4B 海报、不新增字节）。组件、样式与文案代码不计入这个图片预算。
 4. 来源只用 Pexels / Unsplash 等可商用图库，逐张记录页面 URL、直链、作者、许可到 `src/studio/posters/SOURCES.md`。
 5. 海报是「概念示意」，不是该模型的出图样例；面板底部必须写明这一点。
 
@@ -83,14 +85,11 @@
 | 模型 | 海报意向 | 来源 |
 | :--- | :--- | :--- |
 | `sdxl-lightning` | 琥珀破晓光柱 | Pexels |
-| `hyper-sdxl-8step` | 暖红/橙高速流光 | Pexels |
-| `sdxl-turbo` | 冷青色运动光轨 | Pexels |
-| `playground-v2.5` | 柔和梦幻的 pastel 风景/云 | Pexels |
-| `sdxl-base` | 中性银灰雾中建筑 | Pexels |
-| `realvis-v5` | 写实人像与自然光 | Pexels |
-| `flux2-klein-4b` | 深紫棱镜晶体 | Pexels |
-| `animagine-xl-3.1` | 二次元/插画感图像 | Pexels |
-| `anima-light-lavender` | 二次元角色手办特写（概念示意，非该模型出图） | Pexels |
+| `sana-sprint-1.6b` | 夜间高速公路车辆光轨（2 步极速） | Pexels |
+| `z-image-turbo` | 香港楼宇橙红霓虹店招（写实摄影 + 中英文字） | Pexels |
+| `qwen-image-2.1` | 整面重复排印 `TERRAZA` 的绿色招牌（强排版） | Pexels |
+| `flux2-klein-4b` / `flux2-klein-9b` | 深紫棱镜晶体（`flux2-klein-9b` 复用同一张） | Pexels |
+| `anima-turbo-v1.1` | 二次元角色手办特写（概念示意，非该模型出图；沿用原 Anima 图） | Pexels |
 
 彩色边界：
 - 只允许存在于 56×56 图片本身；
@@ -142,14 +141,14 @@
 
 | 序号 | 文件路径 | 变更类型 | 变更职责 |
 | :---: | :--- | :---: | :--- |
-| 1 | `src/studio/ModelCardPicker.jsx` | 新增 | 独立的模型卡下拉选择器组件，含 8 张内联海报、卡片排版、listbox 键盘交互。 |
+| 1 | `src/studio/ModelCardPicker.jsx` | 新增 | 独立的模型卡下拉选择器组件，含内联海报、卡片排版、listbox 键盘交互与算力来源门控。 |
 | 2 | `src/studio/TopBar.jsx` | 修改 | 移除原生 `<select>`，接入 `ModelCardPicker`；模型弹层与算力弹层互斥；保留参数回填。 |
 | 3 | `src/studio/Studio.jsx` / `src/studio/useStudio.js` | 修改 | 把当前语言 `isEn` 传给顶栏，用于选择中英描述。 |
 | 4 | `src/styles/shell.css` / `src/styles/responsive.css` | 修改 | 新增模型卡胶囊、海报容器、多行排版、选中态、滚动与三档响应式；删除旧 `.ofs-preset` 样式。 |
 | 5 | `src/dict/zh.js` & `src/dict/en.js` | 修改 | 新增菜单标题、实测标签、默认标记、步数单位、双 GPU、海报声明等文案。 |
-| 6 | `models/*.json` + `tools/build-assets.mjs` + `shared/models.generated.js` | 修改/生成 | 8 个模型的 label / family / short / description 落库并重新生成契约。 |
+| 6 | `models/*.json` + `tools/build-assets.mjs` + `shared/models.generated.js` | 修改/生成 | 7 个现役模型的 label / family / short / description 落库并重新生成契约。 |
 | 7 | `build.mjs` | 修改 | esbuild 增加 `.webp: 'dataurl'` loader。 |
-| 8 | `src/studio/posters/*.webp` + `SOURCES.md` | 新增 | 8 张模型海报与来源记录。 |
+| 8 | `src/studio/posters/*.webp` + `SOURCES.md` | 新增 | 6 份模型海报（覆盖 7 张模型卡）与来源记录。 |
 | 9 | `src/logic/format.js` | 修改 | `formatSeconds` 统一一位小数，消除 27.8s 与 28s 的分歧。 |
 | 10 | `tools/preview.mjs` | 修改 | 新增 `defaultModelOpen` 预览场景（`model-picker` / `model-picker-dark`），供无头截图核对。 |
 
@@ -158,7 +157,7 @@
 ## 6. 验收标准
 
 1. **视觉一致性**：彻底清除系统原生白底 `<select>`，浮层风格与云端算力弹层（`ofs-popover`）完全同构。
-2. **血统透明**：用户进入界面即可明确区分 FLUX（`FLUX.2 Klein 4B`）、SDXL 系列与 Anima（`Anima Light Lavender`）三类底座，不再误解为单一模型；10 个模型（含专用 `SDXL Inpaint`）都能在列表中看到并选中。模型资产的可选 `providers` 能力位会在卡片上按当前算力来源置灰（当前无发布资产启用，UI 已就绪）。
-3. **资产纯净**：9 张独立海报随构建内联为 data URL（`sdxl-inpaint` 复用 SDXL 家族海报），无任何外部图片 HTTP 请求；海报资源 base64 合计 20116 字符（含前缀 20323 字符），低于 20KB 预算。
+2. **血统透明**：用户进入界面即可明确区分 FLUX（`FLUX.2 Klein 4B` / `FLUX.2 Klein 9B`）、SDXL（`SDXL Lightning`）、SANA、Z-Image、Qwen 与 Anima 六类底座，不再误解为单一模型；7 款现役模型都能在列表中看到并选中。模型资产可选 `providers` 能力位会在卡片上按当前算力来源置灰：`z-image-turbo`、`qwen-image-2.1`、`flux2-klein-9b` 声明 `["colab"]`，Kaggle 来源下置灰并标「仅 Colab」。
+3. **资产纯净**：6 份独立海报随构建内联为 data URL（`flux2-klein-9b` 复用 Klein 4B 海报），无任何外部图片 HTTP 请求；海报资源 base64 合计 17460 字符（含前缀 17598 字符），低于 20KB 预算。
 4. **功能兼容**：切换模型后，画布尺寸、CFG、步数等推荐值联动更新，历史出图的 Recall / Variant 逻辑不受影响。
 5. **回归**：`npm test` 全绿；`tools/preview.mjs` 的深色 / 浅色 / 窄屏截图通过人工核对；键盘与 `prefers-reduced-motion` 验证通过。

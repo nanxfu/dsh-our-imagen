@@ -39,7 +39,7 @@ const ACCELERATOR = 'NvidiaTeslaT4'
 const DEFAULT_TIMEOUT_MIN = 30
 const POLL_MS = 15000
 const TERMINAL_STATES = new Set(['COMPLETE', 'ERROR', 'CANCEL_ACKNOWLEDGED'])
-const VALID_LOADERS = new Set(['sdxl', 'sdxl-lora', 'flux2', 'anima'])
+const VALID_LOADERS = new Set(['sdxl', 'sdxl-lora', 'flux2', 'anima', 'zimage', 'sana-sprint', 'qwen-image-2.1'])
 
 // ── 失败分类（导出给测试用） ─────────────────────────────────────────────
 

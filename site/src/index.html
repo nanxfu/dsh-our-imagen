@@ -13,7 +13,7 @@
   <meta property="og:title" content="生图工作台 · Imagen Studio — 开源免显卡生图工作台" />
   <meta
     property="og:description"
-    content="Kaggle 2×T4 免费 GPU 算力直连 DeepSeek Harness：预置 9 款开源模型、30 张实测样张，生成图像直接落盘本地工作区。"
+    content="Kaggle 2×T4 免费 GPU 与 Colab 算力直连 DeepSeek Harness：预置 7 款开源模型、7 张实测样张，生成图像直接落盘本地工作区。"
   />
   <meta name="twitter:card" content="summary_large_image" />
   <script>
@@ -52,7 +52,7 @@
 
   <div class="ambient" aria-hidden="true">
     <div class="room-photo-wrap">
-      <img class="room-photo" src="./assets/showcase/sdxl-lightning-ink-wash.webp" alt="" fetchpriority="low" />
+      <img class="room-photo" src="./assets/showcase/flux2-klein-9b-crane-pond.webp" alt="" fetchpriority="low" />
       <div class="room-veil"></div>
     </div>
     <div class="lamp" id="lamp"></div>
@@ -170,13 +170,13 @@
 
           <div class="hero-actions">
             <a class="btn btn-primary" href="#install" data-t="heroCtaPrimary">快速安装上手</a>
-            <a class="btn btn-quiet" href="#works" data-t="heroCtaSecondary">浏览 30 张实测样张</a>
+            <a class="btn btn-quiet" href="#works" data-t="heroCtaSecondary">浏览 7 张实测样张</a>
           </div>
 
           <p class="hero-facts">
-            <span data-t="factModels">9 款开源模型预置</span>
+            <span data-t="factModels">7 款开源模型预置</span>
             <span class="fact-dot" aria-hidden="true"></span>
-            <span data-t="factSpeed">最快 1.9 秒 / 张</span>
+            <span data-t="factSpeed">最快 4.1 秒 / 张</span>
             <span class="fact-dot" aria-hidden="true"></span>
             <span data-t="factLocal">图像仅留存于本地</span>
           </p>
@@ -226,12 +226,12 @@
     <!-- 样张展区：实测生成效果 -->
     <section class="works" id="works">
       <div class="section-head">
-        <h2 class="section-title" data-t="wallTitle">30 张实测样张，均由 Kaggle 云端环境直接渲染。</h2>
+        <h2 class="section-title" data-t="wallTitle">7 张实测样张，均由真机 GPU 直接渲染。</h2>
         <div class="section-aside">
           <p class="section-desc" data-t="wallDesc">
-            样张均在 Kaggle 2×T4 环境下通过本插件实际生成，仅转存为 WebP 格式，无任何后期修饰。滚动页面可浏览生成详情。
+            样张均由本插件在真机 GPU（Kaggle 2×T4 与 Colab L4 / T4）实际生成，仅转存为 WebP，无任何后期修饰。滚动页面可浏览生成详情。
           </p>
-          <p class="wall-count tabular" id="wall-count">30 SAMPLES · 9 MODELS · KAGGLE 2×T4</p>
+          <p class="wall-count tabular" id="wall-count">7 SAMPLES · 7 MODELS · REAL GPUS</p>
         </div>
       </div>
 
@@ -257,13 +257,13 @@
     <!-- 模型评测：实测基准数据与提示词一览 -->
     <section class="lab" id="lab">
       <div class="section-head">
-        <h2 class="section-title" data-t="labTitle">9 款模型实测数据与生图效果一览。</h2>
+        <h2 class="section-title" data-t="labTitle">7 款模型实测数据与生图效果一览。</h2>
         <div class="section-aside">
           <p class="section-desc" data-t="labDesc">
-            所有样张均基于 Kaggle 2×T4 硬件实测生成，保持原始输出并转换为 WebP 格式。在左侧切换模型，查看单张耗时、显存占用及完整 Prompt。
+            所有样张均基于真机 GPU（Kaggle 2×T4 与 Colab L4 / T4）实测生成，保持原始输出并转换为 WebP 格式。在左侧切换模型，查看单张耗时、显存占用及完整 Prompt。
           </p>
           <div class="seg" id="model-filter" role="group" aria-label="按模型速度筛选" data-t-aria="modelFilterAria">
-            <button type="button" class="seg-btn is-active" data-filter="all" data-t="filterAll">全部 9 款</button>
+            <button type="button" class="seg-btn is-active" data-filter="all" data-t="filterAll">全部 7 款</button>
             <button type="button" class="seg-btn" data-filter="fast" data-t="filterFast">极速档 (≤11s)</button>
             <button type="button" class="seg-btn" data-filter="usable" data-t="filterUsable">高精度与二次元</button>
           </div>
@@ -690,7 +690,7 @@
 
     <div class="footer-base">
       <span class="tabular">v__VERSION__ · Preview</span>
-      <span data-t="footerMeta">全部成片由本插件在 Kaggle 2×T4 上生成，仅存本地工作区。</span>
+      <span data-t="footerMeta">全部成片由本插件在真机 GPU（Kaggle 2×T4 与 Colab L4 / T4）上生成，仅存本地工作区。</span>
     </div>
   </footer>
 

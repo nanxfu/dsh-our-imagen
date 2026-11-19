@@ -10,9 +10,9 @@ Runs on Kaggle's free dual-GPU quota (30 hrs/week) by default, with zero local V
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=flat-square)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/nanxfu/dsh-our-imagen?style=flat-square)](https://github.com/nanxfu/dsh-our-imagen)
 
-> **Preview Release**: Kaggle's free dual-GPU driver is built in by default. Support for Google Colab, local GPUs, and self-hosted workers is in progress.
+> **Preview Release**: Kaggle's free dual-GPU driver is built in by default. The Google Colab driver is available (large-VRAM models are Colab-only), while local GPUs and self-hosted workers are still planned.
 
-[Quick Start](#quick-start) · [Backends](#backend-drivers) · [Features](#features) · [FAQ](#faq) · [Development](#development--testing) · [中文](README.md)
+[Quick Start](#quick-start) · [Backends](#backend-drivers) · [Features](#features) · [Model Showcase](#model-showcase) · [FAQ](#faq) · [Development](#development--testing) · [中文](README.md)
 
 </div>
 
@@ -31,9 +31,11 @@ Not every machine has a high-VRAM GPU, and setting up PyTorch, CUDA, and ComfyUI
 | Driver | Status | Compute | Cost | Notes |
 | :--- | :---: | :--- | :--- | :--- |
 | **Kaggle GPU Driver** | **Built-in (Default)** | 2×Nvidia Tesla T4 (30 GB VRAM) | **Free** (30 hrs/week quota) | Ready out of the box with auto session management and encrypted transfer |
-| **Google Colab Driver** | **In Progress** | Nvidia T4 / A100 | Free / Subscription | Notebook mount with direct tunnel |
+| **Google Colab Driver** | **Available** | Nvidia T4 (free) / L4, A100 (Colab Pro) | Free / Subscription | Notebook mount with direct tunnel; `Z-Image Turbo`, `Qwen-Image 2.1`, and `FLUX.2 Klein 9B` need more VRAM and are Colab-only |
 | **Self-hosted Worker** | **Planned** | Private server / AutoDL / RunPod | Pay-as-you-go / Self-hosted | For private GPUs or always-on setups |
 | **Local (Local/ComfyUI)** | **Planned** | Local GPU (RTX 3060/4090, etc.) | Local hardware | For offline, low-latency local inference |
+
+**Switching to Colab**: open Runtime Settings → set the compute source to `Colab Pro (authorization required)` → under **Google / Colab authorization** click **Authorize in browser**; credentials are saved to `%USERPROFILE%\.imagen\colab-credentials.json`. GPU tiers include T4 / L4 / A100 plus high-memory machines. `Z-Image Turbo`, `Qwen-Image 2.1`, and `FLUX.2 Klein 9B` require the Colab source before they can be selected in the model picker.
 
 ---
 
@@ -44,11 +46,12 @@ Not every machine has a high-VRAM GPU, and setting up PyTorch, CUDA, and ComfyUI
 <td width="48%">
 
 ### 1. Standalone Workbench
-* **10 Built-in Models**: Fast models (`SDXL Lightning`, `Hyper-SDXL`, `SDXL Turbo`), general/photorealistic (`SDXL Base`, `RealVisXL`, `Playground v2.5`), anime (`Animagine XL 3.1`, `Anima Light Lavender`), `FLUX.2 Klein 4B`, and the dedicated `SDXL Inpaint` weights for local repaints.
+* **7 Modern Open-Source Models**: fast and general (`SDXL Lightning`, `SANA-Sprint 1.6B`, `Z-Image Turbo`), reference and outpaint (`FLUX.2 Klein 4B`, `FLUX.2 Klein 9B`, `Qwen-Image 2.1`), and anime (`Anima Turbo v1.1`); names, architectures, and positioning come from [`models/*.json`](models/).
+* **Two Compute Sources**: `SDXL Lightning`, `SANA-Sprint 1.6B`, `FLUX.2 Klein 4B`, and `Anima Turbo v1.1` run on both Kaggle's free T4 quota and Colab. `Z-Image Turbo`, `Qwen-Image 2.1`, and `FLUX.2 Klein 9B` need more VRAM and are Colab-only (their model cards are marked "Colab only" and disabled on Kaggle).
 * **Focused Controls**: Prompt, aspect ratio, resolution, steps, CFG scale, and seed in one panel, with batch count (1–4) pinned in the footer.
-* **Effective Parameters Only**: Unused fields (such as negative prompts on 4-step models or `FLUX.2 Klein 4B`) are hidden and omitted from requests. The dedicated inpaint weights only appear inside the image tools.
+* **Effective Parameters Only**: Negative prompts are hidden and omitted when the selected model ignores them or defaults to CFG 0; reference images, local repaint, and outpaint entry points only appear when the current model really supports them.
 * **Quick Modifiers**: Collapsible one-click English tags for lighting, material, composition, and mood (with localized UI labels).
-* **Stage Image Tools**: With a work selected, hit **Local paint** or **Full repaint** below the stage to edit in place; the canvas and light submit bar include a change description, repaint strength, and model switch. "Repaint from this image" in the gallery/lightbox opens local paint in one step. Upscale/outpaint slots are reserved for later.
+* **Stage Image Tools**: With a work selected, hit **Local paint** or **Full repaint** below the stage to edit in place; the canvas and light submit bar include a change description, repaint strength, and model switch. "Repaint from this image" in the gallery/lightbox opens local paint in one step. Upscale (Real-ESRGAN ×2) and outpaint (`FLUX.2 Klein 4B` + Outpaint LoRA) are available and saved as child versions.
 * **Filmstrip & Version Tree**: The bottom filmstrip folds by version tree; the `⎇ N` badge opens the version panel, and paint/repaint outputs automatically become v2/v3 child versions. Unsubmitted edits are marked with a dot per work and survive work switching. Restore all parameters or generate variations in one click, and manage your date-grouped gallery with search, favorites, batch selection, and single-image deletion.
 
 </td>
@@ -68,7 +71,7 @@ Not every machine has a high-VRAM GPU, and setting up PyTorch, CUDA, and ComfyUI
 ### 2. Chat Integration & Assistant
 * **Direct Tool Calls**: Registers `imagen_generate`, `imagen_batch`, `imagen_recipes`, `imagen_session`, `imagen_history`, and `imagen_cancel`, so you can generate images directly from chat. `imagen_batch` plans a whole set of images in one call, and `imagen_recipes` only returns visible prompt templates — no hidden style suffixes.
 * **Confirm Before Running**: Translates natural-language requests into English prompts, infers aspect ratios, checks model constraints, and shows a confirmation card before starting inference.
-* **Model Awareness**: Understands prompt conventions and strengths across all 10 models and suggests a better match when appropriate.
+* **Model Awareness**: Understands prompt conventions and strengths across all 7 models and suggests a better match when appropriate.
 * **Workbench Sync**: Load confirmation cards into the workbench for fine-tuning, or open chat-generated images in the workbench for further editing.
 
 </td>
@@ -139,26 +142,28 @@ Not every machine has a high-VRAM GPU, and setting up PyTorch, CUDA, and ComfyUI
 
 ## Model Showcase
 
-All 9 samples below were generated on Kaggle 2×T4 using this plugin and converted to WebP without post-processing.
+All 7 samples below were generated by this plugin on real GPUs and converted to WebP without post-processing; timings are from each generation record and refer to the **first image** (including cold start / model-switch warm-up, not the steady state). The speed shown on model cards is the steady-state median (first image discarded, median of the next 3).
+
+Five of them are a **same-prompt comparison across models**: a red-crowned crane in a misty lotus pond (seed 42, `A red-crowned crane standing in a misty lotus pond at dawn, Chinese ink painting, soft light, fine detail`), generated on Colab L4 / T4 with different presets. `SANA-Sprint 1.6B` and `FLUX.2 Klein 9B` lean ink-wash, `Z-Image Turbo` and `Qwen-Image 2.1` lean photographic, and `Anima Turbo v1.1` renders anime illustration. The other 2 are the existing `SDXL Lightning` and `FLUX.2 Klein 4B` samples (Kaggle 2×T4).
 
 <table>
 <tr>
 <td width="33.3%">
 <div align="center">
   <img src="docs/assets/showcase/sdxl-lightning-cyberpunk-street.webp" alt="SDXL Lightning neon street" width="100%" />
-  <p><sub>SDXL Lightning · Rainy Neon Street · ~9.8s</sub></p>
+  <p><sub>SDXL Lightning · Rainy Neon Street · Kaggle 2×T4 · ~9.8s</sub></p>
 </div>
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/hyper-sdxl-8step-baroque-still-life.webp" alt="Hyper-SDXL 8-Step baroque still life" width="100%" />
-  <p><sub>Hyper-SDXL 8-Step · Baroque Still Life · ~8.0s</sub></p>
+  <img src="docs/assets/showcase/sana-sprint-1.6b-crane-pond.webp" alt="SANA-Sprint 1.6B crane in a lotus pond" width="100%" />
+  <p><sub>SANA-Sprint 1.6B · Crane in a Lotus Pond · Colab L4 · 4.07s</sub></p>
 </div>
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/sdxl-turbo-crimson-moon.webp" alt="SDXL Turbo samurai under crimson moon" width="100%" />
-  <p><sub>SDXL Turbo · Samurai Under Crimson Moon · ~3.9s</sub></p>
+  <img src="docs/assets/showcase/z-image-turbo-crane-pond.webp" alt="Z-Image Turbo crane in a lotus pond" width="100%" />
+  <p><sub>Z-Image Turbo · Crane in a Lotus Pond · Colab L4 · 57.73s</sub></p>
 </div>
 </td>
 </tr>
@@ -166,43 +171,35 @@ All 9 samples below were generated on Kaggle 2×T4 using this plugin and convert
 <tr>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/playground-v2.5-floating-islands.webp" alt="Playground v2.5 floating islands" width="100%" />
-  <p><sub>Playground v2.5 · Floating Islands · ~19.6s</sub></p>
+  <img src="docs/assets/showcase/qwen-image-2.1-crane-pond.webp" alt="Qwen-Image 2.1 crane in a lotus pond" width="100%" />
+  <p><sub>Qwen-Image 2.1 · Crane in a Lotus Pond · Colab L4 · 91.21s</sub></p>
 </div>
 </td>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/sdxl-base-alpine-lake.webp" alt="SDXL Base 1.0 alpine lake" width="100%" />
-  <p><sub>SDXL Base 1.0 · Alpine Lake at Dusk · ~17.1s</sub></p>
-</div>
-</td>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/realvis-v5-fisherman-portrait.webp" alt="RealVisXL V5.0 fisherman portrait" width="100%" />
-  <p><sub>RealVisXL V5.0 · Fisherman Portrait · ~21.1s</sub></p>
-</div>
-</td>
-</tr>
-
-<tr>
 <td width="33.3%">
 <div align="center">
   <img src="docs/assets/showcase/flux2-klein-4b-kyoto-poster.webp" alt="FLUX.2 Klein 4B Kyoto poster" width="100%" />
-  <p><sub>FLUX.2 Klein 4B · Minimalist Kyoto Poster · ~6.8s</sub></p>
+  <p><sub>FLUX.2 Klein 4B · Minimalist Kyoto Poster · Kaggle 2×T4 · ~6.8s</sub></p>
 </div>
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/animagine-xl-3.1-sakura-girl.webp" alt="Animagine XL 3.1 sakura girl" width="100%" />
-  <p><sub>Animagine XL 3.1 · Girl in Sakura Alley · ~21.1s</sub></p>
+  <img src="docs/assets/showcase/flux2-klein-9b-crane-pond.webp" alt="FLUX.2 Klein 9B crane in a lotus pond" width="100%" />
+  <p><sub>FLUX.2 Klein 9B · Crane in a Lotus Pond · Colab L4 · 130.87s</sub></p>
 </div>
 </td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="33.3%"></td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/anima-light-lavender-lavender-field.webp" alt="Anima Light Lavender field" width="100%" />
-  <p><sub>Anima Light Lavender · Lavender Field at Dusk · ~63.4s</sub></p>
+  <img src="docs/assets/showcase/anima-turbo-v1.1-crane-pond.webp" alt="Anima Turbo v1.1 crane in a lotus pond" width="100%" />
+  <p><sub>Anima Turbo v1.1 · Crane in a Lotus Pond · Colab T4 · 21.56s</sub></p>
 </div>
 </td>
+<td width="33.3%"></td>
 </tr>
 </table>
 
@@ -295,13 +292,13 @@ It is free. The plugin is MIT-licensed, and compute uses Kaggle's free weekly **
 <details>
 <summary><b>Q2: Do I need a dedicated GPU on my computer?</b></summary>
 
-No. Model loading and inference run on Kaggle's cloud GPUs; your local machine only renders the UI and saves the output files.
+No. Model loading and inference run on cloud GPUs (Kaggle or Colab); your local machine only renders the UI and saves the output files.
 </details>
 
 <details>
 <summary><b>Q3: Why does the first startup take a few minutes?</b></summary>
 
-Cold start includes allocating the 2×T4 instance, checking the runtime environment, and downloading/loading model weights, which typically takes 3–10 minutes. Once ready, subsequent generations take seconds. The kernel auto-shuts down after 30 minutes of idle time, or you can shut it down manually anytime.
+Cold start includes allocating a cloud instance (Kaggle 2×T4, or Colab L4 / A100), checking the runtime environment, and downloading/loading model weights, which typically takes 3–10 minutes. Once ready, subsequent generations take seconds. The kernel auto-shuts down after 30 minutes of idle time, or you can shut it down manually anytime.
 </details>
 
 <details>
@@ -313,17 +310,19 @@ No. Generated images stream back over a per-session temporary Bearer Token tunne
 <details>
 <summary><b>Q5: Which models are included?</b></summary>
 
-Model configs live in [`models/*.json`](models/):
-- `SDXL Lightning` (default, 4-step fast)
-- `Hyper-SDXL 8-Step` (balanced speed & detail)
-- `SDXL Turbo` (ultra-fast drafts)
-- `Playground v2.5` (rich colors & aesthetics)
-- `SDXL Base 1.0` (standard SDXL base)
-- `SDXL Inpaint` (dedicated 9-channel weights, local repaints only)
-- `RealVisXL V5.0` (photorealistic portraits)
-- `FLUX.2 Klein 4B` (lightweight next-gen architecture)
-- `Animagine XL 3.1` (anime)
-- `Anima Light Lavender` (anime illustration, Cosmos-Predict2 2B base)
+Model configs live in [`models/*.json`](models/). There are 7 presets today:
+
+| Model | Positioning | Compute source | License |
+| :--- | :--- | :--- | :--- |
+| `SDXL Lightning` | Default; SDXL + 4-step LoRA, fast generation, img2img / inpaint | Kaggle / Colab | OpenRAIL++ |
+| `SANA-Sprint 1.6B` | 1.6B Linear DiT, 2-step ultra-fast 1024px generation | Kaggle / Colab | Apache-2.0 |
+| `Z-Image Turbo` | 6B S3-DiT, photorealism, bilingual text and inpainting | Colab only | Apache-2.0 |
+| `Qwen-Image 2.1` | 7B DiT + Qwen3-VL, strong typography and multi-image reference editing; RGBA reference input | Colab only | Qwen Research License (non-commercial) |
+| `FLUX.2 Klein 4B` | Lightweight next-gen architecture, multi-image reference + outpaint engine (Outpaint LoRA) | Kaggle / Colab | Apache-2.0 |
+| `FLUX.2 Klein 9B` | 9B distilled editing model, 4-step generation, reference editing | Colab only (HF gated) | FLUX Non-Commercial |
+| `Anima Turbo v1.1` | 2B anime DiT, natural language and Danbooru tags | Kaggle / Colab | CircleStone Labs non-commercial |
+
+Retired presets: `SDXL Turbo`, `Hyper-SDXL 8-Step`, `SDXL Base 1.0`, `Playground v2.5`, `RealVisXL V5.0`, `Animagine XL 3.1`, `SDXL Inpaint`, `Anima Light Lavender`.
 </details>
 
 ---
@@ -357,4 +356,4 @@ Follow on Douyin: **Lumen流明** (`42906749348`):
 - Licensed under the [MIT License](LICENSE).
 - Thanks to the [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness) team for the plugin architecture and design system.
 - Thanks to Kaggle for providing free GPU compute.
-- Thanks to Hugging Face diffusers and the open-source model teams (Stability AI, ByteDance, Playground AI, CagliostroLab, etc.).
+- Thanks to Hugging Face diffusers and the open-source model teams (Stability AI, ByteDance, Efficient-Large-Model, Tongyi-MAI, Black Forest Labs, CircleStone Labs, etc.).

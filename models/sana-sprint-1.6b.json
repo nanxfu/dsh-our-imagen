@@ -1,0 +1,59 @@
+{
+  "id": "sana-sprint-1.6b",
+  "order": 20,
+  "label": "SANA-Sprint 1.6B",
+  "family": "SANA",
+  "short": "SANA-Sprint",
+  "description": {
+    "zh": "1.6B 线性 DiT，2 步超快 1024px 生成，轻量灵感探索",
+    "en": "1.6B Linear DiT, 2-step ultra-fast 1024px generation"
+  },
+  "repo": "Efficient-Large-Model/Sana_Sprint_1.6B_1024px_diffusers",
+  "params": "1.6B + Gemma-2-2B",
+  "license": "Apache-2.0",
+  "licenseKind": "open",
+  "gated": false,
+  "gpus": 1,
+  "tier": "fast",
+  "size": 1024,
+  "steps": 2,
+  "stepRange": null,
+  "cfg": 4.5,
+  "negativeHint": "",
+  "promptStyle": "natural",
+  "qualityPrefix": "",
+  "supportsChinese": false,
+  "supportsImg2Img": false,
+  "supportsReference": false,
+  "supportsInpaint": false,
+  "supportsNegative": false,
+  "sizeOptions": [
+    768,
+    1024
+  ],
+  "runtime": "default",
+  "pipeline": {
+    "loader": "sana-sprint",
+    "base": "Efficient-Large-Model/Sana_Sprint_1.6B_1024px_diffusers",
+    "dtype": "bf16",
+    "lora": null,
+    "scheduler": null,
+    "variant": null,
+    "downloadGb": 9.07,
+    "allowPatterns": [
+      "model_index.json",
+      "scheduler/**",
+      "text_encoder/**",
+      "tokenizer/**",
+      "transformer/**",
+      "vae/**"
+    ],
+    "deviceMap": null
+  },
+  "measured": {
+    "peakVramMb": 10329,
+    "loadSeconds": 35.2,
+    "steadySeconds": 4.07,
+    "downloadGb": null
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "id": "qwen-image-2.1",
+  "order": 35,
+  "label": "Qwen-Image 2.1",
+  "family": "Qwen",
+  "short": "Qwen 2.1",
+  "description": {
+    "zh": "7B DiT + Qwen3-VL-8B（8 步 Turbo），强排版/多图编辑/透明背景（非商用）",
+    "en": "7B DiT + Qwen3-VL-8B (8-step Turbo), strong typography, editing & RGBA (non-commercial)"
+  },
+  "repo": "Qwen/Qwen-Image-2.1-Turbo",
+  "params": "7B DiT + Qwen3-VL-8B",
+  "license": "Qwen Research License",
+  "licenseKind": "restricted",
+  "gated": false,
+  "gpus": 1,
+  "tier": "fast",
+  "size": 1024,
+  "steps": 8,
+  "stepRange": null,
+  "cfg": 1,
+  "negativeHint": "",
+  "promptStyle": "natural",
+  "qualityPrefix": "",
+  "supportsChinese": true,
+  "supportsImg2Img": false,
+  "supportsReference": true,
+  "supportsInpaint": false,
+  "supportsNegative": true,
+  "providers": [
+    "colab"
+  ],
+  "sizeOptions": [
+    768,
+    1024
+  ],
+  "runtime": "default",
+  "pipeline": {
+    "loader": "qwen-image-2.1",
+    "base": "Qwen/Qwen-Image-2.1-Turbo",
+    "dtype": "bf16",
+    "cpuOffload": true,
+    "lora": null,
+    "scheduler": null,
+    "variant": null,
+    "downloadGb": 30.26,
+    "allowPatterns": [
+      "model_index.json",
+      "processor/**",
+      "scheduler/**",
+      "text_encoder/**",
+      "transformer/**",
+      "vae/**"
+    ],
+    "deviceMap": null
+  },
+  "measured": {
+    "peakVramMb": 16764,
+    "loadSeconds": 95.9,
+    "steadySeconds": 43.68,
+    "downloadGb": null
+  }
+}

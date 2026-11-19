@@ -1,8 +1,10 @@
 /**
  * 扩图（outpaint）画布构造的纯逻辑。
  *
- * 扩图不新增远端推理能力：客户端把源图缩放后放进更大的画布，把新增区域涂白生成蒙版，
- * 再按普通局部重绘（`sdxl-inpaint` 9 通道权重）提交。所以「画布多大、原图放在哪里、
+ * 扩图不新增远端推理能力：客户端把源图放进更大的画布、标出新增区域后提交。
+ * 现代扩图引擎（阶段十六）走 `flux2-klein-4b + Outpaint LoRA` 的纯绿画布条件生图
+ * （见 `shared/contract.js` 的 `OUTPAINT_ENGINE`）；9 通道专用权重 `sdxl-inpaint`
+ * 已在阶段十七下线，仅保留为历史记录的回退路径。所以「画布多大、原图放在哪里、
  * 新增区域占多少」这些几何计算全部收敛在这里，不依赖 React / DOM，便于离线断言；
  * 像素合成与导出见 `src/studio/stage/OutpaintEditor.jsx`，状态编排见
  * `src/studio/hooks/useImageTool.js`。

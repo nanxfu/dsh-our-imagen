@@ -662,8 +662,8 @@ async function checkModelCapabilityAssets() {
     if (typeof model.supportsReference !== 'boolean') {
       details.push(`${model.id} 的 supportsReference 必须是布尔值（必填）`)
     }
-    if (model.id !== 'flux2-klein-4b' && model.supportsReference === true) {
-      details.push(`${model.id} 标了 supportsReference=true：首期只有 flux2-klein-4b 经过验证`)
+    if (model.supportsReference === true && !['flux2', 'qwen-image-2.1'].includes(model.pipeline?.loader)) {
+      details.push(`${model.id} 标了 supportsReference=true：当前只有 flux2 / qwen-image-2.1 系列支持参考生图`)
     }
     if (model.supportsReference === true && model.supportsImg2Img === true) {
       details.push(`${model.id} 同时标了 supportsReference 与 supportsImg2Img（互斥的请求形状）`)

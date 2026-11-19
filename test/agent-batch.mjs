@@ -226,7 +226,8 @@ async function main() {
     assert.deepEqual(properties.presetId.enum, TEXT_TO_IMAGE_PRESET_IDS)
     assert.ok(!properties.presetId.enum.includes('sdxl-inpaint'), '文生图 schema 不得出现 sdxl-inpaint')
     assert.ok(properties.presetId.enum.includes('sdxl-lightning'), '可文生图预设照常可选')
-    assert.equal(properties.presetId.enum.length, PRESET_IDS.length - 1, '当前资产只有一个 inpaintOnly 预设')
+    const inpaintOnlyCount = PRESETS.filter((preset) => preset.inpaintOnly === true).length
+    assert.equal(properties.presetId.enum.length, PRESET_IDS.length - inpaintOnlyCount, '文生图枚举应剔除全部 inpaintOnly 预设')
     // 描述里的模型库与枚举保持同一份口径：不把枚举外的模型介绍给 Agent。
     const description = tool('imagen_generate').description
     assert.ok(description.includes('sdxl-lightning'), '模型库应包含默认模型')
@@ -323,11 +324,11 @@ async function main() {
       jobStates: { 生成失败项: 'failed' },
     })
     const value = await tool('imagen_batch').execute({
-      presetId: 'realvis-v5',
+      presetId: 'z-image-turbo',
       width: 768,
       height: 1024,
-      steps: 30,
-      cfg: 5,
+      steps: 9,
+      cfg: 0,
       waitSeconds: 30,
       items: [
         { prompt: '成功的荷花', seed: 7 },
@@ -341,7 +342,7 @@ async function main() {
 
     // 汇总头：5 条里 2 成功、3 失败；失败的 3 条分别是提交失败、生成失败、saveTo 校验失败。
     assert.match(text, /共 5 条，成功 2，失败 3，未完成 0/)
-    assert.match(text, /\[1\] 成功 · 任务 j_batch_1 · 预设 RealVisXL V5\.0（realvis-v5）/)
+    assert.match(text, /\[1\] 成功 · 任务 j_batch_1 · 预设 Z-Image Turbo（z-image-turbo）/)
     assert.match(text, /产物：imagen-output\/fake-j_batch_1\/01\.png（768×1024，seed 7）/)
     assert.match(text, /URL：http:\/\/127\.0\.0\.1\/imagen-api\/file\?path=fake-j_batch_1/)
     assert.match(text, /\[2\] 失败（未入队）[\s\S]*原因：queue_full：队列已满/)
@@ -355,11 +356,11 @@ async function main() {
     // 公共参数合并到每条任务；条目 seed 只作用于自己那条。
     assert.equal(queue.submits.length, 4, '校验失败的条目不应占用队列')
     for (const request of queue.submits) {
-      assert.equal(request.presetId, 'realvis-v5')
+      assert.equal(request.presetId, 'z-image-turbo')
       assert.equal(request.width, 768)
       assert.equal(request.height, 1024)
-      assert.equal(request.steps, 30)
-      assert.equal(request.cfg, 5)
+      assert.equal(request.steps, 9)
+      assert.equal(request.cfg, 0)
     }
     assert.equal(queue.submits[0].seed, 7)
     assert.equal('seed' in queue.submits[1], false, '未指定 seed 的条目不应凭空写入 seed')
@@ -470,8 +471,8 @@ async function main() {
     assert.match(text, /【日系二次元插画】（anime-illustration）/)
     assert.match(text, /分类：插画/)
     assert.match(text, /建议比例：3:4/)
-    assert.match(text, /Danbooru 标签 · Animagine XL 3\.1（animagine-xl-3\.1）/)
-    assert.match(text, /模板：masterpiece, best quality, highres, \{subject\}/)
+    assert.match(text, /Danbooru 标签 · Anima Turbo v1\.1（anima-turbo-v1\.1）/)
+    assert.match(text, /模板：masterpiece, best quality, \{subject\}/)
     assert.match(text, new RegExp(`把 \\{subject\\} 换成具体英文主体描述`))
     assert.match(text, /不会自动追加任何风格后缀/)
     assert.equal(queue.submits.length, 0, '配方检索是只读工具，不得提交任务')
@@ -484,12 +485,12 @@ async function main() {
     assert.match(byCategory, /【写实人像摄影】（photo-portrait）/)
     assert.doesNotMatch(byCategory, /日系二次元插画/)
 
-    const byPreset = (await tool('imagen_recipes').execute({ presetId: 'animagine-xl-3.1', limit: 10 })).text
+    const byPreset = (await tool('imagen_recipes').execute({ presetId: 'anima-turbo-v1.1', limit: 10 })).text
     for (const title of ['日系二次元插画', '水墨水彩插画', '绘本童趣插画']) {
       assert.ok(byPreset.includes(title), `presetId 过滤应命中 ${title}`)
     }
     assert.ok(byPreset.indexOf('Danbooru 标签') < byPreset.indexOf('简短短语'), '按 presetId 过滤时该模型的写法应排在最前')
-    assert.match(byPreset, /Animagine XL 3\.1（animagine-xl-3\.1）/)
+    assert.match(byPreset, /Anima Turbo v1\.1（anima-turbo-v1\.1）/)
 
     const byTags = (await tool('imagen_recipes').execute({ tags: ['雨夜', '霓虹'] })).text
     assert.match(byTags, /【赛博霓虹夜景】（cyber-neon）/)

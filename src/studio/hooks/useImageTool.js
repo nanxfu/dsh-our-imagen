@@ -30,6 +30,7 @@ import { negativePromptActive } from '../../../shared/models-guide.js'
 import { submitGenerate } from '../../api/resources.js'
 import { formatText, positiveSize } from '../../logic/format.js'
 import { isBareImportOf, presetLabelOf } from '../../logic/generate.js'
+import { presetAvailableForProvider } from '../../logic/preset.js'
 import { referenceUrlOf } from '../../logic/reference.js'
 import {
   buildImageToolBody,
@@ -135,11 +136,13 @@ function presetsForTool(list, tool) {
  * @param {object} input.ui 界面态域（showToast / fail / setError）
  * @param {Array<object>} input.presets 宿主下发的预设列表
  * @param {string} input.defaultPreset 宿主默认预设 id
+ * @param {string} [input.provider] 当前算力来源 id（可选；传入时过滤掉不可用的模型）
  * @param {Function} [input.onSubmitted] 提交成功回调，收到响应里的 job 对象
  * @param {string} [input.currentPresetId] 左栏当前预设 id（可选）：工具优先沿用它
  */
-export function useImageTool({ t, alive, ui, presets, defaultPreset, onSubmitted, currentPresetId }) {
-  const list = Array.isArray(presets) ? presets.filter((item) => item && item.id) : []
+export function useImageTool({ t, alive, ui, presets, defaultPreset, provider, onSubmitted, currentPresetId }) {
+  const rawList = Array.isArray(presets) ? presets.filter((item) => item && item.id) : []
+  const list = provider ? rawList.filter((item) => presetAvailableForProvider(item, provider)) : rawList
   const [draft, setDraft] = React.useState(() => emptyDraft())
   const [editorOpen, setEditorOpen] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)

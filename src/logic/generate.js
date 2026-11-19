@@ -319,8 +319,8 @@ export function isBareImportOf(entry) {
 // 阶段十五 Phase B1 / Phase C0 起 `/history` 里会出现几类「扩散参数不能直接写进左栏
 // 纯文生图表单」的记录：
 //  - 高清放大产物：`item.upscale === true`、`presetId: 'realesrgan-x2plus'`、params 全是占位 0；
-//  - 专用局部重绘权重（`inpaintOnly`，如 `sdxl-inpaint`）产物：该预设不在文生图选择器里，
-//    写进表单会让模型选择器出现「空白未选中」态；
+//  - 专用局部重绘权重（`inpaintOnly`，如路线图阶段十七下线的 `sdxl-inpaint`）产物：
+//    该预设已不在文生图选择器里，写进表单会让模型选择器出现「空白未选中」态；
 //  - `presetId` 不在当前扩散预设列表里的旧记录。
 // 这几类统一先沿 `sourceImage` 回溯父作品的真实扩散参数，找不到时走降级补丁，绝不把不可用
 // 预设 / 占位 0 步 / 放大后尺寸写进表单或发成生成请求。

@@ -49,7 +49,7 @@ Kaggle 容器运行在受限沙箱中，无法直接对外暴露端口。常规�
 - **现象**：Kaggle Notebook 容器虽然声称有充足磁盘，但其实际工作目录 `/kaggle/working` 仅有 **20 GB** 额度，且整个容器写入层达到约 **52 GB** 后会直接转为只读（Read-Only），导致后续生图保存或临时文件写入时崩溃。
 - **解法**：
   - 下载 HuggingFace 模型权重时，严禁整仓全量 Clone。
-  - 在 `remote/daemon.py` 中配置严格的白名单，只按需下载 `fp16` 格式的单文件权重（例如 SDXL Base 只下载 6.6GB 的主权重），并将临时缓存重定向到具有更大空间的分区。
+  - 在 `remote/daemon.py` 中配置严格的白名单，只按需下载 `fp16` / `bf16` 组件（例如 `sdxl-lightning` 只下载 SDXL fp16 主权重与 4-step LoRA，约 6.78 GB；FLUX.2 / Z-Image / Qwen-Image 只取 `transformer`、`text_encoder`、`tokenizer`、`vae`、`scheduler`），并将临时缓存重定向到具有更大空间的分区。
 
 ### 2.2 Kaggle 基础镜像的依赖冲突 (`torchao`)
 - **现象**：Kaggle 官方镜像预装了 `torchao 0.10.0`，与新版 `diffusers` 和 `transformers` 存在严重的 C++ ABI 冲突，直接 `import diffusers` 会出现段错误或符号找不到而闪退。
@@ -240,7 +240,7 @@ Windows 上也不依赖 Python `Scripts` 目录进 PATH。
    `reference: { image_b64, strength }` 随每一次远端提交下发（逐张提交，一张参考图跑整批）。
    产物 `meta.json` 记录 `sourceImage` 与 `strength`。
 3. **远端**（`remote/daemon.py`）：提交期 `parse_reference_spec()` 只读图片头部就收敛
-   「loader 白名单（仅 `sdxl` / `sdxl-lora`）、base64、原始字节上限、PNG/JPEG、最小长边、strength」
+   「loader 白名单（`sdxl` / `sdxl-lora` / `zimage`）、base64、原始字节上限、PNG/JPEG、最小长边、strength」
    这些错误（400，不占 GPU）；执行期 `decode_reference_image()` 完整解码恰好一次，
    长边超过 `contract.limits.reference.maxEdge` 时等比 LANCZOS 缩小并转 RGB。
    真正的重绘管线用 `AutoPipelineForImage2Image.from_pipe(STATE.pipe)` 从**已加载的底座复用组件**
@@ -265,16 +265,17 @@ Windows 上也不依赖 Python `Scripts` 目录进 PATH。
   6~8px），出图后再用同一张羽化蒙版做像素级合成。`run_task()` 走 `image` + `mask_image` + `strength`
   分支，并显式下传按 8 对齐的参考图宽高（`w // 8 * 8`、`h // 8 * 8`）——非正方形参考图不再被管线的
   缺省方形推理后拉回；管线不支持该参数时由 `__call__` 签名过滤丢弃，composite 仍是尺寸不一致时的兜底。
-- 能力声明：模型资产 `supportsInpaint`（首期仅 SDXL 家族 true，且必须同时 `supportsImg2Img`），
-  daemon 侧由 loader 白名单 `SUPPORTED_INPAINT_LOADERS` 独立兜底，不信任客户端标记。
-- **专用 inpaint 权重（0.12.0）**：`models/sdxl-inpaint.json` 用 `pipeline.nativeInpaint: true` +
+- 能力声明：模型资产 `supportsInpaint`（当前 `sdxl-lightning` 与 `z-image-turbo` 为 true，且必须同时 `supportsImg2Img`），
+  daemon 侧由注册表的 `inpaint_names()`（`sdxl` / `sdxl-lora` / `zimage`）独立兜底，不信任客户端标记。
+- **专用 inpaint 权重（0.12.0，阶段十七已下线）**：原 `models/sdxl-inpaint.json` 用 `pipeline.nativeInpaint: true` +
   `inpaintOnly: true` 声明「加载出来就是 9 通道 inpaint 管线」。`SdxlLoader.construct` 在
   `nativeInpaint` 时改用 `AutoPipelineForInpainting.from_pretrained` 加载；`ensure_pipeline()` 把该标记
   写进 `STATE.native_inpaint`，`ensure_inpaint_pipeline()` 遇到它直接复用 `STATE.pipe`（不再 `from_pipe`）。
   这类底座不能文生图 / 纯图生图：Host 入队前拒绝、daemon 提交期 `parse_reference_spec` 与执行期
   `run_task` 各兜一层；客户端 `inpaintOnlyOf()` 据此在缺蒙版时拦下生成并提示。
+  资产下线后该能力位与远端分支保留，目前 7 款现役资产均未使用。
 
-模型能力由 `models/*.json` 的 `supportsImg2Img` / `supportsInpaint` 标记（首期仅 SDXL 家族为 true），
+模型能力由 `models/*.json` 的 `supportsImg2Img` / `supportsInpaint` 标记（当前 `sdxl-lightning` / `z-image-turbo` 为 true），
 经生成资产下发到客户端用于置灰与提示；daemon 不信任该标记，按 loader 白名单独立兜底。请求体上限方面：
 daemon 与 Host 出图路由都按 `reference.maxBytes + mask.maxBytes` 推导（base64 膨胀后约 13.5 MB），
 其余路由仍是 256 KiB。
@@ -393,17 +394,19 @@ daemon 与 Host 出图路由都按 `reference.maxBytes + mask.maxBytes` 推导�
      轮询、取消与幂等重投；`meta.json` 记 `upscale / upscaleScale / upscaleSource`，版本树把产物
      挂到源图下。
 
-2. **扩图（`tool=outpaint`）——客户端合成画布，远端零改动**：
+2. **扩图（`tool=outpaint`）——客户端合成画布，远端走原生参考路径**：
    - 画布几何（比例 / 内容框 / 留白锚点 / 8px 对齐 / `maxEdge`、`maxPixels`、`minEdge` 约束）全部在
-     `src/logic/outpaint.js` 里算，`OutpaintEditor` 只做 DOM 绘制与导出：`image` = 黑底 + 原图放进
-     内容框，`mask` = 白底 + 内容框涂黑（白 = 新增区域）。
-   - 提交时 `reference` 走**本地画布来源**：`image` + `mask` + `sourcePath`（原作品路径）。Host
-     `normalizeReference` 对 `image` 来源也接受 `sourcePath`（校验规则与 `path` 相同），
+     `src/logic/outpaint.js` 里算，`OutpaintEditor` 只做 DOM 绘制与导出：现代引擎导出
+     `image` = `#00FF00` 纯绿底 + 原图放进内容框（不再生成蒙版），长边缩到参考图上限以内。
+   - 提交时 `reference` 走**本地画布来源**：`image` + `sourcePath`（原作品路径）+ `outpaintContent`。
+     Host `normalizeReference` 对 `image` 来源也接受 `sourcePath`（校验规则与 `path` 相同），
      `meta.sourceImage` / `rootImage` 因此指回原图，扩图产物直接挂进原图版本树。
-   - 远端看到的就是一次合法的 inpaint 请求：默认 `sdxl-inpaint` 9 通道权重 + `strength 1.0`，
-     `composite_inpaint_image` 保证保留区逐像素不变（真机核心区平均差 0.00/255）。
-     之所以不新增远端 `outpaint` 能力：扩图本质是「画布 + 蒙版」的几何问题，远端已有能力足够，
-     多一条推理分支只会扩大显存与测试面。
+   - 远端零改动：`lib/jobs/queue.js` 判定 `tool=outpaint` 且预设为 `OUTPAINT_ENGINE.presetId`
+     （`flux2-klein-4b`）时，把 `pipeline.lora` 注入 `fal/flux-2-klein-4B-outpaint-lora`、把绿底画布
+     作为 `referenceImages` 提交，并拼接固定指令 `Fill the green spaces according to the image`；
+     远端按 `flux2` 原生参考路径执行，不新增 `outpaint` 推理分支（`outpaint` 只在 Host 侧存在）。
+   - 回退路径：预设列表缺少现代引擎时，才回退「扩张画布 + 白=新增区蒙版」的普通局部重绘；
+     专用 9 通道 `sdxl-inpaint` 权重已于阶段十七下线，仅旧历史数据保留 `outpaint` 元数据。
    - Agent 侧只接 `imagen_upscale`；扩图需要像素级画布合成，Host 保持零图像依赖（不引入
      sharp / jimp），不在本轮提供工具。
 

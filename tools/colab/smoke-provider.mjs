@@ -30,11 +30,10 @@
  */
 
 import { spawnSync } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
-import { LIMITS, SETTINGS } from '../../shared/contract.js'
-import { presetById } from '../../lib/presets.js'
+import { LIMITS, PRESETS, SETTINGS } from '../../shared/contract.js'
 import { mergeSettings } from '../../lib/settings.js'
 import { fetchHealth, requestGenerate, requestLogs } from '../../lib/remote.js'
 import { SessionManager } from '../../lib/session.js'
@@ -49,11 +48,13 @@ const argValue = (name) => {
 const help = args.includes('--help') || args.includes('-h')
 const checkOnly = args.includes('--check')
 const restart = args.includes('--restart')
+const writeMeasured = args.includes('--write')
 // Colab 的 A100 只在高内存机型（assign shape=hm）提供，普通档位申请会 503；G4 同理不可用。
 const highRam = args.includes('--high-ram')
 const gpu = String(argValue('--gpu') || 'L4').trim().toUpperCase()
-const presetId = String(argValue('--preset') || 'sdxl-lightning').trim()
-const preset = presetById(presetId)
+const configArg = argValue('--config')
+const configPath = configArg ? resolve(process.cwd(), configArg) : null
+const presetArg = argValue('--preset')
 const reportArg = argValue('--report')
 const reportPath = reportArg ? resolve(process.cwd(), reportArg) : null
 const outDir = join(process.cwd(), '.tmp/colab')
@@ -63,16 +64,23 @@ const PROMPT =
   'A red-crowned crane standing in a misty lotus pond at dawn, Chinese ink painting, soft light, fine detail'
 const SEED = 42
 
+async function loadTargetPreset() {
+  if (configPath) {
+    const raw = JSON.parse(await readFile(configPath, 'utf8'))
+    return { preset: raw, presetId: String(raw?.id || presetArg || 'custom').trim() }
+  }
+  const id = String(presetArg || 'sdxl-lightning').trim()
+  return { preset: PRESETS.find((item) => item.id === id) || null, presetId: id }
+}
+
 /** 出图边长：`--size` 优先，按契约钳制并对齐 8px；缺省跟随预设 size。 */
-function resolveSize() {
+function resolveSize(preset) {
   const raw = Number(argValue('--size'))
   const base = Number.isFinite(raw) && raw > 0 ? raw : Number(preset?.size) || 1024
   const { min, max, step } = LIMITS.width
   const clamped = Math.min(max, Math.max(min, Math.round(base)))
   return Math.round(clamped / step) * step
 }
-
-const size = resolveSize()
 
 const sink = {
   debug: () => {},
@@ -109,12 +117,13 @@ function ccuSummary(info) {
   }
 }
 
-/** 从 /logs 行里提取下载体积（GiB）：优先 `[load] ... X GiB`、`download X GiB`。 */
+/** 从 /logs 行里提取实际下载体积（GiB）：排除磁盘可用空间探测行。 */
 function downloadGbFromLogs(lines) {
   let last = null
   for (const line of lines ?? []) {
     if (typeof line !== 'string') continue
-    if (!/下载|download|GiB/i.test(line)) continue
+    if (/可用|free/i.test(line)) continue
+    if (!/(?:下载|download).{0,24}([\d.]+)\s*GiB/i.test(line)) continue
     const matches = [...line.matchAll(/([\d.]+)\s*GiB/gi)]
     for (const match of matches) {
       const value = Number(match[1])
@@ -132,14 +141,16 @@ function check(name, ok, detail = '') {
 
 function usage() {
   return [
-    '用法：node tools/colab/smoke-provider.mjs [--gpu L4|A100|G4|T4] [--high-ram] [--preset <id>] [--size <px>]',
-    '                                      [--report <path>] [--restart] [--check] [--help]',
+    '用法：node tools/colab/smoke-provider.mjs [--gpu L4|A100|G4|T4] [--high-ram] [--preset <id> | --config <path>] [--size <px>]',
+    '                                      [--report <path>] [--write] [--restart] [--check] [--help]',
     '',
     '  --gpu <档位>      Colab GPU 档位（默认 L4；flux2-klein-9b 用 A100，需同时给 --high-ram）',
     '  --high-ram        请求高内存机型（A100 只在 shape=hm 下提供；缺省关闭）',
     '  --preset <id>     出图预设（默认 sdxl-lightning）',
+    '  --config <path>   从模型 JSON 草稿文件加载预设（如 .tmp/models/z-image-turbo.json）',
     '  --size <px>       出图边长（默认跟随预设 size；OOM 时用 768 降档）',
     '  --report <path>   结构化 JSON 报告落盘路径（如 .tmp/colab/klein9b-report.json）',
+    '  --write           将实测 measured 写回 --config 指定的 JSON 文件',
     '  --check           只做离线校验，不连 Colab、不消耗 CCU',
     '  --restart         模拟 Host 崩溃后 restore() 接管',
     '  --help, -h        显示本帮助',
@@ -152,9 +163,13 @@ function usage() {
  * 校验链路与真机一致：预设存在 → mergeSettings 接受 GPU 档位 → SessionManager
  * effectiveSettings() 接受同一档位并带上 HF Token（只报布尔）→ gated 模型 Token 可用。
  */
-async function runCheck(hfToken) {
+async function runCheck(hfToken, { preset, presetId, size }) {
   const effective = mergeSettings({}, { provider: 'colab', colabGpu: gpu, colabHighRam: highRam })
-  check('预设已入库', Boolean(preset), preset ? `${presetId} → ${preset.repo}` : `models/ 下没有 ${presetId}`)
+  check(
+    configPath ? '草稿配置已读取' : '预设已入库',
+    Boolean(preset),
+    preset ? `${presetId} → ${preset.repo}` : `models/ 下没有 ${presetId}`,
+  )
   check(
     '设置层接受 Colab GPU 档位',
     effective.colabGpu === gpu,
@@ -194,12 +209,14 @@ async function main() {
     return
   }
 
+  const { preset, presetId } = await loadTargetPreset()
+  const size = resolveSize(preset)
   const { token: hfToken, source: hfTokenSource } = await resolveHfToken()
   console.log(`colab 冒烟：gpu=${gpu} highRam=${highRam ? 'on' : 'off'} preset=${presetId} size=${size}x${size}`)
   if (hfToken) console.log('  · 已注入 HF Token（来源：环境变量或私有设置文件，值不打印）')
 
   if (checkOnly) {
-    const ok = await runCheck(hfToken)
+    const ok = await runCheck(hfToken, { preset, presetId, size })
     if (!ok) process.exitCode = 1
     return
   }
@@ -536,6 +553,22 @@ async function main() {
       await mkdir(dirname(reportPath), { recursive: true })
       await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
       console.log(`\n报告已写入：${reportPath}`)
+    }
+    if (report.ok && writeMeasured && configPath) {
+      const next = {
+        ...preset,
+        measured: {
+          peakVramMb: report.measured.peakVramMb,
+          loadSeconds: report.measured.loadSeconds,
+          steadySeconds: report.measured.steadySeconds,
+          downloadGb: report.measured.downloadGb,
+        },
+      }
+      if (report.measured.downloadGb !== null && next.pipeline && typeof next.pipeline === 'object') {
+        next.pipeline = { ...next.pipeline, downloadGb: report.measured.downloadGb }
+      }
+      await writeFile(configPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8')
+      console.log(`measured 已写回：${configPath}`)
     }
     if (report.error) {
       console.log(`\n执行失败：${report.error.message}${report.error.code ? `（${report.error.code}）` : ''}`)
