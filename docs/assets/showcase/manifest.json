@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generatedAt": "2026-11-20",
-  "source": "前两张由本插件在 Kaggle 2×T4 实际生成；其余 5 张为同一提示词在 Colab L4 / T4 的真机产出（见各条 seconds 与环境说明）。均仅转 WebP，未做后期修图",
+  "source": "前两张由本插件在 Kaggle 2×T4 实际生成；其余 5 张由本插件在 Colab L4 真机按各自适用场景生成（含预热后的稳态耗时）。均仅转 WebP，未做后期修图",
   "items": [
     {
       "file": "sdxl-lightning-cyberpunk-street.webp",
@@ -28,28 +28,28 @@
       "seed": 42
     },
     {
-      "file": "z-image-turbo-crane-pond.webp",
+      "file": "z-image-turbo-alley-bookstore.webp",
       "presetId": "z-image-turbo",
       "modelLabel": "Z-Image Turbo",
-      "title": "红冠鹤与晨间荷塘",
-      "titleEn": "Red-crowned crane in a misty lotus pond",
-      "prompt": "A red-crowned crane standing in a misty lotus pond at dawn, Chinese ink painting, soft light, fine detail",
-      "width": 1024,
+      "title": "雨巷旧书店",
+      "titleEn": "Rainy Alley Bookstore",
+      "prompt": "A cozy vintage independent bookstore storefront on a rain-slicked cobblestone alley at blue hour dusk, warm amber light glowing through wooden grid windows stacked with books, a hanging lantern sign with crisp Chinese calligraphy reading \"旧书与茶\", wet reflections, shot on 35mm Kodak Portra 400 film, candid street photography, rich natural detail",
+      "width": 768,
       "height": 1024,
-      "seconds": 57.73,
-      "seed": 42
+      "seconds": 29.19,
+      "seed": 202601
     },
     {
-      "file": "qwen-image-2.1-crane-pond.webp",
+      "file": "qwen-image-2.1-botanica-poster.webp",
       "presetId": "qwen-image-2.1",
       "modelLabel": "Qwen-Image 2.1",
-      "title": "红冠鹤与晨间荷塘",
-      "titleEn": "Red-crowned crane in a misty lotus pond",
-      "prompt": "A red-crowned crane standing in a misty lotus pond at dawn, Chinese ink painting, soft light, fine detail",
-      "width": 1024,
+      "title": "温室植物志海报",
+      "titleEn": "Botanica Conservatory Poster",
+      "prompt": "Minimalist botanical art print poster on clean warm ivory paper, centered sunlit arched glass conservatory dome filled with lush green monstera leaves and golden ferns, only two lines of large bold clean black sans-serif text at the top reading \"BOTANICA\" and \"温室植物志\", pure empty blank margins at the bottom and sides, no small text, no body copy, no footnotes, no captions, no decorative labels, gallery print",
+      "width": 768,
       "height": 1024,
-      "seconds": 91.21,
-      "seed": 42
+      "seconds": 39.25,
+      "seed": 202605
     },
     {
       "file": "flux2-klein-4b-kyoto-poster.webp",
@@ -64,28 +64,28 @@
       "seed": 71107
     },
     {
-      "file": "flux2-klein-9b-crane-pond.webp",
+      "file": "flux2-klein-9b-clockmaker-bench.webp",
       "presetId": "flux2-klein-9b",
       "modelLabel": "FLUX.2 Klein 9B",
-      "title": "红冠鹤与晨间荷塘",
-      "titleEn": "Red-crowned crane in a misty lotus pond",
-      "prompt": "A red-crowned crane standing in a misty lotus pond at dawn, Chinese ink painting, soft light, fine detail",
-      "width": 1024,
-      "height": 1024,
-      "seconds": 130.87,
-      "seed": 42
+      "title": "黄金时刻钟表匠工作台",
+      "titleEn": "Clockmaker Workbench",
+      "prompt": "An intricate antique clockmaker workbench bathed in golden afternoon sunbeams through a tall arched workshop window, gleaming open brass pocket watches, tiny optical loupes, delicate mechanical gears and leather-bound blueprints scattered across weathered dark oak wood, floating dust motes in volumetric light, shallow depth of field, cinematic still life photography, ultra detailed textures",
+      "width": 1152,
+      "height": 768,
+      "seconds": 113.1,
+      "seed": 202604
     },
     {
-      "file": "anima-turbo-v1.1-crane-pond.webp",
+      "file": "anima-turbo-v1.1-seaside-station.webp",
       "presetId": "anima-turbo-v1.1",
       "modelLabel": "Anima Turbo v1.1",
-      "title": "红冠鹤与晨间荷塘",
-      "titleEn": "Red-crowned crane in a misty lotus pond",
-      "prompt": "A red-crowned crane standing in a misty lotus pond at dawn, Chinese ink painting, soft light, fine detail",
-      "width": 1024,
+      "title": "黄昏海边站台少女",
+      "titleEn": "Girl at Seaside Station",
+      "prompt": "masterpiece, best quality, 1girl, solo, silver hair, windblown hair, blue eyes, sailor uniform, navy cardigan, standing on an empty seaside train platform at sunset, golden hour, orange and violet sky, sparkling ocean waves in background, vintage railway crossing, warm rim lighting, anime illustration, vibrant colors, cinematic composition",
+      "width": 768,
       "height": 1024,
-      "seconds": 21.56,
-      "seed": 42
+      "seconds": 9.81,
+      "seed": 202602
     }
   ]
 }

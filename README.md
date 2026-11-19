@@ -144,9 +144,7 @@
 
 ## 模型示例
 
-以下 7 张样张均由本插件真机生成，仅转存为 WebP，未做后期修图；耗时取自当次生成记录，是**首图耗时**（含冷启 / 切模型预热，不等同稳态）；模型卡上的速度读数按「丢弃首张 + 后 3 张中位数」的稳态口径回填。
-
-其中 5 张是**同一提示词 · 各模型风格对照**：红冠鹤与晨间荷塘（seed 42，`A red-crowned crane standing in a misty lotus pond at dawn, Chinese ink painting, soft light, fine detail`）在 Colab L4 / T4 上跨模型生成——`SANA-Sprint 1.6B` 与 `FLUX.2 Klein 9B` 偏水墨，`Z-Image Turbo` 与 `Qwen-Image 2.1` 偏写实摄影，`Anima Turbo v1.1` 为二次元插画。另外 2 张是 `SDXL Lightning` 与 `FLUX.2 Klein 4B` 的既有示例（Kaggle 2×T4）。
+以下 7 张样张均由本插件真机生成，仅转存为 WebP，未做后期修图；各模型分别按自身擅长题材（街景、水墨、中英排版、静物光影、二次元角色等）生成，耗时为当次生成记录（`Z-Image Turbo`、`Qwen-Image 2.1` 经同尺寸预热，贴近模型卡稳态读数）：
 
 <table>
 <tr>
@@ -164,8 +162,8 @@
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/z-image-turbo-crane-pond.webp" alt="Z-Image Turbo 生成的红冠鹤与晨间荷塘" width="100%" />
-  <p><sub>Z-Image Turbo · 红冠鹤与晨间荷塘 · Colab L4 · 57.73 秒</sub></p>
+  <img src="docs/assets/showcase/z-image-turbo-alley-bookstore.webp" alt="Z-Image Turbo 生成的雨巷旧书店" width="100%" />
+  <p><sub>Z-Image Turbo · 雨巷旧书店 · Colab L4 · 29.19 秒</sub></p>
 </div>
 </td>
 </tr>
@@ -173,8 +171,8 @@
 <tr>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/qwen-image-2.1-crane-pond.webp" alt="Qwen-Image 2.1 生成的红冠鹤与晨间荷塘" width="100%" />
-  <p><sub>Qwen-Image 2.1 · 红冠鹤与晨间荷塘 · Colab L4 · 91.21 秒</sub></p>
+  <img src="docs/assets/showcase/qwen-image-2.1-botanica-poster.webp" alt="Qwen-Image 2.1 生成的温室植物志海报" width="100%" />
+  <p><sub>Qwen-Image 2.1 · 温室植物志海报 · Colab L4 · 39.25 秒</sub></p>
 </div>
 </td>
 <td width="33.3%">
@@ -185,8 +183,8 @@
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/flux2-klein-9b-crane-pond.webp" alt="FLUX.2 Klein 9B 生成的红冠鹤与晨间荷塘" width="100%" />
-  <p><sub>FLUX.2 Klein 9B · 红冠鹤与晨间荷塘 · Colab L4 · 130.87 秒</sub></p>
+  <img src="docs/assets/showcase/flux2-klein-9b-clockmaker-bench.webp" alt="FLUX.2 Klein 9B 生成的黄金时刻钟表匠工作台" width="100%" />
+  <p><sub>FLUX.2 Klein 9B · 黄金时刻钟表匠工作台 · Colab L4 · 113.1 秒</sub></p>
 </div>
 </td>
 </tr>
@@ -197,8 +195,8 @@
 <td width="33.3%"></td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/anima-turbo-v1.1-crane-pond.webp" alt="Anima Turbo v1.1 生成的红冠鹤与晨间荷塘" width="100%" />
-  <p><sub>Anima Turbo v1.1 · 红冠鹤与晨间荷塘 · Colab T4 · 21.56 秒</sub></p>
+  <img src="docs/assets/showcase/anima-turbo-v1.1-seaside-station.webp" alt="Anima Turbo v1.1 生成的黄昏海边站台少女" width="100%" />
+  <p><sub>Anima Turbo v1.1 · 黄昏海边站台少女 · Colab L4 · 9.81 秒</sub></p>
 </div>
 </td>
 <td width="33.3%"></td>

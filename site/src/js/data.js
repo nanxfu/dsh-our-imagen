@@ -14,8 +14,8 @@ export const showcaseItems = Array.isArray(SITE_DATA.showcase?.items) ? SITE_DAT
 const HERO_PICKS = [
   'flux2-klein-4b-kyoto-poster.webp',
   'sdxl-lightning-cyberpunk-street.webp',
-  'qwen-image-2.1-crane-pond.webp',
-  'anima-turbo-v1.1-crane-pond.webp',
+  'qwen-image-2.1-botanica-poster.webp',
+  'anima-turbo-v1.1-seaside-station.webp',
 ];
 
 export const heroItems = HERO_PICKS.map((file) => showcaseItems.find((item) => item.file === file)).filter(

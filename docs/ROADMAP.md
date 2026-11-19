@@ -437,7 +437,7 @@
 - **`qwen-image-2.1` 多图参考与透明背景（Colab L4）**：
   - 多图参考（`referenceImages` 2 张）：51.83s（`load_seconds=0`），出图 1024²；相对同会话纯文生图平均差 35.07/255（87.6% 变化），相对同提示词同 seed 的无参考对照平均差 **54.24/255（98.4% 变化）** → 参考条件确实生效（弱参考，构图仍由提示词与 seed 主导）。双参考峰值显存 20,127 MiB（L4 24 GB，余量约 4 GB）。
   - 透明背景：三次返回的 PNG 均为 RGBA（PNG 颜色类型 6），daemon `_encode_png` 原样保留 alpha；默认文生图 alpha 232~255（91.1% 为 255，实质不透明）；明确要求「透明背景 / 贴纸」时 alpha=0 占 7.9%、≤1 占 65.3%、=255 占 32.9%、不透明包围盒 510×856 → **当前链路可导出真透明背景**。透明区 RGB 仍有残留（偏紫），消费端必须按 alpha 合成。
-- **海报与文档**：新增 `sana-sprint-1.6b` / `z-image-turbo` / `qwen-image-2.1` 三张 Pexels 海报，`anima-light-lavender.webp` 重命名为 `anima-turbo-v1.1.webp`，删除 6 张下线模型海报；最终 6 份图片覆盖 7 张模型卡，data URL 合计 **17,598 字符**（上限 20,480）；README / README.en / PRODUCT / SPEC / ARCHITECTURE / MODEL_CARD_SPEC / MODEL_ASSET_SPEC 与示例墙（7 张，含 5 张同提示词跨模型对照）、README 界面截图同步更新；`docs/TROUBLESHOOTING.md` 补齐参考图 / 透明背景与扩图新口径。
+- **海报与文档**：新增 `sana-sprint-1.6b` / `z-image-turbo` / `qwen-image-2.1` 三张 Pexels 海报，`anima-light-lavender.webp` 重命名为 `anima-turbo-v1.1.webp`，删除 6 张下线模型海报；最终 6 份图片覆盖 7 张模型卡，data URL 合计 **17,598 字符**（上限 20,480）；README / README.en / PRODUCT / SPEC / ARCHITECTURE / MODEL_CARD_SPEC / MODEL_ASSET_SPEC 与示例墙（7 张多题材真机成片，含街景、水墨、书店招牌、中英海报排版、静物光影与二次元角色）、README 界面截图同步更新；`docs/TROUBLESHOOTING.md` 补齐参考图 / 透明背景与扩图新口径。
 
 ### 5. 阶段十七真机验收
 

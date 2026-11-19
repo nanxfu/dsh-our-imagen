@@ -26,7 +26,7 @@
 
 ### 文档与示例
 
-- `docs/ROADMAP.md` 第十七节收口（状态、第 4 节验收记录、第 5 节真机验收、排期表）；`README.md` / `README.en.md` 更新 7 款模型清单、双算力来源与「同一提示词 · 各模型风格对照」示例墙（7 张 = 2 张既有 Kaggle 成片 + 5 张 Colab L4/T4 真机成片）；`docs/PRODUCT.md` / `docs/SPEC.md` / `docs/ARCHITECTURE.md` / `docs/MODEL_CARD_SPEC.md` / `docs/MODEL_ASSET_SPEC.md` 同步 7 款口径与 `providers` 现状；`docs/TROUBLESHOOTING.md` 补齐参考图 / 透明背景 / 现代扩图新口径，并新增「模型原生参考图与透明背景」一节。
+- `docs/ROADMAP.md` 第十七节收口（状态、第 4 节验收记录、第 5 节真机验收、排期表）；`README.md` / `README.en.md` 更新 7 款模型清单、双算力来源与多题材示例墙（7 张 = 2 张既有 Kaggle 成片 + 5 张 Colab L4 按各模型擅长题材生成的真机成片）；`docs/PRODUCT.md` / `docs/SPEC.md` / `docs/ARCHITECTURE.md` / `docs/MODEL_CARD_SPEC.md` / `docs/MODEL_ASSET_SPEC.md` 同步 7 款口径与 `providers` 现状；`docs/TROUBLESHOOTING.md` 补齐参考图 / 透明背景 / 现代扩图新口径，并新增「模型原生参考图与透明背景」一节。
 - `docs/assets/showcase/manifest.json` 重写为 7 条，清理 49 张下线模型成片；`src/studio/posters/SOURCES.md` 重写（6 份图片、data URL 合计 17,598 字符 ≤ 20,480）；README 四张界面截图用现役模型重新生成。
 
 ### 真机验收（Colab L4，2026-11-20）
