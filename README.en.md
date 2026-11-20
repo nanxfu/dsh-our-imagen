@@ -41,60 +41,35 @@ Not every machine has a high-VRAM GPU, and setting up PyTorch, CUDA, and ComfyUI
 
 ## Features
 
-<table>
-<tr>
-<td width="48%">
-
 ### 1. Standalone Workbench
-* **7 Modern Open-Source Models**: fast and general (`SDXL Lightning`, `SANA-Sprint 1.6B`, `Z-Image Turbo`), reference and outpaint (`FLUX.2 Klein 4B`, `FLUX.2 Klein 9B`, `Qwen-Image 2.1`), and anime (`Anima Turbo v1.1`); names, architectures, and positioning come from [`models/*.json`](models/).
-* **Two Compute Sources**: `SDXL Lightning`, `SANA-Sprint 1.6B`, `FLUX.2 Klein 4B`, and `Anima Turbo v1.1` run on both Kaggle's free T4 quota and Colab. `Z-Image Turbo`, `Qwen-Image 2.1`, and `FLUX.2 Klein 9B` need more VRAM and are Colab-only (their model cards are marked "Colab only" and disabled on Kaggle).
-* **Focused Controls**: Prompt, aspect ratio, resolution, steps, CFG scale, and seed in one panel, with batch count (1–4) pinned in the footer.
-* **Effective Parameters Only**: Negative prompts are hidden and omitted when the selected model ignores them or defaults to CFG 0; reference images, local repaint, and outpaint entry points only appear when the current model really supports them.
-* **Quick Modifiers**: Collapsible one-click English tags for lighting, material, composition, and mood (with localized UI labels).
-* **Stage Image Tools**: With a work selected, hit **Local paint** or **Full repaint** below the stage to edit in place; the canvas and light submit bar include a change description, repaint strength, and model switch. "Repaint from this image" in the gallery/lightbox opens local paint in one step. Upscale (Real-ESRGAN ×2) and outpaint (`FLUX.2 Klein 4B` + Outpaint LoRA) are available and saved as child versions.
-* **Filmstrip & Version Tree**: The bottom filmstrip folds by version tree; the `⎇ N` badge opens the version panel, and paint/repaint outputs automatically become v2/v3 child versions. Unsubmitted edits are marked with a dot per work and survive work switching. Restore all parameters or generate variations in one click, and manage your date-grouped gallery with search, favorites, batch selection, and single-image deletion.
 
-</td>
-<td width="52%">
+* **7 Models & Dual Compute**: Includes 7 modern open-source models (see [FAQ](#faq) and [`models/*.json`](models/)). Four run on both Kaggle's free T4 quota and Colab, while `Z-Image Turbo`, `Qwen-Image 2.1`, and `FLUX.2 Klein 9B` require Colab for higher VRAM.
+* **Adaptive Parameter Panel**: Prompt, aspect ratio, resolution, steps, CFG scale, and batch count in one focused panel—only showing parameters and reference inputs supported by the active model, with one-click English translation and quick modifiers.
+* **In-Place Stage Tools**: Select any work to run local paint, full repaint, ×2 upscale (Real-ESRGAN), or outpaint right on the stage, automatically archived as child versions.
+* **Version Tree & Gallery**: The bottom filmstrip folds by derivation tree and preserves unsubmitted drafts per work; the gallery groups by date with search, favorites, and batch management.
 
 <div align="center">
-  <img src="docs/assets/studio-light.png" alt="Image Studio Workbench" width="100%" />
+  <img src="docs/assets/studio-light.png" alt="Image Studio Workbench" width="92%" />
   <p><sub>Standalone workbench: parameter panel, live canvas, and recent filmstrip</sub></p>
 </div>
 
-</td>
-</tr>
-
-<tr>
-<td width="48%">
-
 ### 2. Chat Integration & Assistant
+
 * **Direct Tool Calls**: Registers `imagen_generate`, `imagen_batch`, `imagen_recipes`, `imagen_session`, `imagen_history`, and `imagen_cancel`, so you can generate images directly from chat. `imagen_batch` plans a whole set of images in one call, and `imagen_recipes` only returns visible prompt templates — no hidden style suffixes.
 * **Confirm Before Running**: Translates natural-language requests into English prompts, infers aspect ratios, checks model constraints, and shows a confirmation card before starting inference.
 * **Model Awareness**: Understands prompt conventions and strengths across all 7 models and suggests a better match when appropriate.
 * **Workbench Sync**: Load confirmation cards into the workbench for fine-tuning, or open chat-generated images in the workbench for further editing.
 
-</td>
-<td width="52%">
-
 <div align="center">
-  <img src="docs/assets/chat-tool.png" alt="Chat Confirmation Card and Preview" width="100%" />
+  <img src="docs/assets/chat-tool.png" alt="Chat Confirmation Card and Preview" width="92%" />
   <p><sub>Chat card: confirm parameters first, then generate directly to local disk</sub></p>
 </div>
 
-</td>
-</tr>
-
-<tr>
-<td width="48%">
-
 ### 3. Local Storage & Session Management
+
 * **Local-Only Storage**: Generated images stream back over a per-session Bearer Token tunnel and are written directly to `imagen-output/`, without third-party image hosts.
 * **Idle Auto-Shutdown**: The remote kernel shuts down automatically after 30 minutes of inactivity (configurable), or anytime from the top-right controls.
 * **Session Recovery**: `.imagen/session.json` tracks the active session so DSH restarts or page refreshes reconnect to the existing instance instead of starting a duplicate one.
-
-</td>
-<td width="52%">
 
 ```text
 [ DSH Workbench / Chat ]
@@ -108,10 +83,6 @@ Not every machine has a high-VRAM GPU, and setting up PyTorch, CUDA, and ComfyUI
           │  One-time Bearer Token tunnel
           └─────────────────────────────────▶ (streamed back locally)
 ```
-
-</td>
-</tr>
-</table>
 
 ---
 
@@ -146,27 +117,43 @@ All 7 samples below were generated by this plugin on real GPUs and converted to 
 
 <table>
 <tr>
-<td width="33.3%">
+<td width="50%">
 <div align="center">
   <img src="docs/assets/showcase/sdxl-lightning-cyberpunk-street.webp" alt="SDXL Lightning neon street" width="100%" />
   <p><sub>SDXL Lightning · Rainy Neon Street · Kaggle 2×T4 · ~9.8s</sub></p>
 </div>
 </td>
-<td width="33.3%">
+<td width="50%">
+<div align="center">
+  <img src="docs/assets/showcase/flux2-klein-4b-kyoto-poster.webp" alt="FLUX.2 Klein 4B Kyoto poster" width="100%" />
+  <p><sub>FLUX.2 Klein 4B · Minimalist Kyoto Poster · Kaggle 2×T4 · ~6.8s</sub></p>
+</div>
+</td>
+</tr>
+<tr>
+<td width="50%">
+<div align="center">
+  <img src="docs/assets/showcase/flux2-klein-9b-clockmaker-bench.webp" alt="FLUX.2 Klein 9B clockmaker workbench" width="100%" />
+  <p><sub>FLUX.2 Klein 9B · Clockmaker Workbench · Colab L4 · 113.1s</sub></p>
+</div>
+</td>
+<td width="50%">
 <div align="center">
   <img src="docs/assets/showcase/sana-sprint-1.6b-crane-pond.webp" alt="SANA-Sprint 1.6B crane in a lotus pond" width="100%" />
   <p><sub>SANA-Sprint 1.6B · Crane in a Lotus Pond · Colab L4 · 4.07s</sub></p>
 </div>
 </td>
+</tr>
+</table>
+
+<table>
+<tr>
 <td width="33.3%">
 <div align="center">
   <img src="docs/assets/showcase/z-image-turbo-alley-bookstore.webp" alt="Z-Image Turbo rainy alley bookstore" width="100%" />
   <p><sub>Z-Image Turbo · Rainy Alley Bookstore · Colab L4 · 29.19s</sub></p>
 </div>
 </td>
-</tr>
-
-<tr>
 <td width="33.3%">
 <div align="center">
   <img src="docs/assets/showcase/qwen-image-2.1-botanica-poster.webp" alt="Qwen-Image 2.1 Botanica conservatory poster" width="100%" />
@@ -175,29 +162,10 @@ All 7 samples below were generated by this plugin on real GPUs and converted to 
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/flux2-klein-4b-kyoto-poster.webp" alt="FLUX.2 Klein 4B Kyoto poster" width="100%" />
-  <p><sub>FLUX.2 Klein 4B · Minimalist Kyoto Poster · Kaggle 2×T4 · ~6.8s</sub></p>
-</div>
-</td>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/flux2-klein-9b-clockmaker-bench.webp" alt="FLUX.2 Klein 9B clockmaker workbench" width="100%" />
-  <p><sub>FLUX.2 Klein 9B · Clockmaker Workbench · Colab L4 · 113.1s</sub></p>
-</div>
-</td>
-</tr>
-</table>
-
-<table>
-<tr>
-<td width="33.3%"></td>
-<td width="33.3%">
-<div align="center">
   <img src="docs/assets/showcase/anima-turbo-v1.1-seaside-station.webp" alt="Anima Turbo v1.1 girl at seaside station" width="100%" />
   <p><sub>Anima Turbo v1.1 · Girl at Seaside Station · Colab L4 · 9.81s</sub></p>
 </div>
 </td>
-<td width="33.3%"></td>
 </tr>
 </table>
 

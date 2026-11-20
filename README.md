@@ -11,7 +11,8 @@
 [![DeepSeek Harness](https://img.shields.io/badge/DSH-Plugin-0066FF?style=flat-square)](https://github.com/deepseek-ai/DeepSeek-Harness)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=flat-square)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/nanxfu/dsh-our-imagen?style=flat-square)](https://github.com/nanxfu/dsh-our-imagen)
- <a href="https://linux.do/"><img src="https://img.shields.io/badge/LINUX%20DO-社区友链-555?style=flat-square" alt="LINUX DO" /></a>
+<a href="https://linux.do/"><img src="https://img.shields.io/badge/LINUX%20DO-社区友链-555?style=flat-square" alt="LINUX DO" /></a>
+
 > **当前处于 Preview 阶段**：默认内置 Kaggle 免费双卡 GPU 驱动，Colab 驱动已接入（大显存模型仅 Colab 可用），本地 GPU 与自建 Worker 支持在规划中。
 
 [快速上手](#三步上手) · [算力后端](#算力后端支持) · [核心功能](#核心功能) · [模型示例](#模型示例) · [常见问答](#常见问答) · [开发与测试](#开发与测试) · [English](README.en.md)
@@ -43,60 +44,35 @@
 
 ## 核心功能
 
-<table>
-<tr>
-<td width="48%">
-
 ### 1. 独立工作台
-* **内置 7 款现代开源模型**：极速与通用（`SDXL Lightning`、`SANA-Sprint 1.6B`、`Z-Image Turbo`）、参考与扩图（`FLUX.2 Klein 4B`、`FLUX.2 Klein 9B`、`Qwen-Image 2.1`）、二次元专项（`Anima Turbo v1.1`）；名称、架构与定位以 [`models/*.json`](models/) 为准。
-* **双算力来源**：`SDXL Lightning`、`SANA-Sprint 1.6B`、`FLUX.2 Klein 4B`、`Anima Turbo v1.1` 可在 Kaggle 免费 T4 与 Colab 运行；`Z-Image Turbo`、`Qwen-Image 2.1`、`FLUX.2 Klein 9B` 显存需求更高，仅 Colab 可用（模型卡标「仅 Colab」并置灰）。
-* **干净的参数面板**：提示词、画幅比例、分辨率、步数、引导强度和随机种子集中在一个面板里，生成张数（1~4）常驻页脚。
-* **只显示生效参数**：模型不消费负向词或默认引导强度为 0 时，排除项自动隐藏且不提交；参考图、局部重绘与扩图入口只在当前模型真正支持时出现。
-* **快捷词缀**：光影、材质、构图、氛围四类常用英文短语一键追加（界面显示中文标签），支持收起/展开。
-* **舞台图片工具**：选中作品后点下方的「局部涂抹 / 整图重绘」就地编辑，画布与提交栏内置修改描述、重绘强度与模型切换；画廊与大图的「以此图重绘」一步直达局部涂抹。高清放大（Real-ESRGAN ×2）与扩图（`FLUX.2 Klein 4B` + Outpaint LoRA）已接入，产物作为子版本归档。
-* **作品条与版本树**：底部作品条按版本树折叠，`⎇ N` 角标展开版本派生面板，涂抹 / 整图重绘产出的图自动成为 v2/v3 子版本；每张作品的未提交编辑草稿有圆点标记，切换作品不丢笔迹。支持一键带回全部参数或生成变体；画廊按日期归档，支持搜索、收藏、批量选择与单张删除。
 
-</td>
-<td width="52%">
+* **7 款模型与双算力来源**：内置 7 款现代开源模型（详见[模型列表](#常见问答)与 [`models/*.json`](models/)），其中 4 款可在 Kaggle 免费 T4 与 Colab 运行，`Z-Image Turbo`、`Qwen-Image 2.1`、`FLUX.2 Klein 9B` 因显存需求更高仅 Colab 可用。
+* **自适应参数面板**：提示词、画幅比例、分辨率、步数、引导强度与张数集中在一个面板；仅显示当前模型真正生效的参数与参考图入口，支持中译英及光影、材质、构图、氛围快捷词缀。
+* **舞台就地二创**：选中作品后可在舞台下方直接发起局部涂抹、整图重绘、高清放大（Real-ESRGAN ×2）或扩图，产物自动归档为子版本。
+* **版本树与作品画廊**：底部作品条按版本树折叠，保留各作品未提交编辑草稿；支持一键带回参数或生成变体，画廊按日期归档并支持搜索、收藏与批量管理。
 
 <div align="center">
-  <img src="docs/assets/studio-light.png" alt="生图工作台 独立界面" width="100%" />
+  <img src="docs/assets/studio-light.png" alt="生图工作台 独立界面" width="92%" />
   <p><sub>独立工作台：参数面板 + 实时画布 + 最近胶卷</sub></p>
 </div>
 
-</td>
-</tr>
-
-<tr>
-<td width="48%">
-
 ### 2. 对话生图与创作助手
-* **对话直接调用**：宿主自动挂载 `imagen_generate`、`imagen_batch`、`imagen_recipes`、`imagen_session`、`imagen_history` 等工具，在聊天窗口里直接说需求就能出图；一句话可以规划一组配图或分镜，配方库只提供可见的提示词模板，不做暗箱拼接。
+
+* **对话直接调用**：宿主自动挂载 `imagen_generate`、`imagen_batch`、`imagen_recipes`、`imagen_session`、`imagen_history` 等工具，在聊天窗口里直接说需求就能出图或规划一组分镜配图；配方库只提供可见提示词模板，不做暗箱拼接。
 * **先确认再执行**：内置助手会把自然语言翻译成英文提示词、推断比例并检查当前模型的参数限制，先给出确认卡片，点确定后再跑。
 * **模型适配提醒**：助手了解 7 款模型的提示词习惯与专长，如果当前模型不太适合你的描述，会给出提示。
 * **工作台联动**：确认卡可以一键带入参数面板继续精调；聊天里生成的图片也可以直接在工作台里打开做二次编辑。
 
-</td>
-<td width="52%">
-
 <div align="center">
-  <img src="docs/assets/chat-tool.png" alt="对话卡片与生图预览" width="100%" />
+  <img src="docs/assets/chat-tool.png" alt="对话卡片与生图预览" width="92%" />
   <p><sub>对话卡片：先给确认卡，点确定即出图</sub></p>
 </div>
 
-</td>
-</tr>
-
-<tr>
-<td width="48%">
-
 ### 3. 本地落盘与自动保活
+
 * **图片只存本地**：生成结果通过单次随机 Bearer Token 隧道直接写入本地 `imagen-output/`，不经过第三方公共图床。
 * **空闲自动关机**：云端 Kernel 空闲超过 30 分钟（可在设置中调整）自动关机，也可以在右上角随时手动关机，避免白白消耗额度。
 * **断线重连**：本地 `.imagen/session.json` 会记录当前会话状态，DSH 重启或刷新后会自动探活并接管旧实例，不会重复开机。
-
-</td>
-<td width="52%">
 
 ```text
 [ DSH 工作台 / 聊天窗口 ]
@@ -111,9 +87,6 @@
           └─────────────────────────────▶ (直接回传本地)
 ```
 
-</td>
-</tr>
-</table>
 ---
 
 ## 界面速览
@@ -148,27 +121,43 @@
 
 <table>
 <tr>
-<td width="33.3%">
+<td width="50%">
 <div align="center">
   <img src="docs/assets/showcase/sdxl-lightning-cyberpunk-street.webp" alt="SDXL Lightning 生成的雨夜霓虹街道" width="100%" />
-  <p><sub>SDXL Lightning · 雨夜霓虹街道 · 约 9.8 秒</sub></p>
+  <p><sub>SDXL Lightning · 雨夜霓虹街道 · Kaggle 2×T4 · 约 9.8 秒</sub></p>
 </div>
 </td>
-<td width="33.3%">
+<td width="50%">
+<div align="center">
+  <img src="docs/assets/showcase/flux2-klein-4b-kyoto-poster.webp" alt="FLUX.2 Klein 4B 生成的极简京都旅行海报" width="100%" />
+  <p><sub>FLUX.2 Klein 4B · 极简京都旅行海报 · Kaggle 2×T4 · 约 6.8 秒</sub></p>
+</div>
+</td>
+</tr>
+<tr>
+<td width="50%">
+<div align="center">
+  <img src="docs/assets/showcase/flux2-klein-9b-clockmaker-bench.webp" alt="FLUX.2 Klein 9B 生成的黄金时刻钟表匠工作台" width="100%" />
+  <p><sub>FLUX.2 Klein 9B · 黄金时刻钟表匠工作台 · Colab L4 · 113.1 秒</sub></p>
+</div>
+</td>
+<td width="50%">
 <div align="center">
   <img src="docs/assets/showcase/sana-sprint-1.6b-crane-pond.webp" alt="SANA-Sprint 1.6B 生成的红冠鹤与晨间荷塘" width="100%" />
   <p><sub>SANA-Sprint 1.6B · 红冠鹤与晨间荷塘 · Colab L4 · 4.07 秒</sub></p>
 </div>
 </td>
+</tr>
+</table>
+
+<table>
+<tr>
 <td width="33.3%">
 <div align="center">
   <img src="docs/assets/showcase/z-image-turbo-alley-bookstore.webp" alt="Z-Image Turbo 生成的雨巷旧书店" width="100%" />
   <p><sub>Z-Image Turbo · 雨巷旧书店 · Colab L4 · 29.19 秒</sub></p>
 </div>
 </td>
-</tr>
-
-<tr>
 <td width="33.3%">
 <div align="center">
   <img src="docs/assets/showcase/qwen-image-2.1-botanica-poster.webp" alt="Qwen-Image 2.1 生成的温室植物志海报" width="100%" />
@@ -177,29 +166,10 @@
 </td>
 <td width="33.3%">
 <div align="center">
-  <img src="docs/assets/showcase/flux2-klein-4b-kyoto-poster.webp" alt="FLUX.2 Klein 4B 生成的极简京都旅行海报" width="100%" />
-  <p><sub>FLUX.2 Klein 4B · 极简京都旅行海报 · Kaggle 2×T4 · 约 6.8 秒</sub></p>
-</div>
-</td>
-<td width="33.3%">
-<div align="center">
-  <img src="docs/assets/showcase/flux2-klein-9b-clockmaker-bench.webp" alt="FLUX.2 Klein 9B 生成的黄金时刻钟表匠工作台" width="100%" />
-  <p><sub>FLUX.2 Klein 9B · 黄金时刻钟表匠工作台 · Colab L4 · 113.1 秒</sub></p>
-</div>
-</td>
-</tr>
-</table>
-
-<table>
-<tr>
-<td width="33.3%"></td>
-<td width="33.3%">
-<div align="center">
   <img src="docs/assets/showcase/anima-turbo-v1.1-seaside-station.webp" alt="Anima Turbo v1.1 生成的黄昏海边站台少女" width="100%" />
   <p><sub>Anima Turbo v1.1 · 黄昏海边站台少女 · Colab L4 · 9.81 秒</sub></p>
 </div>
 </td>
-<td width="33.3%"></td>
 </tr>
 </table>
 

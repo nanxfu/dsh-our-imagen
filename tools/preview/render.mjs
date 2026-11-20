@@ -149,13 +149,14 @@ function pageOf(body, options = {}) {
   const themeStyle = options.dark ? `<style>${DARK_TOKENS}</style>` : ''
   const cssStyle = options.injectCss ? `<style>${CSS}</style>` : ''
   const extraStyle = options.extraCss ? `<style>${options.extraCss}</style>` : ''
+  const settleStyle = '<style>*,*::before,*::after{animation:none !important;transition:none !important;}.ofs-drawer{grid-template-rows:1fr !important;}</style>'
   const themeAttr = options.dark ? ' data-theme="dark"' : ''
   return `<!doctype html><html lang="zh-CN"${themeAttr}><head><meta charset="utf-8">
 <style>*{box-sizing:border-box}html,body{margin:0;height:100%;${FONT}}
 body{background:${options.dark ? '#0b0b0d' : '#e6e7e9'};padding:0;}
 #stage{height:100vh;width:100vw;overflow:hidden;}
 .ofs-root{height:100%;}
-</style>${cssStyle}${themeStyle}${extraStyle}</head><body><div id="stage">${body}</div></body></html>`
+</style>${cssStyle}${themeStyle}${extraStyle}${settleStyle}</head><body><div id="stage">${body}</div></body></html>`
 }
 
 async function createPreviewClient(state = states.ready, history = historyItems) {
